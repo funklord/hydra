@@ -7,7 +7,7 @@
 #include <QList>
 
 // A single entry in the tab/link tree. Folder or leaf.
-// Runtime weight (a live QWebEngineView, or a suspended state blob) is attached
+// Runtime weight (a live web view backend, or a suspended state blob) is attached
 // separately by `id` in the shell — never stored on the node itself — so moving
 // a node never disturbs its payload. See architecture doc §4.2.
 enum class node_type { folder, open_tab, unopened_tab, suspended_tab };

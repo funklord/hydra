@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "main_window.h"
+#include "policy_engine.h"
+#include "request_filter.h"
+#include "qtwebengine_factory.h"
 
 #include <QApplication>
 #include <QByteArray>
@@ -26,7 +29,15 @@ int main(int argc, char *argv[]) {
 	QApplication app(argc, argv);
 	app.setApplicationName("Hydra");
 
-	main_window w;
+	// The only place in the tree that names a concrete web view backend
+	// (architecture doc §19.2). Swapping in the Android System WebView is
+	// meant to be a change to these two lines plus one new backend class.
+	// Declaration order matters: each of these outlives the ones below it.
+	policy_engine       policy;
+	request_filter      filter(&policy);
+	qtwebengine_factory factory(&filter);
+
+	main_window w(&factory, &policy);
 
 	// Tree file: first CLI arg, else ./sample-tree.txt next to the binary or cwd.
 	QString tree_path = (argc > 1) ? QString::fromLocal8Bit(argv[1])

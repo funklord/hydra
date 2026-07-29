@@ -16,14 +16,13 @@ class QStatusBar;
 class QTimer;
 class QPoint;
 class QCloseEvent;
-class QWebEngineView;
-class QWebEngineProfile;
-class QWebEnginePage;
+class QEvent;
 class tab_tree_model;
 class tree_sort_proxy;
 class state_store;
 class policy_engine;
-class request_interceptor;
+class web_view_backend;
+class web_view_factory;
 class site_policy_dialog;
 struct node;
 
@@ -41,7 +40,12 @@ struct node;
 class main_window : public QWidget {
 	Q_OBJECT
 public:
-	explicit main_window(QWidget *parent = nullptr);
+	// The factory and policy engine are injected rather than constructed here:
+	// that is what keeps this class free of any engine-specific type, and it
+	// leaves main() as the single place naming a concrete backend
+	// (architecture doc §19.2). Both must outlive the window.
+	main_window(web_view_factory *factory, policy_engine *policy,
+	             QWidget *parent = nullptr);
 
 	bool load_tree(const QString &path);
 
@@ -66,14 +70,14 @@ private slots:
 private:
 	QMenuBar *build_menu_bar();
 	void update_status();          // refresh the status bar's permanent counts
-	QWebEngineView *current_view() const;
+	web_view_backend *current_view() const;
 	void open_node(node *n);            // create/restore a live view and show it
 	void suspend_node(node *n);         // serialize + tear down the live view
 	void touch_lru(const QString &id);
 	void enforce_live_cap(const QString &keep_id);
 	void mark_dirty();
 	void update_address(const QString &url);
-	void apply_policy(QWebEnginePage *page, const QString &host);
+	void apply_policy(web_view_backend *view, const QString &host);
 
 	static constexpr int k_max_live_views = 4;
 
@@ -89,15 +93,14 @@ private:
 	QStatusBar      *m_status     = nullptr;
 	QLabel          *m_tab_counts = nullptr;   // permanent widget, right side
 
-	QWebEngineProfile   *m_profile       = nullptr;
-	state_store         *m_state         = nullptr;
-	policy_engine       *m_policy        = nullptr;
-	request_interceptor *m_interceptor   = nullptr;
-	site_policy_dialog  *m_policy_dialog = nullptr;
-	QTimer              *m_save_timer    = nullptr;
-	QString              m_tree_path;
-	QString              m_policy_path;
+	web_view_factory   *m_factory       = nullptr;   // injected, not owned
+	state_store        *m_state         = nullptr;
+	policy_engine      *m_policy        = nullptr;   // injected, not owned
+	site_policy_dialog *m_policy_dialog = nullptr;
+	QTimer             *m_save_timer    = nullptr;
+	QString             m_tree_path;
+	QString             m_policy_path;
 
-	QHash<QString, QWebEngineView *> m_views_by_id;  // node id -> live view
-	QStringList                      m_lru;          // most-recent id at front
+	QHash<QString, web_view_backend *> m_views_by_id;  // node id -> live view
+	QStringList                        m_lru;          // most-recent id at front
 };

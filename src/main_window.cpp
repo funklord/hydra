@@ -4,8 +4,9 @@
 #include "tree_sort_proxy.h"
 #include "state_store.h"
 #include "policy_engine.h"
-#include "request_interceptor.h"
 #include "site_policy_dialog.h"
+#include "web_view_backend.h"
+#include "web_view_factory.h"
 #include "policy.h"
 #include "node.h"
 
@@ -30,33 +31,13 @@
 #include <QDateTime>
 #include <QDataStream>
 #include <QCloseEvent>
-#include <QWebEngineView>
-#include <QWebEngineProfile>
-#include <QWebEnginePage>
-#include <QWebEngineHistory>
-#include <QWebEngineSettings>
-#include <QWebEngineCookieStore>
 
-main_window::main_window(QWidget *parent)
-	: QWidget(parent) {
-	// One shared profile. The request interceptor, cookie filter, and download
-	// handler attach here in later steps (architecture doc §6/§7/§10).
-	m_profile = QWebEngineProfile::defaultProfile();
-
-	// --- Security spine: policy_engine + interceptor + cookie filter ------
-	m_policy      = new policy_engine(this);
-	m_interceptor = new request_interceptor(m_policy, this);
-	m_profile->setUrlRequestInterceptor(m_interceptor);
-
-	policy_engine *pe = m_policy;
-	m_profile->cookieStore()->setCookieFilter(
-		[pe](const QWebEngineCookieStore::FilterRequest &r) {
-			const QString site = r.firstPartyUrl.host();
-			if (r.thirdParty &&
-			    !pe->is_allowed(policy::feature::third_party_cookies, site))
-				return false;
-			return pe->is_allowed(policy::feature::cookies, site);
-		});
+main_window::main_window(web_view_factory *factory, policy_engine *policy,
+                          QWidget *parent)
+	: QWidget(parent), m_factory(factory), m_policy(policy) {
+	// The security spine is wired up before we get here: the factory owns the
+	// profile with the interceptor and cookie filter already installed on it
+	// (architecture doc §6/§7.3), and the policy engine is shared with them.
 
 	m_model = new tab_tree_model(this);
 	m_proxy = new tree_sort_proxy(this);
@@ -240,8 +221,14 @@ bool main_window::load_tree(const QString &path) {
 	return ok;
 }
 
-QWebEngineView *main_window::current_view() const {
-	return qobject_cast<QWebEngineView *>(m_stack->currentWidget());
+web_view_backend *main_window::current_view() const {
+	// Linear over at most k_max_live_views entries, which beats keeping a
+	// second piece of state in sync with the stack.
+	QWidget *w = m_stack->currentWidget();
+	for (web_view_backend *v : m_views_by_id)
+		if (v->widget() == w)
+			return v;
+	return nullptr;
 }
 
 void main_window::open_node(node *n) {
@@ -250,63 +237,40 @@ void main_window::open_node(node *n) {
 
 	n->last_seen = QDateTime::currentDateTime();
 
-	QWebEngineView *view = m_views_by_id.value(n->id, nullptr);
+	web_view_backend *view = m_views_by_id.value(n->id, nullptr);
 	if (!view) {
-		view = new QWebEngineView(this);
-		QWebEnginePage *page = new QWebEnginePage(m_profile, view);
-		view->setPage(page);
+		view = m_factory->create_view(this);
 		m_views_by_id.insert(n->id, view);
-		m_stack->addWidget(view);
+		m_stack->addWidget(view->widget());
 
-		apply_policy(page, QUrl::fromUserInput(n->url).host());
+		apply_policy(view, QUrl::fromUserInput(n->url).host());
 
-		connect(view, &QWebEngineView::urlChanged, this, [this, view, page](const QUrl &u) {
-			apply_policy(page, u.host());
+		connect(view, &web_view_backend::url_changed, this, [this, view](const QUrl &u) {
+			apply_policy(view, u.host());
 			if (view == current_view())
 				update_address(u.toString());
 		});
 
-		// Feature permissions (geo/cam/mic/notifications) decided from policy.
-		// Note: featurePermissionRequested is deprecated in Qt 6.8+ but still
-		// functional; migrate to QWebEnginePermission when targeting only 6.8+.
-		connect(page, &QWebEnginePage::featurePermissionRequested, this,
-		         [this, page](const QUrl &origin, QWebEnginePage::Feature f) {
-			policy::feature pf;
-			switch (f) {
-				case QWebEnginePage::Geolocation:
-					pf = policy::feature::geolocation; break;
-				case QWebEnginePage::MediaAudioCapture:
-					pf = policy::feature::microphone; break;
-				case QWebEnginePage::MediaVideoCapture:
-				case QWebEnginePage::MediaAudioVideoCapture:
-					pf = policy::feature::camera; break;
-				case QWebEnginePage::Notifications:
-					pf = policy::feature::notifications; break;
-				default:
-					page->setFeaturePermission(origin, f,
-						QWebEnginePage::PermissionDeniedByUser);
-					return;
-			}
-			const bool grant = m_policy->is_allowed(pf, origin.host());
-			page->setFeaturePermission(origin, f,
-				grant ? QWebEnginePage::PermissionGrantedByUser
-				      : QWebEnginePage::PermissionDeniedByUser);
+		// Feature permissions (geo/cam/mic/notifications) answered from policy.
+		// The backend maps its engine's own feature enum onto policy::feature,
+		// so this stays a pure policy lookup on our side.
+		policy_engine *pe = m_policy;
+		view->set_permission_decider([pe](const QUrl &origin, policy::feature f) {
+			return pe->is_allowed(f, origin.host());
 		});
 
 		if (n->type == node_type::suspended_tab && m_state && m_state->has_state(n->id)) {
-			// Restore navigation history from the suspended blob.
-			QByteArray blob = m_state->load(n->id);
-			QDataStream ds(&blob, QIODevice::ReadOnly);
-			ds >> *view->history();
+			// Restore the session blob this node was suspended into.
+			view->restore_state(m_state->load(n->id));
 			m_state->remove(n->id);
 		} else {
-			view->setUrl(QUrl::fromUserInput(n->url));
+			view->load(QUrl::fromUserInput(n->url));
 		}
 	}
 
 	n->type = node_type::open_tab;
 	m_model->refresh_node(n);
-	m_stack->setCurrentWidget(view);
+	m_stack->setCurrentWidget(view->widget());
 	update_address(view->url().toString());
 	touch_lru(n->id);
 	enforce_live_cap(n->id);
@@ -317,25 +281,20 @@ void main_window::open_node(node *n) {
 void main_window::suspend_node(node *n) {
 	if (!n)
 		return;
-	QWebEngineView *view = m_views_by_id.value(n->id, nullptr);
+	web_view_backend *view = m_views_by_id.value(n->id, nullptr);
 	if (!view)
 		return;
 
-	// Serialize navigation history to a blob keyed by node id.
-	QByteArray blob;
-	{
-		QDataStream ds(&blob, QIODevice::WriteOnly);
-		ds << *view->history();
-	}
 	if (m_state)
-		m_state->save(n->id, blob);
+		m_state->save(n->id, view->save_state());
 
 	if (view == current_view())
 		m_stack->setCurrentIndex(0);  // back to placeholder
-	m_stack->removeWidget(view);
+	QWidget *w = view->widget();
+	m_stack->removeWidget(w);
 	m_views_by_id.remove(n->id);
 	m_lru.removeAll(n->id);
-	view->deleteLater();
+	w->deleteLater();   // the backend is parented to its widget and goes too
 
 	n->type = node_type::suspended_tab;
 	m_model->refresh_node(n);
@@ -409,23 +368,23 @@ void main_window::on_search_changed(const QString &text) {
 }
 
 void main_window::navigate_to_address() {
-	if (QWebEngineView *view = current_view())
-		view->setUrl(QUrl::fromUserInput(m_address->text()));
+	if (web_view_backend *v = current_view())
+		v->load(QUrl::fromUserInput(m_address->text()));
 }
 
 void main_window::go_back() {
-	if (QWebEngineView *v = current_view())
-		v->triggerPageAction(QWebEnginePage::Back);
+	if (web_view_backend *v = current_view())
+		v->back();
 }
 
 void main_window::go_forward() {
-	if (QWebEngineView *v = current_view())
-		v->triggerPageAction(QWebEnginePage::Forward);
+	if (web_view_backend *v = current_view())
+		v->forward();
 }
 
 void main_window::reload_page() {
-	if (QWebEngineView *v = current_view())
-		v->triggerPageAction(QWebEnginePage::Reload);
+	if (web_view_backend *v = current_view())
+		v->reload();
 }
 
 void main_window::mark_dirty() {
@@ -443,19 +402,16 @@ void main_window::update_address(const QString &url) {
 		m_status->showMessage(url.isEmpty() ? QStringLiteral("Ready") : url);
 }
 
-void main_window::apply_policy(QWebEnginePage *page, const QString &host) {
-	if (!page)
+void main_window::apply_policy(web_view_backend *view, const QString &host) {
+	if (!view)
 		return;
-	QWebEngineSettings *s = page->settings();
 	using F = policy::feature;
-	s->setAttribute(QWebEngineSettings::JavascriptEnabled,
-	                m_policy->is_allowed(F::javascript, host));
-	s->setAttribute(QWebEngineSettings::AutoLoadImages,
-	                m_policy->is_allowed(F::images, host));
-	s->setAttribute(QWebEngineSettings::PlaybackRequiresUserGesture,
-	                !m_policy->is_allowed(F::autoplay, host));
-	s->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows,
-	                m_policy->is_allowed(F::popups, host));
+	view_settings s;
+	s.javascript = m_policy->is_allowed(F::javascript, host);
+	s.images     = m_policy->is_allowed(F::images, host);
+	s.autoplay   = m_policy->is_allowed(F::autoplay, host);
+	s.popups     = m_policy->is_allowed(F::popups, host);
+	view->apply_settings(s);
 }
 
 void main_window::open_site_controls() {
@@ -465,7 +421,7 @@ void main_window::open_site_controls() {
 		         this, &main_window::on_policy_changed);
 	}
 	QString host;
-	if (QWebEngineView *v = current_view())
+	if (web_view_backend *v = current_view())
 		host = v->url().host();
 	m_policy_dialog->set_host(host);
 	m_policy_dialog->move(m_address->mapToGlobal(QPoint(0, m_address->height() + 2)));
@@ -476,9 +432,9 @@ void main_window::open_site_controls() {
 void main_window::on_policy_changed() {
 	if (!m_policy_path.isEmpty())
 		m_policy->save(m_policy_path);
-	if (QWebEngineView *v = current_view()) {
-		apply_policy(v->page(), v->url().host());
-		v->triggerPageAction(QWebEnginePage::Reload);
+	if (web_view_backend *v = current_view()) {
+		apply_policy(v, v->url().host());
+		v->reload();
 	}
 }
 

@@ -32,11 +32,22 @@ add_executable(hydra
     src/policy.h
     src/policy_engine.cpp
     src/policy_engine.h
-    src/request_interceptor.cpp
-    src/request_interceptor.h
+    src/request_filter.cpp
+    src/request_filter.h
     src/site_policy_dialog.cpp
     src/site_policy_dialog.h
     src/node.h
+    # The web view seam: the shell talks only to these two interfaces
+    # (architecture doc §19.2); the qtwebengine_* pair is the desktop
+    # implementation, and an Android one slots in beside it later.
+    src/web_view_backend.h
+    src/web_view_factory.h
+    src/qtwebengine_view.cpp
+    src/qtwebengine_view.h
+    src/qtwebengine_factory.cpp
+    src/qtwebengine_factory.h
+    src/qtwebengine_interceptor.cpp
+    src/qtwebengine_interceptor.h
 )
 
 target_link_libraries(hydra PRIVATE

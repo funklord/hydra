@@ -105,7 +105,7 @@ Note that going beyond Linux needs one code change first: `main.cpp`
 unconditionally forces `QT_QPA_PLATFORM=xcb`, which has to become
 Linux-conditional before a Windows or macOS build is meaningful.
 
-## What is implemented (build-order steps 1–3)
+## What is implemented (build-order steps 1–3.5)
 
 | Area | Files | Notes |
 |---|---|---|
@@ -117,15 +117,42 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Policy model | `policy.{h,cpp}`, `policy_engine.{h,cpp}` | packed 2-bit tri-states, precedence, JSON |
 | Enforcement | `request_interceptor.{h,cpp}`, `main_window.cpp` | interceptor, cookie filter, per-page settings, permissions |
 | Site editor | `site_policy_dialog.{h,cpp}` | shield popup, scope this-host/domain/global |
+| WebView seam | `web_view_backend.h`, `web_view_factory.h`, `request_filter.{h,cpp}` | platform-neutral interfaces + shared block/cookie decisions |
+| Desktop backend | `qtwebengine_{view,factory,interceptor}.{h,cpp}` | the only files that name Qt WebEngine |
 
 Persistence: `policy.json`, `state/<id>.blob`, and the tree file all sit next to
 the outline file passed on the command line.
 
+## The WebView seam (step 3.5, done)
+
+The shell no longer names Qt WebEngine anywhere — `grep QWebEngine src/` hits
+only the four `qtwebengine_*` files, and `main_window.{h,cpp}` is clean. The
+shape:
+
+- `web_view_backend` — one rendered page: load, back/forward/reload,
+  `apply_settings(view_settings)`, `save_state`/`restore_state`, a permission
+  decider, and a `url_changed` signal. `view_settings` is four plain bools, so
+  a reduced Android backend applies what it supports and ignores the rest.
+- `web_view_factory` — makes views and owns whatever profile-wide machinery
+  sits behind them.
+- `request_filter` — the platform-neutral half of interception. Deciding what
+  to block is just policy plus a host list and is identical everywhere, so it
+  is shared; only the plumbing that delivers requests is per-platform. Android's
+  `shouldInterceptRequest` reuses this verbatim (arch §19.5).
+- `qtwebengine_view` / `qtwebengine_factory` / `qtwebengine_interceptor` — the
+  desktop implementation, and the only Qt-WebEngine-aware code in the tree.
+
+`main()` is the single place that names a concrete backend: it builds the
+policy engine, the filter, and the factory, then injects the factory and policy
+into `main_window`. Adding Android is meant to be one new backend pair plus a
+different two lines there.
+
+A side benefit worth noting: the deprecated permissions API is now confined to
+`qtwebengine_view.cpp`, so the eventual `QWebEnginePermission` migration is a
+one-file change that cannot touch the shell.
+
 ## What is next (in order)
 
-- **3.5 — WebViewBackend seam.** Refactor so the shell talks to an interface,
-  not `QWebEngineView` directly (arch §19.2). No user-visible change; unblocks
-  Android without a rewrite. Do this before step 4 grows the view code.
 - **4 — Kiosk mode.** Fullscreen chromeless, reflow-zoom scale, crop-via-clip,
   fit modes, idle-reset/watchdog (arch §8).
 - **5 — AI reorganizer.** `AIProvider` (local-first, Claude as default
