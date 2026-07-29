@@ -1,0 +1,16 @@
+# Build output
+/build/
+*.o
+*.obj
+*.moc
+moc_*.cpp
+qrc_*.cpp
+
+# Runtime state written next to a tree file
+/state/
+policy.json
+
+# Editor / OS cruft
+*.user
+.DS_Store
+*.swp

@@ -1,0 +1,9 @@
+- [f0] folder | Work
+  - [a1] open | Qt Documentation | https://doc.qt.io | created=2026-01-04T09:00:00 | seen=2026-07-27T18:30:00
+  - [a2] unopened | Wikipedia | https://www.wikipedia.org | created=2026-02-11T14:20:00 | seen=2026-06-02T08:15:00
+  - [a3] unopened | Arch Wiki | https://wiki.archlinux.org | created=2026-03-01T10:00:00 | seen=2026-07-20T21:05:00
+- [f1] folder | Reading
+  - [a4] unopened | Hacker News | https://news.ycombinator.com | created=2026-05-19T07:45:00 | seen=2026-07-28T06:40:00
+  - [a5] unopened | Example | https://example.com | created=2026-04-02T12:00:00 | seen=2026-05-30T19:00:00
+- [f2] folder | Media
+  - [a6] unopened | Big Buck Bunny (clear MP4) | https://test-videos.co.uk/bigbuckbunny | created=2026-06-01T11:11:00 | seen=2026-07-15T22:00:00
