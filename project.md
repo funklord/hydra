@@ -105,7 +105,7 @@ Note that going beyond Linux needs one code change first: `main.cpp`
 unconditionally forces `QT_QPA_PLATFORM=xcb`, which has to become
 Linux-conditional before a Windows or macOS build is meaningful.
 
-## What is implemented (build-order steps 1–3.5)
+## What is implemented (build-order steps 1–4)
 
 | Area | Files | Notes |
 |---|---|---|
@@ -115,10 +115,11 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Sorting / search | `tree_sort_proxy.{h,cpp}` | tree-order / title / created / last-seen + live search |
 | Lifecycle | `main_window.cpp`, `state_store.{h,cpp}` | open⇄suspended, history blobs, LRU live cap (4) |
 | Policy model | `policy.{h,cpp}`, `policy_engine.{h,cpp}` | packed 2-bit tri-states, precedence, JSON |
-| Enforcement | `request_interceptor.{h,cpp}`, `main_window.cpp` | interceptor, cookie filter, per-page settings, permissions |
+| Enforcement | `request_filter.{h,cpp}`, `qtwebengine_interceptor.{h,cpp}` | ad/script/image blocking, referer strip, cookie filter |
 | Site editor | `site_policy_dialog.{h,cpp}` | shield popup, scope this-host/domain/global |
 | WebView seam | `web_view_backend.h`, `web_view_factory.h`, `request_filter.{h,cpp}` | platform-neutral interfaces + shared block/cookie decisions |
 | Desktop backend | `qtwebengine_{view,factory,interceptor}.{h,cpp}` | the only files that name Qt WebEngine |
+| Kiosk | `kiosk_controller.{h,cpp}` | fullscreen stage, 3 scale paths, fit modes, idle-reset, watchdog |
 
 Persistence: `policy.json`, `state/<id>.blob`, and the tree file all sit next to
 the outline file passed on the command line.
@@ -131,7 +132,7 @@ shape:
 
 - `web_view_backend` — one rendered page: load, back/forward/reload,
   `apply_settings(view_settings)`, `save_state`/`restore_state`, a permission
-  decider, and a `url_changed` signal. `view_settings` is four plain bools, so
+  decider, and a `url_changed` signal. `view_settings` is plain bools, so
   a reduced Android backend applies what it supports and ignores the rest.
 - `web_view_factory` — makes views and owns whatever profile-wide machinery
   sits behind them.
@@ -151,10 +152,49 @@ A side benefit worth noting: the deprecated permissions API is now confined to
 `qtwebengine_view.cpp`, so the eventual `QWebEnginePermission` migration is a
 one-file change that cannot touch the shell.
 
+## Kiosk mode (step 4, done)
+
+`kiosk_controller` + `kiosk_config`, reached from **View → Kiosk Mode (F11)**,
+Esc to leave. It borrows the current view's widget into a frameless fullscreen
+stage of its own for the duration — which is what makes "strip all chrome" free,
+since the stage has none — and hands it back on exit.
+
+Three scale paths (arch §8.1), because they fail differently:
+
+- **reflow** (default) — one zoom factor, the page re-lays out. Always works.
+- **none** — crop via clip: native size, positioned by alignment, overflow
+  clipped by the stage. No transform anywhere, so nothing can go wrong.
+- **geometric** — `QGraphicsProxyWidget` transform. Exact layout, no reflow,
+  and the only path that can do genuine per-axis `stretch`.
+
+`fit_mode` (contain/cover/stretch/actual) composes with those; the header
+documents which pairs are meaningful. Reflow cannot do `stretch` — one zoom
+factor cannot scale axes independently — so it approximates with cover rather
+than pretending. Also implemented: idle-reset to the home URL, a watchdog that
+reloads on render-process death, cursor auto-hide, scrollbars and context menu
+off, and an `allow_escape` flag for lockdown.
+
+**The geometric spike is answered: it renders correctly here** (Qt 6.8.2 / X11,
+1280×720 design scaled 1.5× to 1920×1080 — real content, not black). One data
+point on one GPU, so re-test on any new deployment target. Two traps found
+while getting there, both now handled:
+
+- `QGraphicsProxyWidget::setWidget()` refuses a widget that still has a parent,
+  warns to the console, and leaves the scene empty — which looks exactly like
+  the black-render failure it is supposed to detect. Detach first, and fall
+  back to reflow if the embed returns null.
+- Tearing the shell down while a session is live was a use-after-free: the
+  controller hands the borrowed widget back to a stack that has already been
+  destroyed. Fixed with `QPointer` throughout plus a `~main_window` that exits
+  kiosk while its children still exist.
+
+**Not done from §8:** the off-the-record profile (a factory-level concern),
+`disableInput`, an escape *gesture* as opposed to the flag, and any settings UI
+— `kiosk_config` is currently code-level defaults with no way to edit it from
+the app.
+
 ## What is next (in order)
 
-- **4 — Kiosk mode.** Fullscreen chromeless, reflow-zoom scale, crop-via-clip,
-  fit modes, idle-reset/watchdog (arch §8).
 - **5 — AI reorganizer.** `AIProvider` (local-first, Claude as default
   external), tree serialization, non-destructive diff/accept with the
   no-node-left-behind invariant (arch §9).
@@ -174,9 +214,10 @@ one-file change that cannot touch the shell.
   kiosk (may render black on some GPUs), and local-model tree-sort quality.
 - **Interceptor limits:** request-only — no inline-script blocking, no response
   headers; the optional local proxy (arch §10) is the upgrade path.
-- **Thread note:** `request_interceptor::interceptRequest` may run off the UI
-  thread; the policy_engine is only mutated on the UI thread and reads tolerate
-  a stale snapshot. Revisit if mutation frequency grows.
+- **Thread note:** `qtwebengine_interceptor::interceptRequest`, and so
+  `request_filter::decide`, may run off the UI thread; the policy_engine is only
+  mutated on the UI thread and reads tolerate a stale snapshot. Revisit if
+  mutation frequency grows.
 
 ## Code style and file naming
 

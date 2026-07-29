@@ -1,0 +1,279 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "kiosk_controller.h"
+#include "web_view_backend.h"
+
+#include <QApplication>
+#include <QEvent>
+#include <QGraphicsProxyWidget>
+#include <QGraphicsScene>
+#include <QGraphicsView>
+#include <QGuiApplication>
+#include <QKeyEvent>
+#include <QScreen>
+#include <QTimer>
+#include <QTransform>
+#include <QWidget>
+
+#include <algorithm>
+
+namespace {
+
+// Place `inner` inside `outer` per alignment. Sizes larger than `outer` get
+// negative offsets, which is exactly what produces the crop: child widgets are
+// clipped to their parent's bounds, so the overflow simply is not drawn, and
+// input still maps correctly (architecture doc §8.1).
+QRect aligned_rect(const QSize &inner, const QSize &outer, Qt::Alignment a) {
+	int x = (outer.width() - inner.width()) / 2;
+	int y = (outer.height() - inner.height()) / 2;
+	if (a & Qt::AlignLeft)    x = 0;
+	if (a & Qt::AlignRight)   x = outer.width() - inner.width();
+	if (a & Qt::AlignTop)     y = 0;
+	if (a & Qt::AlignBottom)  y = outer.height() - inner.height();
+	return QRect(QPoint(x, y), inner);
+}
+
+}  // namespace
+
+kiosk_controller::kiosk_controller(QObject *parent) : QObject(parent) {
+	m_idle_timer = new QTimer(this);
+	m_idle_timer->setSingleShot(true);
+	connect(m_idle_timer, &QTimer::timeout, this, [this] {
+		// The single most-used real kiosk feature: walk back to the home URL
+		// after inactivity so an abandoned session does not persist (§8.3).
+		if (m_view && m_config.home.isValid())
+			m_view->load(m_config.home);
+	});
+}
+
+kiosk_controller::~kiosk_controller() {
+	if (active())
+		exit();
+}
+
+void kiosk_controller::set_config(const kiosk_config &c) {
+	m_config = c;
+	if (active()) {
+		reset_idle_timer();
+		set_cursor_hidden(m_config.hide_cursor);
+		relayout();
+	}
+}
+
+bool kiosk_controller::enter(web_view_backend *view, QWidget *restore_to) {
+	if (active() || !view)
+		return false;
+
+	m_view       = view;
+	m_restore_to = restore_to;
+
+	// A frameless fullscreen top-level of our own. Nothing to strip, and it
+	// gives the crop path a container to clip against.
+	m_stage = new QWidget(nullptr, Qt::Window | Qt::FramelessWindowHint);
+	m_stage->setWindowTitle("Hydra — kiosk");
+	m_stage->setContextMenuPolicy(Qt::NoContextMenu);
+	m_stage->setAutoFillBackground(true);
+	m_stage->installEventFilter(this);
+
+	QWidget *w = view->widget();
+	w->setParent(m_stage);
+	w->setContextMenuPolicy(Qt::NoContextMenu);
+	w->show();
+
+	// Scrollbars off; the rest of the page policy is untouched.
+	view_settings s;
+	s.scrollbars = false;
+	view->apply_settings(s);
+
+	if (m_config.watchdog) {
+		connect(view, &web_view_backend::render_process_gone, this, [this] {
+			// Self-heal: an unattended screen must not stay dead (§8.3).
+			if (m_view)
+				m_view->load(m_config.home.isValid() ? m_config.home : m_view->url());
+		});
+	}
+
+	if (m_config.home.isEmpty())
+		m_config.home = view->url();
+
+	m_stage->showFullScreen();
+	set_cursor_hidden(m_config.hide_cursor);
+	reset_idle_timer();
+	relayout();
+
+	emit entered();
+	return true;
+}
+
+void kiosk_controller::exit() {
+	if (!active())
+		return;
+
+	m_idle_timer->stop();
+	set_cursor_hidden(false);
+
+	if (m_view) {
+		disconnect(m_view, &web_view_backend::render_process_gone, this, nullptr);
+		m_view->set_zoom_factor(1.0);
+
+		view_settings s;   // defaults restore scrollbars
+		m_view->apply_settings(s);
+
+		QWidget *w = m_view->widget();
+		teardown_geometric();
+		if (w) {
+			w->setParent(m_restore_to);   // null parent is fine: it just detaches
+			w->setContextMenuPolicy(Qt::DefaultContextMenu);
+		}
+	}
+
+	if (m_stage) {
+		m_stage->removeEventFilter(this);
+		m_stage->deleteLater();
+	}
+	m_stage      = nullptr;
+	m_view       = nullptr;
+	m_restore_to = nullptr;
+
+	emit left();
+}
+
+void kiosk_controller::teardown_geometric() {
+	if (!m_proxy)
+		return;
+	// Take the widget back off the scene before anything owning it is deleted.
+	m_proxy->setWidget(nullptr);
+	delete m_gview;   // owns nothing else we need
+	delete m_scene;
+	m_gview = nullptr;
+	m_scene = nullptr;
+	m_proxy = nullptr;
+}
+
+void kiosk_controller::relayout() {
+	if (!active() || !m_view)
+		return;
+
+	QWidget *w = m_view->widget();
+	const QSize stage = m_stage->size();
+	const QSize design = m_config.design_size.isValid() ? m_config.design_size : stage;
+	if (design.isEmpty() || stage.isEmpty())
+		return;
+
+	const double sx = double(stage.width())  / design.width();
+	const double sy = double(stage.height()) / design.height();
+
+	switch (m_config.scale) {
+	case scale_mode::reflow: {
+		// One factor, viewport fills the stage, the page reflows into it.
+		double z = 1.0;
+		switch (m_config.fit) {
+			case fit_mode::contain: z = std::min(sx, sy); break;
+			case fit_mode::cover:   z = std::max(sx, sy); break;
+			case fit_mode::actual:  z = 1.0;              break;
+			case fit_mode::stretch:
+				// A single zoom factor cannot scale axes independently; cover
+				// is the closest honest approximation. Use geometric scale if
+				// genuine stretch matters.
+				z = std::max(sx, sy);
+				break;
+		}
+		m_view->set_zoom_factor(z);
+		w->setGeometry(QRect(QPoint(0, 0), stage));
+		break;
+	}
+	case scale_mode::none: {
+		// Crop via clip: native size, positioned, overflow clipped by the
+		// stage. No transform anywhere, which is why this path is the robust
+		// one (§8.1).
+		m_view->set_zoom_factor(1.0);
+		w->setGeometry(aligned_rect(design, stage, m_config.alignment));
+		break;
+	}
+	case scale_mode::geometric: {
+		// Render at the design size and transform the pixels. Exact layout, no
+		// reflow — and the historically fragile path (§8.3).
+		m_view->set_zoom_factor(1.0);
+		if (!m_scene) {
+			m_scene = new QGraphicsScene;
+			m_gview = new QGraphicsView(m_scene, m_stage);
+			m_gview->setFrameShape(QFrame::NoFrame);
+			m_gview->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+			m_gview->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+			m_gview->setContextMenuPolicy(Qt::NoContextMenu);
+			// QGraphicsProxyWidget only embeds a top-level widget: with a
+			// parent still set, setWidget() refuses and warns, and the scene
+			// silently stays empty. Detach first.
+			w->setParent(nullptr);
+			m_proxy = m_scene->addWidget(w);
+			if (!m_proxy) {
+				// Embedding failed; fall back rather than present a blank
+				// screen (§8.3 — this path is the fragile one).
+				w->setParent(m_stage);
+				w->show();
+				m_config.scale = scale_mode::reflow;
+				delete m_gview; delete m_scene;
+				m_gview = nullptr; m_scene = nullptr;
+				relayout();
+				return;
+			}
+			m_gview->show();
+		}
+		w->resize(design);
+		m_gview->setGeometry(QRect(QPoint(0, 0), stage));
+
+		double tx = sx, ty = sy;
+		switch (m_config.fit) {
+			case fit_mode::contain: tx = ty = std::min(sx, sy); break;
+			case fit_mode::cover:   tx = ty = std::max(sx, sy); break;
+			case fit_mode::actual:  tx = ty = 1.0;              break;
+			case fit_mode::stretch: break;   // per-axis, as asked
+		}
+		m_proxy->setTransform(QTransform::fromScale(tx, ty));
+		m_scene->setSceneRect(m_proxy->sceneBoundingRect());
+		m_gview->setAlignment(m_config.alignment);
+		break;
+	}
+	}
+}
+
+void kiosk_controller::reset_idle_timer() {
+	if (m_config.idle_reset_seconds > 0)
+		m_idle_timer->start(m_config.idle_reset_seconds * 1000);
+	else
+		m_idle_timer->stop();
+}
+
+void kiosk_controller::set_cursor_hidden(bool hidden) {
+	if (!m_stage)
+		return;
+	if (hidden)
+		m_stage->setCursor(Qt::BlankCursor);
+	else
+		m_stage->unsetCursor();
+}
+
+bool kiosk_controller::eventFilter(QObject *obj, QEvent *e) {
+	if (obj != m_stage)
+		return QObject::eventFilter(obj, e);
+
+	switch (e->type()) {
+		case QEvent::Resize:
+			relayout();
+			break;
+		case QEvent::KeyPress:
+			if (m_config.allow_escape &&
+			    static_cast<QKeyEvent *>(e)->key() == Qt::Key_Escape) {
+				exit();
+				return true;
+			}
+			reset_idle_timer();
+			break;
+		case QEvent::MouseMove:
+		case QEvent::MouseButtonPress:
+			reset_idle_timer();
+			break;
+		default:
+			break;
+	}
+	return QObject::eventFilter(obj, e);
+}

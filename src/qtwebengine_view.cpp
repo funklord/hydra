@@ -20,6 +20,10 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	setParent(m_view);
 
 	connect(m_view, &QWebEngineView::urlChanged, this, &qtwebengine_view::url_changed);
+	connect(m_view, &QWebEngineView::renderProcessTerminated, this,
+	         [this](QWebEnginePage::RenderProcessTerminationStatus, int) {
+		emit render_process_gone();
+	});
 
 	// Feature permissions (geo/cam/mic/notifications) answered from the
 	// decider the shell installs. Note: featurePermissionRequested is
@@ -82,10 +86,15 @@ void qtwebengine_view::apply_settings(const view_settings &s) {
 	set->setAttribute(QWebEngineSettings::AutoLoadImages, s.images);
 	set->setAttribute(QWebEngineSettings::PlaybackRequiresUserGesture, !s.autoplay);
 	set->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows, s.popups);
+	set->setAttribute(QWebEngineSettings::ShowScrollBars, s.scrollbars);
 }
 
 void qtwebengine_view::set_permission_decider(permission_decider fn) {
 	m_decider = std::move(fn);
+}
+
+void qtwebengine_view::set_zoom_factor(double factor) {
+	m_view->setZoomFactor(factor);
 }
 
 QByteArray qtwebengine_view::save_state() const {

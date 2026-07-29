@@ -37,6 +37,8 @@ add_executable(hydra
     src/site_policy_dialog.cpp
     src/site_policy_dialog.h
     src/node.h
+    src/kiosk_controller.cpp
+    src/kiosk_controller.h
     # The web view seam: the shell talks only to these two interfaces
     # (architecture doc §19.2); the qtwebengine_* pair is the desktop
     # implementation, and an Android one slots in beside it later.

@@ -20,6 +20,7 @@ struct view_settings {
 	bool images     = true;
 	bool autoplay   = true;
 	bool popups     = false;
+	bool scrollbars = true;   // kiosk mode turns these off (architecture doc §8)
 };
 
 // One rendered page.
@@ -49,6 +50,10 @@ public:
 	virtual void apply_settings(const view_settings &s) = 0;
 	virtual void set_permission_decider(permission_decider fn) = 0;
 
+	// Reflow zoom — the page re-lays out at the new scale. Kiosk mode's
+	// reliable scaling path (architecture doc §8.1); every engine has this.
+	virtual void set_zoom_factor(double factor) = 0;
+
 	// Session state — navigation history and whatever else the engine can
 	// serialize. Opaque to the shell, which only stores and returns the blob
 	// (state_store keys it by node id, architecture doc §4.2).
@@ -57,4 +62,8 @@ public:
 
 signals:
 	void url_changed(const QUrl &url);
+
+	// The engine's render process died. Kiosk mode's watchdog reloads on this
+	// so an unattended screen self-heals (architecture doc §8.3).
+	void render_process_gone();
 };

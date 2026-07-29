@@ -7,6 +7,7 @@
 #include "site_policy_dialog.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"
+#include "kiosk_controller.h"
 #include "policy.h"
 #include "node.h"
 
@@ -172,6 +173,11 @@ QMenuBar *main_window::build_menu_bar() {
 	view_menu->addSeparator();
 	view_menu->addAction("&Expand All", this, [this] { m_tree->expandAll(); });
 	view_menu->addAction("&Collapse All", this, [this] { m_tree->collapseAll(); });
+	view_menu->addSeparator();
+	m_kiosk_action = view_menu->addAction("&Kiosk Mode", QKeySequence(Qt::Key_F11),
+	                                       this, &main_window::toggle_kiosk);
+	m_kiosk_action->setCheckable(true);
+	m_kiosk_action->setStatusTip("Fullscreen chrome-less presentation; Esc returns");
 
 	QMenu *tools_menu = menu->addMenu("&Tools");
 	tools_menu->addAction("&Site Controls…", this, &main_window::open_site_controls);
@@ -180,6 +186,48 @@ QMenuBar *main_window::build_menu_bar() {
 	help_menu->addAction("&About", this, &main_window::on_about);
 
 	return menu;
+}
+
+void main_window::toggle_kiosk() {
+	if (!m_kiosk) {
+		m_kiosk = new kiosk_controller(this);
+		// Coming back from kiosk: put the view on screen again and resync the
+		// menu check, which also covers Esc exiting without going through here.
+		connect(m_kiosk, &kiosk_controller::left, this, [this] {
+			if (web_view_backend *v = m_kiosk->view())
+				m_stack->addWidget(v->widget());
+			m_kiosk_action->setChecked(false);
+			show();
+			if (web_view_backend *v = current_view())
+				m_stack->setCurrentWidget(v->widget());
+			update_status();
+		});
+	}
+
+	if (m_kiosk->active()) {
+		m_kiosk->exit();
+		return;
+	}
+
+	web_view_backend *v = current_view();
+	if (!v) {
+		m_status->showMessage("Kiosk mode needs an open tab", 4000);
+		m_kiosk_action->setChecked(false);
+		return;
+	}
+
+	kiosk_config c = m_kiosk->config();
+	c.home = v->url();
+	m_kiosk->set_config(c);
+
+	m_stack->removeWidget(v->widget());   // the controller takes it from here
+	if (m_kiosk->enter(v, m_stack)) {
+		m_kiosk_action->setChecked(true);
+		hide();                            // the stage is its own fullscreen window
+	} else {
+		m_stack->addWidget(v->widget());
+		m_kiosk_action->setChecked(false);
+	}
 }
 
 void main_window::on_about() {
@@ -205,6 +253,15 @@ bool main_window::event(QEvent *e) {
 		return true;
 	}
 	return QWidget::event(e);
+}
+
+main_window::~main_window() {
+	// Leave kiosk while our children still exist: the controller hands the
+	// presented view's widget back to the stack, and doing that after the
+	// stack has been destroyed is a use-after-free. Destructor bodies run
+	// before QObject tears down children, so here is the right place.
+	if (m_kiosk && m_kiosk->active())
+		m_kiosk->exit();
 }
 
 bool main_window::load_tree(const QString &path) {
@@ -283,6 +340,11 @@ void main_window::suspend_node(node *n) {
 		return;
 	web_view_backend *view = m_views_by_id.value(n->id, nullptr);
 	if (!view)
+		return;
+
+	// Never tear down the view a kiosk session is presenting. Without this the
+	// live-view cap could suspend the tab that is currently fullscreen.
+	if (m_kiosk && m_kiosk->active() && m_kiosk->view() == view)
 		return;
 
 	if (m_state)
@@ -439,6 +501,11 @@ void main_window::on_policy_changed() {
 }
 
 void main_window::closeEvent(QCloseEvent *event) {
+	// Leave kiosk first, so the presented view is back in the stack and can be
+	// suspended with the rest.
+	if (m_kiosk && m_kiosk->active())
+		m_kiosk->exit();
+
 	// Persist live tabs as suspended blobs so they restore next launch,
 	// then write the tree structure.
 	const QList<QString> live_ids = m_views_by_id.keys();

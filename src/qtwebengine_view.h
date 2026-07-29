@@ -23,6 +23,7 @@ public:
 	void reload() override;
 	void apply_settings(const view_settings &s) override;
 	void set_permission_decider(permission_decider fn) override;
+	void set_zoom_factor(double factor) override;
 	QByteArray save_state() const override;
 	bool       restore_state(const QByteArray &blob) override;
 

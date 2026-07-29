@@ -13,6 +13,7 @@ class QComboBox;
 class QLabel;
 class QMenuBar;
 class QStatusBar;
+class QAction;
 class QTimer;
 class QPoint;
 class QCloseEvent;
@@ -24,6 +25,7 @@ class policy_engine;
 class web_view_backend;
 class web_view_factory;
 class site_policy_dialog;
+class kiosk_controller;
 struct node;
 
 // The shell: a splitter with the tab tree on the left and a stack of
@@ -46,6 +48,7 @@ public:
 	// (architecture doc §19.2). Both must outlive the window.
 	main_window(web_view_factory *factory, policy_engine *policy,
 	             QWidget *parent = nullptr);
+	~main_window() override;
 
 	bool load_tree(const QString &path);
 
@@ -66,6 +69,7 @@ private slots:
 	void open_site_controls();
 	void on_policy_changed();
 	void on_about();
+	void toggle_kiosk();
 
 private:
 	QMenuBar *build_menu_bar();
@@ -97,6 +101,8 @@ private:
 	state_store        *m_state         = nullptr;
 	policy_engine      *m_policy        = nullptr;   // injected, not owned
 	site_policy_dialog *m_policy_dialog = nullptr;
+	kiosk_controller   *m_kiosk         = nullptr;
+	QAction            *m_kiosk_action  = nullptr;
 	QTimer             *m_save_timer    = nullptr;
 	QString             m_tree_path;
 	QString             m_policy_path;
