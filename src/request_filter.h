@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <QList>
 #include <QSet>
 #include <QString>
+#include <QUrl>
 
 class policy_engine;
 
@@ -18,11 +20,27 @@ struct request_decision {
 	bool strip_referer = false;
 };
 
-// One request, reduced to what a decision needs.
+// One request, reduced to what a decision needs — plus the full URL, which
+// the decision ignores but the media detector (§11.1) reads for extensions
+// and manifest paths.
 struct request_context {
 	QString       request_host;   // host the request goes to
 	QString       site_host;      // host of the page making it
+	QUrl          url;            // the full request URL
 	resource_kind kind = resource_kind::other;
+};
+
+// The interceptor is a shared *sensor*, not just a gate (architecture doc §10):
+// ad-blocking, media detection, and filter-evolution signal collection all ride
+// the same stream of requests. Observers see every request and its decision.
+//
+// Thread note: on_request() is called from wherever the platform's interceptor
+// runs, which on Qt WebEngine is not the UI thread. Implementations must be
+// safe to call concurrently and must not touch widgets directly.
+class request_observer {
+public:
+	virtual ~request_observer() = default;
+	virtual void on_request(const request_context &ctx, const request_decision &d) = 0;
 };
 
 // The platform-neutral half of request interception (architecture doc §7.3,
@@ -45,7 +63,14 @@ public:
 
 	bool is_ad_host(const QString &host) const;
 
+	// Observers are registered on the UI thread before browsing starts and are
+	// not removed while requests are in flight.
+	void add_observer(request_observer *o) { m_observers.push_back(o); }
+	void remove_observer(request_observer *o) { m_observers.removeAll(o); }
+	void notify(const request_context &ctx, const request_decision &d) const;
+
 private:
 	policy_engine *m_engine;
 	QSet<QString>  m_ad_hosts;
+	QList<request_observer *> m_observers;
 };

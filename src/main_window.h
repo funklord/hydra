@@ -27,6 +27,12 @@ class web_view_factory;
 class site_policy_dialog;
 class kiosk_controller;
 class ai_provider;
+class media_detector;
+class player_launcher;
+class download_manager;
+class filter_signals;
+class filter_list;
+class request_filter;
 class ollama_provider;
 class claude_provider;
 struct node;
@@ -50,7 +56,7 @@ public:
 	// leaves main() as the single place naming a concrete backend
 	// (architecture doc §19.2). Both must outlive the window.
 	main_window(web_view_factory *factory, policy_engine *policy,
-	             QWidget *parent = nullptr);
+	             request_filter *filter, QWidget *parent = nullptr);
 	~main_window() override;
 
 	bool load_tree(const QString &path);
@@ -74,6 +80,9 @@ private slots:
 	void on_about();
 	void toggle_kiosk();
 	void open_reorganizer();
+	void open_media();
+	void open_filter_evolution();
+	void on_media_found(const QString &site_host, int count);
 
 private:
 	QMenuBar *build_menu_bar();
@@ -108,6 +117,13 @@ private:
 	kiosk_controller   *m_kiosk         = nullptr;
 	ollama_provider    *m_local_ai      = nullptr;
 	claude_provider    *m_external_ai   = nullptr;
+	media_detector     *m_media         = nullptr;
+	player_launcher    *m_players       = nullptr;
+	download_manager   *m_downloads     = nullptr;
+	filter_signals     *m_signals       = nullptr;
+	filter_list        *m_filters       = nullptr;
+	QAction            *m_media_action  = nullptr;
+	QString             m_filters_path;
 	QAction            *m_kiosk_action  = nullptr;
 	QTimer             *m_save_timer    = nullptr;
 	QString             m_tree_path;

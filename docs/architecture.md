@@ -283,6 +283,8 @@ A single `QWebEngineUrlRequestInterceptor` on the profile is the sensor behind t
 
 ## 11. Media-download detector and download manager
 
+**Status: done**, minus the local-proxy tier. `media_detector` rides the interceptor's observer seam and classifies by URL shape; `player_launcher` probes PATH and routes by capability; `download_manager` queues direct files with Range resume. Segment assembly, the ffmpeg remux, and the proxy that would inject request context remain the next increment.
+
 ### 11.1 Detection
 
 Riding the interceptor, the detector classifies three kinds of saveable media: direct files (`.mp4/.webm/.mkv/.mp3/.m4a/.pdf`…) by URL/extension and Content-Type; HLS manifests (`.m3u8`); and DASH manifests (`.mpd`). Obfuscated manifests are still betrayed by their segment requests (`.ts`, `.m4s`). Reliable Content-Type and manifest-body classification uses the optional local proxy (§10).
@@ -308,6 +310,8 @@ A "media on this page" toolbar badge lights with a count when saveable resources
 ## 12. Filter-evolution loop
 
 The AI diff/accept pipeline (Spine 3) pointed at the filter list instead of the tree.
+
+**Status: passive half done.** `filter_signals` collects the passive signals below, `filter_list::evaluate` implements step 4's static rejection plus dry-run simulation, and `filter_dialog` is the step-5 accept UI writing into a separate AI-authored list. The user-driven element picker needs the script-injection and QWebChannel plumbing that arrives with the password manager (§13.2), so it is deferred to that step.
 
 **1. Signal collection.** User-driven: an element-picker ("zap this") captures a leaked ad's selector, attributes, DOM snippet, and associated requests. Passive: the interceptor logs requests that slipped through but match heuristics (third-party, ad-serving shapes, high-frequency beacons) and flags likely anti-adblock overlays (a full-page element appearing right after load).
 

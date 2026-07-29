@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
 	request_filter      filter(&policy);
 	qtwebengine_factory factory(&filter);
 
-	main_window w(&factory, &policy);
+	main_window w(&factory, &policy, &filter);
 
 	// Tree file: first CLI arg, else ./sample-tree.txt next to the binary or cwd.
 	QString tree_path = (argc > 1) ? QString::fromLocal8Bit(argv[1])

@@ -52,6 +52,22 @@ add_executable(hydra
     src/tree_diff.h
     src/reorganize_dialog.cpp
     src/reorganize_dialog.h
+    # Interceptor consumers (architecture doc §11–§12): media detection with
+    # downloads and external-player handoff, and the filter-evolution loop.
+    src/media_detector.cpp
+    src/media_detector.h
+    src/media_dialog.cpp
+    src/media_dialog.h
+    src/player_launcher.cpp
+    src/player_launcher.h
+    src/download_manager.cpp
+    src/download_manager.h
+    src/filter_list.cpp
+    src/filter_list.h
+    src/filter_signals.cpp
+    src/filter_signals.h
+    src/filter_dialog.cpp
+    src/filter_dialog.h
     # The web view seam: the shell talks only to these two interfaces
     # (architecture doc §19.2); the qtwebengine_* pair is the desktop
     # implementation, and an Android one slots in beside it later.

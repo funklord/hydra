@@ -1,0 +1,57 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#pragma once
+
+#include "filter_list.h"
+
+#include <QDialog>
+#include <QList>
+
+class QLabel;
+class QTreeWidget;
+class QPushButton;
+class QStackedWidget;
+class QPlainTextEdit;
+class ai_provider;
+class filter_signals;
+
+// The filter-evolution loop's accept UI (architecture doc §12.5) — Spine 3's
+// diff/accept machinery pointed at the filter list instead of the tree.
+//
+// The shape deliberately mirrors reorganize_dialog, because it is the same
+// pipeline: review payload → send → receive → validate → per-item accept.
+// What differs is the safety core. There the invariant was "no node left
+// behind"; here it is the dry run (§12.4), which statically rejects
+// dangerously broad rules and simulates the survivors against the requests
+// actually observed on the page, so each rule is shown with exactly what it
+// would have blocked.
+class filter_dialog : public QDialog {
+	Q_OBJECT
+public:
+	filter_dialog(filter_signals *signals_source, filter_list *list,
+	               ai_provider *provider, const QString &site_host,
+	               QWidget *parent = nullptr);
+
+private slots:
+	void on_send();
+	void on_reply(const QString &text);
+	void on_failed(const QString &error);
+	void on_accept();
+
+private:
+	void build_ui();
+	void show_proposals(const QList<filter_rule> &rules);
+
+	filter_signals *m_signals  = nullptr;
+	filter_list    *m_list     = nullptr;
+	ai_provider    *m_provider = nullptr;
+	QString         m_site;
+
+	QStackedWidget *m_pages   = nullptr;
+	QPlainTextEdit *m_payload = nullptr;
+	QLabel         *m_status  = nullptr;
+	QTreeWidget    *m_rules   = nullptr;
+	QPushButton    *m_send    = nullptr;
+	QPushButton    *m_apply   = nullptr;
+
+	QList<filter_rule> m_accepted;
+};

@@ -11,6 +11,13 @@
 #include "reorganize_dialog.h"
 #include "ollama_provider.h"
 #include "claude_provider.h"
+#include "media_detector.h"
+#include "media_dialog.h"
+#include "player_launcher.h"
+#include "download_manager.h"
+#include "filter_signals.h"
+#include "filter_list.h"
+#include "filter_dialog.h"
 #include "policy.h"
 #include "node.h"
 
@@ -37,8 +44,22 @@
 #include <QCloseEvent>
 
 main_window::main_window(web_view_factory *factory, policy_engine *policy,
-                          QWidget *parent)
+                          request_filter *filter, QWidget *parent)
 	: QWidget(parent), m_factory(factory), m_policy(policy) {
+	// The two interceptor consumers (architecture doc §10): both observe the
+	// same request stream the blocker already rides, rather than adding a
+	// second sensor.
+	m_media   = new media_detector(this);
+	m_signals = new filter_signals(this);
+	if (filter) {
+		filter->add_observer(m_media);
+		filter->add_observer(m_signals);
+	}
+	m_players   = new player_launcher;
+	m_downloads = new download_manager(this);
+	m_filters   = new filter_list;
+	connect(m_media, &media_detector::site_updated,
+	         this, &main_window::on_media_found, Qt::QueuedConnection);
 	// The security spine is wired up before we get here: the factory owns the
 	// profile with the interceptor and cookie filter already installed on it
 	// (architecture doc §6/§7.3), and the policy engine is shared with them.
@@ -77,6 +98,14 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_address->setClearButtonEnabled(true);
 	connect(m_address, &QLineEdit::returnPressed, this, &main_window::navigate_to_address);
 	bar->addWidget(m_address);
+
+	// The media affordance sits next to the policy shield and stays hidden
+	// until something is detected — detection is progressive, so it fades in a
+	// beat after load rather than being present and empty (§11.3).
+	m_media_action = bar->addAction("Media");
+	m_media_action->setToolTip("Watch or download media on this page");
+	m_media_action->setVisible(false);
+	connect(m_media_action, &QAction::triggered, this, &main_window::open_media);
 
 	QAction *shield_act = bar->addAction("Shield");
 	shield_act->setToolTip("Site controls");
@@ -188,6 +217,9 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *reorg = tools_menu->addAction("&Reorganize Tree with AI…", this,
                                         &main_window::open_reorganizer);
 	reorg->setStatusTip("Propose a new tree layout; nothing changes until you accept");
+	QAction *eva = tools_menu->addAction("Evolve Ad &Filters…", this,
+	                                      &main_window::open_filter_evolution);
+	eva->setStatusTip("Propose filter rules for ads that slipped through here");
 
 	QMenu *help_menu = menu->addMenu("&Help");
 	help_menu->addAction("&About", this, &main_window::on_about);
@@ -267,6 +299,53 @@ void main_window::open_reorganizer() {
 	}
 }
 
+void main_window::on_media_found(const QString &site_host, int count) {
+	web_view_backend *v = current_view();
+	if (!v || v->url().host() != site_host)
+		return;   // detection on a background tab; don't retitle this one
+	m_media_action->setVisible(count > 0);
+	m_media_action->setText(QString("Media (%1)").arg(count));
+}
+
+void main_window::open_media() {
+	web_view_backend *v = current_view();
+	if (!v)
+		return;
+	QString node_id;
+	for (auto it = m_views_by_id.cbegin(); it != m_views_by_id.cend(); ++it)
+		if (it.value() == v) { node_id = it.key(); break; }
+
+	media_dialog dlg(m_media, m_players, m_downloads, this);
+	dlg.set_site(v->url().host(), node_id);
+	dlg.exec();
+}
+
+void main_window::open_filter_evolution() {
+	web_view_backend *v = current_view();
+	if (!v) {
+		m_status->showMessage("Open a page first — filter evolution works from "
+		                      "what that page requested.", 5000);
+		return;
+	}
+	if (!m_local_ai) {
+		m_local_ai    = new ollama_provider(this);
+		m_external_ai = new claude_provider(this);
+		m_local_ai->probe();
+	}
+	ai_provider *chosen = m_local_ai->available()    ? static_cast<ai_provider *>(m_local_ai)
+	                    : m_external_ai->available() ? static_cast<ai_provider *>(m_external_ai)
+	                                                 : nullptr;
+	if (!chosen) {
+		m_status->showMessage("No AI provider: start Ollama locally, or set "
+		                      "ANTHROPIC_API_KEY.", 6000);
+		return;
+	}
+
+	filter_dialog dlg(m_signals, m_filters, chosen, v->url().host(), this);
+	if (dlg.exec() == QDialog::Accepted && !m_filters_path.isEmpty())
+		m_filters->save(m_filters_path);
+}
+
 void main_window::on_about() {
 	QMessageBox::about(this, "About Hydra",
 		"<b>Hydra</b><br>"
@@ -293,6 +372,8 @@ bool main_window::event(QEvent *e) {
 }
 
 main_window::~main_window() {
+	delete m_players;
+	delete m_filters;
 	// Leave kiosk while our children still exist: the controller hands the
 	// presented view's widget back to the stack, and doing that after the
 	// stack has been destroyed is a use-after-free. Destructor bodies run
@@ -309,6 +390,11 @@ bool main_window::load_tree(const QString &path) {
 
 	m_policy_path = dir + "/policy.json";
 	m_policy->load(m_policy_path);   // no-op if the file doesn't exist yet
+
+	// The AI/user-authored filter list lives beside the rest, kept separate
+	// from any imported EasyList so upstream updates cannot clobber it (§12.5).
+	m_filters_path = dir + "/filters-ai.txt";
+	m_filters->load(m_filters_path);
 
 	const bool ok = m_model->load(path);
 	m_tree->expandAll();

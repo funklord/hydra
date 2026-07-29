@@ -68,3 +68,8 @@ bool request_filter::allow_cookie(const QString &site_host, bool third_party) co
 		return false;
 	return m_engine->is_allowed(feature::cookies, site_host);
 }
+
+void request_filter::notify(const request_context &ctx, const request_decision &d) const {
+	for (request_observer *o : m_observers)
+		o->on_request(ctx, d);
+}

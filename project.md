@@ -105,7 +105,7 @@ Note that going beyond Linux needs one code change first: `main.cpp`
 unconditionally forces `QT_QPA_PLATFORM=xcb`, which has to become
 Linux-conditional before a Windows or macOS build is meaningful.
 
-## What is implemented (build-order steps 1–5)
+## What is implemented (build-order steps 1–6)
 
 | Area | Files | Notes |
 |---|---|---|
@@ -122,6 +122,10 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Kiosk | `kiosk_controller.{h,cpp}` | fullscreen stage, 3 scale paths, fit modes, idle-reset, watchdog |
 | AI provider | `ai_provider.h`, `ollama_provider.{h,cpp}`, `claude_provider.{h,cpp}` | local-first seam; Ollama local, Claude external |
 | AI reorganizer | `tree_serializer.{h,cpp}`, `tree_diff.{h,cpp}`, `reorganize_dialog.{h,cpp}` | metadata-only payload, invariant check, diff/accept |
+| Media detector | `media_detector.{h,cpp}`, `media_dialog.{h,cpp}` | URL-shaped classification, segment attribution, Watch/Download list |
+| Player handoff | `player_launcher.{h,cpp}` | PATH probe, capability routing, URL-not-pipe launch |
+| Downloads | `download_manager.{h,cpp}` | queue, resume via Range, per-node association |
+| Filter evolution | `filter_list.{h,cpp}`, `filter_signals.{h,cpp}`, `filter_dialog.{h,cpp}` | passive signals, dry-run validation, diff/accept |
 
 Persistence: `policy.json`, `state/<id>.blob`, and the tree file all sit next to
 the outline file passed on the command line.

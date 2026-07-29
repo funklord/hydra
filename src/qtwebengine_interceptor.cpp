@@ -16,6 +16,7 @@ void qtwebengine_interceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
 	request_context ctx;
 	ctx.request_host = info.requestUrl().host();
 	ctx.site_host    = info.firstPartyUrl().host();   // the page's site
+	ctx.url          = info.requestUrl();
 	switch (info.resourceType()) {
 		case RT::ResourceTypeScript: ctx.kind = resource_kind::script; break;
 		case RT::ResourceTypeImage:  ctx.kind = resource_kind::image;  break;
@@ -23,6 +24,9 @@ void qtwebengine_interceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
 	}
 
 	const request_decision d = m_filter->decide(ctx);
+	// Every request reaches the observers, blocked or not: the media detector
+	// wants what loaded, and filter-evolution wants what slipped through.
+	m_filter->notify(ctx, d);
 	if (d.block) {
 		info.block(true);
 		return;
