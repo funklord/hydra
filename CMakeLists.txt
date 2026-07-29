@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.19)
 
 # Rename the project here (and the executable name below) to whatever final
@@ -12,25 +13,25 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets WebEngineWidgets)
 
 add_executable(hydra
     src/main.cpp
-    src/MainWindow.cpp
-    src/MainWindow.h
-    src/TabTreeModel.cpp
-    src/TabTreeModel.h
-    src/TreeSortProxy.cpp
-    src/TreeSortProxy.h
-    src/TreeOutline.cpp
-    src/TreeOutline.h
-    src/StateStore.cpp
-    src/StateStore.h
-    src/Policy.cpp
-    src/Policy.h
-    src/PolicyEngine.cpp
-    src/PolicyEngine.h
-    src/RequestInterceptor.cpp
-    src/RequestInterceptor.h
-    src/SitePolicyDialog.cpp
-    src/SitePolicyDialog.h
-    src/Node.h
+    src/main_window.cpp
+    src/main_window.h
+    src/tab_tree_model.cpp
+    src/tab_tree_model.h
+    src/tree_sort_proxy.cpp
+    src/tree_sort_proxy.h
+    src/tree_outline.cpp
+    src/tree_outline.h
+    src/state_store.cpp
+    src/state_store.h
+    src/policy.cpp
+    src/policy.h
+    src/policy_engine.cpp
+    src/policy_engine.h
+    src/request_interceptor.cpp
+    src/request_interceptor.h
+    src/site_policy_dialog.cpp
+    src/site_policy_dialog.h
+    src/node.h
 )
 
 target_link_libraries(hydra PRIVATE

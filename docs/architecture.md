@@ -39,7 +39,8 @@ The application is organized around three shared spines and a set of feature mod
 ```
                          ┌─────────────────────────────────────────┐
                          │              Qt Widgets Shell            │
-                         │  QMainWindow · QSplitter · Sidebar tree  │
+                         │  QWidget · Menu/tool/status bars         │
+                         │  · QSplitter · Sidebar tree              │
                          │  · QStackedWidget of QWebEngineViews     │
                          └───────────────┬─────────────────────────┘
                                          │
@@ -165,7 +166,13 @@ Nodes move between types as a lifecycle: an UnopenedTab becomes an OpenTab when 
 
 ## 6. The shell and web-view embedding
 
-The shell is a `QMainWindow` whose central widget is a horizontal `QSplitter`. The left pane is a `QTreeView` bound to the sort/filter proxy stack over `TabTreeModel`. The right pane is a `QStackedWidget` holding one `QWebEngineView` per open tab; selecting a tree node either switches the stack to that node's live view, instantiates a view for an unopened node, or rehydrates a suspended one. For true side-by-side viewing, the right pane can itself be a nested `QSplitter` hosting two live views.
+The shell presents itself as a conventional desktop application in the older style: a **menu bar** across the top, the compact toolbar beneath it, the content area, and a **status bar** along the bottom. Structurally it is a plain `QWidget` rather than a `QMainWindow`, with all four laid out explicitly in one `QVBoxLayout` — `QMenuBar`, `QToolBar`, a horizontal `QSplitter`, `QStatusBar`. Both bars are ordinary widgets and work perfectly well outside a `QMainWindow`; the only thing that has to be reproduced by hand is status-tip routing (a `QMainWindow` forwards `QEvent::StatusTip` to its status bar automatically, so the shell handles that event itself). Laying the furniture out directly keeps the window's structure explicit, which is what kiosk mode (§8) and the Android drawer layout (§19.3) both need in order to rearrange or strip it later.
+
+The menus cover what the app already does — File (save tree, quit), Go (back/forward/reload), View (sort mode, expand/collapse), Tools (site controls), Help — with the sort actions driving the toolbar's sort combo rather than the proxy directly, so the two controls cannot drift apart. The status bar carries transient messages (the current URL, menu status tips) on the left and a permanent live-view count on the right.
+
+Note that "chrome-less" below refers to *per-tab browser* chrome drawn around the web views, not to the application window's own furniture: the app window keeps its menu bar, toolbar, and status bar; what it does not do is wrap each web view in a Chromium frame.
+
+The left pane is a `QTreeView` bound to the sort/filter proxy stack over `TabTreeModel`. The right pane is a `QStackedWidget` holding one `QWebEngineView` per open tab; selecting a tree node either switches the stack to that node's live view, instantiates a view for an unopened node, or rehydrates a suspended one. For true side-by-side viewing, the right pane can itself be a nested `QSplitter` hosting two live views.
 
 Chrome-less presentation is inherent: the app draws no per-tab browser chrome around the web views — navigation and controls live in the app's own compact toolbar (address field, the policy shield, media badge), not in a Chromium frame. All web views share a single `QWebEngineProfile`, which is where the interceptor, cookie filter, and download handler are installed once and apply everywhere.
 
@@ -380,7 +387,7 @@ The interceptor's request-only visibility (inline scripts, response headers) cap
 
 ## 17. Suggested build order
 
-1. **Shell + engine + tree model** — `QMainWindow`/`QSplitter`, one `QWebEngineView`, `TabTreeModel` loading the canonical file, basic open/suspend lifecycle.
+1. **Shell + engine + tree model** — `QWidget`/`QSplitter`, one `QWebEngineView`, `TabTreeModel` loading the canonical file, basic open/suspend lifecycle.
 2. **Sort/filter proxy layer** — hierarchical and flat proxies, the four sort modes, search.
 3. **Interceptor + PolicyEngine** — rule model, `decide()`, the enforcement hooks, the URL-bar tri-state editor.
 4. **Kiosk mode** — fullscreen chromeless, reflow-zoom scale, crop-via-clip, fit modes; geometric scale behind a tested flag.
@@ -398,7 +405,7 @@ Each step builds on a spine the previous steps already established, so no subsys
 
 | Subsystem | Responsibility | Key Qt classes | Shares |
 |---|---|---|---|
-| Shell | Window, sidebar, view stack | `QMainWindow`, `QSplitter`, `QTreeView`, `QStackedWidget`, `QWebEngineView` | — |
+| Shell | Window, menus, sidebar, view stack | `QWidget`, `QVBoxLayout`, `QMenuBar`, `QToolBar`, `QSplitter`, `QTreeView`, `QStackedWidget`, `QStatusBar`, `QWebEngineView` | — |
 | TabTree model | State: folders/tabs/links, lifecycle | `QAbstractItemModel` | Spine 2 |
 | Sort/filter | Powerful sorting + search | `QSortFilterProxyModel`, flattening proxy | Spine 2 |
 | PolicyEngine | Per-site security rules + enforce | `QWebEngineSettings`, `QWebEngineCookieStore`, `QWebEnginePage` | Sink |

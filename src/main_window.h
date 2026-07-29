@@ -1,0 +1,103 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#pragma once
+
+#include <QWidget>
+#include <QHash>
+#include <QStringList>
+#include <QString>
+
+class QTreeView;
+class QStackedWidget;
+class QLineEdit;
+class QComboBox;
+class QLabel;
+class QMenuBar;
+class QStatusBar;
+class QTimer;
+class QPoint;
+class QCloseEvent;
+class QWebEngineView;
+class QWebEngineProfile;
+class QWebEnginePage;
+class tab_tree_model;
+class tree_sort_proxy;
+class state_store;
+class policy_engine;
+class request_interceptor;
+class site_policy_dialog;
+struct node;
+
+// The shell: a splitter with the tab tree on the left and a stack of
+// chrome-less web views on the right (architecture doc §6). Tabs follow a
+// lifecycle — unopened -> open (live view) -> suspended (history blob) — with a
+// small cap on how many views stay live at once (§5.4).
+//
+// A plain QWidget rather than a QMainWindow, stacking the classic desktop
+// furniture itself in one QVBoxLayout: menu bar, toolbar, splitter, status bar.
+// QMenuBar and QStatusBar are ordinary widgets and work fine outside a
+// QMainWindow, so laying them out directly costs nothing and keeps the window's
+// structure explicit — which kiosk mode (§8) and the Android drawer layout
+// (§19.3) both need to rearrange later.
+class main_window : public QWidget {
+	Q_OBJECT
+public:
+	explicit main_window(QWidget *parent = nullptr);
+
+	bool load_tree(const QString &path);
+
+protected:
+	void closeEvent(QCloseEvent *event) override;
+	bool event(QEvent *e) override;   // routes status tips to the status bar
+
+private slots:
+	void on_tree_activated(const QModelIndex &proxy_index);
+	void on_tree_context_menu(const QPoint &pos);
+	void on_sort_mode_changed(int combo_index);
+	void on_search_changed(const QString &text);
+	void navigate_to_address();
+	void go_back();
+	void go_forward();
+	void reload_page();
+	void flush_tree();
+	void open_site_controls();
+	void on_policy_changed();
+	void on_about();
+
+private:
+	QMenuBar *build_menu_bar();
+	void update_status();          // refresh the status bar's permanent counts
+	QWebEngineView *current_view() const;
+	void open_node(node *n);            // create/restore a live view and show it
+	void suspend_node(node *n);         // serialize + tear down the live view
+	void touch_lru(const QString &id);
+	void enforce_live_cap(const QString &keep_id);
+	void mark_dirty();
+	void update_address(const QString &url);
+	void apply_policy(QWebEnginePage *page, const QString &host);
+
+	static constexpr int k_max_live_views = 4;
+
+	tab_tree_model  *m_model = nullptr;
+	tree_sort_proxy *m_proxy = nullptr;
+	QTreeView       *m_tree  = nullptr;
+	QStackedWidget  *m_stack = nullptr;
+
+	QLineEdit       *m_address  = nullptr;
+	QComboBox       *m_sort_box = nullptr;
+	QLineEdit       *m_search   = nullptr;
+
+	QStatusBar      *m_status     = nullptr;
+	QLabel          *m_tab_counts = nullptr;   // permanent widget, right side
+
+	QWebEngineProfile   *m_profile       = nullptr;
+	state_store         *m_state         = nullptr;
+	policy_engine       *m_policy        = nullptr;
+	request_interceptor *m_interceptor   = nullptr;
+	site_policy_dialog  *m_policy_dialog = nullptr;
+	QTimer              *m_save_timer    = nullptr;
+	QString              m_tree_path;
+	QString              m_policy_path;
+
+	QHash<QString, QWebEngineView *> m_views_by_id;  // node id -> live view
+	QStringList                      m_lru;          // most-recent id at front
+};

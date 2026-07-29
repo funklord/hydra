@@ -1,8 +1,9 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
 #include <QString>
 
-struct Node;
+struct node;
 
 // Reads and writes the canonical, human-readable tree file — the source of
 // truth for structure and order (architecture doc §4.4). Format, two spaces
@@ -14,12 +15,12 @@ struct Node;
 //
 // Fields are separated by " | ". The first field is the node type; trailing
 // key=value fields (created=, seen=) are optional.
-namespace TreeOutline {
+namespace tree_outline {
 
-// Returns a synthetic root Node (owns the whole tree; delete it to free).
+// Returns a synthetic root node (owns the whole tree; delete it to free).
 // On failure or empty file, returns an empty root.
-Node* load(const QString& path);
+node *load(const QString &path);
 
-bool  save(const QString& path, Node* root);
+bool  save(const QString &path, node *root);
 
-}  // namespace TreeOutline
+}  // namespace tree_outline
