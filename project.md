@@ -105,7 +105,7 @@ Note that going beyond Linux needs one code change first: `main.cpp`
 unconditionally forces `QT_QPA_PLATFORM=xcb`, which has to become
 Linux-conditional before a Windows or macOS build is meaningful.
 
-## What is implemented (build-order steps 1–4)
+## What is implemented (build-order steps 1–5)
 
 | Area | Files | Notes |
 |---|---|---|
@@ -120,6 +120,8 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | WebView seam | `web_view_backend.h`, `web_view_factory.h`, `request_filter.{h,cpp}` | platform-neutral interfaces + shared block/cookie decisions |
 | Desktop backend | `qtwebengine_{view,factory,interceptor}.{h,cpp}` | the only files that name Qt WebEngine |
 | Kiosk | `kiosk_controller.{h,cpp}` | fullscreen stage, 3 scale paths, fit modes, idle-reset, watchdog |
+| AI provider | `ai_provider.h`, `ollama_provider.{h,cpp}`, `claude_provider.{h,cpp}` | local-first seam; Ollama local, Claude external |
+| AI reorganizer | `tree_serializer.{h,cpp}`, `tree_diff.{h,cpp}`, `reorganize_dialog.{h,cpp}` | metadata-only payload, invariant check, diff/accept |
 
 Persistence: `policy.json`, `state/<id>.blob`, and the tree file all sit next to
 the outline file passed on the command line.
@@ -193,11 +195,59 @@ while getting there, both now handled:
 — `kiosk_config` is currently code-level defaults with no way to edit it from
 the app.
 
-## What is next (in order)
+## AI reorganizer (step 5, done)
 
-- **5 — AI reorganizer.** `AIProvider` (local-first, Claude as default
-  external), tree serialization, non-destructive diff/accept with the
-  no-node-left-behind invariant (arch §9).
+**Tools → Reorganize Tree with AI…**  The pipeline is arch §9.2 verbatim:
+review payload → send → receive → check invariants → diff → cherry-pick →
+apply. The live tree is untouched until Accept; the proposal is parsed into a
+shadow tree the dialog owns and deletes.
+
+**Provider seam.** `ai_provider` is one text request, one text reply — so the
+reorganizer, the later filter-evolution loop, and the diff/accept pipeline are
+all provider-agnostic. Resolution is local-first: `ollama_provider` if a local
+server answers, else `claude_provider` if `ANTHROPIC_API_KEY` is set, else the
+feature says so and does nothing. There is no official Anthropic SDK for C++,
+so the Claude adapter speaks the REST endpoint directly (`anthropic-version:
+2023-06-01`, model `claude-opus-5`, no `temperature`/`top_p` — that model
+rejects them). A refusal arrives as a normal 200, so it is checked before the
+response body is read.
+
+**What travels** (§9.3): per node, id, parent/depth, title, URL, type, tags —
+and nothing else. `tree_serializer` is deliberately not the canonical outline:
+it drops the `created=` / `seen=` timestamps the on-disk file keeps, because
+browsing history is not on §9.3's list and should not travel just because it
+shares a file. State blobs and live views never come near it. The
+review-before-send page shows the exact payload, and nothing is sent until the
+user presses Send.
+
+**The safety core** (§9.4) is `tree_diff::check_and_repair`, and it runs before
+any diff is shown. The invariant: every original *leaf* id appears exactly once
+in the proposal. Folders are the model's to invent, rename and drop; tabs are
+not. So dropped leaves are re-attached and duplicates collapsed rather than
+surfaced as a diff that could lose a tab — while an **invented leaf id fails the
+whole proposal**, since there is no safe repair for a fabricated tab and
+accepting one would put it in the user's tree. A leaf silently converted to a
+folder counts as invented for the same reason.
+
+Verified offline against 19 cases, all passing: timestamps absent from the
+payload; a dropped tab restored; duplicates collapsed to one; an invented leaf
+rejected by id; a leaf→folder conversion rejected; new folders allowed and
+counted; moves computed and applied with the leaf count preserved; a prose-only
+reply parsing to nothing rather than an empty tree (an empty proposal is a
+provider failure, not a request to delete everything); a fenced/prose-wrapped
+reply still parsing; and a move into a node's own subtree refused.
+
+**Not done from §9:** the undo snapshot (§9.4's one-keystroke revert — the
+cherry-pick UI covers accept-time control, but there is no post-apply undo), the
+web-session provider (§9.1 rates it least preferred), and merging on the
+duplicate-URL changes — those are detected and listed, never pre-selected, and
+applying one is currently a no-op.
+
+**Neither provider has been exercised against a live endpoint** — no Ollama and
+no API key in the development environment. The request/response shapes follow
+the documented contracts, but the first real call is unverified.
+
+## What is next (in order)
 - **6 — Interceptor consumers.** Media detector, download manager, and the
   filter-evolution loop (arch §11–§12), reusing the interceptor and the
   diff/accept UI.

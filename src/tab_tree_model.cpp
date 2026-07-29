@@ -2,6 +2,7 @@
 #include "tab_tree_model.h"
 #include "node.h"
 #include "tree_outline.h"
+#include "tree_diff.h"
 
 #include <QApplication>
 #include <QStyle>
@@ -137,4 +138,15 @@ QVariant tab_tree_model::data(const QModelIndex &index, int role) const {
 		case node_type_role:  return static_cast<int>(n->type);
 		default:              return {};
 	}
+}
+
+int tab_tree_model::apply_reorganization(const QList<tree_change> &changes) {
+	// Moves and new folders restructure whole subtrees at once, so a reset is
+	// both simpler and safer here than a sequence of begin/endMoveRows calls —
+	// and this runs once, on an explicit user action, not on a hot path.
+	beginResetModel();
+	const int applied = tree_diff::apply(m_root, changes);
+	reindex();
+	endResetModel();
+	return applied;
 }

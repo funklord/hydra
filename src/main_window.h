@@ -26,6 +26,9 @@ class web_view_backend;
 class web_view_factory;
 class site_policy_dialog;
 class kiosk_controller;
+class ai_provider;
+class ollama_provider;
+class claude_provider;
 struct node;
 
 // The shell: a splitter with the tab tree on the left and a stack of
@@ -70,6 +73,7 @@ private slots:
 	void on_policy_changed();
 	void on_about();
 	void toggle_kiosk();
+	void open_reorganizer();
 
 private:
 	QMenuBar *build_menu_bar();
@@ -102,6 +106,8 @@ private:
 	policy_engine      *m_policy        = nullptr;   // injected, not owned
 	site_policy_dialog *m_policy_dialog = nullptr;
 	kiosk_controller   *m_kiosk         = nullptr;
+	ollama_provider    *m_local_ai      = nullptr;
+	claude_provider    *m_external_ai   = nullptr;
 	QAction            *m_kiosk_action  = nullptr;
 	QTimer             *m_save_timer    = nullptr;
 	QString             m_tree_path;

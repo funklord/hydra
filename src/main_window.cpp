@@ -8,6 +8,9 @@
 #include "web_view_backend.h"
 #include "web_view_factory.h"
 #include "kiosk_controller.h"
+#include "reorganize_dialog.h"
+#include "ollama_provider.h"
+#include "claude_provider.h"
 #include "policy.h"
 #include "node.h"
 
@@ -181,6 +184,10 @@ QMenuBar *main_window::build_menu_bar() {
 
 	QMenu *tools_menu = menu->addMenu("&Tools");
 	tools_menu->addAction("&Site Controls…", this, &main_window::open_site_controls);
+	tools_menu->addSeparator();
+	QAction *reorg = tools_menu->addAction("&Reorganize Tree with AI…", this,
+                                        &main_window::open_reorganizer);
+	reorg->setStatusTip("Propose a new tree layout; nothing changes until you accept");
 
 	QMenu *help_menu = menu->addMenu("&Help");
 	help_menu->addAction("&About", this, &main_window::on_about);
@@ -227,6 +234,36 @@ void main_window::toggle_kiosk() {
 	} else {
 		m_stack->addWidget(v->widget());
 		m_kiosk_action->setChecked(false);
+	}
+}
+
+void main_window::open_reorganizer() {
+	// Local-first (architecture doc §9.1): if a local model answers, it handles
+	// the request and nothing leaves the machine. The external provider is used
+	// only when there is no local one and a credential exists — and the dialog
+	// gates it behind review-before-send either way.
+	if (!m_local_ai) {
+		m_local_ai    = new ollama_provider(this);
+		m_external_ai = new claude_provider(this);
+		m_local_ai->probe();
+	}
+
+	ai_provider *chosen = nullptr;
+	if (m_local_ai->available())
+		chosen = m_local_ai;
+	else if (m_external_ai->available())
+		chosen = m_external_ai;
+
+	if (!chosen) {
+		m_status->showMessage("No AI provider: start Ollama locally, or set "
+		                      "ANTHROPIC_API_KEY.", 6000);
+		return;
+	}
+
+	reorganize_dialog dlg(m_model, chosen, this);
+	if (dlg.exec() == QDialog::Accepted) {
+		m_tree->expandAll();
+		mark_dirty();
 	}
 }
 

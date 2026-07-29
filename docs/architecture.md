@@ -267,6 +267,8 @@ Before any proposal is shown, a **"no node left behind"** check runs: every orig
 
 ### 9.5 Diff and accept UI
 
+**Status: done.** `tree_serializer` builds the metadata-only payload, `tree_diff` holds the invariant check and the change derivation, `reorganize_dialog` is the review-and-cherry-pick UI, and `ai_provider` fronts `ollama_provider` (local, preferred) and `claude_provider` (external). Not yet built: the undo snapshot, the web-session backend, and acting on duplicate-URL merges.
+
 From the two id-keyed trees the app derives atomic changes — moved, re-parented, reordered, new folder, renamed folder, and optionally "duplicate URLs suggested for merge" — rendered as an annotated proposal tree with per-change badges, each individually toggleable. Applying a change is a model reparent/insert; because payloads follow ids, accepting is instantaneous and lossless.
 
 ---

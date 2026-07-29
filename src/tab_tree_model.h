@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "tree_diff.h"   // for tree_change in apply_reorganization()
+
 #include <QAbstractItemModel>
 #include <QHash>
+#include <QList>
 #include <QString>
 
 struct node;
@@ -35,6 +38,11 @@ public:
 
 	QModelIndex index_for_node(node *n) const;
 	void        refresh_node(node *n);            // emit dataChanged for one node
+
+	// Apply an accepted AI reorganization (architecture doc §9.5). Structural,
+	// so it goes through a model reset rather than per-row moves; returns the
+	// number of changes applied. Payloads follow ids, so nothing else moves.
+	int apply_reorganization(const QList<tree_change> &changes);
 
 	// QAbstractItemModel
 	QModelIndex index(int row, int column, const QModelIndex &parent) const override;

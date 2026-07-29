@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-#include <QString>
+#include "node.h"   // for node_type in the vocabulary helpers below
 
-struct node;
+#include <QString>
 
 // Reads and writes the canonical, human-readable tree file — the source of
 // truth for structure and order (architecture doc §4.4). Format, two spaces
@@ -22,5 +22,10 @@ namespace tree_outline {
 node *load(const QString &path);
 
 bool  save(const QString &path, node *root);
+
+// The shared type vocabulary. Exposed because the AI payload (tree_serializer)
+// uses the same words — one spelling of "folder"/"open" across the project.
+QString   type_to_string(node_type t);
+node_type type_from_string(const QString &s);
 
 }  // namespace tree_outline

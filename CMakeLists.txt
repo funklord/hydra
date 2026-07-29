@@ -14,7 +14,7 @@ set(CMAKE_AUTOMOC ON)
 # replacement Qt 6.4 introduced (the older order is deprecated from 6.4 on).
 # Asking for it here turns "too old Qt" into a clear configure-time failure
 # instead of a confusing compile error. Developed and tested against 6.8.2.
-find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets WebEngineWidgets)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets WebEngineWidgets Network)
 
 add_executable(hydra
     src/main.cpp
@@ -39,6 +39,19 @@ add_executable(hydra
     src/node.h
     src/kiosk_controller.cpp
     src/kiosk_controller.h
+    # AI reorganizer (architecture doc §9): provider seam, payload
+    # serialization, the diff/accept pipeline, and its dialog.
+    src/ai_provider.h
+    src/ollama_provider.cpp
+    src/ollama_provider.h
+    src/claude_provider.cpp
+    src/claude_provider.h
+    src/tree_serializer.cpp
+    src/tree_serializer.h
+    src/tree_diff.cpp
+    src/tree_diff.h
+    src/reorganize_dialog.cpp
+    src/reorganize_dialog.h
     # The web view seam: the shell talks only to these two interfaces
     # (architecture doc §19.2); the qtwebengine_* pair is the desktop
     # implementation, and an Android one slots in beside it later.
@@ -55,6 +68,7 @@ add_executable(hydra
 target_link_libraries(hydra PRIVATE
     Qt6::Widgets
     Qt6::WebEngineWidgets
+    Qt6::Network
 )
 
 # Copy the sample tree next to the binary so the app finds it on first run.

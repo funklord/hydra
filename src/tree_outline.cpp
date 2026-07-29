@@ -6,7 +6,7 @@
 #include <QTextStream>
 #include <QVector>
 
-namespace {
+namespace tree_outline {
 
 QString type_to_string(node_type t) {
 	switch (t) {
@@ -24,6 +24,10 @@ node_type type_from_string(const QString &s) {
 	if (s == "suspended") return node_type::suspended_tab;
 	return node_type::unopened_tab;
 }
+
+}  // namespace tree_outline
+
+namespace {
 
 int leading_spaces(const QString &line) {
 	int n = 0;
