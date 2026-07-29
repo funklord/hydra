@@ -61,8 +61,10 @@ See `project.md` for conventions, current status, and what to do next;
   (e.g. Debian/Ubuntu: `qt6-base-dev qt6-webengine-dev`;
   Arch: `qt6-base qt6-webengine`).
 - CMake ≥ 3.19, a C++17 compiler.
-- **X11 / XWayland** — the app forces `QT_QPA_PLATFORM=xcb` (see `main.cpp`),
-  matching the X11-only design decision.
+- **X11 / XWayland** on Linux — `main.cpp` forces `QT_QPA_PLATFORM=xcb` there
+  (unless the environment already set it), matching the X11-only design
+  decision. The forcing is guarded to desktop Linux; other platforms keep Qt's
+  own default platform plugin.
 
 ## Build & run
 

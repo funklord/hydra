@@ -5,13 +5,20 @@
 #include <QByteArray>
 #include <QDir>
 #include <QFileInfo>
+#include <QtGlobal>
 
 int main(int argc, char *argv[]) {
-	// X11 only, by design (architecture doc §2/§14). Force the xcb platform if
-	// the environment hasn't already chosen one, so foreign-window and embedding
-	// behavior stays predictable (and works under XWayland on Wayland sessions).
+	// Desktop Linux only: force the xcb platform plugin unless the environment
+	// has already chosen one, so the X11 behaviour this design relies on
+	// (architecture doc §2/§14) stays predictable, and a Wayland session runs
+	// under XWayland. Every other target has one sensible platform plugin —
+	// Windows, macOS, and Android each pick correctly on their own — so forcing
+	// anything there would be actively wrong. Q_OS_LINUX is also defined on
+	// Android, hence the second half of the guard.
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
 	if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
 		qputenv("QT_QPA_PLATFORM", QByteArray("xcb"));
+#endif
 
 	// Recommended for Qt WebEngine.
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);

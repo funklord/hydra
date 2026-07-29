@@ -27,31 +27,83 @@ cmake --build build -j
 
 Requires Qt 6 with **Widgets** and **WebEngineWidgets** (Arch: `qt6-base
 qt6-webengine`; Debian/Ubuntu: `qt6-base-dev qt6-webengine-dev`), CMake ≥ 3.19,
-C++17. X11 / XWayland only (the app forces `QT_QPA_PLATFORM=xcb`).
+C++17. On Linux this is an X11 / XWayland app: `main.cpp` forces
+`QT_QPA_PLATFORM=xcb` there unless the environment already set it. That forcing
+is guarded to desktop Linux, so other platforms keep Qt's own default plugin.
 
 ## Build-verification state
 
-Partially verified. Against Qt 6.8.2 (Widgets/Core/Gui — `qt6-webengine` is not
-installed), every translation unit compiles, all six `Q_OBJECT` headers pass
-`moc`, and the whole shell **links and runs**: substituting non-functional stub
-headers for the eight Qt WebEngine classes the code touches produces a binary
-that loads `sample-tree.txt` and renders the real UI offscreen
-(`QT_QPA_PLATFORM=offscreen`) — toolbar, splitter, populated tree with its
-bold/italic/muted state cues, and the placeholder pane. So the tree model, the
-outline parser, the sort proxy, and the layout are exercised, not just parsed.
+**Builds and runs.** Verified on Debian 13 with Qt 6.8.2 and
+`qt6-webengine-dev` 6.8.2: a clean `cmake --build` produces `build/hydra` with
+no errors, and the binary starts both on X11 and headless
+(`QT_QPA_PLATFORM=offscreen`), loads `sample-tree.txt`, and renders the shell —
+menu bar, toolbar, populated tree with its bold/italic/muted state cues, status
+bar.
 
-**What that does not prove:** the stub headers were written to match what the
-code expects, so they confirm internal consistency and say nothing about
-whether the real Qt WebEngine API agrees. `main_window.cpp` and
-`request_interceptor.cpp` are the two files carrying that risk. Install
-`qt6-webengine` and do a full `cmake --build` as the first action — the three
-most likely trouble spots, all flagged in code comments:
+Two of the three long-standing trouble spots turned out fine: the
+`QWebEngineHistory` `QDataStream` operators and the
+`QWebEngineCookieStore::FilterRequest` field names both compile clean. The
+third is real but not urgent — the whole `featurePermissionRequested` /
+`setFeaturePermission` permissions path is deprecated as of 6.8 and produces
+eleven warnings. It still works. Migrating to `QWebEnginePermission` would
+raise the Qt floor from 6.4 to 6.8, so it is a deliberate decision rather than
+a cleanup; see "Qt version floor" below.
 
-- `QWebEngineHistory` `QDataStream` operators (`main_window.cpp`,
-  suspend/restore).
-- `QWebEngineCookieStore::FilterRequest` field names (`main_window.cpp`).
-- `featurePermissionRequested` is deprecated in Qt 6.8+ (still functional);
-  `QWebEnginePermission` is the migration target once the floor is 6.8.
+### The interceptor is confirmed working
+
+Opening a tab drives a real navigation end to end: the page loads, subresources
+are fetched, and both of the interceptor's mutations demonstrably take effect.
+Tested against a local HTTP server that logs every request it receives, with
+the page served from `127.0.0.1` and its subresources from `127.0.0.2` — both
+loopback, but *different hosts*, which is what makes the result attributable:
+
+| Case | Result |
+|---|---|
+| No policy file | page, image and script all fetched; `Referer` present |
+| `javascript=block` for `127.0.0.2` only | the script never reaches the server; the image **from the same host** still does |
+| `referer=block` for `127.0.0.1` | all three fetched, `Referer` stripped from both subresources |
+
+The middle row is the one that isolates the interceptor. Per-page
+`JavascriptEnabled` keys off the **top-level** host (`127.0.0.1`, untouched
+here), so only `interceptRequest`'s per-origin `ResourceTypeScript` rule can
+explain a blocked script alongside a loaded image from that same origin. The
+third row is likewise interceptor-only — nothing else in the app touches
+`Referer`.
+
+**Not yet exercised:** the ad-host list specifically. It runs through the same
+`info.block(true)` path proven above, but pointing a name like `doubleclick.net`
+at a local server needs either `/etc/hosts` (root) or Chromium's
+`--host-resolver-rules`, which Qt's `QTWEBENGINE_CHROMIUM_FLAGS` mangles because
+it splits the variable on spaces and the `MAP host ip` syntax contains one. So
+the *mechanism* is verified and only the host-matching predicate is untested at
+runtime. The cookie filter and the permission callbacks are also still
+unexercised.
+
+### Qt version floor
+
+`CMakeLists.txt` requires **Qt 6.4**, and that number is derived, not guessed:
+the menu bar uses the `addAction(text, shortcut, receiver, member)` argument
+order that 6.4 introduced (the older order is deprecated from 6.4 onward).
+Everything else in the tree is 6.0-era API. Developed and tested against 6.8.2.
+
+Qt WebEngine is a **system dependency, not a vendored one** — it bundles
+Chromium, must be ABI-matched to the rest of Qt, and is LGPLv3/GPL/commercial
+(arch §2), so linking the platform's build is far simpler than carrying it. How
+it arrives differs per platform, but the CMake side is identical everywhere
+(`find_package(Qt6 6.4 ...)`, with `CMAKE_PREFIX_PATH` pointed at the Qt
+install where needed):
+
+- **Linux** — distro packages (`qt6-webengine-dev` / `qt6-webengine`).
+- **Windows / macOS** — the official Qt online installer, `aqtinstall`, or
+  vcpkg/Conan. There is no system Qt to inherit, so the version is whatever CI
+  and developers provision; pin it there.
+- **Android** — Qt WebEngine does not exist at all (arch §19.2). That platform
+  goes through the System WebView behind the `WebViewBackend` seam, which is
+  why that seam is step 3.5 rather than an afterthought.
+
+Note that going beyond Linux needs one code change first: `main.cpp`
+unconditionally forces `QT_QPA_PLATFORM=xcb`, which has to become
+Linux-conditional before a Windows or macOS build is meaningful.
 
 ## What is implemented (build-order steps 1–3)
 

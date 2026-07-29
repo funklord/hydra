@@ -9,7 +9,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets WebEngineWidgets)
+# 6.4 is a real floor, not a guess: the menu bar uses the
+# addAction(text, shortcut, receiver, member) argument order, which is the
+# replacement Qt 6.4 introduced (the older order is deprecated from 6.4 on).
+# Asking for it here turns "too old Qt" into a clear configure-time failure
+# instead of a confusing compile error. Developed and tested against 6.8.2.
+find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets WebEngineWidgets)
 
 add_executable(hydra
     src/main.cpp
