@@ -10,6 +10,7 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QFileInfo>
+#include <QFont>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -262,10 +263,20 @@ void downloads_dialog::refresh() {
 		if (!j.files.isEmpty() && row->childCount() != j.files.size()) {
 			while (row->childCount())
 				delete row->takeChild(0);
-			for (const QString &f : j.files) {
+			QString chosen;
+			const bool any = find_playable(j, &chosen);
+			for (const download_file &f : j.files) {
 				auto *kid = new QTreeWidgetItem(row);
-				kid->setText(col_name, f);
-				kid->setFirstColumnSpanned(false);
+				kid->setText(col_name, f.path);
+				kid->setText(col_size, human_bytes(f.size));
+				// Mark the one Watch would play, so the choice is visible
+				// rather than something the user has to infer.
+				if (any && f.path == chosen) {
+					kid->setText(col_status, "would be played");
+					QFont bold = kid->font(col_name);
+					bold.setBold(true);
+					kid->setFont(col_name, bold);
+				}
 			}
 		}
 	}
@@ -343,16 +354,23 @@ bool downloads_dialog::find_playable(const download_job &j, QString *rel) const 
 		rel->clear();
 	if (j.files.isEmpty())
 		return is_playable(j.path);          // the job's own path is the file
-	// Multi-file: take the first playable entry. The feature is usually the
-	// largest, but per-file sizes are not in the job model.
-	for (const QString &f : j.files) {
-		if (!is_playable(f))
+
+	// The **largest** playable file, not the first. Releases routinely ship a
+	// short sample clip that sorts ahead of the feature, and picking by order
+	// would play the sample. Ties and unknown sizes fall back to order, which
+	// is the best available answer rather than a wrong one.
+	const download_file *best = nullptr;
+	for (const download_file &f : j.files) {
+		if (!is_playable(f.path))
 			continue;
-		if (rel)
-			*rel = f;
-		return true;
+		if (!best || f.size > best->size)
+			best = &f;
 	}
-	return false;
+	if (!best)
+		return false;
+	if (rel)
+		*rel = best->path;
+	return true;
 }
 
 void downloads_dialog::act_pause() {

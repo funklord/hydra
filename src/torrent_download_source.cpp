@@ -574,7 +574,8 @@ download_progress torrent_download_source::final_progress(int job,
 		for (lt::file_index_t i : fs.file_range()) {
 			if (fs.pad_file_at(i))
 				continue;          // alignment padding, not content
-			p.files << QString::fromStdString(fs.file_path(i));
+			p.files << download_file{ QString::fromStdString(fs.file_path(i)),
+			                           fs.file_size(i) };
 		}
 	}
 	return p;
@@ -643,7 +644,9 @@ void torrent_download_source::poll_alerts() {
 							// though they were part of the download.
 							if (fs.pad_file_at(i))
 								continue;
-							p.files << QString::fromStdString(fs.file_path(i));
+							p.files << download_file{
+								QString::fromStdString(fs.file_path(i)),
+								fs.file_size(i) };
 						}
 						m_d->files_sent.insert(job);
 					}
@@ -746,7 +749,8 @@ void torrent_download_source::poll_alerts() {
 				for (lt::file_index_t i : fs.file_range()) {
 					if (fs.pad_file_at(i))
 						continue;      // alignment padding, not content
-					p.files << QString::fromStdString(fs.file_path(i));
+					p.files << download_file{
+						QString::fromStdString(fs.file_path(i)), fs.file_size(i) };
 				}
 				p.path = QDir(m_d->save_path.value(job))
 				              .filePath(QString::fromStdString(ti->name()));

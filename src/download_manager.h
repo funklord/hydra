@@ -14,7 +14,7 @@ struct download_job {
 	QUrl        url;
 	QString     source_id;      // which transport took it ("http", "torrent"…)
 	QString     path;           // destination on disk, once the source knows it
-	QStringList files;          // multi-file jobs; empty for single-file
+	QList<download_file> files; // multi-file jobs; empty for single-file
 	QString     node_id;        // the tree node it came from (§11.2), may be empty
 	qint64      received = 0;
 	qint64      total    = -1;  // -1 while unknown, and it may stay unknown

@@ -619,6 +619,15 @@ callback; the torrent source answers it by walking pieces from the file's first
 piece to the first hole, mapping through `file_storage` because the file may
 start mid-piece and may not be first in the torrent.
 
+**Which file gets played.** The largest playable one, not the first. Releases
+routinely ship a short sample clip that sorts ahead of the feature, and picking
+by order would play the sample. That needed per-file sizes on the job, so
+`download_progress::files` is a `QList<download_file>` (path + size) rather than
+a `QStringList` — parallel arrays would have been fragile for no gain. Unknown
+sizes and ties fall back to order, which is the best available answer rather
+than a wrong one. The downloads window shows each file's size and marks the one
+Watch would play, so the choice is inspectable instead of mysterious.
+
 Sequential order alone is not enough either: it gets the front of the file first
 but promises nothing about *when*. `prioritize_streaming` also sets
 `set_piece_deadline` on the opening pieces, which is the difference between

@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QList>
 #include <QStringList>
 #include <QUrl>
 
@@ -93,6 +94,15 @@ struct source_capabilities {
 	bool streamable = false;
 };
 
+// One file inside a job. A bare path was enough while the list was only ever
+// displayed, but choosing *which* file to play needs sizes: the feature in a
+// multi-file torrent is the largest video, and a release that ships a sample
+// clip first would otherwise be played instead of the film.
+struct download_file {
+	QString path;         // relative to the download directory
+	qint64  size = -1;    // -1 when the source does not know
+};
+
 struct download_request {
 	int     id = 0;
 	QUrl    url;
@@ -106,7 +116,7 @@ struct download_progress {
 	qint64      received = 0;
 	qint64      total    = -1;   // -1 while unknown, and it may stay unknown
 	QString     path;            // primary file, or the directory if multi-file
-	QStringList files;           // multi-file jobs only
+	QList<download_file> files;  // multi-file jobs only
 	QString     detail;          // "fetching metadata", "seeding to 4 peers"…
 	download_state state = download_state::running;
 };
