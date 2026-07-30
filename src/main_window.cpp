@@ -530,7 +530,15 @@ void main_window::open_media() {
 	// browser's own User-Agent.
 	stream_context ctx;
 	ctx.referer = v->url().toString();
-	media_dialog dlg(m_media, m_players, m_downloads, m_local_proxy, this);
+	media_dialog dlg(m_media, m_players, m_downloads, m_local_proxy, m_mse, this);
+	connect(&dlg, &media_dialog::capture_requested, this, [this] {
+		// Queued: the dialog is closing itself, and starting a capture reloads
+		// the page — not something to do from inside its own exec().
+		QTimer::singleShot(0, this, [this] {
+			if (m_capture_url.isEmpty())
+				toggle_capture();
+		});
+	});
 	dlg.set_site(v->url().host(), node_id, ctx);
 	dlg.exec();
 }

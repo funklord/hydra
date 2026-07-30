@@ -14,6 +14,7 @@ class download_manager;
 class player_launcher;
 class local_proxy;
 class hls_assembler;
+class mse_tap;
 
 // The compact list behind the media badge (architecture doc §11.2/§11.3).
 // One row per detected stream, each offering both ▶ Watch and ⬇ Download, with
@@ -24,10 +25,16 @@ class media_dialog : public QDialog {
 public:
 	media_dialog(media_detector *detector, player_launcher *players,
 	              download_manager *downloads, local_proxy *proxy,
-	              QWidget *parent = nullptr);
+	              mse_tap *tap, QWidget *parent = nullptr);
 
 	void set_site(const QString &site_host, const QString &node_id,
 	               const stream_context &ctx);
+
+signals:
+	// A page whose video only the tap can see has nothing to Watch or
+	// Download — the only way to get those bytes is to record them, and the
+	// shell owns that.
+	void capture_requested();
 
 private:
 	void repopulate();
@@ -40,6 +47,7 @@ private:
 	player_launcher  *m_players   = nullptr;
 	download_manager *m_downloads = nullptr;
 	local_proxy      *m_proxy     = nullptr;
+	mse_tap          *m_tap       = nullptr;
 	stream_context    m_ctx;
 	hls_assembler    *m_assembler = nullptr;
 	QTemporaryDir     m_scratch;

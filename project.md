@@ -929,6 +929,15 @@ connection now accumulates until its headers and declared `Content-Length` are
 both in hand. A single chunk is capped at 32 MiB — a media segment is not a
 file upload, and an absurd declared length must not be buffered.
 
+**The media list agrees with the badge.** A page whose video only the tap can
+see used to show `Media (playing)` and then open an empty list — the badge and
+the thing it points at contradicting each other. Such streams now appear as
+`Playing` rows carrying the mime and how much is buffered, and the one action
+offered is **Capture**, because there is no URL to Watch or Download: the bytes
+exist only inside the player. Reproduced locally rather than against a live
+site by serving the media under an extension the detector ignores, which gives
+the same condition deterministically: `detector=0`, `tap_active=1`, one row.
+
 **A capture is a job.** `download_manager::adopt()` registers a job whose
 transport is already running, which is the honest shape here: `enqueue()`
 schedules — picks a source, waits for a slot, calls `start()` — and a capture

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "media_dialog.h"
 #include "download_manager.h"
+#include "mse_tap.h"
 #include "player_launcher.h"
 #include "local_proxy.h"
 #include "hls_assembler.h"
@@ -9,6 +10,7 @@
 
 #include <QDialogButtonBox>
 #include <QHeaderView>
+#include <QLocale>
 #include <QLabel>
 #include <QPushButton>
 #include <QTreeWidget>
@@ -30,9 +32,9 @@ QString kind_label(media_kind k) {
 
 media_dialog::media_dialog(media_detector *detector, player_launcher *players,
                             download_manager *downloads, local_proxy *proxy,
-                            QWidget *parent)
+                            mse_tap *tap, QWidget *parent)
 	: QDialog(parent), m_detector(detector), m_players(players),
-	  m_downloads(downloads), m_proxy(proxy) {
+	  m_downloads(downloads), m_proxy(proxy), m_tap(tap) {
 	setWindowTitle("Media on this page");
 	resize(720, 340);
 
@@ -85,16 +87,50 @@ void media_dialog::repopulate() {
 		connect(save,  &QPushButton::clicked, this, [this, item] { this->save(item); });
 		m_list->setItemWidget(row, 3, cell);
 	}
+	// What the tap can see but no URL can name (§11.6). These rows are not
+	// streams anyone can fetch — the bytes exist only inside the player — so
+	// the one thing offered is to record them.
+	const QList<mse_stream> playing = m_tap ? m_tap->streams_for(m_site)
+	                                        : QList<mse_stream>{};
+	for (const mse_stream &s : playing) {
+		if (s.bytes <= 0)
+			continue;
+		auto *row = new QTreeWidgetItem(m_list);
+		row->setText(0, "Playing");
+		row->setText(1, QString("%1 · %2 buffered")
+		                    .arg(s.mime, QLocale().formattedDataSize(s.bytes)));
+		row->setText(2, m_site);
+
+		auto *cell   = new QWidget(m_list);
+		auto *layout = new QHBoxLayout(cell);
+		layout->setContentsMargins(0, 0, 0, 0);
+		auto *rec = new QPushButton("⏺ Capture", cell);
+		rec->setToolTip("Record what the player is fed. The page reloads first, "
+		                 "so the recording starts from the beginning.");
+		layout->addWidget(rec);
+		connect(rec, &QPushButton::clicked, this, [this] {
+			emit capture_requested();
+			accept();
+		});
+		m_list->setItemWidget(row, 3, cell);
+	}
+
 	m_list->resizeColumnToContents(0);
 	m_list->resizeColumnToContents(3);
 
-	if (items.isEmpty()) {
+	if (!items.isEmpty()) {
+		m_status->setText(QString("%1 item(s). The first row is the stream this "
+		                          "page looks to be playing.").arg(items.size()));
+	} else if (!playing.isEmpty()) {
+		// The badge said this page is playing; the list must not then look
+		// empty, which is how it read before these rows existed.
+		m_status->setText("This page is playing video, but no stream URL could "
+		                  "be found — the address is hidden, or the bytes never "
+		                  "travel as one. Capture records it as it plays.");
+	} else {
 		m_status->setText("Nothing detected yet. Many sites only request the "
 		                  "manifest when their player starts, so try pressing "
 		                  "play first.");
-	} else {
-		m_status->setText(QString("%1 item(s). The first row is the stream this "
-		                          "page looks to be playing.").arg(items.size()));
 	}
 }
 
