@@ -77,8 +77,19 @@ bool http_download_source::start(const download_request &req, QString *error) {
 	t->id   = req.id;
 	t->path = QDir(req.directory).filePath(name);
 
-	// Resume: if a partial file is already there, ask for the rest.
 	QNetworkRequest net_req(req.url);
+
+	// Whatever this address needs to be served at all. Range is ours and is
+	// set below, so a caller cannot overwrite the resume offset by naming it.
+	for (auto it = req.headers.cbegin(); it != req.headers.cend(); ++it) {
+		if (it.key().isEmpty() || it.value().isEmpty())
+			continue;
+		if (it.key().compare("Range", Qt::CaseInsensitive) == 0)
+			continue;
+		net_req.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
+	}
+
+	// Resume: if a partial file is already there, ask for the rest.
 	const QFileInfo fi(t->path);
 	const qint64 have = fi.exists() ? fi.size() : 0;
 	if (have > 0) {

@@ -19,6 +19,7 @@ struct download_job {
 	qint64      received = 0;
 	qint64      total    = -1;  // -1 while unknown, and it may stay unknown
 	QString     detail;         // source's own words: "fetching metadata"…
+	QMap<QString, QString> headers;   // what this address needs sent with it
 	QString     error;
 	download_state status = download_state::queued;
 
@@ -70,7 +71,11 @@ public:
 	bool has_consent(const QString &source_id) const;
 
 	// Returns the job id, or 0 if no source would take it (see `error`).
-	int enqueue(const QUrl &url, const QString &node_id, QString *error);
+	//
+	// `headers` travel with the request to whichever source takes it — what a
+	// CDN wants to see before it will serve a stream (§11.3).
+	int enqueue(const QUrl &url, const QString &node_id, QString *error,
+	             const QMap<QString, QString> &headers = {});
 
 	// Register a job whose transport is *already* running.
 	//

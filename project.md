@@ -949,10 +949,17 @@ Cookie are passed rather than silently dropped. Verified against a server that
 reports what it received: all five arrive, including two the extractor invented
 for itself.
 
-**Download does not carry them yet.** `http_download_source` has no notion of
-per-request headers, so downloading a learned stream that needs a Referer would
-still be refused. Watch works because the proxy exists to inject exactly this;
-the download path would need `download_request` to carry headers too.
+**Download carries them too.** `download_request` gained a `headers` map, so
+they travel to whichever source takes the job, and `http_download_source`
+applies them. `enqueue()` takes them as a defaulted argument, which left every
+existing call site alone.
+
+**Range stays the source's own.** A caller-supplied `Range` is dropped rather
+than merged: the resume offset is derived from what is on disk, and letting a
+header decide it would mean a stale or hostile value silently corrupting a
+resumed file. Tested with a partial file and a caller asking for
+`bytes=999999-`: the request went out as `bytes=500-`, the caller's value never
+appeared, and its other headers still did.
 
 **Not yet exercised against a real model.** The gate, the sandbox, the folding
 and the fence-stripping are all tested offline (34 checks), and the dialog is

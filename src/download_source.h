@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QList>
+#include <QMap>
 #include <QStringList>
 #include <QUrl>
 
@@ -108,6 +109,15 @@ struct download_request {
 	QUrl    url;
 	QString directory;   // where to write; the source chooses names within it
 	QString node_id;     // the tree node it came from (§11.2), may be empty
+
+	// What this particular address needs sent with it. A CDN commonly refuses
+	// a stream URL fetched without the Referer, User-Agent or cookies the page
+	// carried (§11.3), and a learned extractor (§11.5) names them for exactly
+	// that reason. Empty for an ordinary download, which needs none of it.
+	//
+	// A source applies what it can and ignores the rest; nothing here is a
+	// promise that a given transport has headers at all.
+	QMap<QString, QString> headers;
 };
 
 // A source's report on a job. Fields left at their defaults mean "unchanged",

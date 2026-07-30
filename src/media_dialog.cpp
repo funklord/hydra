@@ -213,7 +213,9 @@ void media_dialog::save(const media_item &item) {
 	}
 
 	QString error;
-	const int id = m_downloads->enqueue(item.url, m_node_id, &error);
+	// A learned stream carries the headers its CDN checks; without them the
+	// download is refused where Watch would have succeeded.
+	const int id = m_downloads->enqueue(item.url, m_node_id, &error, item.headers);
 	m_status->setText(id ? QString("Queued download to %1.")
 	                           .arg(m_downloads->directory())
 	                     : "<b>" + error.toHtmlEscaped() + "</b>");

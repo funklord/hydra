@@ -57,7 +57,9 @@ void download_manager::set_consent(const QString &source_id, bool granted) {
 	pump();
 }
 
-int download_manager::enqueue(const QUrl &url, const QString &node_id, QString *error) {
+int download_manager::enqueue(const QUrl &url, const QString &node_id,
+                               QString *error,
+                               const QMap<QString, QString> &headers) {
 	// First source that accepts wins. If none does, report the most specific
 	// reason offered rather than a generic refusal — the sources know why.
 	download_source *chosen = nullptr;
@@ -88,6 +90,7 @@ int download_manager::enqueue(const QUrl &url, const QString &node_id, QString *
 	job.source_id            = chosen->id();
 	job.status               = download_state::queued;
 	job.public_participation = caps.public_participation;
+	job.headers              = headers;
 
 	m_jobs.push_back(job);
 	emit changed();
@@ -158,6 +161,7 @@ void download_manager::sweep() {
 		req.url       = j.url;
 		req.directory = m_dir;
 		req.node_id   = j.node_id;
+		req.headers   = j.headers;
 
 		QString error;
 		m_live.insert(j.id);
