@@ -32,6 +32,7 @@ class ai_provider;
 class media_detector;
 class player_launcher;
 class download_manager;
+class downloads_dialog;
 class filter_signals;
 class filter_list;
 class request_filter;
@@ -82,6 +83,7 @@ private slots:
 	void confirm_public_download(const QString &source_id, const QString &note,
 	                              int job_id);
 	void start_download(const QUrl &url);
+	void open_downloads();
 	void go_back();
 	void go_forward();
 	void reload_page();
@@ -134,6 +136,7 @@ private:
 	media_detector     *m_media         = nullptr;
 	player_launcher    *m_players       = nullptr;
 	download_manager   *m_downloads     = nullptr;
+	downloads_dialog   *m_downloads_ui  = nullptr;
 	local_proxy        *m_local_proxy   = nullptr;
 	element_picker     *m_picker        = nullptr;
 	filter_signals     *m_signals       = nullptr;

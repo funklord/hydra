@@ -136,6 +136,7 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Player handoff | `player_launcher.{h,cpp}` | PATH probe, capability routing, URL-not-pipe launch |
 | Downloads | `download_manager.{h,cpp}`, `download_source.h`, `http_download_source.{h,cpp}` | transport seam: manager owns queue/consent, source owns bytes |
 | BitTorrent | `torrent_download_source.{h,cpp}` | libtorrent-rasterbar; magnet + .torrent, seeding, info-hash resume (optional dep) |
+| Downloads UI | `downloads_dialog.{h,cpp}` | one list for every source, progress bars, public-transfer marking (Ctrl+J) |
 | Filter evolution | `filter_list.{h,cpp}`, `filter_signals.{h,cpp}`, `filter_dialog.{h,cpp}` | passive signals, dry-run validation, diff/accept |
 | Password manager | `keepass_protocol.{h,cpp}`, `keepass_bridge.{h,cpp}`, `crypto_box.{h,cpp}` | KeePassXC-Browser client; no vault, no master password |
 | Autofill | `autofill_controller.{h,cpp}`, `autofill_script.h` | QWebChannel bridge, origin gate, policy-governed |
@@ -559,6 +560,44 @@ Found and fixed while testing: `~http_download_source` aborted replies while
 iterating `m_transfers`, and `abort()` delivers `finished()` synchronously,
 which re-entered `teardown()` and mutated the map mid-iteration. The map is
 now emptied first.
+
+## Downloads window (arch §11.2)
+
+`downloads_dialog`, opened from Tools → Downloads… or **Ctrl+J**, and raised
+automatically when a download starts. One list for every source — a torrent
+appears beside an HTTP file with the same columns, progress bar and controls,
+which is the whole point of §11.4's first-class decision.
+
+Two rules it is built around:
+
+- **It never asks what transport a row is.** Whether Pause is offered, whether
+  children are shown, whether the row carries a warning — all of it comes from
+  `source_capabilities` and the job's own fields. The word "torrent" appears
+  only in a source's `display_name`.
+- **Publicly-observable rows are visibly different**: an `⇅ public` marker in
+  the Source column, coloured, with the source's participation note as a
+  tooltip, plus a footer that appears only while such a transfer exists. The
+  consent dialog says it once before the first one; this says it permanently,
+  because the transfer keeps announcing for as long as it lives.
+
+Indeterminate jobs (a magnet with no metadata) draw a busy bar rather than a
+false 0%. Multi-file jobs list their files as children once known. Open Folder
+opens the *containing directory*, never the file — the standing rule is that a
+download is written to disk and not opened by us.
+
+Rows are reconciled in place rather than rebuilt, and `changed()` is coalesced
+on a 200 ms timer: it fires on every chunk of every transfer, and clearing the
+tree at that rate would throw away the selection and scroll position several
+times a second.
+
+**Verified by rendering it**, which caught four defects that all looked fine in
+the source: the `⇅ public` marker was being truncated away by column sizing
+(defeating its entire purpose), progress text was clipped top and bottom by the
+style's internal text layout (now drawn by hand), the Size column was elided,
+and torrent rows were titled `magnet:` because stripping the query from a magnet
+link leaves nothing. The last one is fixed in the *source* rather than the
+dialog — it reports the `dn` name at `resolving` time, so the window never has
+to know what a magnet link looks like.
 
 ## BitTorrent downloads (implemented)
 

@@ -256,9 +256,20 @@ bool torrent_download_source::start(const download_request &req, QString *error)
 
 	m_d->save_path.insert(req.id, req.directory);
 	m_d->pending.push_back(req.id);
+
+	// Report a name now if the URI carried one. A magnet's `dn` parameter is
+	// exactly that, and without it the list has nothing to show but the raw
+	// magnet string until metadata arrives — which can be a long wait on a
+	// cold swarm. Naming is the source's job, not the UI's: the window must
+	// not have to know what a magnet link looks like.
+	download_progress p;
+	p.state  = download_state::resolving;
+	p.detail = req.url.scheme() == "magnet" ? "fetching metadata" : "checking files";
+	if (!atp.name.empty())
+		p.path = QDir(req.directory).filePath(QString::fromStdString(atp.name));
+
 	m_d->session->async_add_torrent(std::move(atp));
-	report(req.id, download_state::resolving,
-	        req.url.scheme() == "magnet" ? "fetching metadata" : "checking files");
+	emit progressed(req.id, p);
 	return true;
 #endif
 }

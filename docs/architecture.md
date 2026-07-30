@@ -285,6 +285,8 @@ A single `QWebEngineUrlRequestInterceptor` on the profile is the sensor behind t
 
 **Status: done**, minus the local-proxy tier. `media_detector` rides the interceptor's observer seam and classifies by URL shape; `player_launcher` probes PATH and routes by capability; `download_manager` queues direct files with Range resume. Segment assembly, the ffmpeg remux, and the proxy that would inject request context remain the next increment.
 
+**The downloads window is done.** `downloads_dialog` (Tools → Downloads…, Ctrl+J) is the one list §11.2 asks for: every source in the same table, with progress bars, per-job Pause/Resume/Cancel gated on `source_capabilities`, multi-file jobs expanding to their files, and indeterminate jobs drawing a busy bar rather than a false zero. It carries the §11.4 visibility obligation as a permanent `⇅ public` row marker plus a footer, rather than relying on the one-time consent dialog. It contains no test for a transport: everything it varies comes from capabilities and the job's own fields.
+
 **The transport seam is done** (§11.4): `download_manager` no longer contains a transport. It owns the queue, the destination, consent and the job records; a `download_source` owns the bytes, and `http_download_source` is the first one. The job model now carries the states a torrent needs and HTTP never enters — `resolving` (a magnet with no metadata yet) and `seeding` (complete but still working) — plus multi-file jobs, per-source concurrency, and the consent gate that enforces the §11.4 privacy obligation structurally. Verified with 77 checks, including a fake torrent source that exercises the whole torrent-shaped lifecycle without libtorrent present.
 
 ### 11.1 Detection

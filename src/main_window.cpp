@@ -17,6 +17,7 @@
 #include "download_manager.h"
 #include "http_download_source.h"
 #include "torrent_download_source.h"
+#include "downloads_dialog.h"
 #include "local_proxy.h"
 #include "filter_signals.h"
 #include "filter_list.h"
@@ -254,6 +255,10 @@ QMenuBar *main_window::build_menu_bar() {
 	m_kiosk_action->setStatusTip("Fullscreen chrome-less presentation; Esc returns");
 
 	QMenu *tools_menu = menu->addMenu("&Tools");
+	QAction *dl = tools_menu->addAction("&Downloads…", QKeySequence("Ctrl+J"),
+	                                     this, &main_window::open_downloads);
+	dl->setStatusTip("Show transfers in progress and finished");
+	tools_menu->addSeparator();
 	tools_menu->addAction("&Site Controls…", this, &main_window::open_site_controls);
 	QAction *kp = tools_menu->addAction("Connect to &KeePassXC…", this,
 	                                     &main_window::toggle_password_manager);
@@ -718,7 +723,17 @@ void main_window::start_download(const QUrl &url) {
 		return;
 	}
 	m_address->clear();
-	m_status->showMessage(QString("Queued: %1").arg(url.toString()), 5000);
+	// Show the list rather than announce it in the status bar: a download the
+	// user cannot watch is not a first-class download (§11.2).
+	open_downloads();
+}
+
+void main_window::open_downloads() {
+	if (!m_downloads_ui)
+		m_downloads_ui = new downloads_dialog(m_downloads, this);
+	m_downloads_ui->show();
+	m_downloads_ui->raise();
+	m_downloads_ui->activateWindow();
 }
 
 void main_window::confirm_public_download(const QString &source_id,
