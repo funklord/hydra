@@ -7,6 +7,8 @@
 #include <QRandomGenerator>
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <QFile>
+#include <QFileInfo>
 
 namespace {
 
@@ -108,6 +110,91 @@ QUrl local_proxy::publish(const QUrl &upstream, const stream_context &ctx) {
 	return local;
 }
 
+QUrl local_proxy::publish_file(const QString &path, const QString &content_type) {
+	if (!listening())
+		return {};
+	QByteArray raw(16, Qt::Uninitialized);
+	QRandomGenerator::system()->generate(raw.begin(), raw.end());
+	const QString token = QString::fromLatin1(raw.toHex());
+
+	entry e;
+	e.local_path   = path;
+	e.content_type = content_type;
+	m_published.insert(token, e);
+
+	QUrl local;
+	local.setScheme("http");
+	local.setHost("127.0.0.1");
+	local.setPort(port());
+	// .ts, because the assembled output is concatenated MPEG-TS and players
+	// pick their demuxer from the extension.
+	local.setPath("/s/" + token + ".ts");
+	return local;
+}
+
+void local_proxy::serve_file(QTcpSocket *client, const entry &e,
+                              const QByteArray &head, bool head_only) {
+	QFile f(e.local_path);
+	if (!f.open(QIODevice::ReadOnly)) {
+		send_simple(client, 404, "not available yet");
+		return;
+	}
+	// Whatever has landed so far. A live capture grows between requests, which
+	// is exactly what makes seeking backwards through it work.
+	const qint64 size = f.size();
+
+	qint64 start = 0, end = size - 1;
+	bool partial = false;
+	const QByteArray range = header_of(head, "Range");
+	if (range.startsWith("bytes=")) {
+		const QByteArray spec = range.mid(6);
+		const int dash = spec.indexOf('-');
+		if (dash >= 0) {
+			const QByteArray a = spec.left(dash).trimmed();
+			const QByteArray b = spec.mid(dash + 1).trimmed();
+			if (!a.isEmpty()) {
+				start = a.toLongLong();
+				if (!b.isEmpty())
+					end = qMin<qint64>(b.toLongLong(), size - 1);
+			} else if (!b.isEmpty()) {
+				start = qMax<qint64>(0, size - b.toLongLong());   // suffix range
+			}
+			partial = true;
+		}
+	}
+	if (start >= size || start > end) {
+		client->write(status_line(416));
+		client->write("Content-Range: bytes */" + QByteArray::number(size) + "\r\n");
+		client->write("Connection: close\r\n\r\n");
+		client->disconnectFromHost();
+		return;
+	}
+
+	const qint64 length = end - start + 1;
+	client->write(status_line(partial ? 206 : 200));
+	client->write("Content-Type: " + e.content_type.toUtf8() + "\r\n");
+	client->write("Accept-Ranges: bytes\r\n");
+	client->write("Content-Length: " + QByteArray::number(length) + "\r\n");
+	if (partial)
+		client->write("Content-Range: bytes " + QByteArray::number(start) + "-" +
+		               QByteArray::number(end) + "/" + QByteArray::number(size) + "\r\n");
+	client->write("Connection: close\r\n\r\n");
+
+	if (!head_only) {
+		f.seek(start);
+		qint64 left = length;
+		while (left > 0 && client->state() == QAbstractSocket::ConnectedState) {
+			const QByteArray chunk = f.read(qMin<qint64>(left, 64 * 1024));
+			if (chunk.isEmpty())
+				break;
+			client->write(chunk);
+			client->waitForBytesWritten(3000);
+			left -= chunk.size();
+		}
+	}
+	client->disconnectFromHost();
+}
+
 void local_proxy::unpublish_all() {
 	m_published.clear();
 }
@@ -150,6 +237,10 @@ void local_proxy::serve(QTcpSocket *client, const QByteArray &head) {
 	}
 
 	const entry e = m_published.value(token);
+	if (!e.local_path.isEmpty()) {
+		serve_file(client, e, head, method == "HEAD");
+		return;
+	}
 
 	QNetworkRequest req(e.upstream);
 	// The context the CDN expects, replayed from the page that loaded it.

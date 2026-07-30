@@ -399,12 +399,41 @@ bytes and an intact `Content-Range`; Referer, User-Agent and Cookie each
 observed arriving upstream; an HLS manifest relayed byte-for-byte with its
 timing tags; and an unpublished token refused with 404.
 
-**Still missing from §10–§11:** segment assembly (turning HLS into one seekable
-progressive stream, which is what would actually fix classic mplayer), the
-tee-to-disk trick that makes a live stream scrubbable, and cookie capture — the
-context currently carries the page URL as Referer and the browser's User-Agent,
-but cookies are only replayed if a caller supplies them, since reading them back
-needs cookie-store integration.
+### Segment assembly (§11.2/§11.3)
+
+`hls_playlist` parses manifests — master vs media, variants, segments, relative
+URI resolution, `#EXT-X-BYTERANGE`, and VOD vs live by the presence of
+`#EXT-X-ENDLIST`. It is pure parsing with no network, which is where the fiddly
+cases are, so it is tested on its own.
+
+`hls_assembler` follows a master playlist to its highest-bandwidth variant and
+appends that variant's segments, in order, into one growing file — with the same
+Referer/User-Agent/cookie injection the proxy does, since a CDN that 403s a
+naked stream URL will 403 the segment fetches too. `local_proxy::publish_file`
+then serves that file with full `Range` support against whatever has landed so
+far.
+
+That combination is what makes the §11.3 story real. A player that cannot take a
+manifest — classic mplayer — now gets a progressive `.ts` it can seek around in,
+and playback starts as soon as the first segment lands rather than waiting for
+the whole stream. It is also the tee-to-disk trick: because segments are written
+as they arrive and ranges are served against the current size, a live stream
+becomes a locally seekable capture, and the same mechanism serves both "watch
+this properly" and "save this" — HLS is now saveable rather than refused.
+
+Verified across 22 cases, all passing: VOD/live detection, relative and nested
+URI resolution, a quoted `CODECS="avc1,mp4a"` parsed as one attribute rather
+than split on its comma, `BYTERANGE` `len@offset`, highest-bandwidth variant
+selection; then master → variant → segments assembled in order into one file of
+the right size; then serving it with a mid-file range, a suffix range, and a
+range past EOF correctly returning 416.
+
+**Still missing from §10–§11:** DASH assembly (HLS only), the ffmpeg remux —
+concatenated MPEG-TS is directly playable, which is why this works without one,
+but fMP4 segments would need their init segment and a real remux — re-polling a
+live playlist as it grows (what is captured is what was in the list when it was
+read), and cookie capture, since the context carries Referer and User-Agent but
+reading cookies back needs cookie-store integration.
 
 **Routing the browser through it is deliberately not attempted.** §10's other
 use — response inspection for real Content-Types and manifest bodies — means

@@ -4,6 +4,8 @@
 #include "media_detector.h"
 #include "local_proxy.h"
 
+#include <QTemporaryDir>
+
 #include <QDialog>
 
 class QLabel;
@@ -11,6 +13,7 @@ class QTreeWidget;
 class download_manager;
 class player_launcher;
 class local_proxy;
+class hls_assembler;
 
 // The compact list behind the media badge (architecture doc §11.2/§11.3).
 // One row per detected stream, each offering both ▶ Watch and ⬇ Download, with
@@ -30,12 +33,16 @@ private:
 	void repopulate();
 	void watch(const media_item &item);
 	void save(const media_item &item);
+	// Assemble an HLS stream into one progressive file, then act on it.
+	void assemble_then(const media_item &item, bool play_it);
 
 	media_detector   *m_detector  = nullptr;
 	player_launcher  *m_players   = nullptr;
 	download_manager *m_downloads = nullptr;
 	local_proxy      *m_proxy     = nullptr;
 	stream_context    m_ctx;
+	hls_assembler    *m_assembler = nullptr;
+	QTemporaryDir     m_scratch;
 	QString m_site;
 	QString m_node_id;
 

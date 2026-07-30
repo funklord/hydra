@@ -61,6 +61,11 @@ public:
 
 	// Publish `upstream` and get back the localhost URL to hand a player.
 	QUrl publish(const QUrl &upstream, const stream_context &ctx);
+
+	// Publish a local file that is still being written — the assembled HLS
+	// output (§11.3). Ranges are served against whatever has landed so far, so
+	// a player can seek backwards through a live capture while it grows.
+	QUrl publish_file(const QString &path, const QString &content_type);
 	void unpublish_all();
 
 signals:
@@ -70,10 +75,14 @@ private:
 	struct entry {
 		QUrl           upstream;
 		stream_context ctx;
+		QString        local_path;     // set instead of upstream for a file
+		QString        content_type;
 	};
 
 	void on_connection();
 	void serve(QTcpSocket *client, const QByteArray &request_head);
+	void serve_file(QTcpSocket *client, const entry &e, const QByteArray &head,
+	                 bool head_only);
 
 	QTcpServer            *m_server = nullptr;
 	QNetworkAccessManager *m_net    = nullptr;

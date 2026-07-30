@@ -3,6 +3,9 @@
 #include "download_manager.h"
 #include "player_launcher.h"
 #include "local_proxy.h"
+#include "hls_assembler.h"
+
+#include <QDir>
 
 #include <QDialogButtonBox>
 #include <QHeaderView>
@@ -95,7 +98,51 @@ void media_dialog::repopulate() {
 	}
 }
 
+void media_dialog::assemble_then(const media_item &item, bool play_it) {
+	if (!m_assembler)
+		m_assembler = new hls_assembler(this);
+
+	const QString out = play_it
+		? m_scratch.filePath("stream.ts")
+		: QDir(m_downloads->directory()).filePath(
+		      item.label.section('/', -1).section('.', 0, 0) + ".ts");
+
+	connect(m_assembler, &hls_assembler::progress, this,
+	         [this, out, play_it, item](qint64 bytes, int done, int total) {
+		m_status->setText(QString("Assembling %1/%2 segments (%3 KiB)…")
+		                      .arg(done).arg(total).arg(bytes / 1024));
+		// Hand the player the growing file as soon as there is something to
+		// play — that is the §11.3 tee-to-disk trick, and it is what turns a
+		// live stream into a locally seekable one.
+		if (play_it && done == 1) {
+			const QUrl via = m_proxy ? m_proxy->publish_file(out, "video/mp2t") : QUrl();
+			QString error;
+			if (!m_players->play(item, &error, via))
+				m_status->setText("<b>" + error.toHtmlEscaped() + "</b>");
+		}
+	}, Qt::UniqueConnection);
+
+	connect(m_assembler, &hls_assembler::completed, this, [this, out, play_it] {
+		m_status->setText(play_it ? "Stream assembled; playback continues locally."
+		                          : QString("Saved assembled stream to %1.").arg(out));
+	}, Qt::UniqueConnection);
+
+	connect(m_assembler, &hls_assembler::failed, this, [this](const QString &e) {
+		m_status->setText("<b>Assembly failed:</b> " + e.toHtmlEscaped());
+	}, Qt::UniqueConnection);
+
+	m_status->setText("Fetching manifest…");
+	m_assembler->start(item.url, m_ctx, out);
+}
+
 void media_dialog::watch(const media_item &item) {
+	// A player that cannot take a manifest gets an assembled progressive file
+	// instead — "the app compensates in the proxy for what the player lacks".
+	if (item.kind == media_kind::hls && !m_players->selected_handles_streams()) {
+		assemble_then(item, true);
+		return;
+	}
+
 	const QString warn = m_players->warning_for(item);
 	// Hand the player a localhost URL when the proxy is up, so the CDN sees
 	// the page's Referer and cookies rather than a naked request (§11.3).
@@ -112,6 +159,12 @@ void media_dialog::watch(const media_item &item) {
 }
 
 void media_dialog::save(const media_item &item) {
+	// HLS is saveable now: fetch the segments and concatenate them (§11.2).
+	if (item.kind == media_kind::hls) {
+		assemble_then(item, false);
+		return;
+	}
+
 	QString error;
 	const int id = m_downloads->enqueue(item.url, m_node_id, &error);
 	m_status->setText(id ? QString("Queued download to %1.")

@@ -77,6 +77,10 @@ add_executable(hydra
     src/download_manager.h
     src/local_proxy.cpp
     src/local_proxy.h
+    src/hls_playlist.cpp
+    src/hls_playlist.h
+    src/hls_assembler.cpp
+    src/hls_assembler.h
     src/filter_list.cpp
     src/filter_list.h
     src/filter_signals.cpp

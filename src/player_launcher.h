@@ -51,6 +51,10 @@ public:
 	// user — no player, or a player that cannot handle this stream well.
 	QString warning_for(const media_item &item) const;
 
+	// True when the selected player takes an HLS/DASH manifest directly.
+	// False means the stream must be assembled for it first (§11.3).
+	bool selected_handles_streams() const;
+
 	// Launches detached so a player outliving the browser is fine.
 	// Returns false and fills `error` if it could not start.
 	// `via` overrides the URL handed to the player — the local proxy's

@@ -69,17 +69,21 @@ const player_entry *player_launcher::entry(const QString &id) const {
 	return nullptr;
 }
 
+bool player_launcher::selected_handles_streams() const {
+	const player_entry *e = entry(m_selected);
+	return e && e->installed && e->native_streams;
+}
+
 QString player_launcher::warning_for(const media_item &item) const {
 	const player_entry *e = entry(m_selected);
 	if (!e || !e->installed)
 		return "No external player found. Install mpv, VLC, or mplayer.";
 	if (is_manifest(item) && !e->native_streams) {
-		// §11.3 wants the local proxy to assemble segments into a seekable
-		// progressive stream for players like this. Until that exists, say so
-		// rather than pretending the handoff is clean.
-		return QString("%1 handles HLS/DASH poorly. Playback may fail or not "
-		               "seek until the local proxy (arch §10) can assemble the "
-		               "stream for it.").arg(e->label);
+		// HLS gets assembled into a progressive file before it reaches a player
+		// like this (§11.3), so only DASH is still a genuine problem.
+		if (item.kind == media_kind::dash)
+			return QString("%1 cannot play DASH, and DASH assembly is not "
+			               "implemented.").arg(e->label);
 	}
 	return QString();
 }
