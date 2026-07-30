@@ -3,7 +3,11 @@
 # Test harnesses. Built separately from the app: they link the same sources
 # rather than the binary, so each suite pulls in only what it exercises.
 #
-#   cmake -S tests -B tests/build && cmake --build tests/build -j
+#   cmake -S tests -B tests/build && cmake --build tests/build -j2
+#
+# Always name a job count. `-j` with no number is *unlimited* under Make, not
+# one per core, and each live driver links Qt WebEngine — that has exhausted
+# memory and taken the desktop session down.
 #
 # Then see tests/README.md — several suites need a local server or a model,
 # and the ones under live/ need a running X display and drive the real shell.

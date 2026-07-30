@@ -48,6 +48,15 @@ has exhausted memory and taken the desktop session down on this machine, twice
 — worst when a model is loaded, since a 14B holds ~10 GB before the compiler
 starts. Use `-j2`, or name a single target. Stop Ollama first if it is running.
 
+The mechanism, since it is easy to underestimate: this repo configures the
+**Unix Makefiles** generator, and `make -j` with no number is *unlimited*, not
+one job per core. Every ready translation unit starts at once. What follows is
+not a failed build — the kernel OOM killer takes the whole user session slice.
+The 2026-07-30 23:08 event killed `dbus`, `pipewire`, `wireplumber`, both
+`xdg-desktop-portal`s, `plasma-kactivitymanagerd`, and the running browsers;
+31 GB of RAM and 31 GB of swap were not enough. `systemd-oomd` is inactive
+here, so nothing intervenes earlier or more gently.
+
 ### What is actually proven, and what is not
 
 The project's habit is to measure rather than assert, so the distinction is
@@ -76,7 +85,7 @@ test that drives the real widget over one that calls the function underneath it.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+cmake --build build -j2       # a number, always: see the warning above
 ./build/hydra                 # loads ./sample-tree.txt
 ./build/hydra my-tree.txt     # or a custom outline file
 ```

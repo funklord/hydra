@@ -70,7 +70,7 @@ See `project.md` for conventions, current status, and what to do next;
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+cmake --build build -j2       # name a number: bare -j is unlimited under Make
 ./build/hydra                 # loads ./sample-tree.txt (copied next to binary)
 ./build/hydra my-tree.txt     # or point it at your own outline file
 ```
