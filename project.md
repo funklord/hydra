@@ -872,6 +872,25 @@ The decisions behind it:
 Seeding policy, ports/UPnP, multi-file jobs, the Android shape, and a suggested
 implementation order are in arch §11.4.
 
+## Wishlist (raised, not yet done)
+
+Recorded verbatim-in-substance so they are not lost; none of these are started.
+
+- **Test the media path against `dramafren.org`.** The detector, the local proxy
+  and the external-player handoff have only ever been exercised against local
+  servers and synthetic streams. A real site with real player JS is the case
+  that decides whether URL-shaped detection is enough, and it is the obvious
+  next thing to point §11 at.
+- **Brief flicker when the first website loads.** Visible on the first page load
+  of a session. Cause unknown — candidates are the web view being added to the
+  stack before its first frame exists, the placeholder label swapping out, or
+  Chromium's first-paint background. Needs to be looked at with a real page,
+  not reasoned about.
+- **The tree filter controls are in the wrong place.** Sort and Search filter
+  the *sidebar*, but they sit in the main toolbar next to Back/Forward/Address,
+  which are about the page. They belong above the tree they act on, so the
+  control and the thing it controls are visibly one unit.
+
 ## What is next (in order)
 - **Remaining gaps**, listed per step above — the local proxy (§10) is the
   biggest single unlock, since it covers stream assembly, request context for

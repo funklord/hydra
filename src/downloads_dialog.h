@@ -50,6 +50,10 @@ private:
 	void act_cancel();
 	void act_open_folder();
 	void act_watch();
+	// Watch cannot launch the moment it is pressed: the front of the chosen
+	// file is usually not there yet, especially when that file is not first in
+	// the torrent. This polls until enough has landed, then launches.
+	void try_launch_watch();
 	int  selected_job() const;
 	// Is there something in this job worth playing, and if so which file?
 	// `rel` is the job-relative path, left empty for a single-file job — that
@@ -63,13 +67,21 @@ private:
 	local_proxy      *m_proxy     = nullptr;
 
 	QTreeWidget *m_list   = nullptr;
-	QLabel      *m_note   = nullptr;
+	QLabel      *m_note   = nullptr;   // standing "public transfer" explanation
+	QLabel      *m_action = nullptr;   // transient feedback from a button press
 	QPushButton *m_pause  = nullptr;
 	QPushButton *m_resume = nullptr;
 	QPushButton *m_cancel = nullptr;
 	QPushButton *m_folder = nullptr;
 	QPushButton *m_watch  = nullptr;
 	QTimer      *m_coalesce = nullptr;
+
+	// Pending Watch, waiting for enough of the file to exist.
+	QTimer  *m_watch_wait = nullptr;
+	int      m_watch_job  = 0;
+	QString  m_watch_rel;
+	QString  m_watch_path;
+	int      m_watch_ticks = 0;
 
 	// Rows are reconciled in place rather than rebuilt. changed() fires on
 	// every chunk of every transfer, and clearing the tree that often would

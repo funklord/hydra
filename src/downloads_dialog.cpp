@@ -160,6 +160,15 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 	m_note->setVisible(false);
 	outer->addWidget(m_note);
 
+	// A separate label for what a button press just did. Sharing one with the
+	// standing note above does not work: refresh() rewrites that every 200 ms,
+	// so anything an action wrote there was erased before it could be read —
+	// pressing Watch appeared to do nothing at all.
+	m_action = new QLabel(this);
+	m_action->setWordWrap(true);
+	m_action->setVisible(false);
+	outer->addWidget(m_action);
+
 	auto *row = new QHBoxLayout;
 	m_pause  = new QPushButton("&Pause", this);
 	m_resume = new QPushButton("&Resume", this);
@@ -426,38 +435,106 @@ void downloads_dialog::act_watch() {
 	if (path.isEmpty())
 		return;
 
+	if (!m_proxy->listening()) {
+		m_action->setVisible(true);
+		m_action->setText("<b>Cannot watch:</b> the local proxy is not listening.");
+		return;
+	}
+
 	// Ask the source to fetch the front first. Without this a torrent downloads
 	// in whatever order the swarm offers, and the beginning of the file may be
 	// the last thing to arrive — which is the difference between "watchable
 	// now" and "watchable when it finishes".
 	src->prioritize_streaming(id, rel, true);
 
-	if (!m_proxy->listening()) {
-		m_note->setVisible(true);
-		m_note->setText("<b>Cannot watch:</b> the local proxy is not listening.");
+	m_watch_job   = id;
+	m_watch_rel   = rel;
+	m_watch_path  = path;
+	m_watch_ticks = 0;
+	m_watch->setEnabled(false);
+
+	if (!m_watch_wait) {
+		m_watch_wait = new QTimer(this);
+		m_watch_wait->setInterval(500);
+		connect(m_watch_wait, &QTimer::timeout, this,
+		         &downloads_dialog::try_launch_watch);
+	}
+	try_launch_watch();          // it may already be ready
+}
+
+void downloads_dialog::try_launch_watch() {
+	const download_job *job = nullptr;
+	for (const download_job &j : m_downloads->jobs())
+		if (j.id == m_watch_job)
+			job = &j;
+	download_source *src = job ? m_downloads->source_by_id(job->source_id) : nullptr;
+	if (!job || !src) {
+		m_watch_wait->stop();
 		return;
 	}
+
+	// How much of the *front of this file* is genuinely readable. -1 means the
+	// source writes front-to-back and the file's own size is the truth.
+	qint64 have = src->contiguous_bytes(m_watch_job, m_watch_rel);
+	if (have < 0)
+		have = QFileInfo(m_watch_path).size();
+
+	// Enough for a demuxer to find its headers and a keyframe, and enough that
+	// playback does not stall a second later. Sequential order was requested
+	// above, so this fills from the front rather than at random.
+	static constexpr qint64 k_lead = 1024 * 1024;
+	const bool ready = job->complete() || have >= k_lead;
+
+	if (!ready) {
+		if (++m_watch_ticks > 120) {         // a minute of getting nowhere
+			m_watch_wait->stop();
+			m_watch->setEnabled(true);
+			m_action->setVisible(true);
+			m_action->setText("<b>Cannot watch yet:</b> the start of the file is "
+			                   "not arriving. It will play once more of it has "
+			                   "downloaded.");
+			return;
+		}
+		m_watch_wait->start();
+		m_action->setVisible(true);
+		m_action->setText(QString("Preparing to play — %1 of the start ready, "
+		                           "waiting for %2.")
+		                      .arg(human_bytes(have), human_bytes(k_lead)));
+		return;
+	}
+
+	m_watch_wait->stop();
+	m_watch->setEnabled(true);
 
 	// Serve it through the proxy rather than handing the player the path, so
 	// the readable prefix is enforced on every range request. A player pointed
 	// straight at a sparse file reads holes as zeros and renders them.
-	const int job_id = id;
+	const int     job_id = m_watch_job;
+	const QString rel    = m_watch_rel;
 	const QUrl local = m_proxy->publish_file(
-		path, content_type_for(path),
+		m_watch_path, content_type_for(m_watch_path),
 		[src, job_id, rel] { return src->contiguous_bytes(job_id, rel); });
-	if (!local.isValid())
+	if (!local.isValid()) {
+		m_action->setVisible(true);
+		m_action->setText("<b>Cannot watch:</b> the local proxy refused to "
+		                   "publish the file.");
 		return;
+	}
 
 	media_item item;
 	item.kind  = media_kind::direct;
-	item.url   = QUrl::fromLocalFile(path);
-	item.label = QFileInfo(path).fileName();
+	item.url   = QUrl::fromLocalFile(m_watch_path);
+	item.label = QFileInfo(m_watch_path).fileName();
 
 	QString error;
 	if (!m_players->play(item, &error, local)) {
-		m_note->setVisible(true);
-		m_note->setText("<b>Cannot watch:</b> " + error.toHtmlEscaped());
+		m_action->setVisible(true);
+		m_action->setText("<b>Cannot watch:</b> " + error.toHtmlEscaped());
+		return;
 	}
+	m_action->setVisible(true);
+	m_action->setText(QString("Playing %1 in %2, from %3 downloaded so far.")
+	                      .arg(item.label, m_players->selected(), human_bytes(have)));
 }
 
 void downloads_dialog::act_open_folder() {

@@ -128,9 +128,13 @@ QUrl local_proxy::publish_file(const QString &path, const QString &content_type,
 	local.setScheme("http");
 	local.setHost("127.0.0.1");
 	local.setPort(port());
-	// .ts, because the assembled output is concatenated MPEG-TS and players
-	// pick their demuxer from the extension.
-	local.setPath("/s/" + token + ".ts");
+	// Players pick their demuxer from the extension, so it has to be the real
+	// one. This was hardcoded to .ts back when the only published file was
+	// assembled MPEG-TS; serving a torrent's .mkv under a .ts name told the
+	// player the wrong container before it had read a byte.
+	const QString ext = QFileInfo(path).suffix();
+	local.setPath("/s/" + token + (ext.isEmpty() ? QString(".ts")
+	                                             : "." + ext.toLower()));
 	return local;
 }
 
