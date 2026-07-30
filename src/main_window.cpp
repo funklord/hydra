@@ -277,6 +277,33 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 
 	setWindowTitle("Hydra");
 	resize(1180, 760);
+
+	// Realize this window with the visual the web engine needs, *before* it is
+	// ever shown.
+	//
+	// The first web view added to a top-level that is already on screen makes
+	// Qt recreate that window's native handle, and X then unmaps and remaps it:
+	// measured at 30 fps, the whole browser window vanishes and the desktop
+	// shows through for about a third of a second on the first tab open.
+	// Building a view here and dropping it again forces the same handle to be
+	// created up front, where there is nothing on screen to lose.
+	//
+	// Done through the factory rather than by naming an engine, so the seam
+	// holds — a backend with no such requirement simply pays a cheap create
+	// and destroy (§19.2).
+	if (m_factory) {
+		web_view_backend *warm = m_factory->create_view(this);
+		m_stack->addWidget(warm->widget());
+		// Loading is what does it, not creating: the engine instantiates its
+		// render widget on the first load, and *that* is what forces the
+		// window to be rebuilt. A blank load is enough.
+		warm->load(QUrl("about:blank"));
+		winId();
+		QWidget *w = warm->widget();
+		m_stack->removeWidget(w);
+		delete w;                           // the backend is parented to it
+	}
+
 	update_status();
 }
 

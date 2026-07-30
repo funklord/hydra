@@ -5,6 +5,7 @@
 #include "qtwebengine_interceptor.h"
 
 #include <QWebEngineProfile>
+#include <QWebEngineView>
 #include <QWebEngineUrlRequestJob>
 #include <QWebEngineUrlScheme>
 #include <QWebEngineUrlSchemeHandler>

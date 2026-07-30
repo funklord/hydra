@@ -881,11 +881,33 @@ Recorded verbatim-in-substance so they are not lost; none of these are started.
   servers and synthetic streams. A real site with real player JS is the case
   that decides whether URL-shaped detection is enough, and it is the obvious
   next thing to point §11 at.
-- **Brief flicker when the first website loads.** Visible on the first page load
-  of a session. Cause unknown — candidates are the web view being added to the
-  stack before its first frame exists, the placeholder label swapping out, or
-  Chromium's first-paint background. Needs to be looked at with a real page,
-  not reasoned about.
+
+## First-load flicker (fixed)
+
+The whole browser window vanished for about a third of a second on the first
+tab open, showing the desktop through. Diagnosed by recording the screen at
+30 fps rather than reasoning about it, which is what made it findable: the
+content pane went grey → **wallpaper for ~12 frames** → white → page, and a
+full-screen capture showed no Hydra window anywhere during those frames.
+
+It was a genuine window recreation, not a paint artefact — polling
+`xwininfo` across the transition showed the X window id change
+(`0x8800029` → `0x8800038`) with a gap of nothing in between.
+
+Two plausible fixes failed before the right one. A warm `QWebEngineView`
+created in the factory did nothing, because the window being rebuilt was
+`main_window`'s, not that view's. Creating a warm view *inside* the window
+before `show()` also did nothing. Instrumenting `open_node` step by step found
+why: the surface is destroyed and recreated inside **`view->load()`**, not on
+construction — the engine instantiates its render widget on the first load,
+and that is what forces the rebuild. A warm view that never loads never
+triggers it.
+
+So the constructor now builds a view, loads `about:blank` into it, forces the
+native window, and drops it again — paying the rebuild before anything is on
+screen. After: grey → white → page, with no dark frame at any point. It also
+moves Chromium's start-up (~165 ms of blocked UI, measured) off the first tab
+open.
 
 ## Sidebar filter controls (done)
 
