@@ -27,7 +27,10 @@ cmake --build build -j
 
 Requires Qt 6 with **Widgets** and **WebEngineWidgets** (Arch: `qt6-base
 qt6-webengine`; Debian/Ubuntu: `qt6-base-dev qt6-webengine-dev`), CMake ≥ 3.19,
-C++17. On Linux this is an X11 / XWayland app: `main.cpp` forces
+C++17. Clone with `--recurse-submodules`, or run `git submodule update --init
+--depth 1` — `third_party/yt-dlp` is vendored for the site-extractor work
+(arch §11.5) and is source and tooling, not something the build compiles.
+On Linux this is an X11 / XWayland app: `main.cpp` forces
 `QT_QPA_PLATFORM=xcb` there unless the environment already set it. That forcing
 is guarded to desktop Linux, so other platforms keep Qt's own default plugin.
 
@@ -876,11 +879,83 @@ implementation order are in arch §11.4.
 
 Recorded verbatim-in-substance so they are not lost; none of these are started.
 
-- **Test the media path against `dramafren.org`.** The detector, the local proxy
-  and the external-player handoff have only ever been exercised against local
-  servers and synthetic streams. A real site with real player JS is the case
-  that decides whether URL-shaped detection is enough, and it is the obvious
-  next thing to point §11 at.
+
+## Media detection against a real site (tested; it does not work there)
+
+Pointed the media path at `dramafren.org` in the running app, logging every
+request through the interceptor's observer seam. The answer to "is URL-shaped
+detection enough" is **no**, and the reasons are worth keeping.
+
+**Nothing is requested until play is pressed.** On the watch page, 92 requests
+across 22 hosts and not one media URL. §11.3 predicted exactly this ("many
+sites only request the manifest when their player initializes or the user
+presses play"), and it is now measured rather than assumed. A synthesized Qt
+mouse click on the view — which the engine treats as a real user gesture — is
+what made the stream appear.
+
+**The manifest is disguised.** After the click the player fetched
+`…/v4/db/<id>/cf-master.<digits>.txt?k=…`. The name says master playlist; the
+extension says `.txt`. `media_detector::classify()` works from the URL, so it
+sees nothing, and the badge stays empty on a page that is plainly playing
+video. This is the limitation §11.1 already documents — "reliable Content-Type
+and manifest-body classification uses the optional local proxy (§10)" — and it
+is not a corner case but the normal state of affairs on a site that expects to
+be filtered.
+
+**Fetching that URL directly returns 403** from Cloudflare, which is the §11.3
+request-context argument holding up in the field: the CDN wants the page's
+Referer, cookies and User-Agent, so a naked fetch is refused. The body could
+not be confirmed for that reason; the reading of it as an HLS master playlist
+rests on the name, not on inspection.
+
+**Some of the delivery is peer-to-peer.** `tracker.webtorrent.dev` and three
+bare-IP hosts were contacted only after playback started. A design that watches
+HTTP requests for media URLs cannot see video arriving over WebRTC data
+channels at all, and no amount of Content-Type sniffing changes that.
+
+**The conclusion is architectural, not a patch.** Site-specific knowledge has a
+half-life of weeks, so it cannot be C++ — that would mean a rebuild and a
+release per site, with the working set frozen at ship time. It belongs where
+the filter list already lives: **produced, reviewed and stored as data**, by
+the AI diff/accept pipeline that already does this twice (tree §9, filters
+§12). Extraction is the third consumer, and its output is a **parser script**
+validated by having to pick a URL that was actually observed — the same
+"cannot invent" rule that governs reorganization. See arch §11.5.
+
+**yt-dlp is vendored** at `third_party/yt-dlp` (Unlicense, so no friction with
+GPL-3-or-later; shallow submodule, ~15 MB). Three jobs: try it first and skip
+the model entirely where it supports a site, since it is free and maintained
+by people tracking site changes; hand its nearest extractor to the model as
+worked reference when it does not; and use it as ground truth where it does.
+Not a build dependency — nothing in `CMakeLists.txt` refers to it.
+
+**And there is a mechanism that works today, measured.** A main-world script
+wrapping `MediaSource.addSourceBuffer` / `SourceBuffer.appendBuffer` captured
+the real video on this exact site: a `video/mp4;codecs=mp4a.40.2,avc1.64001E`
+source buffer, append totals past 5.1 MB, and the element reporting real
+playback positions — while URL detection saw nothing, yt-dlp refused the site,
+and part of the delivery was peer-to-peer. Whatever the transport, the page
+ends up pushing segments into MSE, so a tap there is transport-agnostic by
+construction. Design in arch §11.6.
+
+**Multiple sources per page is what settles it.** A watch page offers a mirror
+list (`ul.mirror`); one episode of the measured site carries two mirrors from
+two unrelated vendors (`dramafrenvip.upns.pro`, `abyssplayer.com`), held as
+base64 iframe snippets in `data-em` and absent from the DOM until clicked —
+only one literal `<iframe>` is in the initial HTML. Extraction costs one recipe per player per
+mirror, maintained forever; the tap costs none, because it captures whichever
+mirror the user actually started. The price is that it must run in the **main
+world** — an isolated world cannot see the page's `MediaSource`, which was
+verified rather than assumed — so it is a read-only byte observer injected on
+an explicit action, never the standing, privileged kind of script that
+autofill and the element picker are.
+
+Measured caveat: **yt-dlp does not support this site either**, dedicated or
+generic. That is the case a generated extractor exists for, and a reminder
+that vendoring is not by itself a solution. The remaining implications stand:
+the local-proxy content-type tier is what makes detection work on real sites
+rather than being a refinement; the media affordance should wait for a play
+gesture; and P2P-delivered video is outside the model entirely.
 
 ## First-load flicker (fixed)
 

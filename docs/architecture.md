@@ -401,6 +401,105 @@ That is a deliberately higher bar than "we support torrents", and it is what dec
 
 ---
 
+### 11.5 Site extractors: generated scripts, not engine code
+
+**Status: designed, not implemented.** §11.1's URL-shaped detection was measured against a real site and does not work there (see `project.md`): the manifest arrives as `cf-master.<digits>.txt?k=…`, and nothing is requested at all until a play gesture. That failure is not a bug to patch — it is the wrong layer trying to solve the problem.
+
+**Why this cannot live in C++.** Knowing how one site hides its stream is knowledge with a half-life of weeks. Encoding it in the engine means a rebuild and a release every time a site changes, for every site, forever — and it means the set of sites that work is fixed at ship time. The filter list (§12) is already data for exactly this reason. A site extractor is the same kind of thing and belongs in the same place: **produced, reviewed, stored and updated as data.**
+
+**It is the third consumer of Spine 3.** The AI diff/accept pipeline already does this shape twice — tree reorganization (§9) and filter rules (§12). Extraction is the same loop with a different output:
+
+| | signal | proposal | validation | stored as |
+|---|---|---|---|---|
+| §9 | the tree | a new arrangement | every leaf survives | the outline file |
+| §12 | requests that slipped through | filter rules | dry run over observed requests | the filter list |
+| §11.5 | requests after a play gesture | **a parser script** | it must pick a URL that was actually seen | a per-site extractor |
+
+**What the model is given.** The page URL, and the request log for that page since the play gesture — URLs, resource kinds, order. Not bodies, not cookies, not credentials; the §9.3 discipline of sending the least that can work applies here too. Plus **the closest yt-dlp extractor** as worked reference (below).
+
+**What it produces.** A pure function, not prose:
+
+```
+extract(evidence) -> { url, kind, headers } | null
+```
+
+`evidence` is the captured request log. No network, no side effects. The first tier does not get the DOM at all, because for the measured case it does not need it — the manifest was in the request log; what was missing was the knowledge that a `.txt` under that path *is* a master playlist. A second, DOM-reading tier behind the existing isolated-world injection seam (§13.2, already used by autofill and the element picker) is the escalation for sites where the URL is computed in page JS, and should be a separate, consented step rather than the default.
+
+**Validation is the whole safety story, and it mirrors §9.4.** A proposal is run offline against the *captured* evidence and must return a URL that appears in it. An extractor that invents a URL is rejected outright, exactly as a reorganization that invents a tab id is — in both cases there is no safe repair, and accepting one would act on something fabricated. Where the local proxy is up, the picked URL is then fetched with the page's own context and must actually look like a manifest before the user is asked to accept.
+
+**yt-dlp, vendored at `third_party/yt-dlp`.** Public domain (Unlicense), so it composes with GPL-3-or-later without friction. It earns its place three times over:
+
+1. **Try it first.** Where it supports a site, use it and skip the model entirely — it is free, correct, and maintained by people who track site changes so we do not have to. That is most of the value.
+2. **Worked reference.** 941 extractor modules are a corpus of *how sites hide streams*, written by people who have solved this thousands of times. Handing the model the nearest one is far better context than asking it to invent an approach.
+3. **Oracle.** On sites it does support, its answer is ground truth to check a generated extractor against.
+
+It is source and tooling, not a build dependency: nothing in `CMakeLists.txt` refers to it. At runtime, prefer a `yt-dlp` on `PATH` (the §11.3 player-probe pattern) and fall back to the vendored copy under the system Python; with neither, the feature degrades to the AI path alone.
+
+**Honest limits.** yt-dlp did not support the measured site either — dedicated *or* generic — which is the case a generated extractor exists for, and also a reminder that vendoring it is not a solution by itself. And part of that site's delivery is peer-to-peer: `tracker.webtorrent.dev` was contacted only after playback began. Video arriving over WebRTC data channels is invisible to anything watching HTTP requests, generated extractor or not, and should be said plainly rather than quietly missed.
+
+### 11.6 Capture at the sink: a Media Source tap
+
+**Status: proven on a real site, not implemented.** §11.5 proposes generating a
+parser per site. This section is the mechanism that makes extraction optional
+rather than mandatory, and the measurement that argues for it.
+
+**Whatever the transport, the page ends up handing bytes to a `<video>`.** For
+anything adaptive that means **Media Source Extensions**: the player creates a
+`MediaSource`, hands its blob URL to the element, and pushes segments through
+`SourceBuffer.appendBuffer`. HLS-in-JS, DASH-in-JS and WebTorrent over WebRTC
+all converge there. A tap on that call is therefore **transport-agnostic by
+construction** — it does not need to know how the bytes arrived, which is the
+one thing site-specific extraction can never stop needing.
+
+**Measured on the site where everything else failed.** With a main-world script
+wrapping `addSourceBuffer`/`appendBuffer`, the run reported
+`createObjectURL MediaSource -> blob:…`, a source buffer of
+`video/mp4;codecs=mp4a.40.2,avc1.64001E` (fragmented MP4, H.264 + AAC), append
+totals climbing past **5.1 MB**, and the element reporting real playback
+positions. URL-shaped detection saw nothing there, yt-dlp does not support the
+site at all, and part of the delivery was peer-to-peer — none of which the tap
+has to care about.
+
+**Multiple sources per page is what makes this decisive.** A watch page does not
+offer one player; it offers a list of mirrors (`ul.mirror`), and each is a
+*different third-party player host* with its own quirks and release schedule.
+Counted on one episode of the measured site: **two mirrors, two unrelated
+vendors** (`dramafrenvip.upns.pro`, `abyssplayer.com`), held as base64 iframe
+snippets in `data-em` attributes with only **one** literal `<iframe>` in the
+initial HTML — the alternates are not in the DOM at all until clicked. Extraction therefore
+costs one recipe per player per mirror, maintained forever — which is precisely
+what yt-dlp's 941 modules are. The tap costs none: it captures whichever mirror
+the user actually pressed play on, and is indifferent to how many alternatives
+sit behind the switcher.
+
+**The price is the main world, and it is a real one.** An isolated world has its
+own globals, so a hook installed there cannot see the page's `MediaSource` —
+this was verified, not assumed. The tap must therefore run where the page can
+see and tamper with it, which inverts the rule §13.2 follows for autofill and
+the element picker. Those stay isolated *because* they touch credentials and
+user intent. The tap is allowed in the main world only because it is the
+opposite kind of thing: a read-only observer of bytes the page is already
+decoding, holding no secrets and granting no privilege. It should be injected
+per site on an explicit action rather than standing in every page by default.
+
+**Getting the bytes out.** Shipping multi-megabyte `ArrayBuffer`s per segment
+over the QWebChannel bridge is the obvious route and the wrong one. The local
+proxy (§10) already listens on loopback behind unguessable tokens and already
+serves a growing file with Range transparency and held requests (§11.3,
+§11.4) — so the tap should POST segments to a capture token and let the
+existing machinery make the result watchable and seekable *while it
+accumulates*. Fragmented MP4 concatenates to a playable file directly; the
+ffmpeg remux stays the fallback for anything that does not.
+
+**How the three approaches rank.** yt-dlp first, where it supports the site:
+free, maintained, and it yields a URL, which is the best possible outcome
+because everything downstream (external player, resumable download, seeking)
+works normally. The tap second: it always works if the page can play it, at the
+cost of playing in-page and injecting into the main world. A generated
+extractor (§11.5) third — and note that the tap is the **oracle** that makes
+generating one safe, because a session that captured the real bytes knows what
+the right answer was and can check a proposal against it.
+
 ## 12. Filter-evolution loop
 
 The AI diff/accept pipeline (Spine 3) pointed at the filter list instead of the tree.
