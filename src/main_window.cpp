@@ -364,6 +364,11 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *dl = tools_menu->addAction("&Downloads…", QKeySequence("Ctrl+J"),
 	                                     this, &main_window::open_downloads);
 	dl->setStatusTip("Show transfers in progress and finished");
+	m_capture_action = tools_menu->addAction("&Capture Playing Video", this,
+	                                          &main_window::toggle_capture);
+	m_capture_action->setCheckable(true);
+	m_capture_action->setStatusTip("Record what this page plays, for sites where "
+	                                "no stream URL can be found");
 	QAction *find = tools_menu->addAction("&Find Media on This Page…", this,
 	                                       &main_window::find_media_with_ytdlp);
 	find->setStatusTip("Ask yt-dlp what the video on this page is");
@@ -910,6 +915,75 @@ ai_provider *main_window::choose_ai(QString *why) {
 	if (why)
 		*why = "No AI provider: start Ollama locally, or set ANTHROPIC_API_KEY.";
 	return nullptr;
+}
+
+void main_window::toggle_capture() {
+	web_view_backend *v = current_view();
+	if (!v) {
+		m_capture_action->setChecked(false);
+		m_status->showMessage("Open a page first.", 5000);
+		return;
+	}
+
+	// --- stop --------------------------------------------------------------
+	if (!m_capture_url.isEmpty()) {
+		const qint64 got = m_local_proxy->captured_bytes(m_capture_url);
+		m_local_proxy->close_capture(m_capture_url);
+		m_capture_url.clear();
+		m_capture_action->setChecked(false);
+
+		if (got <= 0) {
+			QFile::remove(m_capture_path);
+			m_status->showMessage("Nothing was captured — the page may not use "
+			                       "Media Source, or never started playing.", 9000);
+			return;
+		}
+		// Offer it the same way anything else found on this page is offered, so
+		// Watch and the download list need to know nothing about capture.
+		media_item item;
+		item.kind      = media_kind::direct;
+		item.url       = QUrl::fromLocalFile(m_capture_path);
+		item.site_host = v->url().host();
+		item.label     = QString("Captured · %1")
+		                     .arg(QLocale().formattedDataSize(got));
+		m_media->add_item(item.site_host, item);
+		m_status->showMessage(QString("Captured %1 to %2")
+		                          .arg(QLocale().formattedDataSize(got),
+		                               m_capture_path), 12000);
+		return;
+	}
+
+	// --- start -------------------------------------------------------------
+	if (!m_local_proxy || !m_local_proxy->listening()) {
+		m_capture_action->setChecked(false);
+		m_status->showMessage("Cannot capture: the local proxy is not listening.",
+		                       8000);
+		return;
+	}
+	const QString host = v->url().host();
+	m_capture_path = QDir(m_downloads->directory())
+	                     .filePath(QString("%1-%2.mp4")
+	                                   .arg(host.isEmpty() ? "capture" : host,
+	                                        QDateTime::currentDateTime()
+	                                            .toString("yyyyMMdd-hhmmss")));
+	m_capture_url = m_local_proxy->open_capture(m_capture_path);
+	if (m_capture_url.isEmpty()) {
+		m_capture_action->setChecked(false);
+		m_status->showMessage("Cannot capture: could not open " + m_capture_path,
+		                       8000);
+		return;
+	}
+
+	// The hook has to be in place before the player builds its MediaSource, so
+	// arming means injecting and reloading. Catching a stream mid-playback
+	// would miss the init segment and produce a file nothing can decode.
+	v->inject_main_world_script("hydra-mse-capture",
+	                             mse_tap::capture_source(m_capture_url));
+	m_capture_action->setChecked(true);
+	m_status->showMessage("Capturing — reloading so the recorder is in place "
+	                       "before playback starts. Press play, then turn this "
+	                       "off when done.", 12000);
+	v->reload();
 }
 
 void main_window::find_media_with_ytdlp() {

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "mse_tap.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
+
 #include <algorithm>
 
 namespace {
@@ -41,6 +44,19 @@ const char *k_hook = R"JS(
         var s = seen[mime];
         s.bytes += n;
         s.appends += 1;
+        // If capture is armed, the same bytes go to the shell. Order matters:
+        // this is the *first* buffer of this mime, so an init segment reaches
+        // the file before any media segment does, and the result is playable.
+        if (window.__hydra_capture && n > 0 && !s.skip) {
+          try {
+            var copy = buf.buffer ? buf.buffer.slice(buf.byteOffset || 0,
+                                                     (buf.byteOffset || 0) + n)
+                                  : buf;
+            fetch(window.__hydra_capture, { method: 'POST', body: copy,
+                                            mode: 'cors', keepalive: false })
+              .catch(function () { s.skip = true; });
+          } catch (e) { s.skip = true; }
+        }
         // Report on a byte threshold rather than per append: a player appends
         // constantly, and the shell only needs to know roughly how much is
         // buffered.
@@ -94,6 +110,19 @@ mse_tap::mse_tap(QObject *parent) : QObject(parent) {}
 
 QString mse_tap::hook_source()  { return QString::fromUtf8(k_hook); }
 QString mse_tap::relay_source() { return QString::fromUtf8(k_relay); }
+
+QString mse_tap::capture_source(const QUrl &endpoint) {
+	// Only a loopback URL is ever handed to a page. Belt and braces: the caller
+	// is the shell, but this is the one value that crosses into the page's own
+	// world and it should be impossible to point somewhere else by accident.
+	if (endpoint.host() != "127.0.0.1")
+		return QStringLiteral("/* refused: capture endpoint is not loopback */");
+	return QString("window.__hydra_capture = %1;")
+	    .arg(QString::fromUtf8(QJsonDocument(QJsonArray{ endpoint.toString() })
+	                                .toJson(QJsonDocument::Compact))
+	             .mid(1)      // strip the array brackets, leaving the quoted string
+	             .chopped(1));
+}
 
 void mse_tap::report(const QString &site_host, const QString &mime, double bytes,
                       double appends, double position, double duration) {

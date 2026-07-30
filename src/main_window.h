@@ -5,6 +5,7 @@
 
 #include <QWidget>
 #include <QHash>
+#include <QUrl>
 #include <QStringList>
 #include <QString>
 
@@ -88,6 +89,7 @@ private slots:
 	void start_download(const QUrl &url);
 	void open_downloads();
 	void find_media_with_ytdlp();
+	void toggle_capture();
 	// One place decides what the media badge says, since two sources feed it.
 	void refresh_media_affordance(const QString &site_host);
 	void open_settings();
@@ -150,6 +152,9 @@ private:
 	torrent_download_source *m_torrents = nullptr;
 	ytdlp_resolver     *m_ytdlp          = nullptr;
 	mse_tap            *m_mse            = nullptr;
+	QAction            *m_capture_action = nullptr;
+	QUrl                m_capture_url;      // the proxy endpoint, while capturing
+	QString             m_capture_path;
 	local_proxy        *m_local_proxy   = nullptr;
 	element_picker     *m_picker        = nullptr;
 	filter_signals     *m_signals       = nullptr;

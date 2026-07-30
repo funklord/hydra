@@ -11,6 +11,7 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QDir>
 #include <QFileInfo>
 
 namespace {
@@ -270,17 +271,107 @@ void local_proxy::unpublish_all() {
 
 void local_proxy::on_connection() {
 	while (QTcpSocket *client = m_server->nextPendingConnection()) {
-		connect(client, &QTcpSocket::disconnected, client, &QObject::deleteLater);
+		connect(client, &QTcpSocket::disconnected, this, [this, client] {
+			m_incoming.remove(client);
+			client->deleteLater();
+		});
 		connect(client, &QTcpSocket::readyRead, this, [this, client] {
-			const QByteArray head = client->readAll();
-			if (head.isEmpty())
+			QByteArray &buf = m_incoming[client];
+			buf += client->readAll();
+
+			// Headers first. A GET arrives complete in one read; a POST body
+			// does not, so nothing can be answered until both the header block
+			// and the declared length are in hand.
+			const int end = buf.indexOf("\r\n\r\n");
+			if (end < 0) {
+				if (buf.size() > 16 * 1024) {
+					send_simple(client, 431, "headers too large");
+					m_incoming.remove(client);
+				}
 				return;
-			serve(client, head);
+			}
+			const QByteArray head = buf.left(end + 4);
+			const qint64 len = header_of(head, "Content-Length").toLongLong();
+			// One capture chunk is a media segment, not a file upload. A
+			// declared length far beyond that is a mistake or an attack, and
+			// either way must not be buffered.
+			if (len < 0 || len > 32 * 1024 * 1024) {
+				send_simple(client, 413, "too large");
+				m_incoming.remove(client);
+				return;
+			}
+			if (buf.size() - (end + 4) < len)
+				return;                       // still arriving
+
+			const QByteArray body = buf.mid(end + 4, int(len));
+			m_incoming.remove(client);
+			serve(client, head, body);
 		});
 	}
 }
 
-void local_proxy::serve(QTcpSocket *client, const QByteArray &head) {
+
+// --- capture ---------------------------------------------------------------
+
+QUrl local_proxy::open_capture(const QString &path) {
+	if (!listening())
+		return {};
+	QDir().mkpath(QFileInfo(path).absolutePath());
+	// Truncate: a capture is a fresh recording, and appending to whatever was
+	// there before would silently splice two unrelated streams together.
+	QFile f(path);
+	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+		return {};
+	f.close();
+
+	QByteArray raw(16, Qt::Uninitialized);
+	QRandomGenerator::system()->generate(raw.begin(), raw.end());
+	const QString token = QString::fromLatin1(raw.toHex());
+
+	entry e;
+	e.local_path = path;
+	e.capture    = true;
+	m_published.insert(token, e);
+
+	QUrl local;
+	local.setScheme("http");
+	local.setHost("127.0.0.1");
+	local.setPort(port());
+	local.setPath("/c/" + token);
+	return local;
+}
+
+void local_proxy::close_capture(const QUrl &url) {
+	const QString token = url.path().section('/', 2, 2);
+	m_published.remove(token);
+}
+
+qint64 local_proxy::captured_bytes(const QUrl &url) const {
+	const QString token = url.path().section('/', 2, 2);
+	return m_published.value(token).received;
+}
+
+void local_proxy::accept_capture(QTcpSocket *client, const QString &token,
+                                  const QByteArray &body) {
+	entry &e = m_published[token];
+	if (!body.isEmpty()) {
+		QFile f(e.local_path);
+		if (f.open(QIODevice::WriteOnly | QIODevice::Append)) {
+			f.write(body);
+			f.close();
+			e.received += body.size();
+		}
+	}
+	// 204 and close: the page is not waiting on anything from us, and keeping
+	// the socket would just accumulate connections for the length of a film.
+	client->write(status_line(204));
+	client->write("Access-Control-Allow-Origin: *\r\n");
+	client->write("Connection: close\r\n\r\n");
+	client->disconnectFromHost();
+}
+
+void local_proxy::serve(QTcpSocket *client, const QByteArray &head,
+                         const QByteArray &body) {
 	const QByteArray request_line = head.left(head.indexOf('\n')).trimmed();
 	const QList<QByteArray> parts = request_line.split(' ');
 	if (parts.size() < 2) {
@@ -300,12 +391,20 @@ void local_proxy::serve(QTcpSocket *client, const QByteArray &head) {
 		send_simple(client, 404, "not published");
 		return;
 	}
+	const entry e = m_published.value(token);
+	if (e.capture) {
+		if (method != "POST") {
+			send_simple(client, 405, "capture accepts POST only");
+			return;
+		}
+		accept_capture(client, token, body);
+		return;
+	}
 	if (method != "GET" && method != "HEAD") {
 		send_simple(client, 405, "method not allowed");
 		return;
 	}
 
-	const entry e = m_published.value(token);
 	if (!e.local_path.isEmpty()) {
 		serve_file(client, e, head, method == "HEAD");
 		return;

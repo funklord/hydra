@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QObject>
 #include <QString>
+#include <QUrl>
 
 // What a page is actually feeding its <video> element (architecture doc §11.6).
 struct mse_stream {
@@ -45,6 +46,11 @@ public:
 	// events. Injected through the two different seam calls of the same name.
 	static QString hook_source();
 	static QString relay_source();
+
+	// Arms capture for the next load: a one-line main-world script that names
+	// the endpoint the hook posts segments to. Injected separately so the hook
+	// itself stays constant and carries no per-session state.
+	static QString capture_source(const QUrl &endpoint);
 
 	// The object name the relay expects on the bridge.
 	static const char *bridge_name() { return "hydraMse"; }

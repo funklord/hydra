@@ -882,7 +882,7 @@ implementation order are in arch §11.4.
 Recorded verbatim-in-substance so they are not lost; none of these are started.
 
 
-## Media Source tap (implemented, detection only)
+## Media Source tap (implemented, with capture)
 
 `mse_tap` reports what a page is actually feeding its `<video>`, for the sites
 where watching request URLs finds nothing. Verified on the site from the
@@ -907,8 +907,27 @@ a flag on `inject_script()`, so the escalation is greppable. It also runs on
 subframes, which is not optional: on real sites the player is a third-party
 iframe, and a tap confined to the top frame sees nothing.
 
-**Detection only.** Getting the bytes out belongs on the local proxy (arch
-§11.6) — a POST to a capture token, not this channel — and is not done.
+**Capture works, and is verified end to end.** Tools → Capture Playing Video
+opens a file, arms the hook and reloads (the recorder has to be in place before
+the player builds its MediaSource, or the init segment is missed and the result
+decodes as nothing). Segments are POSTed to a `local_proxy` capture endpoint;
+stopping offers the file as a normal media item, so Watch and the download list
+need to know nothing about capture. Against a local page feeding a fragmented
+MP4 through MSE, the captured file came out **byte-identical to the source**
+(911,975 bytes) and passed a full `ffmpeg` decode with no errors.
+
+**On the token that lands in the page.** The capture URL is main-world, so the
+page can read it — and that is acceptable rather than tolerated: it grants
+exactly one thing, appending to a file the user just asked to create, and the
+bytes in that file are page-supplied by definition. A page abusing its own
+token can only corrupt its own capture. It cannot read, cannot name a path,
+cannot reach another capture, and only loopback URLs are ever emitted.
+
+Proxy plumbing this needed: the connection handler used to assume a request
+arrived in one read, which is true of a GET and false of a POST body, so each
+connection now accumulates until its headers and declared `Content-Length` are
+both in hand. A single chunk is capped at 32 MiB — a media segment is not a
+file upload, and an absurd declared length must not be buffered.
 Observed while testing: the page reported `duration ≈ 7469s` for a short
 episode, which is a placeholder an unbounded MediaSource commonly carries, and
 a good reminder that these numbers are the page's claims rather than facts.

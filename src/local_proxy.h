@@ -93,6 +93,19 @@ public:
 	                   available_length avail = {}, expected_length total = {});
 	void unpublish_all();
 
+	// --- capture (architecture doc §11.6) ---------------------------------
+	// Open a file for a page to append to, and get back the URL it posts to.
+	//
+	// The token ends up inside the page, which is worth being explicit about:
+	// it grants exactly one thing, appending to a file the user just asked to
+	// create, and the bytes going into that file are page-supplied by
+	// definition. So a page abusing its own token can only corrupt its own
+	// capture — it gains nothing it did not already have. It cannot read, cannot
+	// name a path, and cannot reach another capture.
+	QUrl open_capture(const QString &path);
+	void close_capture(const QUrl &url);
+	qint64 captured_bytes(const QUrl &url) const;
+
 signals:
 	void failed(const QString &message);
 
@@ -104,14 +117,22 @@ private:
 		QString        content_type;
 		available_length avail;        // readable prefix, or null to trust size
 		expected_length  expected;     // eventual size, or null if unknown
+		bool     capture = false;      // accepts POSTed bytes instead of serving
+		qint64   received = 0;
 	};
 
 	void on_connection();
-	void serve(QTcpSocket *client, const QByteArray &request_head);
+	void serve(QTcpSocket *client, const QByteArray &request_head,
+	            const QByteArray &body);
+	void accept_capture(QTcpSocket *client, const QString &token,
+	                     const QByteArray &body);
 	void serve_file(QTcpSocket *client, const entry &e, const QByteArray &head,
 	                 bool head_only);
 
 	QTcpServer            *m_server = nullptr;
 	QNetworkAccessManager *m_net    = nullptr;
 	QHash<QString, entry>  m_published;
+	// A POST body does not arrive in one read, so each connection accumulates
+	// until its headers and declared length are both complete.
+	QHash<QTcpSocket *, QByteArray> m_incoming;
 };
