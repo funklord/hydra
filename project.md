@@ -928,6 +928,15 @@ arrived in one read, which is true of a GET and false of a POST body, so each
 connection now accumulates until its headers and declared `Content-Length` are
 both in hand. A single chunk is capped at 32 MiB — a media segment is not a
 file upload, and an absurd declared length must not be buffered.
+
+**Load-tested, since one HTTP connection per segment is the obvious way this
+falls over.** A feeder appending 32 KiB at a time — 519 segments, 17 MB, 90 s
+of 720p — came out byte-identical and decoded cleanly, while the process held
+flat at 130 descriptors and 52 sockets for the whole run with no growth in
+system-wide TIME-WAIT. Deliberately a local feeder rather than a real site: it
+makes the segment rate the only variable and keeps the test repeatable. What
+remains unverified against a live site is network variability, not the
+mechanism — the hook is already known to fire there.
 Observed while testing: the page reported `duration ≈ 7469s` for a short
 episode, which is a placeholder an unbounded MediaSource commonly carries, and
 a good reminder that these numbers are the page's claims rather than facts.
