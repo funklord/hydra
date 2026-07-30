@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "downloads_dialog.h"
 #include "download_manager.h"
+#include "local_proxy.h"
+#include "media_detector.h"
+#include "player_launcher.h"
 
 #include <QApplication>
 #include <QDesktopServices>
@@ -50,6 +53,18 @@ QString state_label(download_state s) {
 		case download_state::cancelled: return "Cancelled";
 	}
 	return QString();
+}
+
+QString content_type_for(const QString &path) {
+	static const QHash<QString, QString> by_ext = {
+		{"mp4", "video/mp4"},   {"m4v", "video/mp4"},   {"mkv", "video/x-matroska"},
+		{"webm", "video/webm"}, {"avi", "video/x-msvideo"}, {"mov", "video/quicktime"},
+		{"ts", "video/mp2t"},   {"mpg", "video/mpeg"},  {"mpeg", "video/mpeg"},
+		{"mp3", "audio/mpeg"},  {"m4a", "audio/mp4"},   {"flac", "audio/flac"},
+		{"ogg", "audio/ogg"},   {"opus", "audio/opus"}, {"wav", "audio/wav"},
+	};
+	return by_ext.value(QFileInfo(path).suffix().toLower(),
+	                     "application/octet-stream");
 }
 
 // Draws a real progress bar in the progress column. A downloads list without
@@ -107,8 +122,10 @@ public:
 
 }  // namespace
 
-downloads_dialog::downloads_dialog(download_manager *downloads, QWidget *parent)
-	: QDialog(parent), m_downloads(downloads) {
+downloads_dialog::downloads_dialog(download_manager *downloads,
+                                    player_launcher *players, local_proxy *proxy,
+                                    QWidget *parent)
+	: QDialog(parent), m_downloads(downloads), m_players(players), m_proxy(proxy) {
 	setWindowTitle("Downloads");
 	resize(880, 460);
 	// A downloads window is something you leave open beside the browser.
@@ -147,7 +164,9 @@ downloads_dialog::downloads_dialog(download_manager *downloads, QWidget *parent)
 	m_resume = new QPushButton("&Resume", this);
 	m_cancel = new QPushButton("&Cancel", this);
 	m_folder = new QPushButton("Open &Folder", this);
-	for (QPushButton *b : { m_pause, m_resume, m_cancel, m_folder }) {
+	m_watch  = new QPushButton("&Watch", this);
+	m_watch->setToolTip("Play this while it is still downloading");
+	for (QPushButton *b : { m_watch, m_pause, m_resume, m_cancel, m_folder }) {
 		b->setEnabled(false);
 		row->addWidget(b);
 	}
@@ -161,6 +180,7 @@ downloads_dialog::downloads_dialog(download_manager *downloads, QWidget *parent)
 	connect(m_resume, &QPushButton::clicked, this, &downloads_dialog::act_resume);
 	connect(m_cancel, &QPushButton::clicked, this, &downloads_dialog::act_cancel);
 	connect(m_folder, &QPushButton::clicked, this, &downloads_dialog::act_open_folder);
+	connect(m_watch,  &QPushButton::clicked, this, &downloads_dialog::act_watch);
 
 	// changed() fires on every chunk of every transfer. Repainting the tree at
 	// that rate is pure waste, so bursts are collapsed into one refresh.
@@ -283,7 +303,7 @@ void downloads_dialog::update_buttons() {
 			job = &j;
 
 	if (!job) {
-		for (QPushButton *b : { m_pause, m_resume, m_cancel, m_folder })
+		for (QPushButton *b : { m_watch, m_pause, m_resume, m_cancel, m_folder })
 			b->setEnabled(false);
 		return;
 	}
@@ -298,6 +318,41 @@ void downloads_dialog::update_buttons() {
 	// stopping it is exactly what a user would expect Cancel to do there.
 	m_cancel->setEnabled(!job->terminal());
 	m_folder->setEnabled(!job->path.isEmpty());
+
+	// Watch is offered when the source says a partial file is usable and the
+	// job contains something worth playing. Whether that is a torrent or an
+	// ordinary download is not asked and does not matter.
+	const bool streamable = src && src->capabilities().streamable;
+	m_watch->setEnabled(streamable && m_players && m_proxy &&
+	                     find_playable(*job, nullptr));
+}
+
+// Which file in a job is worth playing. This is a media judgement rather than a
+// transport one, so it belongs above the seam: the source knows how bytes
+// arrive, not which of them is a film.
+bool downloads_dialog::find_playable(const download_job &j, QString *rel) const {
+	static const QStringList playable = {
+		"mp4", "mkv", "webm", "avi", "mov", "m4v", "ts", "mpg", "mpeg",
+		"mp3", "m4a", "flac", "ogg", "opus", "wav",
+	};
+	auto is_playable = [](const QString &p) {
+		return playable.contains(QFileInfo(p).suffix().toLower());
+	};
+
+	if (rel)
+		rel->clear();
+	if (j.files.isEmpty())
+		return is_playable(j.path);          // the job's own path is the file
+	// Multi-file: take the first playable entry. The feature is usually the
+	// largest, but per-file sizes are not in the job model.
+	for (const QString &f : j.files) {
+		if (!is_playable(f))
+			continue;
+		if (rel)
+			*rel = f;
+		return true;
+	}
+	return false;
 }
 
 void downloads_dialog::act_pause() {
@@ -313,6 +368,65 @@ void downloads_dialog::act_resume() {
 void downloads_dialog::act_cancel() {
 	if (const int id = selected_job())
 		m_downloads->cancel(id);
+}
+
+void downloads_dialog::act_watch() {
+	const int id = selected_job();
+	const download_job *job = nullptr;
+	for (const download_job &j : m_downloads->jobs())
+		if (j.id == id)
+			job = &j;
+	if (!job || !m_players || !m_proxy)
+		return;
+
+	download_source *src = m_downloads->source_by_id(job->source_id);
+	if (!src)
+		return;
+
+	// The file to play, and where it actually lives. For a single-file job the
+	// job's own path is the file; for a multi-file one the entries are relative
+	// to the download directory.
+	QString rel;
+	if (!find_playable(*job, &rel))
+		return;
+	const QString path = rel.isEmpty()
+	                         ? job->path
+	                         : QDir(m_downloads->directory()).filePath(rel);
+	if (path.isEmpty())
+		return;
+
+	// Ask the source to fetch the front first. Without this a torrent downloads
+	// in whatever order the swarm offers, and the beginning of the file may be
+	// the last thing to arrive — which is the difference between "watchable
+	// now" and "watchable when it finishes".
+	src->prioritize_streaming(id, rel, true);
+
+	if (!m_proxy->listening()) {
+		m_note->setVisible(true);
+		m_note->setText("<b>Cannot watch:</b> the local proxy is not listening.");
+		return;
+	}
+
+	// Serve it through the proxy rather than handing the player the path, so
+	// the readable prefix is enforced on every range request. A player pointed
+	// straight at a sparse file reads holes as zeros and renders them.
+	const int job_id = id;
+	const QUrl local = m_proxy->publish_file(
+		path, content_type_for(path),
+		[src, job_id, rel] { return src->contiguous_bytes(job_id, rel); });
+	if (!local.isValid())
+		return;
+
+	media_item item;
+	item.kind  = media_kind::direct;
+	item.url   = QUrl::fromLocalFile(path);
+	item.label = QFileInfo(path).fileName();
+
+	QString error;
+	if (!m_players->play(item, &error, local)) {
+		m_note->setVisible(true);
+		m_note->setText("<b>Cannot watch:</b> " + error.toHtmlEscaped());
+	}
 }
 
 void downloads_dialog::act_open_folder() {

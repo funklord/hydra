@@ -71,6 +71,8 @@ public:
 	void cancel(int id) override;
 	void pause(int id) override;
 	void unpause(int id) override;
+	void prioritize_streaming(int id, const QString &file, bool on) override;
+	qint64 contiguous_bytes(int id, const QString &file) const override;
 
 	// --- Settings ---------------------------------------------------------
 	// The §11.4 caps. `global` is the whole session; `per_torrent` bounds one
@@ -88,8 +90,8 @@ public:
 	// "stop as soon as the download completes".
 	void set_seed_ratio(double ratio);
 
-	// Sequential piece order, so the growing file is playable from the front —
-	// what makes Watch work on a torrent the way it does on HLS (§11.3).
+	// Sequential piece order for *every* torrent. Watch uses the per-job
+	// prioritize_streaming() instead; this is the global default.
 	void set_sequential(bool on);
 
 	// Where resume data and the session state live.

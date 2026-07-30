@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "download_manager.h"
+
 #include <QDialog>
 #include <QHash>
 
@@ -9,7 +11,8 @@ class QPushButton;
 class QTimer;
 class QTreeWidget;
 class QTreeWidgetItem;
-class download_manager;
+class local_proxy;
+class player_launcher;
 
 // The downloads window (architecture doc §11.2, §11.4).
 //
@@ -35,8 +38,8 @@ class download_manager;
 class downloads_dialog : public QDialog {
 	Q_OBJECT
 public:
-	explicit downloads_dialog(download_manager *downloads,
-	                           QWidget *parent = nullptr);
+	downloads_dialog(download_manager *downloads, player_launcher *players,
+	                  local_proxy *proxy, QWidget *parent = nullptr);
 
 private:
 	void refresh();              // reconcile rows against the job list
@@ -46,9 +49,18 @@ private:
 	void act_resume();
 	void act_cancel();
 	void act_open_folder();
+	void act_watch();
 	int  selected_job() const;
+	// Is there something in this job worth playing, and if so which file?
+	// `rel` is the job-relative path, left empty for a single-file job — that
+	// is a real answer, not a failure, which is why it cannot be signalled by
+	// returning an empty string. UI-level media judgement, which is why it
+	// lives here and not behind the transport seam.
+	bool find_playable(const download_job &j, QString *rel) const;
 
 	download_manager *m_downloads = nullptr;
+	player_launcher  *m_players   = nullptr;
+	local_proxy      *m_proxy     = nullptr;
 
 	QTreeWidget *m_list   = nullptr;
 	QLabel      *m_note   = nullptr;
@@ -56,6 +68,7 @@ private:
 	QPushButton *m_resume = nullptr;
 	QPushButton *m_cancel = nullptr;
 	QPushButton *m_folder = nullptr;
+	QPushButton *m_watch  = nullptr;
 	QTimer      *m_coalesce = nullptr;
 
 	// Rows are reconciled in place rather than rebuilt. changed() fires on

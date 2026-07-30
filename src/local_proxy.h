@@ -6,6 +6,8 @@
 #include <QString>
 #include <QUrl>
 
+#include <functional>
+
 class QTcpServer;
 class QTcpSocket;
 class QNetworkAccessManager;
@@ -62,10 +64,23 @@ public:
 	// Publish `upstream` and get back the localhost URL to hand a player.
 	QUrl publish(const QUrl &upstream, const stream_context &ctx);
 
+	// How many bytes at the start of a published file are genuinely readable.
+	// Returning -1 means "trust the file's size".
+	using available_length = std::function<qint64()>;
+
 	// Publish a local file that is still being written — the assembled HLS
-	// output (§11.3). Ranges are served against whatever has landed so far, so
-	// a player can seek backwards through a live capture while it grows.
-	QUrl publish_file(const QString &path, const QString &content_type);
+	// output (§11.3), or a torrent being watched as it downloads (§11.4).
+	// Ranges are served against whatever has landed so far, so a player can
+	// seek backwards through a live capture while it grows.
+	//
+	// `avail` exists because a file's size is not always a statement about what
+	// is in it. An appended capture can be trusted (omit it). A torrent's files
+	// are allocated **sparse and full-size from the outset**, so the size is
+	// right immediately while the content is mostly holes that read as zeros —
+	// serving those would hand the player silence instead of an honest short
+	// read, and it would look like a corrupt stream rather than a slow one.
+	QUrl publish_file(const QString &path, const QString &content_type,
+	                   available_length avail = {});
 	void unpublish_all();
 
 signals:
@@ -77,6 +92,7 @@ private:
 		stream_context ctx;
 		QString        local_path;     // set instead of upstream for a file
 		QString        content_type;
+		available_length avail;        // readable prefix, or null to trust size
 	};
 
 	void on_connection();

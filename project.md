@@ -561,6 +561,57 @@ iterating `m_transfers`, and `abort()` delivers `finished()` synchronously,
 which re-entered `teardown()` and mutated the map mid-iteration. The map is
 now emptied first.
 
+## Watch a torrent while it downloads (arch §11.3, §11.4)
+
+**Watch** in the downloads window plays a job before it finishes, through the
+existing local proxy and external player — the same path §11.3 already uses for
+a growing HLS capture, now fed by a torrent.
+
+Expressed neutrally, because it is not torrent-specific: an HTTP download is
+written front-to-back and is streamable for the same reason. The seam gained
+`source_capabilities::streamable`, `prioritize_streaming(id, file, on)` and
+`contiguous_bytes(id, file)`; the UI's only transport-specific knowledge is
+which *file extensions* are worth playing, which is a media judgement rather
+than a transport one.
+
+**The trap this is built around: a file's size is not a statement about what is
+in it.** libtorrent allocates files **sparse and full-size from the outset**, so
+`QFile::size()` returns the final size while the content is mostly holes that
+read as zeros. The proxy previously trusted that size — which for a torrent
+means confidently serving a player megabytes of silence, indistinguishable from
+a corrupt stream. `publish_file()` now takes an optional readable-prefix
+callback; the torrent source answers it by walking pieces from the file's first
+piece to the first hole, mapping through `file_storage` because the file may
+start mid-piece and may not be first in the torrent.
+
+Sequential order alone is not enough either: it gets the front of the file first
+but promises nothing about *when*. `prioritize_streaming` also sets
+`set_piece_deadline` on the opening pieces, which is the difference between
+"downloads in order" and "starts playing promptly" on a slow swarm.
+
+**Verified against a throttled real swarm, 16 checks.** With the transfer held
+mid-flight the file is 6 MiB on disk while only 32 KiB is readable; the proxy
+serves exactly the readable prefix, **every byte matching the original**, and
+refuses a range past it with 416 rather than answering with zeros. The prefix
+never goes backwards, and after completion the whole file is served
+byte-identically.
+
+Two bugs this found:
+
+- **Pad files were being reported as content.** libtorrent inserts zero-length
+  padding files to align pieces in hybrid torrents, and all three reporting
+  paths listed them — so the downloads window would have shown entries like
+  `.pad/98304` beside the real files. Filtered at the source.
+- `find_playable` originally returned `QString()` on both branches for
+  single-file jobs, so Watch could never enable for them. The empty string is a
+  *valid* answer there (the job's own path is the file), which is why the check
+  is now a bool with an out-parameter.
+
+Note for testing: libtorrent puts loopback peers in `local_peer_class`, which is
+exempt from rate limits, so a "throttled" local seeder saturates the link and
+finishes instantly. The test clears that class for 127/8 via
+`set_peer_class_filter`.
+
 ## In-page magnet links (arch §11.4, §19.2)
 
 Clicking a magnet link in a page routes it to the download manager. The seam is

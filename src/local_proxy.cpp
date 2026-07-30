@@ -110,7 +110,8 @@ QUrl local_proxy::publish(const QUrl &upstream, const stream_context &ctx) {
 	return local;
 }
 
-QUrl local_proxy::publish_file(const QString &path, const QString &content_type) {
+QUrl local_proxy::publish_file(const QString &path, const QString &content_type,
+                                available_length avail) {
 	if (!listening())
 		return {};
 	QByteArray raw(16, Qt::Uninitialized);
@@ -120,6 +121,7 @@ QUrl local_proxy::publish_file(const QString &path, const QString &content_type)
 	entry e;
 	e.local_path   = path;
 	e.content_type = content_type;
+	e.avail        = std::move(avail);
 	m_published.insert(token, e);
 
 	QUrl local;
@@ -141,7 +143,21 @@ void local_proxy::serve_file(QTcpSocket *client, const entry &e,
 	}
 	// Whatever has landed so far. A live capture grows between requests, which
 	// is exactly what makes seeking backwards through it work.
-	const qint64 size = f.size();
+	//
+	// For a sparsely-allocated file the size is already the final one while the
+	// content is still arriving, so the publisher's own answer wins where it
+	// has one — otherwise every read past the real data returns zeros and the
+	// player renders them rather than waiting.
+	qint64 size = f.size();
+	if (e.avail) {
+		const qint64 usable = e.avail();
+		if (usable >= 0)
+			size = qMin(size, usable);
+	}
+	if (size <= 0) {
+		send_simple(client, 503, "not enough downloaded yet");
+		return;
+	}
 
 	qint64 start = 0, end = size - 1;
 	bool partial = false;

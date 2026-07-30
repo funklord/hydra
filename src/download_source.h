@@ -86,6 +86,11 @@ struct source_capabilities {
 
 	// One line, shown when asking for that consent.
 	QString participation_note;
+
+	// The partial file is usable before the job finishes, so it can be played
+	// while it downloads (§11.3). Not torrent-specific: an HTTP download is
+	// written strictly front-to-back and is streamable for the same reason.
+	bool streamable = false;
 };
 
 struct download_request {
@@ -134,6 +139,30 @@ public:
 	// calling and watching nothing happen.
 	virtual void pause(int id) { Q_UNUSED(id) }
 	virtual void unpause(int id) { Q_UNUSED(id) }
+
+	// Ask the source to fetch the front of the file first, so playback can
+	// start before the job finishes. A source that already transfers in order
+	// has nothing to do and ignores it.
+	// `file` is one of the job's `files` entries, or empty for a single-file
+	// job. Named explicitly rather than remembered, so two callers cannot
+	// silently disagree about which file the answer below refers to.
+	virtual void prioritize_streaming(int id, const QString &file, bool on) {
+		Q_UNUSED(id) Q_UNUSED(file) Q_UNUSED(on)
+	}
+
+	// Bytes at the *start* of the job's primary file that are genuinely on disk
+	// and readable, or -1 to mean "the file's own size is the truth".
+	//
+	// This exists because a file's size is not always a statement about what is
+	// in it. A source that appends can use the size and does (-1). A torrent
+	// allocates its files sparse and full-size from the outset, so the size is
+	// available immediately while most of the content is holes that read as
+	// **zeros** — handing that to a player would produce silence or garbage
+	// rather than an honest short read.
+	virtual qint64 contiguous_bytes(int id, const QString &file) const {
+		Q_UNUSED(id) Q_UNUSED(file)
+		return -1;
+	}
 
 signals:
 	// Any movement, including state changes. Sources may emit this freely; the

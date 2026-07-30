@@ -767,7 +767,8 @@ void main_window::start_download(const QUrl &url) {
 
 void main_window::open_downloads() {
 	if (!m_downloads_ui)
-		m_downloads_ui = new downloads_dialog(m_downloads, this);
+		m_downloads_ui = new downloads_dialog(m_downloads, m_players,
+		                                      m_local_proxy, this);
 	m_downloads_ui->show();
 	m_downloads_ui->raise();
 	m_downloads_ui->activateWindow();

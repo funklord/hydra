@@ -25,6 +25,9 @@
 #include <libtorrent/settings_pack.hpp>
 #include <libtorrent/torrent_flags.hpp>
 #include <libtorrent/torrent_handle.hpp>
+#include <libtorrent/torrent_info.hpp>
+#include <libtorrent/file_storage.hpp>
+#include <libtorrent/torrent_info.hpp>
 #include <libtorrent/torrent_status.hpp>
 #include <libtorrent/write_resume_data.hpp>
 
@@ -42,6 +45,8 @@ struct torrent_download_source::impl {
 	QHash<int, QString>          save_path;
 	QSet<int>                    completed;   // reached seeding, not yet released
 	QSet<int>                    files_sent;  // file list emitted once per job
+	QSet<int>                    streaming;   // jobs asked to prioritise playback
+	QHash<int, lt::file_index_t> primary_file;// which file Watch is aiming at
 	QList<int>                   pending;     // async_add_torrent in flight, FIFO
 };
 
@@ -133,6 +138,7 @@ source_capabilities torrent_download_source::capabilities() const {
 	// Several swarms at once is the normal case; serializing torrents would
 	// mean a swarm that is not connected, which is a swarm not downloading.
 	c.max_concurrent       = 8;
+	c.streamable           = true;   // sequential + deadlines make it playable
 	c.participation_note   =
 		"A torrent is not a private download. Your IP address is announced to "
 		"the tracker and to every peer in the swarm, and peers can see what you "
@@ -434,6 +440,107 @@ void torrent_download_source::unpause(int id) {
 #endif
 }
 
+#ifdef HYDRA_HAVE_LIBTORRENT
+namespace {
+
+// Map one of the job's reported file paths back to its index. The reported
+// paths come from file_storage::file_path(), so comparing against the same
+// call is exact rather than a guess at path normalisation.
+lt::file_index_t file_index_for(const lt::file_storage &fs, const QString &file) {
+	if (file.isEmpty())
+		return lt::file_index_t(0);
+	for (lt::file_index_t i : fs.file_range()) {
+		if (QString::fromStdString(fs.file_path(i)) == file)
+			return i;
+	}
+	return lt::file_index_t(0);
+}
+
+}  // namespace
+#endif
+
+void torrent_download_source::prioritize_streaming(int id, const QString &file,
+                                                    bool on) {
+#ifdef HYDRA_HAVE_LIBTORRENT
+	auto it = m_d->handle_of_job.find(id);
+	if (it == m_d->handle_of_job.end() || !it.value().is_valid())
+		return;
+	lt::torrent_handle h = it.value();
+	if (!on) {
+		h.unset_flags(lt::torrent_flags::sequential_download);
+		m_d->streaming.remove(id);
+		return;
+	}
+
+	// Sequential order alone gets the front of the file first, but it does not
+	// promise *when*. Deadlines do: they tell libtorrent these pieces are
+	// wanted soon, which is what turns "downloads in order" into "starts
+	// playing quickly" on a swarm that would otherwise trickle.
+	h.set_flags(lt::torrent_flags::sequential_download);
+	m_d->streaming.insert(id);
+
+	const std::shared_ptr<const lt::torrent_info> ti = h.torrent_file();
+	if (!ti)
+		return;   // magnet with no metadata yet; the flag applies when it lands
+	const lt::file_storage &fs = ti->files();
+	const lt::file_index_t idx = file_index_for(fs, file);
+	if (idx < lt::file_index_t(0) || idx >= fs.end_file())
+		return;
+	m_d->primary_file.insert(id, idx);
+
+	// Deadline the first slice of the chosen file, in ascending order, so the
+	// player has something to open almost immediately.
+	const lt::peer_request first = fs.map_file(idx, 0, 1);
+	const int piece_len = fs.piece_length();
+	const qint64 lead   = qint64(piece_len) * 24;   // ~a few seconds of video
+	const lt::peer_request last = fs.map_file(
+		idx, qMin<qint64>(lead, qMax<qint64>(0, fs.file_size(idx) - 1)), 1);
+	int deadline = 0;
+	for (lt::piece_index_t p = first.piece; p <= last.piece; ++p)
+		h.set_piece_deadline(p, (deadline += 200));
+#else
+	Q_UNUSED(id) Q_UNUSED(on)
+#endif
+}
+
+qint64 torrent_download_source::contiguous_bytes(int id, const QString &file) const {
+#ifdef HYDRA_HAVE_LIBTORRENT
+	auto it = m_d->handle_of_job.constFind(id);
+	if (it == m_d->handle_of_job.constEnd() || !it.value().is_valid())
+		return -1;
+	const lt::torrent_handle h = it.value();
+	const std::shared_ptr<const lt::torrent_info> ti = h.torrent_file();
+	if (!ti)
+		return 0;
+
+	const lt::file_storage &fs = ti->files();
+	const lt::file_index_t idx = file_index_for(fs, file);
+	if (idx < lt::file_index_t(0) || idx >= fs.end_file())
+		return -1;
+
+	const qint64 file_off  = fs.file_offset(idx);
+	const qint64 file_size = fs.file_size(idx);
+	const int    piece_len = fs.piece_length();
+
+	// Walk forward from the piece the file starts in and stop at the first hole.
+	// Everything past that point is a sparse gap that reads as zeros, and a
+	// player told it exists will render the zeros rather than wait for them.
+	const lt::piece_index_t first = fs.map_file(idx, 0, 1).piece;
+	lt::piece_index_t p = first;
+	while (p < ti->end_piece() && h.have_piece(p))
+		++p;
+
+	// Absolute byte just past the last complete piece, converted to an offset
+	// within this file. A partial first piece cannot count: the file may start
+	// mid-piece, so the usable prefix begins where the file does.
+	const qint64 have_to = qint64(static_cast<int>(p)) * qint64(piece_len);
+	return qBound<qint64>(0, have_to - file_off, file_size);
+#else
+	Q_UNUSED(id)
+	return -1;
+#endif
+}
+
 void torrent_download_source::save_all_resume_data() {
 #ifdef HYDRA_HAVE_LIBTORRENT
 	for (auto it = m_d->handle_of_job.cbegin(); it != m_d->handle_of_job.cend(); ++it) {
@@ -464,8 +571,11 @@ download_progress torrent_download_source::final_progress(int job,
 		              .filePath(QString::fromStdString(st.name));
 	if (auto ti = h.torrent_file()) {
 		const lt::file_storage &fs = ti->files();
-		for (lt::file_index_t i : fs.file_range())
+		for (lt::file_index_t i : fs.file_range()) {
+			if (fs.pad_file_at(i))
+				continue;          // alignment padding, not content
 			p.files << QString::fromStdString(fs.file_path(i));
+		}
 	}
 	return p;
 }
@@ -525,8 +635,16 @@ void torrent_download_source::poll_alerts() {
 				if (st.has_metadata && !m_d->files_sent.contains(job)) {
 					if (auto ti = st.handle.torrent_file()) {
 						const lt::file_storage &fs = ti->files();
-						for (lt::file_index_t i : fs.file_range())
+						for (lt::file_index_t i : fs.file_range()) {
+							// Skip padding. libtorrent inserts zero-content pad
+							// files to align pieces in hybrid torrents; they are
+							// an encoding detail, and listing them would put
+							// entries like ".pad/98304" in front of the user as
+							// though they were part of the download.
+							if (fs.pad_file_at(i))
+								continue;
 							p.files << QString::fromStdString(fs.file_path(i));
+						}
 						m_d->files_sent.insert(job);
 					}
 				}
@@ -625,8 +743,11 @@ void torrent_download_source::poll_alerts() {
 			p.detail   = "metadata received";
 			if (auto ti = md->handle.torrent_file()) {
 				const lt::file_storage &fs = ti->files();
-				for (lt::file_index_t i : fs.file_range())
+				for (lt::file_index_t i : fs.file_range()) {
+					if (fs.pad_file_at(i))
+						continue;      // alignment padding, not content
 					p.files << QString::fromStdString(fs.file_path(i));
+				}
 				p.path = QDir(m_d->save_path.value(job))
 				              .filePath(QString::fromStdString(ti->name()));
 			}

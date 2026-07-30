@@ -36,6 +36,7 @@ public:
 		source_capabilities c;
 		c.resumable      = true;   // Range against what is already on disk
 		c.max_concurrent = 1;      // unchanged from before the seam
+		c.streamable     = true;   // written strictly front-to-back
 		return c;
 	}
 
