@@ -28,11 +28,17 @@ struct player_entry {
 //    `mplayer -` cannot seek; a URL lets the player issue its own range or
 //    segment requests and seekability follows the source.
 //
-// Capability-aware routing: mpv and VLC take a manifest directly, classic
-// mplayer is weak at HLS/DASH and would ideally be handed an assembled
-// progressive stream by the local proxy (§10). That proxy does not exist yet,
-// so this reports the limitation rather than silently handing mplayer a
-// manifest it will stumble on.
+// Capability-aware routing: mpv and VLC take a manifest directly; classic
+// mplayer is weak at HLS/DASH. That is no longer merely *reported* — HLS is
+// assembled into one progressive file first (`hls_assembler`, served through
+// the local proxy, §10/§11.3), so "only mplayer installed" still yields a
+// seekable stream. DASH has no assembly step yet and is the one case still
+// reported rather than compensated for.
+//
+// A **Custom…** player is deliberately treated as *not* handling manifests,
+// because nothing here knows what it is. Assembling first works for every
+// player and costs only effort; assuming a capability that turns out to be
+// missing fails at playback, where the user has no way to tell why.
 class player_launcher {
 public:
 	player_launcher();
@@ -43,7 +49,7 @@ public:
 	const QList<player_entry> &players() const { return m_players; }
 	QList<player_entry> installed() const;
 
-	// The chosen player id, resolved from what is installed. `k_custom_id` is
+	// The chosen player id, resolved from what is installed. `custom_id()` is
 	// the "Custom…" entry, which is driven by a command template instead of a
 	// built-in argument list.
 	QString selected() const { return m_selected; }

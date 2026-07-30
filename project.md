@@ -583,6 +583,17 @@ ceiling can be raised, and that claim is only true if someone can raise it.
   interface field says plainly that Hydra does not tunnel and that this only
   makes a *system-level* VPN reliable — it is not a VPN feature.
 
+**Capability routing is now accurate.** `player_launcher`'s header still said
+the local proxy "does not exist yet" and that mplayer's manifest weakness was
+merely *reported*; both stopped being true once `hls_assembler` landed. HLS is
+assembled into one progressive file before it reaches a non-native player, so
+only DASH — which has no assembly step — is still reported. A **Custom…**
+player is treated as *not* handling manifests: nothing here knows what the
+command is, assembling first works whatever it turns out to be, and assuming a
+capability that is missing fails at playback with nothing to point at. The DASH
+warning for a custom command says the limitation is ours rather than claiming
+the player "cannot" do something we have no way to know.
+
 Persistence is `QSettings` (INI, user scope, explicit `hydra/hydra` path so it
 does not move if the app name is edited). **Saved values are applied by
 `settings_store::load_into()` at startup, not by the dialog** — otherwise

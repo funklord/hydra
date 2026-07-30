@@ -53,7 +53,12 @@ void player_launcher::refresh() {
 		player_entry e;
 		e.id             = QString::fromLatin1(custom_id());
 		e.label          = "Custom…";
-		e.native_streams = true;    // unknown, so do not warn about manifests
+		// Unknown, so assume the *cautious* answer rather than the convenient
+		// one: an HLS stream is assembled into a progressive file before it
+		// reaches this player. That works whatever the command turns out to
+		// be, whereas assuming it reads manifests fails at playback with
+		// nothing to point at.
+		e.native_streams = false;
 		e.installed      = false;
 		m_players.push_back(e);
 		set_custom_command(m_custom);   // re-resolves its path
@@ -92,14 +97,22 @@ QString player_launcher::warning_for(const media_item &item) const {
 	const player_entry *e = entry(m_selected);
 	if (!e || !e->installed)
 		return "No external player found. Install mpv, VLC, or mplayer.";
-	if (is_manifest(item) && !e->native_streams) {
-		// HLS gets assembled into a progressive file before it reaches a player
-		// like this (§11.3), so only DASH is still a genuine problem.
-		if (item.kind == media_kind::dash)
-			return QString("%1 cannot play DASH, and DASH assembly is not "
-			               "implemented.").arg(e->label);
-	}
-	return QString();
+	if (!is_manifest(item) || e->native_streams)
+		return QString();
+
+	// HLS reaches a player like this only after being assembled into one
+	// progressive file (§11.3), so it is no longer a limitation to report.
+	if (item.kind == media_kind::hls)
+		return QString();
+
+	// DASH has no assembly step, so the manifest goes over as-is and whether
+	// that works is the player's business. For a custom command we do not know
+	// what it can do, and saying it "cannot" would be an overclaim.
+	if (e->id == QLatin1String(custom_id()))
+		return "DASH assembly is not implemented, so the manifest is handed "
+		       "over unchanged — this will only work if your player reads DASH.";
+	return QString("%1 cannot play DASH, and DASH assembly is not implemented.")
+	           .arg(e->label);
 }
 
 void player_launcher::set_custom_command(const QString &cmd) {
