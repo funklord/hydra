@@ -75,6 +75,12 @@ add_executable(hydra
     src/player_launcher.h
     src/download_manager.cpp
     src/download_manager.h
+    # The download transport seam (architecture doc §11.4): the manager owns
+    # the queue and consent, a source owns the bytes. http_download_source is
+    # the first implementation; a torrent source slots in beside it.
+    src/download_source.h
+    src/http_download_source.cpp
+    src/http_download_source.h
     src/local_proxy.cpp
     src/local_proxy.h
     src/hls_playlist.cpp

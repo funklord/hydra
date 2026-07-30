@@ -124,7 +124,7 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | AI reorganizer | `tree_serializer.{h,cpp}`, `tree_diff.{h,cpp}`, `reorganize_dialog.{h,cpp}` | metadata-only payload, invariant check, diff/accept |
 | Media detector | `media_detector.{h,cpp}`, `media_dialog.{h,cpp}` | URL-shaped classification, segment attribution, Watch/Download list |
 | Player handoff | `player_launcher.{h,cpp}` | PATH probe, capability routing, URL-not-pipe launch |
-| Downloads | `download_manager.{h,cpp}` | queue, resume via Range, per-node association |
+| Downloads | `download_manager.{h,cpp}`, `download_source.h`, `http_download_source.{h,cpp}` | transport seam: manager owns queue/consent, source owns bytes |
 | Filter evolution | `filter_list.{h,cpp}`, `filter_signals.{h,cpp}`, `filter_dialog.{h,cpp}` | passive signals, dry-run validation, diff/accept |
 | Password manager | `keepass_protocol.{h,cpp}`, `keepass_bridge.{h,cpp}`, `crypto_box.{h,cpp}` | KeePassXC-Browser client; no vault, no master password |
 | Autofill | `autofill_controller.{h,cpp}`, `autofill_script.h` | QWebChannel bridge, origin gate, policy-governed |
@@ -507,6 +507,48 @@ it or crashing.
 
 One level only, as §9.4 specifies — the snapshot is cleared once used.
 
+## Download transport seam (arch §11.4)
+
+`download_manager` no longer contains a transport. It owns the queue, the
+destination directory, consent and the job records; a `download_source` owns
+the bytes. `http_download_source` is the first implementation and is a
+straight move of the code that was inline before — same Range resume, same
+refusal messages, now living where the knowledge does.
+
+What the seam carries that HTTP never needed, all present and tested:
+
+- **`resolving`** — a magnet link that is working but has no size, name or file
+  list yet. **`seeding`** — every byte has arrived and the file is usable, but
+  the source has not let go. `complete()` is true for both `seeding` and `done`;
+  `terminal()` only for `done`/`failed`/`cancelled`.
+- **Multi-file jobs** — `files` alongside a primary `path`.
+- **Per-source concurrency** — `max_concurrent` comes from the source, because
+  "one at a time" is right for HTTP and wrong for torrents. A seeding job still
+  holds its slot.
+- **The consent gate** — a source declaring `public_participation` cannot start
+  until `set_consent()` is given; the job waits and `consent_required` fires
+  with the source's own note. This is the §11.4 privacy decision made
+  structural rather than left to whoever writes the UI: since torrents are
+  deliberately made to look like every other download, the fact that this one
+  announces you to strangers must not be forgettable.
+
+The rule that keeps it honest: **nothing above this interface names a
+transport.** If the manager or the UI has to ask "is this a torrent?", the
+answer belongs in `source_capabilities` instead.
+
+**Verified: 77 checks passing** (offline harness, `scratchpad/dlseam`). Routing
+and refusal messages, the consent gate including revocation, the full
+torrent-shaped lifecycle via a fake source with no libtorrent present,
+per-source concurrency, cancel from both queued and running, failure paths,
+pump re-entrancy, and the HTTP source against a live Range-capable server —
+including a resume that the server log confirms issued `Range: bytes=30000-`
+and that stitched byte-exactly.
+
+Found and fixed while testing: `~http_download_source` aborted replies while
+iterating `m_transfers`, and `abort()` delivers `finished()` synchronously,
+which re-entered `teardown()` and mutated the map mid-iteration. The map is
+now emptied first.
+
 ## BitTorrent downloads (requested, not implemented)
 
 Written up in **arch §11.4** rather than built, pending a decision. The short
@@ -515,24 +557,41 @@ rather than a new subsystem, and the trigger surfaces (`magnet:` navigation,
 `.torrent` link, `application/x-bittorrent` response) are all things the current
 spines already see.
 
-Two things need deciding before code, and they are entangled:
+**Scope is decided; the code is not written.** Both open questions have been
+answered:
 
-- **Embed libtorrent, or hand off to an installed client?** Embedding keeps
-  progress, resume and tab-tree association uniform with every other download,
-  which is what §11.2 asks for. Handing off follows the §11.3 external-player
-  precedent and adds no dependency, but the download leaves the app and the
-  association is lost. A `download_source` seam — the same shape as the WebView
-  backend — would make the choice reversible.
-- **The privacy default.** This is the one that actually matters. BitTorrent is
-  not a fetch: it announces your IP to a tracker and every peer, and peers can
-  enumerate what you are fetching. That cuts directly against §1's "data stays
-  on the machine; only lightweight metadata ever leaves, and only when the user
-  asks". It needs explicit opt-in at minimum, and realistically proxy/VPN
-  binding to be defensible — and embedding makes that leak-proofing our problem
-  where a handoff delegates it.
+- **First class, so embed.** Torrents are a peer of HTTP downloads — same queue,
+  progress, pause/resume, and tab-tree association — not a handoff. A magnet
+  link behaves like any other download link. Handoff is rejected on desktop
+  (the association is lost the moment it starts) but stays the likely Android
+  shape, so the `download_source` seam is still worth having.
+- **rasterbar, chosen from the shipped headers.** rakshasa's 64 headers are a
+  peer-scaling core — `choke_queue.h`, `connection_list.h`, `throttle.h`,
+  `poll_epoll.h` — which confirms the throughput reputation, but it ships **no**
+  magnet (BEP 9), µTP, UPnP/NAT-PMP, LSD, or streaming piece order. All of those
+  are what "works when you click the link" is made of. µTP decides it: without
+  LEDBAT backoff a torrent saturates the uplink and makes its own browser
+  unusable. `set_piece_deadline` is the bonus — sequential pieces through the
+  existing local proxy means **Watch** works on a torrent like it does on HLS.
+  The scaling insight is honoured by raising the connection caps, not by
+  library choice. Verified: both packages install a pkg-config named
+  `libtorrent` — bare `libtorrent` resolves to rakshasa's; use
+  `find_package(LibtorrentRasterbar)`.
+- **If it is ever benchmarked, benchmark the right axis.** Swarm throughput
+  comes from holding many mostly-poor peers, not from peak rate over a few good
+  ones — measure throughput against peer count and find the ceiling, and check
+  the default connection caps first, since a desktop-tuned default can hide that
+  ceiling entirely. The ~2010 ranking is unverified today; the criterion is not.
+- **No VPN feature, but visibility is required.** VPN/proxy tunnelling is a
+  system-level concern — the OS and router do it properly, and a browser-local
+  version would be a leakier reimplementation of something configured once for
+  every app. What replaces it: torrent rows are visibly distinct in the download
+  list, a plain-language explanation on the first magnet link, never starting a
+  torrent on a page's initiative, and a `listen_interfaces` setting so a
+  system-level VPN can actually be bound to (a settings field, not a VPN).
 
-Seeding, ports/UPnP, multi-file jobs, and the Android shape are covered there
-too.
+Seeding policy, ports/UPnP, multi-file jobs, the Android shape, and a suggested
+implementation order are in arch §11.4.
 
 ## What is next (in order)
 - **Remaining gaps**, listed per step above — the local proxy (§10) is the

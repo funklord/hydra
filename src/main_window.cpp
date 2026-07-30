@@ -15,6 +15,7 @@
 #include "media_dialog.h"
 #include "player_launcher.h"
 #include "download_manager.h"
+#include "http_download_source.h"
 #include "local_proxy.h"
 #include "filter_signals.h"
 #include "filter_list.h"
@@ -79,6 +80,9 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 
 	m_players   = new player_launcher;
 	m_downloads = new download_manager(this);
+	// The manager has no transport of its own (§11.4); give it one. Sources are
+	// tried in order, so adding a torrent source later is one line here.
+	m_downloads->add_source(new http_download_source);
 	// The local proxy is optional: if it cannot listen, Watch still works and
 	// simply hands over the raw URL (§10 — it is an upgrade tier, not a
 	// prerequisite).

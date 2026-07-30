@@ -1,18 +1,33 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "download_manager.h"
-#include "media_detector.h"
 
-#include <QDir>
-#include <QFile>
-#include <QFileInfo>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QNetworkRequest>
 #include <QStandardPaths>
 
 download_manager::download_manager(QObject *parent) : QObject(parent) {
-	m_net = new QNetworkAccessManager(this);
 	m_dir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+}
+
+void download_manager::add_source(download_source *source) {
+	if (!source || m_sources.contains(source))
+		return;
+	source->setParent(this);
+	m_sources.push_back(source);
+	connect(source, &download_source::progressed, this, &download_manager::on_progress);
+	connect(source, &download_source::finished,   this, &download_manager::on_finished);
+}
+
+download_source *download_manager::source_by_id(const QString &id) const {
+	for (download_source *s : m_sources)
+		if (s->id() == id)
+			return s;
+	return nullptr;
+}
+
+download_source *download_manager::source_for(const QUrl &url) const {
+	for (download_source *s : m_sources)
+		if (s->accepts(url))
+			return s;
+	return nullptr;
 }
 
 download_job *download_manager::find(int id) {
@@ -22,138 +37,187 @@ download_job *download_manager::find(int id) {
 	return nullptr;
 }
 
+int download_manager::live_count(const QString &source_id) const {
+	int n = 0;
+	for (const download_job &j : m_jobs)
+		if (j.source_id == source_id && m_live.contains(j.id))
+			++n;
+	return n;
+}
+
+bool download_manager::has_consent(const QString &source_id) const {
+	return m_consented.contains(source_id);
+}
+
+void download_manager::set_consent(const QString &source_id, bool granted) {
+	if (granted)
+		m_consented.insert(source_id);
+	else
+		m_consented.remove(source_id);
+	pump();
+}
+
 int download_manager::enqueue(const QUrl &url, const QString &node_id, QString *error) {
-	bool saveable = false;
-	const media_kind kind = media_detector::classify(url, &saveable);
-	if (kind == media_kind::hls || kind == media_kind::dash) {
-		// Fetching a manifest would save the playlist text, not the video.
-		// Refuse plainly rather than produce a file that looks like a failure.
-		if (error)
-			*error = "Streamed media (HLS/DASH) cannot be saved yet — segment "
-			         "assembly is not implemented. Try \"Watch in player\".";
-		return 0;
+	// First source that accepts wins. If none does, report the most specific
+	// reason offered rather than a generic refusal — the sources know why.
+	download_source *chosen = nullptr;
+	QString first_reason;
+	for (download_source *s : m_sources) {
+		QString why_not;
+		if (s->accepts(url, &why_not)) {
+			chosen = s;
+			break;
+		}
+		if (first_reason.isEmpty() && !why_not.isEmpty())
+			first_reason = why_not;
 	}
-	if (!saveable) {
+	if (!chosen) {
 		if (error)
-			*error = "That URL does not look like a saveable file.";
+			*error = first_reason.isEmpty()
+			             ? QString("Nothing here can download that address.")
+			             : first_reason;
 		return 0;
 	}
 
-	QDir().mkpath(m_dir);
+	const source_capabilities caps = chosen->capabilities();
 
 	download_job job;
-	job.id      = m_next_id++;
-	job.url     = url;
-	job.node_id = node_id;
-
-	QString name = QFileInfo(url.path()).fileName();
-	if (name.isEmpty())
-		name = "download";
-	// Never let a remote path escape the download directory.
-	name = QFileInfo(name).fileName();
-	job.path = QDir(m_dir).filePath(name);
+	job.id                   = m_next_id++;
+	job.url                  = url;
+	job.node_id              = node_id;
+	job.source_id            = chosen->id();
+	job.status               = download_state::queued;
+	job.public_participation = caps.public_participation;
 
 	m_jobs.push_back(job);
 	emit changed();
+
+	// Ask before the first publicly-observable job of this source, not after.
+	if (caps.public_participation && !has_consent(job.source_id))
+		emit consent_required(job.source_id, caps.participation_note, job.id);
+
 	pump();
 	return job.id;
 }
 
 void download_manager::pump() {
-	if (m_active)
+	// A source may fail synchronously inside start(), which lands in
+	// on_finished() and calls back in here mid-iteration. Rather than reason
+	// about what that does to the loop, coalesce: the inner call asks for
+	// another sweep and the outer one performs it.
+	if (m_pumping) {
+		m_pump_again = true;
 		return;
+	}
+	m_pumping = true;
+	do {
+		m_pump_again = false;
+		sweep();
+	} while (m_pump_again);
+	m_pumping = false;
+}
+
+void download_manager::sweep() {
 	for (download_job &j : m_jobs) {
-		if (j.status == download_job::queued) {
-			start(j);
-			return;
+		if (j.status != download_state::queued)
+			continue;
+		download_source *s = source_by_id(j.source_id);
+		if (!s)
+			continue;
+		const source_capabilities caps = s->capabilities();
+		if (caps.public_participation && !has_consent(j.source_id))
+			continue;   // held until the user is told and agrees
+		if (live_count(j.source_id) >= qMax(1, caps.max_concurrent))
+			continue;
+
+		download_request req;
+		req.id        = j.id;
+		req.url       = j.url;
+		req.directory = m_dir;
+		req.node_id   = j.node_id;
+
+		QString error;
+		m_live.insert(j.id);
+		if (!s->start(req, &error)) {
+			m_live.remove(j.id);
+			j.status = download_state::failed;
+			j.error  = error;
+			emit changed();
+			continue;
 		}
+		// A source may have moved the job along synchronously inside start();
+		// only claim "running" if it did not say otherwise.
+		if (j.status == download_state::queued)
+			j.status = download_state::running;
+		emit changed();
 	}
 }
 
-void download_manager::start(download_job &job) {
-	job.status = download_job::running;
-	m_active   = job.id;
-
-	QNetworkRequest req(job.url);
-
-	// Resume: if a partial file is already there, ask for the rest.
-	QFileInfo fi(job.path);
-	const qint64 have = fi.exists() ? fi.size() : 0;
-	if (have > 0) {
-		req.setRawHeader("Range", QByteArray("bytes=") + QByteArray::number(have) + "-");
-		job.received = have;
-	}
-
-	m_file = new QFile(job.path, this);
-	if (!m_file->open(have > 0 ? (QIODevice::Append | QIODevice::WriteOnly)
-	                           : (QIODevice::Truncate | QIODevice::WriteOnly))) {
-		job.status = download_job::failed;
-		job.error  = "Cannot write " + job.path;
-		delete m_file;
-		m_file = nullptr;
-		m_active = 0;
-		emit changed();
-		pump();
+void download_manager::on_progress(int id, const download_progress &p) {
+	download_job *j = find(id);
+	if (!j || j->terminal())
 		return;
+	j->received = p.received;
+	if (p.total >= 0)
+		j->total = p.total;
+	if (!p.path.isEmpty())
+		j->path = p.path;
+	if (!p.files.isEmpty())
+		j->files = p.files;
+	j->detail = p.detail;
+	j->status = p.state;
+	emit changed();
+}
+
+void download_manager::on_finished(int id, bool ok, const QString &message) {
+	m_live.remove(id);
+	if (download_job *j = find(id)) {
+		if (ok) {
+			j->status = download_state::done;
+		} else if (j->status != download_state::cancelled) {
+			j->status = download_state::failed;
+			j->error  = message;
+		}
 	}
-
-	m_reply = m_net->get(req);
-	QNetworkReply *reply = m_reply;
-	const int id = job.id;
-
-	connect(reply, &QNetworkReply::readyRead, this, [this, reply, id] {
-		if (m_file)
-			m_file->write(reply->readAll());
-		if (download_job *j = find(id))
-			j->received = m_file ? m_file->size() : j->received;
-		emit changed();
-	});
-	connect(reply, &QNetworkReply::downloadProgress, this,
-	         [this, id](qint64 got, qint64 total) {
-		if (download_job *j = find(id)) {
-			// With a resumed request the server reports only the remaining
-			// bytes, so add back what was already on disk.
-			const qint64 base = (j->status == download_job::running && total > 0)
-			                        ? j->received - got : 0;
-			j->total = (total > 0) ? total + qMax<qint64>(0, base) : -1;
-		}
-		emit changed();
-	});
-	connect(reply, &QNetworkReply::finished, this, [this, reply, id] {
-		reply->deleteLater();
-		if (m_file) {
-			m_file->write(reply->readAll());
-			m_file->close();
-			delete m_file;
-			m_file = nullptr;
-		}
-		if (download_job *j = find(id)) {
-			if (j->status == download_job::cancelled) {
-				// leave as cancelled
-			} else if (reply->error() != QNetworkReply::NoError) {
-				j->status = download_job::failed;
-				j->error  = reply->errorString();
-			} else {
-				j->status   = download_job::done;
-				j->received = QFileInfo(j->path).size();
-				j->total    = j->received;
-			}
-		}
-		m_active = 0;
-		emit changed();
-		pump();
-	});
+	emit changed();
+	pump();
 }
 
 void download_manager::cancel(int id) {
 	download_job *j = find(id);
+	if (!j || j->terminal())
+		return;
+	if (m_live.contains(id)) {
+		j->status = download_state::cancelled;
+		if (download_source *s = source_by_id(j->source_id))
+			s->cancel(id);           // finished() cleans up and pumps
+	} else {
+		j->status = download_state::cancelled;
+		emit changed();
+	}
+}
+
+void download_manager::pause(int id) {
+	download_job *j = find(id);
+	if (!j || !m_live.contains(id))
+		return;
+	download_source *s = source_by_id(j->source_id);
+	if (!s || !s->capabilities().resumable)
+		return;
+	s->pause(id);
+}
+
+void download_manager::unpause(int id) {
+	download_job *j = find(id);
 	if (!j)
 		return;
-	if (j->status == download_job::running && m_reply) {
-		j->status = download_job::cancelled;
-		m_reply->abort();          // finished() cleans up and pumps
-	} else if (j->status == download_job::queued) {
-		j->status = download_job::cancelled;
-		emit changed();
+	download_source *s = source_by_id(j->source_id);
+	if (!s || !s->capabilities().resumable)
+		return;
+	if (m_live.contains(id)) {
+		s->unpause(id);
+	} else if (j->status == download_state::paused) {
+		j->status = download_state::queued;
+		pump();
 	}
 }

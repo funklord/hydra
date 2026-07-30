@@ -285,6 +285,8 @@ A single `QWebEngineUrlRequestInterceptor` on the profile is the sensor behind t
 
 **Status: done**, minus the local-proxy tier. `media_detector` rides the interceptor's observer seam and classifies by URL shape; `player_launcher` probes PATH and routes by capability; `download_manager` queues direct files with Range resume. Segment assembly, the ffmpeg remux, and the proxy that would inject request context remain the next increment.
 
+**The transport seam is done** (§11.4): `download_manager` no longer contains a transport. It owns the queue, the destination, consent and the job records; a `download_source` owns the bytes, and `http_download_source` is the first one. The job model now carries the states a torrent needs and HTTP never enters — `resolving` (a magnet with no metadata yet) and `seeding` (complete but still working) — plus multi-file jobs, per-source concurrency, and the consent gate that enforces the §11.4 privacy obligation structurally. Verified with 77 checks, including a fake torrent source that exercises the whole torrent-shaped lifecycle without libtorrent present.
+
 ### 11.1 Detection
 
 Riding the interceptor, the detector classifies three kinds of saveable media: direct files (`.mp4/.webm/.mkv/.mp3/.m4a/.pdf`…) by URL/extension and Content-Type; HLS manifests (`.m3u8`); and DASH manifests (`.mpd`). Obfuscated manifests are still betrayed by their segment requests (`.ts`, `.m4s`). Reliable Content-Type and manifest-body classification uses the optional local proxy (§10).
@@ -305,32 +307,85 @@ A "media on this page" toolbar badge lights with a count when saveable resources
 
 **Seekability.** Two rules preserve it. First, **hand the player a URL, never a stdin pipe** — a pipe has no random access, so `mplayer -`/`mpv -` can't seek; a URL lets the player issue its own range/segment requests. Second, the **local proxy must be range-transparent**: when the player sends `Range: bytes=X-Y`, the proxy issues the same range upstream (with injected headers) and relays the `206 Partial Content` with `Accept-Ranges`/`Content-Range` intact; for HLS it relays the manifest and segments verbatim, and if it rewrites the manifest it preserves the full segment list and timing tags (`#EXTINF`, `#EXT-X-MEDIA-SEQUENCE`, `#EXT-X-BYTERANGE`). With those in place, seekability follows the source: a direct file with server Range support and a **VOD** HLS/DASH playlist (ends in `#EXT-X-ENDLIST` / static MPD) are fully seekable end to end, while a **live/windowed** stream is seekable only within the window the server still exposes. To make a live stream fully scrubbable, **tee segments to disk while playing** (reusing the download manager's assembly) and point the player at the growing local file — live becomes a local VOD, giving full backward/forward seek plus a saved copy in one step. Player cache flags (`--cache`, generous back-buffer) widen backward seek within a live buffer even without recording.
 
-### 11.4 BitTorrent downloads (requested; design open)
+### 11.4 BitTorrent downloads (scope decided; not implemented)
 
-**Status: not implemented. This section records the requirement and the decisions it forces, so the implementation choice can be made deliberately rather than fallen into.**
+**Status: not implemented, but no longer open.** Two decisions have been made and are recorded below: BitTorrent is a **first-class download source**, not a side feature or a handoff; and **VPN/proxy binding is not a launch requirement**, because that belongs to the system layer. The engine recommendation follows from the first and is argued from evidence rather than reputation. What remains is implementation.
 
-The download manager (§11.2) is already defined as *one queue fed by multiple sources* — page-initiated downloads and detector-initiated media saves. BitTorrent is naturally a third source rather than a new subsystem: same queue, same progress and resume model, same organization against the tab tree, different transport underneath. That framing is what keeps it compact, and it should survive whichever engine choice is made.
+**The scope decision: first class.** Torrents are to be a peer of HTTP downloads, not a bolted-on extra — the thing other browsers conspicuously will not do. Concretely that means a magnet link behaves like any other download link: same queue, same progress, same pause/resume, same association with the node it came from, same completion notification, no separate window and no separate mental model. The user should not have to know which transport carried the bytes.
+
+That is a deliberately higher bar than "we support torrents", and it is what decides the engine. The download manager (§11.2) is already *one queue fed by multiple sources*, so the shape is right: BitTorrent is a third source, not a new subsystem.
 
 **Trigger surfaces.** Three, all of which the existing spines already see. A `magnet:` URI is a navigation the shell can intercept before the engine tries and fails to load it. A `.torrent` link is an ordinary download the manager already receives. A response typed `application/x-bittorrent` is only visible with the local proxy tier (§10) — request-only interception sees the URL, not the Content-Type, so extension-based detection is the fallback exactly as it is for media.
 
 **The engine decision — three options, with the trade-off that actually separates them.**
 
-1. **Embed a library** (libtorrent-rasterbar is the mature choice; BSD-licensed, so compatible with a GPL-3 application). Downloads stay inside the app, so queue, progress, resume, and per-node association all work uniformly with every other download, and a torrent can belong to the tab it came from. Cost: a large C++ dependency with its own threading and state directory, plus the whole of the operational surface below becomes ours.
-2. **Hand off to an installed client** — the `player_launcher` pattern (§11.3) applied again: probe `PATH` for `transmission-remote`, `aria2c`, `deluge-console`, `qbittorrent-nox`; present what is installed; hand over the magnet or `.torrent`. Cheap, no new dependency, and consistent with the design's existing "the vault lives elsewhere" instinct (§13). Cost: progress and completion are outside the app, so the download manager cannot show them and the tab-tree association is lost — the torrent becomes someone else's job the moment it starts.
+1. **Embed a library.** ⚠️ **Two different libraries are both called "libtorrent" — check which one any advice refers to.**
+
+   | | libtorrent-**rasterbar** | libtorrent (**rakshasa**) |
+   |---|---|---|
+   | Home | libtorrent.org (Arvid Norberg) | rakshasa.github.io/rtorrent (Jari Sundell) |
+   | Debian package | `libtorrent-rasterbar-dev` 2.0.11 | `libtorrent-dev` 0.13.8 |
+   | Embedded by | qBittorrent, Deluge | **rTorrent** |
+   | Licence (Debian copyright) | BSD-3-clause | GPL-2+ (some MPL-1.1 parts; OpenSSL exception) |
+
+   **Both are licence-compatible with a GPL-3-or-later application** — rakshasa's is GPL-2-*or-later*, not GPL-2-only, so it can be combined under GPL-3. Licence does not decide this.
+
+   **What rakshasa's is actually known for.** Not "running light" in the trivial sense of lacking a GUI — the reputation is *connection scaling and throughput*: holding very large numbers of simultaneous peer connections and sustaining far higher up/down rates than contemporaries, which is why it dominated seedbox use. That is a property of the **library's** networking and disk architecture, not of rTorrent's ncurses front end, so unlike a UI's memory footprint it **does** transfer to an embedder. Nabeel puts the gap at roughly 30× against other clients from direct experience; that specific multiple is unverified here and should be measured rather than repeated, but the directional claim is well attested and the mechanism is plausible.
+
+   **The insight behind that reputation outlives the comparison.** BitTorrent aggregate throughput is dominated by *how many peers you are talking to*, not by how fast any one of them is: the swarm population is mostly slow, distant, choked, or half-dead, so speed is the sum of many poor contributions rather than a few good ones. More connections also means more candidates for the choking algorithm to reciprocate with, which compounds it. rakshasa built around that; a client tuned for peak rate over a handful of fast peers is optimising the wrong axis, and benchmarks reporting exactly that number were common then and still are.
+
+   **Caveat on vintage, from the source of the claim:** the observation dates to roughly 2010 and the landscape has moved — rasterbar has had substantial work since, including the 2.0 memory-mapped disk I/O rework. Treat the ranking as *unverified today*, but treat the criterion as durable.
+
+   **Which makes the evaluation concrete.** Whichever library is trialled, measure the axis that matters rather than the one that is easy: throughput as a function of peer count against a realistically *poor* swarm, and the ceiling where it stops scaling. Watch file-descriptor limits, per-connection memory, and event-loop behaviour at thousands of sockets — and check each library's default connection caps and whether they can be raised, since a default tuned for a desktop GUI may hide the ceiling entirely.
+
+   **Which one, decided from the shipped headers rather than from reputation.** Unpacking both Debian dev packages and probing their public headers (word-boundary matches, after `utp` was found to match `output`) is unambiguous about what each library *is*:
+
+   | Capability (in public headers) | rasterbar 2.0.11 | rakshasa 0.13.8 |
+   |---|---|---|
+   | Public headers shipped | 273 | 64 |
+   | Magnet URI (BEP 9) | `magnet_uri.hpp` | **absent** |
+   | DHT | `dht_*.hpp` ×5 | `dht_manager.h` |
+   | µTP / LEDBAT | `utp_stream.hpp`, `utp_socket_manager.hpp` | **absent** |
+   | UPnP / NAT-PMP | `upnp.hpp`, `natpmp.hpp` | **absent** |
+   | Local peer discovery | `lsd.hpp` | **absent** |
+   | Streaming piece order | `set_sequential_download`, `set_piece_deadline` | **absent** |
+   | Build integration | pkg-config + CMake package config | pkg-config only |
+
+   Read the right way round, this **confirms** the scaling story rather than undercutting it. rakshasa's 64 headers are a *peer-scaling core* and nothing else: `choke_group.h`, `choke_queue.h`, `choke_status.h`, `connection_list.h`, `peer_list.h`, `throttle.h`, `resource_manager.h`, `poll_epoll.h`/`poll_kqueue.h`/`poll_select.h`. The reciprocation and connection machinery is the exposed API surface — which is exactly the thing it is famous for, deliberately factored out. rTorrent supplies everything else around it.
+
+   **But "everything else" is precisely what first-class-in-a-browser is made of.** Magnet parsing, port mapping so it works without the user configuring a router, and local peer discovery are not garnish here; they are the difference between "it works when you click the link" and "it works after you read a wiki page". Their absence means writing BEP 9 and NAT traversal ourselves, which is option 3 wearing a disguise.
+
+   **The structural argument is µTP, and it is specific to living inside a browser.** µTP's LEDBAT congestion control yields to competing traffic; plain TCP BitTorrent does not, and will saturate an uplink until interactive browsing in the *same application* becomes unusable. A torrent that makes its own browser unresponsive is not a first-class download by any definition. rasterbar has µTP; rakshasa's headers do not.
+
+   **And `set_piece_deadline` is the feature that makes torrents first class rather than merely present.** Sequential and deadline-driven piece priority means a torrent can be served through the local proxy (§10) as a Range-served growing file — the same trick §11.3 already uses for live HLS. **Watch** on a torrent then works exactly like **Watch** on a stream, through the media affordance that already exists. That is a genuine capability, not a convenience, and it is unavailable in a handoff design at any price.
+
+   **Recommendation: rasterbar** — chosen for feature completeness against this specific product, not for peak throughput. The scaling insight above is respected by *configuration* instead: raise `connections_limit` and the per-torrent cap well above the desktop-GUI defaults, lift the fd ceiling to match, and measure against the criterion recorded above rather than trusting either library's defaults. If measurement later shows rasterbar's peer handling genuinely capping out at a level that matters to real use, that is the moment to revisit — and the `download_source` seam below is what keeps that affordable.
+
+   **Naming hazard worth writing down:** both packages install a pkg-config file named `libtorrent`. `pkg-config --cflags libtorrent` resolves to **rakshasa's**; rasterbar is `libtorrent-rasterbar`. Use its CMake package config (`find_package(LibtorrentRasterbar)`) and the ambiguity disappears.
+
+   Cost of embedding, honestly: a large C++ dependency with its own threading model and state directory, and the whole operational surface below becomes ours.
+2. **Hand off to an installed client** — the `player_launcher` pattern (§11.3) applied again. **Rejected for the desktop.** It is cheap and adds no dependency, but progress and completion happen outside the app, so the manager cannot show them and the tab-tree association is lost the moment the torrent starts. That is the direct negation of the first-class decision. It remains the likely shape on **Android** (§19), where background-execution limits make a long-lived seeding process impractical regardless of preference.
 3. **Implement the protocol.** No.
 
-The honest tension is that §11.2 wants downloads *organized against the tab tree*, which argues for (1), while §11.3's precedent and the project's preference for small, comprehensible cores argues for (2). A defensible middle path is a `download_source` seam — the same shape as the WebView backend (§19.2) — with a handoff source first and an embedded engine later behind the same interface, so the choice is reversible instead of load-bearing.
+**Keep the seam anyway.** A `download_source` interface — the same shape as the WebView backend (§19.2) — is still worth having, for three reasons that survive the decision: Android will need the handoff source, revisiting the engine after measurement should not be a rewrite, and it keeps the torrent dependency behind an interface so the rest of the download manager stays testable without it. The decision is which source ships first on desktop, not whether the seam exists.
 
 **What BitTorrent forces that HTTP does not**, and why this needs a decision rather than just code:
 
-- **Privacy.** This is the significant one, and it cuts against the stated ethos. BitTorrent is not a fetch — it announces your IP address to a tracker and to every peer in the swarm, and peers can enumerate what you are downloading. A design whose defaults are "data stays on the machine; only lightweight metadata ever leaves, and only when the user asks" (§1) cannot quietly acquire a subsystem that broadcasts participation to strangers. At minimum this needs an explicit, informed opt-in; realistically it also needs proxy/VPN binding (bind-to-interface, refuse to announce if the bound interface disappears) to be defensible. That is a product decision, not an implementation detail.
+- **Privacy — decided: no VPN feature, but visibility is not optional.** BitTorrent is not a fetch. It announces your IP to a tracker and to every peer, and peers can enumerate what you are fetching, which sits awkwardly beside §1's "data stays on the machine; only lightweight metadata ever leaves, and only when the user asks".
+
+  **The decision is that Hydra does not ship VPN or proxy tunnelling**, and this is the correct call rather than a deferral: a VPN is a system-level concern, the OS and the router already do it properly, and a browser-internal reimplementation would be a smaller and leakier version of something the user can already configure once for every application. Building one would also be scope Hydra has no business owning.
+
+  **What replaces it is an obligation, not nothing.** The first-class decision creates the risk here: making a torrent look exactly like an HTTP download is the goal, and it is also precisely what could mislead someone into thinking it *behaves* like one. So the honest requirement is that the difference stays visible — a distinct indicator on torrent rows in the download list, a plain-language explanation the first time a magnet link is opened (announces your address to strangers; the swarm can see what you are fetching), and never silently starting a torrent from a page's initiative.
+
+  **And one cheap thing that makes the system-level choice actually work:** a `listen_interfaces` setting so a user who *has* configured a VPN at the OS layer can bind the torrent session to it, with announces refused if that interface disappears. That is a settings field wired to a libtorrent option, not a VPN implementation — it respects the decision above by making the layer the user chose reliable, instead of competing with it. Worth having precisely because it is a few lines.
 - **Seeding is a policy question, not a default.** Uploading is continued participation after the user's task is done, with bandwidth, legal, and privacy consequences. Ratio, seed time, and whether to seed at all belong in the PolicyEngine as a feature like any other (§7.1), so the tri-state and global default govern it.
 - **Inbound connectivity.** Ports, NAT traversal, UPnP. UPnP in particular means asking the router to open a hole, which is a security posture change and should not be silently on.
 - **Torrents are not one file.** The manager's model is a job with a path, a size, and progress. A torrent is a set of files with per-file selection, out-of-order completion, and no meaningful single "bytes received / total" until metadata resolves (a magnet has none at the start). Either the manager's job model grows, or a torrent is one job that fans out internally.
 - **Content risk.** Swarms carry whatever is in them. The app should not become an execution path for what it downloads, which mainly means keeping the existing rule that a download is written to disk and never opened automatically.
-- **Android** (§19) differs again: background execution limits and SAF storage make a long-running seeding process impractical, so the handoff-to-an-app model is likely the only viable shape there — another argument for the seam in the middle path.
+- **Android** (§19) differs again: background execution limits and SAF storage make a long-running seeding process impractical, so the engine cannot simply live inside the browser there. The shape proposed for it is a **separate side-loaded companion APK** we ship ourselves — which recovers the progress and association a plain handoff loses, and buys process isolation against hostile peer input as well. See **§19.6**; it needs nothing from the desktop code beyond the `download_source` seam.
+- **Distribution, not timidity.** Worth naming why no mainstream browser does this, so it is not mistaken for a technical obstacle we have solved cleverly: Opera shipped BitTorrent in 2006 and later dropped it, and the reasons since have been liability and app-store policy rather than engineering. That is a real constraint only where a store stands between us and users — it touches the Android target, not the desktop one, and it is a packaging question rather than a design one.
 
-**Recommended next step:** decide (1) versus (2) explicitly, since everything else follows from it, and decide the privacy default at the same time — the two are entangled, because an embedded engine makes leak-proofing our responsibility while a handoff delegates it to a client the user already trusts.
+**Implementation order, once started.** Roughly: `download_source` seam → magnet/`.torrent` trigger surfaces wired to the existing manager → metadata-then-progress job model → resume via libtorrent's resume-data blob through `state_store` → seeding policy in the PolicyEngine → `set_piece_deadline` + local proxy for **Watch**. The first three are what make it *work*; the last is what makes it *first class*.
 
 ---
 
@@ -496,7 +551,41 @@ Each edge subsystem gets a platform backend behind the same interface the deskto
 - **Kiosk (§8).** Desktop uses fullscreen + chromeless + scale/crop. Android adds **immersive mode** and, for locked deployments, **lock task mode / screen pinning**; the scale/crop logic applies inside the WebView on both.
 - **Ad/filter enforcement & media detection (§11/§12).** On desktop these ride the Qt interceptor; on Android they ride the System WebView's `shouldInterceptRequest`, with the same PolicyEngine deciding — reduced resolution, same rules.
 
-### 19.6 Honest constraints
+### 19.6 BitTorrent on Android: a separate side-loaded APK
+
+**Status: proposed, provisionally accepted for Android only. Not a desktop plan.** §11.4 decided that desktop embeds a torrent engine and that handoff was rejected there because progress and tab-tree association are lost the moment the torrent leaves the app. This section is about the observation that on Android those two objections mostly evaporate — *if we write the other end ourselves*.
+
+**It is a third option, not the handoff §11.4 rejected.** Handing a magnet to LibreTorrent or Flud is a one-way door: the browser gets no progress, no completion signal, and no way to associate the result with the node it came from. A **companion app we ship** is a different proposition, because we define the interface. Progress comes back, the association survives, and the download list can show a torrent beside an HTTP file exactly as on desktop. The user-visible result is closer to embedding than to handoff; only the process boundary differs.
+
+**Why the boundary is a good idea specifically on Android:**
+
+- **Background execution.** This is the strongest reason and it is not about policy at all. Android aggressively curtails background work, and a browser is exactly the kind of app the system expects to suspend when it leaves the foreground. Seeding — and even a long download — needs a **foreground service with an ongoing notification**, which is a natural thing for a dedicated transfer app to be and an awkward, battery-suspicious thing for a browser to claim. The companion keeps running while the browser is swapped out or killed.
+- **Attribution the user can act on.** Android reports battery and mobile-data usage per app. A separate app tells the truth: the user can see what the torrenting cost and restrict it — background data off, unmetered-only — with the OS controls they already know, rather than through settings we would have to invent.
+- **Process isolation against hostile input.** A torrent engine parses data from arbitrary strangers — peer handshakes, bencoded metadata, DHT traffic. That is a large attack surface in a memory-unsafe library, and putting it in its own process, in its own app sandbox, is defence in depth of exactly the kind Chromium's own architecture is built on. A bug there should not be a bug in the thing holding the user's sessions and passwords.
+- **Distribution.** Standalone torrent clients do exist on Google Play, so this is not a flat prohibition; but a *browser* with a built-in torrent engine is a different and less predictable review category than either a browser or a torrent client alone. Splitting means the browser stays conventionally distributable while the companion goes via F-Droid or direct APK, and a policy problem with one cannot take down the other. **This should be checked against current Play policy before it is relied on** — it is the weakest of the four reasons and the one most likely to have changed.
+
+**How the two would talk.** Android offers a spectrum, and the useful answer is a combination rather than a single mechanism:
+
+- **Start a job:** an `Intent` to the companion, carrying the magnet or `.torrent` plus our node id as an extra. Simple, and it works even if the companion is not running.
+- **Observe:** a **`ContentProvider`** in the companion exposing one row per job. The browser queries it for the download list and registers a `ContentObserver` for live progress. This maps onto the existing model well — a cursor of jobs *is* the job list — and it survives both processes being restarted, which a bound-service callback does not.
+- **Collect the result:** `ContentProvider.openFile()` hands back a file descriptor. In the SAF era this is the clean way to get at the finished file without the browser holding broad storage permissions.
+- **Watch while downloading:** the companion runs a small **loopback HTTP server** over the growing file, and the browser points the player at it — which is the desktop `local_proxy` design (§10, §11.3) unchanged, and the natural home for the sequential-piece trick from §11.4.
+
+A **bound service with AIDL** is the classic answer here and would also work; the reason to prefer the provider is that progress observation is inherently a "watch this list" problem, and `ContentObserver` already is that, with lifecycle handling we would otherwise write ourselves.
+
+**The security problem this creates, which must not be waved through.** An exported service or provider that starts downloads is, by construction, a way for *any* app on the device to make the user download and seed arbitrary content. It must be protected. A `signature`-level custom permission is the correct mechanism and costs nothing at runtime, but it requires both APKs to be signed with the same key, which constrains distribution — notably, an F-Droid build signed by F-Droid's per-app keys will not automatically satisfy it. Either the pairing is preserved via developer-signed reproducible builds, or the companion falls back on **confirming each new torrent in its own UI**, which is distribution-agnostic and honest but adds a tap. Decide this before writing the manifest, not after.
+
+**The honest cost, and it is a real one:**
+
+- **Two installs is in tension with "first class".** §11.4's whole point is that a torrent should behave like every other download. On Android it would behave like every other download *after the user installs a second app*, which is a meaningfully worse experience than on desktop. The browser needs a graceful story for the un-installed case — explain, offer a link, and fall back to the system chooser so a magnet still opens *something*.
+- **Version skew.** Two independently updatable APKs need an interface version exchanged on first contact and a refusal path when they disagree. This is the standard cost of an IPC boundary and it does not go away.
+- **A second toolchain.** The companion is most naturally Kotlin plus libtorrent through the NDK, not Qt — so it is a separate codebase with a separate build, not another target of this one.
+
+**What this changes in the code today: nothing, which is the point.** The `download_source` seam (§11.4) already describes this: an `android_companion_source` implements the same interface, reporting `seeds = true`, `public_participation = true`, `multi_file = true` and a `max_concurrent` the companion decides. The manager neither knows nor cares that the bytes are moving in another process — it owns the queue, consent and the job records either way. The seam was built for the desktop/Android split and this is the first real test of it passing.
+
+**A desktop echo worth noting but not acting on.** The process-isolation argument is not Android-specific: running the torrent engine out-of-process on desktop too would give the same hardening against hostile peer input, behind the same seam, without changing anything above it. That is a possible later refinement, not a reason to complicate the first desktop implementation.
+
+### 19.7 Honest constraints
 
 Qt Widgets on Android is supported but is the less-trodden path in the Qt ecosystem (QML is the norm), so the adaptive-layout and touch work is non-trivial and should be scoped as its own phase. The Android System WebView cannot match Chromium/CDP fidelity, so a few desktop-grade controls will be coarser or unavailable on Android; that is a documented difference, not a bug. And the reparenting/foreign-window discussion (§2) is desktop/X11-only and simply does not apply on Android — which is fine, because the design already chose the own-engine path.
 
