@@ -30,11 +30,14 @@ const char *k_system_prompt =
 	"guess one: a returned url that was not requested is rejected outright.\n"
 	"2. Match on shape, not on an exact string — the next visit will have "
 	"different ids, tokens and numbers. Prefer a stable path fragment.\n"
-	"3. A manifest may be disguised: master playlists are often served with "
-	"innocuous extensions and query strings. Judge by path and position, not by "
-	"the extension alone.\n"
-	"4. Prefer the master/playlist request over an individual segment.\n"
-	"5. Return null if nothing in the list is a stream.\n";
+	"3. A manifest may be disguised: master playlists are routinely served with "
+	"innocuous extensions and query strings, so do not decide by extension "
+	"alone.\n"
+	"4. A line ending `(+N more like this)` is a request the page repeated N "
+	"further times — those are segments. A manifest is fetched once.\n"
+	"5. Prefer the manifest over any individual segment.\n"
+	"6. Return null if nothing in the list is a stream. Returning nothing is a "
+	"clean answer; a guess is not.\n";
 
 // Requests that differ only in a run of digits are the same request repeated —
 // segment 0001, 0002, and so on.

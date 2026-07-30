@@ -961,11 +961,49 @@ resumed file. Tested with a partial file and a caller asking for
 `bytes=999999-`: the request went out as `bytes=500-`, the caller's value never
 appeared, and its other headers still did.
 
-**Not yet exercised against a real model.** The gate, the sandbox, the folding
-and the fence-stripping are all tested offline (34 checks), and the dialog is
-wired to `choose_ai()` like the other two loops — but no proposal has been
-round-tripped through Ollama or Claude here, so what a model actually returns
-for this prompt is unmeasured.
+**Measured against a real model.** Ollama installed user-local at
+`~/.local/ollama` (no root: the release tarball, extracted), running
+`qwen2.5-coder:7b`. The loop works end to end — the model reads the folded
+evidence, writes a parser, and the gate judges it.
+
+**Model size dominates the hit rate.** Same evidence, same gate, five runs each:
+
+| model | usable | how it failed |
+|---|---|---|
+| `qwen2.5-coder:7b` | ~1 in 3 | matched `.m3u8`/`.mpd` and found nothing; once returned a segment |
+| `qwen2.5-coder:14b` | **4 of 5** | once used `endsWith('.txt')`, which misses a query string |
+
+The 14B failure is the interesting one: it had the right idea — the manifest is
+disguised as `.txt` — and then tripped on the query string, since
+`…cf-master.1774687168.txt?k=…` does not *end* with `.txt`. A clean failure, and
+the kind a prompt line about query strings might fix; worth trying before
+tuning anything else.
+
+Inference here is **CPU-only** (12 cores, 19 GiB usable; ollama drops the
+integrated Intel GPU), so 14B takes a minute or two per proposal and 32B is not
+viable — a ~20 GB model against 19 GB free would thrash.
+
+**Roughly one run in three produces a usable extractor** with the 7B model, on
+this evidence. The successful ones find the disguised manifest
+(`cf-master.1774687168.txt?k=…`) by matching `master.` as a *shape*, which is
+exactly what URL detection cannot do. Two failure modes were seen, repeatedly:
+
+- **Extension matching.** The script looks for `.m3u8`/`.mpd`, finds nothing,
+  returns null. A clean failure — the gate reports "found nothing".
+- **Picking a segment.** The script returns `seg-00000.ts`, which the page
+  genuinely requested. **The gate accepted this**, because observed is not the
+  same as correct, and that was a real hole: it would have played ten seconds
+  of video. Closed — a URL that is one of many near-identical requests is a
+  segment, since a manifest is fetched once. The rejection now names the count.
+
+**A prompt change made on three samples made things worse and was reverted.**
+Adding a hint about which host the segments came from pushed the model toward
+segments. Tuning a prompt against one model's quirks is not the durable fix;
+tightening the gate is, because it holds whatever model is behind it.
+
+That is the whole argument for this design: a model that is right one time in
+three is *usable* precisely because the wrong answers are refused rather than
+acted on. No proposal in any run returned an invented URL.
 
 ## Media Source tap (implemented, with capture)
 

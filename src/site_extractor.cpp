@@ -8,6 +8,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJSValueIterator>
+#include <QHash>
+#include <QRegularExpression>
 #include <QSet>
 #include <QScopeGuard>
 
@@ -30,6 +32,14 @@ QString wrap(const QString &source) {
 	    "    throw new Error('the script defines no extract() function');\n"
 	    "  return extract;\n"
 	    "})()").arg(source);
+}
+
+// Two requests differing only in a run of digits are the same request repeated.
+QString shape_of(const QUrl &u) {
+	static const QRegularExpression digits("[0-9]{2,}");
+	QString s = u.toString();
+	s.replace(digits, "#");
+	return s;
 }
 
 QString normalise(const QUrl &u) {
@@ -150,6 +160,23 @@ extractor_verdict check(const QString &source, const QUrl &page,
 		v.invented = true;
 		v.message  = "Rejected: the script returned a URL this page never "
 		             "requested (" + v.result.url.toString().left(120) + ").";
+		return v;
+	}
+
+	// Observed is not the same as correct, and a real model showed why: asked
+	// for a manifest it returned `seg-00000.ts`, which the page had genuinely
+	// requested, so the observed-URL rule waved it through. A stream that
+	// arrives as hundreds of near-identical requests is a *segment* — the
+	// manifest is fetched once. Anything picked out of that flood is refused.
+	QHash<QString, int> shape_count;
+	for (const evidence_request &r : evidence)
+		shape_count[shape_of(r.url)]++;
+	if (shape_count.value(shape_of(v.result.url)) > 2) {
+		v.is_segment = true;
+		v.message = QString("Rejected: that address is one of %1 near-identical "
+		                     "requests, which makes it a segment rather than the "
+		                     "stream.")
+		                .arg(shape_count.value(shape_of(v.result.url)));
 		return v;
 	}
 

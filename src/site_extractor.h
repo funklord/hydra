@@ -30,6 +30,8 @@ struct extraction {
 struct extractor_verdict {
 	bool       usable = false;
 	bool       invented = false;   // returned a URL that was never observed
+	bool       is_segment = false; // returned one of a flood of near-identical
+	                               // requests, which is a segment, not a stream
 	bool       timed_out = false;
 	QString    message;
 	extraction result;
