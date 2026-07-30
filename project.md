@@ -353,9 +353,11 @@ a different origin, an empty one, a suffix lookalike (`bank.test.evil.test`),
 plain HTTP, and a policy-blocked site each refused, with navigation
 re-pointing the gate.
 
-**Not exercised against a live KeePassXC**, and libsodium is not installed
-here, so the socket handshake, the encrypt/decrypt path, and association have
-never run. Also not done from §13: the key icon and entry-picker UI (a single
+**libsodium is now installed here, so the crypto path is verified**: X25519
+keypairs, a seal/open round-trip, and rejection of a tampered ciphertext, a
+wrong nonce and a wrong key all pass. What remains unexercised is everything
+above the crypto — the socket handshake, association, and `get-logins` have
+never run, because KeePassXC itself is not installed. Also not done from §13: the key icon and entry-picker UI (a single
 match fills automatically; multiple matches are deliberately left alone rather
 than guessed at), `set-login` on new-credential submit, `generate-password`,
 storing the association key encrypted at rest via Secret Service — it is in
@@ -365,6 +367,50 @@ direct-`.kdbx` fallback, which §13.4 recommends against anyway.
 **This also unblocks §12.1's element picker**, which was deferred from step 6
 for exactly this plumbing. It is not built yet, but the injection and bridge
 seam it needs now exists.
+
+## Local proxy (§10, player-facing half)
+
+`local_proxy` is a loopback HTTP relay that solves the §11.3 problem: a naked
+stream URL frequently 403s, because the CDN expects the same Referer, cookies
+and User-Agent the page carried. Rather than depend on whichever header flags a
+given player supports — they vary, and mplayer's are limited — "Watch in
+player" now publishes the stream to the proxy and hands over a localhost URL,
+and the proxy replays the context upstream.
+
+Two properties carry the feature:
+
+- **Range transparency.** A player's `Range: bytes=X-Y` is forwarded verbatim
+  and the `206` comes back with `Content-Range` and `Accept-Ranges` intact.
+  Without this the player cannot seek, and seekability is most of the point.
+- **Verbatim relay.** Manifests and segments pass through unmodified, so an HLS
+  playlist keeps its full segment list and its `#EXTINF`,
+  `#EXT-X-MEDIA-SEQUENCE` and `#EXT-X-BYTERANGE` tags. Rewriting a manifest is
+  how seeking silently breaks.
+
+Security: loopback-only, and it serves nothing but URLs explicitly published to
+it, each behind a 128-bit token. It is a context-injecting relay for streams the
+user chose, not a general forward proxy — something that guessed the port still
+cannot make it fetch anything. It is also optional: if it cannot listen, Watch
+falls back to the raw URL.
+
+Verified against a real origin server across 15 proxy cases, all passing:
+full-body relay; a range request coming back as `206` with exactly the requested
+bytes and an intact `Content-Range`; Referer, User-Agent and Cookie each
+observed arriving upstream; an HLS manifest relayed byte-for-byte with its
+timing tags; and an unpublished token refused with 404.
+
+**Still missing from §10–§11:** segment assembly (turning HLS into one seekable
+progressive stream, which is what would actually fix classic mplayer), the
+tee-to-disk trick that makes a live stream scrubbable, and cookie capture — the
+context currently carries the page URL as Referer and the browser's User-Agent,
+but cookies are only replayed if a caller supplies them, since reading them back
+needs cookie-store integration.
+
+**Routing the browser through it is deliberately not attempted.** §10's other
+use — response inspection for real Content-Types and manifest bodies — means
+intercepting HTTPS, which means terminating TLS with a generated certificate the
+browser must be made to trust. That is a different problem with its own risks,
+and the design does not currently address it.
 
 ## What is next (in order)
 - **Remaining gaps**, listed per step above — the local proxy (§10) is the

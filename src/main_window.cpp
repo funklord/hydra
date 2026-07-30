@@ -15,6 +15,7 @@
 #include "media_dialog.h"
 #include "player_launcher.h"
 #include "download_manager.h"
+#include "local_proxy.h"
 #include "filter_signals.h"
 #include "filter_list.h"
 #include "filter_dialog.h"
@@ -70,6 +71,11 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 
 	m_players   = new player_launcher;
 	m_downloads = new download_manager(this);
+	// The local proxy is optional: if it cannot listen, Watch still works and
+	// simply hands over the raw URL (§10 — it is an upgrade tier, not a
+	// prerequisite).
+	m_local_proxy = new local_proxy(this);
+	m_local_proxy->start();
 	m_filters   = new filter_list;
 	connect(m_media, &media_detector::site_updated,
 	         this, &main_window::on_media_found, Qt::QueuedConnection);
@@ -334,8 +340,12 @@ void main_window::open_media() {
 	for (auto it = m_views_by_id.cbegin(); it != m_views_by_id.cend(); ++it)
 		if (it.value() == v) { node_id = it.key(); break; }
 
-	media_dialog dlg(m_media, m_players, m_downloads, this);
-	dlg.set_site(v->url().host(), node_id);
+	// The context a CDN expects: the page that loaded the stream, and this
+	// browser's own User-Agent.
+	stream_context ctx;
+	ctx.referer = v->url().toString();
+	media_dialog dlg(m_media, m_players, m_downloads, m_local_proxy, this);
+	dlg.set_site(v->url().host(), node_id, ctx);
 	dlg.exec();
 }
 

@@ -84,7 +84,8 @@ QString player_launcher::warning_for(const media_item &item) const {
 	return QString();
 }
 
-bool player_launcher::play(const media_item &item, QString *error) const {
+bool player_launcher::play(const media_item &item, QString *error,
+                            const QUrl &via) const {
 	const player_entry *e = entry(m_selected);
 	if (!e || !e->installed) {
 		if (error)
@@ -93,17 +94,18 @@ bool player_launcher::play(const media_item &item, QString *error) const {
 	}
 
 	// Always a URL, never stdin: a pipe cannot seek (§11.3).
+	const QString target = via.isValid() ? via.toString() : item.url.toString();
 	QStringList args;
 	if (e->id == "mpv") {
-		args << "--force-window=yes" << item.url.toString();
+		args << "--force-window=yes" << target;
 	} else if (e->id == "vlc") {
-		args << item.url.toString();
+		args << target;
 	} else if (e->id == "ffplay") {
-		args << "-autoexit" << item.url.toString();
+		args << "-autoexit" << target;
 	} else if (e->id == "smplayer") {
-		args << item.url.toString();
+		args << target;
 	} else {   // mplayer / mplayer2
-		args << "-cache" << "8192" << item.url.toString();
+		args << "-cache" << "8192" << target;
 	}
 
 	// Detached: a player outliving the browser is normal.

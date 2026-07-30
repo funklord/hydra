@@ -5,6 +5,7 @@
 
 #include <QList>
 #include <QString>
+#include <QUrl>
 
 // One known external player.
 struct player_entry {
@@ -52,7 +53,11 @@ public:
 
 	// Launches detached so a player outliving the browser is fine.
 	// Returns false and fills `error` if it could not start.
-	bool play(const media_item &item, QString *error) const;
+	// `via` overrides the URL handed to the player — the local proxy's
+	// localhost URL when one is available, so the CDN sees the page's own
+	// Referer and cookies instead of a naked request (§11.3).
+	bool play(const media_item &item, QString *error,
+	           const QUrl &via = QUrl()) const;
 
 private:
 	const player_entry *entry(const QString &id) const;

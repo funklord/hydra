@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "keepass_bridge.h"
-#include "crypto_box.h"
+#include "box_crypto.h"
 
 #include <QJsonDocument>
 #include <QLocalSocket>
@@ -24,7 +24,7 @@ keepass_bridge::keepass_bridge(QObject *parent) : QObject(parent) {
 }
 
 bool keepass_bridge::supported() {
-	return crypto_box::available();
+	return box_crypto::available();
 }
 
 QString keepass_bridge::socket_path() {
@@ -48,11 +48,11 @@ void keepass_bridge::start() {
 	if (connected())
 		return;
 
-	if (!crypto_box::keypair(&m_our_public, &m_our_secret)) {
+	if (!box_crypto::keypair(&m_our_public, &m_our_secret)) {
 		emit error("Could not generate a key pair.");
 		return;
 	}
-	m_nonce = crypto_box::random_nonce();
+	m_nonce = box_crypto::random_nonce();
 
 	if (!m_socket) {
 		m_socket = new QLocalSocket(this);
@@ -102,7 +102,7 @@ bool keepass_bridge::send_encrypted(const QString &action, const QJsonObject &in
 	const QByteArray plain = QJsonDocument(inner).toJson(QJsonDocument::Compact);
 	const QByteArray nonce = next_nonce();
 	QByteArray cipher;
-	if (!crypto_box::seal(plain, nonce, m_their_public, m_our_secret, &cipher)) {
+	if (!box_crypto::seal(plain, nonce, m_their_public, m_our_secret, &cipher)) {
 		emit error("Encryption failed.");
 		return false;
 	}
@@ -112,7 +112,7 @@ bool keepass_bridge::send_encrypted(const QString &action, const QJsonObject &in
 
 void keepass_bridge::associate() {
 	if (m_id_key_b64.isEmpty())
-		m_id_key_b64 = b64(crypto_box::random_bytes(32));
+		m_id_key_b64 = b64(box_crypto::random_bytes(32));
 	send_encrypted("associate",
 	                keepass_protocol::associate_request(b64(m_our_public), m_id_key_b64));
 }
@@ -185,7 +185,7 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 	QJsonObject inner = reply;
 	if (!cipher_b64.isEmpty()) {
 		QByteArray plain;
-		if (!crypto_box::open(unb64(cipher_b64), unb64(nonce_b64), m_their_public,
+		if (!box_crypto::open(unb64(cipher_b64), unb64(nonce_b64), m_their_public,
 		                      m_our_secret, &plain)) {
 			emit error("Could not decrypt a reply from KeePassXC.");
 			return;

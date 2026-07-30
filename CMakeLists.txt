@@ -75,6 +75,8 @@ add_executable(hydra
     src/player_launcher.h
     src/download_manager.cpp
     src/download_manager.h
+    src/local_proxy.cpp
+    src/local_proxy.h
     src/filter_list.cpp
     src/filter_list.h
     src/filter_signals.cpp
@@ -83,8 +85,8 @@ add_executable(hydra
     src/filter_dialog.h
     # Password manager (architecture doc §13): KeePassXC-Browser protocol
     # client, the QWebChannel autofill layer, and Autofill as a policy feature.
-    src/crypto_box.cpp
-    src/crypto_box.h
+    src/box_crypto.cpp
+    src/box_crypto.h
     src/keepass_protocol.cpp
     src/keepass_protocol.h
     src/keepass_bridge.cpp

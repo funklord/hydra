@@ -35,6 +35,7 @@ class filter_list;
 class request_filter;
 class keepass_bridge;
 class autofill_controller;
+class local_proxy;
 class ollama_provider;
 class claude_provider;
 struct node;
@@ -123,6 +124,7 @@ private:
 	media_detector     *m_media         = nullptr;
 	player_launcher    *m_players       = nullptr;
 	download_manager   *m_downloads     = nullptr;
+	local_proxy        *m_local_proxy   = nullptr;
 	filter_signals     *m_signals       = nullptr;
 	filter_list        *m_filters       = nullptr;
 	keepass_bridge     *m_keepass       = nullptr;

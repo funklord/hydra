@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#include "crypto_box.h"
+#include "box_crypto.h"
 
 #ifdef HYDRA_HAVE_SODIUM
 #include <sodium.h>
 #endif
 
-namespace crypto_box {
+namespace box_crypto {
 
 #ifdef HYDRA_HAVE_SODIUM
 
@@ -97,4 +97,4 @@ bool open(const QByteArray &, const QByteArray &, const QByteArray &,
 
 #endif
 
-}  // namespace crypto_box
+}  // namespace box_crypto

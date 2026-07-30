@@ -15,7 +15,7 @@
 //
 // We implement no crypto of our own and never see the master password —
 // KeePassXC holds the vault, the unlock, and everything derived from it (§13.3).
-namespace crypto_box {
+namespace box_crypto {
 
 // False when Hydra was built without libsodium.
 bool available();
@@ -38,4 +38,4 @@ bool open(const QByteArray &cipher, const QByteArray &nonce,
 // Random bytes, used for the association id key.
 QByteArray random_bytes(int n);
 
-}  // namespace crypto_box
+}  // namespace box_crypto

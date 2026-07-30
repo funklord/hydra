@@ -2,6 +2,7 @@
 #include "media_dialog.h"
 #include "download_manager.h"
 #include "player_launcher.h"
+#include "local_proxy.h"
 
 #include <QDialogButtonBox>
 #include <QHeaderView>
@@ -25,9 +26,10 @@ QString kind_label(media_kind k) {
 }  // namespace
 
 media_dialog::media_dialog(media_detector *detector, player_launcher *players,
-                            download_manager *downloads, QWidget *parent)
+                            download_manager *downloads, local_proxy *proxy,
+                            QWidget *parent)
 	: QDialog(parent), m_detector(detector), m_players(players),
-	  m_downloads(downloads) {
+	  m_downloads(downloads), m_proxy(proxy) {
 	setWindowTitle("Media on this page");
 	resize(720, 340);
 
@@ -50,9 +52,11 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 	outer->addWidget(buttons);
 }
 
-void media_dialog::set_site(const QString &site_host, const QString &node_id) {
+void media_dialog::set_site(const QString &site_host, const QString &node_id,
+                            const stream_context &ctx) {
 	m_site    = site_host;
 	m_node_id = node_id;
+	m_ctx     = ctx;
 	repopulate();
 }
 
@@ -93,13 +97,17 @@ void media_dialog::repopulate() {
 
 void media_dialog::watch(const media_item &item) {
 	const QString warn = m_players->warning_for(item);
+	// Hand the player a localhost URL when the proxy is up, so the CDN sees
+	// the page's Referer and cookies rather than a naked request (§11.3).
+	const QUrl via = m_proxy ? m_proxy->publish(item.url, m_ctx) : QUrl();
 	QString error;
-	if (!m_players->play(item, &error)) {
+	if (!m_players->play(item, &error, via)) {
 		m_status->setText("<b>" + error.toHtmlEscaped() + "</b>");
 		return;
 	}
 	m_status->setText(warn.isEmpty()
-	                      ? QString("Opened in %1.").arg(m_players->selected())
+	                      ? QString("Opened in %1%2.").arg(m_players->selected(),
+	                            via.isValid() ? " via the local proxy" : "")
 	                      : "<b>Warning:</b> " + warn.toHtmlEscaped());
 }
 
