@@ -2,6 +2,7 @@
 #include "tree_diff.h"
 #include "node.h"
 
+#include <QHash>
 #include <QSet>
 
 namespace {
@@ -298,6 +299,77 @@ int apply(node *original, const QList<tree_change> &changes) {
 	for (node *n : all_nodes(original))
 		renumber(n);
 	return applied;
+}
+
+}  // namespace tree_diff
+
+namespace tree_diff {
+
+tree_snapshot snapshot(node *root) {
+	tree_snapshot snap;
+	if (!root)
+		return snap;
+	for (node *n : all_nodes(root)) {
+		tree_snapshot_entry e;
+		e.id        = n->id;
+		e.parent_id = (n->parent && n->parent != root) ? n->parent->id
+		                                              : QString("root");
+		e.title     = n->title;
+		e.order     = n->order;
+		e.folder    = n->is_folder();
+		snap.entries.push_back(e);
+	}
+	return snap;
+}
+
+int restore(node *root, const tree_snapshot &snap) {
+	if (!root || !snap.valid())
+		return 0;
+
+	QHash<QString, node *> by_id;
+	for (node *n : all_nodes(root))
+		by_id.insert(n->id, n);
+
+	// Detach everything first, so re-attaching in snapshot order reproduces
+	// the recorded sibling order exactly rather than approximating it.
+	for (node *n : all_nodes(root))
+		n->children.clear();
+	root->children.clear();
+
+	QSet<QString> known;
+	int restored = 0;
+	for (const tree_snapshot_entry &e : snap.entries) {
+		node *n = by_id.value(e.id, nullptr);
+		if (!n)
+			continue;   // vanished since the snapshot; nothing to put back
+		node *parent = (e.parent_id == "root") ? root
+		                                       : by_id.value(e.parent_id, root);
+		if (!parent)
+			parent = root;
+		n->parent = parent;
+		parent->children.push_back(n);
+		if (e.folder)
+			n->title = e.title;   // undo a folder rename too
+		known.insert(e.id);
+		++restored;
+	}
+
+	// Whatever the snapshot never knew about is a folder the reorganization
+	// invented. Its children have already been re-attached above, so deleting
+	// it now cannot take a tab with it.
+	for (auto it = by_id.cbegin(); it != by_id.cend(); ++it) {
+		if (known.contains(it.key()))
+			continue;
+		node *orphan = it.value();
+		orphan->children.clear();   // belt and braces: never delete a subtree
+		orphan->parent = nullptr;
+		delete orphan;
+	}
+
+	renumber(root);
+	for (node *n : all_nodes(root))
+		renumber(n);
+	return restored;
 }
 
 }  // namespace tree_diff

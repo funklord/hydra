@@ -44,6 +44,10 @@ public:
 	// number of changes applied. Payloads follow ids, so nothing else moves.
 	int apply_reorganization(const QList<tree_change> &changes);
 
+	// The §9.4 undo snapshot: take one before applying, restore it to revert.
+	tree_snapshot take_snapshot() const;
+	int restore_snapshot(const tree_snapshot &snap);
+
 	// QAbstractItemModel
 	QModelIndex index(int row, int column, const QModelIndex &parent) const override;
 	QModelIndex parent(const QModelIndex &index) const override;

@@ -477,6 +477,63 @@ intercepting HTTPS, which means terminating TLS with a generated certificate the
 browser must be made to trust. That is a different problem with its own risks,
 and the design does not currently address it.
 
+## Reorganizer undo (§9.4, done)
+
+**Tools → Undo Reorganize (Ctrl+Shift+Z)**, enabled only after an accepted
+reorganization. §9.4 asks for "a single undo snapshot [that] makes any accepted
+change one keystroke to revert", and until now accepting was irreversible except
+by rearranging the tree by hand — an odd gap in a feature whose entire design is
+about not losing tabs.
+
+The snapshot records **structure only**: id, parent, order, and folder titles.
+That is sufficient because structure is the only thing a reorganization changes
+— live views and state blobs are keyed by id and were never stored on the node,
+so putting the structure back restores every tab without touching its payload,
+for exactly the reason applying the change could not disturb it either.
+
+Restore detaches everything and re-attaches in snapshot order, so sibling order
+is reproduced rather than approximated. Folders the AI invented are not in the
+snapshot; they are deleted **after** their children have been re-attached
+elsewhere, so removing one cannot take a tab with it. The shortcut is
+Ctrl+Shift+Z rather than Ctrl+Z so it never steals undo from a focused text
+field in the page or the address bar.
+
+Verified across 15 cases: a full apply→undo round trip compared against a
+structural fingerprint (ids, parents, sibling indices, titles — not just a leaf
+count), the invented folder gone afterwards, every tab surviving, a lone folder
+rename reverted, an empty snapshot doing nothing, and a restore whose snapshot
+references a tab that has since been closed skipping it rather than resurrecting
+it or crashing.
+
+One level only, as §9.4 specifies — the snapshot is cleared once used.
+
+## BitTorrent downloads (requested, not implemented)
+
+Written up in **arch §11.4** rather than built, pending a decision. The short
+version: BitTorrent fits as a third *source* for the existing download queue
+rather than a new subsystem, and the trigger surfaces (`magnet:` navigation,
+`.torrent` link, `application/x-bittorrent` response) are all things the current
+spines already see.
+
+Two things need deciding before code, and they are entangled:
+
+- **Embed libtorrent, or hand off to an installed client?** Embedding keeps
+  progress, resume and tab-tree association uniform with every other download,
+  which is what §11.2 asks for. Handing off follows the §11.3 external-player
+  precedent and adds no dependency, but the download leaves the app and the
+  association is lost. A `download_source` seam — the same shape as the WebView
+  backend — would make the choice reversible.
+- **The privacy default.** This is the one that actually matters. BitTorrent is
+  not a fetch: it announces your IP to a tracker and every peer, and peers can
+  enumerate what you are fetching. That cuts directly against §1's "data stays
+  on the machine; only lightweight metadata ever leaves, and only when the user
+  asks". It needs explicit opt-in at minimum, and realistically proxy/VPN
+  binding to be defensible — and embedding makes that leak-proofing our problem
+  where a handoff delegates it.
+
+Seeding, ports/UPnP, multi-file jobs, and the Android shape are covered there
+too.
+
 ## What is next (in order)
 - **Remaining gaps**, listed per step above — the local proxy (§10) is the
   biggest single unlock, since it covers stream assembly, request context for

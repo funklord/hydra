@@ -27,6 +27,28 @@ struct tree_change {
 	bool        accepted = true; // cherry-pick state
 };
 
+// --- Undo ----------------------------------------------------------------
+// §9.4 asks for "a single undo snapshot [that] makes any accepted change one
+// keystroke to revert". This is that snapshot.
+//
+// It records structure only — id, parent, order, and folder titles — because
+// structure is the only thing a reorganization changes. Live views and state
+// blobs are keyed by id and were never stored on the node, so restoring the
+// structure puts every tab back where it was without touching its payload,
+// for exactly the same reason applying the change could not disturb them.
+struct tree_snapshot_entry {
+	QString id;
+	QString parent_id;   // "root" for a top-level node
+	QString title;
+	int     order  = 0;
+	bool    folder = false;
+};
+
+struct tree_snapshot {
+	QList<tree_snapshot_entry> entries;
+	bool valid() const { return !entries.isEmpty(); }
+};
+
 // The result of checking a proposal against the original — the
 // "no node left behind" gate (architecture doc §9.4). Nothing is shown to the
 // user until this has run and, where possible, repaired.
@@ -63,5 +85,13 @@ int apply(node *original, const QList<tree_change> &changes);
 
 // Every leaf id in a tree, in document order.
 QStringList leaf_ids(node *root);
+
+tree_snapshot snapshot(node *root);
+
+// Puts `root` back into the recorded shape. Nodes the snapshot does not know
+// about are folders the reorganization invented, and are deleted — their
+// children are re-attached first, so nothing is lost with them. Returns the
+// number of nodes restored.
+int restore(node *root, const tree_snapshot &snap);
 
 }  // namespace tree_diff

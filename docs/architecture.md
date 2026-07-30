@@ -305,6 +305,33 @@ A "media on this page" toolbar badge lights with a count when saveable resources
 
 **Seekability.** Two rules preserve it. First, **hand the player a URL, never a stdin pipe** — a pipe has no random access, so `mplayer -`/`mpv -` can't seek; a URL lets the player issue its own range/segment requests. Second, the **local proxy must be range-transparent**: when the player sends `Range: bytes=X-Y`, the proxy issues the same range upstream (with injected headers) and relays the `206 Partial Content` with `Accept-Ranges`/`Content-Range` intact; for HLS it relays the manifest and segments verbatim, and if it rewrites the manifest it preserves the full segment list and timing tags (`#EXTINF`, `#EXT-X-MEDIA-SEQUENCE`, `#EXT-X-BYTERANGE`). With those in place, seekability follows the source: a direct file with server Range support and a **VOD** HLS/DASH playlist (ends in `#EXT-X-ENDLIST` / static MPD) are fully seekable end to end, while a **live/windowed** stream is seekable only within the window the server still exposes. To make a live stream fully scrubbable, **tee segments to disk while playing** (reusing the download manager's assembly) and point the player at the growing local file — live becomes a local VOD, giving full backward/forward seek plus a saved copy in one step. Player cache flags (`--cache`, generous back-buffer) widen backward seek within a live buffer even without recording.
 
+### 11.4 BitTorrent downloads (requested; design open)
+
+**Status: not implemented. This section records the requirement and the decisions it forces, so the implementation choice can be made deliberately rather than fallen into.**
+
+The download manager (§11.2) is already defined as *one queue fed by multiple sources* — page-initiated downloads and detector-initiated media saves. BitTorrent is naturally a third source rather than a new subsystem: same queue, same progress and resume model, same organization against the tab tree, different transport underneath. That framing is what keeps it compact, and it should survive whichever engine choice is made.
+
+**Trigger surfaces.** Three, all of which the existing spines already see. A `magnet:` URI is a navigation the shell can intercept before the engine tries and fails to load it. A `.torrent` link is an ordinary download the manager already receives. A response typed `application/x-bittorrent` is only visible with the local proxy tier (§10) — request-only interception sees the URL, not the Content-Type, so extension-based detection is the fallback exactly as it is for media.
+
+**The engine decision — three options, with the trade-off that actually separates them.**
+
+1. **Embed a library** (libtorrent-rasterbar is the mature choice; BSD-licensed, so compatible with a GPL-3 application). Downloads stay inside the app, so queue, progress, resume, and per-node association all work uniformly with every other download, and a torrent can belong to the tab it came from. Cost: a large C++ dependency with its own threading and state directory, plus the whole of the operational surface below becomes ours.
+2. **Hand off to an installed client** — the `player_launcher` pattern (§11.3) applied again: probe `PATH` for `transmission-remote`, `aria2c`, `deluge-console`, `qbittorrent-nox`; present what is installed; hand over the magnet or `.torrent`. Cheap, no new dependency, and consistent with the design's existing "the vault lives elsewhere" instinct (§13). Cost: progress and completion are outside the app, so the download manager cannot show them and the tab-tree association is lost — the torrent becomes someone else's job the moment it starts.
+3. **Implement the protocol.** No.
+
+The honest tension is that §11.2 wants downloads *organized against the tab tree*, which argues for (1), while §11.3's precedent and the project's preference for small, comprehensible cores argues for (2). A defensible middle path is a `download_source` seam — the same shape as the WebView backend (§19.2) — with a handoff source first and an embedded engine later behind the same interface, so the choice is reversible instead of load-bearing.
+
+**What BitTorrent forces that HTTP does not**, and why this needs a decision rather than just code:
+
+- **Privacy.** This is the significant one, and it cuts against the stated ethos. BitTorrent is not a fetch — it announces your IP address to a tracker and to every peer in the swarm, and peers can enumerate what you are downloading. A design whose defaults are "data stays on the machine; only lightweight metadata ever leaves, and only when the user asks" (§1) cannot quietly acquire a subsystem that broadcasts participation to strangers. At minimum this needs an explicit, informed opt-in; realistically it also needs proxy/VPN binding (bind-to-interface, refuse to announce if the bound interface disappears) to be defensible. That is a product decision, not an implementation detail.
+- **Seeding is a policy question, not a default.** Uploading is continued participation after the user's task is done, with bandwidth, legal, and privacy consequences. Ratio, seed time, and whether to seed at all belong in the PolicyEngine as a feature like any other (§7.1), so the tri-state and global default govern it.
+- **Inbound connectivity.** Ports, NAT traversal, UPnP. UPnP in particular means asking the router to open a hole, which is a security posture change and should not be silently on.
+- **Torrents are not one file.** The manager's model is a job with a path, a size, and progress. A torrent is a set of files with per-file selection, out-of-order completion, and no meaningful single "bytes received / total" until metadata resolves (a magnet has none at the start). Either the manager's job model grows, or a torrent is one job that fans out internally.
+- **Content risk.** Swarms carry whatever is in them. The app should not become an execution path for what it downloads, which mainly means keeping the existing rule that a download is written to disk and never opened automatically.
+- **Android** (§19) differs again: background execution limits and SAF storage make a long-running seeding process impractical, so the handoff-to-an-app model is likely the only viable shape there — another argument for the seam in the middle path.
+
+**Recommended next step:** decide (1) versus (2) explicitly, since everything else follows from it, and decide the privacy default at the same time — the two are entangled, because an embedded engine makes leak-proofing our responsibility while a handoff delegates it to a client the user already trusts.
+
 ---
 
 ## 12. Filter-evolution loop

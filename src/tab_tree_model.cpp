@@ -140,6 +140,18 @@ QVariant tab_tree_model::data(const QModelIndex &index, int role) const {
 	}
 }
 
+tree_snapshot tab_tree_model::take_snapshot() const {
+	return tree_diff::snapshot(m_root);
+}
+
+int tab_tree_model::restore_snapshot(const tree_snapshot &snap) {
+	beginResetModel();
+	const int n = tree_diff::restore(m_root, snap);
+	reindex();
+	endResetModel();
+	return n;
+}
+
 int tab_tree_model::apply_reorganization(const QList<tree_change> &changes) {
 	// Moves and new folders restructure whole subtrees at once, so a reset is
 	// both simpler and safer here than a sequence of begin/endMoveRows calls —

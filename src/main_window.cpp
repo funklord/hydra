@@ -256,6 +256,15 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *zap = tools_menu->addAction("&Zap an Element…", this,
 	                                      &main_window::start_element_picker);
 	zap->setStatusTip("Click a leaked ad; Escape cancels");
+	tools_menu->addSeparator();
+	// Ctrl+Shift+Z rather than Ctrl+Z, so this never steals undo from a focused
+	// text field in the page or the address bar.
+	m_undo_action = tools_menu->addAction("&Undo Reorganize",
+	                                       QKeySequence("Ctrl+Shift+Z"), this,
+	                                       &main_window::undo_reorganize);
+	m_undo_action->setEnabled(false);
+	m_undo_action->setStatusTip("Put the tree back the way it was before the "
+	                             "last accepted reorganization");
 
 	QMenu *help_menu = menu->addMenu("&Help");
 	help_menu->addAction("&About", this, &main_window::on_about);
@@ -328,8 +337,13 @@ void main_window::open_reorganizer() {
 		return;
 	}
 
+	// §9.4: snapshot before applying, so any accepted change is one keystroke
+	// to revert. Structure only — payloads follow ids and are never touched.
+	const tree_snapshot before = m_model->take_snapshot();
 	reorganize_dialog dlg(m_model, chosen, this);
 	if (dlg.exec() == QDialog::Accepted) {
+		m_undo = before;
+		m_undo_action->setEnabled(true);
 		m_tree->expandAll();
 		mark_dirty();
 	}
@@ -409,6 +423,18 @@ void main_window::toggle_password_manager() {
 	} else {
 		m_status->showMessage("Already paired with KeePassXC.", 4000);
 	}
+}
+
+void main_window::undo_reorganize() {
+	if (!m_undo.valid())
+		return;
+	const int n = m_model->restore_snapshot(m_undo);
+	m_undo = tree_snapshot{};        // one level, as §9.4 specifies
+	m_undo_action->setEnabled(false);
+	m_tree->expandAll();
+	mark_dirty();
+	m_status->showMessage(QString("Reverted the reorganization (%1 nodes).").arg(n),
+	                       5000);
 }
 
 void main_window::start_element_picker() {

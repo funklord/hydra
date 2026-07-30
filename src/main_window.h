@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "tree_diff.h"   // for the §9.4 undo snapshot
+
 #include <QWidget>
 #include <QHash>
 #include <QStringList>
@@ -88,6 +90,7 @@ private slots:
 	void open_filter_evolution();
 	void toggle_password_manager();
 	void start_element_picker();
+	void undo_reorganize();
 	void on_media_found(const QString &site_host, int count);
 
 private:
@@ -135,6 +138,8 @@ private:
 	QAction            *m_media_action  = nullptr;
 	QString             m_filters_path;
 	QAction            *m_kiosk_action  = nullptr;
+	QAction            *m_undo_action   = nullptr;
+	tree_snapshot       m_undo;
 	QTimer             *m_save_timer    = nullptr;
 	QString             m_tree_path;
 	QString             m_policy_path;
