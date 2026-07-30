@@ -51,6 +51,23 @@
 #include <QDateTime>
 #include <QDataStream>
 #include <QCloseEvent>
+#include <QSet>
+
+namespace {
+
+// Schemes a browser is expected to render itself. Anything outside this set is
+// not a page, which makes it a candidate for handing to something that can
+// actually deal with it. Kept as a property of the web rather than of any
+// engine, so the same rule holds behind the Android backend (§19.2).
+bool renders_as_page(const QUrl &url) {
+	static const QSet<QString> web = {
+		"http", "https", "file", "about", "data", "blob",
+		"view-source", "chrome", "qrc",
+	};
+	return web.contains(url.scheme().toLower());
+}
+
+}  // namespace
 
 main_window::main_window(web_view_factory *factory, policy_engine *policy,
                           request_filter *filter, QWidget *parent)
@@ -95,6 +112,25 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// where the telling happens.
 	connect(m_downloads, &download_manager::consent_required, this,
 	         &main_window::confirm_public_download);
+
+	// Links that are not pages (§11.4). The rule is deliberately general rather
+	// than a test for one scheme: anything the browser will not render, but
+	// which some download source will take, becomes a download. A magnet link
+	// is simply the first thing that fits, and the shell still never names a
+	// transport.
+	if (factory) {
+		factory->set_external_url_handler([this](const QUrl &url) {
+			if (renders_as_page(url))
+				return;
+			if (!m_downloads->source_for(url)) {
+				m_status->showMessage(
+					QString("Nothing here can open %1").arg(url.scheme() + ":"),
+					6000);
+				return;
+			}
+			start_download(url);
+		});
+	}
 	// The local proxy is optional: if it cannot listen, Watch still works and
 	// simply hands over the raw URL (§10 — it is an upgrade tier, not a
 	// prerequisite).
@@ -575,6 +611,7 @@ void main_window::open_node(node *n) {
 		view->set_permission_decider([pe](const QUrl &origin, policy::feature f) {
 			return pe->is_allowed(f, origin.host());
 		});
+
 
 		if (n->type == node_type::suspended_tab && m_state && m_state->has_state(n->id)) {
 			// Restore the session blob this node was suspended into.

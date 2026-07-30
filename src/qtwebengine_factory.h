@@ -3,7 +3,10 @@
 
 #include "web_view_factory.h"
 
+#include <QStringList>
+
 class QWebEngineProfile;
+class magnet_scheme_handler;
 class request_filter;
 class qtwebengine_interceptor;
 
@@ -17,9 +20,23 @@ public:
 	~qtwebengine_factory() override;
 
 	web_view_backend *create_view(QWidget *parent) override;
+	void set_external_url_handler(external_url_handler fn) override;
+
+	// Must be called before QApplication exists — Qt requires custom schemes to
+	// be registered before the engine initialises, and it is a fatal warning
+	// otherwise. main() is therefore the only possible caller, which is also
+	// where the concrete backend is already named.
+	//
+	// Registering a scheme is what makes Chromium route it to a handler instead
+	// of discarding it as an external protocol. Only register schemes something
+	// can actually take: a registered scheme with no handler behind it would
+	// swallow the link silently, which is worse than the error page.
+	static void register_url_schemes(const QStringList &schemes);
 
 private:
 	QWebEngineProfile  *m_profile     = nullptr;
 	request_filter     *m_filter      = nullptr;
 	qtwebengine_interceptor *m_interceptor = nullptr;
+	magnet_scheme_handler   *m_scheme_handler = nullptr;
+	external_url_handler     m_external;
 };

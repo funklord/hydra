@@ -97,6 +97,7 @@ void qtwebengine_view::set_permission_decider(permission_decider fn) {
 	m_decider = std::move(fn);
 }
 
+
 void qtwebengine_view::set_zoom_factor(double factor) {
 	m_view->setZoomFactor(factor);
 }

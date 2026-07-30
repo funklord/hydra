@@ -36,6 +36,7 @@ public:
 	// is a pure policy lookup today, with no UI and no waiting.
 	using permission_decider = std::function<bool(const QUrl &origin, policy::feature f)>;
 
+
 	explicit web_view_backend(QObject *parent = nullptr) : QObject(parent) {}
 
 	// The widget to place in the shell's view stack. Owned by the backend.

@@ -120,6 +120,10 @@ torrent_download_source::~torrent_download_source() {
 	delete m_d;
 }
 
+QStringList torrent_download_source::url_schemes() {
+	return available() ? QStringList{ "magnet" } : QStringList{};
+}
+
 source_capabilities torrent_download_source::capabilities() const {
 	source_capabilities c;
 	c.resumable            = true;

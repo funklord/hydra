@@ -6,6 +6,7 @@
 #include <QByteArray>
 #include <QHash>
 #include <QString>
+#include <QStringList>
 
 namespace libtorrent {
 struct torrent_handle;
@@ -50,6 +51,16 @@ public:
 	// False when built without libtorrent. Nothing else on this class is
 	// meaningful in that case.
 	static bool available();
+
+	// Non-web URL schemes this source claims, for the engine to be told about
+	// before it starts (see qtwebengine_factory::register_url_schemes).
+	//
+	// Empty when there is no libtorrent, and deliberately so: registering
+	// `magnet` with nothing behind it would make the engine route such links to
+	// a handler that cannot serve them, silently swallowing the click. Better
+	// to leave them unregistered and let the engine do whatever it does with an
+	// unknown scheme.
+	static QStringList url_schemes();
 
 	QString id() const override { return "torrent"; }
 	QString display_name() const override { return "BitTorrent"; }

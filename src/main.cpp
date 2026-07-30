@@ -3,6 +3,7 @@
 #include "policy_engine.h"
 #include "request_filter.h"
 #include "qtwebengine_factory.h"
+#include "torrent_download_source.h"
 
 #include <QApplication>
 #include <QByteArray>
@@ -25,6 +26,14 @@ int main(int argc, char *argv[]) {
 
 	// Recommended for Qt WebEngine.
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+
+	// Custom URL schemes must be registered before the engine initialises, so
+	// this cannot move later. Each download source names the non-web schemes it
+	// claims; without the registration Chromium treats them as external
+	// protocols and drops such navigations before anything of ours can see them
+	// (§11.4). The list is empty when the feature is not built, and then
+	// nothing changes.
+	qtwebengine_factory::register_url_schemes(torrent_download_source::url_schemes());
 
 	QApplication app(argc, argv);
 	app.setApplicationName("Hydra");

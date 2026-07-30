@@ -561,6 +561,43 @@ iterating `m_transfers`, and `abort()` delivers `finished()` synchronously,
 which re-entered `teardown()` and mutated the map mid-iteration. The map is
 now emptied first.
 
+## In-page magnet links (arch §11.4, §19.2)
+
+Clicking a magnet link in a page routes it to the download manager. The seam is
+`web_view_factory::set_external_url_handler` — "a URL the engine will not render
+as a page" — and the shell's rule names no transport: **anything not renderable
+that some download source will take becomes a download.**
+
+**The obvious implementation does not work, and this was measured rather than
+assumed.** Intercepting the navigation is the natural guess, but Chromium
+classifies unregistered schemes as *external protocols* and disposes of them
+before any per-navigation callback runs. Against Qt 6.8,
+`QWebEnginePage::navigationRequested` is **never** invoked for `magnet:` while
+it fires normally for `http` — the click goes to the desktop's registered
+handler instead (during testing it launched kmail for `mailto:`, which is the
+same mechanism doing its job).
+
+What works is `QWebEngineUrlScheme::registerScheme()` before the engine
+initialises, plus a `QWebEngineUrlSchemeHandler` on the profile. That catches
+both a clicked link and a scripted `window.location`. Consequences:
+
+- Registration lives in `main()`, because Qt requires it before QApplication.
+- Only schemes a source can actually take are registered —
+  `torrent_download_source::url_schemes()` returns empty without libtorrent, on
+  purpose. A registered scheme with no handler swallows the click silently,
+  which is worse than the error page.
+- The hook is on the *factory*, not a view: the desktop mechanism is
+  profile-wide. Android's `shouldOverrideUrlLoading` satisfies the same
+  interface per view.
+
+**Verified end to end with real clicks, 13 checks:** a clicked magnet creates
+exactly one job on the torrent source, carrying the clicked URL and the tab it
+came from; the page does not navigate away; ordinary links still navigate and
+create no download; `mailto:` is left entirely to the engine. And the one that
+matters most — **a page cannot start a torrent silently**: the job is `queued`
+and `consent_required` fires, so page-initiated participation still goes
+through the §11.4 gate.
+
 ## Downloads window (arch §11.2)
 
 `downloads_dialog`, opened from Tools → Downloads… or **Ctrl+J**, and raised
