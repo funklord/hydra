@@ -364,9 +364,45 @@ storing the association key encrypted at rest via Secret Service — it is in
 memory only, so pairing does not survive a restart — and the optional
 direct-`.kdbx` fallback, which §13.4 recommends against anyway.
 
-**This also unblocks §12.1's element picker**, which was deferred from step 6
-for exactly this plumbing. It is not built yet, but the injection and bridge
-seam it needs now exists.
+## The element picker (§12.1, done)
+
+**Tools → Zap an Element…**  This is the half of filter-evolution signal
+collection deferred from step 6 for a structural reason — capturing a leaked
+ad's selector needs script injection and a channel into the page, which is the
+plumbing the password manager introduced. Same seam, second purpose.
+
+The page-side overlay highlights on hover, captures on click, and cancels on
+Escape; it listens in the **capture phase** so a page that swallows its own
+clicks cannot block it. What comes back is the element's shape — selector, tag,
+id, classes, and an outerHTML with text nodes stripped. Dropping the prose is
+the cheap, reliable version of §12.2's "personal data stripped from the
+snippet", and loses nothing the model needs to write a selector. The derived
+selector skips hashed-looking class names, since a rule built on `css-1a2b3c`
+is dead at the next deploy.
+
+It also makes the **cosmetic dry run real**. Before, a cosmetic rule showed "no
+request-level preview" because there was nothing to check it against.
+`filter_list::cosmetic_matches` now answers the question the user actually has:
+*will this hide the thing I zapped?* Approximate by design — a full selector
+match needs a live DOM — so it checks the selector's rightmost compound, the
+part naming the element itself, and never claims more than it checked. A
+cosmetic rule that misses the picked element is reported as a miss and left
+unticked.
+
+Everything arriving from the page is treated as hostile: the page URL comes
+from the shell rather than the payload, a malformed or tag-less payload aborts
+instead of yielding an element, and the snippet is capped.
+
+Verified across 27 cases: matching on tag/class/id and combinations, the
+universal selector, class-order independence; misses on wrong tag, wrong id and
+an absent class; descendant and child combinators; a pseudo-class ignored
+rather than mis-parsed; the generic-tag rejection still winning over a rule
+that would have hit; and the picker aborting on garbage, on a tag-less payload,
+and capping an oversized snippet.
+
+Wiring it up found a bug in step 7's plumbing: `set_script_bridge` injected
+`qwebchannel.js` once per registered object, so a second bridge would have run
+the transport setup twice in the same page. It is now injected once.
 
 ## Local proxy (§10, player-facing half)
 

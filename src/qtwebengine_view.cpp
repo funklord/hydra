@@ -139,8 +139,14 @@ void qtwebengine_view::set_script_bridge(QObject *object, const QString &name) {
 	m_page->setWebChannel(m_channel, QWebEngineScript::ApplicationWorld);
 
 	// qwebchannel.js ships with Qt as a resource; the page-side script needs it
-	// before it can construct a QWebChannel.
-	QFile api(":/qtwebchannel/qwebchannel.js");
-	if (api.open(QIODevice::ReadOnly))
-		inject_script("qwebchannel", QString::fromUtf8(api.readAll()));
+	// before it can construct a QWebChannel. Inject it exactly once — more than
+	// one bridge object registers here, and a second copy of the transport
+	// would run the whole setup twice in the same page.
+	if (!m_channel_api_injected) {
+		QFile api(":/qtwebchannel/qwebchannel.js");
+		if (api.open(QIODevice::ReadOnly)) {
+			inject_script("qwebchannel", QString::fromUtf8(api.readAll()));
+			m_channel_api_injected = true;
+		}
+	}
 }

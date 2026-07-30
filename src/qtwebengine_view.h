@@ -35,4 +35,5 @@ private:
 	QWebEnginePage *m_page = nullptr;
 	permission_decider m_decider;
 	QWebChannel *m_channel = nullptr;
+	bool m_channel_api_injected = false;
 };

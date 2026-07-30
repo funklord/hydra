@@ -29,6 +29,7 @@ class filter_dialog : public QDialog {
 public:
 	filter_dialog(filter_signals *signals_source, filter_list *list,
 	               ai_provider *provider, const QString &site_host,
+	               const picked_element &picked = picked_element{},
 	               QWidget *parent = nullptr);
 
 private slots:
@@ -45,6 +46,7 @@ private:
 	filter_list    *m_list     = nullptr;
 	ai_provider    *m_provider = nullptr;
 	QString         m_site;
+	picked_element  m_picked;
 
 	QStackedWidget *m_pages   = nullptr;
 	QPlainTextEdit *m_payload = nullptr;

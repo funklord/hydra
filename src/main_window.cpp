@@ -22,6 +22,8 @@
 #include "keepass_bridge.h"
 #include "autofill_controller.h"
 #include "autofill_script.h"
+#include "element_picker.h"
+#include "picker_script.h"
 #include "policy.h"
 #include "node.h"
 
@@ -61,6 +63,12 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	}
 	m_keepass  = new keepass_bridge(this);
 	m_autofill = new autofill_controller(m_keepass, m_policy, this);
+	m_picker   = new element_picker(this);
+	connect(m_picker, &element_picker::picked, this,
+	         [this](const picked_element &) { open_filter_evolution(); });
+	connect(m_picker, &element_picker::aborted, this, [this] {
+		m_status->showMessage("Element pick cancelled.", 3000);
+	});
 	connect(m_keepass, &keepass_bridge::associated_changed, this,
 	         [this](bool ok, const QString &msg) {
 		m_status->showMessage((ok ? "KeePassXC: " : "KeePassXC: ") + msg, 6000);
@@ -245,6 +253,9 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *eva = tools_menu->addAction("Evolve Ad &Filters…", this,
 	                                      &main_window::open_filter_evolution);
 	eva->setStatusTip("Propose filter rules for ads that slipped through here");
+	QAction *zap = tools_menu->addAction("&Zap an Element…", this,
+	                                      &main_window::start_element_picker);
+	zap->setStatusTip("Click a leaked ad; Escape cancels");
 
 	QMenu *help_menu = menu->addMenu("&Help");
 	help_menu->addAction("&About", this, &main_window::on_about);
@@ -370,7 +381,8 @@ void main_window::open_filter_evolution() {
 		return;
 	}
 
-	filter_dialog dlg(m_signals, m_filters, chosen, v->url().host(), this);
+	filter_dialog dlg(m_signals, m_filters, chosen, v->url().host(),
+	                   m_picker->last(), this);
 	if (dlg.exec() == QDialog::Accepted && !m_filters_path.isEmpty())
 		m_filters->save(m_filters_path);
 }
@@ -397,6 +409,16 @@ void main_window::toggle_password_manager() {
 	} else {
 		m_status->showMessage("Already paired with KeePassXC.", 4000);
 	}
+}
+
+void main_window::start_element_picker() {
+	web_view_backend *v = current_view();
+	if (!v) {
+		m_status->showMessage("Open a page first.", 4000);
+		return;
+	}
+	m_status->showMessage("Click the element to block — Escape cancels.", 0);
+	m_picker->begin(v->url().toString());
 }
 
 void main_window::on_about() {
@@ -484,6 +506,11 @@ void main_window::open_node(node *n) {
 		view->set_script_bridge(m_autofill, "hydraAutofill");
 		view->inject_script("hydra-autofill",
 		                     QString::fromUtf8(autofill_script::source()));
+		// The element picker rides the same seam — that is why it waited for
+		// step 7 rather than shipping with the rest of §12.
+		view->set_script_bridge(m_picker, "hydraPicker");
+		view->inject_script("hydra-picker",
+		                     QString::fromUtf8(picker_script::source()));
 
 		connect(view, &web_view_backend::url_changed, this, [this, view](const QUrl &u) {
 			apply_policy(view, u.host());

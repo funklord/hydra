@@ -32,9 +32,9 @@ const char *k_system_prompt =
 
 filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
                               ai_provider *provider, const QString &site_host,
-                              QWidget *parent)
+                              const picked_element &picked, QWidget *parent)
 	: QDialog(parent), m_signals(signals_source), m_list(list),
-	  m_provider(provider), m_site(site_host) {
+	  m_provider(provider), m_site(site_host), m_picked(picked) {
 	setWindowTitle("Evolve ad filters");
 	resize(820, 560);
 	build_ui();
@@ -46,14 +46,28 @@ filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
 	// through. Personal data is not in it because only URLs of third-party
 	// ad-shaped requests are collected in the first place.
 	const QStringList suspects = m_signals->suspects_for(m_site);
-	QString payload = "Page: " + m_site + "\n\nRequests that were not blocked:\n";
+	QString payload = "Page: " + m_site + "\n";
+	if (m_picked.is_valid()) {
+		// The user pointed at the ad, so the model gets the element itself —
+		// this is what makes a *cosmetic* rule proposable at all (§12.1/§12.2).
+		payload += "\nThe user marked this element as an ad:\n";
+		payload += "  selector: " + m_picked.selector + "\n";
+		payload += "  tag: " + m_picked.tag + "\n";
+		if (!m_picked.id.isEmpty())
+			payload += "  id: " + m_picked.id + "\n";
+		if (!m_picked.classes.isEmpty())
+			payload += "  classes: " + m_picked.classes.join(' ') + "\n";
+		payload += "  shape: " + m_picked.snippet + "\n";
+	}
+	payload += "\nRequests that were not blocked:\n";
 	for (const QString &s : suspects)
 		payload += "  " + s + "\n";
 	m_payload->setPlainText(payload);
 
-	if (suspects.isEmpty())
-		m_status->setText("Nothing ad-shaped slipped through on this page — "
-		                  "there is nothing to propose against.");
+	if (suspects.isEmpty() && !m_picked.is_valid())
+		m_status->setText("Nothing ad-shaped slipped through on this page, and "
+		                  "no element was picked — there is nothing to propose "
+		                  "against.");
 }
 
 void filter_dialog::build_ui() {
@@ -90,7 +104,8 @@ void filter_dialog::build_ui() {
 	m_send  = buttons->addButton("&Send", QDialogButtonBox::ActionRole);
 	m_apply = buttons->addButton("&Accept Selected", QDialogButtonBox::AcceptRole);
 	m_apply->setEnabled(false);
-	m_send->setEnabled(!m_signals->suspects_for(m_site).isEmpty());
+	m_send->setEnabled(!m_signals->suspects_for(m_site).isEmpty() ||
+	                    m_picked.is_valid());
 	connect(m_send,  &QPushButton::clicked, this, &filter_dialog::on_send);
 	connect(m_apply, &QPushButton::clicked, this, &filter_dialog::on_accept);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -148,7 +163,7 @@ void filter_dialog::show_proposals(const QList<filter_rule> &rules) {
 	int rejected = 0;
 
 	for (const filter_rule &r : rules) {
-		const dry_run sim = filter_list::evaluate(r, observed, m_site);
+		const dry_run sim = filter_list::evaluate(r, observed, m_site, m_picked);
 
 		auto *row = new QTreeWidgetItem(m_rules);
 		row->setText(0, r.text);
@@ -165,13 +180,24 @@ void filter_dialog::show_proposals(const QList<filter_rule> &rules) {
 			continue;
 		}
 
-		row->setText(1, r.cosmetic
-		                    ? QString("cosmetic — no request-level preview")
-		                    : QString("would block %1 of %2 observed request(s)")
-		                          .arg(sim.would_block.size()).arg(observed.size()));
+		if (r.cosmetic) {
+			row->setText(1, sim.cosmetic_checked
+			                    ? (sim.cosmetic_hits
+			                           ? QString("hides the element you picked")
+			                           : QString("does NOT hide the element you picked"))
+			                    : QString("cosmetic — nothing picked to check against"));
+		} else {
+			row->setText(1, QString("would block %1 of %2 observed request(s)")
+			                    .arg(sim.would_block.size()).arg(observed.size()));
+		}
 		// A rule that matches nothing observed is not obviously wrong, but it
 		// is unproven — leave it unticked so accepting it is a deliberate act.
-		row->setCheckState(0, sim.would_block.isEmpty() ? Qt::Unchecked : Qt::Checked);
+		// Pre-tick only what is demonstrably doing something: a rule that
+		// matched nothing, or a cosmetic rule that misses the picked element,
+		// is unproven and stays for the user to decide.
+		const bool proven = r.cosmetic ? (sim.cosmetic_checked && sim.cosmetic_hits)
+		                               : !sim.would_block.isEmpty();
+		row->setCheckState(0, proven ? Qt::Checked : Qt::Unchecked);
 		for (const QString &u : sim.would_block)
 			new QTreeWidgetItem(row, QStringList{u});
 		m_accepted << r;

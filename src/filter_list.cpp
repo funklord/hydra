@@ -65,8 +65,54 @@ bool filter_list::matches(const QString &pattern, const QString &url) {
 	return !p.isEmpty() && url.contains(p);
 }
 
+bool filter_list::cosmetic_matches(const QString &selector, const picked_element &e) {
+	if (!e.is_valid())
+		return false;
+	// The rightmost compound is the one that describes the target element;
+	// anything to its left constrains ancestors we cannot see from here.
+	QString last = selector.trimmed();
+	for (const QChar sep : {QChar(' '), QChar('>'), QChar('+'), QChar('~')}) {
+		const int at = last.lastIndexOf(sep);
+		if (at >= 0)
+			last = last.mid(at + 1);
+	}
+	last = last.trimmed();
+	if (last.isEmpty())
+		return false;
+
+	// Split "tag#id.a.b" into its parts, keeping the leading tag if present.
+	QString tag, token;
+	QStringList ids, classes;
+	QChar kind = QChar(' ');
+	auto flush = [&] {
+		if (token.isEmpty())
+			return;
+		if (kind == QChar('#'))      ids << token;
+		else if (kind == QChar('.')) classes << token;
+		else                         tag = token.toLower();
+		token.clear();
+	};
+	for (const QChar c : last) {
+		if (c == QChar('#') || c == QChar('.')) { flush(); kind = c; continue; }
+		if (c == QChar('[') || c == QChar(':')) break;   // attribute/pseudo: not checked
+		token.append(c);
+	}
+	flush();
+
+	if (!tag.isEmpty() && tag != "*" && tag != e.tag)
+		return false;
+	for (const QString &id : ids)
+		if (id != e.id)
+			return false;
+	for (const QString &c : classes)
+		if (!e.classes.contains(c))
+			return false;
+	return !tag.isEmpty() || !ids.isEmpty() || !classes.isEmpty();
+}
+
 dry_run filter_list::evaluate(const filter_rule &r, const QStringList &observed,
-                               const QString &site_host) {
+                               const QString &site_host,
+                               const picked_element &picked) {
 	dry_run out;
 
 	// --- Static breadth check: reject dangerously broad rules (§12.4).
@@ -109,6 +155,11 @@ dry_run filter_list::evaluate(const filter_rule &r, const QStringList &observed,
 	}
 
 	// --- Simulation: show exactly what it would have blocked (§12.4).
+	if (r.cosmetic && picked.is_valid()) {
+		out.cosmetic_checked = true;
+		out.cosmetic_hits =
+			cosmetic_matches(r.text.mid(r.text.indexOf("##") + 2).trimmed(), picked);
+	}
 	if (!r.cosmetic) {
 		for (const QString &url : observed)
 			if (matches(r.text, url))

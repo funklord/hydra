@@ -36,6 +36,7 @@ class request_filter;
 class keepass_bridge;
 class autofill_controller;
 class local_proxy;
+class element_picker;
 class ollama_provider;
 class claude_provider;
 struct node;
@@ -86,6 +87,7 @@ private slots:
 	void open_media();
 	void open_filter_evolution();
 	void toggle_password_manager();
+	void start_element_picker();
 	void on_media_found(const QString &site_host, int count);
 
 private:
@@ -125,6 +127,7 @@ private:
 	player_launcher    *m_players       = nullptr;
 	download_manager   *m_downloads     = nullptr;
 	local_proxy        *m_local_proxy   = nullptr;
+	element_picker     *m_picker        = nullptr;
 	filter_signals     *m_signals       = nullptr;
 	filter_list        *m_filters       = nullptr;
 	keepass_bridge     *m_keepass       = nullptr;

@@ -98,6 +98,9 @@ add_executable(hydra
     src/autofill_controller.cpp
     src/autofill_controller.h
     src/autofill_script.h
+    src/element_picker.cpp
+    src/element_picker.h
+    src/picker_script.h
     # The web view seam: the shell talks only to these two interfaces
     # (architecture doc §19.2); the qtwebengine_* pair is the desktop
     # implementation, and an Android one slots in beside it later.
