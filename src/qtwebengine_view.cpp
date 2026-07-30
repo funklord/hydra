@@ -128,6 +128,20 @@ void qtwebengine_view::inject_script(const QString &name, const QString &source)
 	m_page->scripts().insert(s);
 }
 
+void qtwebengine_view::inject_main_world_script(const QString &name,
+                                                 const QString &source) {
+	QWebEngineScript s;
+	s.setName(name);
+	s.setSourceCode(source);
+	s.setInjectionPoint(QWebEngineScript::DocumentCreation);
+	// MainWorld and every frame — see the comment on the seam. Both are
+	// required rather than convenient: an isolated world cannot wrap the page's
+	// MediaSource, and on real sites the player lives in an iframe.
+	s.setWorldId(QWebEngineScript::MainWorld);
+	s.setRunsOnSubFrames(true);
+	m_page->scripts().insert(s);
+}
+
 void qtwebengine_view::set_script_bridge(QObject *object, const QString &name) {
 	if (!object) {
 		m_page->setWebChannel(nullptr);

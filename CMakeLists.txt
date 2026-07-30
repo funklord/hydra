@@ -97,6 +97,10 @@ add_executable(hydra
     # a real URL makes every downstream feature work normally.
     src/ytdlp_resolver.cpp
     src/ytdlp_resolver.h
+    # The Media Source tap (architecture doc §11.6): main-world hook, isolated
+    # relay, and the shell-side record of what a page is actually playing.
+    src/mse_tap.cpp
+    src/mse_tap.h
     src/download_manager.cpp
     src/download_manager.h
     # The download transport seam (architecture doc §11.4): the manager owns

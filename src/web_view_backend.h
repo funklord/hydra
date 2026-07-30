@@ -61,6 +61,22 @@ public:
 	// the seam instead of appearing as QWebEngineScript in the shell.
 	virtual void inject_script(const QString &name, const QString &source) = 0;
 
+	// The same, but in the page's **own** world, and in every frame.
+	//
+	// Separate from inject_script() rather than a flag on it, because this is a
+	// security escalation and should be greppable. An isolated world has its
+	// own globals, so a script there cannot see or wrap the page's objects —
+	// which is exactly why autofill and the picker live in one, and exactly why
+	// a Media Source tap (§11.6) cannot. A script injected here is visible and
+	// modifiable by the page, so it must hold nothing worth stealing and grant
+	// nothing: no bridge, no tokens, no privileged calls. It reports by
+	// dispatching DOM events that an isolated-world relay picks up.
+	//
+	// Frames matter too: on real sites the player is in a third-party iframe,
+	// so a tap confined to the top frame would see nothing at all.
+	virtual void inject_main_world_script(const QString &name,
+	                                       const QString &source) = 0;
+
 	// Expose `object` to injected scripts under `name`. Desktop wires this
 	// through QWebChannel; Android would use addJavascriptInterface. Passing
 	// nullptr withdraws it.

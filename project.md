@@ -138,6 +138,7 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Media detector | `media_detector.{h,cpp}`, `media_dialog.{h,cpp}` | URL-shaped classification, segment attribution, Watch/Download list |
 | Player handoff | `player_launcher.{h,cpp}` | PATH probe, capability routing, URL-not-pipe launch |
 | yt-dlp handoff | `ytdlp_resolver.{h,cpp}` | resolve a page to real stream URLs + headers; PATH or vendored |
+| MSE tap | `mse_tap.{h,cpp}` | main-world hook + isolated relay; reports what a page is actually playing |
 | Downloads | `download_manager.{h,cpp}`, `download_source.h`, `http_download_source.{h,cpp}` | transport seam: manager owns queue/consent, source owns bytes |
 | BitTorrent | `torrent_download_source.{h,cpp}` | libtorrent-rasterbar; magnet + .torrent, seeding, info-hash resume (optional dep) |
 | Downloads UI | `downloads_dialog.{h,cpp}` | one list for every source, progress bars, public-transfer marking (Ctrl+J) |
@@ -880,6 +881,37 @@ implementation order are in arch §11.4.
 
 Recorded verbatim-in-substance so they are not lost; none of these are started.
 
+
+## Media Source tap (implemented, detection only)
+
+`mse_tap` reports what a page is actually feeding its `<video>`, for the sites
+where watching request URLs finds nothing. Verified on the site from the
+section below, through the app's own seams: URL detection found **0 items**
+while the tap reported
+`video/mp4;codecs=mp4a.40.2,avc1.64001E, 5,168,080 bytes, pos 13.1s`, and the
+media badge read **"Media (playing)"** instead of staying empty on a page that
+was plainly playing video.
+
+**Two scripts, and the split is the security design.** The hook must run in the
+page's own world, because an isolated world cannot wrap the page's
+`MediaSource` — verified, not assumed. So the main-world half holds nothing and
+grants nothing: it wraps two methods, counts bytes, and dispatches a DOM
+`CustomEvent`. The privileged half — the QWebChannel bridge — stays in the
+isolated world where autofill already lives and only listens for those events.
+The page can forge them, so everything arriving is treated as a claim: the site
+key and mime are length-capped and a site is bounded to 8 mime entries, so a
+page calling `report()` in a loop cannot grow the map.
+
+The seam gained `inject_main_world_script()` as a **separate call** rather than
+a flag on `inject_script()`, so the escalation is greppable. It also runs on
+subframes, which is not optional: on real sites the player is a third-party
+iframe, and a tap confined to the top frame sees nothing.
+
+**Detection only.** Getting the bytes out belongs on the local proxy (arch
+§11.6) — a POST to a capture token, not this channel — and is not done.
+Observed while testing: the page reported `duration ≈ 7469s` for a short
+episode, which is a placeholder an unbounded MediaSource commonly carries, and
+a good reminder that these numbers are the page's claims rather than facts.
 
 ## yt-dlp handoff (implemented)
 

@@ -26,6 +26,7 @@ public:
 	void set_permission_decider(permission_decider fn) override;
 	void set_zoom_factor(double factor) override;
 	void inject_script(const QString &name, const QString &source) override;
+	void inject_main_world_script(const QString &name, const QString &source) override;
 	void set_script_bridge(QObject *object, const QString &name) override;
 	QByteArray save_state() const override;
 	bool       restore_state(const QByteArray &blob) override;

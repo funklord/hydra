@@ -20,6 +20,7 @@
 #include "downloads_dialog.h"
 #include "settings_dialog.h"
 #include "ytdlp_resolver.h"
+#include "mse_tap.h"
 #include "ai_provider.h"
 #include "local_proxy.h"
 #include "filter_signals.h"
@@ -54,6 +55,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QDateTime>
+#include <QLocale>
 #include <QDataStream>
 #include <QCloseEvent>
 #include <QSet>
@@ -86,6 +88,13 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		filter->add_observer(m_media);
 		filter->add_observer(m_signals);
 	}
+	// The §11.6 tap: what a page is actually feeding its <video>, for the sites
+	// where watching request URLs finds nothing.
+	m_mse = new mse_tap(this);
+	connect(m_mse, &mse_tap::site_updated, this, [this](const QString &host) {
+		refresh_media_affordance(host);
+	});
+
 	m_keepass  = new keepass_bridge(this);
 	m_autofill = new autofill_controller(m_keepass, m_policy, this);
 	m_picker   = new element_picker(this);
@@ -461,11 +470,40 @@ void main_window::open_reorganizer() {
 }
 
 void main_window::on_media_found(const QString &site_host, int count) {
+	Q_UNUSED(count)
+	refresh_media_affordance(site_host);
+}
+
+void main_window::refresh_media_affordance(const QString &site_host) {
 	web_view_backend *v = current_view();
 	if (!v || v->url().host() != site_host)
 		return;   // detection on a background tab; don't retitle this one
-	m_media_action->setVisible(count > 0);
-	m_media_action->setText(QString("Media (%1)").arg(count));
+
+	const int  found   = m_media->count_for(site_host);
+	const bool playing = m_mse && m_mse->active_for(site_host);
+	m_media_action->setVisible(found > 0 || playing);
+
+	if (found > 0) {
+		m_media_action->setText(QString("Media (%1)").arg(found));
+		m_media_action->setToolTip("Watch or download media on this page");
+		return;
+	}
+
+	// The §11.6 case: the page is demonstrably playing, and watching request
+	// URLs found nothing. Saying so is worth more than an empty badge, which
+	// on such a site is simply a lie.
+	qint64 buffered = 0;
+	QString mime;
+	for (const mse_stream &s : m_mse->streams_for(site_host)) {
+		buffered += s.bytes;
+		if (mime.isEmpty())
+			mime = s.mime;
+	}
+	m_media_action->setText("Media (playing)");
+	m_media_action->setToolTip(
+		QString("This page is playing video (%1 buffered, %2), but no stream "
+		         "URL was detected — try Tools ▸ Find Media on This Page.")
+		    .arg(QLocale().formattedDataSize(buffered), mime));
 }
 
 void main_window::open_media() {
@@ -641,6 +679,12 @@ void main_window::open_node(node *n) {
 		view->set_script_bridge(m_picker, "hydraPicker");
 		view->inject_script("hydra-picker",
 		                     QString::fromUtf8(picker_script::source()));
+		// §11.6, in two halves. The relay is privileged and stays isolated with
+		// the others; the hook is the only thing that goes into the page's own
+		// world, and it carries nothing.
+		view->set_script_bridge(m_mse, mse_tap::bridge_name());
+		view->inject_script("hydra-mse-relay", mse_tap::relay_source());
+		view->inject_main_world_script("hydra-mse-hook", mse_tap::hook_source());
 
 		connect(view, &web_view_backend::url_changed, this, [this, view](const QUrl &u) {
 			apply_policy(view, u.host());
