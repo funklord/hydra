@@ -20,6 +20,7 @@ const info k_info[] = {
 	{ "microphone",        "Microphone"          },
 	{ "notifications",     "Notifications"       },
 	{ "referer",           "Referer header"      },
+	{ "autofill",          "Password autofill"   },
 };
 
 }  // namespace

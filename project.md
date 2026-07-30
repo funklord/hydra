@@ -105,7 +105,7 @@ Note that going beyond Linux needs one code change first: `main.cpp`
 unconditionally forces `QT_QPA_PLATFORM=xcb`, which has to become
 Linux-conditional before a Windows or macOS build is meaningful.
 
-## What is implemented (build-order steps 1–6)
+## What is implemented (build-order steps 1–7)
 
 | Area | Files | Notes |
 |---|---|---|
@@ -126,6 +126,8 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Player handoff | `player_launcher.{h,cpp}` | PATH probe, capability routing, URL-not-pipe launch |
 | Downloads | `download_manager.{h,cpp}` | queue, resume via Range, per-node association |
 | Filter evolution | `filter_list.{h,cpp}`, `filter_signals.{h,cpp}`, `filter_dialog.{h,cpp}` | passive signals, dry-run validation, diff/accept |
+| Password manager | `keepass_protocol.{h,cpp}`, `keepass_bridge.{h,cpp}`, `crypto_box.{h,cpp}` | KeePassXC-Browser client; no vault, no master password |
+| Autofill | `autofill_controller.{h,cpp}`, `autofill_script.h` | QWebChannel bridge, origin gate, policy-governed |
 
 Persistence: `policy.json`, `state/<id>.blob`, and the tree file all sit next to
 the outline file passed on the command line.
@@ -251,12 +253,123 @@ applying one is currently a no-op.
 no API key in the development environment. The request/response shapes follow
 the documented contracts, but the first real call is unverified.
 
+## Interceptor consumers (step 6, done)
+
+Both features consume the one request stream the blocker already rides (§10)
+rather than adding a second sensor: `request_filter` gained a
+`request_observer` seam and the interceptor notifies it for every request,
+blocked or not — the media detector wants what loaded, filter evolution wants
+what slipped through. Observers are called off the UI thread and are
+mutex-guarded accordingly.
+
+**Media (§11).** `media_detector` classifies by URL shape, which is all a
+request-only interceptor can do; real Content-Types and manifest bodies need
+the optional local proxy (§10). Segments (`.ts`, `.m4s`) are tracked but never
+offered for saving — they exist to answer *which stream is playing*, and each
+is credited to the manifest sharing the longest directory prefix, so the one
+being fetched sorts first. That is §11.3's primary-stream heuristic, made
+answerable without response bodies.
+
+`player_launcher` probes `PATH` and resolves the default from what is present —
+it never assumes mpv exists. Launch always hands over a **URL, never a stdin
+pipe**, because a pipe has no random access and the player could not seek.
+Routing is capability-aware: handing a manifest to classic mplayer warns
+explicitly rather than stumbling silently. `download_manager` is one queue with
+`Range`-based resume and jobs tagged with the node they came from; it refuses
+manifests rather than saving playlist text and calling it a video.
+
+**Filter evolution (§12).** `filter_signals` logs third-party ad-shaped
+requests that were *not* blocked — a blocked one is the system working, not a
+gap — and never flags a first-party request, since proposing a rule against one
+is how a filter list breaks the page it was meant to fix.
+`filter_list::evaluate` is the safety core and the analogue of the
+reorganizer's invariant check: nothing reaches the accept UI until a static
+breadth check and a simulation against the page's real observed requests have
+both run. A bare TLD, the page's own origin, an undomained cosmetic rule and a
+generic-tag selector are rejected outright; survivors are shown with exactly
+what they would block, and one matching nothing observed is left unticked as
+unproven rather than wrong. Accepted rules merge into `filters-ai.txt`, apart
+from any imported EasyList (§12.5).
+
+Verified offline across 23 cases, all passing — classification and the
+saveable/segment split, segment attribution picking the right primary, blocked
+media not offered, all four dangerous-rule rejections, the dry run reporting
+exactly what it matches, first-party and already-blocked requests excluded from
+signals, and `||host^` matching subdomains but not a suffix-only lookalike.
+
+**Not done from §11–§12:** segment assembly and the ffmpeg remux, tee-to-disk
+for scrubbing a live stream, the local proxy that would inject Referer/cookies
+for CDNs that 403 a naked stream URL, a downloads window, the per-site
+auto-detect toggle, and regression re-runs over a known-clean page set.
+
+## Password manager (step 7, done)
+
+**Tools → Connect to KeePassXC…**  The design choice §13 leads with is what
+this does *not* do: no `.kdbx` parsing, no master password, no vault of our
+own. KeePassXC is already an unlocked local daemon in the session, so Hydra
+becomes a first-class client of it. Transport is the Unix socket directly —
+`keepassxc-proxy` exists only to bridge stdio for sandboxed extensions and a
+native app skips it.
+
+**The protocol is split from the crypto and the socket**, the same way
+`request_filter` is split from the interceptor. `keepass_protocol` is pure
+functions: message shapes, reply parsing, and the per-message nonce discipline.
+That is where protocol bugs live, and keeping it free of libsodium and sockets
+means it is testable with neither installed.
+
+**libsodium is optional at build time.** Without it `crypto_box` reports
+`available() == false`, the bridge refuses to start, and the menu item is
+disabled — the protocol is end-to-end encrypted (X25519 + XSalsa20-Poly1305),
+so there is no degraded mode worth offering, but an optional dependency should
+not break the build. Install `libsodium-dev` to enable it.
+
+**Autofill** injects a content script at document creation into an isolated
+world, talking to `autofill_controller` over `QWebChannel`. The script does the
+field detection every password manager has to do — `type=password`,
+`autocomplete` values, name/id/aria heuristics — assigns through the native
+value setter so framework-managed inputs see the change, and **never
+auto-submits**.
+
+The security rules are enforced in C++, not trusted to the script, because a
+page can rewrite anything in its own document:
+
+- **The page does not choose the origin it asks about.** The shell sets it from
+  the view's real URL on navigation; a request naming anything else is refused.
+  That is what stops a cross-origin iframe asking for the top page's
+  credentials, and a lookalike asking for the real site's.
+- **Autofill is a policy_engine feature**, so the shield's tri-state and the
+  global default govern it exactly like JavaScript or cookies.
+- **HTTPS-only by default** — filling a password over plain HTTP puts it on the
+  wire.
+- Credentials are held only for the fill that asked, and a navigation
+  invalidates any request in flight.
+
+Verified offline across 20 cases, all passing: nonce increment including the
+carry into byte 1 and the full all-`0xFF` wrap (a nonce reuse is the one
+failure this protocol cannot tolerate); message shapes including that the
+envelope carries only ciphertext and leaks no plaintext URL; both error reply
+shapes, and that an error reply yields no entries; and the full origin gate —
+a different origin, an empty one, a suffix lookalike (`bank.test.evil.test`),
+plain HTTP, and a policy-blocked site each refused, with navigation
+re-pointing the gate.
+
+**Not exercised against a live KeePassXC**, and libsodium is not installed
+here, so the socket handshake, the encrypt/decrypt path, and association have
+never run. Also not done from §13: the key icon and entry-picker UI (a single
+match fills automatically; multiple matches are deliberately left alone rather
+than guessed at), `set-login` on new-credential submit, `generate-password`,
+storing the association key encrypted at rest via Secret Service — it is in
+memory only, so pairing does not survive a restart — and the optional
+direct-`.kdbx` fallback, which §13.4 recommends against anyway.
+
+**This also unblocks §12.1's element picker**, which was deferred from step 6
+for exactly this plumbing. It is not built yet, but the injection and bridge
+seam it needs now exists.
+
 ## What is next (in order)
-- **6 — Interceptor consumers.** Media detector, download manager, and the
-  filter-evolution loop (arch §11–§12), reusing the interceptor and the
-  diff/accept UI.
-- **7 — Password manager.** KeePassXC-Browser protocol bridge + `QWebChannel`
-  autofill; Autofill as a policy_engine feature (arch §13).
+- **Remaining gaps**, listed per step above — the local proxy (§10) is the
+  biggest single unlock, since it covers stream assembly, request context for
+  external players, and response-level filtering at once.
 - **Android phase (deferred).** System WebView backend, adaptive drawer layout,
   Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
 

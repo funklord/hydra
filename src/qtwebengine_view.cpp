@@ -8,6 +8,10 @@
 #include <QWebEngineProfile>
 #include <QWebEngineHistory>
 #include <QWebEngineSettings>
+#include <QWebEngineScript>
+#include <QWebEngineScriptCollection>
+#include <QWebChannel>
+#include <QFile>
 
 qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	: web_view_backend(nullptr) {
@@ -109,4 +113,34 @@ bool qtwebengine_view::restore_state(const QByteArray &blob) {
 	QDataStream ds(&copy, QIODevice::ReadOnly);
 	ds >> *m_view->history();
 	return ds.status() == QDataStream::Ok;
+}
+
+void qtwebengine_view::inject_script(const QString &name, const QString &source) {
+	QWebEngineScript s;
+	s.setName(name);
+	s.setSourceCode(source);
+	// Document creation, so the script is in place before the page's own code
+	// runs; and an isolated world so the page cannot read or rewrite it (§13.2).
+	s.setInjectionPoint(QWebEngineScript::DocumentCreation);
+	s.setWorldId(QWebEngineScript::ApplicationWorld);
+	s.setRunsOnSubFrames(false);   // top frame only; cross-origin iframes do not fill
+	m_page->scripts().insert(s);
+}
+
+void qtwebengine_view::set_script_bridge(QObject *object, const QString &name) {
+	if (!object) {
+		m_page->setWebChannel(nullptr);
+		return;
+	}
+	if (!m_channel)
+		m_channel = new QWebChannel(this);
+	m_channel->registerObject(name, object);
+	// Same world the content script runs in, or the two cannot see each other.
+	m_page->setWebChannel(m_channel, QWebEngineScript::ApplicationWorld);
+
+	// qwebchannel.js ships with Qt as a resource; the page-side script needs it
+	// before it can construct a QWebChannel.
+	QFile api(":/qtwebchannel/qwebchannel.js");
+	if (api.open(QIODevice::ReadOnly))
+		inject_script("qwebchannel", QString::fromUtf8(api.readAll()));
 }

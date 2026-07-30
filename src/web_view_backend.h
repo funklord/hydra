@@ -54,6 +54,17 @@ public:
 	// reliable scaling path (architecture doc §8.1); every engine has this.
 	virtual void set_zoom_factor(double factor) = 0;
 
+	// Run `source` in every page this view loads, in an isolated world so the
+	// page cannot see or tamper with it (architecture doc §13.2). Android's
+	// System WebView has its own injection mechanism, which is why this sits on
+	// the seam instead of appearing as QWebEngineScript in the shell.
+	virtual void inject_script(const QString &name, const QString &source) = 0;
+
+	// Expose `object` to injected scripts under `name`. Desktop wires this
+	// through QWebChannel; Android would use addJavascriptInterface. Passing
+	// nullptr withdraws it.
+	virtual void set_script_bridge(QObject *object, const QString &name) = 0;
+
 	// Session state — navigation history and whatever else the engine can
 	// serialize. Opaque to the shell, which only stores and returns the blob
 	// (state_store keys it by node id, architecture doc §4.2).

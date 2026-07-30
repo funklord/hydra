@@ -331,6 +331,8 @@ The AI diff/accept pipeline (Spine 3) pointed at the filter list instead of the 
 
 "That just works" points at a specific design choice: **do not build a password manager, and do not parse `.kdbx` or ever touch the master password.** Become a first-class client of the vault the user already runs. (KeePassX proper is unmaintained and has no browser-integration protocol; the maintained fork **KeePassXC** ships the protocol its official extensions use, and is the target here.)
 
+**Status: done**, unexercised against a live KeePassXC. `keepass_protocol` holds the wire format and nonce discipline as pure functions, `crypto_box` is a thin libsodium shim (optional at build time), `keepass_bridge` is the socket client, and `autofill_controller` plus the injected script are the §13.2 layer. Autofill is a policy feature. Not built: the entry-picker UI, `set-login`, `generate-password`, and encrypted-at-rest storage of the association key.
+
 ### 13.1 Approach — speak the KeePassXC-Browser protocol
 
 KeePassXC exposes a local **BrowserServer** that its official extensions talk to. Because Browser Overlord *is* a native app that owns its engine, it can be that client directly:

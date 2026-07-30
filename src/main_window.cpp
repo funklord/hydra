@@ -18,6 +18,9 @@
 #include "filter_signals.h"
 #include "filter_list.h"
 #include "filter_dialog.h"
+#include "keepass_bridge.h"
+#include "autofill_controller.h"
+#include "autofill_script.h"
 #include "policy.h"
 #include "node.h"
 
@@ -55,6 +58,16 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		filter->add_observer(m_media);
 		filter->add_observer(m_signals);
 	}
+	m_keepass  = new keepass_bridge(this);
+	m_autofill = new autofill_controller(m_keepass, m_policy, this);
+	connect(m_keepass, &keepass_bridge::associated_changed, this,
+	         [this](bool ok, const QString &msg) {
+		m_status->showMessage((ok ? "KeePassXC: " : "KeePassXC: ") + msg, 6000);
+	});
+	connect(m_keepass, &keepass_bridge::error, this, [this](const QString &msg) {
+		m_status->showMessage("KeePassXC: " + msg, 8000);
+	});
+
 	m_players   = new player_launcher;
 	m_downloads = new download_manager(this);
 	m_filters   = new filter_list;
@@ -213,6 +226,12 @@ QMenuBar *main_window::build_menu_bar() {
 
 	QMenu *tools_menu = menu->addMenu("&Tools");
 	tools_menu->addAction("&Site Controls…", this, &main_window::open_site_controls);
+	QAction *kp = tools_menu->addAction("Connect to &KeePassXC…", this,
+	                                     &main_window::toggle_password_manager);
+	kp->setStatusTip(keepass_bridge::supported()
+	                     ? "Pair with a running KeePassXC for autofill"
+	                     : "Unavailable: built without libsodium");
+	kp->setEnabled(keepass_bridge::supported());
 	tools_menu->addSeparator();
 	QAction *reorg = tools_menu->addAction("&Reorganize Tree with AI…", this,
                                         &main_window::open_reorganizer);
@@ -346,6 +365,30 @@ void main_window::open_filter_evolution() {
 		m_filters->save(m_filters_path);
 }
 
+void main_window::toggle_password_manager() {
+	if (!keepass_bridge::supported()) {
+		m_status->showMessage("Built without libsodium — install libsodium-dev "
+		                      "and rebuild.", 8000);
+		return;
+	}
+	if (!m_keepass->connected()) {
+		connect(m_keepass, &keepass_bridge::ready, this, [this] {
+			// A stored pairing is tested rather than re-created, so the user is
+			// not asked to confirm a new connection on every launch (§13.1).
+			if (m_keepass->associated())
+				m_keepass->test_association();
+			else
+				m_keepass->associate();
+		}, Qt::SingleShotConnection);
+		m_status->showMessage("Connecting to KeePassXC…", 4000);
+		m_keepass->start();
+	} else if (!m_keepass->associated()) {
+		m_keepass->associate();
+	} else {
+		m_status->showMessage("Already paired with KeePassXC.", 4000);
+	}
+}
+
 void main_window::on_about() {
 	QMessageBox::about(this, "About Hydra",
 		"<b>Hydra</b><br>"
@@ -425,8 +468,19 @@ void main_window::open_node(node *n) {
 
 		apply_policy(view, QUrl::fromUserInput(n->url).host());
 
+		// Autofill plumbing (architecture doc §13.2): the content script runs
+		// in an isolated world and talks to a bridge object the shell owns.
+		// The page never sets its own origin — the shell does, on navigation.
+		view->set_script_bridge(m_autofill, "hydraAutofill");
+		view->inject_script("hydra-autofill",
+		                     QString::fromUtf8(autofill_script::source()));
+
 		connect(view, &web_view_backend::url_changed, this, [this, view](const QUrl &u) {
 			apply_policy(view, u.host());
+			if (view == current_view())
+				m_autofill->set_page_origin(
+					u.adjusted(QUrl::RemovePath | QUrl::RemoveQuery |
+					            QUrl::RemoveFragment).toString());
 			if (view == current_view())
 				update_address(u.toString());
 		});

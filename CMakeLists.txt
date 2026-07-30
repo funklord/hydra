@@ -14,7 +14,20 @@ set(CMAKE_AUTOMOC ON)
 # replacement Qt 6.4 introduced (the older order is deprecated from 6.4 on).
 # Asking for it here turns "too old Qt" into a clear configure-time failure
 # instead of a confusing compile error. Developed and tested against 6.8.2.
-find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets WebEngineWidgets Network)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets WebEngineWidgets Network WebChannel)
+
+# libsodium is optional: without it the KeePassXC bridge reports itself
+# unusable (the protocol is end-to-end encrypted, so there is no degraded
+# mode), but everything else still builds. Install libsodium-dev to enable it.
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(SODIUM QUIET libsodium)
+endif()
+if(SODIUM_FOUND)
+    message(STATUS "libsodium found — KeePassXC password manager enabled")
+else()
+    message(WARNING "libsodium not found — KeePassXC password manager disabled")
+endif()
 
 add_executable(hydra
     src/main.cpp
@@ -68,6 +81,17 @@ add_executable(hydra
     src/filter_signals.h
     src/filter_dialog.cpp
     src/filter_dialog.h
+    # Password manager (architecture doc §13): KeePassXC-Browser protocol
+    # client, the QWebChannel autofill layer, and Autofill as a policy feature.
+    src/crypto_box.cpp
+    src/crypto_box.h
+    src/keepass_protocol.cpp
+    src/keepass_protocol.h
+    src/keepass_bridge.cpp
+    src/keepass_bridge.h
+    src/autofill_controller.cpp
+    src/autofill_controller.h
+    src/autofill_script.h
     # The web view seam: the shell talks only to these two interfaces
     # (architecture doc §19.2); the qtwebengine_* pair is the desktop
     # implementation, and an Android one slots in beside it later.
@@ -85,7 +109,14 @@ target_link_libraries(hydra PRIVATE
     Qt6::Widgets
     Qt6::WebEngineWidgets
     Qt6::Network
+    Qt6::WebChannel
 )
+
+if(SODIUM_FOUND)
+    target_compile_definitions(hydra PRIVATE HYDRA_HAVE_SODIUM)
+    target_include_directories(hydra PRIVATE ${SODIUM_INCLUDE_DIRS})
+    target_link_libraries(hydra PRIVATE ${SODIUM_LIBRARIES})
+endif()
 
 # Copy the sample tree next to the binary so the app finds it on first run.
 add_custom_command(TARGET hydra POST_BUILD

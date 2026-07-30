@@ -6,6 +6,7 @@
 class QWebEngineView;
 class QWebEnginePage;
 class QWebEngineProfile;
+class QWebChannel;
 
 // The desktop web_view_backend: a QWebEngineView plus its page, wrapped so the
 // shell never names either (architecture doc §19.2). Everything
@@ -24,6 +25,8 @@ public:
 	void apply_settings(const view_settings &s) override;
 	void set_permission_decider(permission_decider fn) override;
 	void set_zoom_factor(double factor) override;
+	void inject_script(const QString &name, const QString &source) override;
+	void set_script_bridge(QObject *object, const QString &name) override;
 	QByteArray save_state() const override;
 	bool       restore_state(const QByteArray &blob) override;
 
@@ -31,4 +34,5 @@ private:
 	QWebEngineView *m_view = nullptr;
 	QWebEnginePage *m_page = nullptr;
 	permission_decider m_decider;
+	QWebChannel *m_channel = nullptr;
 };

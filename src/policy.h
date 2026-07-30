@@ -21,6 +21,7 @@ enum class feature : int {
 	microphone,
 	notifications,
 	referer,
+	autofill,
 	count
 };
 

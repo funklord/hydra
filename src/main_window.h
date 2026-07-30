@@ -33,6 +33,8 @@ class download_manager;
 class filter_signals;
 class filter_list;
 class request_filter;
+class keepass_bridge;
+class autofill_controller;
 class ollama_provider;
 class claude_provider;
 struct node;
@@ -82,6 +84,7 @@ private slots:
 	void open_reorganizer();
 	void open_media();
 	void open_filter_evolution();
+	void toggle_password_manager();
 	void on_media_found(const QString &site_host, int count);
 
 private:
@@ -122,6 +125,8 @@ private:
 	download_manager   *m_downloads     = nullptr;
 	filter_signals     *m_signals       = nullptr;
 	filter_list        *m_filters       = nullptr;
+	keepass_bridge     *m_keepass       = nullptr;
+	autofill_controller *m_autofill     = nullptr;
 	QAction            *m_media_action  = nullptr;
 	QString             m_filters_path;
 	QAction            *m_kiosk_action  = nullptr;

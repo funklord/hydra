@@ -43,6 +43,9 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	set_global_default(feature::microphone,          setting::block);
 	set_global_default(feature::notifications,       setting::block);
 	set_global_default(feature::referer,             setting::allow);
+	// Autofill defaults on; the per-site tri-state and the strict origin gate
+	// are what actually govern it (§13.3).
+	set_global_default(feature::autofill,            setting::allow);
 }
 
 QString policy_engine::etld_plus_one(const QString &host) {
