@@ -182,7 +182,18 @@ void media_dialog::watch(const media_item &item) {
 	const QString warn = m_players->warning_for(item);
 	// Hand the player a localhost URL when the proxy is up, so the CDN sees
 	// the page's Referer and cookies rather than a naked request (§11.3).
-	const QUrl via = m_proxy ? m_proxy->publish(item.url, m_ctx) : QUrl();
+	// The page's own context, overlaid with anything this particular stream
+	// asked for. A learned extractor names the headers its CDN checks, and
+	// they are useless if they stop here.
+	stream_context ctx = m_ctx;
+	for (auto it = item.headers.cbegin(); it != item.headers.cend(); ++it) {
+		const QString k = it.key().toLower();
+		if (k == "referer" || k == "referrer") ctx.referer    = it.value();
+		else if (k == "user-agent")            ctx.user_agent = it.value();
+		else if (k == "cookie")                ctx.cookies    = it.value();
+		else                                   ctx.extra.insert(it.key(), it.value());
+	}
+	const QUrl via = m_proxy ? m_proxy->publish(item.url, ctx) : QUrl();
 	QString error;
 	if (!m_players->play(item, &error, via)) {
 		m_status->setText("<b>" + error.toHtmlEscaped() + "</b>");

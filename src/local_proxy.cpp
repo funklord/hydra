@@ -418,6 +418,11 @@ void local_proxy::serve(QTcpSocket *client, const QByteArray &head,
 		req.setRawHeader("User-Agent", e.ctx.user_agent.toUtf8());
 	if (!e.ctx.cookies.isEmpty())
 		req.setRawHeader("Cookie", e.ctx.cookies.toUtf8());
+	for (auto it = e.ctx.extra.cbegin(); it != e.ctx.extra.cend(); ++it) {
+		if (it.key().isEmpty() || it.value().isEmpty())
+			continue;
+		req.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
+	}
 
 	// Range transparency: forward the player's range verbatim so it can seek.
 	const QByteArray range = header_of(head, "Range");

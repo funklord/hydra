@@ -939,6 +939,21 @@ is sent folded, a valid proposal becomes acceptable and stores with its fence
 stripped, an invented URL leaves the accept button disabled and stores nothing,
 and a stored script stops matching when the evidence changes.
 
+**Its headers are actually sent.** A learned extractor is asked for the headers
+its CDN checks, and those were being dropped on the floor — built into the
+verdict and then discarded when the media item was made, which is precisely how
+you get the 403 measured earlier. `media_item` now carries them, and Watch
+overlays them onto the page's own context before publishing through the proxy.
+`stream_context` grew an `extra` map so headers beyond Referer / User-Agent /
+Cookie are passed rather than silently dropped. Verified against a server that
+reports what it received: all five arrive, including two the extractor invented
+for itself.
+
+**Download does not carry them yet.** `http_download_source` has no notion of
+per-request headers, so downloading a learned stream that needs a Referer would
+still be refused. Watch works because the proxy exists to inject exactly this;
+the download path would need `download_request` to carry headers too.
+
 **Not yet exercised against a real model.** The gate, the sandbox, the folding
 and the fence-stripping are all tested offline (34 checks), and the dialog is
 wired to `choose_ai()` like the other two loops — but no proposal has been

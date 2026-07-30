@@ -975,6 +975,7 @@ int main_window::apply_extractor(const QString &host, const QUrl &page) {
 	                                      : media_kind::direct;
 	item.url       = v.result.url;
 	item.site_host = host;
+	item.headers   = v.result.headers;   // the whole point of asking for them
 	item.label     = QString("Learned · %1").arg(v.result.kind);
 	m_media->add_item(host, item);
 	return 1;

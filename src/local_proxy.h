@@ -2,6 +2,7 @@
 #pragma once
 
 #include <QHash>
+#include <QMap>
 #include <QObject>
 #include <QString>
 #include <QUrl>
@@ -18,6 +19,12 @@ struct stream_context {
 	QString referer;
 	QString user_agent;
 	QString cookies;
+
+	// Anything else a particular stream needs. The three above are what a CDN
+	// usually checks and are kept named for that reason; this carries whatever
+	// else a learned extractor said to send, rather than dropping headers the
+	// model was asked to supply.
+	QMap<QString, QString> extra;
 };
 
 // The local HTTP proxy (architecture doc §10, §11.3).

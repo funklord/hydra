@@ -8,6 +8,7 @@
 #include <QMutex>
 #include <QObject>
 #include <QString>
+#include <QMap>
 #include <QUrl>
 
 // What kind of saveable thing a URL looks like (architecture doc §11.1).
@@ -24,6 +25,12 @@ struct media_item {
 	QString    site_host;   // the page it was found on
 	QString    label;       // filename or manifest name, for the list
 	int        hits = 0;    // segment counts tell us which stream is playing
+
+	// What this particular stream needs sent with it. Empty for anything found
+	// by watching request shapes — those are replayed with the page's own
+	// context — and filled by a learned extractor (§11.5), which is asked for
+	// them precisely because a CDN answers 403 without them (§11.3).
+	QMap<QString, QString> headers;
 };
 
 // The first interceptor consumer (architecture doc §10/§11): it watches the
