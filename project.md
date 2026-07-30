@@ -882,6 +882,34 @@ implementation order are in arch §11.4.
 Recorded verbatim-in-substance so they are not lost; none of these are started.
 
 
+## Site extractors: the sandbox and the gate (implemented; loop not yet wired)
+
+`site_extractor` runs a generated parser script against the requests a page
+made, and decides whether the answer may be shown to the user at all. This is
+the core of arch §11.5 — the AI-produced part is not wired up yet, and the
+piece built first is deliberately the piece where being wrong is expensive.
+
+**The rule is the one §9.4 already uses on the tree.** A reorganization that
+invents a tab id is rejected outright because no safe repair exists; an
+extractor that returns a URL the page never requested is rejected for exactly
+the same reason. A proposal is *choosing among addresses the page actually
+fetched*, not authoring one. Tested both ways: an obviously foreign URL, and
+the subtler case of a plausible-looking path on a host that really was
+contacted — both refused as invented.
+
+**The sandbox is a `QJSEngine` with nothing in it.** Verified rather than
+assumed: `fetch`, `XMLHttpRequest`, `document`, `window`, `require` and
+`process` all resolve to `undefined`. A script that never returns is
+interrupted from a watchdog thread — a timer on this thread would never fire,
+because a tight JS loop does not yield — so a proposal cannot hang the browser.
+
+Extractors are stored as plain JSON per host, so they can be read, diffed and
+shared like the filter list. **27 checks** cover the accept path, both invented
+cases, loops, throws, unparseable source, a script defining no `extract()`, an
+unknown stream kind, the empty sandbox, and the store round-trip.
+
+Qt6::Qml is a new dependency, and only for `QJSEngine`. No QML is used in the UI.
+
 ## Media Source tap (implemented, with capture)
 
 `mse_tap` reports what a page is actually feeding its `<video>`, for the sites

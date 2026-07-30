@@ -1,0 +1,230 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "site_extractor.h"
+
+#include <QElapsedTimer>
+#include <QFile>
+#include <QJSEngine>
+#include <QJSValue>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJSValueIterator>
+#include <QSet>
+#include <QScopeGuard>
+
+#include <atomic>
+#include <chrono>
+#include <thread>
+
+namespace site_extractor {
+namespace {
+
+// The script is wrapped rather than trusted to define anything at top level:
+// this way a proposal that is a bare expression, a function declaration or an
+// assignment all work, and none of them can leave anything behind.
+QString wrap(const QString &source) {
+	return QStringLiteral(
+	    "(function(){\n"
+	    "  var extract = null;\n"
+	    "  %1\n"
+	    "  if (typeof extract !== 'function')\n"
+	    "    throw new Error('the script defines no extract() function');\n"
+	    "  return extract;\n"
+	    "})()").arg(source);
+}
+
+QString normalise(const QUrl &u) {
+	// Compared as text, but with the pieces that vary between two sightings of
+	// the same request removed. A fragment never reaches the server at all.
+	return u.adjusted(QUrl::RemoveFragment | QUrl::StripTrailingSlash).toString();
+}
+
+}  // namespace
+
+extraction run(const QString &source, const QUrl &page,
+                const QList<evidence_request> &evidence, int timeout_ms) {
+	extraction out;
+	QJSEngine engine;
+	engine.installExtensions(QJSEngine::ConsoleExtension);
+
+	// A script that never returns must not be able to hang the browser. The
+	// interrupt is set from another thread because a tight loop in JS never
+	// yields to this one — a timer here would simply never fire.
+	std::atomic<bool> done{false};
+	std::thread watchdog([&engine, &done, timeout_ms] {
+		QElapsedTimer t;
+		t.start();
+		while (!done.load()) {
+			if (t.elapsed() > timeout_ms) {
+				engine.setInterrupted(true);
+				return;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
+	});
+	const auto finish = qScopeGuard([&done, &watchdog] {
+		done.store(true);
+		watchdog.join();
+	});
+
+	const QJSValue fn = engine.evaluate(wrap(source), "extractor.js");
+	if (fn.isError()) {
+		out.error = "script error: " + fn.toString();
+		return out;
+	}
+	if (!fn.isCallable()) {
+		out.error = "the script does not evaluate to a function";
+		return out;
+	}
+
+	QJSValue page_obj = engine.newObject();
+	page_obj.setProperty("url", page.toString());
+	page_obj.setProperty("host", page.host());
+
+	QJSValue list = engine.newArray(uint(evidence.size()));
+	for (int i = 0; i < evidence.size(); ++i) {
+		QJSValue r = engine.newObject();
+		r.setProperty("url", evidence[i].url.toString());
+		r.setProperty("kind", evidence[i].kind);
+		r.setProperty("order", evidence[i].order);
+		list.setProperty(uint(i), r);
+	}
+
+	const QJSValue res = fn.call({ page_obj, list });
+	if (engine.isInterrupted()) {
+		out.error = "the script did not finish in time";
+		return out;
+	}
+	if (res.isError()) {
+		out.error = "the script threw: " + res.toString();
+		return out;
+	}
+	if (res.isNull() || res.isUndefined()) {
+		out.error = "the script found nothing";
+		return out;
+	}
+	if (!res.isObject()) {
+		out.error = "the script returned something that is not an object";
+		return out;
+	}
+
+	out.url  = QUrl(res.property("url").toString());
+	out.kind = res.property("kind").toString();
+	const QJSValue hs = res.property("headers");
+	if (hs.isObject()) {
+		QJSValueIterator it(hs);
+		while (it.hasNext()) {
+			it.next();
+			out.headers.insert(it.name(), it.value().toString());
+		}
+	}
+	if (!out.url.isValid() || out.url.isEmpty()) {
+		out.error = "the script returned no usable URL";
+		return out;
+	}
+	if (out.kind.isEmpty())
+		out.kind = "direct";
+	out.ok = true;
+	return out;
+}
+
+extractor_verdict check(const QString &source, const QUrl &page,
+                         const QList<evidence_request> &evidence) {
+	extractor_verdict v;
+	v.result = run(source, page, evidence);
+
+	if (!v.result.ok) {
+		v.timed_out = v.result.error.contains("in time");
+		v.message   = v.result.error;
+		return v;
+	}
+
+	// The gate. §9.4 rejects a reorganization that invents a tab id because
+	// there is no safe repair for one; the same holds here. A proposal is
+	// choosing among addresses the page actually fetched, and one that returns
+	// something else has authored a destination of its own.
+	QSet<QString> seen;
+	for (const evidence_request &r : evidence)
+		seen.insert(normalise(r.url));
+
+	if (!seen.contains(normalise(v.result.url))) {
+		v.invented = true;
+		v.message  = "Rejected: the script returned a URL this page never "
+		             "requested (" + v.result.url.toString().left(120) + ").";
+		return v;
+	}
+
+	static const QSet<QString> kinds = { "hls", "dash", "direct" };
+	if (!kinds.contains(v.result.kind)) {
+		v.message = QString("Rejected: \"%1\" is not a kind this can act on.")
+		                .arg(v.result.kind.left(40));
+		return v;
+	}
+
+	v.usable = true;
+	v.message = QString("Picks a %1 stream the page really requested.")
+	                .arg(v.result.kind);
+	return v;
+}
+
+}  // namespace site_extractor
+
+// ---------------------------------------------------------------- store ----
+
+void extractor_store::set_for(const QString &host, const QString &source,
+                               const QString &note) {
+	if (host.isEmpty() || source.isEmpty())
+		return;
+	m_by_host.insert(host, { source, note });
+}
+
+QString extractor_store::source_for(const QString &host) const {
+	return m_by_host.value(host).source;
+}
+
+QString extractor_store::note_for(const QString &host) const {
+	return m_by_host.value(host).note;
+}
+
+bool extractor_store::has(const QString &host) const {
+	return m_by_host.contains(host);
+}
+
+void extractor_store::remove(const QString &host) { m_by_host.remove(host); }
+
+QStringList extractor_store::hosts() const {
+	QStringList out = m_by_host.keys();
+	out.sort();
+	return out;
+}
+
+bool extractor_store::load(const QString &path) {
+	QFile f(path);
+	if (!f.open(QIODevice::ReadOnly))
+		return false;
+	const QJsonObject root = QJsonDocument::fromJson(f.readAll()).object();
+	m_by_host.clear();
+	for (auto it = root.begin(); it != root.end(); ++it) {
+		const QJsonObject o = it.value().toObject();
+		entry e;
+		e.source = o.value("source").toString();
+		e.note   = o.value("note").toString();
+		if (!e.source.isEmpty())
+			m_by_host.insert(it.key(), e);
+	}
+	return true;
+}
+
+bool extractor_store::save(const QString &path) const {
+	QJsonObject root;
+	for (auto it = m_by_host.cbegin(); it != m_by_host.cend(); ++it) {
+		QJsonObject o;
+		o.insert("source", it.value().source);
+		o.insert("note", it.value().note);
+		root.insert(it.key(), o);
+	}
+	QFile f(path);
+	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+		return false;
+	f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+	return true;
+}

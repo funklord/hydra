@@ -14,7 +14,9 @@ set(CMAKE_AUTOMOC ON)
 # replacement Qt 6.4 introduced (the older order is deprecated from 6.4 on).
 # Asking for it here turns "too old Qt" into a clear configure-time failure
 # instead of a confusing compile error. Developed and tested against 6.8.2.
-find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets WebEngineWidgets Network WebChannel)
+# Qml is here for QJSEngine only — the sandbox that runs generated site
+# extractors (architecture doc §11.5). No QML is used anywhere in the UI.
+find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets WebEngineWidgets Network WebChannel Qml)
 
 # libsodium is optional: without it the KeePassXC bridge reports itself
 # unusable (the protocol is end-to-end encrypted, so there is no degraded
@@ -103,6 +105,10 @@ add_executable(hydra
     src/mse_tap.h
     src/capture_source.cpp
     src/capture_source.h
+    # Generated site extractors (architecture doc §11.5): the sandbox they run
+    # in, the rule that a proposal cannot invent a URL, and the per-site store.
+    src/site_extractor.cpp
+    src/site_extractor.h
     src/download_manager.cpp
     src/download_manager.h
     # The download transport seam (architecture doc §11.4): the manager owns
@@ -161,6 +167,7 @@ target_link_libraries(hydra PRIVATE
     Qt6::WebEngineWidgets
     Qt6::Network
     Qt6::WebChannel
+    Qt6::Qml
 )
 
 if(SODIUM_FOUND)
