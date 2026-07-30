@@ -929,6 +929,14 @@ connection now accumulates until its headers and declared `Content-Length` are
 both in hand. A single chunk is capped at 32 MiB — a media segment is not a
 file upload, and an absurd declared length must not be buffered.
 
+**It reports as it goes.** The action reads `Capture Playing Video — 16.20 MiB`
+and the status bar shows a running rate, both updated on a 500 ms poll of the
+proxy's byte count. If nothing arrives for twelve seconds it says so, and says
+the likely reason — the commonest way to end up with an empty file is arming
+capture and forgetting to press play, which previously produced silence for the
+whole recording and an empty file at the end. A feed that stops mid-way is
+reported as paused rather than left looking like work.
+
 **Load-tested, since one HTTP connection per segment is the obvious way this
 falls over.** A feeder appending 32 KiB at a time — 519 segments, 17 MB, 90 s
 of 720p — came out byte-identical and decoded cleanly, while the process held

@@ -5,6 +5,7 @@
 
 #include <QWidget>
 #include <QHash>
+#include <QElapsedTimer>
 #include <QUrl>
 #include <QStringList>
 #include <QString>
@@ -90,6 +91,7 @@ private slots:
 	void open_downloads();
 	void find_media_with_ytdlp();
 	void toggle_capture();
+	void poll_capture();
 	// One place decides what the media badge says, since two sources feed it.
 	void refresh_media_affordance(const QString &site_host);
 	void open_settings();
@@ -155,6 +157,10 @@ private:
 	QAction            *m_capture_action = nullptr;
 	QUrl                m_capture_url;      // the proxy endpoint, while capturing
 	QString             m_capture_path;
+	QTimer             *m_capture_timer = nullptr;
+	QElapsedTimer       m_capture_clock;
+	qint64              m_capture_last  = 0;
+	bool                m_capture_warned = false;
 	local_proxy        *m_local_proxy   = nullptr;
 	element_picker     *m_picker        = nullptr;
 	filter_signals     *m_signals       = nullptr;

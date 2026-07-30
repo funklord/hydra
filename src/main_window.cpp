@@ -927,6 +927,9 @@ void main_window::toggle_capture() {
 
 	// --- stop --------------------------------------------------------------
 	if (!m_capture_url.isEmpty()) {
+		if (m_capture_timer)
+			m_capture_timer->stop();
+		m_capture_action->setText("&Capture Playing Video");
 		const qint64 got = m_local_proxy->captured_bytes(m_capture_url);
 		m_local_proxy->close_capture(m_capture_url);
 		m_capture_url.clear();
@@ -983,7 +986,56 @@ void main_window::toggle_capture() {
 	m_status->showMessage("Capturing — reloading so the recorder is in place "
 	                       "before playback starts. Press play, then turn this "
 	                       "off when done.", 12000);
+
+	// Without this the whole recording is silent: arm it, walk away, and
+	// nothing says whether anything is being written until it is stopped. The
+	// commonest way to get an empty file is forgetting to press play, and that
+	// deserves to be said out loud rather than discovered at the end.
+	m_capture_last   = 0;
+	m_capture_warned = false;
+	m_capture_clock.start();
+	if (!m_capture_timer) {
+		m_capture_timer = new QTimer(this);
+		m_capture_timer->setInterval(500);
+		connect(m_capture_timer, &QTimer::timeout, this, &main_window::poll_capture);
+	}
+	m_capture_timer->start();
+
 	v->reload();
+}
+
+void main_window::poll_capture() {
+	if (m_capture_url.isEmpty() || !m_local_proxy)
+		return;
+	const qint64 got  = m_local_proxy->captured_bytes(m_capture_url);
+	const qint64 ms   = qMax<qint64>(1, m_capture_clock.elapsed());
+	const QString size = QLocale().formattedDataSize(got);
+
+	// On the action itself, so the count is visible wherever the menu is, not
+	// only while a transient status message happens to be showing.
+	m_capture_action->setText(QString("&Capture Playing Video — %1").arg(size));
+
+	if (got > m_capture_last) {
+		m_capture_last   = got;
+		m_capture_warned = false;
+		m_status->showMessage(QString("Capturing %1 (%2/s)")
+		                          .arg(size,
+		                               QLocale().formattedDataSize(got * 1000 / ms)));
+		return;
+	}
+
+	// Nothing arriving. Say why, once, rather than letting it look like work.
+	if (!m_capture_warned && m_capture_clock.elapsed() > 12000) {
+		m_capture_warned = true;
+		m_status->showMessage(
+			got == 0
+			    ? QString("Capturing, but nothing has arrived — press play. If "
+			               "the page is already playing, it may not use Media "
+			               "Source, and nothing here can record it.")
+			    : QString("Capture paused at %1 — the page has stopped feeding "
+			               "its player.").arg(size),
+			15000);
+	}
 }
 
 void main_window::find_media_with_ytdlp() {
