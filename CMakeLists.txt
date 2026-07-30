@@ -29,6 +29,26 @@ else()
     message(WARNING "libsodium not found — KeePassXC password manager disabled")
 endif()
 
+# libtorrent-rasterbar is optional on the same terms: without it the BitTorrent
+# download source reports itself unavailable and the shell does not add it, so
+# everything else still builds. There is no degraded mode -- a torrent engine
+# cannot be faked. Install libtorrent-rasterbar-dev to enable it.
+#
+# NOTE the name: both rasterbar's and rakshasa's libraries install a pkg-config
+# file called "libtorrent", and the bare name resolves to rakshasa's, which is a
+# different library with a different API (architecture doc 11.4). Ask for the
+# CMake package, which is unambiguous, and fall back to the *qualified*
+# pkg-config name -- never the bare one.
+find_package(LibtorrentRasterbar QUIET)
+if(NOT LibtorrentRasterbar_FOUND AND PkgConfig_FOUND)
+    pkg_check_modules(LIBTORRENT QUIET libtorrent-rasterbar)
+endif()
+if(LibtorrentRasterbar_FOUND OR LIBTORRENT_FOUND)
+    message(STATUS "libtorrent-rasterbar found — BitTorrent downloads enabled")
+else()
+    message(WARNING "libtorrent-rasterbar not found — BitTorrent downloads disabled")
+endif()
+
 add_executable(hydra
     src/main.cpp
     src/main_window.cpp
@@ -81,6 +101,8 @@ add_executable(hydra
     src/download_source.h
     src/http_download_source.cpp
     src/http_download_source.h
+    src/torrent_download_source.cpp
+    src/torrent_download_source.h
     src/local_proxy.cpp
     src/local_proxy.h
     src/hls_playlist.cpp
@@ -131,6 +153,15 @@ if(SODIUM_FOUND)
     target_compile_definitions(hydra PRIVATE HYDRA_HAVE_SODIUM)
     target_include_directories(hydra PRIVATE ${SODIUM_INCLUDE_DIRS})
     target_link_libraries(hydra PRIVATE ${SODIUM_LIBRARIES})
+endif()
+
+if(LibtorrentRasterbar_FOUND)
+    target_compile_definitions(hydra PRIVATE HYDRA_HAVE_LIBTORRENT)
+    target_link_libraries(hydra PRIVATE LibtorrentRasterbar::torrent-rasterbar)
+elseif(LIBTORRENT_FOUND)
+    target_compile_definitions(hydra PRIVATE HYDRA_HAVE_LIBTORRENT)
+    target_include_directories(hydra PRIVATE ${LIBTORRENT_INCLUDE_DIRS})
+    target_link_libraries(hydra PRIVATE ${LIBTORRENT_LIBRARIES})
 endif()
 
 # Copy the sample tree next to the binary so the app finds it on first run.

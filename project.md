@@ -31,6 +31,16 @@ C++17. On Linux this is an X11 / XWayland app: `main.cpp` forces
 `QT_QPA_PLATFORM=xcb` there unless the environment already set it. That forcing
 is guarded to desktop Linux, so other platforms keep Qt's own default plugin.
 
+Two optional dependencies, both on the same pattern — found, and the feature is
+on; absent, and it reports itself unavailable with no degraded mode:
+`libsodium` (KeePassXC bridge) and `libtorrent-rasterbar` (BitTorrent
+downloads). On Debian/Ubuntu: `libsodium-dev libtorrent-rasterbar-dev`.
+
+**Watch the library name.** Both rasterbar's and rakshasa's unrelated libraries
+install a pkg-config file called `libtorrent`, and the bare name resolves to
+rakshasa's. `CMakeLists.txt` asks for `find_package(LibtorrentRasterbar)` first
+and falls back only to the *qualified* `libtorrent-rasterbar` pkg-config name.
+
 ## Build-verification state
 
 **Builds and runs.** Verified on Debian 13 with Qt 6.8.2 and
@@ -125,6 +135,7 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Media detector | `media_detector.{h,cpp}`, `media_dialog.{h,cpp}` | URL-shaped classification, segment attribution, Watch/Download list |
 | Player handoff | `player_launcher.{h,cpp}` | PATH probe, capability routing, URL-not-pipe launch |
 | Downloads | `download_manager.{h,cpp}`, `download_source.h`, `http_download_source.{h,cpp}` | transport seam: manager owns queue/consent, source owns bytes |
+| BitTorrent | `torrent_download_source.{h,cpp}` | libtorrent-rasterbar; magnet + .torrent, seeding, info-hash resume (optional dep) |
 | Filter evolution | `filter_list.{h,cpp}`, `filter_signals.{h,cpp}`, `filter_dialog.{h,cpp}` | passive signals, dry-run validation, diff/accept |
 | Password manager | `keepass_protocol.{h,cpp}`, `keepass_bridge.{h,cpp}`, `crypto_box.{h,cpp}` | KeePassXC-Browser client; no vault, no master password |
 | Autofill | `autofill_controller.{h,cpp}`, `autofill_script.h` | QWebChannel bridge, origin gate, policy-governed |
@@ -549,7 +560,7 @@ iterating `m_transfers`, and `abort()` delivers `finished()` synchronously,
 which re-entered `teardown()` and mutated the map mid-iteration. The map is
 now emptied first.
 
-## BitTorrent downloads (requested, not implemented)
+## BitTorrent downloads (implemented)
 
 Written up in **arch §11.4** rather than built, pending a decision. The short
 version: BitTorrent fits as a third *source* for the existing download queue
@@ -557,14 +568,42 @@ rather than a new subsystem, and the trigger surfaces (`magnet:` navigation,
 `.torrent` link, `application/x-bittorrent` response) are all things the current
 spines already see.
 
-**Scope is decided; the code is not written.** Both open questions have been
-answered:
+**Implemented on desktop** in `torrent_download_source.{h,cpp}`, on
+libtorrent-rasterbar, behind the `download_source` seam. Magnet links and
+`.torrent` files (local, or fetched over HTTP first — libtorrent 2.0 does not
+fetch them itself), multi-file jobs, seeding with a ratio policy, resume data,
+and the connection caps raised off their defaults.
+
+**Verified against a real swarm**, not a mock: a libtorrent seeder session and
+the source exchanging a torrent over loopback with no tracker and no DHT, files
+byte-identical, plus magnet metadata fetched from a peer over the wire. 35
+checks. libtorrent is optional on the libsodium pattern — without it the source
+reports `available() == false` and the shell does not add it, since a torrent
+engine cannot be faked.
+
+Three real bugs were found by running it rather than by reading it:
+
+- Completion emitted `finished()` with no final byte count, so a torrent that
+  finished between two status polls showed `received = 0` forever.
+- The file list was only reported from `metadata_received_alert`, which fires
+  when metadata arrives **from a peer** — so a `.torrent`, which has metadata
+  from the start, reported no files at all.
+- **Resume data was keyed by job id.** Job ids restart at 1 every session, so
+  after a restart a new torrent would load an unrelated one's piece state. It
+  is keyed by info-hash now, and a resume file whose hash does not match is
+  ignored rather than trusted.
+
+The decisions behind it:
 
 - **First class, so embed.** Torrents are a peer of HTTP downloads — same queue,
   progress, pause/resume, and tab-tree association — not a handoff. A magnet
   link behaves like any other download link. Handoff is rejected on desktop
   (the association is lost the moment it starts) but stays the likely Android
   shape, so the `download_source` seam is still worth having.
+- **First class means embed everywhere, including Android.** The side-loaded
+  companion APK in arch §19.6 is a documented **fallback if store policy forces
+  it**, not the plan — two installs is exactly the thing that would stop a
+  torrent behaving like every other download.
 - **rasterbar, chosen from the shipped headers.** rakshasa's 64 headers are a
   peer-scaling core — `choke_queue.h`, `connection_list.h`, `throttle.h`,
   `poll_epoll.h` — which confirms the throughput reputation, but it ships **no**

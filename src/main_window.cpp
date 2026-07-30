@@ -16,6 +16,7 @@
 #include "player_launcher.h"
 #include "download_manager.h"
 #include "http_download_source.h"
+#include "torrent_download_source.h"
 #include "local_proxy.h"
 #include "filter_signals.h"
 #include "filter_list.h"
@@ -83,6 +84,16 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// The manager has no transport of its own (§11.4); give it one. Sources are
 	// tried in order, so adding a torrent source later is one line here.
 	m_downloads->add_source(new http_download_source);
+	// BitTorrent is a first-class source, not a side feature (§11.4). It is
+	// only present when the build found libtorrent; there is no degraded mode.
+	if (torrent_download_source::available())
+		m_downloads->add_source(new torrent_download_source);
+	// The §11.4 obligation that replaces the VPN we deliberately do not ship:
+	// a source whose participation is publicly observable cannot start until
+	// the user has been told what it does. The manager holds the job; this is
+	// where the telling happens.
+	connect(m_downloads, &download_manager::consent_required, this,
+	         &main_window::confirm_public_download);
 	// The local proxy is optional: if it cannot listen, Watch still works and
 	// simply hands over the raw URL (§10 — it is an upgrade tier, not a
 	// prerequisite).
@@ -674,8 +685,63 @@ void main_window::on_search_changed(const QString &text) {
 }
 
 void main_window::navigate_to_address() {
+	const QString text = m_address->text().trimmed();
+
+	// A magnet link is not a page. Handing it to the engine would produce an
+	// error page, so route it to the download manager instead — which is what
+	// "first class" means in practice: the same box, the same result as any
+	// other download link (§11.4).
+	const QUrl direct(text);
+	if (m_downloads->source_for(direct) &&
+	    direct.scheme().compare("magnet", Qt::CaseInsensitive) == 0) {
+		start_download(direct);
+		return;
+	}
+
 	if (web_view_backend *v = current_view())
-		v->load(QUrl::fromUserInput(m_address->text()));
+		v->load(QUrl::fromUserInput(text));
+}
+
+void main_window::start_download(const QUrl &url) {
+	QString error;
+	// A download belongs to the node it came from (§11.2), so a torrent lands
+	// in the tree beside every other download rather than in a separate world.
+	QString node_id;
+	if (web_view_backend *v = current_view()) {
+		for (auto it = m_views_by_id.cbegin(); it != m_views_by_id.cend(); ++it)
+			if (it.value() == v) { node_id = it.key(); break; }
+	}
+
+	const int id = m_downloads->enqueue(url, node_id, &error);
+	if (!id) {
+		m_status->showMessage(error, 8000);
+		return;
+	}
+	m_address->clear();
+	m_status->showMessage(QString("Queued: %1").arg(url.toString()), 5000);
+}
+
+void main_window::confirm_public_download(const QString &source_id,
+                                           const QString &note, int job_id) {
+	download_source *src = m_downloads->source_by_id(source_id);
+	const QString name = src ? src->display_name() : source_id;
+
+	QMessageBox box(this);
+	box.setIcon(QMessageBox::Warning);
+	box.setWindowTitle(name + " is not a private download");
+	box.setText(note);
+	box.setInformativeText(
+		"Continue only if that is acceptable for what you are downloading. "
+		"This choice is remembered for the rest of this session.");
+	box.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+	box.setDefaultButton(QMessageBox::No);
+
+	if (box.exec() == QMessageBox::Yes) {
+		m_downloads->set_consent(source_id, true);
+	} else {
+		m_downloads->cancel(job_id);
+		m_status->showMessage("Download cancelled.", 5000);
+	}
 }
 
 void main_window::go_back() {

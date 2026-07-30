@@ -77,6 +77,11 @@ private slots:
 	void on_sort_mode_changed(int combo_index);
 	void on_search_changed(const QString &text);
 	void navigate_to_address();
+	// Downloads that are publicly observable (§11.4) get an explanation before
+	// they start, never after.
+	void confirm_public_download(const QString &source_id, const QString &note,
+	                              int job_id);
+	void start_download(const QUrl &url);
 	void go_back();
 	void go_forward();
 	void reload_page();
