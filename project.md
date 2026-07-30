@@ -882,7 +882,7 @@ implementation order are in arch §11.4.
 Recorded verbatim-in-substance so they are not lost; none of these are started.
 
 
-## Site extractors: the sandbox and the gate (implemented; loop not yet wired)
+## Site extractors: the loop (implemented; unexercised against a live model)
 
 `site_extractor` runs a generated parser script against the requests a page
 made, and decides whether the answer may be shown to the user at all. This is
@@ -909,6 +909,28 @@ cases, loops, throws, unparseable source, a script defining no `extract()`, an
 unknown stream kind, the empty sandbox, and the store round-trip.
 
 Qt6::Qml is a new dependency, and only for `QJSEngine`. No QML is used in the UI.
+
+**The loop around it is wired**: Tools → Learn This Site…. `extractor_signals`
+is a third rider on the interceptor's observer seam, keeping URL, kind and
+order per page, bounded at 400 so a long-lived stream cannot grow it without
+limit. `extractor_dialog` is the same review shape as the reorganizer and the
+filter loop — see exactly what will be sent, send nothing until asked, judge
+what comes back, accept or refuse — and accepted scripts are stored as JSON per
+host under the app data directory.
+
+**Evidence is folded before it is shown.** A player fetches hundreds of
+segments differing only by a number; sending all of them buries the few
+requests that matter. Requests are grouped by shape (runs of digits collapsed),
+one line each, with `(+249 more like this)` appended rather than the repeats
+being silently dropped — a reader should be able to tell a page that fetched
+something once from one that fetched it four hundred times. Measured: 252
+requests fold to 3 lines with the disguised manifest intact.
+
+**Not yet exercised against a real model.** The gate, the sandbox, the folding
+and the fence-stripping are all tested offline (34 checks), and the dialog is
+wired to `choose_ai()` like the other two loops — but no proposal has been
+round-tripped through Ollama or Claude here, so what a model actually returns
+for this prompt is unmeasured.
 
 ## Media Source tap (implemented, with capture)
 

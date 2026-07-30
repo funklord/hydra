@@ -2,6 +2,7 @@
 #pragma once
 
 #include "tree_diff.h"   // for the §9.4 undo snapshot
+#include "site_extractor.h"
 
 #include <QWidget>
 #include <QHash>
@@ -39,6 +40,7 @@ class torrent_download_source;
 class ytdlp_resolver;
 class mse_tap;
 class capture_source;
+class extractor_signals;
 class filter_signals;
 class filter_list;
 class request_filter;
@@ -92,6 +94,7 @@ private slots:
 	void open_downloads();
 	void find_media_with_ytdlp();
 	void toggle_capture();
+	void learn_this_site();
 	void poll_capture();
 	// One place decides what the media badge says, since two sources feed it.
 	void refresh_media_affordance(const QString &site_host);
@@ -163,6 +166,8 @@ private:
 	qint64              m_capture_last  = 0;
 	bool                m_capture_warned = false;
 	capture_source     *m_capture_src   = nullptr;
+	extractor_signals  *m_ex_signals    = nullptr;
+	extractor_store     m_extractors;
 	int                 m_capture_job   = 0;
 	local_proxy        *m_local_proxy   = nullptr;
 	element_picker     *m_picker        = nullptr;

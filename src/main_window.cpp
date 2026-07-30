@@ -22,6 +22,8 @@
 #include "ytdlp_resolver.h"
 #include "mse_tap.h"
 #include "capture_source.h"
+#include "extractor_signals.h"
+#include "extractor_dialog.h"
 #include "ai_provider.h"
 #include "local_proxy.h"
 #include "filter_signals.h"
@@ -57,6 +59,7 @@
 #include <QFileInfo>
 #include <QDateTime>
 #include <QLocale>
+#include <QStandardPaths>
 #include <QDataStream>
 #include <QCloseEvent>
 #include <QSet>
@@ -83,12 +86,17 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// The two interceptor consumers (architecture doc §10): both observe the
 	// same request stream the blocker already rides, rather than adding a
 	// second sensor.
-	m_media   = new media_detector(this);
-	m_signals = new filter_signals(this);
+	m_media      = new media_detector(this);
+	m_signals    = new filter_signals(this);
+	m_ex_signals = new extractor_signals(this);
 	if (filter) {
 		filter->add_observer(m_media);
 		filter->add_observer(m_signals);
+		filter->add_observer(m_ex_signals);
 	}
+	m_extractors.load(QDir(QStandardPaths::writableLocation(
+	                            QStandardPaths::AppDataLocation))
+	                       .filePath("extractors.json"));
 	// The §11.6 tap: what a page is actually feeding its <video>, for the sites
 	// where watching request URLs finds nothing.
 	m_mse = new mse_tap(this);
@@ -371,6 +379,10 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *dl = tools_menu->addAction("&Downloads…", QKeySequence("Ctrl+J"),
 	                                     this, &main_window::open_downloads);
 	dl->setStatusTip("Show transfers in progress and finished");
+	QAction *learn = tools_menu->addAction("&Learn This Site…", this,
+	                                        &main_window::learn_this_site);
+	learn->setStatusTip("Ask for a parser that finds this site's stream, and "
+	                     "check it against what the page really requested");
 	m_capture_action = tools_menu->addAction("&Capture Playing Video", this,
 	                                          &main_window::toggle_capture);
 	m_capture_action->setCheckable(true);
@@ -930,6 +942,32 @@ ai_provider *main_window::choose_ai(QString *why) {
 	if (why)
 		*why = "No AI provider: start Ollama locally, or set ANTHROPIC_API_KEY.";
 	return nullptr;
+}
+
+void main_window::learn_this_site() {
+	web_view_backend *v = current_view();
+	if (!v) {
+		m_status->showMessage("Open a page first.", 5000);
+		return;
+	}
+	QString why;
+	ai_provider *chosen = choose_ai(&why);
+	if (!chosen) {
+		m_status->showMessage(why, 8000);
+		return;
+	}
+
+	const QString host = v->url().host();
+	extractor_dialog dlg(m_ex_signals, &m_extractors, chosen, host, v->url(), this);
+	if (dlg.exec() != QDialog::Accepted)
+		return;
+
+	const QString dir = QStandardPaths::writableLocation(
+	    QStandardPaths::AppDataLocation);
+	QDir().mkpath(dir);
+	m_extractors.save(QDir(dir).filePath("extractors.json"));
+	m_status->showMessage(QString("Extractor saved for %1. Re-open the media "
+	                               "list to use it.").arg(host), 8000);
 }
 
 void main_window::toggle_capture() {

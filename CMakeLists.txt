@@ -109,6 +109,10 @@ add_executable(hydra
     # in, the rule that a proposal cannot invent a URL, and the per-site store.
     src/site_extractor.cpp
     src/site_extractor.h
+    src/extractor_signals.cpp
+    src/extractor_signals.h
+    src/extractor_dialog.cpp
+    src/extractor_dialog.h
     src/download_manager.cpp
     src/download_manager.h
     # The download transport seam (architecture doc §11.4): the manager owns
