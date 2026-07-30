@@ -18,6 +18,7 @@
 #include "http_download_source.h"
 #include "torrent_download_source.h"
 #include "downloads_dialog.h"
+#include "settings_dialog.h"
 #include "local_proxy.h"
 #include "filter_signals.h"
 #include "filter_list.h"
@@ -104,8 +105,10 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_downloads->add_source(new http_download_source);
 	// BitTorrent is a first-class source, not a side feature (§11.4). It is
 	// only present when the build found libtorrent; there is no degraded mode.
-	if (torrent_download_source::available())
-		m_downloads->add_source(new torrent_download_source);
+	if (torrent_download_source::available()) {
+		m_torrents = new torrent_download_source;
+		m_downloads->add_source(m_torrents);
+	}
 	// The §11.4 obligation that replaces the VPN we deliberately do not ship:
 	// a source whose participation is publicly observable cannot start until
 	// the user has been told what it does. The manager holds the job; this is
@@ -137,6 +140,11 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_local_proxy = new local_proxy(this);
 	m_local_proxy->start();
 	m_filters   = new filter_list;
+
+	// Saved settings are applied here rather than by the settings dialog, so
+	// they take effect on a run where that dialog is never opened — otherwise
+	// "settings persist" quietly means "settings persist if you go and look".
+	settings_store::load_into(m_players, m_downloads, m_torrents);
 	connect(m_media, &media_detector::site_updated,
 	         this, &main_window::on_media_found, Qt::QueuedConnection);
 	// The security spine is wired up before we get here: the factory owns the
@@ -294,6 +302,9 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *dl = tools_menu->addAction("&Downloads…", QKeySequence("Ctrl+J"),
 	                                     this, &main_window::open_downloads);
 	dl->setStatusTip("Show transfers in progress and finished");
+	QAction *prefs = tools_menu->addAction("&Settings…", this,
+	                                        &main_window::open_settings);
+	prefs->setStatusTip("Player, download folder and BitTorrent options");
 	tools_menu->addSeparator();
 	tools_menu->addAction("&Site Controls…", this, &main_window::open_site_controls);
 	QAction *kp = tools_menu->addAction("Connect to &KeePassXC…", this,
@@ -763,6 +774,11 @@ void main_window::start_download(const QUrl &url) {
 	// Show the list rather than announce it in the status bar: a download the
 	// user cannot watch is not a first-class download (§11.2).
 	open_downloads();
+}
+
+void main_window::open_settings() {
+	settings_dialog dlg(m_players, m_downloads, m_torrents, this);
+	dlg.exec();
 }
 
 void main_window::open_downloads() {

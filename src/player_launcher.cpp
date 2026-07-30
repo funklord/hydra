@@ -2,6 +2,8 @@
 #include "player_launcher.h"
 
 #include <QProcess>
+#include <QFileInfo>
+#include <QRegularExpression>
 #include <QStandardPaths>
 
 namespace {
@@ -43,6 +45,18 @@ void player_launcher::refresh() {
 		e.path           = QStandardPaths::findExecutable(e.id);
 		e.installed      = !e.path.isEmpty();
 		m_players.push_back(e);
+	}
+
+	// The Custom… entry is always offered; whether it works is up to whatever
+	// the user typed, which is checked when it is set rather than probed here.
+	{
+		player_entry e;
+		e.id             = QString::fromLatin1(custom_id());
+		e.label          = "Custom…";
+		e.native_streams = true;    // unknown, so do not warn about manifests
+		e.installed      = false;
+		m_players.push_back(e);
+		set_custom_command(m_custom);   // re-resolves its path
 	}
 
 	// Resolve the default from what is present — never assume mpv exists.
@@ -88,6 +102,25 @@ QString player_launcher::warning_for(const media_item &item) const {
 	return QString();
 }
 
+void player_launcher::set_custom_command(const QString &cmd) {
+	m_custom = cmd.trimmed();
+	for (player_entry &e : m_players) {
+		if (e.id != QLatin1String(custom_id()))
+			continue;
+		const QStringList parts = m_custom.split(QRegularExpression("\\s+"),
+		                                          Qt::SkipEmptyParts);
+		e.path      = parts.isEmpty() ? QString()
+		                              : QStandardPaths::findExecutable(parts.first());
+		// An absolute path that exists is equally valid as a PATH lookup.
+		if (e.path.isEmpty() && !parts.isEmpty() && QFileInfo(parts.first()).isExecutable())
+			e.path = parts.first();
+		e.installed = !e.path.isEmpty();
+		e.label     = m_custom.isEmpty() ? "Custom…"
+		                                 : QString("Custom… (%1)").arg(parts.value(0));
+		return;
+	}
+}
+
 bool player_launcher::play(const media_item &item, QString *error,
                             const QUrl &via) const {
 	const player_entry *e = entry(m_selected);
@@ -100,7 +133,22 @@ bool player_launcher::play(const media_item &item, QString *error,
 	// Always a URL, never stdin: a pipe cannot seek (§11.3).
 	const QString target = via.isValid() ? via.toString() : item.url.toString();
 	QStringList args;
-	if (e->id == "mpv") {
+	if (e->id == QLatin1String(custom_id())) {
+		QStringList parts = m_custom.split(QRegularExpression("\\s+"),
+		                                    Qt::SkipEmptyParts);
+		if (!parts.isEmpty())
+			parts.removeFirst();          // the program itself
+		bool substituted = false;
+		for (QString &a : parts) {
+			if (a.contains("%U")) {
+				a.replace("%U", target);
+				substituted = true;
+			}
+		}
+		if (!substituted)
+			parts << target;              // no placeholder: append, as meant
+		args = parts;
+	} else if (e->id == "mpv") {
 		args << "--force-window=yes" << target;
 	} else if (e->id == "vlc") {
 		args << target;

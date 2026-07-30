@@ -105,6 +105,8 @@ add_executable(hydra
     src/torrent_download_source.h
     src/downloads_dialog.cpp
     src/downloads_dialog.h
+    src/settings_dialog.cpp
+    src/settings_dialog.h
     src/local_proxy.cpp
     src/local_proxy.h
     src/hls_playlist.cpp

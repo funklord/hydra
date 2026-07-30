@@ -97,6 +97,14 @@ public:
 	// Where resume data and the session state live.
 	void set_state_directory(const QString &dir);
 
+	// Read back what is currently in force, so settings can be shown and saved
+	// without a second copy of them living somewhere else.
+	int     connection_limit_global() const { return m_global_limit; }
+	int     connection_limit_per_torrent() const { return m_torrent_limit; }
+	double  seed_ratio() const { return m_seed_ratio; }
+	QString listen_interfaces() const { return m_listen_interfaces; }
+	bool    sequential() const { return m_sequential; }
+
 	// Ask every live torrent to write resume data now. Called at shutdown;
 	// safe to call at any time.
 	void save_all_resume_data();

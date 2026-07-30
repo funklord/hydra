@@ -33,6 +33,7 @@ class media_detector;
 class player_launcher;
 class download_manager;
 class downloads_dialog;
+class torrent_download_source;
 class filter_signals;
 class filter_list;
 class request_filter;
@@ -84,6 +85,7 @@ private slots:
 	                              int job_id);
 	void start_download(const QUrl &url);
 	void open_downloads();
+	void open_settings();
 	void go_back();
 	void go_forward();
 	void reload_page();
@@ -137,6 +139,7 @@ private:
 	player_launcher    *m_players       = nullptr;
 	download_manager   *m_downloads     = nullptr;
 	downloads_dialog   *m_downloads_ui  = nullptr;
+	torrent_download_source *m_torrents = nullptr;
 	local_proxy        *m_local_proxy   = nullptr;
 	element_picker     *m_picker        = nullptr;
 	filter_signals     *m_signals       = nullptr;

@@ -137,6 +137,7 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Downloads | `download_manager.{h,cpp}`, `download_source.h`, `http_download_source.{h,cpp}` | transport seam: manager owns queue/consent, source owns bytes |
 | BitTorrent | `torrent_download_source.{h,cpp}` | libtorrent-rasterbar; magnet + .torrent, seeding, info-hash resume (optional dep) |
 | Downloads UI | `downloads_dialog.{h,cpp}` | one list for every source, progress bars, public-transfer marking (Ctrl+J) |
+| Settings | `settings_dialog.{h,cpp}` | player radio group, download folder, BitTorrent caps/ratio/interface; QSettings |
 | Filter evolution | `filter_list.{h,cpp}`, `filter_signals.{h,cpp}`, `filter_dialog.{h,cpp}` | passive signals, dry-run validation, diff/accept |
 | Password manager | `keepass_protocol.{h,cpp}`, `keepass_bridge.{h,cpp}`, `crypto_box.{h,cpp}` | KeePassXC-Browser client; no vault, no master password |
 | Autofill | `autofill_controller.{h,cpp}`, `autofill_script.h` | QWebChannel bridge, origin gate, policy-governed |
@@ -560,6 +561,40 @@ Found and fixed while testing: `~http_download_source` aborted replies while
 iterating `m_transfers`, and `abort()` delivers `finished()` synchronously,
 which re-entered `teardown()` and mutated the map mid-iteration. The map is
 now emptied first.
+
+## Settings (arch §11.3, §11.4)
+
+Tools → Settings…. Two pages, both of which existed only as API before —
+a setting nobody can change is a setting that does not exist, and that mattered
+most for the BitTorrent caps: the whole argument for rasterbar was that the
+ceiling can be raised, and that claim is only true if someone can raise it.
+
+- **Player** — §11.3's radio group, finally built as specified: every supported
+  player listed, installed ones selectable, missing ones greyed with
+  "not installed" so you can see what to install, default resolved from what is
+  actually present. Plus the **Custom…** entry §11.3 asked for, which needed
+  new support in `player_launcher`: a command template where `%U` is the stream
+  URL, appended if the placeholder is absent. Split on whitespace, **not** a
+  shell — quoting and pipes do not work, and the hint text says so rather than
+  letting someone discover it.
+- **Downloads** — download folder, and BitTorrent connection caps, seed ratio,
+  sequential-by-default and `listen_interfaces`. The caps carry the §11.4
+  reasoning inline, where the person changing the number can read it. The
+  interface field says plainly that Hydra does not tunnel and that this only
+  makes a *system-level* VPN reliable — it is not a VPN feature.
+
+Persistence is `QSettings` (INI, user scope, explicit `hydra/hydra` path so it
+does not move if the app name is edited). **Saved values are applied by
+`settings_store::load_into()` at startup, not by the dialog** — otherwise
+"settings persist" would quietly mean "settings persist if you open the
+dialog". A saved player that has since been uninstalled falls back to one that
+is present rather than failing to launch anything.
+
+**20 checks:** defaults, full round-trip of every field, fallback for a
+now-missing player, `%U` substitution in place, append-when-absent, and a
+custom command resolving to nothing correctly reporting itself uninstalled.
+The tests redirect `QSettings` to a temp path, so they cannot touch the real
+user config.
 
 ## Watch a torrent while it downloads (arch §11.3, §11.4)
 

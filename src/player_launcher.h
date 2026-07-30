@@ -43,9 +43,21 @@ public:
 	const QList<player_entry> &players() const { return m_players; }
 	QList<player_entry> installed() const;
 
-	// The chosen player id, resolved from what is installed.
+	// The chosen player id, resolved from what is installed. `k_custom_id` is
+	// the "Custom…" entry, which is driven by a command template instead of a
+	// built-in argument list.
 	QString selected() const { return m_selected; }
 	void set_selected(const QString &id) { m_selected = id; }
+
+	static const char *custom_id() { return "custom"; }
+
+	// A command line with `%U` where the stream URL goes. Split on whitespace,
+	// which is enough for a player invocation and keeps the field honest about
+	// what it supports — a shell would invite quoting bugs and injection for no
+	// benefit here. A template with no `%U` gets the URL appended, since that
+	// is what someone typing just a program name means.
+	QString custom_command() const { return m_custom; }
+	void set_custom_command(const QString &cmd);
 
 	// Empty when the launch is expected to work. Otherwise a reason to show the
 	// user — no player, or a player that cannot handle this stream well.
@@ -68,4 +80,5 @@ private:
 
 	QList<player_entry> m_players;
 	QString             m_selected;
+	QString             m_custom;
 };
