@@ -538,6 +538,10 @@ void main_window::open_media() {
 	for (auto it = m_views_by_id.cbegin(); it != m_views_by_id.cend(); ++it)
 		if (it.value() == v) { node_id = it.key(); break; }
 
+	// Anything this site has been taught (§11.5) runs before the list is built,
+	// so a learned stream appears beside whatever detection found on its own.
+	apply_extractor(v->url().host(), v->url());
+
 	// The context a CDN expects: the page that loaded the stream, and this
 	// browser's own User-Agent.
 	stream_context ctx;
@@ -944,6 +948,38 @@ ai_provider *main_window::choose_ai(QString *why) {
 	return nullptr;
 }
 
+int main_window::apply_extractor(const QString &host, const QUrl &page) {
+	if (host.isEmpty() || !m_extractors.has(host))
+		return 0;
+	const QList<evidence_request> ev = m_ex_signals->evidence_for(host);
+	if (ev.isEmpty())
+		return 0;
+
+	// Judged again on every run, not merely when it was accepted. A stored
+	// script is re-run against fresh evidence each time, and the same rule
+	// applies: it may only return an address this visit actually requested.
+	// A site that changes shape therefore stops producing results rather than
+	// producing wrong ones.
+	const extractor_verdict v =
+	    site_extractor::check(m_extractors.source_for(host), page, ev);
+	if (!v.usable) {
+		m_status->showMessage(
+		    QString("The saved extractor for %1 no longer matches this page (%2)")
+		        .arg(host, v.message.left(90)), 9000);
+		return 0;
+	}
+
+	media_item item;
+	item.kind = v.result.kind == "hls"    ? media_kind::hls
+	          : v.result.kind == "dash"   ? media_kind::dash
+	                                      : media_kind::direct;
+	item.url       = v.result.url;
+	item.site_host = host;
+	item.label     = QString("Learned · %1").arg(v.result.kind);
+	m_media->add_item(host, item);
+	return 1;
+}
+
 void main_window::learn_this_site() {
 	web_view_backend *v = current_view();
 	if (!v) {
@@ -966,8 +1002,12 @@ void main_window::learn_this_site() {
 	    QStandardPaths::AppDataLocation);
 	QDir().mkpath(dir);
 	m_extractors.save(QDir(dir).filePath("extractors.json"));
-	m_status->showMessage(QString("Extractor saved for %1. Re-open the media "
-	                               "list to use it.").arg(host), 8000);
+	const int found = apply_extractor(host, v->url());
+	m_status->showMessage(
+	    found ? QString("Extractor saved for %1, and it found a stream — see the "
+	                     "media list.").arg(host)
+	          : QString("Extractor saved for %1.").arg(host), 9000);
+	refresh_media_affordance(host);
 }
 
 void main_window::toggle_capture() {

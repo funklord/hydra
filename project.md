@@ -926,6 +926,19 @@ being silently dropped — a reader should be able to tell a page that fetched
 something once from one that fetched it four hundred times. Measured: 252
 requests fold to 3 lines with the disguised manifest intact.
 
+**A learned extractor is actually used, and re-judged every time.** Opening the
+media list runs the stored script for that host against the *current* evidence,
+and the result is filed beside whatever detection found on its own. The gate is
+applied on every run, not only when the script was accepted — so a site that
+changes shape stops producing a result rather than producing a wrong one. That
+was a real gap: the store was written and loaded but never read, so learning a
+site did nothing and the status message promised otherwise.
+
+**The review loop is exercised with a stub provider** (14 checks): the payload
+is sent folded, a valid proposal becomes acceptable and stores with its fence
+stripped, an invented URL leaves the accept button disabled and stores nothing,
+and a stored script stops matching when the evidence changes.
+
 **Not yet exercised against a real model.** The gate, the sandbox, the folding
 and the fence-stripping are all tested offline (34 checks), and the dialog is
 wired to `choose_ai()` like the other two loops — but no proposal has been

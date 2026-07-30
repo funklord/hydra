@@ -95,6 +95,9 @@ private slots:
 	void find_media_with_ytdlp();
 	void toggle_capture();
 	void learn_this_site();
+	// Run a stored extractor for this host, if there is one, and file what it
+	// finds with everything else the page offers.
+	int  apply_extractor(const QString &host, const QUrl &page);
 	void poll_capture();
 	// One place decides what the media badge says, since two sources feed it.
 	void refresh_media_affordance(const QString &site_host);
