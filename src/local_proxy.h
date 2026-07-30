@@ -68,6 +68,16 @@ public:
 	// Returning -1 means "trust the file's size".
 	using available_length = std::function<qint64()>;
 
+	// What the file will eventually be, or -1 if unknown.
+	//
+	// This is what makes *holding* possible at all. HTTP wants a length before
+	// the body, so a server that only knows what it has right now can promise
+	// no more than that — and a player that reaches the end of a complete-
+	// looking response stops, which is exactly the "File ended prematurely" a
+	// growing file produces. Advertising the eventual size instead lets the
+	// response stay open and the player keep waiting.
+	using expected_length = std::function<qint64()>;
+
 	// Publish a local file that is still being written — the assembled HLS
 	// output (§11.3), or a torrent being watched as it downloads (§11.4).
 	// Ranges are served against whatever has landed so far, so a player can
@@ -80,7 +90,7 @@ public:
 	// serving those would hand the player silence instead of an honest short
 	// read, and it would look like a corrupt stream rather than a slow one.
 	QUrl publish_file(const QString &path, const QString &content_type,
-	                   available_length avail = {});
+	                   available_length avail = {}, expected_length total = {});
 	void unpublish_all();
 
 signals:
@@ -93,6 +103,7 @@ private:
 		QString        local_path;     // set instead of upstream for a file
 		QString        content_type;
 		available_length avail;        // readable prefix, or null to trust size
+		expected_length  expected;     // eventual size, or null if unknown
 	};
 
 	void on_connection();

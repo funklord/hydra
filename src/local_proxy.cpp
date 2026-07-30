@@ -8,6 +8,9 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QFile>
+#include <QCoreApplication>
+#include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFileInfo>
 
 namespace {
@@ -111,7 +114,7 @@ QUrl local_proxy::publish(const QUrl &upstream, const stream_context &ctx) {
 }
 
 QUrl local_proxy::publish_file(const QString &path, const QString &content_type,
-                                available_length avail) {
+                                available_length avail, expected_length total) {
 	if (!listening())
 		return {};
 	QByteArray raw(16, Qt::Uninitialized);
@@ -122,6 +125,7 @@ QUrl local_proxy::publish_file(const QString &path, const QString &content_type,
 	e.local_path   = path;
 	e.content_type = content_type;
 	e.avail        = std::move(avail);
+	e.expected     = std::move(total);
 	m_published.insert(token, e);
 
 	QUrl local;
@@ -152,11 +156,24 @@ void local_proxy::serve_file(QTcpSocket *client, const entry &e,
 	// content is still arriving, so the publisher's own answer wins where it
 	// has one — otherwise every read past the real data returns zeros and the
 	// player renders them rather than waiting.
-	qint64 size = f.size();
-	if (e.avail) {
-		const qint64 usable = e.avail();
-		if (usable >= 0)
-			size = qMin(size, usable);
+	auto readable_now = [&]() -> qint64 {
+		qint64 n = QFileInfo(e.local_path).size();
+		if (e.avail) {
+			const qint64 usable = e.avail();
+			if (usable >= 0)
+				n = qMin(n, usable);
+		}
+		return qMax<qint64>(0, n);
+	};
+
+	// `size` is what we promise; `readable_now()` is what exists yet. They are
+	// the same for a finished file and differ for one still arriving, and it is
+	// that gap the request is held across.
+	qint64 size = readable_now();
+	if (e.expected) {
+		const qint64 eventual = e.expected();
+		if (eventual > size)
+			size = eventual;
 	}
 	if (size <= 0) {
 		send_simple(client, 503, "not enough downloaded yet");
@@ -201,14 +218,46 @@ void local_proxy::serve_file(QTcpSocket *client, const entry &e,
 	client->write("Connection: close\r\n\r\n");
 
 	if (!head_only) {
-		f.seek(start);
+		// Feed from the file, waiting when the reader catches up with whatever
+		// is still arriving rather than closing on it. Closing is what makes a
+		// player report the stream as truncated when it was merely ahead.
+		//
+		// The wait pumps the event loop, and that is not optional: the bytes
+		// being waited for arrive through libtorrent's alert timer and Qt's own
+		// sockets, so a wait that blocks the loop is a wait for data that can
+		// never come — it would deadlock rather than stall.
+		static constexpr int k_stall_ms = 30000;   // no growth for this long: give up
+		qint64 pos  = start;
 		qint64 left = length;
+		qint64 seen = readable_now();
+		QElapsedTimer idle;
+		idle.start();
+
 		while (left > 0 && client->state() == QAbstractSocket::ConnectedState) {
-			const QByteArray chunk = f.read(qMin<qint64>(left, 64 * 1024));
-			if (chunk.isEmpty())
-				break;
+			const qint64 have = readable_now();
+			if (have > seen) {          // progress: the clock starts again
+				seen = have;
+				idle.restart();
+			}
+			if (pos >= have) {
+				if (idle.elapsed() > k_stall_ms)
+					break;              // genuinely stalled, not merely behind
+				QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents,
+				                                 50);
+				continue;
+			}
+
+			f.seek(pos);
+			const QByteArray chunk =
+				f.read(qMin<qint64>(qMin<qint64>(left, 64 * 1024), have - pos));
+			if (chunk.isEmpty()) {
+				QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents,
+				                                 50);
+				continue;
+			}
 			client->write(chunk);
 			client->waitForBytesWritten(3000);
+			pos  += chunk.size();
 			left -= chunk.size();
 		}
 	}

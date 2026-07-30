@@ -92,6 +92,14 @@ public:
 			return;
 		}
 		QStyleOptionProgressBar bar;
+		// Inherit palette, layout direction and font metrics from the item
+		// rather than leaving them defaulted, then take the state over.
+		static_cast<QStyleOption &>(bar) = option;
+		// State_Horizontal is not decoration: Qt styles read it to decide the
+		// bar's *orientation*. Without it the bar is drawn vertical, and in a
+		// row-shaped rect that shows up as a fill creeping bottom-to-top
+		// across the full width instead of left-to-right.
+		bar.state            = QStyle::State_Enabled | QStyle::State_Horizontal;
 		bar.rect             = option.rect.adjusted(2, 1, -2, -1);
 		bar.minimum          = 0;
 		bar.maximum          = 100;
@@ -101,7 +109,6 @@ public:
 		// row height clips the digits top and bottom and reads as a rendering
 		// fault; drawing it over the finished bar is exact.
 		bar.textVisible      = false;
-		bar.state            = QStyle::State_Enabled;
 		// An indeterminate job — a magnet with no metadata yet — has no
 		// meaningful percentage. Qt draws min == max == 0 as a busy bar, which
 		// is exactly the honest thing to show.
@@ -511,9 +518,39 @@ void downloads_dialog::try_launch_watch() {
 	// straight at a sparse file reads holes as zeros and renders them.
 	const int     job_id = m_watch_job;
 	const QString rel    = m_watch_rel;
+
+	// The eventual size of the *file*, which for a multi-file job is not the
+	// job's total. Without it the proxy can only promise what has arrived, and
+	// a player that reaches that point sees a complete response and stops.
+	qint64 eventual = -1;
+	for (const download_file &f : job->files) {
+		if (f.path == rel) {
+			eventual = f.size;
+			break;
+		}
+	}
+	if (eventual < 0 && job->files.isEmpty())
+		eventual = job->total;          // single-file job: the job is the file
+
+	download_manager *dm = m_downloads;
 	const QUrl local = m_proxy->publish_file(
 		m_watch_path, content_type_for(m_watch_path),
-		[src, job_id, rel] { return src->contiguous_bytes(job_id, rel); });
+		[src, job_id, rel] { return src->contiguous_bytes(job_id, rel); },
+		[eventual, dm, job_id, rel]() -> qint64 {
+			if (eventual >= 0)
+				return eventual;
+			// Fall back to whatever the job now knows — a magnet has no sizes
+			// until metadata lands, which can be after Watch was pressed.
+			for (const download_job &j : dm->jobs()) {
+				if (j.id != job_id)
+					continue;
+				for (const download_file &f : j.files)
+					if (f.path == rel)
+						return f.size;
+				return j.files.isEmpty() ? j.total : -1;
+			}
+			return -1;
+		});
 	if (!local.isValid()) {
 		m_action->setVisible(true);
 		m_action->setText("<b>Cannot watch:</b> the local proxy refused to "
