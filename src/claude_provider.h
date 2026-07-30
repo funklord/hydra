@@ -25,9 +25,12 @@ public:
 	void send(const QString &system_prompt, const QString &user_prompt) override;
 	void cancel() override;
 
-	// Held in memory only; never written to disk with the tree or policy.
+	// Held in memory only; never written to disk with the tree or policy — and
+	// that includes the settings file, which is plain INI.
 	void set_api_key(const QString &key) { m_api_key = key; }
+	bool has_api_key() const { return !m_api_key.isEmpty(); }
 	void set_model(const QString &model) { m_model = model; }
+	QString model() const { return m_model; }
 
 private:
 	QNetworkAccessManager *m_net = nullptr;

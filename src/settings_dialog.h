@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "ai_provider.h"
+
 #include <QDialog>
 #include <QList>
 
 class QCheckBox;
+class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
 class QRadioButton;
 class QSpinBox;
+class claude_provider;
 class download_manager;
+class ollama_provider;
 class player_launcher;
 class torrent_download_source;
 
@@ -29,11 +34,14 @@ class settings_dialog : public QDialog {
 	Q_OBJECT
 public:
 	settings_dialog(player_launcher *players, download_manager *downloads,
-	                 torrent_download_source *torrents, QWidget *parent = nullptr);
+	                 torrent_download_source *torrents, ollama_provider *local_ai,
+	                 claude_provider *external_ai, QWidget *parent = nullptr);
 
 private:
 	void build_player_page(QWidget *page);
 	void build_download_page(QWidget *page);
+	void build_ai_page(QWidget *page);
+	void update_ai_state();
 	void load();
 	void apply();
 	void update_custom_state();
@@ -41,6 +49,8 @@ private:
 	player_launcher         *m_players  = nullptr;
 	download_manager        *m_downloads = nullptr;
 	torrent_download_source *m_torrents = nullptr;
+	ollama_provider         *m_local_ai = nullptr;
+	claude_provider         *m_external_ai = nullptr;
 
 	QList<QRadioButton *> m_player_buttons;
 	QLineEdit      *m_custom_cmd   = nullptr;
@@ -52,6 +62,15 @@ private:
 	QDoubleSpinBox *m_seed_ratio   = nullptr;
 	QLineEdit      *m_interfaces   = nullptr;
 	QCheckBox      *m_sequential   = nullptr;
+
+	QRadioButton *m_ai_auto     = nullptr;
+	QRadioButton *m_ai_local    = nullptr;
+	QRadioButton *m_ai_external = nullptr;
+	QLineEdit    *m_ollama_url   = nullptr;
+	QLineEdit    *m_ollama_model = nullptr;
+	QLineEdit    *m_claude_model = nullptr;
+	QLineEdit    *m_claude_key   = nullptr;
+	QLabel       *m_ai_status    = nullptr;
 };
 
 // Where settings live between runs, and the one place that pushes them into the
@@ -63,9 +82,17 @@ private:
 namespace settings_store {
 
 void load_into(player_launcher *players, download_manager *downloads,
-                torrent_download_source *torrents);
+                torrent_download_source *torrents, ollama_provider *local_ai,
+                claude_provider *external_ai);
 
 void save_from(player_launcher *players, download_manager *downloads,
-                torrent_download_source *torrents);
+                torrent_download_source *torrents, ollama_provider *local_ai,
+                claude_provider *external_ai);
+
+// Which backend the user picked. Read straight from storage rather than held
+// on any one object, because it is a preference *about* providers rather than
+// a property of either of them.
+ai_choice ai_mode();
+void set_ai_mode(ai_choice mode);
 
 }  // namespace settings_store

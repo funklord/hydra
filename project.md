@@ -583,6 +583,28 @@ ceiling can be raised, and that claim is only true if someone can raise it.
   interface field says plainly that Hydra does not tunnel and that this only
   makes a *system-level* VPN reliable — it is not a VPN feature.
 
+**AI backend is a global setting** (§9.1), on its own page, and both consumers
+— the tree reorganizer and the filter-evolution loop — resolve it through a
+single `main_window::choose_ai()` instead of each repeating the local-first
+rule:
+
+- **Automatic** — local-first, as the design describes: a reachable Ollama
+  handles everything and nothing leaves the machine; Claude is the fallback.
+- **Local only** — never uses an external service. This exists because §1's
+  "data stays on the machine" should be something you can *hold the app to*,
+  not a default that quietly lapses the first time Ollama is not running.
+  Under it, no local model means no AI features rather than a silent switch.
+- **Claude** — explicit external opt-in, still gated by review-before-send.
+
+Endpoint, both model names and the mode persist. **The API key does not**, and
+that is deliberate: the settings file is plain INI, `claude_provider` states the
+key is memory-only, and the same reasoning that kept the KeePassXC association
+key out of plaintext applies here. The field is offered for the session and
+labelled as not saved, with `ANTHROPIC_API_KEY` named as the way to persist it.
+A test asserts the key never appears **anywhere in the file**, not merely that
+no `setValue` call was written — that is the property that matters and it is
+the one that could break silently.
+
 **Capability routing is now accurate.** `player_launcher`'s header still said
 the local proxy "does not exist yet" and that mplayer's manifest weakness was
 merely *reported*; both stopped being true once `hls_assembler` landed. HLS is

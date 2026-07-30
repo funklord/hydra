@@ -19,6 +19,7 @@
 #include "torrent_download_source.h"
 #include "downloads_dialog.h"
 #include "settings_dialog.h"
+#include "ai_provider.h"
 #include "local_proxy.h"
 #include "filter_signals.h"
 #include "filter_list.h"
@@ -144,7 +145,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// Saved settings are applied here rather than by the settings dialog, so
 	// they take effect on a run where that dialog is never opened — otherwise
 	// "settings persist" quietly means "settings persist if you go and look".
-	settings_store::load_into(m_players, m_downloads, m_torrents);
+	settings_store::load_into(m_players, m_downloads, m_torrents, nullptr, nullptr);
 	connect(m_media, &media_detector::site_updated,
 	         this, &main_window::on_media_found, Qt::QueuedConnection);
 	// The security spine is wired up before we get here: the factory owns the
@@ -382,25 +383,13 @@ void main_window::toggle_kiosk() {
 }
 
 void main_window::open_reorganizer() {
-	// Local-first (architecture doc §9.1): if a local model answers, it handles
-	// the request and nothing leaves the machine. The external provider is used
-	// only when there is no local one and a credential exists — and the dialog
-	// gates it behind review-before-send either way.
-	if (!m_local_ai) {
-		m_local_ai    = new ollama_provider(this);
-		m_external_ai = new claude_provider(this);
-		m_local_ai->probe();
-	}
-
-	ai_provider *chosen = nullptr;
-	if (m_local_ai->available())
-		chosen = m_local_ai;
-	else if (m_external_ai->available())
-		chosen = m_external_ai;
-
+	// Which backend, and whether one is allowed at all, is a single global
+	// setting resolved in one place (§9.1). The dialog still gates an external
+	// provider behind review-before-send either way.
+	QString why;
+	ai_provider *chosen = choose_ai(&why);
 	if (!chosen) {
-		m_status->showMessage("No AI provider: start Ollama locally, or set "
-		                      "ANTHROPIC_API_KEY.", 6000);
+		m_status->showMessage(why, 8000);
 		return;
 	}
 
@@ -448,17 +437,10 @@ void main_window::open_filter_evolution() {
 		                      "what that page requested.", 5000);
 		return;
 	}
-	if (!m_local_ai) {
-		m_local_ai    = new ollama_provider(this);
-		m_external_ai = new claude_provider(this);
-		m_local_ai->probe();
-	}
-	ai_provider *chosen = m_local_ai->available()    ? static_cast<ai_provider *>(m_local_ai)
-	                    : m_external_ai->available() ? static_cast<ai_provider *>(m_external_ai)
-	                                                 : nullptr;
+	QString why;
+	ai_provider *chosen = choose_ai(&why);
 	if (!chosen) {
-		m_status->showMessage("No AI provider: start Ollama locally, or set "
-		                      "ANTHROPIC_API_KEY.", 6000);
+		m_status->showMessage(why, 8000);
 		return;
 	}
 
@@ -776,8 +758,59 @@ void main_window::start_download(const QUrl &url) {
 	open_downloads();
 }
 
+ai_provider *main_window::choose_ai(QString *why) {
+	if (!m_local_ai) {
+		m_local_ai    = new ollama_provider(this);
+		m_external_ai = new claude_provider(this);
+		settings_store::load_into(nullptr, nullptr, nullptr, m_local_ai,
+		                           m_external_ai);
+		m_local_ai->probe();
+	}
+
+	const bool local_ok = m_local_ai->available();
+	const bool ext_ok   = m_external_ai->available();
+
+	switch (settings_store::ai_mode()) {
+		case ai_choice::local_only:
+			// Deliberately does *not* fall back. The whole value of this
+			// setting is that "nothing leaves this machine" keeps meaning that
+			// on the day the local model is not running (§1, §9.1).
+			if (local_ok)
+				return m_local_ai;
+			if (why)
+				*why = "No local model is answering, and the AI backend is set "
+				       "to local only. Start Ollama, or change it in Settings.";
+			return nullptr;
+
+		case ai_choice::external:
+			if (ext_ok)
+				return m_external_ai;
+			if (why)
+				*why = "Claude is selected but has no API key. Set one in "
+				       "Settings, or ANTHROPIC_API_KEY.";
+			return nullptr;
+
+		case ai_choice::automatic:
+			break;
+	}
+
+	// Local-first: a reachable local model handles everything and nothing
+	// leaves the machine; the external one is the fallback, still gated behind
+	// review-before-send by the dialogs.
+	if (local_ok)
+		return m_local_ai;
+	if (ext_ok)
+		return m_external_ai;
+	if (why)
+		*why = "No AI provider: start Ollama locally, or set ANTHROPIC_API_KEY.";
+	return nullptr;
+}
+
 void main_window::open_settings() {
-	settings_dialog dlg(m_players, m_downloads, m_torrents, this);
+	QString ignored;
+	choose_ai(&ignored);          // make sure the providers exist to configure
+	settings_dialog dlg(m_players, m_downloads, m_torrents, m_local_ai,
+	                     m_external_ai, this);
 	dlg.exec();
 }
 

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "settings_dialog.h"
+#include "claude_provider.h"
 #include "download_manager.h"
+#include "ollama_provider.h"
 #include "player_launcher.h"
 #include "torrent_download_source.h"
 
@@ -35,8 +37,26 @@ QSettings open_settings() {
 
 namespace settings_store {
 
+ai_choice ai_mode() {
+	const QString v = open_settings().value("ai/mode", "automatic").toString();
+	if (v == "local_only")
+		return ai_choice::local_only;
+	if (v == "external")
+		return ai_choice::external;
+	return ai_choice::automatic;
+}
+
+void set_ai_mode(ai_choice mode) {
+	QSettings s = open_settings();
+	s.setValue("ai/mode", mode == ai_choice::local_only ? "local_only"
+	                     : mode == ai_choice::external  ? "external"
+	                                                    : "automatic");
+	s.sync();
+}
+
 void load_into(player_launcher *players, download_manager *downloads,
-                torrent_download_source *torrents) {
+                torrent_download_source *torrents, ollama_provider *local_ai,
+                claude_provider *external_ai) {
 	QSettings s = open_settings();
 
 	if (players) {
@@ -65,10 +85,26 @@ void load_into(player_launcher *players, download_manager *downloads,
 			s.value("torrent/listen_interfaces").toString());
 		torrents->set_sequential(s.value("torrent/sequential", false).toBool());
 	}
+
+	if (local_ai) {
+		local_ai->set_endpoint(QUrl(s.value("ai/ollama_endpoint",
+		                                     "http://localhost:11434").toString()));
+		local_ai->set_model(s.value("ai/ollama_model", "llama3").toString());
+	}
+	if (external_ai) {
+		const QString model = s.value("ai/claude_model").toString();
+		if (!model.isEmpty())
+			external_ai->set_model(model);
+		// The API key is deliberately absent: this file is plain INI, and
+		// claude_provider states the key is held in memory only. Writing it
+		// here would quietly break that, so the key comes from the environment
+		// or is typed for one session.
+	}
 }
 
 void save_from(player_launcher *players, download_manager *downloads,
-                torrent_download_source *torrents) {
+                torrent_download_source *torrents, ollama_provider *local_ai,
+                claude_provider *external_ai) {
 	QSettings s = open_settings();
 
 	if (players) {
@@ -86,6 +122,12 @@ void save_from(player_launcher *players, download_manager *downloads,
 		s.setValue("torrent/listen_interfaces", torrents->listen_interfaces());
 		s.setValue("torrent/sequential", torrents->sequential());
 	}
+	if (local_ai) {
+		s.setValue("ai/ollama_endpoint", local_ai->endpoint().toString());
+		s.setValue("ai/ollama_model", local_ai->model());
+	}
+	if (external_ai)
+		s.setValue("ai/claude_model", external_ai->model());
 	s.sync();
 }
 
@@ -96,9 +138,11 @@ void save_from(player_launcher *players, download_manager *downloads,
 settings_dialog::settings_dialog(player_launcher *players,
                                   download_manager *downloads,
                                   torrent_download_source *torrents,
+                                  ollama_provider *local_ai,
+                                  claude_provider *external_ai,
                                   QWidget *parent)
 	: QDialog(parent), m_players(players), m_downloads(downloads),
-	  m_torrents(torrents) {
+	  m_torrents(torrents), m_local_ai(local_ai), m_external_ai(external_ai) {
 	setWindowTitle("Settings");
 	resize(640, 540);
 
@@ -108,10 +152,13 @@ settings_dialog::settings_dialog(player_launcher *players,
 
 	auto *player_page = new QWidget(tabs);
 	auto *dl_page     = new QWidget(tabs);
+	auto *ai_page     = new QWidget(tabs);
 	build_player_page(player_page);
 	build_download_page(dl_page);
+	build_ai_page(ai_page);
 	tabs->addTab(player_page, "&Player");
 	tabs->addTab(dl_page, "&Downloads");
+	tabs->addTab(ai_page, "&AI");
 
 	auto *buttons = new QDialogButtonBox(
 		QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -260,6 +307,106 @@ void settings_dialog::build_download_page(QWidget *page) {
 	v->addStretch(1);
 }
 
+void settings_dialog::build_ai_page(QWidget *page) {
+	auto *v = new QVBoxLayout(page);
+
+	auto *intro = new QLabel(
+		"The tree reorganizer and the ad-filter proposals ask a model. Only "
+		"metadata is ever sent — titles, URLs and structure — and nothing "
+		"leaves until you review it and press Send.", page);
+	intro->setWordWrap(true);
+	v->addWidget(intro);
+
+	auto *group = new QGroupBox("Which backend", page);
+	auto *gv    = new QVBoxLayout(group);
+
+	m_ai_auto = new QRadioButton(
+		"Automatic — use the local model when it is running", group);
+	m_ai_local = new QRadioButton(
+		"Local only — never use an external service", group);
+	m_ai_external = new QRadioButton("Claude (external service)", group);
+
+	m_ai_auto->setToolTip("Falls back to Claude only when no local model answers");
+	// The point of this option: §1's "data stays on the machine" should be
+	// something you can hold the app to, not a default that silently lapses
+	// the first time Ollama is not running.
+	m_ai_local->setToolTip(
+		"If the local model is not running, the AI features are simply "
+		"unavailable rather than quietly switching to a service");
+	for (QRadioButton *b : { m_ai_auto, m_ai_local, m_ai_external }) {
+		gv->addWidget(b);
+		connect(b, &QRadioButton::toggled, this, &settings_dialog::update_ai_state);
+	}
+	v->addWidget(group);
+
+	auto *local_box = new QGroupBox("Local model (Ollama)", page);
+	auto *lf = new QFormLayout(local_box);
+	m_ollama_url = new QLineEdit(local_box);
+	m_ollama_url->setPlaceholderText("http://localhost:11434");
+	m_ollama_model = new QLineEdit(local_box);
+	m_ollama_model->setPlaceholderText("llama3");
+	lf->addRow("Endpoint:", m_ollama_url);
+	lf->addRow("Model:", m_ollama_model);
+	v->addWidget(local_box);
+
+	auto *ext_box = new QGroupBox("Claude", page);
+	auto *ef = new QFormLayout(ext_box);
+	m_claude_model = new QLineEdit(ext_box);
+	m_claude_model->setPlaceholderText("claude-opus-5");
+	ef->addRow("Model:", m_claude_model);
+
+	m_claude_key = new QLineEdit(ext_box);
+	m_claude_key->setEchoMode(QLineEdit::Password);
+	m_claude_key->setPlaceholderText("from ANTHROPIC_API_KEY");
+	ef->addRow("API key:", m_claude_key);
+
+	// Not persisted, and it says so rather than letting someone find out. The
+	// settings file is plain INI and an API key does not belong in one; the
+	// same reasoning that keeps it out of the tree and policy files applies
+	// here, and writing it anywhere readable would be security theatre.
+	auto *key_note = new QLabel(
+		"<small>The key is <b>not saved</b> — it is kept in memory for this "
+		"session only. Set <tt>ANTHROPIC_API_KEY</tt> in your environment for "
+		"it to persist; this settings file is plain text and a credential does "
+		"not belong in one.</small>", ext_box);
+	key_note->setWordWrap(true);
+	ef->addRow(key_note);
+	v->addWidget(ext_box);
+
+	m_ai_status = new QLabel(page);
+	m_ai_status->setWordWrap(true);
+	v->addWidget(m_ai_status);
+	v->addStretch(1);
+}
+
+void settings_dialog::update_ai_state() {
+	if (!m_ai_status)
+		return;
+
+	const bool local_ok = m_local_ai && m_local_ai->available();
+	const bool ext_ok   = m_external_ai &&
+	                       (m_external_ai->has_api_key() ||
+	                        !m_claude_key->text().trimmed().isEmpty());
+
+	QString msg;
+	if (m_ai_local->isChecked() && !local_ok) {
+		msg = "<b>No local model is answering.</b> The reorganizer and filter "
+		      "proposals will be unavailable until Ollama is running — which "
+		      "is what this setting asks for.";
+	} else if (m_ai_external->isChecked() && !ext_ok) {
+		msg = "<b>No API key.</b> Set one above for this session, or "
+		      "<tt>ANTHROPIC_API_KEY</tt> in your environment.";
+	} else if (m_ai_auto->isChecked()) {
+		msg = local_ok
+		          ? "Local model is reachable — nothing will leave this machine."
+		          : (ext_ok ? "No local model; Claude will be used, with review "
+		                      "before anything is sent."
+		                    : "<b>Neither backend is available.</b> Start Ollama, "
+		                      "or set an API key.");
+	}
+	m_ai_status->setText(msg);
+}
+
 void settings_dialog::load() {
 	const QString sel = m_players ? m_players->selected() : QString();
 	for (QRadioButton *b : m_player_buttons) {
@@ -281,7 +428,21 @@ void settings_dialog::load() {
 		m_interfaces->setText(m_torrents->listen_interfaces());
 		m_sequential->setChecked(m_torrents->sequential());
 	}
+	if (m_local_ai) {
+		m_ollama_url->setText(m_local_ai->endpoint().toString());
+		m_ollama_model->setText(m_local_ai->model());
+	}
+	if (m_external_ai)
+		m_claude_model->setText(m_external_ai->model());
+
+	switch (settings_store::ai_mode()) {
+		case ai_choice::local_only: m_ai_local->setChecked(true); break;
+		case ai_choice::external:   m_ai_external->setChecked(true); break;
+		case ai_choice::automatic:  m_ai_auto->setChecked(true); break;
+	}
+
 	update_custom_state();
+	update_ai_state();
 }
 
 void settings_dialog::update_custom_state() {
@@ -334,5 +495,29 @@ void settings_dialog::apply() {
 		m_torrents->set_sequential(m_sequential->isChecked());
 	}
 
-	settings_store::save_from(m_players, m_downloads, m_torrents);
+	if (m_local_ai) {
+		const QString url = m_ollama_url->text().trimmed();
+		m_local_ai->set_endpoint(QUrl(url.isEmpty() ? "http://localhost:11434"
+		                                            : url));
+		const QString model = m_ollama_model->text().trimmed();
+		if (!model.isEmpty())
+			m_local_ai->set_model(model);
+		// The endpoint may have changed, so what "available" means has too.
+		m_local_ai->probe();
+	}
+	if (m_external_ai) {
+		const QString model = m_claude_model->text().trimmed();
+		if (!model.isEmpty())
+			m_external_ai->set_model(model);
+		const QString key = m_claude_key->text().trimmed();
+		if (!key.isEmpty())
+			m_external_ai->set_api_key(key);   // memory only, never stored
+	}
+
+	settings_store::set_ai_mode(m_ai_local->isChecked()    ? ai_choice::local_only
+	                            : m_ai_external->isChecked() ? ai_choice::external
+	                                                         : ai_choice::automatic);
+
+	settings_store::save_from(m_players, m_downloads, m_torrents,
+	                           m_local_ai, m_external_ai);
 }

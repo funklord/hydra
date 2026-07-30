@@ -24,6 +24,8 @@ public:
 
 	void set_endpoint(const QUrl &url) { m_endpoint = url; }
 	void set_model(const QString &model) { m_model = model; }
+	QUrl    endpoint() const { return m_endpoint; }
+	QString model() const { return m_model; }
 
 	// Probes the local server and remembers the answer for available().
 	void probe();

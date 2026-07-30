@@ -86,6 +86,9 @@ private slots:
 	void start_download(const QUrl &url);
 	void open_downloads();
 	void open_settings();
+	// The one place that resolves which backend to use (§9.1). Returns null
+	// when the user's choice cannot be satisfied, with `why` set.
+	ai_provider *choose_ai(QString *why);
 	void go_back();
 	void go_forward();
 	void reload_page();

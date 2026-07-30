@@ -4,6 +4,22 @@
 #include <QObject>
 #include <QString>
 
+// Which backend the user wants used (architecture doc §9.1).
+//
+// `automatic` is the local-first rule the design describes: a reachable local
+// model handles everything and nothing leaves the machine, falling back to an
+// external provider only when there is no local one.
+//
+// `local_only` exists because "nothing leaves this machine" should be
+// something a user can *enforce*, not merely a default that quietly stops
+// applying the day Ollama is not running. Under it, no local model means no
+// AI features rather than a silent switch to a service.
+enum class ai_choice {
+	automatic,
+	local_only,
+	external,
+};
+
 // One pluggable AI backend (architecture doc §9.1).
 //
 // Resolution is local-first: if a local model is present and enabled it handles
