@@ -661,7 +661,7 @@ void torrent_download_source::poll_alerts() {
 					p.detail = "checking files";
 				} else if (m_d->completed.contains(job)) {
 					p.state  = download_state::seeding;
-					p.detail = QString("seeding to %1 peer(s), ratio %2")
+					p.detail = QString("%1 peer(s), ratio %2")
 					                .arg(st.num_peers)
 					                .arg(st.all_time_download > 0
 					                         ? double(st.all_time_upload) /
@@ -723,7 +723,10 @@ void torrent_download_source::poll_alerts() {
 				p.state    = download_state::seeding;
 				p.received = st.total_wanted_done;
 				p.total    = st.total_wanted;
-				p.detail   = "seeding";
+				// No detail: the state label already says "Complete — seeding",
+				// and repeating the word produced "Complete — seeding —
+				// seeding". The next status poll fills in peers and ratio.
+				p.detail   = QString();
 				if (!st.name.empty())
 					p.path = QDir(m_d->save_path.value(job))
 					              .filePath(QString::fromStdString(st.name));

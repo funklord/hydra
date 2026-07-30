@@ -115,8 +115,16 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// a source whose participation is publicly observable cannot start until
 	// the user has been told what it does. The manager holds the job; this is
 	// where the telling happens.
+	// Queued, not direct. consent_required is emitted from inside
+	// download_manager::enqueue(), and this handler opens a modal dialog — so a
+	// direct connection would run a nested event loop inside enqueue() and not
+	// return until the user answered. Every caller would then have to be safe
+	// against that, including the URL-scheme handler that turns an in-page
+	// magnet link into a download, where a nested loop inside an engine
+	// callback is a genuinely bad place to be. Deferring keeps enqueue() a
+	// function that returns.
 	connect(m_downloads, &download_manager::consent_required, this,
-	         &main_window::confirm_public_download);
+	         &main_window::confirm_public_download, Qt::QueuedConnection);
 
 	// Links that are not pages (§11.4). The rule is deliberately general rather
 	// than a test for one scheme: anything the browser will not render, but

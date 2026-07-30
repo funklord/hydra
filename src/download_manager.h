@@ -82,6 +82,11 @@ signals:
 
 	// A job is held because its source needs consent that has not been given.
 	// The UI is expected to explain and then call set_consent().
+	//
+	// Emitted from inside enqueue(). A handler that opens a dialog should take
+	// this on a queued connection, or enqueue() will not return until the user
+	// has answered — which turns every call site into one that must survive a
+	// nested event loop.
 	void consent_required(const QString &source_id, const QString &note, int job_id);
 
 private:

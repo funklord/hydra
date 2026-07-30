@@ -237,12 +237,25 @@ void downloads_dialog::refresh() {
 		}
 		row->setText(col_source, source_text);
 
-		const int pct = (j.total > 0)
-		                    ? int((100 * j.received) / j.total)
-		                    : (j.complete() ? 100 : -1);
+		// A job with no known total draws a busy bar, which says "working".
+		// That is right for a magnet resolving metadata and wrong for one that
+		// has failed or been cancelled — an animation on a dead transfer reads
+		// as activity that is not happening.
+		int pct;
+		if (j.total > 0)
+			pct = int((100 * j.received) / j.total);
+		else if (j.complete())
+			pct = 100;
+		else if (j.terminal())
+			pct = 0;      // stopped, and nothing is known about how far it got
+		else
+			pct = -1;     // genuinely indeterminate, and genuinely still going
 		row->setData(col_progress, role_percent, pct);
-		row->setText(col_progress, pct < 0 ? QString("…")
-		                                   : QString::number(pct) + "%");
+		row->setText(col_progress,
+		              pct < 0 ? QString("…")
+		                      : (j.terminal() && !j.complete() && j.total <= 0)
+		                            ? QString("—")
+		                            : QString::number(pct) + "%");
 
 		row->setText(col_size, j.total > 0
 		                            ? human_bytes(j.received) + " / " + human_bytes(j.total)
