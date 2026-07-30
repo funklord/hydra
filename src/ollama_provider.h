@@ -32,14 +32,26 @@ public:
 	// it does.
 	void probe();
 
-	// Probe and wait for the answer, up to `timeout_ms`.
+	// Probe and wait for the answer, up to the probe timeout.
 	//
 	// Deliberately blocking, which is the right trade here. The backend choice
 	// cannot be deferred — something has to be asked *now* — and getting it
 	// wrong is not symmetric: treating a running local model as absent sends
 	// the payload to an external service when it never had to leave the
-	// machine. A user-initiated action may cost a second to avoid that.
-	bool probe_now(int timeout_ms = 2500);
+	// machine. A user-initiated action may cost a moment to avoid that.
+	bool probe_now();
+
+	// How long to wait for the local server before giving up on it.
+	//
+	// Configurable because the right value depends entirely on where the
+	// endpoint points. On loopback the answer arrives in about a millisecond
+	// and a short timeout costs nothing. A remote host that *drops* packets
+	// rather than refusing gives no answer at all, and then the timeout is paid
+	// in full every time a dialog that needs a backend is opened — so the
+	// person who moved the endpoint off localhost is the person who needs to be
+	// able to change this.
+	void set_probe_timeout(int ms) { m_probe_timeout = qMax(100, ms); }
+	int  probe_timeout() const { return m_probe_timeout; }
 
 signals:
 	void probe_finished(bool reachable);
@@ -52,4 +64,5 @@ private:
 	QUrl    m_endpoint = QUrl("http://localhost:11434");
 	QString m_model    = "llama3";
 	bool    m_reachable = false;
+	int     m_probe_timeout = 2500;   // milliseconds
 };

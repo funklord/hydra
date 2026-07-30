@@ -29,20 +29,21 @@ void ollama_provider::probe() {
 		reply->deleteLater();
 		emit probe_finished(m_reachable);
 	});
-	// Don't let a dead localhost hang the probe.
-	QTimer::singleShot(2000, reply, [reply] {
+	// Don't let a host that never answers hang the probe.
+	QTimer::singleShot(m_probe_timeout, reply, [reply] {
 		if (reply->isRunning())
 			reply->abort();
 	});
 }
 
-bool ollama_provider::probe_now(int timeout_ms) {
+bool ollama_provider::probe_now() {
 	QEventLoop loop;
-	// Either outcome ends the wait: a finished probe, or the deadline. The
-	// deadline matters because a host that drops packets rather than refusing
-	// gives no answer at all, and the caller still needs one.
 	connect(this, &ollama_provider::probe_finished, &loop, &QEventLoop::quit);
-	QTimer::singleShot(timeout_ms, &loop, &QEventLoop::quit);
+	// The abort above is what normally ends this, and it produces a real
+	// answer rather than a guess. The grace period is only a backstop for the
+	// case where the abort itself does not deliver finished() promptly — so
+	// the wait cannot outlive the timeout by anything a user would notice.
+	QTimer::singleShot(m_probe_timeout + 500, &loop, &QEventLoop::quit);
 	probe();
 	loop.exec();
 	return m_reachable;

@@ -13,6 +13,7 @@ class QLabel;
 class QLineEdit;
 class QRadioButton;
 class QSpinBox;
+class QVBoxLayout;
 class claude_provider;
 class download_manager;
 class ollama_provider;
@@ -42,6 +43,11 @@ private:
 	void build_download_page(QWidget *page);
 	void build_ai_page(QWidget *page);
 	void update_ai_state();
+	// Probing in a settings window is an explicit act, never something that
+	// happens because the window opened. Both of these are wired to a button.
+	void check_local_model();
+	void rescan_players();
+	void populate_players();
 	void load();
 	void apply();
 	void update_custom_state();
@@ -53,6 +59,7 @@ private:
 	claude_provider         *m_external_ai = nullptr;
 
 	QList<QRadioButton *> m_player_buttons;
+	QVBoxLayout    *m_player_group_layout = nullptr;
 	QLineEdit      *m_custom_cmd   = nullptr;
 	QLabel         *m_player_note  = nullptr;
 
@@ -68,6 +75,11 @@ private:
 	QRadioButton *m_ai_external = nullptr;
 	QLineEdit    *m_ollama_url   = nullptr;
 	QLineEdit    *m_ollama_model = nullptr;
+	QSpinBox     *m_probe_timeout = nullptr;
+	QPushButton  *m_check_local   = nullptr;
+	// Nothing is claimed about the local model until it has been checked.
+	enum class probe_state { unknown, checking, reachable, unreachable };
+	probe_state   m_probe_state = probe_state::unknown;
 	QLineEdit    *m_claude_model = nullptr;
 	QLineEdit    *m_claude_key   = nullptr;
 	QLabel       *m_ai_status    = nullptr;

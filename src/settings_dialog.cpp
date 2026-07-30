@@ -18,6 +18,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QScrollArea>
 #include <QSettings>
 #include <QSpinBox>
 #include <QTabWidget>
@@ -90,6 +91,8 @@ void load_into(player_launcher *players, download_manager *downloads,
 		local_ai->set_endpoint(QUrl(s.value("ai/ollama_endpoint",
 		                                     "http://localhost:11434").toString()));
 		local_ai->set_model(s.value("ai/ollama_model", "llama3").toString());
+		local_ai->set_probe_timeout(
+			s.value("ai/probe_timeout_ms", 2500).toInt());
 	}
 	if (external_ai) {
 		const QString model = s.value("ai/claude_model").toString();
@@ -125,6 +128,7 @@ void save_from(player_launcher *players, download_manager *downloads,
 	if (local_ai) {
 		s.setValue("ai/ollama_endpoint", local_ai->endpoint().toString());
 		s.setValue("ai/ollama_model", local_ai->model());
+		s.setValue("ai/probe_timeout_ms", local_ai->probe_timeout());
 	}
 	if (external_ai)
 		s.setValue("ai/claude_model", external_ai->model());
@@ -150,15 +154,27 @@ settings_dialog::settings_dialog(player_launcher *players,
 	auto *tabs  = new QTabWidget(this);
 	outer->addWidget(tabs, 1);
 
-	auto *player_page = new QWidget(tabs);
-	auto *dl_page     = new QWidget(tabs);
-	auto *ai_page     = new QWidget(tabs);
+	auto *player_page = new QWidget;
+	auto *dl_page     = new QWidget;
+	auto *ai_page     = new QWidget;
 	build_player_page(player_page);
 	build_download_page(dl_page);
 	build_ai_page(ai_page);
-	tabs->addTab(player_page, "&Player");
-	tabs->addTab(dl_page, "&Downloads");
-	tabs->addTab(ai_page, "&AI");
+
+	// Each page scrolls. These pages carry explanatory text, and text height
+	// depends on the system font and the user's scaling — any fixed dialog
+	// height is a guess that silently clips the explanation on somebody's
+	// machine, which is worse than a scrollbar.
+	auto wrap = [tabs](QWidget *page) {
+		auto *area = new QScrollArea(tabs);
+		area->setWidget(page);
+		area->setWidgetResizable(true);
+		area->setFrameShape(QFrame::NoFrame);
+		return area;
+	};
+	tabs->addTab(wrap(player_page), "&Player");
+	tabs->addTab(wrap(dl_page), "&Downloads");
+	tabs->addTab(wrap(ai_page), "&AI");
 
 	auto *buttons = new QDialogButtonBox(
 		QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -169,17 +185,20 @@ settings_dialog::settings_dialog(player_launcher *players,
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 	outer->addWidget(buttons);
 
-	load();
-
-	// The status line reports what is reachable *now*, so ask now. Kept
-	// asynchronous here — a settings window that freezes on open would be a
-	// poor trade for a label — and the answer refreshes the label when it
-	// lands.
+	// Opening a settings window must not reach out to the network by itself:
+	// the endpoint may be remote, may be wrong, and may be mid-edit. The probe
+	// is a button, and until it is pressed nothing is claimed either way.
 	if (m_local_ai) {
 		connect(m_local_ai, &ollama_provider::probe_finished, this,
-		         [this] { update_ai_state(); });
-		m_local_ai->probe();
+		         [this](bool reachable) {
+			m_probe_state = reachable ? probe_state::reachable
+			                          : probe_state::unreachable;
+			m_check_local->setEnabled(true);
+			update_ai_state();
+		});
 	}
+
+	load();
 }
 
 void settings_dialog::build_player_page(QWidget *page) {
@@ -193,30 +212,14 @@ void settings_dialog::build_player_page(QWidget *page) {
 	v->addWidget(intro);
 
 	auto *group = new QGroupBox("External player", page);
-	auto *gv    = new QVBoxLayout(group);
+	m_player_group_layout = new QVBoxLayout(group);
+	populate_players();
 
-	// §11.3's radio group: everything supported is shown, installed ones are
-	// selectable, missing ones are greyed with the reason. The point is that a
-	// machine with only mplayer still gets a working default and can see why
-	// the others are unavailable.
-	for (const player_entry &e : m_players->players()) {
-		auto *b = new QRadioButton(group);
-		b->setProperty("player_id", e.id);
-		if (e.id == QLatin1String(player_launcher::custom_id())) {
-			b->setText("Custom…");
-			b->setToolTip("Run any command; see the box below");
-		} else {
-			b->setText(e.installed ? e.label
-			                       : QString("%1 — not installed").arg(e.label));
-			b->setEnabled(e.installed);
-			if (!e.installed)
-				b->setToolTip(QString("Install %1 to use it").arg(e.id));
-		}
-		connect(b, &QRadioButton::toggled, this,
-		         &settings_dialog::update_custom_state);
-		m_player_buttons << b;
-		gv->addWidget(b);
-	}
+	auto *rescan = new QPushButton("&Rescan for players", group);
+	rescan->setObjectName("rescan_players");
+	rescan->setToolTip("Look again at PATH — use this after installing one");
+	connect(rescan, &QPushButton::clicked, this, &settings_dialog::rescan_players);
+	m_player_group_layout->addWidget(rescan);
 	v->addWidget(group);
 
 	auto *custom_box = new QGroupBox("Custom command", page);
@@ -317,6 +320,70 @@ void settings_dialog::build_download_page(QWidget *page) {
 	v->addStretch(1);
 }
 
+// §11.3's radio group: everything supported is shown, installed ones are
+// selectable, missing ones are greyed with the reason. The point is that a
+// machine with only mplayer still gets a working default and can see why the
+// others are unavailable.
+void settings_dialog::populate_players() {
+	for (QRadioButton *b : m_player_buttons)
+		delete b;
+	m_player_buttons.clear();
+
+	int at = 0;
+	for (const player_entry &e : m_players->players()) {
+		auto *b = new QRadioButton;
+		b->setProperty("player_id", e.id);
+		if (e.id == QLatin1String(player_launcher::custom_id())) {
+			b->setText("Custom…");
+			b->setToolTip("Run any command; see the box below");
+		} else {
+			b->setText(e.installed ? e.label
+			                       : QString("%1 — not installed").arg(e.label));
+			b->setEnabled(e.installed);
+			if (!e.installed)
+				b->setToolTip(QString("Install %1 to use it").arg(e.id));
+		}
+		connect(b, &QRadioButton::toggled, this,
+		         &settings_dialog::update_custom_state);
+		m_player_buttons << b;
+		m_player_group_layout->insertWidget(at++, b);
+	}
+}
+
+void settings_dialog::rescan_players() {
+	// Scanning PATH is cheap, but it is still a probe, and it happens because
+	// the user asked — not because a window opened.
+	QString was;
+	for (QRadioButton *b : m_player_buttons)
+		if (b->isChecked())
+			was = b->property("player_id").toString();
+
+	m_players->refresh();
+	populate_players();
+
+	for (QRadioButton *b : m_player_buttons) {
+		if (b->property("player_id").toString() == was && b->isEnabled()) {
+			b->setChecked(true);
+			break;
+		}
+	}
+	update_custom_state();
+}
+
+void settings_dialog::check_local_model() {
+	if (!m_local_ai || m_probe_state == probe_state::checking)
+		return;
+	m_probe_state = probe_state::checking;
+	m_check_local->setEnabled(false);
+	// Apply what is currently in the fields first, or the button would test
+	// the old endpoint while showing the new one.
+	const QString url = m_ollama_url->text().trimmed();
+	m_local_ai->set_endpoint(QUrl(url.isEmpty() ? "http://localhost:11434" : url));
+	m_local_ai->set_probe_timeout(m_probe_timeout->value());
+	update_ai_state();
+	m_local_ai->probe();          // asynchronous: the window stays usable
+}
+
 void settings_dialog::build_ai_page(QWidget *page) {
 	auto *v = new QVBoxLayout(page);
 
@@ -355,8 +422,31 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	m_ollama_url->setPlaceholderText("http://localhost:11434");
 	m_ollama_model = new QLineEdit(local_box);
 	m_ollama_model->setPlaceholderText("llama3");
+	m_probe_timeout = new QSpinBox(local_box);
+	m_probe_timeout->setRange(100, 15000);
+	m_probe_timeout->setSingleStep(250);
+	m_probe_timeout->setSuffix(" ms");
 	lf->addRow("Endpoint:", m_ollama_url);
 	lf->addRow("Model:", m_ollama_model);
+	lf->addRow("Reachability timeout:", m_probe_timeout);
+
+	m_check_local = new QPushButton("&Check now", local_box);
+	m_check_local->setObjectName("check_local");
+	m_check_local->setToolTip("Ask the endpoint above whether it is there");
+	connect(m_check_local, &QPushButton::clicked, this,
+	         &settings_dialog::check_local_model);
+	lf->addRow(QString(), m_check_local);
+
+	// Why anyone would touch this: the cost is only paid when the endpoint
+	// stops being local, and then it is paid every time.
+	auto *probe_note = new QLabel(
+		"<small>Rechecked whenever a backend is needed, since Ollama is started "
+		"and stopped like any service. Loopback answers in about a millisecond; "
+		"a remote host that <i>drops</i> packets never answers at all and costs "
+		"this whole timeout each time — so lower it if the endpoint is not on "
+		"this machine.</small>", local_box);
+	probe_note->setWordWrap(true);
+	lf->addRow(probe_note);
 	v->addWidget(local_box);
 
 	auto *ext_box = new QGroupBox("Claude", page);
@@ -384,6 +474,7 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	v->addWidget(ext_box);
 
 	m_ai_status = new QLabel(page);
+	m_ai_status->setObjectName("ai_status");
 	m_ai_status->setWordWrap(true);
 	v->addWidget(m_ai_status);
 	v->addStretch(1);
@@ -393,26 +484,42 @@ void settings_dialog::update_ai_state() {
 	if (!m_ai_status)
 		return;
 
-	const bool local_ok = m_local_ai && m_local_ai->available();
-	const bool ext_ok   = m_external_ai &&
-	                       (m_external_ai->has_api_key() ||
-	                        !m_claude_key->text().trimmed().isEmpty());
+	const bool ext_ok = m_external_ai &&
+	                     (m_external_ai->has_api_key() ||
+	                      !m_claude_key->text().trimmed().isEmpty());
+
+	// Report only what has been established. Before the button is pressed the
+	// honest answer is "not checked", not "unavailable" — the latter would be
+	// a claim about the user's machine that nothing here has verified.
+	if (m_probe_state == probe_state::checking) {
+		m_ai_status->setText("Checking the local model…");
+		return;
+	}
 
 	QString msg;
-	if (m_ai_local->isChecked() && !local_ok) {
-		msg = "<b>No local model is answering.</b> The reorganizer and filter "
-		      "proposals will be unavailable until Ollama is running — which "
-		      "is what this setting asks for.";
-	} else if (m_ai_external->isChecked() && !ext_ok) {
+	if (m_ai_external->isChecked() && !ext_ok) {
 		msg = "<b>No API key.</b> Set one above for this session, or "
 		      "<tt>ANTHROPIC_API_KEY</tt> in your environment.";
-	} else if (m_ai_auto->isChecked()) {
-		msg = local_ok
-		          ? "Local model is reachable — nothing will leave this machine."
-		          : (ext_ok ? "No local model; Claude will be used, with review "
-		                      "before anything is sent."
-		                    : "<b>Neither backend is available.</b> Start Ollama, "
-		                      "or set an API key.");
+	} else if (m_probe_state == probe_state::unknown) {
+		msg = m_ai_local->isChecked() || m_ai_auto->isChecked()
+		          ? "Local model not checked yet — press <b>Check now</b> to see "
+		            "whether it is running."
+		          : QString();
+	} else if (m_probe_state == probe_state::reachable) {
+		msg = m_ai_external->isChecked()
+		          ? "Local model is reachable, but Claude is selected — requests "
+		            "will leave this machine."
+		          : "Local model is reachable — nothing will leave this machine.";
+	} else {   // unreachable
+		if (m_ai_local->isChecked())
+			msg = "<b>The local model did not answer.</b> With <i>Local only</i> "
+			      "set, the reorganizer and filter proposals stay unavailable "
+			      "rather than falling back — which is what that setting is for.";
+		else if (m_ai_auto->isChecked())
+			msg = ext_ok ? "<b>The local model did not answer</b>, so Claude "
+			                "would be used — with review before anything is sent."
+			             : "<b>Neither backend is available.</b> Start Ollama, or "
+			                "set an API key.";
 	}
 	m_ai_status->setText(msg);
 }
@@ -441,6 +548,7 @@ void settings_dialog::load() {
 	if (m_local_ai) {
 		m_ollama_url->setText(m_local_ai->endpoint().toString());
 		m_ollama_model->setText(m_local_ai->model());
+		m_probe_timeout->setValue(m_local_ai->probe_timeout());
 	}
 	if (m_external_ai)
 		m_claude_model->setText(m_external_ai->model());
@@ -512,8 +620,9 @@ void settings_dialog::apply() {
 		const QString model = m_ollama_model->text().trimmed();
 		if (!model.isEmpty())
 			m_local_ai->set_model(model);
-		// The endpoint may have changed, so what "available" means has too.
-		m_local_ai->probe();
+		m_local_ai->set_probe_timeout(m_probe_timeout->value());
+		// No probe here. Pressing OK is not a request to contact anything, and
+		// whatever needs a backend re-probes when it needs one anyway.
 	}
 	if (m_external_ai) {
 		const QString model = m_claude_model->text().trimmed();

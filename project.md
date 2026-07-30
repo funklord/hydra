@@ -621,6 +621,26 @@ had to leave it, and a user-initiated action can afford a second to avoid that.
 The settings page stays asynchronous — a window that freezes on open would be a
 poor trade for a label — and refreshes the status when `probe_finished` lands.
 
+**Probing in settings is a button, never a side effect of opening the window.**
+Opening a config dialog must not reach out to the network by itself — the
+endpoint may be remote, wrong, or mid-edit. So the AI page has **Check now**
+(async, disables itself while in flight, tests what is *in the field* rather
+than what was saved), and the Player page has **Rescan for players** for the
+PATH probe. Until Check now is pressed the status says "not checked yet"
+rather than claiming the model is unavailable — that would be an assertion
+about the user's machine that nothing had verified.
+
+The probe timeout is configurable (`ai/probe_timeout_ms`, default 2500,
+clamped at 100). It only matters once the endpoint stops being local: loopback
+answers in about a millisecond, but a host that *drops* packets rather than
+refusing never answers at all, and then the full timeout is paid every time a
+backend is needed. Tested against a stub that accepts and stays silent, which
+is the only case that actually costs the timeout — a refused port returns
+instantly and proves nothing.
+
+Settings pages scroll. The explanatory text made a fixed dialog height a guess
+that clipped on some font sizes, which is worse than a scrollbar.
+
 **Capability routing is now accurate.** `player_launcher`'s header still said
 the local proxy "does not exist yet" and that mplayer's manifest weakness was
 merely *reported*; both stopped being true once `hls_assembler` landed. HLS is
