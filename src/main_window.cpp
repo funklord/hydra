@@ -36,6 +36,7 @@
 #include <QSplitter>
 #include <QTreeView>
 #include <QStackedWidget>
+#include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QToolBar>
 #include <QLineEdit>
@@ -208,24 +209,6 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	shield_act->setToolTip("Site controls");
 	connect(shield_act, &QAction::triggered, this, &main_window::open_site_controls);
 
-	bar->addSeparator();
-	bar->addWidget(new QLabel(" Sort: ", this));
-	m_sort_box = new QComboBox(this);
-	m_sort_box->addItem("Tree order");
-	m_sort_box->addItem("Title A–Z");
-	m_sort_box->addItem("Newest");
-	m_sort_box->addItem("Recently seen");
-	connect(m_sort_box, &QComboBox::currentIndexChanged,
-	         this, &main_window::on_sort_mode_changed);
-	bar->addWidget(m_sort_box);
-
-	m_search = new QLineEdit(this);
-	m_search->setPlaceholderText("Search tree");
-	m_search->setClearButtonEnabled(true);
-	m_search->setMaximumWidth(200);
-	connect(m_search, &QLineEdit::textChanged, this, &main_window::on_search_changed);
-	bar->addWidget(m_search);
-
 	outer->addWidget(bar);
 
 	// --- Central splitter ----------------------------------------------
@@ -245,8 +228,40 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	placeholder->setAlignment(Qt::AlignCenter);
 	m_stack->addWidget(placeholder);
 
+	// Sort and Search filter the *tree*, so they belong above the tree rather
+	// than in the toolbar beside Back/Forward/Address — those act on the page.
+	// Putting a control next to what it does not control is a small lie about
+	// the layout, and it costs a beat every time to work out which pane the
+	// search box searches.
+	QWidget *sidebar = new QWidget(this);
+	QVBoxLayout *side = new QVBoxLayout(sidebar);
+	side->setContentsMargins(4, 4, 4, 0);
+	side->setSpacing(4);
+
+	m_search = new QLineEdit(sidebar);
+	m_search->setPlaceholderText("Search tree");
+	m_search->setClearButtonEnabled(true);
+	connect(m_search, &QLineEdit::textChanged, this, &main_window::on_search_changed);
+	side->addWidget(m_search);
+
+	QHBoxLayout *sort_row = new QHBoxLayout;
+	sort_row->setContentsMargins(0, 0, 0, 0);
+	sort_row->setSpacing(4);
+	sort_row->addWidget(new QLabel("Sort:", sidebar));
+	m_sort_box = new QComboBox(sidebar);
+	m_sort_box->addItem("Tree order");
+	m_sort_box->addItem("Title A–Z");
+	m_sort_box->addItem("Newest");
+	m_sort_box->addItem("Recently seen");
+	connect(m_sort_box, &QComboBox::currentIndexChanged,
+	         this, &main_window::on_sort_mode_changed);
+	sort_row->addWidget(m_sort_box, 1);
+	side->addLayout(sort_row);
+
+	side->addWidget(m_tree, 1);
+
 	QSplitter *splitter = new QSplitter(Qt::Horizontal, this);
-	splitter->addWidget(m_tree);
+	splitter->addWidget(sidebar);
 	splitter->addWidget(m_stack);
 	splitter->setStretchFactor(0, 0);
 	splitter->setStretchFactor(1, 1);

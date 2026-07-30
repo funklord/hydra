@@ -886,10 +886,15 @@ Recorded verbatim-in-substance so they are not lost; none of these are started.
   stack before its first frame exists, the placeholder label swapping out, or
   Chromium's first-paint background. Needs to be looked at with a real page,
   not reasoned about.
-- **The tree filter controls are in the wrong place.** Sort and Search filter
-  the *sidebar*, but they sit in the main toolbar next to Back/Forward/Address,
-  which are about the page. They belong above the tree they act on, so the
-  control and the thing it controls are visibly one unit.
+
+## Sidebar filter controls (done)
+
+Search and Sort now sit above the tree rather than in the page toolbar. They
+filter the *sidebar*, and a control placed next to something it does not
+control is a small lie about the layout — it costs a beat every time to work
+out which pane the search box searches. Search takes the full sidebar width,
+Sort sits under it, and the toolbar is left with the things that act on the
+page.
 
 ## What is next (in order)
 - **Remaining gaps**, listed per step above — the local proxy (§10) is the
