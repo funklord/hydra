@@ -71,6 +71,19 @@ public:
 
 	// Returns the job id, or 0 if no source would take it (see `error`).
 	int enqueue(const QUrl &url, const QString &node_id, QString *error);
+
+	// Register a job whose transport is *already* running.
+	//
+	// enqueue() schedules: it picks a source, waits for a slot and calls
+	// start(). A media capture (§11.6) is the other shape — the page drives the
+	// transfer and the manager only tracks it — so there is nothing to schedule
+	// and start() would have nothing to do. Everything after this point is
+	// identical: the source reports through progressed()/finished() exactly as
+	// any other, and the downloads window cannot tell the difference.
+	//
+	// Concurrency and consent are deliberately not applied. Nothing is being
+	// queued, and the user began this by pressing the control that started it.
+	int adopt(download_source *source, const QUrl &url, const QString &node_id);
 	void cancel(int id);
 	void pause(int id);
 	void unpause(int id);

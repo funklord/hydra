@@ -100,6 +100,29 @@ int download_manager::enqueue(const QUrl &url, const QString &node_id, QString *
 	return job.id;
 }
 
+int download_manager::adopt(download_source *source, const QUrl &url,
+                             const QString &node_id) {
+	if (!source)
+		return 0;
+	if (!m_sources.contains(source))
+		add_source(source);
+
+	download_job job;
+	job.id                   = m_next_id++;
+	job.url                  = url;
+	job.node_id              = node_id;
+	job.source_id            = source->id();
+	job.status               = download_state::running;
+	job.public_participation = source->capabilities().public_participation;
+
+	m_jobs.push_back(job);
+	// Live from the outset: the transport is running, so finished() must be
+	// able to retire it and sweep() must never try to start it.
+	m_live.insert(job.id);
+	emit changed();
+	return job.id;
+}
+
 void download_manager::pump() {
 	// A source may fail synchronously inside start(), which lands in
 	// on_finished() and calls back in here mid-iteration. Rather than reason

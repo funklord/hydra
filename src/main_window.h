@@ -38,6 +38,7 @@ class downloads_dialog;
 class torrent_download_source;
 class ytdlp_resolver;
 class mse_tap;
+class capture_source;
 class filter_signals;
 class filter_list;
 class request_filter;
@@ -161,6 +162,8 @@ private:
 	QElapsedTimer       m_capture_clock;
 	qint64              m_capture_last  = 0;
 	bool                m_capture_warned = false;
+	capture_source     *m_capture_src   = nullptr;
+	int                 m_capture_job   = 0;
 	local_proxy        *m_local_proxy   = nullptr;
 	element_picker     *m_picker        = nullptr;
 	filter_signals     *m_signals       = nullptr;

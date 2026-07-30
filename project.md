@@ -929,6 +929,17 @@ connection now accumulates until its headers and declared `Content-Length` are
 both in hand. A single chunk is capped at 32 MiB — a media segment is not a
 file upload, and an absurd declared length must not be buffered.
 
+**A capture is a job.** `download_manager::adopt()` registers a job whose
+transport is already running, which is the honest shape here: `enqueue()`
+schedules — picks a source, waits for a slot, calls `start()` — and a capture
+has nothing to schedule because the page drives it. Everything after that point
+is ordinary, so `capture_source` reports through `progressed()`/`finished()`
+like any other and the downloads window cannot tell the difference. Verified
+live: the row reads `Media capture · 16.2 MiB · Downloading — 8.10 MiB/s` with a
+busy bar (a recording's length is unknown until it stops, and a percentage of an
+invented total would be a lie), Watch enabled because the file is written
+front-to-back, Pause and Resume greyed because a recording cannot be resumed.
+
 **It reports as it goes.** The action reads `Capture Playing Video — 16.20 MiB`
 and the status bar shows a running rate, both updated on a 500 ms poll of the
 proxy's byte count. If nothing arrives for twelve seconds it says so, and says

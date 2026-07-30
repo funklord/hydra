@@ -21,6 +21,7 @@
 #include "settings_dialog.h"
 #include "ytdlp_resolver.h"
 #include "mse_tap.h"
+#include "capture_source.h"
 #include "ai_provider.h"
 #include "local_proxy.h"
 #include "filter_signals.h"
@@ -118,6 +119,12 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_downloads->add_source(new http_download_source);
 	// BitTorrent is a first-class source, not a side feature (§11.4). It is
 	// only present when the build found libtorrent; there is no degraded mode.
+	// A recording is a download once it exists; it is only started differently.
+	m_capture_src = new capture_source;
+	m_downloads->add_source(m_capture_src);
+	connect(m_capture_src, &capture_source::stop_requested, this,
+	         [this](int) { if (!m_capture_url.isEmpty()) toggle_capture(); });
+
 	if (torrent_download_source::available()) {
 		m_torrents = new torrent_download_source;
 		m_downloads->add_source(m_torrents);
@@ -935,6 +942,12 @@ void main_window::toggle_capture() {
 		m_capture_url.clear();
 		m_capture_action->setChecked(false);
 
+		if (m_capture_src && m_capture_job) {
+			m_capture_src->ended(m_capture_job, got > 0,
+			                      got > 0 ? QString()
+			                              : QString("Nothing was captured."));
+			m_capture_job = 0;
+		}
 		if (got <= 0) {
 			QFile::remove(m_capture_path);
 			m_status->showMessage("Nothing was captured — the page may not use "
@@ -991,6 +1004,14 @@ void main_window::toggle_capture() {
 	// nothing says whether anything is being written until it is stopped. The
 	// commonest way to get an empty file is forgetting to press play, and that
 	// deserves to be said out loud rather than discovered at the end.
+	// From here it is an ordinary job: the downloads window shows it with the
+	// same progress and the same Cancel as anything else (§11.6).
+	QString node_id;
+	for (auto it = m_views_by_id.cbegin(); it != m_views_by_id.cend(); ++it)
+		if (it.value() == v) { node_id = it.key(); break; }
+	m_capture_job = m_downloads->adopt(m_capture_src, v->url(), node_id);
+	m_capture_src->began(m_capture_job, m_capture_path);
+
 	m_capture_last   = 0;
 	m_capture_warned = false;
 	m_capture_clock.start();
@@ -1018,9 +1039,10 @@ void main_window::poll_capture() {
 	if (got > m_capture_last) {
 		m_capture_last   = got;
 		m_capture_warned = false;
-		m_status->showMessage(QString("Capturing %1 (%2/s)")
-		                          .arg(size,
-		                               QLocale().formattedDataSize(got * 1000 / ms)));
+		const QString rate = QLocale().formattedDataSize(got * 1000 / ms) + "/s";
+		if (m_capture_src)
+			m_capture_src->progressed_to(m_capture_job, got, rate);
+		m_status->showMessage(QString("Capturing %1 (%2)").arg(size, rate));
 		return;
 	}
 

@@ -101,6 +101,8 @@ add_executable(hydra
     # relay, and the shell-side record of what a page is actually playing.
     src/mse_tap.cpp
     src/mse_tap.h
+    src/capture_source.cpp
+    src/capture_source.h
     src/download_manager.cpp
     src/download_manager.h
     # The download transport seam (architecture doc §11.4): the manager owns
