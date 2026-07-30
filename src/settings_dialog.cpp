@@ -148,7 +148,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 	: QDialog(parent), m_players(players), m_downloads(downloads),
 	  m_torrents(torrents), m_local_ai(local_ai), m_external_ai(external_ai) {
 	setWindowTitle("Settings");
-	resize(640, 540);
+	resize(660, 620);
 
 	auto *outer = new QVBoxLayout(this);
 	auto *tabs  = new QTabWidget(this);
@@ -174,7 +174,17 @@ settings_dialog::settings_dialog(player_launcher *players,
 	};
 	tabs->addTab(wrap(player_page), "&Player");
 	tabs->addTab(wrap(dl_page), "&Downloads");
-	tabs->addTab(wrap(ai_page), "&AI");
+
+	// The AI page scrolls, but its status line does not. It is the answer to
+	// the button directly above it, and a result that has scrolled out of
+	// sight is the same as no result — pressing Check now would appear to do
+	// nothing at all.
+	auto *ai_tab = new QWidget(tabs);
+	auto *ai_col = new QVBoxLayout(ai_tab);
+	ai_col->setContentsMargins(0, 0, 0, 0);
+	ai_col->addWidget(wrap(ai_page), 1);
+	ai_col->addWidget(m_ai_status);
+	tabs->addTab(ai_tab, "&AI");
 
 	auto *buttons = new QDialogButtonBox(
 		QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -473,10 +483,12 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	ef->addRow(key_note);
 	v->addWidget(ext_box);
 
-	m_ai_status = new QLabel(page);
+	// Created here but *not* added to this layout: the constructor pins it
+	// below the scroll area so it is always visible.
+	m_ai_status = new QLabel;
 	m_ai_status->setObjectName("ai_status");
 	m_ai_status->setWordWrap(true);
-	v->addWidget(m_ai_status);
+	m_ai_status->setContentsMargins(6, 4, 6, 4);
 	v->addStretch(1);
 }
 
