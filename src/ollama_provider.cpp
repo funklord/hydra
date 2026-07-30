@@ -6,6 +6,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QEventLoop>
 #include <QTimer>
 
 ollama_provider::ollama_provider(QObject *parent) : ai_provider(parent) {
@@ -26,12 +27,25 @@ void ollama_provider::probe() {
 	connect(reply, &QNetworkReply::finished, this, [this, reply] {
 		m_reachable = (reply->error() == QNetworkReply::NoError);
 		reply->deleteLater();
+		emit probe_finished(m_reachable);
 	});
 	// Don't let a dead localhost hang the probe.
 	QTimer::singleShot(2000, reply, [reply] {
 		if (reply->isRunning())
 			reply->abort();
 	});
+}
+
+bool ollama_provider::probe_now(int timeout_ms) {
+	QEventLoop loop;
+	// Either outcome ends the wait: a finished probe, or the deadline. The
+	// deadline matters because a host that drops packets rather than refusing
+	// gives no answer at all, and the caller still needs one.
+	connect(this, &ollama_provider::probe_finished, &loop, &QEventLoop::quit);
+	QTimer::singleShot(timeout_ms, &loop, &QEventLoop::quit);
+	probe();
+	loop.exec();
+	return m_reachable;
 }
 
 void ollama_provider::send(const QString &system_prompt, const QString &user_prompt) {

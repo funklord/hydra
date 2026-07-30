@@ -28,7 +28,23 @@ public:
 	QString model() const { return m_model; }
 
 	// Probes the local server and remembers the answer for available().
+	// Asynchronous: probe_finished() follows, and available() is stale until
+	// it does.
 	void probe();
+
+	// Probe and wait for the answer, up to `timeout_ms`.
+	//
+	// Deliberately blocking, which is the right trade here. The backend choice
+	// cannot be deferred — something has to be asked *now* — and getting it
+	// wrong is not symmetric: treating a running local model as absent sends
+	// the payload to an external service when it never had to leave the
+	// machine. A user-initiated action may cost a second to avoid that.
+	bool probe_now(int timeout_ms = 2500);
+
+signals:
+	void probe_finished(bool reachable);
+
+public:
 
 private:
 	QNetworkAccessManager *m_net = nullptr;

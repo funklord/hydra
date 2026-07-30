@@ -170,6 +170,16 @@ settings_dialog::settings_dialog(player_launcher *players,
 	outer->addWidget(buttons);
 
 	load();
+
+	// The status line reports what is reachable *now*, so ask now. Kept
+	// asynchronous here — a settings window that freezes on open would be a
+	// poor trade for a label — and the answer refreshes the label when it
+	// lands.
+	if (m_local_ai) {
+		connect(m_local_ai, &ollama_provider::probe_finished, this,
+		         [this] { update_ai_state(); });
+		m_local_ai->probe();
+	}
 }
 
 void settings_dialog::build_player_page(QWidget *page) {

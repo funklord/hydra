@@ -605,6 +605,22 @@ A test asserts the key never appears **anywhere in the file**, not merely that
 no `setValue` call was written — that is the property that matters and it is
 the one that could break silently.
 
+**Ollama is re-probed rather than cached.** It is started and stopped like any
+other local service, so an answer from earlier in the session says nothing
+about now. `choose_ai()` re-probes on every use and the settings page re-probes
+on open.
+
+This turned out to be fixing a live bug, not just staleness. `probe()` is
+asynchronous, and the old code probed then read `available()` immediately — so
+the answer was always the *previous* one, and on the first use of a session
+that is `false`. A running local model was therefore invisible on first use and
+the payload went to Claude instead. `probe_now()` waits for the answer with a
+bounded timeout; it blocks, deliberately, because the error is not symmetric:
+treating a running local model as absent sends data off the machine that never
+had to leave it, and a user-initiated action can afford a second to avoid that.
+The settings page stays asynchronous — a window that freezes on open would be a
+poor trade for a label — and refreshes the status when `probe_finished` lands.
+
 **Capability routing is now accurate.** `player_launcher`'s header still said
 the local proxy "does not exist yet" and that mplayer's manifest weakness was
 merely *reported*; both stopped being true once `hls_assembler` landed. HLS is

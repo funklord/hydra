@@ -32,6 +32,7 @@
 #include "policy.h"
 #include "node.h"
 
+#include <QApplication>
 #include <QSplitter>
 #include <QTreeView>
 #include <QStackedWidget>
@@ -764,10 +765,17 @@ ai_provider *main_window::choose_ai(QString *why) {
 		m_external_ai = new claude_provider(this);
 		settings_store::load_into(nullptr, nullptr, nullptr, m_local_ai,
 		                           m_external_ai);
-		m_local_ai->probe();
 	}
 
-	const bool local_ok = m_local_ai->available();
+	// Re-probe every time rather than trusting a cached answer. Ollama is
+	// started and stopped like any other local service, so a result from
+	// earlier in the session says nothing about now — and the old code probed
+	// asynchronously then read the answer immediately, which meant the first
+	// use of the day *never* saw a running local model and quietly used the
+	// external one instead.
+	QApplication::setOverrideCursor(Qt::WaitCursor);
+	const bool local_ok = m_local_ai->probe_now();
+	QApplication::restoreOverrideCursor();
 	const bool ext_ok   = m_external_ai->available();
 
 	switch (settings_store::ai_mode()) {
