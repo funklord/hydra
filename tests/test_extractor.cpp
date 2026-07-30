@@ -114,6 +114,41 @@ int main(int argc, char **argv) {
 		      "while a request the page made once still passes");
 	}
 
+	section("the page is not the stream");
+	{
+		// A real model did this one too: asked for the stream in the page, it
+		// returned the page. The document is the most certainly-observed request
+		// there is, so neither the invented rule nor the segment rule catches it,
+		// and the media list would have offered the HTML as though it were video.
+		const QString src =
+			"extract = function(p, r){ return { url: p.url, kind: 'direct' }; };";
+		const extractor_verdict v = site_extractor::check(src, page, ev);
+		check(!v.usable, "returning the page's own address is refused");
+		check(v.is_page, "and reported as the page, not as invented");
+		check(!v.invented, "since the page really was requested");
+		check(!v.is_segment, "and it is not a segment either");
+		check(v.message.contains("page's own address"),
+		      "with a reason that names what went wrong");
+
+		// Same address, dressed differently. A fragment never reaches the server
+		// and a trailing slash is the same resource, so neither is an escape.
+		const QString dressed =
+			"extract = function(p, r){ return { url: p.url + '#top', "
+			"kind: 'direct' }; };";
+		check(site_extractor::check(dressed, page, ev).is_page,
+		      "a fragment on the page url does not get around it");
+
+		// And the rule stays narrow: another request on the page's own host is
+		// still a perfectly good answer.
+		const QString same_host =
+			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
+			"if (r[i].url.indexOf('app.js')!==-1) "
+			"return { url: r[i].url, kind: 'direct' }; return null; };";
+		const extractor_verdict sh = site_extractor::check(same_host, page, ev);
+		check(sh.usable && !sh.is_page,
+		      "while a different request on the same host still passes");
+	}
+
 	section("scripts that misbehave");
 	{
 		const extractor_verdict loop = site_extractor::check(

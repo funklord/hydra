@@ -163,6 +163,19 @@ extractor_verdict check(const QString &source, const QUrl &page,
 		return v;
 	}
 
+	// Observed is not the same as correct in the other direction too, and a real
+	// model showed this one as well: asked for the stream in a page it returned
+	// the page's own address, with kind 'direct'. The document is the most
+	// certainly-observed request there is, so the rule above waves it through,
+	// and the media list would then offer the HTML as though it were a video.
+	// The page is what the question is *about*; it is never the answer.
+	if (normalise(v.result.url) == normalise(page)) {
+		v.is_page = true;
+		v.message = "Rejected: that is the page's own address, not a stream "
+		            "inside it.";
+		return v;
+	}
+
 	// Observed is not the same as correct, and a real model showed why: asked
 	// for a manifest it returned `seg-00000.ts`, which the page had genuinely
 	// requested, so the observed-URL rule waved it through. A stream that

@@ -66,7 +66,8 @@ kept explicit:
 real torrent moved over loopback byte-identically; watch-while-downloading
 against a throttled swarm; capture byte-identical across 519 segments with flat
 descriptor use; in-page magnet handling with real clicks; the yt-dlp handoff
-end to end; the extractor loop against `qwen2.5-coder` at two sizes.
+end to end; the extractor loop against `qwen2.5-coder` at two sizes, and one
+prompt change measured at ten runs an arm and reverted for making things worse.
 
 **Not measured, and known.**
 - Capture under *live network* conditions — the mechanism is proven locally,
@@ -74,12 +75,22 @@ end to end; the extractor loop against `qwen2.5-coder` at two sizes.
 - The ad-host list at runtime; the cookie filter; the permission callbacks.
 - The KeePassXC bridge above the crypto layer — `keepassxc` is not installed.
 - Whether the extractor prompt generalises past one synthetic evidence set.
+  Every prompt number in this file comes from that single fixture, so treat
+  them as facts about the fixture until a second evidence set exists.
 
 **A caution learned repeatedly.** Six separate defects this project has hit were
 wiring that existed but was never exercised — a signal never connected, a
 message written into a label something else overwrote, a store that was saved
 and never read. Treat "wired but untested" as "probably broken", and prefer a
 test that drives the real widget over one that calls the function underneath it.
+
+**And its mirror image, learned once and worth the same weight.** The extractor
+gate had 27 checks and still accepted the page's own url as a stream, because
+every check asked whether a *wrong* answer was refused and none asked what the
+obvious lazy answer would be. A suite can be thorough about the failures its
+author imagined and blind to the one the model finds in ten tries. When a real
+model is available, running it is a cheaper source of adversarial inputs than
+inventing them.
 
 ## Build & run
 
@@ -984,11 +995,26 @@ assumed: `fetch`, `XMLHttpRequest`, `document`, `window`, `require` and
 `process` all resolve to `undefined`. A script that never returns is
 interrupted from a watchdog thread — a timer on this thread would never fire,
 because a tight JS loop does not yield — so a proposal cannot hang the browser.
+Not everything web-shaped is absent, though: `URL` *is* there, as a live model
+demonstrated by parsing with it and getting no exception. It is inert — a
+string parser with no I/O — so it is left alone, but "nothing in it" is a
+statement about reach, not about the ECMAScript surface.
+
+**The page is not the stream.** A third rejection rule, and the model found it
+rather than a test: asked for the stream inside a page, a run returned the
+page's own address with `kind: 'direct'`. The document is the most
+certainly-observed request there is, so the invented rule waved it through, and
+it is fetched once, so the segment rule did not fire either. The media list
+would have offered the HTML as though it were a video. Compared after the same
+normalisation the invented rule uses, so a fragment or a trailing slash is not
+a way around it, and the rule stays narrow — another request on the page's own
+host is still a perfectly good answer.
 
 Extractors are stored as plain JSON per host, so they can be read, diffed and
-shared like the filter list. **27 checks** cover the accept path, both invented
-cases, loops, throws, unparseable source, a script defining no `extract()`, an
-unknown stream kind, the empty sandbox, and the store round-trip.
+shared like the filter list. **45 checks** cover the accept path, both invented
+cases, the segment rule, the page-url rule and its two edges, loops, throws,
+unparseable source, a script defining no `extract()`, an unknown stream kind,
+the empty sandbox, folding, fenced replies, and the store round-trip.
 
 Qt6::Qml is a new dependency, and only for `QJSEngine`. No QML is used in the UI.
 
@@ -1060,6 +1086,47 @@ disguised as `.txt` — and then tripped on the query string, since
 `…cf-master.1774687168.txt?k=…` does not *end* with `.txt`. A clean failure, and
 the kind a prompt line about query strings might fix; worth trying before
 tuning anything else.
+
+### The query-string prompt line: tried, measured, reverted
+
+It was tried. One sentence was added to rule 3 saying the url still carries its
+query string, that `endsWith('.ext')` fails on `…/name.ext?k=1`, and to cut at
+`?` or match with `includes()` or a regex. Ten runs per arm on the same
+evidence, same gate, 14B — not five, because the target failure turned out not
+to recur in the control at all:
+
+| arm | found the manifest |
+|---|---|
+| original prompt | **8 of 10** |
+| with the query-string line | **3 of 10** |
+
+Worse, not better. Fisher's exact gives p ≈ 0.07 two-tailed, so on the numbers
+alone this is suggestive rather than settled — but the mechanism is not
+statistical. **The line does not do what it was written to do.** One run found
+the disguise correctly, with `includes('/cf-master.')`, and then wrote
+`&& endsWith('.txt')` anyway, with the new sentence sitting in its context. It
+was reverted.
+
+The likely reason it hurt: every failing run reasoned about *extensions*, and
+the line is entirely about extensions, so it draws attention to the losing
+strategy while rule 2's "prefer a stable path fragment" — what every clean pass
+actually did — stays a single clause. The hypothesis worth testing next is
+therefore the opposite one: strengthen the fragment rule rather than the
+extension rule.
+
+**Do not test it on this evidence set.** Every one of these twenty runs is
+against the one synthetic fixture, and a prompt tuned until that fixture passes
+is measuring how well `cf-master` has been described to the model, not whether
+the loop can learn an unfamiliar site. That is the same over-fitting the ledger
+at the top of this file already lists as unmeasured. The fragment-first line
+should be tried against a second evidence set — which is what "point the
+extractor loop at a real site" is for.
+
+**A trap this exposed, worth keeping.** The first tally counted `gate:
+ACCEPTED` as success, and it was wrong: one accepted run had returned the page's
+own url. Gate-acceptance means *not provably bad*, not *correct* — the gate is a
+safety rule, not an oracle. Score these runs on what was picked, never on
+whether the button lit up.
 
 Inference here is **CPU-only** (12 cores, 19 GiB usable; ollama drops the
 integrated Intel GPU), so 14B takes a minute or two per proposal and 32B is not
@@ -1339,10 +1406,13 @@ page.
    never happened is a full turn on evidence from a live page rather than a
    recorded set. dramafren.org is the case that motivated the whole design, and
    the section above says plainly that URL-shaped detection fails there.
-2. **Try the query-string prompt line.** The 14B model's one clean failure was
-   `endsWith('.txt')` against `…​.txt?k=…`. One sentence in the prompt may fix
-   it — but measure over five runs, not three, because a three-sample prompt
-   change already made things worse once and had to be reverted.
+2. **Try the fragment-first prompt line — but only on new evidence.** The
+   query-string line was tried and reverted: 3 of 10 against 8 of 10 for the
+   original, and it failed to prevent the very `endsWith` it was written for
+   (section above). What every clean pass actually did was match a path
+   fragment, so the next hypothesis is to strengthen rule 2 rather than rule 3.
+   Do it *after* step 1, on a second evidence set: tuning further against the
+   one synthetic fixture fits the fixture, not the problem.
 3. **Exercise what is wired but untested**, in rough order of how much is
    riding on it: the ad-host list at runtime, the cookie filter, the permission
    callbacks, and the KeePassXC bridge above the crypto layer (which needs
