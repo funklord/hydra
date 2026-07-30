@@ -1,0 +1,135 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Test harnesses. Built separately from the app: they link the same sources
+# rather than the binary, so each suite pulls in only what it exercises.
+#
+#   cmake -S tests -B tests/build && cmake --build tests/build -j
+#
+# Then see tests/README.md — several suites need a local server or a model,
+# and the ones under live/ need a running X display and drive the real shell.
+cmake_minimum_required(VERSION 3.19)
+project(HydraTests LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
+
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Network Qml Test)
+find_package(Qt6 6.4 QUIET COMPONENTS WebEngineWidgets WebChannel)
+find_package(PkgConfig QUIET)
+find_package(LibtorrentRasterbar QUIET)
+
+set(H ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+
+# --- suites that need nothing but a build ---------------------------------
+add_executable(test_seam test_seam.cpp fake_sources.h
+    ${H}/download_manager.cpp ${H}/download_source.h
+    ${H}/http_download_source.cpp ${H}/media_detector.cpp)
+target_link_libraries(test_seam PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+
+add_executable(test_pick test_pick.cpp fake_sources.h
+    ${H}/download_manager.cpp ${H}/download_source.h
+    ${H}/downloads_dialog.cpp ${H}/local_proxy.cpp
+    ${H}/player_launcher.cpp ${H}/media_detector.cpp)
+target_link_libraries(test_pick PRIVATE Qt6::Widgets Qt6::Network)
+
+add_executable(test_extractor test_extractor.cpp
+    ${H}/site_extractor.cpp ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
+    ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/ai_provider.h)
+target_link_libraries(test_extractor PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
+
+add_executable(test_extloop test_extloop.cpp
+    ${H}/site_extractor.cpp ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
+    ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/ai_provider.h)
+target_link_libraries(test_extloop PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
+
+add_executable(test_settings test_settings.cpp
+    ${H}/settings_dialog.cpp ${H}/download_manager.cpp ${H}/download_source.h
+    ${H}/torrent_download_source.cpp ${H}/player_launcher.cpp
+    ${H}/media_detector.cpp ${H}/ollama_provider.cpp ${H}/claude_provider.cpp
+    ${H}/ai_provider.h)
+target_link_libraries(test_settings PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
+
+foreach(t test_seam test_pick test_extractor test_extloop test_settings)
+    target_include_directories(${t} PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
+endforeach()
+
+# --- suites that need a helper server (see README) -------------------------
+add_executable(test_headers test_headers.cpp ${H}/local_proxy.cpp)
+target_link_libraries(test_headers PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+
+add_executable(test_dlheaders test_dlheaders.cpp
+    ${H}/download_manager.cpp ${H}/http_download_source.cpp
+    ${H}/media_detector.cpp ${H}/download_source.h)
+target_link_libraries(test_dlheaders PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+
+add_executable(test_probe test_probe.cpp ${H}/ollama_provider.cpp ${H}/ai_provider.h)
+target_link_libraries(test_probe PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+
+add_executable(test_probe_ui test_probe_ui.cpp
+    ${H}/settings_dialog.cpp ${H}/download_manager.cpp ${H}/download_source.h
+    ${H}/torrent_download_source.cpp ${H}/player_launcher.cpp
+    ${H}/media_detector.cpp ${H}/ollama_provider.cpp ${H}/claude_provider.cpp
+    ${H}/ai_provider.h)
+target_link_libraries(test_probe_ui PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
+
+add_executable(test_ytdlp test_ytdlp.cpp ${H}/ytdlp_resolver.cpp)
+target_link_libraries(test_ytdlp PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+
+add_executable(test_ytdlp_live test_ytdlp_live.cpp ${H}/ytdlp_resolver.cpp)
+target_link_libraries(test_ytdlp_live PRIVATE Qt6::Core Qt6::Network)
+
+add_executable(test_live_model test_live_model.cpp
+    ${H}/site_extractor.cpp ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
+    ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp
+    ${H}/ollama_provider.cpp ${H}/ai_provider.h)
+target_link_libraries(test_live_model PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
+
+foreach(t test_headers test_dlheaders test_probe test_probe_ui test_ytdlp
+          test_ytdlp_live test_live_model)
+    target_include_directories(${t} PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
+endforeach()
+
+# --- suites needing libtorrent --------------------------------------------
+if(LibtorrentRasterbar_FOUND)
+    add_executable(test_torrent test_torrent.cpp
+        ${H}/download_manager.cpp ${H}/download_source.h ${H}/torrent_download_source.cpp)
+    add_executable(test_watch test_watch.cpp
+        ${H}/download_manager.cpp ${H}/download_source.h
+        ${H}/torrent_download_source.cpp ${H}/local_proxy.cpp)
+    foreach(t test_torrent test_watch)
+        target_include_directories(${t} PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
+        target_compile_definitions(${t} PRIVATE HYDRA_HAVE_LIBTORRENT)
+        target_link_libraries(${t} PRIVATE Qt6::Core Qt6::Network Qt6::Test
+            LibtorrentRasterbar::torrent-rasterbar)
+    endforeach()
+else()
+    message(STATUS "libtorrent-rasterbar not found — test_torrent/test_watch skipped")
+endif()
+
+# --- live drivers: real shell, real display -------------------------------
+if(Qt6WebEngineWidgets_FOUND)
+    file(GLOB APPSRC CONFIGURE_DEPENDS ${H}/*.cpp)
+    list(REMOVE_ITEM APPSRC ${H}/main.cpp)
+    file(GLOB APPHDR CONFIGURE_DEPENDS ${H}/*.h)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(SODIUM QUIET libsodium)
+    endif()
+    file(GLOB LIVE CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/live/try_*.cpp)
+    foreach(src ${LIVE})
+        get_filename_component(name ${src} NAME_WE)
+        add_executable(${name} ${src} ${APPSRC} ${APPHDR})
+        target_include_directories(${name} PRIVATE ${H} ${SODIUM_INCLUDE_DIRS})
+        target_link_libraries(${name} PRIVATE Qt6::Widgets Qt6::WebEngineWidgets
+            Qt6::Network Qt6::WebChannel Qt6::Qml ${SODIUM_LIBRARIES})
+        if(SODIUM_FOUND)
+            target_compile_definitions(${name} PRIVATE HYDRA_HAVE_SODIUM)
+        endif()
+        if(LibtorrentRasterbar_FOUND)
+            target_compile_definitions(${name} PRIVATE HYDRA_HAVE_LIBTORRENT)
+            target_link_libraries(${name} PRIVATE LibtorrentRasterbar::torrent-rasterbar)
+        endif()
+    endforeach()
+else()
+    message(STATUS "Qt WebEngine not found — live drivers skipped")
+endif()

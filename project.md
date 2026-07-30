@@ -16,6 +16,62 @@ external-player handoff, and a KeePassXC-based password manager. **Android is a
 planned first-class target, deferred until desktop is complete** (see
 `docs/architecture.md` §19).
 
+## Resuming work here
+
+Read `docs/architecture.md` for what the design *intends*, this file for what
+currently *is*, and `tests/README.md` before running anything. Where the two
+docs disagree about intent the architecture doc wins; about current state, this
+file wins.
+
+This file is a running log and is long. The fastest orientation is: **What is
+implemented** (the table below), then **What is next**, then the section for
+whatever you are touching.
+
+### On this machine
+
+| thing | state |
+|---|---|
+| `libsodium` | installed — KeePassXC bridge builds |
+| `libtorrent-rasterbar` 2.0.11 | installed — BitTorrent builds |
+| `Qt6::Qml` | required, and only for `QJSEngine` (the extractor sandbox). No QML in the UI |
+| `third_party/yt-dlp` | vendored submodule. Clone with `--recurse-submodules` |
+| `yt-dlp` on PATH | **not** installed, so the vendored copy is used via `python3` |
+| Ollama | installed user-local at `~/.local/ollama` (release tarball, no root). **Not running** — start with `~/.local/ollama/bin/ollama serve` |
+| models | `~/.ollama/models`, ~13.7 GB: `qwen2.5-coder:7b` and `:14b` |
+| inference | **CPU-only.** Ollama drops the integrated Intel GPU, so it is 12 cores / ~29 GB. A 14B proposal takes a minute or two; 32B is not viable |
+
+### ⚠️ Do not build with unbounded `-j`
+
+The live drivers under `tests/live/` each compile ~40 app sources and link Qt
+WebEngine, and there are a dozen of them. `cmake --build … -j` with no number
+has exhausted memory and taken the desktop session down on this machine, twice
+— worst when a model is loaded, since a 14B holds ~10 GB before the compiler
+starts. Use `-j2`, or name a single target. Stop Ollama first if it is running.
+
+### What is actually proven, and what is not
+
+The project's habit is to measure rather than assert, so the distinction is
+kept explicit:
+
+**Measured.** The interceptor's mutations; the kiosk geometric-scale spike; a
+real torrent moved over loopback byte-identically; watch-while-downloading
+against a throttled swarm; capture byte-identical across 519 segments with flat
+descriptor use; in-page magnet handling with real clicks; the yt-dlp handoff
+end to end; the extractor loop against `qwen2.5-coder` at two sizes.
+
+**Not measured, and known.**
+- Capture under *live network* conditions — the mechanism is proven locally,
+  the timing against a real site is not.
+- The ad-host list at runtime; the cookie filter; the permission callbacks.
+- The KeePassXC bridge above the crypto layer — `keepassxc` is not installed.
+- Whether the extractor prompt generalises past one synthetic evidence set.
+
+**A caution learned repeatedly.** Six separate defects this project has hit were
+wiring that existed but was never exercised — a signal never connected, a
+message written into a label something else overwrote, a store that was saved
+and never read. Treat "wired but untested" as "probably broken", and prefer a
+test that drives the real widget over one that calls the function underneath it.
+
 ## Build & run
 
 ```sh
@@ -43,6 +99,23 @@ downloads). On Debian/Ubuntu: `libsodium-dev libtorrent-rasterbar-dev`.
 install a pkg-config file called `libtorrent`, and the bare name resolves to
 rakshasa's. `CMakeLists.txt` asks for `find_package(LibtorrentRasterbar)` first
 and falls back only to the *qualified* `libtorrent-rasterbar` pkg-config name.
+
+### Tests
+
+`tests/` holds the harnesses, built separately from the app — the app's
+`CMakeLists.txt` never references them:
+
+```sh
+cmake -S tests -B tests/build
+cmake --build tests/build -j2          # a job limit, always: see the warning above
+QT_QPA_PLATFORM=offscreen ./tests/build/test_seam
+```
+
+`tests/README.md` says which suites need a helper server, libtorrent, or a
+model, and records the traps that cost time — screenshots going black when the
+screen blanks, `import` hanging against a modal grab, and libtorrent exempting
+loopback peers from rate limits so a "throttled" local transfer finishes
+instantly.
 
 ## Build-verification state
 
@@ -882,12 +955,12 @@ implementation order are in arch §11.4.
 Recorded verbatim-in-substance so they are not lost; none of these are started.
 
 
-## Site extractors: the loop (implemented; unexercised against a live model)
+## Site extractors: the loop (implemented; measured against two model sizes)
 
 `site_extractor` runs a generated parser script against the requests a page
 made, and decides whether the answer may be shown to the user at all. This is
-the core of arch §11.5 — the AI-produced part is not wired up yet, and the
-piece built first is deliberately the piece where being wrong is expensive.
+the core of arch §11.5, and the piece built first is deliberately the piece
+where being wrong is expensive: the gate.
 
 **The rule is the one §9.4 already uses on the tree.** A reorganization that
 invents a tab id is rejected outright because no safe repair exists; an
@@ -1250,11 +1323,24 @@ Sort sits under it, and the toolbar is left with the things that act on the
 page.
 
 ## What is next (in order)
-- **Remaining gaps**, listed per step above — the local proxy (§10) is the
-  biggest single unlock, since it covers stream assembly, request context for
-  external players, and response-level filtering at once.
-- **Android phase (deferred).** System WebView backend, adaptive drawer layout,
-  Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
+
+1. **Point the extractor loop at a real site.** Everything it needs now exists —
+   the tap gathers evidence, the loop proposes, the gate judges, and a stored
+   extractor is read back and its headers carried through the download. What has
+   never happened is a full turn on evidence from a live page rather than a
+   recorded set. dramafren.org is the case that motivated the whole design, and
+   the section above says plainly that URL-shaped detection fails there.
+2. **Try the query-string prompt line.** The 14B model's one clean failure was
+   `endsWith('.txt')` against `…​.txt?k=…`. One sentence in the prompt may fix
+   it — but measure over five runs, not three, because a three-sample prompt
+   change already made things worse once and had to be reverted.
+3. **Exercise what is wired but untested**, in rough order of how much is
+   riding on it: the ad-host list at runtime, the cookie filter, the permission
+   callbacks, and the KeePassXC bridge above the crypto layer (which needs
+   `keepassxc` installed). This project's defect history is almost entirely in
+   this category — see the caution at the top of this file.
+4. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
+   Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
 
 ## Open decisions and risks
 
