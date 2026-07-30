@@ -137,6 +137,7 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | AI reorganizer | `tree_serializer.{h,cpp}`, `tree_diff.{h,cpp}`, `reorganize_dialog.{h,cpp}` | metadata-only payload, invariant check, diff/accept |
 | Media detector | `media_detector.{h,cpp}`, `media_dialog.{h,cpp}` | URL-shaped classification, segment attribution, Watch/Download list |
 | Player handoff | `player_launcher.{h,cpp}` | PATH probe, capability routing, URL-not-pipe launch |
+| yt-dlp handoff | `ytdlp_resolver.{h,cpp}` | resolve a page to real stream URLs + headers; PATH or vendored |
 | Downloads | `download_manager.{h,cpp}`, `download_source.h`, `http_download_source.{h,cpp}` | transport seam: manager owns queue/consent, source owns bytes |
 | BitTorrent | `torrent_download_source.{h,cpp}` | libtorrent-rasterbar; magnet + .torrent, seeding, info-hash resume (optional dep) |
 | Downloads UI | `downloads_dialog.{h,cpp}` | one list for every source, progress bars, public-transfer marking (Ctrl+J) |
@@ -879,6 +880,38 @@ implementation order are in arch §11.4.
 
 Recorded verbatim-in-substance so they are not lost; none of these are started.
 
+
+## yt-dlp handoff (implemented)
+
+`ytdlp_resolver` asks yt-dlp what the video on a page actually is — the first
+thing to try per arch §11.5, because a real URL is the best possible outcome:
+everything downstream already works with one (external player, Range resume,
+the proxy's context injection). Reachable from **Tools → Find Media on This
+Page…**; results land in `media_detector` through a new `add_item()` and show
+up in the existing media dialog with Watch and Download.
+
+Found in one of two ways, in this order: `yt-dlp` on PATH, which is the copy
+the user's package manager keeps current and therefore the point of the whole
+exercise; else the vendored submodule under `python3`. Neither means
+`available()` is false and the action reports why — nothing else degrades.
+
+**Format preference is deliberate**: progressive HTTP beats a taller manifest.
+480p progressive is chosen over 720p HLS and 1080p video-only, because it needs
+no assembly, resumes with a Range request and plays in anything.
+`http_headers` are carried through, which is what keeps the CDN from answering
+403 (§11.3).
+
+**20 offline checks** on the parsing and the choice — playlists falling back to
+their first entry, `filesize_approx` standing in for `filesize`, `acodec:
+"none"` meaning no audio rather than unknown, non-JSON refused, empty formats
+treated as failure rather than empty success. Plus a live end-to-end run: the
+subprocess resolves a real page, and the action populates the media dialog.
+
+Note on that live run: the page used was a direct `.mp4`, which the detector
+already sees from the request stream, so `add_item()` correctly deduplicated
+by URL and the row shown came from the detector. The handoff is proven, but a
+page where yt-dlp finds something the detector cannot is the case still to be
+exercised.
 
 ## Media detection against a real site (tested; it does not work there)
 

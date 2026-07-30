@@ -34,6 +34,7 @@ class player_launcher;
 class download_manager;
 class downloads_dialog;
 class torrent_download_source;
+class ytdlp_resolver;
 class filter_signals;
 class filter_list;
 class request_filter;
@@ -85,6 +86,7 @@ private slots:
 	                              int job_id);
 	void start_download(const QUrl &url);
 	void open_downloads();
+	void find_media_with_ytdlp();
 	void open_settings();
 	// The one place that resolves which backend to use (§9.1). Returns null
 	// when the user's choice cannot be satisfied, with `why` set.
@@ -143,6 +145,7 @@ private:
 	download_manager   *m_downloads     = nullptr;
 	downloads_dialog   *m_downloads_ui  = nullptr;
 	torrent_download_source *m_torrents = nullptr;
+	ytdlp_resolver     *m_ytdlp          = nullptr;
 	local_proxy        *m_local_proxy   = nullptr;
 	element_picker     *m_picker        = nullptr;
 	filter_signals     *m_signals       = nullptr;

@@ -127,6 +127,18 @@ media_item media_detector::primary_for(const QString &site_host) const {
 	return list.isEmpty() ? media_item{} : list.first();
 }
 
+void media_detector::add_item(const QString &site_host, const media_item &item) {
+	{
+		QMutexLocker lock(&m_lock);
+		QList<media_item> &list = m_by_site[site_host];
+		for (const media_item &existing : list)
+			if (existing.url == item.url)
+				return;
+		list.prepend(item);   // an authoritative answer belongs at the top
+	}
+	emit site_updated(site_host, count_for(site_host));
+}
+
 void media_detector::clear_site(const QString &site_host) {
 	QMutexLocker guard(&m_lock);
 	m_by_site.remove(site_host);

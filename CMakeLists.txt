@@ -93,6 +93,10 @@ add_executable(hydra
     src/media_dialog.h
     src/player_launcher.cpp
     src/player_launcher.h
+    # yt-dlp handoff (architecture doc §11.5): the first thing to try, because
+    # a real URL makes every downstream feature work normally.
+    src/ytdlp_resolver.cpp
+    src/ytdlp_resolver.h
     src/download_manager.cpp
     src/download_manager.h
     # The download transport seam (architecture doc §11.4): the manager owns

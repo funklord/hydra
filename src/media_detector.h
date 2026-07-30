@@ -55,6 +55,11 @@ public:
 
 	void clear_site(const QString &site_host);
 
+	// Add something found by other means — the yt-dlp handoff (§11.5), which
+	// resolves a page authoritatively rather than guessing from URL shape.
+	// Deduplicated by URL, so asking twice does not double the list.
+	void add_item(const QString &site_host, const media_item &item);
+
 	static media_kind classify(const QUrl &url, bool *saveable);
 
 signals:

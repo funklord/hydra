@@ -19,6 +19,7 @@
 #include "torrent_download_source.h"
 #include "downloads_dialog.h"
 #include "settings_dialog.h"
+#include "ytdlp_resolver.h"
 #include "ai_provider.h"
 #include "local_proxy.h"
 #include "filter_signals.h"
@@ -354,6 +355,9 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *dl = tools_menu->addAction("&Downloads…", QKeySequence("Ctrl+J"),
 	                                     this, &main_window::open_downloads);
 	dl->setStatusTip("Show transfers in progress and finished");
+	QAction *find = tools_menu->addAction("&Find Media on This Page…", this,
+	                                       &main_window::find_media_with_ytdlp);
+	find->setStatusTip("Ask yt-dlp what the video on this page is");
 	QAction *prefs = tools_menu->addAction("&Settings…", this,
 	                                        &main_window::open_settings);
 	prefs->setStatusTip("Player, download folder and BitTorrent options");
@@ -862,6 +866,69 @@ ai_provider *main_window::choose_ai(QString *why) {
 	if (why)
 		*why = "No AI provider: start Ollama locally, or set ANTHROPIC_API_KEY.";
 	return nullptr;
+}
+
+void main_window::find_media_with_ytdlp() {
+	web_view_backend *v = current_view();
+	if (!v) {
+		m_status->showMessage("Open a page first.", 5000);
+		return;
+	}
+	if (!m_ytdlp)
+		m_ytdlp = new ytdlp_resolver(this);
+	if (!m_ytdlp->available()) {
+		m_status->showMessage(m_ytdlp->description(), 8000);
+		return;
+	}
+	if (m_ytdlp->busy()) {
+		m_status->showMessage("Still looking…", 3000);
+		return;
+	}
+
+	const QUrl page = v->url();
+	const QString host = page.host();
+	m_status->showMessage(QString("Asking yt-dlp about %1…").arg(host));
+
+	// One-shot: these are reconnected per request so a later answer cannot
+	// arrive against a page the user has since left.
+	m_ytdlp->disconnect(this);
+	connect(m_ytdlp, &ytdlp_resolver::resolved, this,
+	         [this, host](const resolved_media &m) {
+		int added = 0;
+		for (const media_format &f : m.formats) {
+			if (!f.has_video && !f.has_audio)
+				continue;
+			media_item item;
+			// Trust yt-dlp's protocol rather than re-guessing from the URL —
+			// knowing this authoritatively is the entire point of asking it.
+			item.kind = (f.protocol.startsWith("m3u8")) ? media_kind::hls
+			          : (f.protocol.startsWith("http_dash")) ? media_kind::dash
+			                                                 : media_kind::direct;
+			item.url       = f.url;
+			item.site_host = host;
+			item.label     = QString("%1 %2%3")
+			                     .arg(m.title.isEmpty() ? host : m.title,
+			                          f.height ? QString::number(f.height) + "p"
+			                                   : f.ext,
+			                          f.note.isEmpty() ? QString()
+			                                           : " · " + f.note);
+			m_media->add_item(host, item);
+			++added;
+		}
+		m_status->showMessage(
+			added ? QString("yt-dlp (%1): %2 stream(s) found.")
+			            .arg(m.extractor).arg(added)
+			      : QString("yt-dlp found nothing playable."), 8000);
+		if (added)
+			open_media();
+	}, Qt::SingleShotConnection);
+	connect(m_ytdlp, &ytdlp_resolver::failed, this, [this](const QString &e) {
+		// yt-dlp's own words: "Unsupported URL" is the answer that matters,
+		// and it is exactly the case §11.6's tap exists for.
+		m_status->showMessage("yt-dlp: " + e, 10000);
+	}, Qt::SingleShotConnection);
+
+	m_ytdlp->resolve(page);
 }
 
 void main_window::open_settings() {
