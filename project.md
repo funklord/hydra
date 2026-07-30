@@ -940,6 +940,18 @@ busy bar (a recording's length is unknown until it stops, and a percentage of an
 invented total would be a lie), Watch enabled because the file is written
 front-to-back, Pause and Resume greyed because a recording cannot be resumed.
 
+**Cancel from the window works, and testing it found a real bug.** The path is
+Cancel → `download_manager::cancel()` → `capture_source::cancel()` →
+`stop_requested` → the shell stops the recording, since a source cannot stop a
+page by itself. It worked, but the job then showed as **Complete**:
+`on_finished()` let a success overwrite a status already set to cancelled. HTTP
+never exposed it because aborting a reply reports failure, while a capture
+reports success whenever any bytes were written. A cancellation is the user's
+decision and now survives a source finishing afterwards — that source is
+describing what it managed before stopping, not undoing the cancel. Two seam
+checks cover it, and the live path now ends `cancelled` with the partial
+recording kept.
+
 **It reports as it goes.** The action reads `Capture Playing Video — 16.20 MiB`
 and the status bar shows a running rate, both updated on a 500 ms poll of the
 proxy's byte count. If nothing arrives for twelve seconds it says so, and says

@@ -195,9 +195,16 @@ void download_manager::on_progress(int id, const download_progress &p) {
 void download_manager::on_finished(int id, bool ok, const QString &message) {
 	m_live.remove(id);
 	if (download_job *j = find(id)) {
-		if (ok) {
+		if (j->status == download_state::cancelled) {
+			// A cancellation is the user's decision and final. A source that
+			// reports success afterwards is describing what it managed before
+			// stopping, not undoing the cancel — and this used to overwrite it,
+			// so cancelling a capture showed as "Complete". HTTP never exposed
+			// it because aborting a reply reports failure; a capture reports
+			// success whenever any bytes were written.
+		} else if (ok) {
 			j->status = download_state::done;
-		} else if (j->status != download_state::cancelled) {
+		} else {
 			j->status = download_state::failed;
 			j->error  = message;
 		}
