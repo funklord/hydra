@@ -67,7 +67,11 @@ real torrent moved over loopback byte-identically; watch-while-downloading
 against a throttled swarm; capture byte-identical across 519 segments with flat
 descriptor use; in-page magnet handling with real clicks; the yt-dlp handoff
 end to end; the extractor loop against `qwen2.5-coder` at two sizes, and one
-prompt change measured at ten runs an arm and reverted for making things worse.
+prompt change measured at ten runs an arm and reverted for making things worse;
+the content-type tier against the real CDN, where the manifest declares
+`application/vnd.apple.mpegurl` once it is asked with the page's context and
+403s without it; and the §11.5.1 helper tier against that same CDN, following a
+master playlist to a variant the page never requested in four calls.
 
 **Not measured, and known.**
 - Capture under *live network* conditions — the mechanism is proven locally,
@@ -78,12 +82,44 @@ prompt change measured at ten runs an arm and reverted for making things worse.
   **Answered, badly:** it does not. Against evidence captured from the real
   site the loop returned prose and no parser in five runs out of five, so every
   hit-rate in this file describes the synthetic fixture and nothing else.
+- **Whether it does better now that the payload carries what each address
+  actually serves.** That change landed *after* the last measurement, and it
+  supplies exactly the signal every failing run was missing, so the 0-of-5
+  above is out of date rather than wrong. Recapture and run five before
+  concluding anything further about the prompt.
+- The DOM half of the helper tier (§11.5.1). The fetch half is proven against
+  a live CDN; the DOM half is designed and unbuilt, and nothing has needed it.
 
 **A caution learned repeatedly.** Six separate defects this project has hit were
 wiring that existed but was never exercised — a signal never connected, a
 message written into a label something else overwrote, a store that was saved
 and never read. Treat "wired but untested" as "probably broken", and prefer a
 test that drives the real widget over one that calls the function underneath it.
+
+**A third, and the most expensive of the three: the apparatus lies.** Six times
+in one session a driver or a script reported something that was not true, and
+in every case the bug was in the measuring rather than in the measured:
+
+- A harness found the proposal pane by *content* — "whichever one mentions a
+  function" — so the moment a reply was prose it reported `(none)` and threw
+  away the only artefact worth reading.
+- Rewritten to find it by *position*, it then stood one pane away from breaking
+  silently, and would have reported the wrong text rather than failing.
+- A driver clicked Send the instant the dialog opened. A later change disabled
+  Send while probing, and **a disabled button ignores a click without saying
+  so**, so five runs "timed out" having never sent anything at all.
+- A test called a blocking fetch from the thread its own fake origin was
+  listening on. **A blocked thread serves nothing**, so every request timed out
+  and the fetcher looked broken.
+- A scoring script counted `extract = function` and missed `function extract`,
+  so two runs that produced perfectly good code were tallied as failures.
+- A background job's script was overwritten while bash was still executing it.
+
+The habit that catches these: make the harness report what it *saw*, not
+whether it matched — print the payload size, the number of annotated addresses,
+the elapsed time, the reply verbatim. Every one of the above was found by a
+diagnostic line rather than by a check, because a check can only fail in the
+ways its author imagined.
 
 **And its mirror image, learned once and worth the same weight.** The extractor
 gate had 27 checks and still accepted the page's own url as a stream, because
@@ -95,28 +131,54 @@ inventing them.
 
 ## The icon
 
-`icons/` holds the app icon and `icons/build_icons.py` regenerates it from
-`hydra-master.png`. Two cuts, because one drawing cannot serve the whole range:
+`icons/` holds the app icon and `icons/build_icons.py` regenerates every size
+from `hydra-master.png`. One drawing, downscaled, with the small sizes
+retouched afterwards.
 
-- **48px and up** are downscales of the master. The master is the artwork with
-  its white plate and cream halo flood-filled away and cropped hard to the ink —
-  the source render was 1024x1024 but only 774x853 of it was drawing, so a
-  quarter of every icon would otherwise have gone on nothing. It is taller than
-  it is wide and an icon slot is square, so the last 9% is squashed rather than
-  letterboxed; invisible at these sizes, and it buys back the margin.
-- **32px** is that plus a light unsharp pass, which is where losing local
-  contrast starts to matter. Not applied below, where it only adds confetti.
-- **16px is drawn pixel by pixel**, in `ICON16` in the build script. Measured
-  rather than assumed: a downscale at 16 spends most of its budget on
-  antialiased grey belonging to no shape, and in a tab strip it reads as a
-  muddy speck while the drawn one still reads as a creature. Three green heads,
-  lit eyes, a fire body, water up the left, full-strength colour, outline only
-  where two fills meet.
+**The master is the artwork cropped hard to the ink.** Its white plate and
+cream halo are flood-filled away — flood, not "delete white", so a highlight
+inside an eye survives while the halo does not — and then it is trimmed. Trim
+on a *threshold*, not on `getbbox()`: the feathered edge carries alpha 2 out of
+255, which `getbbox()` counts as content, so the obvious crop was four columns
+and two rows looser than it looked. The source was 1024x1024 and only 774x853
+of it was drawing, so a quarter of every icon would otherwise have been spent
+on background. It is taller than it is wide and an icon slot is square, so the
+last 9% is squashed rather than letterboxed: invisible at icon sizes, and it
+buys back the margin that cutting just recovered.
 
-All seven sizes are compiled in through `icons/hydra.qrc` and added to one
-`QIcon` in `main.cpp`, so Qt picks per use rather than rescaling one image —
-which is the whole reason the 16px cut exists. `packaging/install-icons.sh`
-lays the same files into a `hicolor` theme with the desktop entry.
+**32px and below are retouched after the shrink**, in three passes and in this
+order. The alpha curve is steepened first, because a shrink leaves a skirt of
+part-transparent pixels that reads as a two-pixel grey fringe on a dark ground;
+pushing the nearly-there pixels to solid and the nearly-gone ones to nothing
+gives the silhouette an edge. Then colour and contrast go back up, since
+averaging thousands of source pixels into one pulls it toward grey. Then
+sharpening, but only where it helps.
+
+**How hard depends on the size, and uniform settings are wrong.** At 32 each
+output pixel averages a few hundred inputs and takes a firm hand well. At 16 it
+averages a few thousand, and the same unsharp pass rings badly enough to invent
+cyan and magenta that are nowhere in the drawing — so 16 gets colour and
+contrast only. The numbers are in `TOUCH`, and they were set by looking at
+magnified renders rather than by taste.
+
+**A hand-drawn 16 was tried and thrown away**, and the reason generalises:
+redrawing at that size loses the artwork rather than compressing it. The
+attempt read as a strawberry — a serrated green band across the top is a hull,
+and a warm body tapering to a point below it is the berry — and it took someone
+else saying so to see it. A retouched downscale keeps the palette, the
+proportions and the silhouette that were already approved at full size.
+
+All seven sizes are compiled in through `icons/hydra.qrc` and added to a single
+`QIcon` in `main.cpp`, so Qt chooses per use instead of rescaling one image;
+adding only the large one would quietly discard the tuned small ones.
+`packaging/install-icons.sh` lays the same files into a `hicolor` theme with
+the desktop entry.
+
+**Judge small icons at their real size.** `tests/` has nothing for this because
+it is not a testable property, but the working method is: render at 16 and 32,
+magnify with nearest-neighbour on both a light and a dark ground, and look at
+the pixels. Every mistake in this section — the fringe, the ringing, the
+strawberry, the loose crop — was invisible at 256px and obvious at 16.
 
 ## Build & run
 
@@ -1157,7 +1219,7 @@ a way around it, and the rule stays narrow — another request on the page's own
 host is still a perfectly good answer.
 
 Extractors are stored as plain JSON per host, so they can be read, diffed and
-shared like the filter list. **71 checks** cover the accept path, both invented
+shared like the filter list. **77 checks** cover the accept path, both invented
 cases, the segment rule, the page-url rule and its two edges, the furniture
 rule and its mixed-type edge, the `type`/`kind` split, which addresses are worth
 probing and what the answers do to the payload, all three ways of spelling the
@@ -1733,74 +1795,32 @@ page.
 
 ## What is next (in order)
 
-1. **Give the extractor better evidence, rather than a better prompt.** Four
-   prompt iterations against captured real evidence took the model from prose,
-   to code, to the right signature, to attempting the real task — and never to
-   a working extractor (section above). On that site there is no extension
-   signal, no host signal, and every failing run reached for an extension. The
-   thing that would settle it is the local proxy's content-type tier (§10),
-   which is already the recorded answer to the same problem in
-   `media_detector::classify()` — **now built**, see the content-type tier
-   above, and measured against the real site: the manifest declares
-   `application/vnd.apple.mpegurl` once it is asked with the page's context.
-   What remains is to send the model what each candidate actually serves,
-   rather than only its address. The two cheaper things the runs turned up are
-   both done: the gate refuses what the browser fetched as an image or a
-   script, and a request's browser type is called `type` now rather than
-   sharing the name `kind` with the stream type it is not. Neither of them
-   makes the loop work on that site; they remove two ways of failing that were
-   ours rather than the model's.
-2. **Try the fragment-first prompt line — but only on new evidence.** The
-   query-string line was tried and reverted: 3 of 10 against 8 of 10 for the
-   original, and it failed to prevent the very `endsWith` it was written for
-   (section above). What every clean pass actually did was match a path
-   fragment, so the next hypothesis is to strengthen rule 2 rather than rule 3.
-   Do it *after* step 1, on a second evidence set: tuning further against the
-   one synthetic fixture fits the fixture, not the problem.
-3. **Exercise what is wired but untested**, in rough order of how much is
-   riding on it: the ad-host list at runtime, the cookie filter, the permission
+1. **Make the loop find the stream on real evidence.** Everything around it is
+   now built and measured, and it still does not work: the content-type tier
+   answers what an address serves, the probed types are folded into the payload,
+   the gate has four rules, and four prompt iterations moved the model from
+   prose to code to the right signature to attempting the real task — and never
+   to a working extractor. The last measured state is 0 of 5 on captured
+   dramafren evidence. What has *not* been tried since the payload started
+   carrying content types is simply running it again: that change landed after
+   the last measurement, and it is the one that supplies the signal every
+   failing run was missing. Recapture, run five, and read the transcript.
+2. **Try the fragment-first prompt line, on a second evidence set.** Every clean
+   pass matched a stable path fragment and every failure reached for an
+   extension, so rule 2 is the one to strengthen — but not against the one
+   fixture, which is how the last four iterations became measurements of a
+   fixture rather than of the task.
+3. **Finish the helper tier (arch §11.5.1).** The fetch half is built,
+   permissioned and proven against a live CDN: it identified the disguised
+   manifest, followed it to a variant the page never requested, and the gate
+   accepted that as *followed rather than invented*, in four calls and 320
+   bytes. What remains is the DOM half behind §13.2, and deciding whether it is
+   wanted at all — nothing has yet needed it.
+4. **Exercise what is wired but untested**, in rough order of how much is riding
+   on it: the ad-host list at runtime, the cookie filter, the permission
    callbacks, and the KeePassXC bridge above the crypto layer (which needs
    `keepassxc` installed). This project's defect history is almost entirely in
-   this category — see the caution at the top of this file.
-4. **Finish the helper tier (arch §11.5.1).** The fetch half is built ahead of
-   a site that demands it, on the reasoning that we cannot meet every site
-   others will and a tier designed against one example fits that example.
-   `helper_allowlist`, `helper_host` and the budgets are done and tested
-   offline; `hydra` appears in the sandbox only when a host is supplied, so the
-   pure tier cannot see the surface exists. The transcript is in the review
-   dialog: every call, what the server answered, refusals marked in the margin,
-   and shown on rejection as well as acceptance — that being the case where it
-   matters most. The blocking fetcher is built too: its own thread, a nested
-   loop where there is nothing to re-enter, a refusal rather than a deadlock if
-   called from its own thread, and a bounded timeout. Judging now happens off
-   the UI thread as well, so a slow CDN no longer freezes the window — asserted
-   as an ordering, not a feeling: a UI timer fires at 120 ms while the script is
-   still blocked at 410 ms. The permission is in too: `extractorFetch` and
-   `extractorDom` are ordinary §7 tri-states defaulting to block, they appear in
-   the site editor without touching it because that editor iterates the feature
-   list, and `main_window` hands the dialog a `helper_host` only where the site
-   has been granted the first.
-
-   **And it has now been run against the real site, which is where it earned
-   its keep and where three defects were found that no fake could have shown.**
-   `test_helpers_live` drives the tier with a hand-written extractor, so a
-   failure is the tier's and not a prompt's. On the third attempt: the
-   disguised manifest ranked first, `head` identified it as
-   `application/vnd.apple.mpegurl`, `text` fetched 160 bytes and taught the
-   allowlist four new addresses, and the script returned the variant — an
-   address **the page never requested**, accepted by the gate because a fetched
-   document named it. Four calls, 320 bytes. The returned variant was then
-   fetched independently and answers 200 `application/vnd.apple.mpegurl`, so
-   the answer is usable and not merely well-formed.
-
-   The first two attempts failed, and both failures were ours: the budget was
-   spent left-to-right on stylesheets and beacons before the video was reached
-   (the sandbox could not see the ranking the C++ side already computed, so
-   `hydra.candidates()` now hands it over), and then a `log()` call — which
-   costs nothing to serve — consumed the last fetch slot, so a script that
-   explained itself ran out of room to work. Notes are bounded separately now.
-
-   What remains is the DOM half behind §13.2.
+   this category — see the cautions at the top of this file.
 5. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
    Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
 

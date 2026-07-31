@@ -3,7 +3,7 @@
 
     python3 icons/build_icons.py
 
-Two cuts, because one drawing cannot serve the whole range.
+One drawing, downscaled, with the small sizes retouched afterwards.
 
 **48px and up** come from `hydra-master.png` by downscaling. The master is the
 artwork with its white plate and cream halo flood-filled away and then cropped
@@ -13,82 +13,72 @@ The artwork is taller than it is wide, and an icon slot is square, so it is
 squashed the last 9% rather than letterboxed — at these sizes the distortion is
 invisible and the recovered margin is not.
 
-**32px** is the same downscale plus a light unsharp pass. Downscaling loses
-local contrast and 32 is where that starts to matter; the pass is deliberately
-not applied below that, where it only adds confetti.
+**32px and below are downscales too, then retouched.** The alpha curve is
+steepened so the silhouette keeps an edge rather than fading out through a
+skirt of half-transparent pixels, and colour and contrast are pushed back up,
+because averaging thousands of source pixels into one greys it out. How hard
+depends on the size and is in `TOUCH`: at 32 a firm hand helps, and at 16 the
+same treatment rings and invents cyan that is nowhere in the drawing.
 
-**16px is drawn here, pixel by pixel.** No resampling. At that size a downscale
-spends most of its budget on antialiased grey belonging to no shape, and the
-result is a speck: the render's three heads, four eyes and flame swirl have to
-land on 256 pixels, and they cannot. What is drawn instead keeps only what
-survives — three green heads, lit eyes, a fire body, water curling up the left —
-in full-strength colour with one-pixel features and outline only where two
-fills meet.
+A hand-drawn 16 was tried and thrown away. Redrawing at that size loses the
+artwork rather than compressing it — the first attempt read as a strawberry —
+and a retouched downscale keeps the palette, the proportions and the silhouette
+that were approved at full size.
 """
 import os
-from PIL import Image, ImageFilter
+from PIL import Image, ImageEnhance, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MASTER = os.path.join(HERE, "hydra-master.png")
 
-# Sampled from the master rather than invented, so the two cuts sit together.
-C = {
-    '.': None,
-    'K': (55, 17, 65, 255),     # plum outline
-    'G': (127, 203, 155, 255),  # scale, lit
-    'Y': (255, 216, 74, 255),   # eye
-    'A': (255, 194, 74, 255),   # fire, bright
-    'O': (255, 119, 47, 255),   # fire, mid
-    'E': (233, 84, 31, 255),    # fire, deep
-    'B': (76, 140, 195, 255),   # water
-    'b': (47, 106, 168, 255),   # water, deep
+# How hard to push, by size. Uniform settings do not work: at 32 each output
+# pixel averages a few hundred source pixels and takes a firm hand well, while
+# at 16 it averages a few thousand and the same treatment rings -- an unsharp
+# pass at 150% on a 16px image invents cyan and magenta that are nowhere in the
+# drawing. Measured by looking at it, not by taste.
+TOUCH = {
+    16: dict(colour=1.18, contrast=1.08, sharp=None),
+    24: dict(colour=1.28, contrast=1.14, sharp=(0.5, 80)),
+    32: dict(colour=1.40, contrast=1.20, sharp=(0.7, 140)),
 }
 
-ICON16 = [
-    # Read as a strawberry in its first form, and deservedly: a serrated green
-    # band across the top is a hull, and a warm body tapering to a point below
-    # it is the berry. Both are fixed here. The heads are three separate blobs
-    # with transparent gaps between them rather than one scalloped band, and the
-    # body is a circle -- widest across its middle, not its shoulders -- so it
-    # reads as an orb the creature holds rather than as fruit. The water up the
-    # left does the rest: strawberries are not blue.
-    "......GGGG......",
-    "......GYYG......",
-    ".GGG..GGGG..GGG.",
-    "GGYGG.GGGG.GGYGG",
-    "GGGGG.OOOO.GGGGG",
-    ".GGGGOOOOOOGGGG.",
-    "..GGOOOAAAOOGG..",
-    "..OOOAAAAAAOOO..",
-    ".OOOAAAAAAAAOOO.",
-    "BOOOAAAAAAAAOOOE",
-    "BBOOAAAAAAAAOOEE",
-    ".BBOOAAAAAAOOEE.",
-    ".bBBOOOAAOOOEEE.",
-    "..bBBOOOOOOOEE..",
-    "...bBBOOOOOEE...",
-    ".....bBOOOE.....",
-]
+def retouch(im, how):
+    """Firm up a downscale so it survives being 16 or 24 pixels wide.
 
-def draw16():
-    im = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
-    px = im.load()
-    for y, row in enumerate(ICON16):
-        for x, ch in enumerate(row):
-            c = C.get(ch)
-            if c:
-                px[x, y] = c
-    return im
+    A plain LANCZOS shrink of a detailed drawing comes out soft and desaturated:
+    every output pixel is an average of dozens of input pixels, and averaging
+    pulls colour toward grey and edges toward mush. Three passes put back what
+    the averaging took, in the order that matters.
+
+    The alpha gamma comes first. The shrink leaves a wide skirt of part-transparent
+    pixels around the edge, which at 16px is a grey fringe two pixels thick on a
+    dark ground; steepening the curve pushes the nearly-there pixels to solid and
+    the nearly-gone ones to nothing, so the silhouette has an edge again.
+    """
+    r, g, b, al = im.split()
+    al = al.point(lambda v: 0 if v < 34 else min(255, int(255*(v/255)**0.55)))
+    im = Image.merge("RGBA", (r, g, b, al))
+    rgb = im.convert("RGB")
+    rgb = ImageEnhance.Color(rgb).enhance(how["colour"])    # averaging greys it out
+    rgb = ImageEnhance.Contrast(rgb).enhance(how["contrast"])  # and flattens it
+    if how["sharp"]:
+        radius, percent = how["sharp"]
+        rgb = rgb.filter(ImageFilter.UnsharpMask(radius=radius, percent=percent,
+                                                  threshold=0))
+    out = rgb.convert("RGBA")
+    out.putalpha(al)
+    return out
 
 def main():
     master = Image.open(MASTER).convert("RGBA")
-    for n in (24, 32, 48, 64, 128, 256, 512):
+    for n in (16, 24, 32, 48, 64, 128, 256, 512):
         im = master.resize((n, n), Image.LANCZOS)
-        if n in (24, 32):
-            im = im.filter(ImageFilter.UnsharpMask(radius=0.6, percent=120,
-                                                    threshold=0))
+        # Retouched where the shrink is violent enough to need it, left alone
+        # where the drawing still has room to speak for itself.
+        if n in TOUCH:
+            im = retouch(im, TOUCH[n])
         im.save(os.path.join(HERE, f"hydra-{n}.png"))
-    draw16().save(os.path.join(HERE, "hydra-16.png"))
+
     print("wrote hydra-16 … hydra-512")
 
 if __name__ == "__main__":
