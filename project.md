@@ -547,6 +547,64 @@ bytes and an intact `Content-Range`; Referer, User-Agent and Cookie each
 observed arriving upstream; an HLS manifest relayed byte-for-byte with its
 timing tags; and an unpublished token refused with 404.
 
+### The content-type tier (§10, §11.1) — and it settles the measured site
+
+`stream_probe` fetches the opening 2 KB of one address with the page's own
+`stream_context` and says what it is. Not the browser-through-the-proxy half of
+§10: inspecting every response would mean terminating TLS with a certificate
+the browser must trust, which the design does not address. This fetches one
+address the user is already being asked about, which needs none of that.
+
+**Measured against the real site, and it answers the question outright:**
+
+| fetch | result |
+|---|---|
+| the manifest, no context | **403** from Cloudflare |
+| the manifest, with Referer + User-Agent | **200**, `application/vnd.apple.mpegurl` |
+| a `seg-N-f1-v1-a1.woff2` "web font" | **206**, `video/mp4` |
+
+Two things follow, and the second corrects an assumption this file was carrying.
+
+First, the §11.3 request-context argument is confirmed again from the field: the
+same address is 403 naked and 200 with the page's Referer, so the context
+injection is what makes the tier possible at all.
+
+Second — **the disguise is in the URL only. The Content-Type is honest.** The
+manifest admits to being a playlist and the counterfeit fonts admit to being
+`video/mp4`. Everything upstream of this had assumed a server lying in both
+places. It is not lying; nobody had asked it. That is why four rounds of prompt
+work could not find the stream: the evidence handed to the model was the one
+channel where the site *does* disguise itself, and the channel where it tells
+the truth was never consulted.
+
+**The body still outranks the header, by design.** Not because this site lies,
+but because the failure mode of believing a header is silent and the cost of
+sniffing is 2 KB. `#EXTM3U` in the opening bytes settles the question whatever
+the header says, and a disagreement is reported rather than smoothed over.
+`<MPD`, an ISO-BMFF `ftyp` box, Matroska and Ogg are recognised the same way.
+
+**What it will not do.** A 403 is a CDN refusing the context, not a statement
+about content, so it reports "could not be established" rather than "not a
+stream" — as does an unreachable address. The tier is optional, so none of
+those may block an accept. Only a body that positively is not a stream, an HTML
+page, disables one.
+
+**Wired into the extractor review**, which is §11.5's last clause: the gate
+proves an address was *observed*, which is not the same as proving it is a
+stream. The review now fetches what was picked and appends what it really
+serves, advisory unless it contradicts.
+
+**25 checks**, split between classification with no network — where the
+subtlety is — and a fake origin answering the way the real one does, including
+that Referer, User-Agent, cookies and an extractor's own headers all arrive,
+and that only a range is asked for.
+
+**The obvious next step, now that this exists.** The evidence sent to the model
+is URLs, types and order — the channel this site disguises. Probing the handful
+of plausible candidates first and telling the model *what each one actually
+serves* would replace the guesswork that four prompt iterations could not fix.
+That is a change to what §11.5 sends, not to how it asks.
+
 ### Segment assembly (§11.2/§11.3)
 
 `hls_playlist` parses manifests — master vs media, variants, segments, relative
@@ -1590,7 +1648,11 @@ page.
    signal, no host signal, and every failing run reached for an extension. The
    thing that would settle it is the local proxy's content-type tier (§10),
    which is already the recorded answer to the same problem in
-   `media_detector::classify()`. The two cheaper things the runs turned up are
+   `media_detector::classify()` — **now built**, see the content-type tier
+   above, and measured against the real site: the manifest declares
+   `application/vnd.apple.mpegurl` once it is asked with the page's context.
+   What remains is to send the model what each candidate actually serves,
+   rather than only its address. The two cheaper things the runs turned up are
    both done: the gate refuses what the browser fetched as an image or a
    script, and a request's browser type is called `type` now rather than
    sharing the name `kind` with the stream type it is not. Neither of them

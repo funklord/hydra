@@ -2,6 +2,7 @@
 #include "extractor_dialog.h"
 #include "ai_provider.h"
 #include "extractor_signals.h"
+#include "stream_probe.h"
 
 #include <QDialogButtonBox>
 #include <QHash>
@@ -125,22 +126,23 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
 	// unlabelled it reads as anything the reader likes.
 	payload += "order | type | url\n";
 	payload += folded;
-	// The contract again, after the evidence rather than only before it. On the
-	// synthetic set this is redundant; on evidence captured from a real page —
-	// eighteen times longer, and shaped exactly like something one summarises —
-	// the model answered five times out of five with prose and no extract() at
-	// all. The instruction has to be the last thing read, not the first.
+	// The contract again, after the evidence rather than only before it, and the
+	// exact wording is measured rather than chosen. On the synthetic set this is
+	// redundant; on evidence captured from a real page — eighteen times longer,
+	// and shaped exactly like something one summarises — the model answered five
+	// times out of five with prose and no extract() at all. Three findings, five
+	// runs each:
 	//
-	// It has to carry the *signature*, not just "reply in JavaScript". Asking
-	// only for the latter moved four runs in five from prose to code, and all
-	// four wrote `extract(url)` over a single address: restating the format
-	// while omitting the shape displaced the shape.
-	// Described rather than shown. A skeleton here was copied out verbatim,
-	// placeholders and all — `url: <one of those urls>` came back as a syntax
-	// error — so the shape is now stated in prose with nothing that can be
-	// pasted. The note about `kind` is not padding: it names two vocabularies
-	// that share one field name, and two runs in five returned
-	// `request.kind === 'hls'`, which is never true.
+	//   * "reply in JavaScript" alone moved four in five from prose to code, and
+	//     all four wrote `extract(url)` over a single address. Restating the
+	//     format while omitting the shape displaced the shape.
+	//   * A skeleton restoring the shape was copied out verbatim, placeholders
+	//     included, so `url: <one of those urls>` came back as a syntax error.
+	//     It is prose now, with nothing that can be pasted.
+	//   * The note about `kind` is not padding. It named two vocabularies
+	//     sharing one field name, and two runs in five returned
+	//     `request.kind === 'hls'`, true of nothing. The request side is called
+	//     `type` now, and this says so.
 	payload += "\n\nNow write the extractor for the requests above. Assign to "
 	           "`extract` a function of two arguments, `page` and `requests`, "
 	           "where `requests` is the list above and each entry has `url`, "
@@ -257,6 +259,62 @@ void extractor_dialog::on_reply(const QString &text) {
 		         m_verdict.result.url.toString().left(200).toHtmlEscaped(),
 		         m_site.toHtmlEscaped()));
 	m_status->setText("Reviewed and validated. Nothing is saved until you accept.");
+
+	confirm_by_fetching();
+}
+
+// §11.5's last clause, and §10's content-type tier: the gate proves the address
+// was observed, which is not the same as proving it is a stream. So fetch its
+// opening bytes with the page's own context and look.
+//
+// Held to advisory except when it *contradicts* the proposal. The tier is
+// optional by design — no network, a CDN that refuses the context, a 403 — and
+// none of those are evidence the pick is wrong, so none of them may block an
+// accept. A body that is plainly a web page is different, and does.
+void extractor_dialog::confirm_by_fetching() {
+	if (!m_probe)
+		m_probe = new stream_probe(this);
+
+	stream_context ctx;
+	ctx.referer = m_page.toString();
+	for (auto it = m_verdict.result.headers.cbegin();
+	      it != m_verdict.result.headers.cend(); ++it) {
+		const QString name = it.key().toLower();
+		if (name == "referer")         ctx.referer = it.value();
+		else if (name == "user-agent") ctx.user_agent = it.value();
+		else if (name == "cookie")     ctx.cookies = it.value();
+		else                            ctx.extra.insert(it.key(), it.value());
+	}
+
+	const QUrl picked = m_verdict.result.url;
+	m_status->setText("Reviewed and validated. Checking what that address "
+	                   "actually serves…");
+
+	m_probe->probe(picked, ctx, [this, picked](const probe_result &r) {
+		if (m_verdict.result.url != picked)
+			return;                       // a newer proposal has overtaken this
+		QString note;
+		if (!r.reached) {
+			note = QString("Could not check what it serves: %1. The pick stands "
+			                "on the request log alone.").arg(r.reason);
+		} else if (r.kind.isEmpty() && r.status < 400) {
+			note = QString("<b>It does not look like a stream:</b> %1.")
+			           .arg(r.reason);
+			m_apply->setEnabled(false);
+		} else if (r.kind.isEmpty()) {
+			note = QString("Could not confirm: %1. The pick stands on the "
+			                "request log alone.").arg(r.reason);
+		} else {
+			note = QString("<b>Confirmed as %1</b> — %2.")
+			           .arg(r.kind.toUpper(), r.reason);
+			if (r.disagreed)
+				note += " That is the disguise this exists to see through.";
+		}
+		m_result->setText(m_result->text() + "<br><br>" + note);
+		m_status->setText(m_apply->isEnabled()
+			? "Reviewed, validated and checked. Nothing is saved until you accept."
+			: "The address does not serve a stream, so it cannot be accepted.");
+	});
 }
 
 void extractor_dialog::on_accept() {

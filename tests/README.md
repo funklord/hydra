@@ -41,6 +41,7 @@ pkill -f 'ollama serve'
 |---|---|
 | `test_seam` | the download transport seam: routing, consent gate, per-source concurrency, cancel, failure paths, pump re-entrancy |
 | `test_pick` | which file in a multi-file job Watch aims at, driven through the visible tree |
+| `test_streamtype` | the §10 content-type tier: classification, and a fake origin answering as the real one does |
 | `test_extractor` | the generated-extractor sandbox and the rules that a proposal cannot invent a URL, return a segment, or return the page itself |
 | `test_extloop` | the review loop end to end with a stub provider standing in for a model |
 | `test_settings` | settings persistence, the uninstalled-player fallback, the custom-player command template |

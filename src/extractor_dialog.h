@@ -12,6 +12,7 @@ class QStackedWidget;
 class ai_provider;
 class extractor_signals;
 class extractor_store;
+class stream_probe;
 
 // Ask for a parser for this site, then judge the answer (architecture doc
 // §11.5).
@@ -45,9 +46,14 @@ private:
 	void on_failed(const QString &error);
 	void on_accept();
 
+	// The §10 content-type tier: fetch what was picked, with the page's own
+	// context, and say what it really serves. Advisory unless it contradicts.
+	void confirm_by_fetching();
+
 	extractor_signals *m_signals  = nullptr;
 	extractor_store   *m_store    = nullptr;
 	ai_provider       *m_provider = nullptr;
+	stream_probe      *m_probe    = nullptr;
 	QString            m_site;
 	QUrl               m_page;
 	QList<evidence_request> m_evidence;

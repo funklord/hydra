@@ -129,6 +129,8 @@ add_executable(hydra
     src/settings_dialog.h
     src/local_proxy.cpp
     src/local_proxy.h
+    src/stream_probe.cpp
+    src/stream_probe.h
     src/hls_playlist.cpp
     src/hls_playlist.h
     src/hls_assembler.cpp
