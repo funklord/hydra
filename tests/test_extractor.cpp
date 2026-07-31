@@ -197,6 +197,35 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	section("every way of spelling the function");
+	{
+		// The wrapper claimed all three forms worked. The declaration form did
+		// not: it hoists, and the wrapper's own initialiser then overwrote it
+		// with null, so the gate said "defines no extract() function" about a
+		// script that plainly defined one. A real model wrote exactly this on
+		// its first well-formatted answer against real evidence.
+		const QString body =
+			"{ for (var i=0;i<r.length;i++) if (r[i].url.indexOf('cf-master')!==-1) "
+			"return { url: r[i].url, kind: 'hls' }; return null; }";
+
+		const QString decl   = "function extract(p, r) " + body;
+		const QString assign = "extract = function (p, r) " + body;
+		const QString var_   = "var extract = function (p, r) " + body;
+
+		check(site_extractor::check(decl, page, ev).usable,
+		      "a function declaration is accepted");
+		check(site_extractor::check(assign, page, ev).usable,
+		      "a bare assignment is accepted");
+		check(site_extractor::check(var_, page, ev).usable,
+		      "and a var-initialised function expression is accepted");
+
+		// The guard still has to fire when there really is no extract().
+		const extractor_verdict none =
+			site_extractor::check("var other = 1;", page, ev);
+		check(!none.usable && none.message.contains("no extract()"),
+		      "while a script defining nothing is still refused");
+	}
+
 	section("a url too long to show is a trap");
 	{
 		// summarise() truncates each url for display. The model can only return

@@ -23,10 +23,19 @@ namespace {
 // The script is wrapped rather than trusted to define anything at top level:
 // this way a proposal that is a bare expression, a function declaration or an
 // assignment all work, and none of them can leave anything behind.
+//
+// `var extract;` rather than `var extract = null;`, and the difference is not
+// cosmetic. A function *declaration* hoists to the top of this scope, and an
+// initialiser here then runs afterwards and overwrites it with null — so
+// `function extract(page, requests) { … }`, which is both valid and the most
+// natural way to write it, was rejected as "defines no extract() function".
+// A declaration with no initialiser does not disturb the hoisted binding, so
+// both forms now arrive intact. A real model wrote the broken-by-us form on
+// its first properly-formatted answer against real evidence.
 QString wrap(const QString &source) {
 	return QStringLiteral(
 	    "(function(){\n"
-	    "  var extract = null;\n"
+	    "  var extract;\n"
 	    "  %1\n"
 	    "  if (typeof extract !== 'function')\n"
 	    "    throw new Error('the script defines no extract() function');\n"

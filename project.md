@@ -1001,6 +1001,22 @@ demonstrated by parsing with it and getting no exception. It is inert — a
 string parser with no I/O — so it is left alone, but "nothing in it" is a
 statement about reach, not about the ECMAScript surface.
 
+**All three ways of spelling the function now actually work.** The wrapper's
+comment had claimed a bare expression, a function declaration and an assignment
+were equivalent, and one of them was not: the wrapper opened with
+`var extract = null;`, a function *declaration* hoists above that, and the
+initialiser then ran and overwrote it — so `function extract(page, requests)
+{ … }` was refused with "the script defines no extract() function" while
+plainly defining one. `var extract;` with no initialiser leaves the hoisted
+binding alone and all three forms arrive intact. Four checks, one per form plus
+the guard still firing on a script that defines nothing.
+
+Worth noting how it surfaced, because no amount of reading found it in months:
+a real model, given real evidence, wrote the declaration form on its first
+well-formatted answer. The synthetic fixture never produced that spelling, so
+the suite never tried it, and the comment asserting it worked is presumably why
+nobody checked.
+
 **The page is not the stream.** A third rejection rule, and the model found it
 rather than a test: asked for the stream inside a page, a run returned the
 page's own address with `kind: 'direct'`. The document is the most
