@@ -4,6 +4,7 @@
 #include "site_extractor.h"
 
 #include <QDialog>
+#include <QPointer>
 #include <QHash>
 
 class QLabel;
@@ -73,6 +74,7 @@ private:
 	void build_ui();
 	void on_send();
 	void on_reply(const QString &text);
+	void on_judged(const extractor_verdict &verdict);
 	void on_failed(const QString &error);
 	void on_accept();
 

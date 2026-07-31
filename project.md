@@ -1727,10 +1727,12 @@ page.
    and shown on rejection as well as acceptance — that being the case where it
    matters most. The blocking fetcher is built too: its own thread, a nested
    loop where there is nothing to re-enter, a refusal rather than a deadlock if
-   called from its own thread, and a bounded timeout. Still to do, and in this
-   order: run the script off the UI thread (a helper-tier run currently freezes
-   the window for the deadline, because a blocked thread serves nothing), the
-   two per-site policy tri-states, and the DOM half behind §13.2.
+   called from its own thread, and a bounded timeout. Judging now happens off
+   the UI thread as well, so a slow CDN no longer freezes the window — asserted
+   as an ordering, not a feeling: a UI timer fires at 120 ms while the script is
+   still blocked at 410 ms. Still to do: the two per-site policy tri-states
+   (nothing in the app calls `use_helpers` yet, so the tier is unreachable until
+   they exist), and the DOM half behind §13.2.
 5. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
    Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
 

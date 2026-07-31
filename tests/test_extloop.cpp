@@ -12,6 +12,8 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QTimer>
+#include <QThread>
+#include <QElapsedTimer>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -228,6 +230,67 @@ int main(int argc, char **argv) {
 		check(shown.contains("found") && shown.contains("bytes of playlist"),
 		      "and the script's own note alongside");
 		check(!shown.startsWith("!"), "nothing is marked as refused here");
+	}
+
+	section("a slow script does not freeze the window");
+	{
+		// The property, stated as an ordering rather than a feeling: a timer on
+		// this thread must fire *before* the verdict arrives. If judging ran
+		// here, the timer would be stuck behind it and could only fire after.
+		extractor_signals sig;
+		request_context c;
+		c.url = QUrl("https://cdn.example/v4/abc/cf-master.177.txt?k=UCp");
+		c.site_host = "site.example";
+		c.request_host = c.url.host();
+		c.kind = resource_kind::other;
+		sig.on_request(c, request_decision{});
+
+		auto slow = [](const QUrl &, qint64, int) -> fetch_result {
+			QThread::msleep(400);            // a CDN that takes its time
+			fetch_result r;
+			r.reached = true; r.status = 200;
+			r.content_type = "application/vnd.apple.mpegurl";
+			r.body = "#EXTM3U\n#EXT-X-ENDLIST\n";
+			return r;
+		};
+		helper_allowlist allow;
+		allow.observe(sig.evidence_for("site.example"));
+		helper_host host(&allow, slow, helper_budget{});
+
+		extractor_store store;
+		stub_provider prov;
+		prov.reply =
+			"extract = function (page, requests) {"
+			"  hydra.text(requests[0].url);"
+			"  return { url: requests[0].url, kind: 'hls' };"
+			"};";
+
+		const QUrl page("https://site.example/watch/1");
+		extractor_dialog dlg(&sig, &store, &prov, "site.example", page);
+		dlg.use_helpers(&host);
+		dlg.show();
+		spin(150);
+
+		auto *transcript = dlg.findChild<QPlainTextEdit *>("transcript");
+		qint64 ticked = -1, judged = -1;
+		QElapsedTimer clock;
+		clock.start();
+		QTimer::singleShot(120, [&] { ticked = clock.elapsed(); });
+
+		button(&dlg, "Send")->click();
+		while (clock.elapsed() < 6000 && judged < 0) {
+			QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+			if (transcript && transcript->isVisible())
+				judged = clock.elapsed();
+		}
+
+		check(judged >= 400,
+		      QString("the script really did block on a slow fetch (%1 ms)")
+		          .arg(judged));
+		check(ticked >= 0, "a timer on this thread still fired");
+		check(ticked >= 0 && judged >= 0 && ticked < judged,
+		      QString("and it fired while the script was running, not after "
+		               "(%1 ms vs %2 ms)").arg(ticked).arg(judged));
 	}
 
 	section("a script that overreaches shows why, and is refused");

@@ -13,6 +13,8 @@
 #include <QRegularExpression>
 #include <QStackedWidget>
 #include <QVBoxLayout>
+#include <QThread>
+#include <QCoreApplication>
 #include <QtGlobal>
 
 #include <algorithm>
@@ -388,8 +390,37 @@ void extractor_dialog::on_reply(const QString &text) {
 	m_pages->setCurrentIndex(1);
 
 	// Judged before it is offered, never after. The gate is the whole reason
-	// this is safe to run at all (§11.5).
-	m_verdict = site_extractor::check(m_proposal, m_page, m_evidence, m_helpers);
+	// this is safe to run at all (§11.5) — but it is judged on another thread,
+	// because a helper-tier script blocks on the network and blocking here
+	// would freeze the window for the whole deadline. The pure tier takes the
+	// same path: a runaway script is bounded by the watchdog either way, and one
+	// path is easier to reason about than two.
+	m_apply->setEnabled(false);
+	m_status->setText("Judging the proposal…");
+
+	const QString  src  = m_proposal;
+	const QUrl     page = m_page;
+	const auto     ev   = m_evidence;
+	helper_host   *hs   = m_helpers;
+	QPointer<extractor_dialog> self(this);
+
+	QThread *t = QThread::create([src, page, ev, hs, self] {
+		const extractor_verdict v = site_extractor::check(src, page, ev, hs);
+		// Back to the UI thread, and only if the dialog is still there. A
+		// closed dialog leaves this to find a null QPointer and stop, rather
+		// than writing into freed widgets.
+		QMetaObject::invokeMethod(qApp, [self, v] {
+			if (self)
+				self->on_judged(v);
+		}, Qt::QueuedConnection);
+	});
+	connect(t, &QThread::finished, t, &QObject::deleteLater);
+	t->start();
+}
+
+// The other half of on_reply, on the UI thread with a verdict in hand.
+void extractor_dialog::on_judged(const extractor_verdict &verdict) {
+	m_verdict = verdict;
 	m_apply->setEnabled(m_verdict.usable);
 
 	// Shown whatever the verdict. A rejected proposal's transcript is the more
