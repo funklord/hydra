@@ -423,7 +423,7 @@ That is a deliberately higher bar than "we support torrents", and it is what dec
 extract(evidence) -> { url, kind, headers } | null
 ```
 
-`evidence` is the captured request log. No network, no side effects. The first tier does not get the DOM at all, because for the measured case it does not need it — the manifest was in the request log; what was missing was the knowledge that a `.txt` under that path *is* a master playlist. A second, DOM-reading tier behind the existing isolated-world injection seam (§13.2, already used by autofill and the element picker) is the escalation for sites where the URL is computed in page JS, and should be a separate, consented step rather than the default.
+`evidence` is the captured request log. No network, no side effects. The first tier does not get the DOM at all, because for the measured case it does not need it — the manifest was in the request log; what was missing was the knowledge that a `.txt` under that path *is* a master playlist. That knowledge now comes from §10's content-type probe, on the C++ side, folded into the evidence before the model is asked: the input is enriched rather than the sandbox opened. The escalation for sites where the URL is computed in page JS — where there is nothing in the log to choose among — is the helper tier in §11.5.1, and it is a separate, consented step rather than the default.
 
 **Validation is the whole safety story, and it mirrors §9.4.** A proposal is run offline against the *captured* evidence and must return a URL that appears in it. An extractor that invents a URL is rejected outright, exactly as a reorganization that invents a tab id is — in both cases there is no safe repair, and accepting one would act on something fabricated. Where the local proxy is up, the picked URL is then fetched with the page's own context and must actually look like a manifest before the user is asked to accept.
 
@@ -436,6 +436,57 @@ extract(evidence) -> { url, kind, headers } | null
 It is source and tooling, not a build dependency: nothing in `CMakeLists.txt` refers to it. At runtime, prefer a `yt-dlp` on `PATH` (the §11.3 player-probe pattern) and fall back to the vendored copy under the system Python; with neither, the feature degrades to the AI path alone.
 
 **Honest limits.** yt-dlp did not support the measured site either — dedicated *or* generic — which is the case a generated extractor exists for, and also a reminder that vendoring it is not a solution by itself. And part of that site's delivery is peer-to-peer: `tracker.webtorrent.dev` was contacted only after playback began. Video arriving over WebRTC data channels is invisible to anything watching HTTP requests, generated extractor or not, and should be said plainly rather than quietly missed.
+
+### 11.5.1 The helper tier: letting a script look, without letting it reach
+
+**Status: the fetch half is implemented; DOM is not.** `helper_allowlist`,
+`helper_host` and the budgets are built and exercised offline against an
+injected fetcher, and `site_extractor::run` exposes them to a script as `hydra`
+when — and only when — a host is supplied. Built ahead of a site that demands
+it, deliberately: we cannot meet every site others will, and a tier designed
+against one example would fit that example. What follows is the design; where
+it and the code differ, the code is behind, not ahead. The pure tier plus §10's content-type probe covers the measured site: the manifest is in the request log, and asking the server what it serves settles what it is. This tier is for the case that is *anticipated but not yet met* — a URL computed in page JS that never appears in the request log at all, so there is nothing to choose among — and for following a master playlist to the variant a player would actually pick. Build it when a site demands it, not before; the design is recorded so that day is short.
+
+**The invariant generalises rather than relaxes.** The pure tier's rule is "return an address that was observed". The helper tier extends it to every address a script *touches*, not merely the one it returns:
+
+> An extractor may read or return an address only if it was observed in the request log, or appeared inside a document already fetched under this same rule. The allowlist grows from bytes the app fetched. It never grows from a string the script composed.
+
+Call it **follow, not fabricate**. It is the §9.4 rule one level up, and it is what keeps the safety story intact: a script still cannot name a destination of its own, so it has no channel to send anything anywhere. Following a master playlist to `index-f1-v1-a1.txt` is allowed because that name was *in* the playlist; inventing `evil.example/?d=…` is refused for the same reason an invented tab id is.
+
+**The surface, in three groups.**
+
+| group | calls | consent | notes |
+|---|---|---|---|
+| pure | `hydra.log(msg)` | none | writes to the transcript; `JSON`/`RegExp` are the engine's own |
+| network (2a) | `hydra.head(url)`, `hydra.text(url)` | per site | allowlisted; `head` is §10's probe, `text` returns a capped body |
+| page (2b) | `hydra.dom(selector, attr)` | separately, per site | read-only snapshot through the §13.2 isolated world |
+
+2a and 2b are **separate permissions**, because they are different powers. Reading a manifest the page already fetched is not comparable to reading the DOM of a logged-in page, and a single "advanced extractor" toggle would quietly grant the second to get the first.
+
+**Budgets, enforced in C++ and not negotiable from script:** at most 8 helper calls, 512 KB total fetched, and a 10-second wall clock for the whole run, on top of the existing watchdog that interrupts a script which never returns. A breach is not a partial answer — the run yields nothing and says which budget it hit.
+
+**Execution model, which is the hard part.** `QJSEngine` is synchronous and the network is not. The script therefore runs on a **worker thread**; a helper call marshals to the network thread and blocks the worker until the reply, the deadline, or the watchdog's interrupt. The alternative — promise-returning helpers — is rejected twice over: `QJSEngine` has no event loop to resolve them, and it would force generated code into an async shape that models get wrong far more often than they get a straight-line loop wrong. The evidence for that is in `project.md`: four prompt iterations were needed to get a *synchronous* two-argument function reliably.
+
+**The transcript is what makes the review meaningful.** Every helper call and its outcome is recorded and shown in the accept dialog, so the question put to the user stops being "read this code and predict what it does" and becomes "here is what it did":
+
+```
+  head  …/cf-master.1785377837.txt?k=…   200  application/vnd.apple.mpegurl  (HLS)
+  text  …/cf-master.1785377837.txt?k=…   1.2 KB
+  head  …/index-f1-v1-a1.txt?k=…         200  application/vnd.apple.mpegurl  (HLS)
+  ->    picked the 637 kbps variant
+```
+
+The transcript is stored beside the script, so a later run that behaves differently is visible as a diff rather than as a mystery.
+
+**Re-judging, and what determinism is not.** A stored extractor is re-judged on every run today, and that continues: the four answer rules (invented, segment, page, furniture) are unchanged, and the allowlist is enforced *at call time* on every run rather than replayed from the transcript. Deliberately **not** attempted: making a helper-tier run reproducible. The site changes — that is the entire reason this exists — so a replay harness would be testing a fossil. What is guaranteed is failure-closed behaviour, not identical behaviour.
+
+**Policy integration is the existing one.** Two new per-site tri-states in the §7 PolicyEngine — `ExtractorFetch` and `ExtractorDom`, each `Allow | Block | Default` with the global default **Block** — governed by the same URL-bar editor and precedence rules as every other feature. A stored extractor records which tier it needs; if that permission is later revoked, it fails closed and reports why rather than degrading to a guess. A tier-1 extractor is unaffected and keeps working.
+
+**What the gate gains.** The answer rules are untouched. Added are *process* rules, checked the same way and reported the same way: no address outside the allowlist was touched, no budget was exceeded, and no call happened after the deadline. A violation is a named rejection, not a warning.
+
+**Threat model, stated plainly.** A helper-tier script sees evidence URLs (which on real sites carry short-lived tokens) and the bodies of documents the page already fetched. It cannot send them anywhere, because every destination must already be in the allowlist and the allowlist is built from fetched bytes. The residual risks are worth naming rather than hiding: a malicious *proposal* could still waste the budget, could read a cookie-authenticated body that the page itself fetched, and under 2b could read page content — which is why 2b is a separate consent, defaults to off, and should never be granted to get 2a. The mitigation for all three is the same as everywhere else in this design: the user sees the transcript before accepting, and nothing is stored until they do.
+
+**Testing, in this project's idiom.** The allowlist and budget logic are pure and get unit checks — a derived URL from a fetched body is accepted, a composed one is refused, the eighth call succeeds and the ninth does not, a body over the cap truncates rather than grows. The bridge gets a fake with scripted responses, so the worker-thread blocking path is exercised without a network. And, because this project's defects have overwhelmingly been in wiring rather than in logic, a live driver runs the whole thing against a real page — the offline suites have never once found the defects the live drivers found.
 
 ### 11.6 Capture at the sink: a Media Source tap
 

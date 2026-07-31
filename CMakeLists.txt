@@ -108,6 +108,8 @@ add_executable(hydra
     # Generated site extractors (architecture doc §11.5): the sandbox they run
     # in, the rule that a proposal cannot invent a URL, and the per-site store.
     src/site_extractor.cpp
+    src/extractor_helpers.cpp
+    src/extractor_helpers.h
     src/site_extractor.h
     src/extractor_signals.cpp
     src/extractor_signals.h

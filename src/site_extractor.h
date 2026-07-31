@@ -7,6 +7,8 @@
 #include <QString>
 #include <QUrl>
 
+class helper_host;
+
 // One request the page made, and the whole of what a proposal gets to reason
 // about. Deliberately thin: URLs, kinds and order, with no bodies, no cookies
 // and no credentials — the §9.3 rule that a payload carries the least that can
@@ -37,6 +39,8 @@ struct extractor_verdict {
 	bool       is_asset = false;   // the browser fetched it as an image or a
 	                               // script, so it is page furniture, not video
 	bool       timed_out = false;
+	bool       helper_breach = false;  // it reached past what it was allowed, or
+	                                   // spent a budget; §11.5.1
 	QString    message;
 	extraction result;
 };
@@ -69,12 +73,18 @@ namespace site_extractor {
 //         // requests: [ { url, kind, order }, … ]
 //         return { url: "…", kind: "hls", headers: { … } };   // or null
 //     }
+//
+// `helpers` is the §11.5.1 tier: null for the pure tier, which is the default
+// and gets no `hydra` object at all, so a script written against it cannot even
+// see that the tier exists.
 extraction run(const QString &source, const QUrl &page,
-                const QList<evidence_request> &evidence, int timeout_ms = 2000);
+                const QList<evidence_request> &evidence, int timeout_ms = 2000,
+                helper_host *helpers = nullptr);
 
 // Runs it and then judges it. Nothing reaches the user without passing here.
 extractor_verdict check(const QString &source, const QUrl &page,
-                         const QList<evidence_request> &evidence);
+                         const QList<evidence_request> &evidence,
+                         helper_host *helpers = nullptr);
 
 }  // namespace site_extractor
 

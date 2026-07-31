@@ -38,16 +38,22 @@ add_executable(test_pick test_pick.cpp fake_sources.h
 target_link_libraries(test_pick PRIVATE Qt6::Widgets Qt6::Network)
 
 add_executable(test_extractor test_extractor.cpp
-    ${H}/site_extractor.cpp ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
+    ${H}/site_extractor.cpp ${H}/extractor_helpers.cpp
+    ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
     ${H}/stream_probe.cpp ${H}/local_proxy.cpp
     ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/ai_provider.h)
 target_link_libraries(test_extractor PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
 
 add_executable(test_extloop test_extloop.cpp
-    ${H}/site_extractor.cpp ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
+    ${H}/site_extractor.cpp ${H}/extractor_helpers.cpp
+    ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
     ${H}/stream_probe.cpp ${H}/local_proxy.cpp
     ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/ai_provider.h)
 target_link_libraries(test_extloop PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
+
+add_executable(test_helpers test_helpers.cpp ${H}/extractor_helpers.cpp
+    ${H}/site_extractor.cpp ${H}/stream_probe.cpp ${H}/local_proxy.cpp)
+target_link_libraries(test_helpers PRIVATE Qt6::Core Qt6::Qml Qt6::Network Qt6::Test)
 
 add_executable(test_streamtype test_streamtype.cpp ${H}/stream_probe.cpp
     ${H}/local_proxy.cpp)
@@ -61,7 +67,7 @@ add_executable(test_settings test_settings.cpp
 target_link_libraries(test_settings PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
 
 foreach(t test_seam test_pick test_extractor test_extloop test_settings
-         test_streamtype)
+         test_streamtype test_helpers)
     target_include_directories(${t} PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
 endforeach()
 
@@ -91,7 +97,8 @@ add_executable(test_ytdlp_live test_ytdlp_live.cpp ${H}/ytdlp_resolver.cpp)
 target_link_libraries(test_ytdlp_live PRIVATE Qt6::Core Qt6::Network)
 
 add_executable(test_live_model test_live_model.cpp
-    ${H}/site_extractor.cpp ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
+    ${H}/site_extractor.cpp ${H}/extractor_helpers.cpp
+    ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
     ${H}/stream_probe.cpp ${H}/local_proxy.cpp
     ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp
     ${H}/ollama_provider.cpp ${H}/ai_provider.h)

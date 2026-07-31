@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "site_extractor.h"
+#include "extractor_helpers.h"
 
 #include <QElapsedTimer>
 #include <QFile>
@@ -8,6 +9,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJSValueIterator>
+#include <QQmlEngine>
 #include <QHash>
 #include <QRegularExpression>
 #include <QSet>
@@ -60,10 +62,21 @@ QString normalise(const QUrl &u) {
 }  // namespace
 
 extraction run(const QString &source, const QUrl &page,
-                const QList<evidence_request> &evidence, int timeout_ms) {
+                const QList<evidence_request> &evidence, int timeout_ms,
+                helper_host *helpers) {
 	extraction out;
 	QJSEngine engine;
 	engine.installExtensions(QJSEngine::ConsoleExtension);
+
+	// The §11.5.1 tier, and only when one was supplied. Without it there is no
+	// `hydra` in scope at all — a pure-tier script cannot discover the surface
+	// exists, let alone use it, which keeps the default the empty sandbox it
+	// has always been.
+	if (helpers) {
+		engine.globalObject().setProperty("hydra", engine.newQObject(helpers));
+		QQmlEngine::setObjectOwnership(helpers, QQmlEngine::CppOwnership);
+		helpers->begin();
+	}
 
 	// A script that never returns must not be able to hang the browser. The
 	// interrupt is set from another thread because a tight loop in JS never
@@ -153,9 +166,19 @@ extraction run(const QString &source, const QUrl &page,
 }
 
 extractor_verdict check(const QString &source, const QUrl &page,
-                         const QList<evidence_request> &evidence) {
+                         const QList<evidence_request> &evidence,
+                         helper_host *helpers) {
 	extractor_verdict v;
-	v.result = run(source, page, evidence);
+	v.result = run(source, page, evidence, 2000, helpers);
+
+	// A script that reached past what it was allowed, or spent a budget, does
+	// not get to return an answer anyway. Checked before the answer is even
+	// looked at, because the misbehaviour is the finding.
+	if (helpers && helpers->breached()) {
+		v.helper_breach = true;
+		v.message = "Rejected: the script " + helpers->breach() + ".";
+		return v;
+	}
 
 	if (!v.result.ok) {
 		v.timed_out = v.result.error.contains("in time");
@@ -171,7 +194,13 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	for (const evidence_request &r : evidence)
 		seen.insert(normalise(r.url));
 
-	if (!seen.contains(normalise(v.result.url))) {
+	// Observed, or reachable by following what a fetched document named. With
+	// no helper tier these are the same set; with one, the second is the point —
+	// a variant listed inside a master playlist was never requested by the page
+	// and is still not invented.
+	const bool followable =
+		helpers && helpers->allowlist() && helpers->allowlist()->allows(v.result.url);
+	if (!seen.contains(normalise(v.result.url)) && !followable) {
 		v.invented = true;
 		v.message  = "Rejected: the script returned a URL this page never "
 		             "requested (" + v.result.url.toString().left(120) + ").";
@@ -246,8 +275,15 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	}
 
 	v.usable = true;
-	v.message = QString("Picks a %1 stream the page really requested.")
-	                .arg(v.result.kind);
+	// Accurate about *which* rule it passed. With the helper tier an accepted
+	// address may be one the page never requested, reached by following a
+	// document that named it, and saying "the page really requested" would be a
+	// plain falsehood in the one place the user is deciding whether to trust it.
+	const bool observed_directly = seen.contains(normalise(v.result.url));
+	v.message = observed_directly
+		? QString("Picks a %1 stream the page really requested.").arg(v.result.kind)
+		: QString("Picks a %1 stream reached by following a document the page "
+		           "requested.").arg(v.result.kind);
 	return v;
 }
 
