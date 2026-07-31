@@ -197,6 +197,34 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	section("a url too long to show is a trap");
+	{
+		// summarise() truncates each url for display. The model can only return
+		// what it was shown, and the gate compares against the full address —
+		// so anything past the display limit is unreturnable by construction.
+		// Real evidence has such requests: the analytics calls on the measured
+		// site run past 300 characters. No stream has yet been long enough for
+		// this to bite, which is exactly why it is worth a check rather than a
+		// comment.
+		QList<evidence_request> long_ev = sample();
+		QString big = "https://long.example/v4/db/abc/cf-master.1774687168.txt?k=";
+		big += QString("x").repeated(400);
+		long_ev << evidence_request{ QUrl(big), "other", long_ev.size() };
+
+		int kept = 0;
+		const QString shown = extractor_dialog::summarise(long_ev, &kept);
+		check(!shown.contains(big), "the full address never reaches the payload");
+
+		// A model returning precisely what it was shown is judged an inventor.
+		const QString truncated = big.left(300);
+		const QString src =
+			QString("extract = function(p, r){ return { url: '%1', kind: 'hls' }; };")
+				.arg(truncated);
+		const extractor_verdict v = site_extractor::check(src, page, long_ev);
+		check(!v.usable && v.invented,
+		      "and returning the shown form is refused as invented");
+	}
+
 	section("the store");
 	{
 		const QString path = QDir::temp().filePath("hydra-extractors.json");

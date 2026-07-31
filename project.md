@@ -1035,6 +1035,20 @@ being silently dropped — a reader should be able to tell a page that fetched
 something once from one that fetched it four hundred times. Measured: 252
 requests fold to 3 lines with the disguised manifest intact.
 
+**But folding also truncates, and that is a trap with a checked edge.** Each
+line caps the url at 300 characters, while the gate compares against the full
+address — so a request longer than the cap is *unreturnable by construction*:
+the model can only return what it was shown, and what it was shown will be
+judged invented. Real evidence already contains such requests, since the
+analytics calls on the measured site run past the cap. No stream has yet been
+long enough for it to bite, which is why it is a check rather than a comment,
+and why the fix is deferred rather than guessed at — raising the cap lengthens
+a payload that is already the suspected cause of the format failures above, and
+eliding the middle leaves an address the model still cannot return. The honest
+options are to send the full url for anything that could plausibly be a stream,
+or to give proposals a way to name a request by its index rather than by
+retyping its address.
+
 **A learned extractor is actually used, and re-judged every time.** Opening the
 media list runs the stored script for that host against the *current* evidence,
 and the result is filed beside whatever detection found on its own. The gate is
