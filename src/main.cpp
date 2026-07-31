@@ -6,6 +6,7 @@
 #include "torrent_download_source.h"
 
 #include <QApplication>
+#include <QIcon>
 #include <QByteArray>
 #include <QDir>
 #include <QFileInfo>
@@ -37,6 +38,16 @@ int main(int argc, char *argv[]) {
 
 	QApplication app(argc, argv);
 	app.setApplicationName("Hydra");
+
+	// Every size is added rather than one image scaled, because the 16px cut is
+	// drawn pixel by pixel rather than resampled and would be thrown away by a
+	// QIcon that only knew the large one. Qt then picks per use: the tab strip
+	// gets the drawn 16, the alt-tab switcher gets 48, the about box gets 256.
+	QIcon icon;
+	for (int size : { 16, 24, 32, 48, 64, 128, 256 })
+		icon.addFile(QString(":/icons/hydra-%1.png").arg(size),
+		              QSize(size, size));
+	QApplication::setWindowIcon(icon);
 
 	// The only place in the tree that names a concrete web view backend
 	// (architecture doc §19.2). Swapping in the Android System WebView is

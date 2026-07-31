@@ -93,6 +93,31 @@ author imagined and blind to the one the model finds in ten tries. When a real
 model is available, running it is a cheaper source of adversarial inputs than
 inventing them.
 
+## The icon
+
+`icons/` holds the app icon and `icons/build_icons.py` regenerates it from
+`hydra-master.png`. Two cuts, because one drawing cannot serve the whole range:
+
+- **48px and up** are downscales of the master. The master is the artwork with
+  its white plate and cream halo flood-filled away and cropped hard to the ink —
+  the source render was 1024x1024 but only 774x853 of it was drawing, so a
+  quarter of every icon would otherwise have gone on nothing. It is taller than
+  it is wide and an icon slot is square, so the last 9% is squashed rather than
+  letterboxed; invisible at these sizes, and it buys back the margin.
+- **32px** is that plus a light unsharp pass, which is where losing local
+  contrast starts to matter. Not applied below, where it only adds confetti.
+- **16px is drawn pixel by pixel**, in `ICON16` in the build script. Measured
+  rather than assumed: a downscale at 16 spends most of its budget on
+  antialiased grey belonging to no shape, and in a tab strip it reads as a
+  muddy speck while the drawn one still reads as a creature. Three green heads,
+  lit eyes, a fire body, water up the left, full-strength colour, outline only
+  where two fills meet.
+
+All seven sizes are compiled in through `icons/hydra.qrc` and added to one
+`QIcon` in `main.cpp`, so Qt picks per use rather than rescaling one image —
+which is the whole reason the 16px cut exists. `packaging/install-icons.sh`
+lays the same files into a `hicolor` theme with the desktop entry.
+
 ## Build & run
 
 ```sh

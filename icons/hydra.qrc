@@ -1,0 +1,16 @@
+<!--
+  Every size is listed, and that is the point: QIcon picks the nearest entry
+  rather than scaling one image, so the 16px cut — which is drawn rather than
+  resampled — is what a tab strip actually gets.
+-->
+<RCC>
+  <qresource prefix="/icons">
+    <file>hydra-16.png</file>
+    <file>hydra-24.png</file>
+    <file>hydra-32.png</file>
+    <file>hydra-48.png</file>
+    <file>hydra-64.png</file>
+    <file>hydra-128.png</file>
+    <file>hydra-256.png</file>
+  </qresource>
+</RCC>

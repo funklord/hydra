@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Hydra
+GenericName=Web Browser
+Comment=A tab-tree browser with a per-site policy engine
+Exec=hydra %U
+Icon=hydra
+Terminal=false
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+StartupWMClass=hydra

@@ -8,6 +8,7 @@ project(Hydra VERSION 0.1 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 
 # 6.4 is a real floor, not a guess: the menu bar uses the
 # addAction(text, shortcut, receiver, member) argument order, which is the
@@ -52,6 +53,7 @@ else()
 endif()
 
 add_executable(hydra
+    icons/hydra.qrc
     src/main.cpp
     src/main_window.cpp
     src/main_window.h
