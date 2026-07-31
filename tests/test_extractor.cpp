@@ -204,6 +204,40 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	section("a request's type and a stream's kind are different words");
+	{
+		// They were both called `kind`, and a model read it the obvious way:
+		// `request.kind === 'hls'`, which is never true of anything, so it
+		// returned null and looked like a model failure rather than a naming
+		// one. The request side is `type` now, and the collision has to be
+		// gone rather than merely discouraged.
+		const QString reads_type =
+			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
+			"if (r[i].type === 'image') "
+			"return { url: r[i].url, kind: 'direct' }; return null; };";
+		const extraction got = site_extractor::run(reads_type, page, ev);
+		check(got.ok && got.url.toString().contains("poster.jpg"),
+		      "a request exposes its browser type as `type`");
+
+		const QString reads_kind =
+			"extract = function(p, r){ return { url: String(r[0].kind), "
+			"kind: 'direct' }; };";
+		const extraction gone = site_extractor::run(reads_kind, page, ev);
+		check(gone.ok && gone.url.toString() == "undefined",
+		      "and no longer carries a `kind` to be confused with the stream's");
+
+		// The return value keeps `kind`, since that one is the proposal's own
+		// conclusion rather than something observed.
+		const QString returns_kind =
+			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
+			"if (r[i].url.indexOf('cf-master')!==-1) "
+			"return { url: r[i].url, kind: 'hls' }; return null; };";
+		const extractor_verdict v =
+			site_extractor::check(returns_kind, page, ev);
+		check(v.usable && v.result.kind == "hls",
+		      "while the returned object still declares its kind");
+	}
+
 	section("page furniture is not a stream");
 	{
 		// A real run picked a Yandex cookie-sync pixel and was accepted:

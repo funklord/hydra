@@ -21,8 +21,11 @@ const char *k_system_prompt =
 	"Assign to `extract`:\n\n"
 	"  extract = function (page, requests) {\n"
 	"    // page:     { url, host }\n"
-	"    // requests: [ { url, kind, order }, ... ]\n"
-	"    return { url: <one of the request urls>, kind: 'hls'|'dash'|'direct',\n"
+	"    // requests: [ { url, type, order }, ... ]\n"
+	"    //   type is what the browser fetched it as: 'script', 'image' or\n"
+	"    //   'other'. It is never 'hls' or 'dash' — that is your conclusion,\n"
+	"    //   and it goes in `kind` below.\n"
+	"    return { url: one of the request urls, kind: 'hls'|'dash'|'direct',\n"
 	"             headers: { Referer: page.url } };   // or null\n"
 	"  };\n\n"
 	"Rules:\n"
@@ -37,7 +40,9 @@ const char *k_system_prompt =
 	"further times — those are segments. A manifest is fetched once.\n"
 	"5. Prefer the manifest over any individual segment.\n"
 	"6. Return null if nothing in the list is a stream. Returning nothing is a "
-	"clean answer; a guess is not.\n";
+	"clean answer; a guess is not.\n"
+	"7. Anything fetched as a `script` or an `image` is page furniture, not the "
+	"stream — returning one is rejected, so do not fall back to it.\n";
 
 // Requests that differ only in a run of digits are the same request repeated —
 // segment 0001, 0002, and so on.
@@ -116,6 +121,9 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
 	payload += "Host: " + m_site + "\n\n";
 	payload += QString("Requests this page made (%1 shown, %2 seen):\n")
 	               .arg(kept).arg(m_evidence.size());
+	// Name the columns. The middle one is the browser's resource type, and
+	// unlabelled it reads as anything the reader likes.
+	payload += "order | type | url\n";
 	payload += folded;
 	// The contract again, after the evidence rather than only before it. On the
 	// synthetic set this is redundant; on evidence captured from a real page —
@@ -136,12 +144,12 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
 	payload += "\n\nNow write the extractor for the requests above. Assign to "
 	           "`extract` a function of two arguments, `page` and `requests`, "
 	           "where `requests` is the list above and each entry has `url`, "
-	           "`kind` and `order`.\n\n"
-	           "Careful with `kind`: on a request it is what the browser "
-	           "fetched it as — `script`, `image` or `other` — and it is never "
-	           "`hls` or `dash`, so testing for those matches nothing. The "
-	           "stream kind is your conclusion, and belongs in what you "
-	           "return.\n\n"
+	           "`type` and `order`.\n\n"
+	           "`type` is what the browser fetched it as — `script`, `image` or "
+	           "`other` — and never `hls` or `dash`, so testing for those "
+	           "matches nothing. Anything fetched as a `script` or an `image` "
+	           "is page furniture and will be rejected, so it is not a useful "
+	           "fallback either.\n\n"
 	           "Return an object whose `url` is one of the addresses above "
 	           "copied exactly, whose `kind` is `hls`, `dash` or `direct`, and "
 	           "whose `headers` sets `Referer` to `page.url` — or return null "

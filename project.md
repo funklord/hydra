@@ -1028,10 +1028,10 @@ a way around it, and the rule stays narrow — another request on the page's own
 host is still a perfectly good answer.
 
 Extractors are stored as plain JSON per host, so they can be read, diffed and
-shared like the filter list. **57 checks** cover the accept path, both invented
+shared like the filter list. **60 checks** cover the accept path, both invented
 cases, the segment rule, the page-url rule and its two edges, the furniture
-rule and its mixed-kind edge, all three ways of spelling the function, the
-truncation trap, loops, throws, unparseable source, a script defining no
+rule and its mixed-type edge, the `type`/`kind` split, all three ways of
+spelling the function, the truncation trap, loops, throws, unparseable source, a script defining no
 `extract()`, an unknown stream kind, the empty sandbox, folding, fenced
 replies, and the store round-trip.
 
@@ -1487,12 +1487,28 @@ because they inflated every "the model cannot do this" reading:
   `url: <one of those urls>` came back as a syntax error. The shape is now
   described in prose, with nothing that can be pasted.
 
-**`kind` means two different things, and the model noticed before we did.**
-On a request it is what the browser fetched the thing as (`script`, `image`,
-`other`); in the return value it is the stream type (`hls`, `dash`, `direct`).
-Two vocabularies, one field name. Two runs in five returned
-`request.kind === 'hls'`, which is never true of anything. The tail now says so
-outright. The deeper fix is to stop overloading the word.
+**`kind` meant two different things, and the model noticed before we did —
+now fixed.** On a request it was what the browser fetched the thing as
+(`script`, `image`, `other`); in the return value it is the stream type (`hls`,
+`dash`, `direct`). Two vocabularies, one field name, and two runs in five
+returned `request.kind === 'hls'` — never true of anything, so they returned
+null and read as a model failure rather than a naming one.
+
+A request now carries **`type`**; only the returned object has a `kind`, which
+is the one the proposal decides rather than observes. Three checks: that `type`
+is there, that `kind` on a request is `undefined` so the collision is gone
+rather than merely discouraged, and that the return value still declares its
+own. The payload also names its columns now (`order | type | url`), because
+unlabelled the middle one reads as whatever the reader assumes.
+
+Nothing had to be migrated: no `extractors.json` existed on this machine. A
+stored extractor written against `r.kind` would break, and that is the moment
+to have made this change rather than after a library of them accumulates.
+
+The prompt gained a seventh rule at the same time, so it matches what the gate
+now enforces: anything fetched as a `script` or an `image` is furniture and
+will be rejected, so it is not a useful fallback. A gate rule the prompt does
+not mention is a rule the model discovers by having its work thrown away.
 
 **A third gate hole, same shape as the first two — now closed.** One run was
 *accepted* having picked `mc.yandex.com/sync_cookie_image_check?…` — a tracking
@@ -1574,11 +1590,12 @@ page.
    signal, no host signal, and every failing run reached for an extension. The
    thing that would settle it is the local proxy's content-type tier (§10),
    which is already the recorded answer to the same problem in
-   `media_detector::classify()`. One cheaper thing to do first, also found by
-   the runs: stop overloading `kind`, which means resource type on a request
-   and stream type in the return value, and which two runs in five got wrong.
-   (The other, refusing what the browser fetched as an image or a script, is
-   done — see the furniture rule above.)
+   `media_detector::classify()`. The two cheaper things the runs turned up are
+   both done: the gate refuses what the browser fetched as an image or a
+   script, and a request's browser type is called `type` now rather than
+   sharing the name `kind` with the stream type it is not. Neither of them
+   makes the loop work on that site; they remove two ways of failing that were
+   ours rather than the model's.
 2. **Try the fragment-first prompt line — but only on new evidence.** The
    query-string line was tried and reverted: 3 of 10 against 8 of 10 for the
    original, and it failed to prevent the very `endsWith` it was written for

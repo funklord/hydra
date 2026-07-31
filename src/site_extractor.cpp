@@ -103,7 +103,13 @@ extraction run(const QString &source, const QUrl &page,
 	for (int i = 0; i < evidence.size(); ++i) {
 		QJSValue r = engine.newObject();
 		r.setProperty("url", evidence[i].url.toString());
-		r.setProperty("kind", evidence[i].kind);
+		// `type`, not `kind`. What the browser fetched this as ("script",
+		// "image", "other") and what a stream is ("hls", "dash", "direct") are
+		// two vocabularies, and they shared the name `kind` until a model read
+		// it the obvious way and wrote `request.kind === 'hls'` — never true of
+		// anything, so it returned null and looked like a model failure. The
+		// return value keeps `kind`, which is the one the proposal decides.
+		r.setProperty("type", evidence[i].kind);
 		r.setProperty("order", evidence[i].order);
 		list.setProperty(uint(i), r);
 	}
