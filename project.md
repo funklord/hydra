@@ -1028,10 +1028,12 @@ a way around it, and the rule stays narrow — another request on the page's own
 host is still a perfectly good answer.
 
 Extractors are stored as plain JSON per host, so they can be read, diffed and
-shared like the filter list. **45 checks** cover the accept path, both invented
-cases, the segment rule, the page-url rule and its two edges, loops, throws,
-unparseable source, a script defining no `extract()`, an unknown stream kind,
-the empty sandbox, folding, fenced replies, and the store round-trip.
+shared like the filter list. **57 checks** cover the accept path, both invented
+cases, the segment rule, the page-url rule and its two edges, the furniture
+rule and its mixed-kind edge, all three ways of spelling the function, the
+truncation trap, loops, throws, unparseable source, a script defining no
+`extract()`, an unknown stream kind, the empty sandbox, folding, fenced
+replies, and the store round-trip.
 
 Qt6::Qml is a new dependency, and only for `QJSEngine`. No QML is used in the UI.
 
@@ -1492,15 +1494,27 @@ Two vocabularies, one field name. Two runs in five returned
 `request.kind === 'hls'`, which is never true of anything. The tail now says so
 outright. The deeper fix is to stop overloading the word.
 
-**A third gate hole, same shape as the first two.** One run was *accepted*
-having picked `mc.yandex.com/sync_cookie_image_check?…` — a tracking pixel,
-`kind='image'`, which the script returned as a `direct` stream after failing to
-find `.m3u8`. It is genuinely requested, it is not one of a flood, and it is
-not the page, so nothing refused it. The evidence carries the browser's own
-resource kind and the gate ignores it: **a request fetched as an image or a
-script is not a stream**, and that is a rule the interceptor already has the
-facts for. Not implemented here — it wants deciding rather than adding in a
-write-up — but it is the obvious next rule.
+**A third gate hole, same shape as the first two — now closed.** One run was
+*accepted* having picked `mc.yandex.com/sync_cookie_image_check?…` — a tracking
+pixel, `kind='image'`, which the script returned as a `direct` stream after
+failing to find `.m3u8`. It is genuinely requested, it is not one of a flood,
+and it is not the page, so nothing refused it, and the media list would have
+offered a tracking pixel as a video. The interceptor knew it was an image the
+whole time and the gate was discarding that.
+
+The rule: **what the browser fetched as an image or a script is page
+furniture, not a stream.** Judged on every sighting rather than the first, so
+an address seen both as an image and as something else is not decided by
+whichever came first — only an address that was never anything but furniture is
+refused. Six checks, including that the manifest (fetched as `other`) still
+passes and that the mixed case does.
+
+It also caught a stale test. The page-url section proved its rule "stays
+narrow" by returning `app.js` from the page's own host, which the furniture
+rule now refuses on its own grounds — so the check passed for a reason that had
+nothing to do with what it claimed to test. It uses a same-host request that is
+not furniture now. A rule that breaks a test by being right is worth more than
+the test was.
 
 **The conclusion is architectural, and it echoes §11.1.** What a proposal gets
 is url, resource kind and order. On this site the manifest is `.txt`, the
@@ -1560,11 +1574,11 @@ page.
    signal, no host signal, and every failing run reached for an extension. The
    thing that would settle it is the local proxy's content-type tier (§10),
    which is already the recorded answer to the same problem in
-   `media_detector::classify()`. Two cheaper things to do first, both found by
-   the runs: teach the gate that a request the browser fetched as an `image` or
-   a `script` is not a stream (a tracking pixel was accepted as one), and stop
-   overloading `kind`, which means resource type on a request and stream type
-   in the return value.
+   `media_detector::classify()`. One cheaper thing to do first, also found by
+   the runs: stop overloading `kind`, which means resource type on a request
+   and stream type in the return value, and which two runs in five got wrong.
+   (The other, refusing what the browser fetched as an image or a script, is
+   done — see the furniture rule above.)
 2. **Try the fragment-first prompt line — but only on new evidence.** The
    query-string line was tried and reverted: 3 of 10 against 8 of 10 for the
    original, and it failed to prevent the very `endsWith` it was written for

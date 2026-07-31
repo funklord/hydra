@@ -139,12 +139,19 @@ int main(int argc, char **argv) {
 		      "a fragment on the page url does not get around it");
 
 		// And the rule stays narrow: another request on the page's own host is
-		// still a perfectly good answer.
+		// still a perfectly good answer. It has to be one the browser did not
+		// fetch as an image or a script, or the furniture rule below refuses it
+		// for its own reasons and this proves nothing.
+		QList<evidence_request> with_sibling = ev;
+		with_sibling << evidence_request{
+			QUrl("https://site.example/watch/1/stream"), "other",
+			with_sibling.size() };
 		const QString same_host =
 			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
-			"if (r[i].url.indexOf('app.js')!==-1) "
+			"if (r[i].url.indexOf('/stream')!==-1) "
 			"return { url: r[i].url, kind: 'direct' }; return null; };";
-		const extractor_verdict sh = site_extractor::check(same_host, page, ev);
+		const extractor_verdict sh =
+			site_extractor::check(same_host, page, with_sibling);
 		check(sh.usable && !sh.is_page,
 		      "while a different request on the same host still passes");
 	}
@@ -195,6 +202,45 @@ int main(int argc, char **argv) {
 			      QString("%1 is not available (%2)")
 			          .arg(probe, r.ok ? r.url.toString() : r.error));
 		}
+	}
+
+	section("page furniture is not a stream");
+	{
+		// A real run picked a Yandex cookie-sync pixel and was accepted:
+		// genuinely requested, fetched once, not the page, so every other rule
+		// waved it through and the media list would have offered a tracking
+		// pixel as a video. The interceptor knew it was an image all along.
+		const QString pick =
+			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
+			"if (r[i].url.indexOf('%1')!==-1) "
+			"return { url: r[i].url, kind: 'direct' }; return null; };";
+
+		const extractor_verdict img =
+			site_extractor::check(pick.arg("poster.jpg"), page, ev);
+		check(!img.usable && img.is_asset, "an image is refused");
+		check(!img.invented && !img.is_segment,
+		      "and not mistaken for an invention or a segment");
+		check(img.message.contains("image"), "the reason names what it was");
+
+		const extractor_verdict scr =
+			site_extractor::check(pick.arg("app.js"), page, ev);
+		check(!scr.usable && scr.is_asset, "a script is refused");
+
+		// The manifest is fetched as "other", so the rule leaves it alone.
+		check(site_extractor::check(pick.arg("cf-master"), page, ev).usable,
+		      "while the manifest still passes");
+
+		// Judged on every sighting, not the first: an address fetched both as
+		// an image and as something else is not settled by which came first.
+		QList<evidence_request> mixed = sample();
+		mixed << evidence_request{ QUrl("https://site.example/both"), "image",
+		                            mixed.size() };
+		mixed << evidence_request{ QUrl("https://site.example/both"), "other",
+		                            mixed.size() };
+		const extractor_verdict both =
+			site_extractor::check(pick.arg("/both"), page, mixed);
+		check(both.usable && !both.is_asset,
+		      "an address seen as both an image and something else still passes");
 	}
 
 	section("every way of spelling the function");

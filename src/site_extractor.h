@@ -34,6 +34,8 @@ struct extractor_verdict {
 	                               // requests, which is a segment, not a stream
 	bool       is_page = false;    // returned the page's own address, which is
 	                               // the document asked about, not a stream in it
+	bool       is_asset = false;   // the browser fetched it as an image or a
+	                               // script, so it is page furniture, not video
 	bool       timed_out = false;
 	QString    message;
 	extraction result;

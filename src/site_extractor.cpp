@@ -202,6 +202,36 @@ extractor_verdict check(const QString &source, const QUrl &page,
 		return v;
 	}
 
+	// The interceptor already knows what the browser asked for each address as,
+	// and the gate was throwing that away. A real run picked a Yandex
+	// cookie-sync pixel and was accepted: genuinely requested, fetched once,
+	// not the page, so nothing else refused it — and the media list would have
+	// offered a tracking pixel as a video. What the browser fetched as an image
+	// or a script is page furniture.
+	//
+	// Judged on *every* sighting, not the first. The same address fetched both
+	// as an image and as something else is not decided by which came first, and
+	// only an address that was never anything but furniture is refused here.
+	int furniture = 0, sightings = 0;
+	QString as;
+	for (const evidence_request &r : evidence) {
+		if (normalise(r.url) != normalise(v.result.url))
+			continue;
+		++sightings;
+		if (r.kind == "image" || r.kind == "script") {
+			++furniture;
+			as = r.kind;
+		}
+	}
+	if (sightings > 0 && furniture == sightings) {
+		v.is_asset = true;
+		v.message = QString("Rejected: the browser fetched that as a %1, which "
+		                     "makes it part of the page rather than a stream in "
+		                     "it.")
+		                .arg(as);
+		return v;
+	}
+
 	static const QSet<QString> kinds = { "hls", "dash", "direct" };
 	if (!kinds.contains(v.result.kind)) {
 		v.message = QString("Rejected: \"%1\" is not a kind this can act on.")
