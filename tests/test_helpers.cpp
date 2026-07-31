@@ -7,8 +7,12 @@
 // on demand.
 #include "extractor_helpers.h"
 #include "site_extractor.h"
+#include "policy_engine.h"
+#include "policy.h"
 
 #include <QCoreApplication>
+#include <QDir>
+#include <QFile>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -259,6 +263,57 @@ int main(int argc, char **argv) {
 			src, QUrl("https://site.example/watch/1"), sample());
 		check(r.ok && r.url.toString() == "undefined",
 		      "with no helpers supplied, `hydra` is not there to be found");
+	}
+
+	section("the tier is off until a site is trusted with it");
+	{
+		policy_engine pol;
+		check(!pol.is_allowed(policy::feature::extractor_fetch, "site.example"),
+		      "fetching is blocked by default");
+		check(!pol.is_allowed(policy::feature::extractor_dom, "site.example"),
+		      "and so is reading the page");
+
+		// Two powers, not one. Reading a manifest the page already fetched is
+		// not comparable to reading the DOM of a logged-in page, and granting
+		// the first must not grant the second.
+		pol.set_setting("site.example", policy::feature::extractor_fetch,
+		                 policy::setting::allow);
+		check(pol.is_allowed(policy::feature::extractor_fetch, "site.example"),
+		      "allowing fetch on one site allows it there");
+		check(!pol.is_allowed(policy::feature::extractor_dom, "site.example"),
+		      "and still does not let it read the page");
+		check(!pol.is_allowed(policy::feature::extractor_fetch, "other.example"),
+		      "nor does it leak to another site");
+
+		// Revocable, and the tri-state falls back to the global default rather
+		// than to whatever was set before.
+		pol.set_setting("site.example", policy::feature::extractor_fetch,
+		                 policy::setting::unset);
+		check(!pol.is_allowed(policy::feature::extractor_fetch, "site.example"),
+		      "clearing the rule returns it to blocked");
+
+		// It survives a round trip, or a permission granted once would quietly
+		// become a permission granted forever with no record of it.
+		const QString path = QDir::temp().filePath("hydra-policy-helpers.json");
+		QFile::remove(path);
+		pol.set_setting("site.example", policy::feature::extractor_fetch,
+		                 policy::setting::allow);
+		check(pol.save(path), "the rule saves");
+		policy_engine reloaded;
+		check(reloaded.load(path), "and loads");
+		check(reloaded.is_allowed(policy::feature::extractor_fetch, "site.example"),
+		      "with the grant intact");
+		check(!reloaded.is_allowed(policy::feature::extractor_dom, "site.example"),
+		      "and nothing granted that was not");
+		QFile::remove(path);
+
+		// The name is what a stored file and any future migration key on.
+		check(QString(policy::feature_name(policy::feature::extractor_fetch))
+		          == "extractorFetch",
+		      "the machine name is stable");
+		check(policy::feature_from_name("extractorDom") ==
+		          policy::feature::extractor_dom,
+		      "and parses back");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

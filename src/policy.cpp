@@ -21,6 +21,8 @@ const info k_info[] = {
 	{ "notifications",     "Notifications"       },
 	{ "referer",           "Referer header"      },
 	{ "autofill",          "Password autofill"   },
+	{ "extractorFetch",    "Extractor may fetch" },
+	{ "extractorDom",      "Extractor may read the page" },
 };
 
 }  // namespace

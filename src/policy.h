@@ -22,6 +22,12 @@ enum class feature : int {
 	notifications,
 	referer,
 	autofill,
+	// The §11.5.1 helper tier, as two powers rather than one. Reading a
+	// manifest the page already fetched is not comparable to reading the DOM of
+	// a logged-in page, and a single "advanced extractor" switch would quietly
+	// grant the second to get the first. Both default to block.
+	extractor_fetch,
+	extractor_dom,
 	count
 };
 

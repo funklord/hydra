@@ -57,7 +57,8 @@ add_executable(test_fetcher test_fetcher.cpp ${H}/network_fetcher.cpp
 target_link_libraries(test_fetcher PRIVATE Qt6::Core Qt6::Qml Qt6::Network Qt6::Test)
 
 add_executable(test_helpers test_helpers.cpp ${H}/extractor_helpers.cpp
-    ${H}/site_extractor.cpp ${H}/stream_probe.cpp ${H}/local_proxy.cpp)
+    ${H}/site_extractor.cpp ${H}/stream_probe.cpp ${H}/local_proxy.cpp
+    ${H}/policy.cpp ${H}/policy_engine.cpp)
 target_link_libraries(test_helpers PRIVATE Qt6::Core Qt6::Qml Qt6::Network Qt6::Test)
 
 add_executable(test_streamtype test_streamtype.cpp ${H}/stream_probe.cpp

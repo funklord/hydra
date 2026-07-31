@@ -1730,9 +1730,13 @@ page.
    called from its own thread, and a bounded timeout. Judging now happens off
    the UI thread as well, so a slow CDN no longer freezes the window — asserted
    as an ordering, not a feeling: a UI timer fires at 120 ms while the script is
-   still blocked at 410 ms. Still to do: the two per-site policy tri-states
-   (nothing in the app calls `use_helpers` yet, so the tier is unreachable until
-   they exist), and the DOM half behind §13.2.
+   still blocked at 410 ms. The permission is in too: `extractorFetch` and
+   `extractorDom` are ordinary §7 tri-states defaulting to block, they appear in
+   the site editor without touching it because that editor iterates the feature
+   list, and `main_window` hands the dialog a `helper_host` only where the site
+   has been granted the first. What remains is the DOM half behind §13.2 — and
+   a real site to point the whole thing at, which is still the only thing that
+   will tell us whether the tier earns its keep.
 5. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
    Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
 

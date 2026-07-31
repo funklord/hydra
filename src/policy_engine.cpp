@@ -46,6 +46,10 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	// Autofill defaults on; the per-site tri-state and the strict origin gate
 	// are what actually govern it (§13.3).
 	set_global_default(feature::autofill,            setting::allow);
+	// The helper tier is off until a site is explicitly trusted with it: it is
+	// the only feature here that lets generated code cause a request.
+	set_global_default(feature::extractor_fetch,     setting::block);
+	set_global_default(feature::extractor_dom,       setting::block);
 }
 
 QString policy_engine::etld_plus_one(const QString &host) {

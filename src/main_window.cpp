@@ -24,6 +24,8 @@
 #include "capture_source.h"
 #include "extractor_signals.h"
 #include "extractor_dialog.h"
+#include "extractor_helpers.h"
+#include "network_fetcher.h"
 #include "ai_provider.h"
 #include "local_proxy.h"
 #include "filter_signals.h"
@@ -63,6 +65,8 @@
 #include <QDataStream>
 #include <QCloseEvent>
 #include <QSet>
+
+#include <memory>
 
 namespace {
 
@@ -996,6 +1000,28 @@ void main_window::learn_this_site() {
 
 	const QString host = v->url().host();
 	extractor_dialog dlg(m_ex_signals, &m_extractors, chosen, host, v->url(), this);
+
+	// The §11.5.1 helper tier, and only where this site has been trusted with
+	// it. `extractor_fetch` defaults to block, so on an ordinary site the
+	// script gets no `hydra` at all and cannot tell the surface exists.
+	//
+	// Both live on the stack beside the modal dialog on purpose: a helper_host
+	// must outlive the run it was handed to, and the run cannot outlive an
+	// exec() that has not returned.
+	std::unique_ptr<network_fetcher> fetcher;
+	std::unique_ptr<helper_allowlist> allow;
+	std::unique_ptr<helper_host> helpers;
+	if (m_policy && m_policy->is_allowed(policy::feature::extractor_fetch, host)) {
+		stream_context ctx;
+		ctx.referer = v->url().toString();
+		fetcher = std::make_unique<network_fetcher>(ctx);
+		allow   = std::make_unique<helper_allowlist>();
+		allow->observe(m_ex_signals->evidence_for(host));
+		helpers = std::make_unique<helper_host>(allow.get(), fetcher->as_function(),
+		                                         helper_budget{});
+		dlg.use_helpers(helpers.get());
+	}
+
 	if (dlg.exec() != QDialog::Accepted)
 		return;
 
