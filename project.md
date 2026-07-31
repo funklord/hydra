@@ -74,9 +74,10 @@ prompt change measured at ten runs an arm and reverted for making things worse.
   the timing against a real site is not.
 - The ad-host list at runtime; the cookie filter; the permission callbacks.
 - The KeePassXC bridge above the crypto layer — `keepassxc` is not installed.
-- Whether the extractor prompt generalises past one synthetic evidence set.
-  Every prompt number in this file comes from that single fixture, so treat
-  them as facts about the fixture until a second evidence set exists.
+- ~~Whether the extractor prompt generalises past one synthetic evidence set.~~
+  **Answered, badly:** it does not. Against evidence captured from the real
+  site the loop returned prose and no parser in five runs out of five, so every
+  hit-rate in this file describes the synthetic fixture and nothing else.
 
 **A caution learned repeatedly.** Six separate defects this project has hit were
 wiring that existed but was never exercised — a signal never connected, a
@@ -1362,6 +1363,68 @@ the local-proxy content-type tier is what makes detection work on real sites
 rather than being a refinement; the media affordance should wait for a play
 gesture; and P2P-delivered video is outside the model entirely.
 
+## The extractor loop against a real site (measured; it fails there)
+
+The step every prompt number in this file was waiting on. `tests/live/
+try_extract` drives the real shell to a real watch page, scrolls the player
+into view, clicks it, and writes what the interceptor saw to JSON;
+`test_live_model <model> <evidence.json>` replays that file through the loop.
+Capture and propose are deliberately separate: evidence captured once is
+repeatable, costs the site nothing to re-measure against, and is the second
+evidence set this file has been asking for.
+
+**The disguise goes much further than the manifest.** The section above
+recorded the manifest as `…/cf-master.<digits>.txt?k=…`, and that holds. What
+had never been looked at is everything around it:
+
+| what | how it arrives |
+|---|---|
+| manifest | `ssu5.stellarpathventures.space/v4/9ow/<id>/cf-master.<digits>.txt?k=…&kx=…` |
+| variant index | `index-f1-v1-a1.txt?k=…` |
+| init segment | `init-f1-v1-a1.**woff**?k=…` |
+| media segments | `seg-N-f1-v1-a1.**woff2**?k=…` |
+
+The segments are dressed as **web fonts**. Every extractor this project has
+measured used `.ts` as its segment test, because the synthetic fixture used
+`.ts` — so all of them would fall through to nothing here, and the two
+"segment" heuristics in the prompt (rule 4's repeat-counting, rule 5's prefer
+the manifest) are the only parts that still bite. The stream host is also
+nowhere in the page or the player origin; it is reachable only by watching.
+
+**The loop produces no parser at all on this evidence. Five runs, zero
+usable.** Not a wrong parser — no parser. The 14B replies with *prose*: a tidy
+summary of the request log, correctly naming the manifest and identifying the
+`seg-…woff2` addresses as video, and then never writes the function. The gate
+refuses all five, four as a syntax error and one for defining no `extract()`.
+So the honest reading of the 8-of-10 recorded above is that it measures a short
+synthetic payload, not the task: the real payload is longer and noisier, and
+the reply format collapses under it before the extraction logic is ever
+exercised. Fix the format adherence before drawing any further conclusion from
+prompt experiments.
+
+**The player fails when embedded and works when loaded directly.** On the watch
+page it printed "Failed to setup player, please try again later" and never
+issued its first API call (`/api/v1/info?id=…`); loaded on its own it issued it
+immediately and streamed. Blocked requests still reach the observers, so this
+is not the interceptor — the call is absent, not refused. Note this contradicts
+the earlier session recorded above, which did get playback on the watch page
+after a synthesized click, so it is either a site change or a difference in
+where the click lands; the mirror list is base64 in `data-em` and only one
+iframe is in the initial HTML, which is exactly the fragile part. Unresolved,
+and worth console capture before guessing further.
+
+**The harness was hiding this.** `test_live_model` picked its result pane by
+looking for one containing "function" or "extract", which was fine while every
+reply was JavaScript and reported a bare "(none)" the moment one was not —
+discarding the only interesting artefact. It now takes the proposal pane by
+position. A test that can only describe the outcomes it expected is the same
+defect class as the gate that had 27 checks and no page-url rule.
+
+**The capture is not committed.** It carries live CDN tokens and analytics
+identifiers from a real session, so it lives outside the repo; regenerate it
+with `try_extract` rather than reusing a stale one, since the `k=`/`kx=` tokens
+expire anyway.
+
 ## First-load flicker (fixed)
 
 The whole browser window vanished for about a third of a second on the first
@@ -1400,12 +1463,15 @@ page.
 
 ## What is next (in order)
 
-1. **Point the extractor loop at a real site.** Everything it needs now exists —
-   the tap gathers evidence, the loop proposes, the gate judges, and a stored
-   extractor is read back and its headers carried through the download. What has
-   never happened is a full turn on evidence from a live page rather than a
-   recorded set. dramafren.org is the case that motivated the whole design, and
-   the section above says plainly that URL-shaped detection fails there.
+1. **Make the loop return a parser on real evidence.** Step 1 as it was
+   written — a full turn on evidence from a live page — is done, and it failed:
+   five runs on captured dramafren evidence produced prose every time and no
+   `extract()` at all (section above). The blocker is reply-format adherence on
+   a long payload, not extraction logic, so it comes before any further prompt
+   work. Things to try, cheapest first: shorten what is sent (the folded
+   payload still carries 300-character tracker URLs), restate the format
+   immediately *after* the evidence rather than only before it, and consider
+   whether `strip_fences` should also salvage a code block from a prose reply.
 2. **Try the fragment-first prompt line — but only on new evidence.** The
    query-string line was tried and reverted: 3 of 10 against 8 of 10 for the
    original, and it failed to prevent the very `endsWith` it was written for

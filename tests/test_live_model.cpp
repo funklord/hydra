@@ -7,6 +7,10 @@
 
 #include <QApplication>
 #include <QEventLoop>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QTimer>
@@ -49,9 +53,41 @@ int main(int argc, char **argv) {
 		      resource_kind::other);
 	feed("https://mc.yandex.com/watch/98086865?wmode=7", resource_kind::script);
 
+	// Or real evidence, captured by tests/live/try_extract from an actual page.
+	// The synthetic set above is a guess at what a site does; a captured one is
+	// what a site did, and the two disagree in ways that matter (the real
+	// segments arrive disguised as .woff2 web fonts, not as .ts).
+	QString site = "dramafren.example";
+	QUrl page("https://dramafren.example/watch/ep1");
+	if (argc > 2) {
+		QFile f(argv[2]);
+		if (!f.open(QIODevice::ReadOnly)) {
+			std::printf("cannot read evidence %s\n", argv[2]);
+			return 1;
+		}
+		const QJsonObject root = QJsonDocument::fromJson(f.readAll()).object();
+		page = QUrl(root.value("page").toString());
+		site = root.value("host").toString();
+		sig.clear_site(site);
+		const QJsonArray reqs = root.value("requests").toArray();
+		for (const QJsonValue &v : reqs) {
+			const QJsonObject o = v.toObject();
+			request_context c;
+			c.url = QUrl(o.value("url").toString());
+			c.site_host = site;
+			c.request_host = c.url.host();
+			c.kind = resource_kind::other;
+			const QString k = o.value("kind").toString();
+			if (k == "script")     c.kind = resource_kind::script;
+			else if (k == "image") c.kind = resource_kind::image;
+			sig.on_request(c, request_decision{});
+		}
+		std::printf("evidence: %lld requests from %s\n", qint64(reqs.size()),
+		             qPrintable(site));
+	}
+
 	extractor_store store;
-	const QUrl page("https://dramafren.example/watch/ep1");
-	extractor_dialog dlg(&sig, &store, &prov, "dramafren.example", page);
+	extractor_dialog dlg(&sig, &store, &prov, site, page);
 	dlg.show();
 
 	QEventLoop loop;
@@ -63,7 +99,12 @@ int main(int argc, char **argv) {
 		std::printf("PROVIDER FAILED: %s\n", qPrintable(e.left(200)));
 		loop.quit();
 	});
-	QTimer::singleShot(240000, &loop, &QEventLoop::quit);
+	// Real evidence is a much longer payload than the synthetic set, and a 14B
+	// on CPU scales with it, so the ceiling has to be movable.
+	const int timeout_ms = qEnvironmentVariableIsSet("HYDRA_MODEL_TIMEOUT_MS")
+	                           ? qEnvironmentVariableIntValue("HYDRA_MODEL_TIMEOUT_MS")
+	                           : 240000;
+	QTimer::singleShot(timeout_ms, &loop, &QEventLoop::quit);
 
 	std::printf("sending...\n");
 	button(&dlg, "Send")->click();
@@ -71,10 +112,14 @@ int main(int argc, char **argv) {
 	if (!answered) { std::printf("no answer within the timeout\n"); return 1; }
 
 	// What came back, and what the gate made of it.
+	// The proposal pane, not "whichever pane mentions a function". Looking for
+	// the word was fine while every reply was JavaScript; against real evidence
+	// the model answers in prose, and then this reported "(none)" and threw away
+	// the very thing worth reading. The proposal is the pane built second.
 	QPlainTextEdit *script = nullptr;
-	for (QPlainTextEdit *e : dlg.findChildren<QPlainTextEdit *>())
-		if (e->toPlainText().contains("function") || e->toPlainText().contains("extract"))
-			script = e;
+	const auto panes = dlg.findChildren<QPlainTextEdit *>();
+	if (panes.size() >= 2) script = panes.last();
+	else if (!panes.isEmpty()) script = panes.first();
 	std::printf("\n----- what the model returned -----\n%s\n-----------------------------------\n",
 	             script ? qPrintable(script->toPlainText().left(1200)) : "(none)");
 
@@ -84,7 +129,7 @@ int main(int argc, char **argv) {
 	if (script) {
 		const extractor_verdict v =
 		    site_extractor::check(script->toPlainText(), page,
-		                           sig.evidence_for("dramafren.example"));
+		                           sig.evidence_for(site));
 		std::printf("verdict: usable=%d invented=%d timed_out=%d\n  %s\n",
 		             v.usable, v.invented, v.timed_out, qPrintable(v.message.left(300)));
 		if (v.usable)

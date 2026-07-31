@@ -80,6 +80,23 @@ submodule). `test_live_model` needs Ollama serving; pass the model name:
 QT_QPA_PLATFORM=offscreen ./tests/build/test_live_model qwen2.5-coder:14b
 ```
 
+With a second argument it replays evidence captured from a real page by
+`try_extract` instead of the built-in synthetic set — which is the only way to
+measure anything that transfers, since the two disagree (real segments arrive
+disguised as `.woff2` web fonts, the synthetic ones as `.ts`):
+
+```sh
+DISPLAY=:0 ./tests/build/try_extract https://site/watch/thing/ 60 /tmp/ev.json
+HYDRA_MODEL_TIMEOUT_MS=900000 QT_QPA_PLATFORM=offscreen \
+    ./tests/build/test_live_model qwen2.5-coder:14b /tmp/ev.json
+```
+
+Raise `HYDRA_MODEL_TIMEOUT_MS` (default 240000) for real evidence: the payload
+is far longer than the synthetic one and a 14B on CPU scales with it, so the
+default ceiling expires mid-answer. Captured evidence carries live CDN tokens
+and analytics ids, so keep it out of the repo and recapture rather than reusing
+a stale file — the tokens expire regardless.
+
 ## Live drivers
 
 Each builds the real `main_window` with the real factory, policy and filter,
@@ -104,3 +121,11 @@ Lessons that cost time, so they are written down:
   30 fps showed the window vanishing for ~12 frames.
 - Some drivers modify `sample-tree.txt`, because opening a tab legitimately
   updates it. `git checkout -- sample-tree.txt` afterwards.
+- **A click at the middle of the viewport misses the player.** The video is
+  usually an iframe below the fold, so the centre of the *view* lands on its
+  top edge or on the page behind it. `try_extract` runs `scrollIntoView` on the
+  iframe first and clicks the centre of the rect it reports back; before that
+  it looked exactly like a site that requests nothing until you press play.
+- **Screenshot before concluding "nothing happened".** A player that failed to
+  initialise and a player nobody clicked produce the same empty request log.
+  One screenshot said "Failed to setup player" and saved the guessing.
