@@ -121,15 +121,18 @@ bool helper_host::permit(const QString &verb, const QUrl &url,
 void helper_host::finish(helper_call call) { m_calls << call; }
 
 void helper_host::log(const QString &message) {
+	// A note costs nothing to serve, so it must not compete with fetches for
+	// the call budget — a script that explained itself well spent its last slot
+	// on the explanation and was refused for it. Bounded separately, because an
+	// unbounded log is still its own denial of service.
 	helper_call c;
 	c.verb   = "log";
 	c.target = message.left(300);
-	if (m_calls.size() >= m_budget.max_calls) {
-		c.outcome = QString("refused: the budget of %1 calls is spent")
-		                .arg(m_budget.max_calls);
-		m_breach = QString("spent its budget of %1 helper calls")
-		               .arg(m_budget.max_calls);
+	if (m_notes >= k_max_notes) {
+		c.outcome = QString("refused: more than %1 notes").arg(k_max_notes);
+		m_breach = QString("wrote more than %1 notes").arg(k_max_notes);
 	} else {
+		++m_notes;
 		c.allowed = true;
 		c.outcome = "noted";
 	}

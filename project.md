@@ -1158,6 +1158,26 @@ being silently dropped — a reader should be able to tell a page that fetched
 something once from one that fetched it four hundred times. Measured: 252
 requests fold to 3 lines with the disguised manifest intact.
 
+**Folding was measuring nothing on real evidence, for two years' worth of
+reasons in one function.** `shape_of` collapsed runs of *two or more* digits and
+kept query strings whole. On the measured site the segments are indexed
+`seg-1 … seg-9` — single digits, never collapsed — and each carries a `k=`
+token and a `kx=` timestamp that rotate per request. Fourteen segment requests
+therefore produced **eleven distinct shapes**, and three things silently stopped
+working:
+
+- the `(+N more like this)` count, so the prompt's rules 4 and 5 (a manifest is
+  fetched once, segments repeat) had nothing to bite on;
+- the probe ranking's "which host is serving the flood" signal;
+- **the gate's segment rule**, which meant a real segment was *accepted*. The
+  synthetic fixture used `seg-00000.ts` — five digits, no token — which folds
+  perfectly, so every test passed while the thing they tested did not work.
+
+Now shared rather than copied (it was defined twice, once for the fold and once
+for the gate, and they had to agree), keys kept but query *values* dropped, and
+digit runs of any length collapsed. Ten real-shaped requests fold to two lines,
+and a segment is refused as one.
+
 **But folding also truncates, and that is a trap with a checked edge.** Each
 line caps the url at 300 characters, while the gate compares against the full
 address — so a request longer than the cap is *unreturnable by construction*:
@@ -1734,9 +1754,28 @@ page.
    `extractorDom` are ordinary §7 tri-states defaulting to block, they appear in
    the site editor without touching it because that editor iterates the feature
    list, and `main_window` hands the dialog a `helper_host` only where the site
-   has been granted the first. What remains is the DOM half behind §13.2 — and
-   a real site to point the whole thing at, which is still the only thing that
-   will tell us whether the tier earns its keep.
+   has been granted the first.
+
+   **And it has now been run against the real site, which is where it earned
+   its keep and where three defects were found that no fake could have shown.**
+   `test_helpers_live` drives the tier with a hand-written extractor, so a
+   failure is the tier's and not a prompt's. On the third attempt: the
+   disguised manifest ranked first, `head` identified it as
+   `application/vnd.apple.mpegurl`, `text` fetched 160 bytes and taught the
+   allowlist four new addresses, and the script returned the variant — an
+   address **the page never requested**, accepted by the gate because a fetched
+   document named it. Four calls, 320 bytes. The returned variant was then
+   fetched independently and answers 200 `application/vnd.apple.mpegurl`, so
+   the answer is usable and not merely well-formed.
+
+   The first two attempts failed, and both failures were ours: the budget was
+   spent left-to-right on stylesheets and beacons before the video was reached
+   (the sandbox could not see the ranking the C++ side already computed, so
+   `hydra.candidates()` now hands it over), and then a `log()` call — which
+   costs nothing to serve — consumed the last fetch slot, so a script that
+   explained itself ran out of room to work. Notes are bounded separately now.
+
+   What remains is the DOM half behind §13.2.
 5. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
    Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
 

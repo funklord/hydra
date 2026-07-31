@@ -86,6 +86,13 @@ add_executable(test_dlheaders test_dlheaders.cpp
     ${H}/media_detector.cpp ${H}/download_source.h)
 target_link_libraries(test_dlheaders PRIVATE Qt6::Core Qt6::Network Qt6::Test)
 
+add_executable(test_helpers_live test_helpers_live.cpp ${H}/extractor_helpers.cpp
+    ${H}/network_fetcher.cpp ${H}/site_extractor.cpp ${H}/stream_probe.cpp
+    ${H}/local_proxy.cpp ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
+    ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp
+    ${H}/ai_provider.h)
+target_link_libraries(test_helpers_live PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network)
+
 add_executable(test_probe test_probe.cpp ${H}/ollama_provider.cpp ${H}/ai_provider.h)
 target_link_libraries(test_probe PRIVATE Qt6::Core Qt6::Network Qt6::Test)
 
@@ -111,7 +118,7 @@ add_executable(test_live_model test_live_model.cpp
 target_link_libraries(test_live_model PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
 
 foreach(t test_headers test_dlheaders test_probe test_probe_ui test_ytdlp
-          test_ytdlp_live test_live_model)
+          test_ytdlp_live test_live_model test_helpers_live)
     target_include_directories(${t} PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
 endforeach()
 

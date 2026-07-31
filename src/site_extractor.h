@@ -77,6 +77,22 @@ namespace site_extractor {
 // `helpers` is the §11.5.1 tier: null for the pure tier, which is the default
 // and gets no `hydra` object at all, so a script written against it cannot even
 // see that the tier exists.
+// Two requests are "the same shape" when they differ only in the parts that
+// vary between sightings of the same thing. Shared, because the evidence fold,
+// the probe ranking and the gate's segment rule must agree about it — they were
+// three consumers of two separate copies, which is a disagreement waiting to
+// happen.
+//
+// Both parts are load-bearing, and both were learned from real evidence rather
+// than guessed. Digit *runs* of two or more were collapsed originally, so a
+// real flood of `seg-1`, `seg-2`, `seg-3` stayed eleven distinct shapes and
+// folded into nothing. And query values rotate per request — `kx=1785501512`
+// is a timestamp and `k=` a token — so keeping them meant the same segment
+// fetched twice never matched itself. Keys are kept and values dropped: what
+// makes two requests the same shape is the shape of the question, not the
+// answer's credentials.
+QString shape_of(const QUrl &u);
+
 extraction run(const QString &source, const QUrl &page,
                 const QList<evidence_request> &evidence, int timeout_ms = 2000,
                 helper_host *helpers = nullptr);

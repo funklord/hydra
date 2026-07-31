@@ -12,6 +12,7 @@
 #include <QQmlEngine>
 #include <QHash>
 #include <QRegularExpression>
+#include <QUrlQuery>
 #include <QSet>
 #include <QScopeGuard>
 
@@ -45,14 +46,6 @@ QString wrap(const QString &source) {
 	    "})()").arg(source);
 }
 
-// Two requests differing only in a run of digits are the same request repeated.
-QString shape_of(const QUrl &u) {
-	static const QRegularExpression digits("[0-9]{2,}");
-	QString s = u.toString();
-	s.replace(digits, "#");
-	return s;
-}
-
 QString normalise(const QUrl &u) {
 	// Compared as text, but with the pieces that vary between two sightings of
 	// the same request removed. A fragment never reaches the server at all.
@@ -60,6 +53,27 @@ QString normalise(const QUrl &u) {
 }
 
 }  // namespace
+
+QString shape_of(const QUrl &u) {
+	static const QRegularExpression digits("[0-9]+");
+	// Query keys without their values: `?k=abc&kx=123` and `?k=def&kx=456` are
+	// the same question asked twice, and on a real CDN every segment carries a
+	// fresh token, so keeping the values means nothing ever matches anything.
+	QUrl bare = u;
+	const QUrlQuery q(u);
+	QStringList keys;
+	for (const auto &pair : q.queryItems())
+		keys << pair.first;
+	bare.setQuery(QString());
+	QString s = bare.toString(QUrl::RemoveFragment);
+	if (!keys.isEmpty())
+		s += "?" + keys.join('&');
+	// Then digit runs of any length: a flood indexed `seg-1 … seg-9` is the
+	// same flood as one indexed `seg-0001 … seg-0009`, and requiring two
+	// digits meant the first kind never folded at all.
+	s.replace(digits, "#");
+	return s;
+}
 
 extraction run(const QString &source, const QUrl &page,
                 const QList<evidence_request> &evidence, int timeout_ms,

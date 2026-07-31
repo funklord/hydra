@@ -51,13 +51,10 @@ const char *k_system_prompt =
 	"7. Anything fetched as a `script` or an `image` is page furniture, not the "
 	"stream — returning one is rejected, so do not fall back to it.\n";
 
-// Requests that differ only in a run of digits are the same request repeated —
-// segment 0001, 0002, and so on.
+// The shared one, so the fold the user reads, the ranking that spends the probe
+// budget and the gate's segment rule cannot drift apart.
 QString shape_of(const QString &url) {
-	static const QRegularExpression digits("[0-9]{2,}");
-	QString s = url;
-	s.replace(digits, "#");
-	return s;
+	return site_extractor::shape_of(QUrl(url));
 }
 
 }  // namespace
@@ -146,17 +143,22 @@ QList<evidence_request> extractor_dialog::candidates(
 	// fetched once on a host that never repeated anything is a beacon. Segments
 	// come next, since knowing one is `video/mp4` tells the model what the
 	// flood is; unrelated one-offs come last.
-	auto rank = [&](const evidence_request &r) {
-		const bool media_host = host_repeats.value(r.url.host()) > 0;
-		const bool repeated   = repeats.value(shape_of(r.url.toString())) > 0;
-		if (media_host && !repeated) return 0;   // the manifest, most likely
-		if (media_host)              return 1;   // one of its segments
-		if (!repeated)               return 2;   // a one-off somewhere else
-		return 3;
-	};
+	// By how big the host's flood is, not by whether it has one. "Any repeat"
+	// was the first attempt and it fails on real traffic: analytics beacons
+	// repeat two or three times, so a tracker host scored exactly the same as
+	// the CDN serving forty segments, and the manifest came sixth of eight.
+	// A flood is a matter of degree, so the ranking has to be too.
 	std::stable_sort(firsts.begin(), firsts.end(),
-	                  [&rank](const evidence_request &a, const evidence_request &b) {
-		return rank(a) < rank(b);
+	                  [&](const evidence_request &a, const evidence_request &b) {
+		const int flood_a = host_repeats.value(a.url.host());
+		const int flood_b = host_repeats.value(b.url.host());
+		if (flood_a != flood_b)
+			return flood_a > flood_b;         // the busiest host first
+		// Within a host: what was fetched once is the manifest, what repeated
+		// is one of its segments.
+		const bool rep_a = repeats.value(shape_of(a.url.toString())) > 0;
+		const bool rep_b = repeats.value(shape_of(b.url.toString())) > 0;
+		return rep_a < rep_b;
 	});
 	if (max >= 0 && firsts.size() > max)
 		firsts = firsts.mid(0, max);

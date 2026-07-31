@@ -1019,6 +1019,14 @@ void main_window::learn_this_site() {
 		allow->observe(m_ex_signals->evidence_for(host));
 		helpers = std::make_unique<helper_host>(allow.get(), fetcher->as_function(),
 		                                         helper_budget{});
+		// The same ranking the content-type probe uses, handed to the script so
+		// its budget is spent where the answer usually is rather than on
+		// whatever the page happened to request first.
+		QStringList ranked;
+		for (const evidence_request &r : extractor_dialog::candidates(
+		         m_ex_signals->evidence_for(host), v->url(), helper_budget{}.max_calls))
+			ranked << r.url.toString();
+		helpers->set_candidates(ranked);
 		dlg.use_helpers(helpers.get());
 	}
 

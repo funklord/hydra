@@ -9,6 +9,7 @@
 #include <QObject>
 #include <QSet>
 #include <QString>
+#include <QStringList>
 #include <QUrl>
 #include <QVariantMap>
 
@@ -105,6 +106,17 @@ public:
 	helper_host(helper_allowlist *allow, helper_fetcher fetch,
 	             helper_budget budget, QObject *parent = nullptr);
 
+	// The addresses worth asking about, best first, as ranked by the caller.
+	//
+	// Free: it is data already computed, with no I/O behind it. It exists
+	// because a budget is spent by *order*, and a script scanning the request
+	// log left to right spends it on stylesheets and beacons before reaching
+	// the video — measured against a real capture, where eight calls went to
+	// page furniture and the manifest was never reached. A script that starts
+	// here spends its budget where the answer is.
+	Q_INVOKABLE QStringList candidates() const { return m_candidates; }
+	void set_candidates(const QStringList &ranked) { m_candidates = ranked; }
+
 	// Note for the transcript. Costs a call slot, because an unbounded log is
 	// its own denial of service.
 	Q_INVOKABLE void log(const QString &message);
@@ -133,6 +145,11 @@ public:
 	qint64 bytes_used() const { return m_bytes; }
 	int    calls_used() const { return m_calls.size(); }
 
+	// Notes are bounded on their own count, not on the fetch budget: they cost
+	// nothing to serve, and charging them the same made a script that explained
+	// itself run out of room to work.
+	static constexpr int k_max_notes = 20;
+
 	// Starts the deadline. Called once, immediately before the script runs.
 	void begin();
 
@@ -147,6 +164,8 @@ private:
 	helper_budget     m_budget;
 	QList<helper_call> m_calls;
 	QString           m_breach;
+	QStringList       m_candidates;
 	qint64            m_bytes = 0;
+	int               m_notes = 0;
 	QElapsedTimer     m_clock;
 };

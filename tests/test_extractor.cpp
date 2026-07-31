@@ -334,6 +334,60 @@ int main(int argc, char **argv) {
 		      "and returning the shown form is refused as invented");
 	}
 
+	section("what counts as the same shape, on addresses a real CDN serves");
+	{
+		// The pattern that defeated the old rule, taken from a live capture:
+		// single-digit indices, and a token plus a timestamp that change per
+		// request. Fourteen segments used to produce eleven shapes, so nothing
+		// folded, the segment rule never fired, and a segment was acceptable.
+		QList<evidence_request> real;
+		int n = 0;
+		for (int i = 1; i <= 9; ++i)
+			real << evidence_request{
+				QUrl(QString("https://cdn.example/v4/ab/seg-%1-f1-v1-a1.woff2"
+				              "?k=tok%1&kx=17855015%1").arg(i)), "other", n++ };
+		const QUrl manifest(
+			"https://cdn.example/v4/ab/cf-master.1785377837.txt?k=tokM&kx=178550151");
+		real << evidence_request{ manifest, "other", n++ };
+
+		const QString seg_shape =
+			site_extractor::shape_of(real.first().url);
+		int same = 0;
+		for (const evidence_request &r : real)
+			if (site_extractor::shape_of(r.url) == seg_shape) ++same;
+		check(same == 9,
+		      QString("nine single-digit segments with rotating tokens are one "
+		               "shape (%1)").arg(same));
+		check(site_extractor::shape_of(manifest) != seg_shape,
+		      "and the manifest is not that shape");
+
+		// The consequence that matters: this is what the gate's segment rule
+		// runs on, and with the old rule it accepted a segment outright.
+		const QString pick_seg =
+			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
+			"if (r[i].url.indexOf('seg-')!==-1) "
+			"return { url: r[i].url, kind: 'hls' }; return null; };";
+		const extractor_verdict v = site_extractor::check(
+			pick_seg, QUrl("https://site.example/watch/1"), real);
+		check(!v.usable && v.is_segment,
+		      QString("so a real segment is refused as one (%1)").arg(v.message));
+
+		const QString pick_manifest =
+			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
+			"if (r[i].url.indexOf('cf-master')!==-1) "
+			"return { url: r[i].url, kind: 'hls' }; return null; };";
+		check(site_extractor::check(pick_manifest,
+		                             QUrl("https://site.example/watch/1"), real).usable,
+		      "while the manifest, fetched once, still passes");
+
+		// And the fold the user and the model both read.
+		int kept = 0;
+		const QString folded = extractor_dialog::summarise(real, &kept);
+		check(kept == 2, QString("ten requests fold to two lines (%1)").arg(kept));
+		check(folded.contains("more like this"),
+		      "with the flood counted rather than listed");
+	}
+
 	section("choosing what to ask the server about");
 	{
 		QList<evidence_request> many = sample();
