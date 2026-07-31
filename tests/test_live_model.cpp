@@ -6,6 +6,7 @@
 #include "ollama_provider.h"
 
 #include <QApplication>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
 #include <QJsonArray>
@@ -106,8 +107,36 @@ int main(int argc, char **argv) {
 	                           : 240000;
 	QTimer::singleShot(timeout_ms, &loop, &QEventLoop::quit);
 
-	std::printf("sending...\n");
-	button(&dlg, "Send")->click();
+	// Wait for Send rather than clicking the instant the dialog exists. The
+	// dialog now asks the server what the candidate addresses serve before it
+	// will let anything be sent, and a disabled button ignores a click in
+	// silence — which presented as the model never answering, with no request
+	// reaching Ollama at all.
+	QPushButton *send = button(&dlg, "Send");
+	QElapsedTimer waited;
+	waited.start();
+	while (send && !send->isEnabled() && waited.elapsed() < 60000)
+		QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+	if (send && !send->isEnabled()) {
+		std::printf("Send never became available (%lld ms)\n",
+		             qint64(waited.elapsed()));
+		return 1;
+	}
+	// Say how much of the payload came from asking the server. These tokens are
+	// short-lived, so evidence captured an hour ago probes as 403 and the run
+	// silently measures the un-annotated case instead of the annotated one.
+	const auto panes_now = dlg.findChildren<QPlainTextEdit *>();
+	QString shown;
+	for (QPlainTextEdit *e : panes_now)          // the payload is the long one
+		if (e->toPlainText().size() > shown.size())
+			shown = e->toPlainText();
+	std::printf("panes: %d\n", int(panes_now.size()));
+	std::printf("payload: %d chars, %d addresses answered, %d refused\n",
+	             int(shown.size()), int(shown.count(QStringLiteral("   -> "))) -
+	                 int(shown.count(QStringLiteral("not established"))),
+	             int(shown.count(QStringLiteral("not established"))));
+	std::printf("sending after %lld ms...\n", qint64(waited.elapsed()));
+	send->click();
 	loop.exec();
 	if (!answered) { std::printf("no answer within the timeout\n"); return 1; }
 

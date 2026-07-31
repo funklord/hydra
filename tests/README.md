@@ -92,6 +92,15 @@ HYDRA_MODEL_TIMEOUT_MS=900000 QT_QPA_PLATFORM=offscreen \
     ./tests/build/test_live_model qwen2.5-coder:14b /tmp/ev.json
 ```
 
+`HYDRA_PROBE_DEBUG=1` prints what each content-type probe concluded, which is
+the fastest way to see whether the budget went to the stream or to the page's
+beacons.
+
+Recapture immediately before each run. The CDN tokens are short-lived, so
+evidence even an hour old probes as 403, and the run then measures the
+un-annotated case while looking like it measured the annotated one — the
+harness prints "N addresses answered" so this cannot pass unnoticed.
+
 Raise `HYDRA_MODEL_TIMEOUT_MS` (default 240000) for real evidence: the payload
 is far longer than the synthetic one and a 14B on CPU scales with it, so the
 default ceiling expires mid-answer. Captured evidence carries live CDN tokens

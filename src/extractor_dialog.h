@@ -4,6 +4,7 @@
 #include "site_extractor.h"
 
 #include <QDialog>
+#include <QHash>
 
 class QLabel;
 class QPlainTextEdit;
@@ -33,8 +34,26 @@ public:
 	// The evidence, folded down to something a person can read and a model can
 	// use. A player requests hundreds of segments that differ only by a number,
 	// and sending all of them buries the handful of requests that matter.
+	// `served` annotates a line with what that address actually returned, keyed
+	// by url. Optional, because the tier is.
 	static QString summarise(const QList<evidence_request> &evidence,
-	                          int *kept = nullptr);
+	                          int *kept = nullptr,
+	                          const QHash<QString, QString> *served = nullptr);
+
+	// Which addresses are worth asking the server about, most promising first.
+	//
+	// Not all of them: probing costs a request each, and most of a page's
+	// traffic is furniture the gate would refuse anyway. Skips the page itself
+	// and anything fetched as a script or an image, keeps one per repeated
+	// shape, and puts the addresses fetched *once* first — a manifest is
+	// fetched once and its segments are not, so that ordering spends the budget
+	// where the answer usually is.
+	static QList<evidence_request> candidates(const QList<evidence_request> &evidence,
+	                                           const QUrl &page, int max);
+
+	// Enough to cover a manifest and a representative segment or two without
+	// turning a review into a crawl.
+	static constexpr int k_max_probes = 10;
 
 	// Models fence code even when asked not to. Strip it rather than fail.
 	static QString strip_fences(const QString &reply);
@@ -50,6 +69,11 @@ private:
 	// context, and say what it really serves. Advisory unless it contradicts.
 	void confirm_by_fetching();
 
+	// Ask the server about the likely candidates before the model is asked
+	// anything, and fold the answers into the payload.
+	void probe_candidates();
+	void rebuild_payload();
+
 	extractor_signals *m_signals  = nullptr;
 	extractor_store   *m_store    = nullptr;
 	ai_provider       *m_provider = nullptr;
@@ -58,6 +82,8 @@ private:
 	QUrl               m_page;
 	QList<evidence_request> m_evidence;
 	QString            m_proposal;
+	QHash<QString, QString> m_served;   // url -> what it actually returned
+	int                m_pending = 0;   // probes still out
 	extractor_verdict  m_verdict;
 
 	QStackedWidget *m_pages   = nullptr;

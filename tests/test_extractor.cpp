@@ -334,6 +334,89 @@ int main(int argc, char **argv) {
 		      "and returning the shown form is refused as invented");
 	}
 
+	section("choosing what to ask the server about");
+	{
+		QList<evidence_request> many = sample();
+		int n = many.size();
+		for (int i = 0; i < 40; ++i)
+			many << evidence_request{
+				QUrl(QString("https://sil5.player.example/v4/db/abc/seg-%1.ts")
+				         .arg(i, 5, 10, QChar('0'))), "other", n++ };
+
+		const QList<evidence_request> picks =
+			extractor_dialog::candidates(many, page, extractor_dialog::k_max_probes);
+
+		check(picks.size() <= extractor_dialog::k_max_probes,
+		      "the budget is respected");
+		QStringList urls;
+		for (const evidence_request &r : picks) urls << r.url.toString();
+
+		check(!urls.filter("cf-master").isEmpty(),
+		      "the disguised manifest is asked about");
+		check(urls.filter("seg-").size() <= 1,
+		      "forty numbered segments cost one question, not forty");
+		check(urls.filter("app.js").isEmpty() && urls.filter("poster.jpg").isEmpty(),
+		      "furniture is not worth a request");
+		check(urls.filter("/watch/1").isEmpty(),
+		      "and neither is the page itself");
+
+		// A manifest is fetched once and its segments are not, so the once-only
+		// addresses have to come first or the budget is spent on segments.
+		int first_seg = -1, first_once = -1;
+		for (int i = 0; i < urls.size(); ++i) {
+			if (first_seg < 0 && urls[i].contains("seg-")) first_seg = i;
+			if (first_once < 0 && urls[i].contains("cf-master")) first_once = i;
+		}
+		check(first_once >= 0 && (first_seg < 0 || first_once < first_seg),
+		      "and what was fetched once is asked about before what repeated");
+
+		// The failure this ordering exists for, measured on a real capture: a
+		// page's one-off beacons and stylesheets are fetched once too, arrive
+		// first, and swallowed the whole budget before the video was reached.
+		// The host that served the flood is the media host, so its once-only
+		// request outranks a tracker's.
+		QList<evidence_request> noisy;
+		int m = 0;
+		for (int i = 0; i < 15; ++i)
+			noisy << evidence_request{
+				QUrl(QString("https://beacon%1.example/collect?v=%1").arg(i)),
+				"other", m++ };
+		noisy << evidence_request{
+			QUrl("https://cdn.example/v4/abc/cf-master.999.txt?k=z"), "other", m++ };
+		for (int i = 0; i < 20; ++i)
+			noisy << evidence_request{
+				QUrl(QString("https://cdn.example/v4/abc/seg-%1.woff2").arg(i, 5, 10, QChar('0'))),
+				"other", m++ };
+
+		const QList<evidence_request> picked =
+			extractor_dialog::candidates(noisy, QUrl("https://site.example/p"),
+			                              extractor_dialog::k_max_probes);
+		check(!picked.isEmpty() &&
+		          picked.first().url.toString().contains("cf-master"),
+		      "the one-off on the flooding host is asked about first");
+		QStringList pu;
+		for (const evidence_request &r : picked) pu << r.url.toString();
+		check(!pu.filter("cf-master").isEmpty(),
+		      "so fifteen beacons cannot crowd the manifest out of the budget");
+	}
+
+	section("what the server said reaches the payload");
+	{
+		QHash<QString, QString> served;
+		served.insert("https://sil5.player.example/v4/db/abc/cf-master.1774687168.txt?k=UCp&kx=17",
+		               "application/vnd.apple.mpegurl (HLS)");
+		int kept = 0;
+		const QString with = extractor_dialog::summarise(ev, &kept, &served);
+		check(with.contains("-> application/vnd.apple.mpegurl (HLS)"),
+		      "the served type is written beside the address it belongs to");
+		check(with.count("->") == 1,
+		      "and only beside addresses that were actually asked about");
+
+		const QString without = extractor_dialog::summarise(ev, &kept);
+		check(!without.contains("->"),
+		      "with nothing added when the tier did not run");
+	}
+
 	section("the store");
 	{
 		const QString path = QDir::temp().filePath("hydra-extractors.json");

@@ -12,6 +12,9 @@
 #include <QRegularExpression>
 #include <QStackedWidget>
 #include <QVBoxLayout>
+#include <QtGlobal>
+
+#include <algorithm>
 
 namespace {
 
@@ -57,7 +60,8 @@ QString shape_of(const QString &url) {
 }  // namespace
 
 QString extractor_dialog::summarise(const QList<evidence_request> &evidence,
-                                     int *kept) {
+                                     int *kept,
+                                     const QHash<QString, QString> *served) {
 	QStringList lines;
 	QHash<QString, int> seen_shape;
 	QHash<QString, int> repeats;
@@ -71,9 +75,18 @@ QString extractor_dialog::summarise(const QList<evidence_request> &evidence,
 		}
 		seen_shape.insert(shape, r.order);
 		order << shape;
-		lines << QString("%1 | %2 | %3")
-		             .arg(r.order, 4).arg(r.kind, -6)
-		             .arg(r.url.toString().left(300));
+		QString line = QString("%1 | %2 | %3")
+		                   .arg(r.order, 4).arg(r.kind, -6)
+		                   .arg(r.url.toString().left(300));
+		// What the server said this really is, where it was asked. This is the
+		// channel the measured site tells the truth on, so it goes next to the
+		// address rather than in a footnote.
+		if (served) {
+			const QString what = served->value(r.url.toString());
+			if (!what.isEmpty())
+				line += "   -> " + what;
+		}
+		lines << line;
 	}
 	// Say what was folded away rather than silently dropping it: a reader
 	// should be able to tell a page that fetched one thing from a page that
@@ -86,6 +99,65 @@ QString extractor_dialog::summarise(const QList<evidence_request> &evidence,
 	if (kept)
 		*kept = lines.size();
 	return lines.join('\n');
+}
+
+QList<evidence_request> extractor_dialog::candidates(
+		const QList<evidence_request> &evidence, const QUrl &page, int max) {
+	// One per shape, because probing sixty numbered segments learns the same
+	// thing sixty times.
+	QHash<QString, int> repeats;      // shape -> extra sightings
+	QHash<QString, int> host_repeats; // host  -> extra sightings, all shapes
+	QList<evidence_request> firsts;
+	const QString page_norm =
+		page.adjusted(QUrl::RemoveFragment | QUrl::StripTrailingSlash).toString();
+
+	for (const evidence_request &r : evidence) {
+		// Furniture the gate refuses anyway, and the document itself. Spending
+		// a request on either would be spending it to be told what is known.
+		if (r.kind == "image" || r.kind == "script")
+			continue;
+		if (r.url.adjusted(QUrl::RemoveFragment | QUrl::StripTrailingSlash)
+		        .toString() == page_norm)
+			continue;
+		const QString shape = shape_of(r.url.toString());
+		if (repeats.contains(shape)) {
+			repeats[shape]++;
+			host_repeats[r.url.host()]++;
+			continue;
+		}
+		repeats.insert(shape, 0);
+		host_repeats.contains(r.url.host()) ? void()
+		                                     : void(host_repeats.insert(r.url.host(), 0));
+		firsts << r;
+	}
+
+	// Ranking, and "fetched once" alone is not enough: analytics beacons and
+	// stylesheets are fetched once too, and they arrive first, so a budget
+	// ordered on that spends itself on trackers before reaching the video —
+	// measured, on a real capture, where the ten questions went to Google
+	// Analytics, Yandex and a CSS file.
+	//
+	// The signal that does work is already in the evidence. **The host that
+	// served a flood of near-identical requests is the media host**, so a
+	// request fetched *once* on *that* host is the manifest, and a request
+	// fetched once on a host that never repeated anything is a beacon. Segments
+	// come next, since knowing one is `video/mp4` tells the model what the
+	// flood is; unrelated one-offs come last.
+	auto rank = [&](const evidence_request &r) {
+		const bool media_host = host_repeats.value(r.url.host()) > 0;
+		const bool repeated   = repeats.value(shape_of(r.url.toString())) > 0;
+		if (media_host && !repeated) return 0;   // the manifest, most likely
+		if (media_host)              return 1;   // one of its segments
+		if (!repeated)               return 2;   // a one-off somewhere else
+		return 3;
+	};
+	std::stable_sort(firsts.begin(), firsts.end(),
+	                  [&rank](const evidence_request &a, const evidence_request &b) {
+		return rank(a) < rank(b);
+	});
+	if (max >= 0 && firsts.size() > max)
+		firsts = firsts.mid(0, max);
+	return firsts;
 }
 
 QString extractor_dialog::strip_fences(const QString &reply) {
@@ -115,8 +187,31 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
 	build_ui();
 
 	m_evidence = m_signals->evidence_for(m_site);
+	rebuild_payload();
+
+	connect(m_provider, &ai_provider::finished, this, &extractor_dialog::on_reply);
+	connect(m_provider, &ai_provider::failed,   this, &extractor_dialog::on_failed);
+
+	if (m_evidence.isEmpty()) {
+		m_status->setText("No requests recorded for this page yet. Many sites "
+		                  "fetch nothing until their player starts, so press "
+		                  "play first, then try again.");
+		m_send->setEnabled(false);
+		return;
+	}
+
+	// Ask the server about the likely candidates before anyone asks the model.
+	// This happens on open rather than on Send for two reasons: the payload
+	// pane is a promise about what will be sent, so it has to be complete
+	// before Send is available; and these requests go to the site the page
+	// already talked to, not to the provider, so the "nothing leaves until you
+	// press Send" rule is untouched.
+	probe_candidates();
+}
+
+void extractor_dialog::rebuild_payload() {
 	int kept = 0;
-	const QString folded = summarise(m_evidence, &kept);
+	const QString folded = summarise(m_evidence, &kept, &m_served);
 
 	QString payload = "Page: " + m_page.toString() + "\n";
 	payload += "Host: " + m_site + "\n\n";
@@ -126,6 +221,11 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
 	// unlabelled it reads as anything the reader likes.
 	payload += "order | type | url\n";
 	payload += folded;
+	if (!m_served.isEmpty())
+		payload += "\n\n`-> …` is what that address actually returned when it was "
+		            "fetched with this page's context. It is the server's own "
+		            "answer, so trust it over the file extension, which on many "
+		            "sites is chosen to mislead.";
 	// The contract again, after the evidence rather than only before it, and the
 	// exact wording is measured rather than chosen. On the synthetic set this is
 	// redundant; on evidence captured from a real page — eighteen times longer,
@@ -159,16 +259,6 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
 	           "nothing else: no summary of this list, no explanation, no "
 	           "markdown fences.";
 	m_payload->setPlainText(payload);
-
-	connect(m_provider, &ai_provider::finished, this, &extractor_dialog::on_reply);
-	connect(m_provider, &ai_provider::failed,   this, &extractor_dialog::on_failed);
-
-	if (m_evidence.isEmpty()) {
-		m_status->setText("No requests recorded for this page yet. Many sites "
-		                  "fetch nothing until their player starts, so press "
-		                  "play first, then try again.");
-		m_send->setEnabled(false);
-	}
 }
 
 void extractor_dialog::build_ui() {
@@ -261,6 +351,65 @@ void extractor_dialog::on_reply(const QString &text) {
 	m_status->setText("Reviewed and validated. Nothing is saved until you accept.");
 
 	confirm_by_fetching();
+}
+
+// The evidence the model gets is urls, types and order — and on the site this
+// was measured against, the url is the one channel that lies. Its manifest
+// wears `.txt` and its segments wear `.woff2`, while the server, asked
+// directly, answers `application/vnd.apple.mpegurl` and `video/mp4`. Four
+// rounds of prompt work could not find the stream in the addresses because the
+// answer was never in them. So ask first, and send what came back.
+void extractor_dialog::probe_candidates() {
+	if (!m_probe)
+		m_probe = new stream_probe(this);
+
+	const QList<evidence_request> picks =
+		candidates(m_evidence, m_page, k_max_probes);
+	if (picks.isEmpty())
+		return;
+
+	stream_context ctx;
+	ctx.referer = m_page.toString();
+
+	m_pending = int(picks.size());
+	m_send->setEnabled(false);
+	m_status->setText(QString("Asking the server what %1 of these addresses "
+	                           "actually serve…").arg(m_pending));
+
+	for (const evidence_request &r : picks) {
+		const QString url = r.url.toString();
+		m_probe->probe(r.url, ctx, [this, url](const probe_result &res) {
+			if (qEnvironmentVariableIsSet("HYDRA_PROBE_DEBUG"))
+				qWarning("probe %s -> reached=%d status=%d kind=%s (%s)",
+				          qPrintable(url.left(80)), int(res.reached), res.status,
+				          qPrintable(res.kind), qPrintable(res.reason.left(90)));
+			// Only a positive identification is worth a line in the payload. An
+			// unreachable address or a refused one says nothing about what it
+			// is, and writing "unknown" beside it would read as a finding.
+			if (res.reached && !res.kind.isEmpty()) {
+				m_served.insert(url, res.content_type.isEmpty()
+					? res.kind.toUpper()
+					: QString("%1 (%2)").arg(res.content_type, res.kind.toUpper()));
+			} else if (res.reached && res.status >= 400) {
+				m_served.insert(url, QString("%1, not established")
+				                          .arg(res.status));
+			}
+			if (--m_pending > 0)
+				return;
+
+			rebuild_payload();
+			m_send->setEnabled(true);
+			int found = 0;
+			for (const QString &v : std::as_const(m_served))
+				if (!v.contains("not established")) ++found;
+			m_status->setText(found
+				? QString("%1 of those addresses said what they serve, and that "
+				           "is in the list below. Nothing leaves until you press "
+				           "Send.").arg(found)
+				: QString("The server did not say what any of them serve. The "
+				           "list below is the addresses alone."));
+		});
+	}
 }
 
 // §11.5's last clause, and §10's content-type tier: the gate proves the address

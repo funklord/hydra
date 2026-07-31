@@ -599,11 +599,57 @@ subtlety is — and a fake origin answering the way the real one does, including
 that Referer, User-Agent, cookies and an extractor's own headers all arrive,
 and that only a range is asked for.
 
-**The obvious next step, now that this exists.** The evidence sent to the model
-is URLs, types and order — the channel this site disguises. Probing the handful
-of plausible candidates first and telling the model *what each one actually
-serves* would replace the guesswork that four prompt iterations could not fix.
-That is a change to what §11.5 sends, not to how it asks.
+### Sending the probed types to the model (built; effect not yet measured)
+
+The evidence sent to the model was URLs, types and order — the channel this
+site disguises. The review now asks the server about the plausible candidates
+*before* anyone asks the model, and writes what came back beside each address:
+
+```
+  42 | other  | https://…/cf-master.1785377837.txt?k=…   -> application/vnd.apple.mpegurl (HLS)
+```
+
+It probes on open rather than on Send, for two reasons: the payload pane is a
+promise about what will be sent, so it has to be complete before Send is
+available; and these requests go to the site the page already talked to, not to
+the provider, so "nothing leaves until you press Send" is untouched.
+
+**Choosing what to ask is the whole problem, and the obvious rule is wrong.**
+Ten questions is the budget. Ordering by "fetched once" — a manifest is fetched
+once, its segments are not — sounds right and fails completely: beacons and
+stylesheets are fetched once too, and they arrive *first*. Measured on a real
+capture, all ten questions went to Google Analytics, Yandex and a CSS file, and
+the manifest was never asked about.
+
+The rule that works is already in the evidence. **The host that served a flood
+of near-identical requests is the media host**, so a request fetched once *on
+that host* is the manifest, while a one-off on a host that never repeated
+anything is a beacon. Segments rank next, since knowing one is `video/mp4`
+tells the model what the flood is. Verified on a live capture:
+`cf-master….txt → HLS` and `index-f1-v1-a1.txt → HLS`, with the trackers
+correctly annotating nothing.
+
+**What is measured, and what is not.** That the right addresses get asked and
+the answers reach the payload is measured, at both unit and live-capture level.
+Whether it makes the model find the stream is **not**: each run needs a fresh
+capture, because the CDN tokens expire and stale evidence probes as 403, and a
+14B on this payload exceeded a 900-second ceiling per run with the model
+resident alongside a WebEngine capture. Do not record a hit rate for this until
+it has actually been run — the temptation is to assume it works because the
+mechanism plainly does.
+
+**Two defects it turned up on the way**, both ours:
+
+- `stream_probe` had a use-after-free. `readyRead`, `finished` and the timeout
+  can all arrive; the first deleted the guard flag and the next read the freed
+  memory to decide whether it had already run, so some replies were delivered
+  twice. A `shared_ptr` now, with no manual delete.
+- Every automated driver that clicks Send the instant the dialog opens broke
+  silently, because probing disables Send and **a disabled button ignores a
+  click without saying so**. It presented as the model never answering, with no
+  request reaching Ollama at all. `test_live_model` waits for the button now,
+  and prints how many addresses answered so a run cannot quietly measure the
+  un-annotated case.
 
 ### Segment assembly (§11.2/§11.3)
 
@@ -1086,10 +1132,11 @@ a way around it, and the rule stays narrow — another request on the page's own
 host is still a perfectly good answer.
 
 Extractors are stored as plain JSON per host, so they can be read, diffed and
-shared like the filter list. **60 checks** cover the accept path, both invented
+shared like the filter list. **71 checks** cover the accept path, both invented
 cases, the segment rule, the page-url rule and its two edges, the furniture
-rule and its mixed-type edge, the `type`/`kind` split, all three ways of
-spelling the function, the truncation trap, loops, throws, unparseable source, a script defining no
+rule and its mixed-type edge, the `type`/`kind` split, which addresses are worth
+probing and what the answers do to the payload, all three ways of spelling the
+function, the truncation trap, loops, throws, unparseable source, a script defining no
 `extract()`, an unknown stream kind, the empty sandbox, folding, fenced
 replies, and the store round-trip.
 
