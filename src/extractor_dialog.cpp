@@ -117,6 +117,37 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
 	payload += QString("Requests this page made (%1 shown, %2 seen):\n")
 	               .arg(kept).arg(m_evidence.size());
 	payload += folded;
+	// The contract again, after the evidence rather than only before it. On the
+	// synthetic set this is redundant; on evidence captured from a real page —
+	// eighteen times longer, and shaped exactly like something one summarises —
+	// the model answered five times out of five with prose and no extract() at
+	// all. The instruction has to be the last thing read, not the first.
+	//
+	// It has to carry the *signature*, not just "reply in JavaScript". Asking
+	// only for the latter moved four runs in five from prose to code, and all
+	// four wrote `extract(url)` over a single address: restating the format
+	// while omitting the shape displaced the shape.
+	// Described rather than shown. A skeleton here was copied out verbatim,
+	// placeholders and all — `url: <one of those urls>` came back as a syntax
+	// error — so the shape is now stated in prose with nothing that can be
+	// pasted. The note about `kind` is not padding: it names two vocabularies
+	// that share one field name, and two runs in five returned
+	// `request.kind === 'hls'`, which is never true.
+	payload += "\n\nNow write the extractor for the requests above. Assign to "
+	           "`extract` a function of two arguments, `page` and `requests`, "
+	           "where `requests` is the list above and each entry has `url`, "
+	           "`kind` and `order`.\n\n"
+	           "Careful with `kind`: on a request it is what the browser "
+	           "fetched it as — `script`, `image` or `other` — and it is never "
+	           "`hls` or `dash`, so testing for those matches nothing. The "
+	           "stream kind is your conclusion, and belongs in what you "
+	           "return.\n\n"
+	           "Return an object whose `url` is one of the addresses above "
+	           "copied exactly, whose `kind` is `hls`, `dash` or `direct`, and "
+	           "whose `headers` sets `Referer` to `page.url` — or return null "
+	           "if none of them is a stream. Reply with that JavaScript and "
+	           "nothing else: no summary of this list, no explanation, no "
+	           "markdown fences.";
 	m_payload->setPlainText(payload);
 
 	connect(m_provider, &ai_provider::finished, this, &extractor_dialog::on_reply);

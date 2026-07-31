@@ -1455,6 +1455,66 @@ identifiers from a real session, so it lives outside the repo; regenerate it
 with `try_extract` rather than reusing a stale one, since the `k=`/`kx=` tokens
 expire anyway.
 
+### Four prompt iterations against it, and what each one bought
+
+Five runs per iteration, same captured evidence, `qwen2.5-coder:14b`. Every
+change is in the payload's tail — the contract restated *after* the evidence
+rather than only in the system prompt before it.
+
+| iteration | produced code | right signature | found the stream |
+|---|---|---|---|
+| system prompt only | 0/5 — all prose | — | 0/5 |
+| + "reply in JavaScript" | 4/5 | 0/5 | 0/5 |
+| + the signature, as a skeleton | 4/5 | 4/5 | 0/5 |
+| + the contract in prose, `kind` disambiguated | 5/5 | 5/5 | **0/5** |
+
+Each step moved the failure one stage further down and none of them reached a
+working extractor. That is the headline: **prompt iteration alone did not solve
+this site**, and the last iteration is where the model finally attempts the
+real task and still fails it.
+
+**Three of the failures were ours, not the model's.** Worth separating,
+because they inflated every "the model cannot do this" reading:
+
+- `wrap()` rejected `function extract(…)` — the declaration hoisted above the
+  wrapper's own `var extract = null;`, which then nulled it. Fixed.
+- `test_live_model` picked its result pane by searching for the word
+  "function", so a prose reply reported "(none)" and threw away the artefact.
+  Fixed.
+- The skeleton in the tail was copied out verbatim, placeholders and all:
+  `url: <one of those urls>` came back as a syntax error. The shape is now
+  described in prose, with nothing that can be pasted.
+
+**`kind` means two different things, and the model noticed before we did.**
+On a request it is what the browser fetched the thing as (`script`, `image`,
+`other`); in the return value it is the stream type (`hls`, `dash`, `direct`).
+Two vocabularies, one field name. Two runs in five returned
+`request.kind === 'hls'`, which is never true of anything. The tail now says so
+outright. The deeper fix is to stop overloading the word.
+
+**A third gate hole, same shape as the first two.** One run was *accepted*
+having picked `mc.yandex.com/sync_cookie_image_check?…` — a tracking pixel,
+`kind='image'`, which the script returned as a `direct` stream after failing to
+find `.m3u8`. It is genuinely requested, it is not one of a flood, and it is
+not the page, so nothing refused it. The evidence carries the browser's own
+resource kind and the gate ignores it: **a request fetched as an image or a
+script is not a stream**, and that is a rule the interceptor already has the
+facts for. Not implemented here — it wants deciding rather than adding in a
+write-up — but it is the obvious next rule.
+
+**The conclusion is architectural, and it echoes §11.1.** What a proposal gets
+is url, resource kind and order. On this site the manifest is `.txt`, the
+segments are `.woff2`, the init segment is `.woff`, and the stream host appears
+nowhere else — so there is no extension signal, no host signal, and the only
+real discriminator left is *how many times each shape was fetched*, which the
+folding already computes and the prompt mentions in one clause. Every failing
+run reached for an extension. It is worth asking whether URL-shaped evidence is
+simply too thin here, exactly as `media_detector::classify()` was found to be
+too thin on the same site: the answer there was the local proxy's content-type
+tier (§10), and the same tier would tell an extractor that one `.txt` is
+`application/vnd.apple.mpegurl` and the `.woff2` files are video segments.
+Prompt work should probably wait behind that.
+
 ## First-load flicker (fixed)
 
 The whole browser window vanished for about a third of a second on the first
@@ -1493,15 +1553,18 @@ page.
 
 ## What is next (in order)
 
-1. **Make the loop return a parser on real evidence.** Step 1 as it was
-   written — a full turn on evidence from a live page — is done, and it failed:
-   five runs on captured dramafren evidence produced prose every time and no
-   `extract()` at all (section above). The blocker is reply-format adherence on
-   a long payload, not extraction logic, so it comes before any further prompt
-   work. Things to try, cheapest first: shorten what is sent (the folded
-   payload still carries 300-character tracker URLs), restate the format
-   immediately *after* the evidence rather than only before it, and consider
-   whether `strip_fences` should also salvage a code block from a prose reply.
+1. **Give the extractor better evidence, rather than a better prompt.** Four
+   prompt iterations against captured real evidence took the model from prose,
+   to code, to the right signature, to attempting the real task — and never to
+   a working extractor (section above). On that site there is no extension
+   signal, no host signal, and every failing run reached for an extension. The
+   thing that would settle it is the local proxy's content-type tier (§10),
+   which is already the recorded answer to the same problem in
+   `media_detector::classify()`. Two cheaper things to do first, both found by
+   the runs: teach the gate that a request the browser fetched as an `image` or
+   a `script` is not a stream (a tracking pixel was accepted as one), and stop
+   overloading `kind`, which means resource type on a request and stream type
+   in the return value.
 2. **Try the fragment-first prompt line — but only on new evidence.** The
    query-string line was tried and reverted: 3 of 10 against 8 of 10 for the
    original, and it failed to prevent the very `endsWith` it was written for
