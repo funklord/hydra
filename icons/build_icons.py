@@ -45,22 +45,29 @@ C = {
 }
 
 ICON16 = [
-    "......KGGK......",
-    ".KK..KGGGGK..KK.",
-    "KGGK.KGGGGK.KGGK",
-    "KGYGKKGYYGKKGYGK",
-    "KGGGGKGGGGKGGGGK",
-    ".KGGGKKGGKKGGGK.",
-    "..KKKOOAAOOKKK..",
-    ".KOOOAAAAAAOOOK.",
-    "KOOAAAAAAAAAAOOK",
-    "KBOAAAAAAAAAAOOK",
-    "KBBOAAAAAAAAOOEK",
-    ".KBBOOAAAAOOOEK.",
-    ".KbBBOOOOOOOEK..",
-    "..KbBBOOOOOEKK..",
-    "...KKbBBOOEKK...",
-    ".....KKKKKK.....",
+    # Read as a strawberry in its first form, and deservedly: a serrated green
+    # band across the top is a hull, and a warm body tapering to a point below
+    # it is the berry. Both are fixed here. The heads are three separate blobs
+    # with transparent gaps between them rather than one scalloped band, and the
+    # body is a circle -- widest across its middle, not its shoulders -- so it
+    # reads as an orb the creature holds rather than as fruit. The water up the
+    # left does the rest: strawberries are not blue.
+    "......GGGG......",
+    "......GYYG......",
+    ".GGG..GGGG..GGG.",
+    "GGYGG.GGGG.GGYGG",
+    "GGGGG.OOOO.GGGGG",
+    ".GGGGOOOOOOGGGG.",
+    "..GGOOOAAAOOGG..",
+    "..OOOAAAAAAOOO..",
+    ".OOOAAAAAAAAOOO.",
+    "BOOOAAAAAAAAOOOE",
+    "BBOOAAAAAAAAOOEE",
+    ".BBOOAAAAAAOOEE.",
+    ".bBBOOOAAOOOEEE.",
+    "..bBBOOOOOOOEE..",
+    "...bBBOOOOOEE...",
+    ".....bBOOOE.....",
 ]
 
 def draw16():
