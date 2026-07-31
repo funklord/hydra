@@ -125,12 +125,8 @@ int main(int argc, char **argv) {
 	// Say how much of the payload came from asking the server. These tokens are
 	// short-lived, so evidence captured an hour ago probes as 403 and the run
 	// silently measures the un-annotated case instead of the annotated one.
-	const auto panes_now = dlg.findChildren<QPlainTextEdit *>();
-	QString shown;
-	for (QPlainTextEdit *e : panes_now)          // the payload is the long one
-		if (e->toPlainText().size() > shown.size())
-			shown = e->toPlainText();
-	std::printf("panes: %d\n", int(panes_now.size()));
+	QPlainTextEdit *payload = dlg.findChild<QPlainTextEdit *>("payload");
+	const QString shown = payload ? payload->toPlainText() : QString();
 	std::printf("payload: %d chars, %d addresses answered, %d refused\n",
 	             int(shown.size()), int(shown.count(QStringLiteral("   -> "))) -
 	                 int(shown.count(QStringLiteral("not established"))),
@@ -141,14 +137,11 @@ int main(int argc, char **argv) {
 	if (!answered) { std::printf("no answer within the timeout\n"); return 1; }
 
 	// What came back, and what the gate made of it.
-	// The proposal pane, not "whichever pane mentions a function". Looking for
-	// the word was fine while every reply was JavaScript; against real evidence
-	// the model answers in prose, and then this reported "(none)" and threw away
-	// the very thing worth reading. The proposal is the pane built second.
-	QPlainTextEdit *script = nullptr;
-	const auto panes = dlg.findChildren<QPlainTextEdit *>();
-	if (panes.size() >= 2) script = panes.last();
-	else if (!panes.isEmpty()) script = panes.first();
+	// By name. Two earlier versions of this line found the pane by content
+	// ("whichever one mentions a function", which reported "(none)" the moment a
+	// reply was prose) and then by position ("the pane built second", which a
+	// third pane would have silently broken). The panes carry object names now.
+	QPlainTextEdit *script = dlg.findChild<QPlainTextEdit *>("proposal");
 	std::printf("\n----- what the model returned -----\n%s\n-----------------------------------\n",
 	             script ? qPrintable(script->toPlainText().left(1200)) : "(none)");
 

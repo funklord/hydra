@@ -14,6 +14,8 @@ class ai_provider;
 class extractor_signals;
 class extractor_store;
 class stream_probe;
+class helper_host;
+struct helper_call;
 
 // Ask for a parser for this site, then judge the answer (architecture doc
 // §11.5).
@@ -58,6 +60,15 @@ public:
 	// Models fence code even when asked not to. Strip it rather than fail.
 	static QString strip_fences(const QString &reply);
 
+	// What the script did, rendered for a person (§11.5.1). Pure, so the
+	// wording is tested without standing up a dialog — and the wording is the
+	// point, since this is what consent is given against.
+	static QString transcript_text(const QList<helper_call> &calls);
+
+	// Run proposals with the helper tier. Null, the default, is the pure tier:
+	// the script gets no `hydra` and there is nothing to show.
+	void use_helpers(helper_host *helpers);
+
 private:
 	void build_ui();
 	void on_send();
@@ -68,6 +79,7 @@ private:
 	// The §10 content-type tier: fetch what was picked, with the page's own
 	// context, and say what it really serves. Advisory unless it contradicts.
 	void confirm_by_fetching();
+	void show_transcript();
 
 	// Ask the server about the likely candidates before the model is asked
 	// anything, and fold the answers into the payload.
@@ -78,6 +90,7 @@ private:
 	extractor_store   *m_store    = nullptr;
 	ai_provider       *m_provider = nullptr;
 	stream_probe      *m_probe    = nullptr;
+	helper_host       *m_helpers  = nullptr;
 	QString            m_site;
 	QUrl               m_page;
 	QList<evidence_request> m_evidence;
@@ -91,6 +104,8 @@ private:
 	QPlainTextEdit *m_script  = nullptr;
 	QLabel         *m_status  = nullptr;
 	QLabel         *m_result  = nullptr;
+	QPlainTextEdit *m_transcript = nullptr;
+	QLabel         *m_transcript_label = nullptr;
 	QPushButton    *m_send    = nullptr;
 	QPushButton    *m_apply   = nullptr;
 };

@@ -439,7 +439,7 @@ It is source and tooling, not a build dependency: nothing in `CMakeLists.txt` re
 
 ### 11.5.1 The helper tier: letting a script look, without letting it reach
 
-**Status: the fetch half is implemented; DOM is not.** `helper_allowlist`,
+**Status: the fetch half and the transcript are implemented; DOM is not.** `helper_allowlist`,
 `helper_host` and the budgets are built and exercised offline against an
 injected fetcher, and `site_extractor::run` exposes them to a script as `hydra`
 when — and only when — a host is supplied. Built ahead of a site that demands
@@ -477,6 +477,8 @@ Call it **follow, not fabricate**. It is the §9.4 rule one level up, and it is 
 ```
 
 The transcript is stored beside the script, so a later run that behaves differently is visible as a diff rather than as a mystery.
+
+Two details of the rendering are load-bearing rather than cosmetic. A refused call is marked in the **margin** (`!`), not merely worded differently, because a refusal is the one line that must not be skimmed past. And the transcript is shown **on rejection too** — that is the case where it matters most, since it is where a script that reached somewhere it should not have becomes visible.
 
 **Re-judging, and what determinism is not.** A stored extractor is re-judged on every run today, and that continues: the four answer rules (invented, segment, page, furniture) are unchanged, and the allowlist is enforced *at call time* on every run rather than replayed from the transcript. Deliberately **not** attempted: making a helper-tier run reproducible. The site changes — that is the entire reason this exists — so a replay harness would be testing a fossil. What is guaranteed is failure-closed behaviour, not identical behaviour.
 

@@ -1722,9 +1722,11 @@ page.
    others will and a tier designed against one example fits that example.
    `helper_allowlist`, `helper_host` and the budgets are done and tested
    offline; `hydra` appears in the sandbox only when a host is supplied, so the
-   pure tier cannot see the surface exists. Still to do: the real blocking
-   fetcher, the two per-site policy tri-states, the transcript in the review
-   dialog, and the DOM half behind §13.2.
+   pure tier cannot see the surface exists. The transcript is in the review
+   dialog: every call, what the server answered, refusals marked in the margin,
+   and shown on rejection as well as acceptance — that being the case where it
+   matters most. Still to do: the real blocking fetcher, the two per-site policy
+   tri-states, and the DOM half behind §13.2.
 5. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
    Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
 

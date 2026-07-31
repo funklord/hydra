@@ -3,6 +3,7 @@
 #include "ai_provider.h"
 #include "extractor_signals.h"
 #include "stream_probe.h"
+#include "extractor_helpers.h"
 
 #include <QDialogButtonBox>
 #include <QHash>
@@ -160,6 +161,47 @@ QList<evidence_request> extractor_dialog::candidates(
 	return firsts;
 }
 
+QString extractor_dialog::transcript_text(const QList<helper_call> &calls) {
+	// The point of this is that the question stops being "read this code and
+	// predict what it does" and becomes "here is what it did". So it is written
+	// for someone deciding whether to trust it, not for a log: a refused call
+	// is marked in the margin rather than merely worded differently, because a
+	// refusal is the one line that must not be skimmed past.
+	QStringList lines;
+	for (const helper_call &c : calls) {
+		const QString mark = c.allowed ? QStringLiteral("  ")
+		                                : QStringLiteral("! ");
+		QString target = c.target;
+		if (target.size() > 96)
+			target = target.left(60) + "…" + target.right(35);
+		lines << QString("%1%2  %3\n        %4")
+		             .arg(mark, c.verb.leftJustified(4), target, c.outcome);
+	}
+	if (lines.isEmpty())
+		return QString();
+	return lines.join('\n');
+}
+
+void extractor_dialog::use_helpers(helper_host *helpers) { m_helpers = helpers; }
+
+void extractor_dialog::show_transcript() {
+	const QString text =
+		m_helpers ? transcript_text(m_helpers->transcript()) : QString();
+	const bool any = !text.isEmpty();
+	m_transcript->setPlainText(text);
+	m_transcript->setVisible(any);
+	m_transcript_label->setVisible(any);
+	if (!any)
+		return;
+	m_transcript_label->setText(
+		m_helpers->breached()
+			? QString("What it did — and where it was stopped:")
+			: QString("What it did (%1 %2, %3 bytes):")
+			      .arg(m_helpers->calls_used())
+			      .arg(m_helpers->calls_used() == 1 ? "call" : "calls")
+			      .arg(m_helpers->bytes_used()));
+}
+
 QString extractor_dialog::strip_fences(const QString &reply) {
 	QString s = reply.trimmed();
 	if (!s.startsWith("```"))
@@ -278,7 +320,11 @@ void extractor_dialog::build_ui() {
 
 	m_pages = new QStackedWidget(this);
 
+	// Named, not merely ordered. Drivers used to find these by position — "the
+	// pane built second" — which broke silently the moment a pane was added,
+	// and reported the wrong text rather than failing.
 	m_payload = new QPlainTextEdit(this);
+	m_payload->setObjectName("payload");
 	m_payload->setReadOnly(true);
 	m_payload->setLineWrapMode(QPlainTextEdit::NoWrap);
 	m_pages->addWidget(m_payload);
@@ -287,12 +333,29 @@ void extractor_dialog::build_ui() {
 	auto *rl = new QVBoxLayout(result_page);
 	rl->setContentsMargins(0, 0, 0, 0);
 	m_result = new QLabel(result_page);
+	m_result->setObjectName("verdict");
 	m_result->setWordWrap(true);
 	m_result->setTextInteractionFlags(Qt::TextSelectableByMouse);
 	rl->addWidget(m_result);
 	m_script = new QPlainTextEdit(result_page);
+	m_script->setObjectName("proposal");
 	m_script->setReadOnly(true);
 	rl->addWidget(m_script, 1);
+
+	// What the script actually did, when it was allowed to do anything
+	// (§11.5.1). Hidden entirely on the pure tier, where there is nothing to
+	// say and an empty box would only ask a question that has no answer.
+	m_transcript_label = new QLabel("What it did:", result_page);
+	m_transcript_label->setObjectName("transcript_label");
+	rl->addWidget(m_transcript_label);
+	m_transcript = new QPlainTextEdit(result_page);
+	m_transcript->setObjectName("transcript");
+	m_transcript->setReadOnly(true);
+	m_transcript->setLineWrapMode(QPlainTextEdit::NoWrap);
+	rl->addWidget(m_transcript, 1);
+	m_transcript_label->hide();
+	m_transcript->hide();
+
 	m_pages->addWidget(result_page);
 
 	outer->addWidget(m_pages, 1);
@@ -326,8 +389,13 @@ void extractor_dialog::on_reply(const QString &text) {
 
 	// Judged before it is offered, never after. The gate is the whole reason
 	// this is safe to run at all (§11.5).
-	m_verdict = site_extractor::check(m_proposal, m_page, m_evidence);
+	m_verdict = site_extractor::check(m_proposal, m_page, m_evidence, m_helpers);
 	m_apply->setEnabled(m_verdict.usable);
+
+	// Shown whatever the verdict. A rejected proposal's transcript is the more
+	// interesting one: it is where a script that reached somewhere it should not
+	// have is visible, and hiding it on rejection would hide exactly that.
+	show_transcript();
 
 	if (!m_verdict.usable) {
 		m_result->setText("<b>Not usable.</b> " + m_verdict.message.toHtmlEscaped() +
