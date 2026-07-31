@@ -1725,8 +1725,12 @@ page.
    pure tier cannot see the surface exists. The transcript is in the review
    dialog: every call, what the server answered, refusals marked in the margin,
    and shown on rejection as well as acceptance — that being the case where it
-   matters most. Still to do: the real blocking fetcher, the two per-site policy
-   tri-states, and the DOM half behind §13.2.
+   matters most. The blocking fetcher is built too: its own thread, a nested
+   loop where there is nothing to re-enter, a refusal rather than a deadlock if
+   called from its own thread, and a bounded timeout. Still to do, and in this
+   order: run the script off the UI thread (a helper-tier run currently freezes
+   the window for the deadline, because a blocked thread serves nothing), the
+   two per-site policy tri-states, and the DOM half behind §13.2.
 5. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
    Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
 

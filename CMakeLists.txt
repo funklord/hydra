@@ -110,6 +110,8 @@ add_executable(hydra
     src/site_extractor.cpp
     src/extractor_helpers.cpp
     src/extractor_helpers.h
+    src/network_fetcher.cpp
+    src/network_fetcher.h
     src/site_extractor.h
     src/extractor_signals.cpp
     src/extractor_signals.h

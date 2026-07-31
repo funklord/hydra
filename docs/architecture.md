@@ -439,7 +439,7 @@ It is source and tooling, not a build dependency: nothing in `CMakeLists.txt` re
 
 ### 11.5.1 The helper tier: letting a script look, without letting it reach
 
-**Status: the fetch half and the transcript are implemented; DOM is not.** `helper_allowlist`,
+**Status: the fetch half, its fetcher and the transcript are implemented; DOM is not, and the script still runs on the calling thread.** `helper_allowlist`,
 `helper_host` and the budgets are built and exercised offline against an
 injected fetcher, and `site_extractor::run` exposes them to a script as `hydra`
 when — and only when — a host is supplied. Built ahead of a site that demands
@@ -465,7 +465,9 @@ Call it **follow, not fabricate**. It is the §9.4 rule one level up, and it is 
 
 **Budgets, enforced in C++ and not negotiable from script:** at most 8 helper calls, 512 KB total fetched, and a 10-second wall clock for the whole run, on top of the existing watchdog that interrupts a script which never returns. A breach is not a partial answer — the run yields nothing and says which budget it hit.
 
-**Execution model, which is the hard part.** `QJSEngine` is synchronous and the network is not. The script therefore runs on a **worker thread**; a helper call marshals to the network thread and blocks the worker until the reply, the deadline, or the watchdog's interrupt. The alternative — promise-returning helpers — is rejected twice over: `QJSEngine` has no event loop to resolve them, and it would force generated code into an async shape that models get wrong far more often than they get a straight-line loop wrong. The evidence for that is in `project.md`: four prompt iterations were needed to get a *synchronous* two-argument function reliably.
+**Execution model, which is the hard part.** `QJSEngine` is synchronous and the network is not. The script therefore runs on a **worker thread**; a helper call marshals to the network thread and blocks the worker until the reply, the deadline, or the watchdog's interrupt. The alternative — promise-returning helpers — is rejected twice over: `QJSEngine` has no event loop to resolve them, and it would force generated code into an async shape that models get wrong far more often than they get a straight-line loop wrong.
+
+`network_fetcher` is that bridge, and it marshals with `Qt::BlockingQueuedConnection` onto a thread of its own which spins a nested event loop for the reply. Nested is safe *there* and nowhere else: on the calling thread the same loop would deliver paint events and user input into the middle of a running script. Two consequences follow and are enforced rather than documented. Blocking from a thread to itself deadlocks, so `fetch` refuses that case and returns a failure — a deadlock inside a review dialog is indistinguishable from a hang. And **a blocked thread serves nothing**: until the script itself is moved off the UI thread, a helper-tier run freezes the window for the deadline. The test suite found this the hard way, by blocking the very thread its own fake origin was listening on and watching every request "time out". The evidence for that is in `project.md`: four prompt iterations were needed to get a *synchronous* two-argument function reliably.
 
 **The transcript is what makes the review meaningful.** Every helper call and its outcome is recorded and shown in the accept dialog, so the question put to the user stops being "read this code and predict what it does" and becomes "here is what it did":
 

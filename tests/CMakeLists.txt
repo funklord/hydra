@@ -51,6 +51,11 @@ add_executable(test_extloop test_extloop.cpp
     ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/ai_provider.h)
 target_link_libraries(test_extloop PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
 
+add_executable(test_fetcher test_fetcher.cpp ${H}/network_fetcher.cpp
+    ${H}/extractor_helpers.cpp ${H}/site_extractor.cpp ${H}/stream_probe.cpp
+    ${H}/local_proxy.cpp)
+target_link_libraries(test_fetcher PRIVATE Qt6::Core Qt6::Qml Qt6::Network Qt6::Test)
+
 add_executable(test_helpers test_helpers.cpp ${H}/extractor_helpers.cpp
     ${H}/site_extractor.cpp ${H}/stream_probe.cpp ${H}/local_proxy.cpp)
 target_link_libraries(test_helpers PRIVATE Qt6::Core Qt6::Qml Qt6::Network Qt6::Test)
@@ -67,7 +72,7 @@ add_executable(test_settings test_settings.cpp
 target_link_libraries(test_settings PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
 
 foreach(t test_seam test_pick test_extractor test_extloop test_settings
-         test_streamtype test_helpers)
+         test_streamtype test_helpers test_fetcher)
     target_include_directories(${t} PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
 endforeach()
 
