@@ -44,6 +44,8 @@
 
 #include <QApplication>
 #include <QSplitter>
+#include <QPropertyAnimation>
+#include <QResizeEvent>
 #include <QTreeView>
 #include <QStackedWidget>
 #include <QHBoxLayout>
@@ -295,6 +297,15 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	QAction *back_act   = bar->addAction("◀");
 	QAction *fwd_act    = bar->addAction("▶");
 	QAction *reload_act = bar->addAction("↻");
+	// Only shown in drawer mode; on a wide window the tree is already visible
+	// and a button to reveal it would be a control that does nothing.
+	m_drawer_action = bar->addAction("☰");
+	m_drawer_action->setIcon(style()->standardIcon(QStyle::SP_FileDialogDetailedView));
+	m_drawer_action->setStatusTip("Show or hide the tab tree");
+	m_drawer_action->setVisible(false);
+	connect(m_drawer_action, &QAction::triggered, this,
+	         [this] { set_drawer_open(!m_drawer_open); });
+
 	back_act->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
 	fwd_act->setIcon(style()->standardIcon(QStyle::SP_ArrowForward));
 	reload_act->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
@@ -331,6 +342,16 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
 	m_tree->expandAll();
 	connect(m_tree, &QTreeView::activated, this, &main_window::on_tree_activated);
+#ifdef Q_OS_ANDROID
+	// A tap is not a double-click, and `activated` is what a double-click emits
+	// on this style -- so on the device the tree looked responsive (rows
+	// highlighted) and opened nothing, with the status bar still reading
+	// "0 / 4 live" after several attempts. Touch gets `clicked` as well.
+	//
+	// Android only, deliberately: making a single click open a tab on the
+	// desktop would change a behaviour nobody asked to have changed.
+	connect(m_tree, &QTreeView::clicked, this, &main_window::on_tree_activated);
+#endif
 	connect(m_tree, &QTreeView::clicked,   this, &main_window::on_tree_activated);
 	connect(m_tree, &QTreeView::customContextMenuRequested,
 	         this, &main_window::on_tree_context_menu);
@@ -346,6 +367,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// the layout, and it costs a beat every time to work out which pane the
 	// search box searches.
 	QWidget *sidebar = new QWidget(this);
+	m_sidebar = sidebar;
 	QVBoxLayout *side = new QVBoxLayout(sidebar);
 	side->setContentsMargins(4, 4, 4, 0);
 	side->setSpacing(4);
@@ -373,6 +395,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	side->addWidget(m_tree, 1);
 
 	QSplitter *splitter = new QSplitter(Qt::Horizontal, this);
+	m_splitter = splitter;
 	splitter->addWidget(sidebar);
 	splitter->addWidget(m_stack);
 	splitter->setStretchFactor(0, 0);
@@ -389,6 +412,13 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 
 	setWindowTitle("Hydra");
 	resize(1180, 760);
+#ifdef Q_OS_ANDROID
+	// Nothing text-shaped gets focus at startup. Qt gives it to the first
+	// focusable widget, which here is the address bar, and on a phone that
+	// raises the soft keyboard over half the window before the user has asked
+	// for anything -- seen on the device the moment the drawer worked.
+	m_stack->setFocus(Qt::OtherFocusReason);
+#endif
 
 	// Realize this window with the visual the web engine needs, *before* it is
 	// ever shown.
@@ -793,6 +823,66 @@ bool main_window::load_tree(const QString &path) {
 	return ok;
 }
 
+void main_window::resizeEvent(QResizeEvent *event) {
+	QWidget::resizeEvent(event);
+	update_layout_mode();
+	if (m_drawer_mode && m_sidebar) {
+		// Keep the drawer the right size and where it belongs, whichever state
+		// it is in -- a rotation while it is open must not leave it half off.
+		const int w = qMin(int(width() * 0.82), 420);
+		const int top = m_splitter ? m_splitter->y() : 0;
+		m_sidebar->resize(w, height() - top - (m_status ? m_status->height() : 0));
+		m_sidebar->move(m_drawer_open ? 0 : -w, top);
+	}
+}
+
+void main_window::update_layout_mode() {
+	const bool narrow = width() < k_drawer_threshold;
+	if (narrow == m_drawer_mode || !m_sidebar || !m_splitter)
+		return;
+	m_drawer_mode = narrow;
+	m_drawer_action->setVisible(narrow);
+
+	if (narrow) {
+		// Out of the splitter and on top of the window. The stack then takes
+		// the whole width, which is the entire point: a page on a phone gets
+		// the screen rather than a third of it.
+		m_sidebar->setParent(this);
+		m_sidebar->setAutoFillBackground(true);
+		m_sidebar->raise();
+		set_drawer_open(false, false);
+		m_sidebar->show();
+	} else {
+		// Back where it came from, at the position it had.
+		m_splitter->insertWidget(0, m_sidebar);
+		m_sidebar->move(0, 0);
+		m_splitter->setSizes({280, qMax(400, width() - 280)});
+		m_drawer_open = false;
+	}
+}
+
+void main_window::set_drawer_open(bool open, bool animate) {
+	if (!m_drawer_mode || !m_sidebar)
+		return;
+	m_drawer_open = open;
+	const int w = m_sidebar->width();
+	const int to = open ? 0 : -w;
+	if (!animate) {
+		m_sidebar->move(to, m_sidebar->y());
+		return;
+	}
+	if (!m_drawer_anim)
+		m_drawer_anim = new QPropertyAnimation(m_sidebar, "pos", this);
+	m_drawer_anim->stop();
+	m_drawer_anim->setDuration(180);
+	m_drawer_anim->setEasingCurve(QEasingCurve::OutCubic);
+	m_drawer_anim->setStartValue(m_sidebar->pos());
+	m_drawer_anim->setEndValue(QPoint(to, m_sidebar->y()));
+	m_drawer_anim->start();
+	if (open)
+		m_sidebar->raise();
+}
+
 web_view_backend *main_window::current_view() const {
 	// Linear over at most k_max_live_views entries, which beats keeping a
 	// second piece of state in sync with the stack.
@@ -935,6 +1025,10 @@ void main_window::enforce_live_cap(const QString &keep_id) {
 }
 
 void main_window::on_tree_activated(const QModelIndex &proxy_index) {
+	// Picking a tab is what the drawer was opened for, so it gets out of the
+	// way. Leaving it up would cover the page the user just asked for.
+	if (m_drawer_mode)
+		set_drawer_open(false);
 	if (!proxy_index.isValid())
 		return;
 	node *n = m_model->node_for_index(m_proxy->mapToSource(proxy_index));

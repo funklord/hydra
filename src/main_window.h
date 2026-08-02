@@ -14,6 +14,7 @@
 #include <QString>
 
 class QTreeView;
+class QSplitter;
 class QStackedWidget;
 class QLineEdit;
 class QComboBox;
@@ -82,6 +83,7 @@ public:
 
 protected:
 	void closeEvent(QCloseEvent *event) override;
+	void resizeEvent(QResizeEvent *event) override;
 	bool event(QEvent *e) override;   // routes status tips to the status bar
 
 private slots:
@@ -138,11 +140,31 @@ private:
 	void update_address(const QString &url);
 	void apply_policy(web_view_backend *view, const QString &host);
 
+	// §19.3's adaptive layout. A horizontal splitter is right on a desktop and
+	// unusable on a portrait phone, where it leaves the page a strip too narrow
+	// to read -- measured on a device before this existed. Narrow windows get the
+	// tree as a drawer that slides over the content instead; wide ones keep the
+	// splitter exactly as it was.
+	//
+	// Driven by the window's own width rather than by the platform, because the
+	// thing that makes a splitter wrong is the aspect ratio and a desktop window
+	// dragged narrow has the same problem.
+	void update_layout_mode();
+	void set_drawer_open(bool open, bool animate = true);
+
+	static constexpr int k_drawer_threshold = 620;   // logical px
+
 	static constexpr int k_max_live_views = 4;
 
 	tab_tree_model  *m_model = nullptr;
 	tree_sort_proxy *m_proxy = nullptr;
 	QTreeView       *m_tree  = nullptr;
+	QWidget         *m_sidebar = nullptr;      // tree + search + sort
+	QSplitter       *m_splitter = nullptr;
+	QAction         *m_drawer_action = nullptr;
+	class QPropertyAnimation *m_drawer_anim = nullptr;
+	bool             m_drawer_mode = false;    // narrow: sidebar is an overlay
+	bool             m_drawer_open = false;
 	QStackedWidget  *m_stack = nullptr;
 
 	QLineEdit       *m_address  = nullptr;

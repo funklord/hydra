@@ -2844,14 +2844,18 @@ same tree with the same flags.
   that reads as a failure. Verified on the device: the tree renders with its
   bold/italic/muted state cues, and `files/tree.txt` and `files/state/` exist in
   app storage afterwards. User-chosen files still want SAF (§19.4).
-- **The layout is desktop-shaped, and it shows.** A horizontal splitter on a
-  portrait phone gives the content pane a strip too narrow to use — "Select a
-  tab from the tree" is clipped at the right edge — while the tree takes half the
-  screen. This is §19.3's adaptive drawer layout, and the screenshot is the
-  argument for it: it is not that a drawer would be *nicer*, it is that the
-  splitter is unusable at this aspect ratio.
-- **The status bar's right-hand text sits hard against the screen edge**, for the
-  same reason.
+- ~~The layout is desktop-shaped~~ **— fixed, and it is §19.3's drawer.** A
+  horizontal splitter on a portrait phone left the page a strip too narrow to
+  read. Below 620 logical pixels the sidebar leaves the splitter, becomes an
+  overlay, and slides in and out over the content; above it, the splitter is
+  exactly what it always was. **Driven by the window's width, not by the
+  platform** — a desktop window dragged narrow has the same problem, and a rule
+  that said "Android" would have been a rule about the wrong thing.
+
+  Verified on the device: the page now gets the whole screen, the toolbar grows
+  a toggle that only exists in drawer mode, tapping it slides the tree in over
+  the content, and **choosing a tab closes it again** — it was opened to pick
+  something, so it gets out of the way of what was picked.
 - ~~A toolbar glyph is missing~~ **— fixed.** Reload was the character `↻` and
   the emulator's font had no glyph, so it drew an empty box while back and
   forward happened to survive. All three now take their icon from the style

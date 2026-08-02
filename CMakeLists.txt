@@ -237,6 +237,14 @@ if(NOT ANDROID)
     target_link_libraries(hydra PRIVATE Qt6::WebEngineWidgets)
 endif()
 
+# The Android package's own files: manifest and launcher icons, generated from
+# the same drawing the desktop uses (`icons/`). Without this the app wears Qt's
+# default icon and is called by the target name.
+if(ANDROID)
+    set_property(TARGET hydra PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
+                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
+endif()
+
 target_link_libraries(hydra PRIVATE
     Qt6::Widgets
     Qt6::Network
