@@ -105,10 +105,11 @@ in 5**, having been 0 in 5 every time it was asked before.
   changed nothing — 0 of 5 — until the payload's *tail* said to use them. What
   the tier supplies and what the model reads are two different questions, and
   only the second one moved the number. See the four arms below.
-- **Whether any of this transfers to a second site.** Everything measured
-  against a real page in this file is one site, and the fragment the working
-  runs matched (`/cf-master.`) is that site's. The loop working here is not the
-  loop working.
+- ~~Whether any of this transfers to a second site.~~ **Answered: it does not,
+  yet.** A second site was captured and the loop scored 0 of 5 there — but the
+  cause is measured and is upstream of the model: the probe budget never reached
+  the media host, so the payload carried no content types at all. See the
+  second-evidence-set section.
 - The DOM half of the helper tier (§11.5.1). The fetch half is proven against
   a live CDN; the DOM half is designed and unbuilt, and nothing has needed it.
 
@@ -2585,6 +2586,79 @@ second evidence set is what would tell us whether the *method* transfers or
 whether four arms of prompt work have described one CDN very well. That is the
 same over-fitting warning the arms above were meant to escape, and it still
 applies.
+
+## The second evidence set, at last — and what it broke
+
+A different site, chosen and captured: a drama aggregator whose player is JW
+Player served from `kisscloud.online`. It is the second real capture this
+project has had, and it earned its keep three times before a single model run
+finished.
+
+**The disguise is genuinely different**, which is what makes it worth having:
+
+| | dramafren | the second site |
+|---|---|---|
+| player | vidstack | JW Player |
+| manifest | `/v4/db/<id>/cf-master.<digits>.txt?k=…&kx=…` | `/cdn/hls/<hash>/master.txt` |
+| variants | `index-f1-v1-a1.txt` | `/m3/<base64 blob>` |
+| segments | `seg-N-…woff2`, dressed as web fonts | not reached before the capture ended |
+| tokens | rotating query string | none — in the path |
+
+Both hide a manifest behind `.txt` and **nothing else is shared**. In
+particular `/cf-master.`, the fragment both winning dramafren runs matched, does
+not occur here at all. The over-fitting this file kept warning about was real
+and is now demonstrated rather than suspected.
+
+**1. It contradicts a finding, and vindicates a decision.** dramafren's
+Content-Type was *honest* — the disguise was in the url only — and this file
+recorded that. This site's is not: the manifest is served as `text/plain`, and
+only `#EXTM3U` in the opening bytes identifies it. The rule that the body
+outranks the header was written "not because this site lies, but because the
+failure mode of believing a header is silent". One site later, a site lies. A
+decision made on principle rather than on evidence turns out to have been the
+right one, which is the strongest argument for making them that way.
+
+It also does **not** require the page's context: the manifest is 200 naked,
+where dramafren's is 403. So neither is the general case.
+
+**2. It broke the probe ranking completely.** The rule this file records — *the
+host that served a flood of near-identical requests is the media host* — was
+derived from one capture, and on this one it is simply false. The ad networks
+flood: a dozen near-identical long-token requests across three rotating hosts.
+The media host served fourteen requests of fourteen *different* shapes, so it
+never looked like a flood. Measured: **all ten questions went to beacons, fonts
+and a favicon, and the host serving the video was never asked about at all.**
+The payload therefore carried no content types, which is exactly the blind
+condition that produced 0 of 5 on dramafren before annotations existed.
+
+**3. And the model scored 0 of 5, as that predicts.** Three runs returned the
+page's own address, one found nothing, and one picked an *ad network* url — which
+the content-type tier caught at accept time, the second time that tier has
+refused something no static rule would have. The runs measure the blindness, not
+the model.
+
+### What was fixed, and what was left alone
+
+**The budget is dealt round-robin across hosts** rather than spent down one
+ranked list. Every host's best candidate before any host's second, so a host
+that is wrong costs one question instead of all ten. Verified against *both*
+captures, which is the only way a change like this can be trusted: the second
+site now reaches its media host, and the first still gets both of its manifests
+— `cf-master` actually moves up the list.
+
+Also dropped: addresses that cannot be fetched at all. Two of dramafren's ten
+questions were going to `wss://` urls, which can never answer what they serve.
+
+**What is not fixed, stated rather than papered over.** Round-robin reaches the
+media host and then asks it the wrong question — it probes the embed page rather
+than `master.txt`, because within a host the ordering is still evidence order and
+the manifest arrives late. Two signals could fix it: deprioritising well-known
+asset extensions, and preferring later requests on the theory that a page fetches
+its furniture first and its video last. **Neither was implemented**, deliberately.
+Each helps one capture and hurts the other — later-first would put dramafren's
+init segment ahead of its manifest — and tuning a heuristic until two captures
+pass is how the last one came to be wrong on the second site. The next attempt
+wants a third capture, not a cleverer sort over these two.
 
 ## First-load flicker (fixed)
 

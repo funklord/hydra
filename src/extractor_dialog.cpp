@@ -116,6 +116,11 @@ QList<evidence_request> extractor_dialog::candidates(
 		// a request on either would be spending it to be told what is known.
 		if (r.kind == "image" || r.kind == "script")
 			continue;
+		// Only things that can be fetched. A websocket address cannot answer
+		// "what do you serve", and spending a question on one is spending it to
+		// learn nothing — two of ten went that way on a real capture.
+		if (r.url.scheme() != "http" && r.url.scheme() != "https")
+			continue;
 		if (r.url.adjusted(QUrl::RemoveFragment | QUrl::StripTrailingSlash)
 		        .toString() == page_norm)
 			continue;
@@ -160,9 +165,44 @@ QList<evidence_request> extractor_dialog::candidates(
 		const bool rep_b = repeats.value(shape_of(b.url.toString())) > 0;
 		return rep_a < rep_b;
 	});
-	if (max >= 0 && firsts.size() > max)
-		firsts = firsts.mid(0, max);
-	return firsts;
+	// And then spread the budget *across* hosts rather than spending it down one
+	// ranked list, which is the fix a second site forced.
+	//
+	// The flood rule above was derived from one capture and is wrong on the
+	// next. On a site whose ad networks are busier than its player, the busiest
+	// host is an ad network: measured, and comprehensively — all ten questions
+	// went to beacons, fonts and a favicon, and the host actually serving the
+	// video was never asked about at all. The media host there served fourteen
+	// requests of fourteen *different* shapes, so it never looked like a flood.
+	//
+	// Ranking cannot tell those apart from inside one list, so the budget is
+	// dealt round-robin: every host's best candidate before any host's second.
+	// A host that is wrong costs one question instead of all of them, and the
+	// ordering above still decides who goes first and what each host offers.
+	QList<QString> host_order;
+	QHash<QString, QList<evidence_request>> by_host;
+	for (const evidence_request &r : firsts) {
+		const QString h = r.url.host();
+		if (!by_host.contains(h))
+			host_order << h;
+		by_host[h].append(r);
+	}
+	QList<evidence_request> dealt;
+	for (int round = 0; ; ++round) {
+		bool any = false;
+		for (const QString &h : host_order) {
+			const QList<evidence_request> &list = by_host[h];
+			if (round >= list.size())
+				continue;
+			any = true;
+			dealt << list[round];
+			if (max >= 0 && dealt.size() >= max)
+				return dealt;
+		}
+		if (!any)
+			break;
+	}
+	return dealt;
 }
 
 QString extractor_dialog::transcript_text(const QList<helper_call> &calls) {
