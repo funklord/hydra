@@ -4,6 +4,8 @@
 #include "policy_engine.h"
 #include "consent_rules.h"
 
+#include <QRegularExpression>
+
 namespace {
 
 // Runs in the isolated world (§13.2), like autofill and the picker: it reads
@@ -90,6 +92,16 @@ const char *k_script = R"JS(
     return out;
   };
 
+  var reported = {};
+  // A banner we could see and could not answer. Reported once per set of
+  // labels, because the observer fires repeatedly and this is one finding.
+  var unanswered = function (labels) {
+    var key = labels.join('|');
+    if (reported[key] || !bridge) return;
+    reported[key] = 1;
+    bridge.report_unhandled(labels.join('\t'));
+  };
+
   var act = function () {
     if (done) return true;
     var boxes = candidates();
@@ -123,6 +135,14 @@ const char *k_script = R"JS(
           return true;
         }
       }
+      // Consent-shaped, on screen, and nothing in it matched. That is the case
+      // a new rule has to cover, and what it offered is most of the answer.
+      var labels = [];
+      for (var q = 0; q < buttons.length; q++) {
+        var l = label_of(buttons[q]);
+        if (l && l.length <= 60) labels.push(l);
+      }
+      if (labels.length) unanswered(labels);
     }
     return false;
   };
@@ -190,6 +210,36 @@ bool consent_blocker::active_for(const QString &host) const {
 	// `block` on this feature means "answer the banner". A site the user has
 	// set to `allow` keeps its banner and never gets the script at all.
 	return m_policy && !m_policy->is_allowed(policy::feature::cookie_notices, host);
+}
+
+void consent_blocker::report_unhandled(const QString &labels) {
+	const QString host = m_host;
+	if (host.isEmpty() || !active_for(host))
+		return;
+	// Bounded and deduplicated: the observer fires per mutation on some pages,
+	// and the same banner arriving twenty times is one finding, not twenty.
+	const QString row = host + "\t" + labels.left(400);
+	if (m_unhandled.contains(row))
+		return;
+	m_unhandled.prepend(row);
+	while (m_unhandled.size() > 20)
+		m_unhandled.removeLast();
+	emit found_unanswerable(host, labels.left(400));
+}
+
+consent_rule consent_blocker::rule_from_label(const QString &label,
+                                               const QString &as) const {
+	consent_rule r;
+	r.kind = (as == "reject") ? QStringLiteral("reject") : QStringLiteral("accept");
+	// Anchored and escaped: a label is text a page chose, and dropping it into a
+	// regex unescaped would let a banner reading "(.*)" match every button on
+	// every site from then on -- a rule that is meant to be shared, no less.
+	r.value = "^" + QRegularExpression::escape(label.trimmed().left(60)) + "$";
+	// No host, deliberately. See the header: a label describes a shape banners
+	// take, not a site, so it is generic and `add()` will flag it for the
+	// built-in set.
+	r.note = "learned from a banner that could not be answered";
+	return r;
 }
 
 void consent_blocker::report_dismissed(const QString &what, const QString &choice) {

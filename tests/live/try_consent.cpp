@@ -16,6 +16,7 @@
 #include "request_filter.h"
 #include "qtwebengine_factory.h"
 #include "consent_blocker.h"
+#include "consent_rules.h"
 
 #include <QApplication>
 #include <QDir>
@@ -103,6 +104,17 @@ static const char *k_scrolllock = R"HTML(
 <script>document.documentElement.style.overflow='hidden';
 document.body.style.overflow='hidden'; wire('cc');</script>)HTML";
 
+// A real banner whose buttons say nothing the built-in patterns know. This is
+// the case the discovery signal exists for, and it is the normal case outside
+// English rather than an exotic one.
+static const char *k_foreign = R"HTML(
+<div id="cc" style="position:fixed;bottom:0;width:100%;height:120px;background:#eee">
+  <p>Vi bruker informasjonskapsler (cookies) på dette nettstedet.</p>
+  <button>Godta alle</button>
+  <button>Avvis alle</button>
+</div>
+<script>wire('cc');</script>)HTML";
+
 class origin : public QTcpServer {
 public:
 	QHash<QString, QString> clicked;    // path -> label
@@ -126,6 +138,7 @@ public:
 				if (target.startsWith("/reject"))          inner = k_reject;
 				else if (target.startsWith("/decoy"))      inner = k_decoy;
 				else if (target.startsWith("/scrolllock")) inner = k_scrolllock;
+				else if (target.startsWith("/foreign"))    inner = k_foreign;
 				body = QByteArray("<!doctype html><html><body><h1>page</h1>"
 				                   "<script>") + k_common + "</script>" + inner +
 				        "</body></html>";
@@ -291,6 +304,50 @@ int main(int argc, char *argv[]) {
 	                                              : qPrintable(clicked_on("/reject")));
 	check(clicked_on("/reject").isEmpty(),
 	      "the banner is left for the user to answer");
+
+	// A banner it cannot answer is the discovery signal, not a silent failure.
+	policy.set_setting("127.0.0.1", policy::feature::cookie_notices,
+	                    policy::setting::unset);
+	std::printf("\n== a banner in a language the built-ins do not cover ==\n");
+	load("/foreign", 8000);
+	check(clicked_on("/foreign").isEmpty(),
+	      "nothing is clicked, because nothing matched");
+	const QStringList seen = blocker->unhandled();
+	std::printf("  unhandled: %s\n",
+	             seen.isEmpty() ? "(none)" : qPrintable(seen.first()));
+	check(!seen.isEmpty(), "and the banner is recorded as unanswerable rather "
+	                        "than silently skipped");
+	check(!seen.isEmpty() && seen.first().contains("Avvis alle"),
+	      "with the labels it offered, which is most of the rule already");
+
+	// Turning one into a rule, and what scope it gets.
+	const consent_rule learned = blocker->rule_from_label("Avvis alle", "reject");
+	check(learned.kind == "reject", "a label becomes a rule of the right kind");
+	check(learned.generic(),
+	      "with no host — a button label describes a shape, not a site");
+	consent_rules store = consent_rules::defaults();
+	store.add(learned);
+	check(store.promotable().size() == 1,
+	      "so it is flagged for the built-in defaults at the next release");
+	check(store.promotable().first().value.contains("Avvis"),
+	      "and the flagged rule is the one just learned");
+
+	// The rule file is the unit that would eventually be shared, so it has to
+	// survive a round trip carrying that flag.
+	const QString rules_path = out + "/consent-rules.json";
+	check(store.save(rules_path), "the rule set saves");
+	consent_rules reloaded;
+	check(reloaded.load(rules_path), "and loads again");
+	check(reloaded.promotable().size() == 1,
+	      "with the promote flag surviving the round trip, which is what makes "
+	      "it findable by whoever folds it into the binary");
+	check(reloaded.all().size() > reloaded.promotable().size(),
+	      "and the built-ins present but not written into the file");
+
+	// An escaped label: a banner reading like a regex must not become one.
+	const consent_rule hostile = blocker->rule_from_label("(.*)", "accept");
+	check(hostile.value.contains("\\("),
+	      "a label that looks like a regex is escaped, not compiled");
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

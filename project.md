@@ -736,8 +736,26 @@ belongs to everyone: `consent_rules::add` marks any learned generic rule
 `promote`, and `promotable()` lists them for folding into `defaults()` at the
 next release. Setting the flag at the point of insertion rather than at each
 call site is deliberate — whichever path learns the next rule cannot forget to.
-**The flagging mechanism exists; nothing discovers rules yet.** That is the next
-piece, and it is the same review-and-accept shape §12 already uses.
+
+**And a banner it cannot answer is where rules come from.** The signal is the
+one §12 uses for filters: record where the system fell short rather than guess.
+A container that is consent-shaped, on screen, and offers nothing any pattern
+matches is reported with the labels it *did* offer — which is most of the rule
+already. The normal case for this is not exotic: it is any language the built-in
+patterns do not cover. `rule_from_label` turns one into a rule, and the scope
+falls out of what a label *is*: "Avvis alle" is Norwegian for reject-all and
+works on every Norwegian site, so the rule carries no host, which makes it
+generic, which flags it for the binary. `#accept-btn-42` would describe one page
+and is not something this produces.
+
+The label is escaped before it becomes a pattern. A banner reading `(.*)` must
+not compile into a rule that matches every button on every site afterwards —
+least of all one built to be shared.
+
+What is not built is the UI: nothing yet shows the unanswered banners or offers
+to accept a rule from one. The mechanism, the scope decision, the flag and the
+round trip are all measured; the review surface is the next piece and is the
+same accept-or-refuse shape the filter and extractor loops already have.
 
 **What carries unknown banners is the generic pass, not the vendor list.** A
 banner is a thing pinned over the page that talks about cookies and offers a way
@@ -746,7 +764,7 @@ text, a small number of buttons. The vendor selectors are a shortcut to the same
 answer. A fixed bar with buttons on a page that merely *mentions* cookies is
 left alone, which is checked.
 
-**Verified through the real shell, 12 checks** (`tests/live/try_consent`),
+**Verified through the real shell, 24 checks** (`tests/live/try_consent`),
 against fixture banners rather than a live CMP — pinning a test to one vendor's
 current markup measures that vendor, as §11.5 already learned. The fixtures are
 the shapes that recur and each is a different decision: one offering reject
@@ -756,6 +774,11 @@ banner at all (nothing clicked), and one that locks scrolling (released). Then
 the policy side, starting from cookies actually blocked, and the option turned
 off for the site leaving the banner alone. Which button was clicked is reported
 by the *page*, so the claim is about what happened rather than what we intended.
+Then the discovery half: a Norwegian banner nothing matches is left alone and
+recorded with its labels, a label becomes a generic rule, the rule is flagged for
+the built-ins, and the flag survives a save and load — the round trip being the
+part that matters, since a flag that does not persist is a flag nobody will ever
+act on.
 
 **Three defects it found, all ours.** The button visibility test applied the
 *container's* size threshold to buttons, so the one banner whose only exit was a

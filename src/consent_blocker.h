@@ -63,6 +63,21 @@ public:
 	// What was dismissed, most recent first, for the status line and the tests.
 	QStringList dismissed() const { return m_dismissed; }
 
+	// Banners seen and not answered, newest first, as "host\tlabel\tlabel...".
+	// Bounded: a page that reports in a loop must not be able to grow this.
+	QStringList unhandled() const { return m_unhandled; }
+
+	// Turn one of those labels into a rule.
+	//
+	// **A button label is generic and a selector is not**, which is the whole
+	// reason this returns what it does. "Godta alle" is Norwegian for accept and
+	// works on every Norwegian site, so it belongs in the shipped defaults and is
+	// flagged for them; `#accept-btn-42` describes one page. So a rule learned
+	// from a label carries no host, which marks it `promote` on insertion, and
+	// the maintainer folding `promotable()` into `defaults()` next release is
+	// how everyone else gets it.
+	consent_rule rule_from_label(const QString &label, const QString &as) const;
+
 public slots:
 	// Whether the page currently shown should have its banner answered. Asked by
 	// the script before it acts; the host is the shell's, not the page's.
@@ -75,9 +90,22 @@ public slots:
 	// host it applies to is the one the shell set.
 	void report_dismissed(const QString &what, const QString &choice);
 
+	// A banner that *was* found and could not be answered: consent-shaped, on
+	// screen, and not one button in it matched anything we know. `labels` is
+	// what it offered, tab-separated.
+	//
+	// This is the discovery signal, and it is the same shape §12 uses for
+	// filters: the system records where it fell short rather than guessing, and
+	// a rule is proposed from real evidence afterwards. A banner nobody could
+	// answer is exactly the case a new rule has to cover, and the labels it
+	// offered are most of the answer already.
+	void report_unhandled(const QString &labels);
+
 signals:
 	// For the status bar: a page just had its banner answered.
 	void acted(const QString &host, const QString &choice);
+	// A banner nobody could answer, for whatever offers to teach a rule.
+	void found_unanswerable(const QString &host, const QString &labels);
 	// Raised when the dismissal required relaxing first-party cookies, because
 	// a policy change the user did not make should be visible when it happens
 	// and not only findable afterwards in the shield.
@@ -87,4 +115,5 @@ private:
 	policy_engine *m_policy = nullptr;
 	QString        m_host;
 	QStringList    m_dismissed;
+	QStringList    m_unhandled;
 };

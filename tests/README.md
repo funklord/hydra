@@ -213,6 +213,10 @@ Offline, self-checking, non-zero on failure. Fixtures rather than a live CMP on
 purpose: a test pinned to one vendor's markup measures that vendor and expires
 with it.
 
+It also covers the discovery half — a banner in a language the built-in patterns
+do not know, recorded rather than silently skipped, and turned into a generic
+rule flagged for the shipped defaults.
+
 Note that it starts its policy phase from cookies **blocked**. An earlier
 version did not, so the relaxation had nothing to do and the check passed while
 testing nothing.
