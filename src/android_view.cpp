@@ -5,6 +5,7 @@
 
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QFileDialog>
 #include <QLabel>
 #include <QJniEnvironment>
 #include <QJniObject>
@@ -157,6 +158,20 @@ Java_org_qtproject_example_hydra_HydraWebView_bridgeCall(JNIEnv *env, jclass, jl
 
 // Called from Java on the UI thread, before every navigation the WebView is
 // about to make. True means the shell took it.
+// Called from Java on the UI thread when a page's file input is used. Posted
+// rather than waited on: the picker Qt is about to show needs that same UI
+// thread, so blocking here would deadlock the two against each other.
+extern "C" JNIEXPORT void JNICALL
+Java_org_qtproject_example_hydra_HydraWebView_chooseFile(JNIEnv *env, jclass, jlong id,
+                                                          jboolean multiple,
+                                                          jstring accept) {
+	const QString a = from_java(env, accept);
+	const bool many = multiple == JNI_TRUE;
+	QMetaObject::invokeMethod(
+		qApp, [id, many, a] { android_view::choose_file(id, many, a); },
+		Qt::QueuedConnection);
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_org_qtproject_example_hydra_HydraWebView_takeExternalUrl(JNIEnv *env, jclass,
                                                                jstring url) {
@@ -192,6 +207,37 @@ bool android_view::take_external_url(const QString &url) {
 		return false;   // nothing to hand it to; let the WebView fail visibly
 	s_external(u);
 	return true;
+}
+
+void android_view::choose_file(qint64 id, bool multiple, const QString &accept) {
+	QStringList picked;
+	{
+		QFileDialog dialog(nullptr);
+		dialog.setFileMode(multiple ? QFileDialog::ExistingFiles
+		                             : QFileDialog::ExistingFile);
+		dialog.setAcceptMode(QFileDialog::AcceptOpen);
+		// `accept` is what the page put in its input: a comma-separated mix of
+		// mime types and extensions. Only the mime types are passed on -- Qt's
+		// Android dialog turns those into the picker's own filter -- and a list
+		// with none is left unfiltered rather than filtered by a guess.
+		QStringList mimes;
+		for (const QString &one : accept.split(',', Qt::SkipEmptyParts)) {
+			const QString t = one.trimmed();
+			if (t.contains('/'))
+				mimes << t;
+		}
+		if (!mimes.isEmpty())
+			dialog.setMimeTypeFilters(mimes);
+		if (dialog.exec() == QDialog::Accepted)
+			picked = dialog.selectedFiles();
+	}
+
+	// Always answered, cancel included. An unanswered chooser callback is not a
+	// no-op: the WebView keeps it, and every later file input on every later page
+	// silently does nothing.
+	QJniObject::callStaticMethod<void>(
+		k_cls, "deliverFiles", "(JLjava/lang/String;)V", jlong(id),
+		QJniObject::fromString(picked.join('\n')).object<jstring>());
 }
 
 QString android_view::describe_bridge(qint64 id, const QString &name) {

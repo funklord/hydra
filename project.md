@@ -3030,6 +3030,37 @@ That completes §19.5's list except the file picker: requests, scripts, bridges
 and external links all cross the seam now, and the Android backend is a set of
 platform hooks onto shared code rather than a port of the shell.
 
+### The file picker, which is Qt's
+
+A page's `<input type=file>` opens the system document picker, and the file
+comes back as a `content:` url the WebView can read — no storage permission
+asked for and none needed, which is the whole point of the Storage Access
+Framework.
+
+**The interesting part is how little of it is ours.** `WebChromeClient`'s
+`onShowFileChooser` calls into C++, which shows Qt's own `QFileDialog` — and on
+Android that *is* the document picker, through
+`qandroidplatformfiledialoghelper`. So the activity-result plumbing, the intent,
+the permission grant and the content-url handling are all Qt's, already written
+and already tested, and the Android file is the two hops on either side of them.
+The alternative was registering an activity-result listener against a private
+Qt header to reimplement what that helper does.
+
+One threading decision: the call from Java is **posted, not waited on**. Every
+other JNI entry point here blocks on the Qt thread for an answer, but the picker
+Qt is about to show needs Android's UI thread — the same thread the chooser
+callback arrives on — so blocking would deadlock the two against each other.
+
+Measured on the device: a page's file input opened the picker, a 26-byte file was
+chosen, and the page reported `count=1, name=hydra-upload.txt, size=26` — the
+right name and the exact byte count, so the WebView really read the url.
+
+**The cancel path is tested separately, because it is the one that matters
+later.** A WebView holds exactly one chooser callback and will not open another
+until it is answered, so dropping one does not fail a single upload — it disables
+every file input on every later page, silently. The picker was opened, dismissed
+with Back, and opened again; the second time proves the cancel was answered.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and

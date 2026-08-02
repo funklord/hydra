@@ -59,6 +59,12 @@ class request_filter;
 //     androidx.webkit is the real answer and is a dependency decision, not a
 //     line of code.
 //
+// **File inputs open the system picker**, through Qt's own `QFileDialog` — on
+// Android that is the document picker, and what comes back is a `content:` url
+// the WebView can read because the picker granted *this* app access to it. No
+// storage permission is asked for and none is needed, which is the point of the
+// Storage Access Framework.
+//
 // **Links that are not pages go where they go on the desktop.**
 // `shouldOverrideUrlLoading` asks about every navigation and takes silence as
 // consent, so anything `renders_as_page()` does not claim is handed to the
@@ -101,6 +107,15 @@ public:
 	// here, and threading it through every view would make the order matter.
 	static bool take_external_url(const QString &url);
 	static void set_external_handler(std::function<void(const QUrl &)> fn);
+
+	// A page asked for a file. Runs on the Qt thread, shows Qt's file dialog —
+	// which on Android *is* the system document picker — and hands the chosen
+	// urls back to Java, which is the only place that may answer the WebView.
+	//
+	// Answered exactly once, cancel included: a WebView whose chooser callback
+	// is dropped never opens another one, so a silent early return here breaks
+	// every file input on every later page.
+	static void choose_file(qint64 id, bool multiple, const QString &accept);
 
 	QWidget *widget() override;
 	QUrl url() const override { return m_url; }

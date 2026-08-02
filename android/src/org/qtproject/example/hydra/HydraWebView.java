@@ -3,11 +3,14 @@ package org.qtproject.example.hydra;
 
 import android.app.Activity;
 import android.graphics.Color;
+import android.net.Uri;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
@@ -66,6 +69,38 @@ public class HydraWebView {
 
     /** True when the shell took a navigation instead -- magnet: and the like. */
     public static native boolean takeExternalUrl(String url);
+
+    /** A page's file input was used. The answer arrives later, via deliverFiles. */
+    public static native void chooseFile(long id, boolean multiple, String accept);
+
+    /**
+     * The chooser callback for each view, held between chooseFile and
+     * deliverFiles.
+     *
+     * A WebView keeps exactly one of these and will not open another chooser
+     * until it is answered, so dropping one does not fail a single upload -- it
+     * disables every file input on every later page. deliverFiles is therefore
+     * called on cancel too, with nothing in it.
+     */
+    private static final Map<Long, ValueCallback<Uri[]>> CHOOSERS = new HashMap<>();
+
+    /** Called from C++ with the picked urls, newline-separated, or empty. */
+    public static void deliverFiles(final long id, final String joined) {
+        onUi(new Runnable() { @Override public void run() {
+            ValueCallback<Uri[]> cb = CHOOSERS.remove(id);
+            if (cb == null)
+                return;
+            if (joined == null || joined.isEmpty()) {
+                cb.onReceiveValue(null);   // the documented "user cancelled"
+                return;
+            }
+            String[] parts = joined.split("\n");
+            Uri[] uris = new Uri[parts.length];
+            for (int i = 0; i < parts.length; ++i)
+                uris[i] = Uri.parse(parts[i]);
+            cb.onReceiveValue(uris);
+        } });
+    }
 
     /**
      * What the page sees as `window.hydraNative`.
@@ -132,6 +167,30 @@ public class HydraWebView {
                 w.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
                 // Before any load, so a page cannot start without it.
                 w.addJavascriptInterface(new Native(id), "hydraNative");
+                w.setWebChromeClient(new WebChromeClient() {
+                    // Returning true means "I will answer, later". Returning
+                    // false would let the WebView fall back to nothing at all --
+                    // a plain WebView has no picker of its own.
+                    @Override
+                    public boolean onShowFileChooser(WebView v,
+                                                     ValueCallback<Uri[]> cb,
+                                                     FileChooserParams params) {
+                        ValueCallback<Uri[]> old = CHOOSERS.put(id, cb);
+                        if (old != null)
+                            old.onReceiveValue(null);   // never leave one hanging
+                        boolean many = params != null &&
+                            params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE;
+                        StringBuilder accept = new StringBuilder();
+                        if (params != null && params.getAcceptTypes() != null)
+                            for (String t : params.getAcceptTypes()) {
+                                if (t == null || t.isEmpty()) continue;
+                                if (accept.length() > 0) accept.append(',');
+                                accept.append(t);
+                            }
+                        chooseFile(id, many, accept.toString());
+                        return true;
+                    }
+                });
                 w.setWebViewClient(new WebViewClient() {
                     @Override
                     public void onPageStarted(WebView v, String url, android.graphics.Bitmap f) {
