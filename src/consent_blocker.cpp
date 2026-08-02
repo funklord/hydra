@@ -2,7 +2,7 @@
 #include "consent_blocker.h"
 
 #include "policy_engine.h"
-#include "consent_rules.h"
+#include "site_rules.h"
 
 #include <QRegularExpression>
 
@@ -229,9 +229,9 @@ void consent_blocker::report_unhandled(const QString &labels) {
 	emit found_unanswerable(host, labels.left(400));
 }
 
-consent_rule consent_blocker::rule_from_label(const QString &label,
+site_rule consent_blocker::rule_from_label(const QString &label,
                                                const QString &as) const {
-	consent_rule r;
+	site_rule r;
 	r.kind = (as == "reject") ? QStringLiteral("reject") : QStringLiteral("accept");
 	// Anchored and escaped: a label is text a page chose, and dropping it into a
 	// regex unescaped would let a banner reading "(.*)" match every button on

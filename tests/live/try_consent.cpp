@@ -16,7 +16,7 @@
 #include "request_filter.h"
 #include "qtwebengine_factory.h"
 #include "consent_blocker.h"
-#include "consent_rules.h"
+#include "site_rules.h"
 #include "consent_dialog.h"
 
 #include <QApplication>
@@ -174,7 +174,7 @@ int main(int argc, char *argv[]) {
 	// stops testing anything. Same shape as the tree and state contamination
 	// `try_extract` had: an artefact of the last run, indistinguishable from a
 	// real result.
-	QFile::remove(out + "/consent-rules.json");
+	QFile::remove(out + "/site-rules.json");
 	const QString tree = out + "/tree.txt";
 	QFile tf(tree);
 	if (!tf.open(QIODevice::WriteOnly | QIODevice::Truncate)) return 1;
@@ -331,11 +331,11 @@ int main(int argc, char *argv[]) {
 	      "with the labels it offered, which is most of the rule already");
 
 	// Turning one into a rule, and what scope it gets.
-	const consent_rule learned = blocker->rule_from_label("Avvis alle", "reject");
+	const site_rule learned = blocker->rule_from_label("Avvis alle", "reject");
 	check(learned.kind == "reject", "a label becomes a rule of the right kind");
 	check(learned.generic(),
 	      "with no host — a button label describes a shape, not a site");
-	consent_rules store = consent_rules::defaults();
+	site_rules store = site_rules::defaults();
 	store.add(learned);
 	check(store.promotable().size() == 1,
 	      "so it is flagged for the built-in defaults at the next release");
@@ -348,7 +348,7 @@ int main(int argc, char *argv[]) {
 	// a rule set for the next run to inherit.
 	const QString rules_path = out + "/round-trip-rules.json";
 	check(store.save(rules_path), "the rule set saves");
-	consent_rules reloaded;
+	site_rules reloaded;
 	check(reloaded.load(rules_path), "and loads again");
 	check(reloaded.promotable().size() == 1,
 	      "with the promote flag surviving the round trip, which is what makes "
@@ -357,7 +357,7 @@ int main(int argc, char *argv[]) {
 	      "and the built-ins present but not written into the file");
 
 	// An escaped label: a banner reading like a regex must not become one.
-	const consent_rule hostile = blocker->rule_from_label("(.*)", "accept");
+	const site_rule hostile = blocker->rule_from_label("(.*)", "accept");
 	check(hostile.value.contains("\\("),
 	      "a label that looks like a regex is escaped, not compiled");
 
@@ -404,12 +404,12 @@ int main(int argc, char *argv[]) {
 			}
 		}
 
-		const QList<consent_rule> flagged = blocker->rules().promotable();
+		const QList<site_rule> flagged = blocker->rules().promotable();
 		check(flagged.size() == 1,
 		      "accepting adds exactly one rule, flagged for the built-ins");
 		check(!flagged.isEmpty() && flagged.first().kind == "reject",
 		      "of the kind the button was said to be");
-		consent_rules from_disk;
+		site_rules from_disk;
 		check(from_disk.load(path) && from_disk.promotable().size() == 1,
 		      "and it is on disk, so it survives the session");
 		Q_UNUSED(accepts)

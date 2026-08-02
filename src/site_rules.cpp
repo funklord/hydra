@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#include "consent_rules.h"
+#include "site_rules.h"
 
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 
-consent_rules consent_rules::defaults() {
-	consent_rules r;
+site_rules site_rules::defaults() {
+	site_rules r;
 	auto builtin = [&](const char *kind, const char *value, const char *note) {
-		consent_rule c;
+		site_rule c;
 		c.kind = QString::fromUtf8(kind);
 		c.value = QString::fromUtf8(value);
 		c.note = QString::fromUtf8(note);
@@ -37,38 +37,49 @@ consent_rules consent_rules::defaults() {
 	builtin("container", "#didomi-notice", "Didomi");
 	builtin("container", "#usercentrics-root", "Usercentrics");
 	builtin("container", ".qc-cmp2-container", "Quantcast");
+
+	// Scripts that exist to detect a blocker. Matched against a file *name*, and
+	// deliberately specific: the message these drive tells someone to lower
+	// their protection, so nothing may match merely on the word "ad".
+	builtin("detector", "fuckadblock", "the one that broke a measured page");
+	builtin("detector", "blockadblock", "its better-known sibling");
+	builtin("detector", "adblock-detector", "");
+	builtin("detector", "adblockdetector", "");
+	builtin("detector", "detectadblock", "");
+	builtin("detector", "antiblock", "");
+	builtin("detector", "adbdetect", "");
 	return r;
 }
 
-void consent_rules::add(const consent_rule &r) {
+void site_rules::add(const site_rule &r) {
 	// A learned rule that is generic is a candidate for the binary. Setting the
 	// flag here rather than at the call sites means it cannot be forgotten by
 	// whichever path learns the next one.
-	consent_rule c = r;
+	site_rule c = r;
 	if (!c.builtin && c.generic())
 		c.promote = true;
 	m_rules.append(c);
 }
 
-consent_rules consent_rules::for_host(const QString &host) const {
-	consent_rules out;
-	for (const consent_rule &r : m_rules)
+site_rules site_rules::for_host(const QString &host) const {
+	site_rules out;
+	for (const site_rule &r : m_rules)
 		if (r.generic() || r.host.compare(host, Qt::CaseInsensitive) == 0)
 			out.m_rules.append(r);
 	return out;
 }
 
-QList<consent_rule> consent_rules::promotable() const {
-	QList<consent_rule> out;
-	for (const consent_rule &r : m_rules)
+QList<site_rule> site_rules::promotable() const {
+	QList<site_rule> out;
+	for (const site_rule &r : m_rules)
 		if (r.promote && !r.builtin && r.generic())
 			out.append(r);
 	return out;
 }
 
-QJsonObject consent_rules::to_json() const {
+QJsonObject site_rules::to_json() const {
 	QJsonArray arr;
-	for (const consent_rule &r : m_rules) {
+	for (const site_rule &r : m_rules) {
 		// Built-ins are not written out. They come from the binary, and copying
 		// them into the file would mean a stale duplicate the day one changes.
 		if (r.builtin)
@@ -87,12 +98,12 @@ QJsonObject consent_rules::to_json() const {
 	return root;
 }
 
-consent_rules consent_rules::from_json(const QJsonObject &o) {
-	consent_rules r = defaults();
+site_rules site_rules::from_json(const QJsonObject &o) {
+	site_rules r = defaults();
 	const QJsonArray arr = o.value("rules").toArray();
 	for (const QJsonValue &v : arr) {
 		const QJsonObject e = v.toObject();
-		consent_rule c;
+		site_rule c;
 		c.kind  = e.value("kind").toString();
 		c.value = e.value("value").toString();
 		c.host  = e.value("host").toString();
@@ -104,7 +115,7 @@ consent_rules consent_rules::from_json(const QJsonObject &o) {
 	return r;
 }
 
-bool consent_rules::load(const QString &path) {
+bool site_rules::load(const QString &path) {
 	QFile f(path);
 	if (!f.open(QIODevice::ReadOnly))
 		return false;
@@ -115,17 +126,25 @@ bool consent_rules::load(const QString &path) {
 	return true;
 }
 
-bool consent_rules::save(const QString &path) const {
+bool site_rules::save(const QString &path) const {
 	QFile f(path);
 	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
 		return false;
 	return f.write(QJsonDocument(to_json()).toJson(QJsonDocument::Indented)) > 0;
 }
 
-QString consent_rules::to_script_literal() const {
+QStringList site_rules::detectors() const {
+	QStringList out;
+	for (const site_rule &r : m_rules)
+		if (r.kind == "detector")
+			out << r.value;
+	return out;
+}
+
+QString site_rules::to_script_literal() const {
 	QJsonArray containers;
 	QStringList reject, accept;
-	for (const consent_rule &r : m_rules) {
+	for (const site_rule &r : m_rules) {
 		if (r.kind == "container")   containers.append(r.value);
 		else if (r.kind == "reject") reject << r.value;
 		else if (r.kind == "accept") accept << r.value;

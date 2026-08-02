@@ -3,6 +3,7 @@
 #include "site_extractor.h"
 #include "extractor_dialog.h"
 #include "antiadblock_watch.h"
+#include "site_rules.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -343,24 +344,29 @@ int main(int argc, char **argv) {
 		// Measured, not imagined: this is what a real watch page loaded while
 		// its player refused to start, and allowing ads for that site alone
 		// started it.
+		// The patterns come from the shared rule store, not from an array in
+		// this class: they are the same kind of perishable fact as the consent
+		// rules and are meant to travel with them.
+		const QStringList names = site_rules::defaults().detectors();
+		check(!names.isEmpty(), "the built-in rules carry detector names");
 		check(antiadblock_watch::looks_like_detector(QUrl(
 		          "https://cdnjs.cloudflare.com/ajax/libs/fuckadblock/3.2.1/"
-		          "fuckadblock.min.js")),
+		          "fuckadblock.min.js"), names),
 		      "the detector script that broke a real page is recognised");
 		check(antiadblock_watch::looks_like_detector(
-		          QUrl("https://x.example/js/blockadblock.js")),
+		          QUrl("https://x.example/js/blockadblock.js"), names),
 		      "and its better-known sibling");
 
 		// The message this drives tells someone to turn protection off, so a
 		// false positive is not a cosmetic mistake. Nothing matches on "ad".
 		check(!antiadblock_watch::looks_like_detector(
-		          QUrl("https://x.example/js/adblock-plus-list.js")),
+		          QUrl("https://x.example/js/adblock-plus-list.js"), names),
 		      "a filter list is not a detector");
 		check(!antiadblock_watch::looks_like_detector(
-		          QUrl("https://x.example/assets/loader.js")),
+		          QUrl("https://x.example/assets/loader.js"), names),
 		      "nor is an ordinary script");
 		check(!antiadblock_watch::looks_like_detector(
-		          QUrl("https://x.example/search?q=fuckadblock")),
+		          QUrl("https://x.example/search?q=fuckadblock"), names),
 		      "and a page that merely mentions one in a query is not accused");
 
 		antiadblock_watch w;
@@ -384,6 +390,26 @@ int main(int argc, char **argv) {
 		      "while both are kept as evidence");
 		check(!w.checked_for_blocker("other.example"),
 		      "and it is a fact about one page, not the browser");
+
+		// A detector name learned rather than shipped is generic for the same
+		// reason a button label is — it describes a script, not a site — so it
+		// is flagged for the binary and travels in the same file.
+		site_rules learned = site_rules::defaults();
+		site_rule d;
+		d.kind = "detector";
+		d.value = "newblockcheck";
+		learned.add(d);
+		antiadblock_watch w2;
+		w2.set_rules(learned);
+		request_context c2;
+		c2.site_host = "later.example";
+		c2.url = QUrl("https://cdn.example/newblockcheck.min.js");
+		w2.on_request(c2, request_decision{});
+		check(w2.checked_for_blocker("later.example"),
+		      "a detector added to the rule file is honoured without a rebuild");
+		check(learned.promotable().size() == 1 &&
+		          learned.promotable().first().kind == "detector",
+		      "and is flagged for the built-ins like any other generic rule");
 	}
 
 	section("every way of spelling the function");

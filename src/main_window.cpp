@@ -96,6 +96,11 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_media      = new media_detector(this);
 	m_signals    = new filter_signals(this);
 	m_ex_signals = new extractor_signals(this);
+	// Constructed before it is registered, which is not a style point: an
+	// observer added while still null was harmless for exactly as long as the
+	// function it landed in touched no members, and became a segfault in every
+	// live driver the moment one did.
+	m_antiadblock = new antiadblock_watch(this);
 	if (filter) {
 		filter->add_observer(m_media);
 		filter->add_observer(m_signals);
@@ -118,7 +123,6 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// Say it once, and say what the lever is. A page that will not run because
 	// we block ads is indistinguishable from a broken site unless we tell them,
 	// and only we know it was us.
-	m_antiadblock = new antiadblock_watch(this);
 	connect(m_antiadblock, &antiadblock_watch::detected, this,
 	         [this](const QString &host, const QString &what) {
 		m_status->showMessage(
@@ -449,7 +453,7 @@ QMenuBar *main_window::build_menu_bar() {
 	                                      &main_window::start_element_picker);
 	zap->setStatusTip("Click a leaked ad; Escape cancels");
 	QAction *banners = tools_menu->addAction("&Cookie Banners We Missed…", this,
-	                                          &main_window::open_consent_rules);
+	                                          &main_window::open_site_rules);
 	banners->setStatusTip("Teach a rule from a consent banner nothing matched");
 	tools_menu->addSeparator();
 	// Ctrl+Shift+Z rather than Ctrl+Z, so this never steals undo from a focused
@@ -654,8 +658,8 @@ void main_window::undo_reorganize() {
 	                       5000);
 }
 
-void main_window::open_consent_rules() {
-	consent_dialog dlg(m_consent, m_consent_rules_path, this);
+void main_window::open_site_rules() {
+	consent_dialog dlg(m_consent, m_site_rules_path, this);
 	dlg.exec();
 }
 
@@ -724,11 +728,12 @@ bool main_window::load_tree(const QString &path) {
 	// the unit a future exchange between users would move, which is why it is a
 	// file from the start rather than something to be extracted from the binary
 	// later (§7.1, `cookie_notices`).
-	m_consent_rules_path = dir + "/consent-rules.json";
-	consent_rules cr;
-	if (!cr.load(m_consent_rules_path))
-		cr = consent_rules::defaults();
+	m_site_rules_path = dir + "/site-rules.json";
+	site_rules cr;
+	if (!cr.load(m_site_rules_path))
+		cr = site_rules::defaults();
 	m_consent->set_rules(cr);
+	m_antiadblock->set_rules(cr);
 
 	const bool ok = m_model->load(path);
 	m_tree->expandAll();

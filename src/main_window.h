@@ -3,7 +3,7 @@
 
 #include "tree_diff.h"   // for the §9.4 undo snapshot
 #include "site_extractor.h"
-#include "consent_rules.h"
+#include "site_rules.h"
 
 #include <QWidget>
 #include <QHash>
@@ -121,7 +121,7 @@ private slots:
 	void open_filter_evolution();
 	void toggle_password_manager();
 	void start_element_picker();
-	void open_consent_rules();
+	void open_site_rules();
 	void undo_reorganize();
 	void on_media_found(const QString &site_host, int count);
 
@@ -184,7 +184,7 @@ private:
 	autofill_controller *m_autofill     = nullptr;
 	consent_blocker     *m_consent      = nullptr;
 	antiadblock_watch   *m_antiadblock  = nullptr;
-	QString              m_consent_rules_path;
+	QString              m_site_rules_path;
 	QAction            *m_media_action  = nullptr;
 	QString             m_filters_path;
 	QAction            *m_kiosk_action  = nullptr;

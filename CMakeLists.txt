@@ -159,8 +159,8 @@ add_executable(hydra
     src/autofill_controller.h
     src/consent_blocker.cpp
     src/consent_blocker.h
-    src/consent_rules.cpp
-    src/consent_rules.h
+    src/site_rules.cpp
+    src/site_rules.h
     src/consent_dialog.cpp
     src/consent_dialog.h
     src/antiadblock_watch.cpp

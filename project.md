@@ -112,6 +112,16 @@ in 5**, having been 0 in 5 every time it was asked before.
 - The DOM half of the helper tier (§11.5.1). The fetch half is proven against
   a live CDN; the DOM half is designed and unbuilt, and nothing has needed it.
 
+**A fourth, from this session, and it is about construction order.** An observer
+was registered on the interceptor seam one line *before* the object was
+constructed, so a null went into the list. That was harmless for as long as the
+function it reached touched no members — and it did not, while the judgement it
+made was a static one over a hard-coded array. Moving those patterns into the
+shared rule store made the function read a member, and every live driver
+segfaulted at once, in a feature unrelated to the one at fault. The registration
+now refuses a null outright, so the next one is a mistake where it is made
+rather than undefined behaviour somewhere later.
+
 **A caution learned repeatedly.** Six separate defects this project has hit were
 wiring that existed but was never exercised — a signal never connected, a
 message written into a label something else overwrote, a store that was saved
@@ -444,6 +454,7 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Autofill | `autofill_controller.{h,cpp}`, `autofill_script.h` | QWebChannel bridge, origin gate, policy-governed |
 | Consent banners | `consent_blocker.{h,cpp}`, `consent_rules.{h,cpp}`, `consent_dialog.{h,cpp}` | answers "accept cookies?" dialogs; rules as data, shareable later |
 | Anti-adblock notice | `antiadblock_watch.{h,cpp}` | says so when a page is checking for a blocker, and names the lever |
+| Shared rule store | `site_rules.{h,cpp}` | consent-banner and detector rules as one file, with provenance; the unit a future exchange would move |
 
 Persistence: `policy.json`, `state/<id>.blob`, and the tree file all sit next to
 the outline file passed on the command line.
@@ -715,12 +726,20 @@ ordinary script, and a page merely mentioning one in a query all left alone; the
 report fired once per page however many are fetched; and the finding scoped to
 one page rather than to the browser.
 
-**The pattern list is in the binary, which is the mistake `consent_rules` exists
-to avoid.** A detector renames itself and a list in C++ is a release behind. The
-consent rules already carry provenance and live in a file meant to be exchanged;
-these belong there rather than in a third rule store. That is the next step and
-is deliberately not done here — one unified shareable rule file is worth more
-than two half-built ones.
+**The patterns live in the shared rule store**, not in an array in C++. A
+detector renames itself, so a list compiled into the binary is a release behind
+for everyone; the consent rules already carried provenance and lived in a file
+meant to be exchanged, and these are the same kind of perishable fact about how
+sites behave. So `consent_rules` became **`site_rules`** and grew a `detector`
+kind, which the rule model already supported — `kind` was always a free string.
+A detector name learned rather than shipped is generic for exactly the reason a
+button label is (it describes a script, not a site), so it is flagged for the
+built-ins and travels in the same file. Checked: a detector added to the rule
+file is honoured with no rebuild, and is flagged.
+
+One store rather than one per feature is the whole point. Two files would be two
+provenance models to keep honest and two things to send, and the direction here
+is that these eventually go to other people.
 
 ## Cookie consent banners (§7.1, done)
 

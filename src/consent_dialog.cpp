@@ -108,8 +108,8 @@ void consent_dialog::on_accept_selected() {
 
 	// The rule is built from the label the page really offered, escaped on the
 	// way in — nothing here is typed.
-	const consent_rule r = m_blocker->rule_from_label(label, as);
-	consent_rules rules = m_blocker->rules();
+	const site_rule r = m_blocker->rule_from_label(label, as);
+	site_rules rules = m_blocker->rules();
 	rules.add(r);
 	m_blocker->set_rules(rules);
 

@@ -14,8 +14,14 @@
 // shipped as a built-in next release, and it is flagged as such rather than
 // left to be noticed. A host-specific one never is; it belongs to that site and
 // travels with the rule file, not with the binary.
-struct consent_rule {
-	QString kind;             // "container" | "reject" | "accept"
+struct site_rule {
+	// "container" | "reject" | "accept" — the consent banner's parts — and
+	// "detector", a script whose only job is to notice we block ads. One store
+	// rather than one per feature: they are the same kind of thing (a small,
+	// perishable fact about how sites behave), they go stale for the same
+	// reason, and they are meant to travel together. A second rule file would
+	// be a second provenance model to keep honest and a second thing to send.
+	QString kind;
 	QString value;            // a CSS selector, or a button-label regex
 	QString host;             // empty = generic
 	QString note;             // where it came from, in words
@@ -41,16 +47,16 @@ struct consent_rule {
 // thoroughness and is really maintenance debt; the generic detector is what has
 // to carry unknown banners, and a vendor entry earns its place only where the
 // generic pass demonstrably fails.
-class consent_rules {
+class site_rules {
 public:
 	// The built-in set: what ships in the binary, marked as such.
-	static consent_rules defaults();
+	static site_rules defaults();
 
-	void add(const consent_rule &r);
-	const QList<consent_rule> &all() const { return m_rules; }
+	void add(const site_rule &r);
+	const QList<site_rule> &all() const { return m_rules; }
 
 	// Everything that applies to a host: the generic rules plus that host's own.
-	consent_rules for_host(const QString &host) const;
+	site_rules for_host(const QString &host) const;
 
 	// **Generic rules that were learned rather than shipped.** These are the
 	// ones to fold into `defaults()` for the next release — a rule that works
@@ -58,10 +64,15 @@ public:
 	// it costs nothing to carry and everyone gets it. Listing them is the whole
 	// mechanism: the flag is set when the rule is added, and this is how a
 	// maintainer finds them without reading the file.
-	QList<consent_rule> promotable() const;
+	QList<site_rule> promotable() const;
+
+	// The detector names, for the anti-adblock notice. Same corpus, same
+	// provenance, same file — a learned one is generic for exactly the reason a
+	// button label is: it describes a script, not a site.
+	QStringList detectors() const;
 
 	QJsonObject to_json() const;
-	static consent_rules from_json(const QJsonObject &o);
+	static site_rules from_json(const QJsonObject &o);
 
 	bool load(const QString &path);
 	bool save(const QString &path) const;
@@ -71,5 +82,5 @@ public:
 	QString to_script_literal() const;
 
 private:
-	QList<consent_rule> m_rules;
+	QList<site_rule> m_rules;
 };

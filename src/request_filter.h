@@ -65,7 +65,13 @@ public:
 
 	// Observers are registered on the UI thread before browsing starts and are
 	// not removed while requests are in flight.
-	void add_observer(request_observer *o) { m_observers.push_back(o); }
+	// A null here is a construction-order mistake at the call site, and keeping
+	// it turns that into undefined behaviour on some later request rather than a
+	// mistake where it was made. It has happened once: an observer registered
+	// before it was constructed was harmless for as long as the function it
+	// landed in touched no members, then segfaulted every live driver the day
+	// one did.
+	void add_observer(request_observer *o) { if (o) m_observers.push_back(o); }
 	void remove_observer(request_observer *o) { m_observers.removeAll(o); }
 	void notify(const request_context &ctx, const request_decision &d) const;
 

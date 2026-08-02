@@ -2,6 +2,7 @@
 #pragma once
 
 #include "request_filter.h"
+#include "site_rules.h"
 
 #include <QHash>
 #include <QMutex>
@@ -30,12 +31,12 @@
 // watched, and a second sensor for the same facts would be a second thing to
 // keep true (§10).
 //
-// **Detected by name, and the names belong in shareable data.** The patterns
-// here are built in, which is the same mistake `consent_rules` was written to
-// avoid — a detector script renames itself and a list in the binary is a
-// release behind. The consent rules already carry provenance and live in a
-// file; these should join them rather than grow a third rule store, and that is
-// the next step rather than something done here.
+// **Detected by name, from the shared rule store.** The names live in
+// `site_rules` beside the consent-banner rules rather than in an array here: a
+// detector renames itself, and a list compiled into the binary is a release
+// behind for everyone. They are the same kind of fact, they go stale the same
+// way, and they are meant to travel together — one file with one provenance
+// model, not two.
 class antiadblock_watch : public QObject, public request_observer {
 	Q_OBJECT
 public:
@@ -50,9 +51,15 @@ public:
 	QStringList evidence_for(const QString &site_host) const;
 	void clear_site(const QString &site_host);
 
-	// Whether a name is one of the known detectors. Public because it is the
-	// whole judgement and deserves to be testable without a browser.
-	static bool looks_like_detector(const QUrl &url);
+	// The rules in force. Set by the shell from the same file the consent
+	// blocker reads.
+	void set_rules(const site_rules &r);
+
+	// Whether a name is one of the known detectors. Static and taking its
+	// patterns explicitly, because it is the whole judgement and deserves to be
+	// testable without a browser or a shell.
+	static bool looks_like_detector(const QUrl &url, const QStringList &names);
+	bool looks_like_detector(const QUrl &url) const;
 
 signals:
 	// Emitted once per site, not once per request: this is a fact about the
@@ -61,5 +68,6 @@ signals:
 
 private:
 	mutable QMutex               m_lock;
+	QStringList                  m_detectors;
 	QHash<QString, QStringList>  m_by_site;
 };

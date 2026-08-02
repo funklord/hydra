@@ -3,37 +3,34 @@
 
 #include <QUrl>
 
-namespace {
+antiadblock_watch::antiadblock_watch(QObject *parent)
+	: QObject(parent), m_detectors(site_rules::defaults().detectors()) {}
 
-// Scripts whose only purpose is to find out whether a blocker is present. Kept
-// short and specific on purpose: a loose pattern here would accuse ordinary
-// pages of something they are not doing, and the message this drives tells the
-// user to *turn off protection*. A false positive is therefore not a cosmetic
-// mistake, which is why nothing matches merely on the word "ad".
-const char *k_detectors[] = {
-	"fuckadblock",
-	"blockadblock",
-	"adblock-detector",
-	"adblockdetector",
-	"detectadblock",
-	"antiblock",
-	"adbdetect",
-};
+void antiadblock_watch::set_rules(const site_rules &r) {
+	QMutexLocker lock(&m_lock);
+	m_detectors = r.detectors();
+}
 
-}  // namespace
-
-antiadblock_watch::antiadblock_watch(QObject *parent) : QObject(parent) {}
-
-bool antiadblock_watch::looks_like_detector(const QUrl &url) {
-	// The file name, not the whole address: a query string can contain
-	// anything, including an innocent page's search terms.
+bool antiadblock_watch::looks_like_detector(const QUrl &url,
+                                             const QStringList &names) {
+	// The file name, not the whole address: a query string can contain anything,
+	// including an innocent page's own search terms.
 	const QString name = url.fileName().toLower();
 	if (name.isEmpty())
 		return false;
-	for (const char *d : k_detectors)
-		if (name.contains(QLatin1String(d)))
+	for (const QString &d : names)
+		if (!d.isEmpty() && name.contains(d, Qt::CaseInsensitive))
 			return true;
 	return false;
+}
+
+bool antiadblock_watch::looks_like_detector(const QUrl &url) const {
+	QStringList names;
+	{
+		QMutexLocker lock(&m_lock);
+		names = m_detectors;
+	}
+	return looks_like_detector(url, names);
 }
 
 void antiadblock_watch::on_request(const request_context &ctx,

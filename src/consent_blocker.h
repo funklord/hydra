@@ -2,7 +2,7 @@
 #pragma once
 
 #include "policy.h"
-#include "consent_rules.h"
+#include "site_rules.h"
 
 #include <QObject>
 #include <QString>
@@ -56,8 +56,8 @@ public:
 	static QString script_source();
 
 	// The rules in force. The shell owns the file; this owns the answer.
-	void set_rules(const consent_rules &r) { m_rules = r; }
-	const consent_rules &rules() const { return m_rules; }
+	void set_rules(const site_rules &r) { m_rules = r; }
+	const site_rules &rules() const { return m_rules; }
 
 	// The object name the script expects on the bridge.
 	static const char *bridge_name() { return "hydraConsent"; }
@@ -85,7 +85,7 @@ public:
 	// from a label carries no host, which marks it `promote` on insertion, and
 	// the maintainer folding `promotable()` into `defaults()` next release is
 	// how everyone else gets it.
-	consent_rule rule_from_label(const QString &label, const QString &as) const;
+	site_rule rule_from_label(const QString &label, const QString &as) const;
 
 public slots:
 	// Whether the page currently shown should have its banner answered. Asked by
@@ -130,5 +130,5 @@ private:
 	QString        m_host;
 	QStringList    m_dismissed;
 	QStringList    m_unhandled;
-	consent_rules  m_rules = consent_rules::defaults();
+	site_rules  m_rules = site_rules::defaults();
 };
