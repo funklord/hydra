@@ -35,6 +35,7 @@
 #include "autofill_controller.h"
 #include "consent_blocker.h"
 #include "consent_dialog.h"
+#include "antiadblock_watch.h"
 #include "autofill_script.h"
 #include "element_picker.h"
 #include "picker_script.h"
@@ -99,6 +100,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		filter->add_observer(m_media);
 		filter->add_observer(m_signals);
 		filter->add_observer(m_ex_signals);
+		filter->add_observer(m_antiadblock);
 	}
 	m_extractors.load(QDir(QStandardPaths::writableLocation(
 	                            QStandardPaths::AppDataLocation))
@@ -113,6 +115,17 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_keepass  = new keepass_bridge(this);
 	m_autofill = new autofill_controller(m_keepass, m_policy, this);
 	m_consent  = new consent_blocker(m_policy, this);
+	// Say it once, and say what the lever is. A page that will not run because
+	// we block ads is indistinguishable from a broken site unless we tell them,
+	// and only we know it was us.
+	m_antiadblock = new antiadblock_watch(this);
+	connect(m_antiadblock, &antiadblock_watch::detected, this,
+	         [this](const QString &host, const QString &what) {
+		m_status->showMessage(
+		    QString("%1 is checking for an ad blocker (%2). If the page does not "
+		             "work, allow ads for this site in the shield.")
+		        .arg(host, what), 12000);
+	});
 	// Non-empty from the start: a view can be built before any tree is loaded,
 	// and an empty rule set is a blocker that silently does nothing.
 

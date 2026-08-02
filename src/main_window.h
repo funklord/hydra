@@ -48,6 +48,7 @@ class request_filter;
 class keepass_bridge;
 class autofill_controller;
 class consent_blocker;
+class antiadblock_watch;
 class local_proxy;
 class element_picker;
 class ollama_provider;
@@ -182,6 +183,7 @@ private:
 	keepass_bridge     *m_keepass       = nullptr;
 	autofill_controller *m_autofill     = nullptr;
 	consent_blocker     *m_consent      = nullptr;
+	antiadblock_watch   *m_antiadblock  = nullptr;
 	QString              m_consent_rules_path;
 	QAction            *m_media_action  = nullptr;
 	QString             m_filters_path;

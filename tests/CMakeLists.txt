@@ -37,7 +37,7 @@ add_executable(test_pick test_pick.cpp fake_sources.h
     ${H}/player_launcher.cpp ${H}/media_detector.cpp)
 target_link_libraries(test_pick PRIVATE Qt6::Widgets Qt6::Network)
 
-add_executable(test_extractor test_extractor.cpp
+add_executable(test_extractor test_extractor.cpp ${H}/antiadblock_watch.cpp
     ${H}/site_extractor.cpp ${H}/extractor_helpers.cpp
     ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
     ${H}/stream_probe.cpp ${H}/local_proxy.cpp

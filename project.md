@@ -442,7 +442,8 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Filter evolution | `filter_list.{h,cpp}`, `filter_signals.{h,cpp}`, `filter_dialog.{h,cpp}` | passive signals, dry-run validation, diff/accept |
 | Password manager | `keepass_protocol.{h,cpp}`, `keepass_bridge.{h,cpp}`, `crypto_box.{h,cpp}` | KeePassXC-Browser client; no vault, no master password |
 | Autofill | `autofill_controller.{h,cpp}`, `autofill_script.h` | QWebChannel bridge, origin gate, policy-governed |
-| Consent banners | `consent_blocker.{h,cpp}`, `consent_rules.{h,cpp}` | answers "accept cookies?" dialogs; rules as data, shareable later |
+| Consent banners | `consent_blocker.{h,cpp}`, `consent_rules.{h,cpp}`, `consent_dialog.{h,cpp}` | answers "accept cookies?" dialogs; rules as data, shareable later |
+| Anti-adblock notice | `antiadblock_watch.{h,cpp}` | says so when a page is checking for a blocker, and names the lever |
 
 Persistence: `policy.json`, `state/<id>.blob`, and the tree file all sit next to
 the outline file passed on the command line.
@@ -678,6 +679,48 @@ than guessed at), `set-login` on new-credential submit, `generate-password`,
 storing the association key encrypted at rest via Secret Service — it is in
 memory only, so pairing does not survive a restart — and the optional
 direct-`.kdbx` fallback, which §13.4 recommends against anyway.
+
+## When our own blocking breaks the page (partly done)
+
+The measured case, from the second mirror: the player never started, the play
+button stayed put, every click was answered by the ad network, and nothing in
+the request log looked wrong. What the log *contained* was
+`cdnjs.cloudflare.com/ajax/libs/fuckadblock/3.2.1/fuckadblock.min.js`. The page
+was watching for a blocker and refusing to play, and allowing ads for that site
+alone started it.
+
+**The failure mode is what makes this worth building.** A page broken this way
+looks like a broken site, or like a broken browser, and gives the user nothing
+to act on. Our blocking is the cause and only we can say so.
+
+`antiadblock_watch` is a fourth rider on the interceptor's observer seam, beside
+the media detector, filter signals and extractor signals — the request stream is
+already being watched and a second sensor for the same facts would be a second
+thing to keep true (§10). When a page fetches a script whose only job is to
+detect a blocker, the status bar says so once and names the lever: the shield's
+per-site ads setting.
+
+**It reports; it does not decide.** Turning ads back on for a site is a real
+tradeoff and the user already has the control — what was missing was any way to
+know that is the control. Whether it should go further, offering or applying the
+change the way the consent blocker relaxes cookies, is a decision left open
+rather than made quietly.
+
+**Nothing matches on the word "ad", deliberately.** This message tells someone to
+lower their protection, so a false positive is not cosmetic. It matches the file
+*name* against a short list of known detectors — not the query string, where a
+page's own search terms live. Ten checks cover both directions: the script that
+broke the real page and its better-known sibling recognised; a filter list, an
+ordinary script, and a page merely mentioning one in a query all left alone; the
+report fired once per page however many are fetched; and the finding scoped to
+one page rather than to the browser.
+
+**The pattern list is in the binary, which is the mistake `consent_rules` exists
+to avoid.** A detector renames itself and a list in C++ is a release behind. The
+consent rules already carry provenance and live in a file meant to be exchanged;
+these belong there rather than in a third rule store. That is the next step and
+is deliberately not done here — one unified shareable rule file is worth more
+than two half-built ones.
 
 ## Cookie consent banners (§7.1, done)
 
@@ -2322,7 +2365,13 @@ page.
    accepted that as *followed rather than invented*, in four calls and 320
    bytes. What remains is the DOM half behind §13.2, and deciding whether it is
    wanted at all — nothing has yet needed it.
-3. **Decide what to do when blocking ads breaks the page.** No longer
+3. **Decide how far to go when blocking ads breaks the page.** The detection
+   half is built: a page that checks for a blocker is noticed and the user is
+   told, once, with the shield named as the lever (see above). What is open is
+   whether it should offer or apply the change itself, the way answering a
+   consent banner relaxes first-party cookies. That is a judgement about how
+   much the browser should undo on the user's behalf, not a missing mechanism.
+   The old note follows. No longer
    hypothetical: on the Abyss mirror the site's anti-adblock refuses to start the
    player, and turning the ad list off is what makes it play. The shield already
    gives a per-site tri-state, so the *mechanism* to allow it is there — what is

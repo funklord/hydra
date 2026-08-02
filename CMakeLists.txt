@@ -163,6 +163,8 @@ add_executable(hydra
     src/consent_rules.h
     src/consent_dialog.cpp
     src/consent_dialog.h
+    src/antiadblock_watch.cpp
+    src/antiadblock_watch.h
     src/autofill_script.h
     src/element_picker.cpp
     src/element_picker.h

@@ -2,6 +2,7 @@
 // invent a URL.
 #include "site_extractor.h"
 #include "extractor_dialog.h"
+#include "antiadblock_watch.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -335,6 +336,54 @@ int main(int argc, char **argv) {
 		check(site_extractor::check(pick.arg("movie.mp4"), page, elsewhere, nullptr,
 		                             &manifests).usable,
 		      "a file elsewhere on the same host is left alone");
+	}
+
+	section("noticing a page that checks for an ad blocker");
+	{
+		// Measured, not imagined: this is what a real watch page loaded while
+		// its player refused to start, and allowing ads for that site alone
+		// started it.
+		check(antiadblock_watch::looks_like_detector(QUrl(
+		          "https://cdnjs.cloudflare.com/ajax/libs/fuckadblock/3.2.1/"
+		          "fuckadblock.min.js")),
+		      "the detector script that broke a real page is recognised");
+		check(antiadblock_watch::looks_like_detector(
+		          QUrl("https://x.example/js/blockadblock.js")),
+		      "and its better-known sibling");
+
+		// The message this drives tells someone to turn protection off, so a
+		// false positive is not a cosmetic mistake. Nothing matches on "ad".
+		check(!antiadblock_watch::looks_like_detector(
+		          QUrl("https://x.example/js/adblock-plus-list.js")),
+		      "a filter list is not a detector");
+		check(!antiadblock_watch::looks_like_detector(
+		          QUrl("https://x.example/assets/loader.js")),
+		      "nor is an ordinary script");
+		check(!antiadblock_watch::looks_like_detector(
+		          QUrl("https://x.example/search?q=fuckadblock")),
+		      "and a page that merely mentions one in a query is not accused");
+
+		antiadblock_watch w;
+		int fired = 0;
+		QObject::connect(&w, &antiadblock_watch::detected,
+		                  [&](const QString &, const QString &) { ++fired; });
+		request_context c;
+		c.site_host = "site.example";
+		c.url = QUrl("https://cdn.example/fuckadblock.min.js");
+		w.on_request(c, request_decision{});
+		check(w.checked_for_blocker("site.example"), "a sighting is recorded");
+		check(fired == 1, "and reported");
+
+		// Said once per page. A status bar that repeats this on every request
+		// is a status bar nobody reads.
+		w.on_request(c, request_decision{});
+		c.url = QUrl("https://cdn.example/blockadblock.js");
+		w.on_request(c, request_decision{});
+		check(fired == 1, "but only once, however many are fetched");
+		check(w.evidence_for("site.example").size() == 2,
+		      "while both are kept as evidence");
+		check(!w.checked_for_blocker("other.example"),
+		      "and it is a fact about one page, not the browser");
 	}
 
 	section("every way of spelling the function");
