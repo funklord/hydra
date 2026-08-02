@@ -3113,6 +3113,29 @@ Both suites pass on both Qts now, and the printed refusal word differs between
 them in the output, which is the shape a version-dependent detail should have:
 visible, named, and not asserted on.
 
+**Then the same comparison, run across every self-contained live driver**, since
+one version difference found by accident says nothing about the rest.
+`try_cookies` (12), `try_consent` (36) and `try_adblock_fix` (7) matched exactly
+on both. `try_subframe` did not: 6 of 6 on 6.8.2, 2 of 6 on 6.11.
+
+It was **the fixture, not the tap**. The MSE fixture asked for
+`video/mp4; codecs="avc1.64001E"`, and Qt's own binaries ship without
+proprietary codecs, so `addSourceBuffer` threw `NotSupportedError`, nothing was
+ever appended, and four checks failed as though the subframe relay were broken.
+The driver's own comment already said the appended bytes are not decodable as
+anything — the tap counts the handover, not the decode — so the type never
+needed to be H.264. It now picks the first type the engine says it supports,
+preferring the royalty-free ones, and prints which: VP8, on both. A test of the
+tap had quietly become a test of the engine's codec licensing.
+
+One detail worth keeping: the fixture reports with `console.warn`, not
+`console.log`. Qt's `js` logging category prints warnings and errors and drops
+info, so a `console.log` would have been invisible in exactly the run where the
+message matters — the one where no type is supported at all.
+
+`try_downloads` and `try_capture` are excluded from this comparison on purpose:
+they assert nothing, so they cannot disagree.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and

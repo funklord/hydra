@@ -49,8 +49,29 @@ static const char *k_player = R"HTML(<!doctype html><html><body>
 <script>
 var ms = new MediaSource();
 document.getElementById('v').src = URL.createObjectURL(ms);
+// Whichever type this build can open a source buffer for.
+//
+// It used to be H.264 outright, which made this driver a test of the engine's
+// codec licensing rather than of the tap: Qt's own 6.11 binaries ship without
+// proprietary codecs, so addSourceBuffer threw NotSupportedError, nothing was
+// ever appended, and four checks failed as if the subframe relay were broken.
+// The bytes below are not decodable as any of these anyway -- the point is the
+// handover, not the decode -- so the only thing the type has to do is exist.
+var types = ['video/webm; codecs="vp8"',
+             'video/webm; codecs="vp9"',
+             'audio/webm; codecs="opus"',
+             'video/mp4; codecs="avc1.64001E"'];
+var type = null;
+for (var t = 0; t < types.length; t++)
+  if (window.MediaSource && MediaSource.isTypeSupported(types[t])) { type = types[t]; break; }
+// warn, not log: Qt's `js` logging category prints warnings and errors and
+// drops info, so a console.log here would be invisible in exactly the run where
+// it matters.
+console.warn(type ? ('mse fixture using ' + type)
+                  : 'mse fixture found NO supported type - this engine can open no source buffer');
 ms.addEventListener('sourceopen', function () {
-  var sb = ms.addSourceBuffer('video/mp4; codecs="avc1.64001E"');
+  if (!type) return;
+  var sb = ms.addSourceBuffer(type);
   // Past the hook's 256 KiB reporting threshold, deliberately: below it the
   // only report is the one `addSourceBuffer` sends, which carries zero bytes
   // and makes a working tap look idle. Four 128 KiB handovers. The buffer will
