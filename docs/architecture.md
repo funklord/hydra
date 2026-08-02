@@ -541,6 +541,8 @@ opposite kind of thing: a read-only observer of bytes the page is already
 decoding, holding no secrets and granting no privilege. It should be injected
 per site on an explicit action rather than standing in every page by default.
 
+**And the hook has to reach the frame the player is in, which the half that carries its findings cannot.** The hook runs in every frame; the relay that hands what it sees to C++ cannot, because Qt installs `qt.webChannelTransport` in the main frame alone, so a relay in a subframe has nothing to connect a `QWebChannel` to. A player in an iframe — of any origin, and the normal arrangement on real sites — therefore reported nothing at all until a subframe was made to hand its report up to the top frame with `window.top.postMessage`. Two rules govern that route. The top frame never takes the *site name* from the message; it files under its own `location.hostname`, so a frame cannot speak for a site it is not, and the key matches what the shell looks up. And the report is readable by the embedding page, which is a disclosure this instrumentation creates — acceptable for a mime string and a byte count, and worth re-weighing if the tap ever carries more.
+
 **Getting the bytes out.** Shipping multi-megabyte `ArrayBuffer`s per segment
 over the QWebChannel bridge is the obvious route and the wrong one. The local
 proxy (§10) already listens on loopback behind unguessable tokens and already

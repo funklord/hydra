@@ -20,15 +20,29 @@ const char *k_hook = R"JS(
   var send = function (mime) {
     var s = seen[mime];
     var v = document.querySelector('video');
+    var detail = {
+      mime: mime,
+      bytes: s.bytes,
+      appends: s.appends,
+      position: v && isFinite(v.currentTime) ? v.currentTime : 0,
+      duration: v && isFinite(v.duration) ? v.duration : 0
+    };
+    // In the top frame the relay is in the isolated world of this same
+    // document, and a DOM event reaches it.
+    //
+    // In a subframe there is no relay: Qt installs `qt.webChannelTransport` in
+    // the main frame alone, so one injected into an iframe would have nothing
+    // to connect a QWebChannel to. A DOM event dispatched here is heard by
+    // nobody. So a subframe hands its report up to the frame that does have a
+    // relay -- which is the whole difference between the tap working and the
+    // tap being silent on every page whose player is an embed, and that is most
+    // of them.
     try {
-      document.dispatchEvent(new CustomEvent('hydra-mse', { detail: {
-        mime: mime,
-        bytes: s.bytes,
-        appends: s.appends,
-        position: v && isFinite(v.currentTime) ? v.currentTime : 0,
-        duration: v && isFinite(v.duration) ? v.duration : 0
-      }}));
-    } catch (e) { /* a page may have replaced CustomEvent; nothing to do */ }
+      if (window.top !== window)
+        window.top.postMessage({ __hydra_mse: detail }, '*');
+      else
+        document.dispatchEvent(new CustomEvent('hydra-mse', { detail: detail }));
+    } catch (e) { /* a page may have replaced either; nothing to do */ }
   };
 
   if (window.MediaSource && MediaSource.prototype.addSourceBuffer) {
@@ -86,11 +100,27 @@ const char *k_relay = R"JS(
                     Number(d.position) || 0, Number(d.duration) || 0);
     }
   };
-  document.addEventListener('hydra-mse', function (e) {
-    if (!e || !e.detail) return;
-    pending.push(e.detail);
+  var take = function (d) {
+    if (!d) return;
+    pending.push(d);
     if (pending.length > 64) pending.shift();   // bound a hostile page
     flush();
+  };
+  document.addEventListener('hydra-mse', function (e) {
+    take(e && e.detail);
+  }, true);
+  // The same report, handed up by a player in a subframe. Any window can post
+  // here, so this is exactly as trustworthy as the DOM event above -- which is
+  // to say not at all, and it gets the same treatment: a claim about a mime and
+  // a byte count, length-capped and bounded per site on the C++ side.
+  //
+  // What is *not* taken from the message is the name it gets filed under. That
+  // stays `location.hostname` of this, the top frame: the page the user is on,
+  // which is also the name the shell looks the tap up by. A frame does not get
+  // to choose the site it speaks for, for the same reason §13.2 does not let a
+  // page choose the origin it asks for credentials about.
+  window.addEventListener('message', function (e) {
+    if (e && e.data && e.data.__hydra_mse) take(e.data.__hydra_mse);
   }, true);
   var start = function () {
     if (typeof QWebChannel === 'undefined' || !window.qt || !qt.webChannelTransport)

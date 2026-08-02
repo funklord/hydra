@@ -78,10 +78,11 @@ in 5**, having been 0 in 5 every time it was asked before.
 **Not measured, and known.**
 - Capture under *live network* conditions — the mechanism is proven locally,
   the timing against a real site is not.
-- ~~The MSE tap on a page whose player is a third-party iframe.~~ **Answered,
-  badly:** it reports nothing there, and that is most real watch pages. Every
-  earlier verification used a player page loaded as its own document, where no
-  subframe is involved.
+- ~~The MSE tap on a page whose player is an iframe.~~ **Answered badly, then
+  fixed:** it reported nothing there — which is most real watch pages — because
+  an iframe has no relay in it. A subframe hands its report to the top frame
+  now. Every earlier verification had used a player page loaded as its own
+  document, where no subframe is involved.
 - ~~The permission callbacks.~~ **Answered.** Every one of the four is refused
   by default and grantable per host, driven through the real shell; geolocation's
   page-visible outcome is the engine's to decide and is checked at our boundary
@@ -1527,46 +1528,48 @@ a flag on `inject_script()`, so the escalation is greppable. It also runs on
 subframes, which is not optional: on real sites the player is a third-party
 iframe, and a tap confined to the top frame sees nothing.
 
-**And that last sentence describes the hook only. The tap does not work in a
-third-party iframe, which is measured and is the shape most watch pages have.**
-`tests/live/try_subframe` is the reproduction: a page on `127.0.0.1` embedding a
-player from `127.0.0.2` that feeds a MediaSource. The same player as its own
-document is reported normally; inside the iframe **nothing arrives at all** — not
-a stream under the wrong name, nothing.
+**And that last sentence described the hook only. Until now the tap did not work
+in an iframe at all — which is the shape most watch pages have.**
+`tests/live/try_subframe` is the reproduction and the proof, offline and
+deterministic: a page on `127.0.0.1` embedding a player from `127.0.0.2` that
+feeds a MediaSource, with the same player as its own document for a control and
+a same-origin iframe to separate the two candidate causes.
 
-The hook does run there. What cannot is the half that carries what it sees: the
-relay lives in the isolated world with `setRunsOnSubFrames(false)`, and the flag
-is not the whole story, because **Qt installs `qt.webChannelTransport` in the
-main frame alone** — a relay in a subframe has nothing to connect a QWebChannel
-to. Both were tried, in that order, and neither worked; the flags are back as
-they were rather than left flipped for no benefit, with the reason written where
-someone will next reach for them.
+**It was never about cross-origin.** An iframe of *any* origin has no relay in
+it: the relay lives in the isolated world, and Qt installs
+`qt.webChannelTransport` in the main frame alone, so one injected into a
+subframe would have nothing to connect a QWebChannel to. The hook ran there
+perfectly well and dispatched its DOM event into a document where nothing was
+listening.
 
-**The obvious fix was attempted and is not sufficient**, which is the more
-useful finding. The hook was changed to hand its report up with
-`window.top.postMessage`, and the top frame's relay to accept it — filing under
-the relay's *own* `location.hostname` rather than anything the frame claims, so
-a frame cannot choose the name it files under, the same rule §13.2 applies to
-credentials. Instrumented, that route works: the subframe posts, the top frame's
-relay receives, `take()` runs.
+**The fix is that a subframe hands its report up.** `window.top.postMessage`
+works cross-origin and the top frame does have a relay. What the top frame will
+*not* take from the message is the name to file under: that stays its own
+`location.hostname`, so a frame cannot speak for a site it is not, and the key
+is the one the shell already looks up. The same rule §13.2 applies to
+credentials, for the same reason. Everything else in the message keeps the
+treatment it always had — a claim, length-capped and bounded per site.
 
-It still does not arrive, for a reason nothing predicted: **on a page that
-contains a cross-origin iframe, the top frame's relay never connects its
-QWebChannel.** It sits with `bridge == null` and its queue unflushed, and its
-retry loop does not even report itself waiting. The same player as its own
-document connects immediately, so the relay script is not what is wrong. That is
-where the next attempt starts; it is not the `setRunsOnSubFrames` flag and not
-the transport-is-main-frame-only rule, both of which were tried and reverted
-rather than left in for no benefit. The postMessage change was reverted with
-them, since a half of a fix is worse than none: it would have looked like the
-route was covered.
+**The price, stated rather than buried:** a report posted to the top frame can
+be read by the embedding page's own scripts, so that page learns the mime, byte
+count and playback position of media inside an iframe it embedded. It chose to
+embed that iframe, the figures are coarse, and the alternative is a tap that
+does not work — but it is a disclosure this instrumentation creates, and it
+should be weighed again if the tap ever carries more than these numbers.
 
-**One consequence worth stating plainly.** §11.6's whole argument is that the
-tap is transport-agnostic and catches whichever mirror the user started. That
-argument holds for the hook and fails at delivery on precisely the pages it was
-written for. Every verification of the tap in this file used a player page
-loaded as its own document, which is why this went unseen: on those, frame host
-and page host are the same name and there is no subframe involved.
+**A wrong diagnosis was committed before the right one, and it is worth more
+than the fix.** This exact change was tried once, appeared to fail, and the
+instrumentation said the top frame's relay had never connected its QWebChannel —
+so it went into the file as an unexplained Qt behaviour and the change was
+reverted. It was neither unexplained nor true. The channel connects on those
+pages perfectly well, only later than the driver's fixed six-second window, and
+the report arrived after the measurement had already been taken. **A fixed wait
+is a measuring instrument, and this one manufactured a mechanism that did not
+exist.** The driver now waits until a report arrives or a generous deadline
+expires, which cannot fail in that direction.
+
+Why it went unseen for so long: every earlier verification of the tap used a
+player page loaded as its own document, where there is no subframe at all.
 
 **Capture works, and is verified end to end.** Tools → Capture Playing Video
 opens a file, arms the hook and reloads (the recorder has to be in place before
@@ -2154,15 +2157,7 @@ page.
    accepted that as *followed rather than invented*, in four calls and 320
    bytes. What remains is the DOM half behind §13.2, and deciding whether it is
    wanted at all — nothing has yet needed it.
-3. **Make the tap work in a third-party iframe**, and start at the right end.
-   Reproduced by `tests/live/try_subframe`. The hook runs in the iframe and the
-   `window.top.postMessage` route to the top frame's relay demonstrably carries
-   the report — that much was built and instrumented. The blocker is downstream
-   of both: **on a page containing a cross-origin iframe the top frame's relay
-   never connects its QWebChannel**, which is unexplained and is the thing to
-   understand before writing any more code. Ranked here rather than lower
-   because §11.6's whole argument depends on it.
-4. **Decide what to do when blocking ads breaks the page.** No longer
+3. **Decide what to do when blocking ads breaks the page.** No longer
    hypothetical: on the Abyss mirror the site's anti-adblock refuses to start the
    player, and turning the ad list off is what makes it play. The shield already
    gives a per-site tri-state, so the *mechanism* to allow it is there — what is
@@ -2170,7 +2165,7 @@ page.
    player that silently spins looks like a broken site or a broken browser. This
    is the first thing the ad-host list has done at runtime and it is a design
    question, not a bug.
-5. **Exercise the rest of what is wired but untested.** What is left needs
+4. **Exercise the rest of what is wired but untested.** What is left needs
    something this machine does not have: the cookie filter's third-party branch
    wants an HTTPS origin with a certificate the engine trusts, and the KeePassXC
    bridge above the crypto layer wants `keepassxc` installed. The ad-host list's
@@ -2178,7 +2173,7 @@ page.
    `--host-resolver-rules` problem recorded above. This project's defect history
    is almost entirely in this category — see the cautions at the top of this
    file.
-6. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
+5. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
    Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
 
 ## Open decisions and risks

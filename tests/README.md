@@ -181,14 +181,22 @@ which produced a convincing false failure first:
   code as a refusal. `HYDRA_PERM_DEBUG=1` makes `qtwebengine_view` log what was
   asked and what was answered, which is where that case is checked instead.
 
-`try_subframe` reproduces the MSE tap's third-party-iframe defect, also offline
-and also self-checking. It **asserts the broken behaviour**, so it is green today
-and will fail the moment someone fixes the tap — which is the intended signal,
-not a regression. Its first case is a control that proves the fixture really
-feeds a MediaSource; without that, the second case's silence would be
-indistinguishable from a fixture that never played anything. If you write a
-fixture like it, note that the hook only reports past **256 KiB** of appends, so
-a smaller one looks idle while working perfectly.
+`try_subframe` covers the MSE tap when the player is in an iframe — same origin
+and cross-origin — which is the shape most watch pages have. Offline and
+self-checking. Three things it encodes, each of which produced a wrong answer
+first:
+
+- **A control comes before the cases.** Its first phase loads the same player as
+  its own document, so a later silence cannot be confused with a fixture that
+  never played anything. That is not hypothetical: the fixture *was* wrong the
+  first time.
+- **The hook only reports past 256 KiB of appends.** A smaller fixture looks
+  idle while working perfectly.
+- **It waits for a report, not for a number of seconds.** The relay cannot
+  deliver until its QWebChannel connects, and on a page with an iframe that took
+  longer than the fixed window this driver used to allow — which read as "the
+  channel never connects" and produced a confident, wrong diagnosis that reached
+  a commit. Any new phase here should use the same wait.
 
 Lessons that cost time, so they are written down:
 

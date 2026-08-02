@@ -76,6 +76,14 @@ public:
 			QByteArray body;
 			if (target.startsWith("/player")) {
 				body = k_player;
+			} else if (target.startsWith("/plain")) {
+				body = "<!doctype html><html><body>no iframe here</body></html>";
+			} else if (target.startsWith("/topsame")) {
+				// Same-origin iframe, to separate "any iframe" from "cross-origin".
+				body = "<!doctype html><html><body>top"
+				        "<iframe src=\"http://127.0.0.1:" + QByteArray::number(port) +
+				        "/player\" width=\"640\" height=\"360\"></iframe>"
+				        "</body></html>";
 			} else {
 				body = "<!doctype html><html><body>top"
 				        "<iframe src=\"http://127.0.0.2:" + QByteArray::number(port) +
@@ -145,12 +153,23 @@ int main(int argc, char *argv[]) {
 		QMetaObject::invokeMethod(bar, "returnPressed");
 		spin(ms);
 	};
+	// Wait for a report rather than for a fixed number of seconds. The relay
+	// cannot deliver until its QWebChannel has connected, and on a page with an
+	// iframe that took longer than the window this driver used to allow -- which
+	// read as "the channel never connects" and sent a whole diagnosis down the
+	// wrong path. A deadline that is generous and a wait that ends as soon as
+	// the answer arrives costs nothing and cannot lie in that direction.
+	auto wait_for_report = [&](int max_ms) {
+		for (int waited = 0; waited < max_ms && tap->sites().isEmpty(); waited += 250)
+			spin(250);
+	};
 
 	// The control, and it comes first: the same player page as its own document.
 	// Without it, a tap that reports nothing for the iframe case cannot be told
 	// apart from a fixture that never fed a MediaSource — and this driver's
 	// fixture is the newest, least trustworthy thing in the room.
-	go(QString("http://127.0.0.2:%1/player").arg(server.port), 6000);
+	go(QString("http://127.0.0.2:%1/player").arg(server.port), 2000);
+	wait_for_report(20000);
 	std::printf("\n== control: the same player as the top document ==\n");
 	for (const QString &s : tap->sites())
 		std::printf("  tap site %s (active=%d)\n", qPrintable(s),
@@ -160,7 +179,24 @@ int main(int argc, char *argv[]) {
 	for (const QString &s : tap->sites())
 		tap->clear_site(s);
 
-	go(QString("http://127.0.0.1:%1/top").arg(server.port), 6000);
+	// Which ingredient stops the channel: a third navigation, an iframe at all,
+	// or a cross-origin one. Answered in that order, because the cheapest wrong
+	// conclusion here is "iframes break it" when it is only some of them.
+	go(QString("http://127.0.0.1:%1/plain").arg(server.port), 4000);
+	go(QString("http://127.0.0.1:%1/topsame").arg(server.port), 2000);
+	wait_for_report(20000);
+	std::printf("\n== a player inside a same-origin iframe ==\n  sites = %s\n",
+	             tap->sites().isEmpty() ? "(none)"
+	                                     : qPrintable(tap->sites().join(", ")));
+	// Not a cross-origin question at all: an iframe of any origin has no relay
+	// in it, so this failed too and for the same reason.
+	check(tap->active_for("127.0.0.1"),
+	      "a same-origin iframe is reported under the page's host too");
+	for (const QString &s2 : tap->sites())
+		tap->clear_site(s2);
+
+	go(QString("http://127.0.0.1:%1/top").arg(server.port), 2000);
+	wait_for_report(20000);
 
 	std::printf("\n== a player inside a third-party iframe ==\n");
 	for (const QString &s : tap->sites()) {
@@ -190,12 +226,12 @@ int main(int argc, char *argv[]) {
 	// That last point is where the next attempt should start, and it is not the
 	// `setRunsOnSubFrames` flag or the transport-is-main-frame-only rule — both
 	// were tried and reverted rather than left in for no benefit.
-	check(tap->sites().isEmpty(),
-	      "KNOWN DEFECT: a player in a cross-origin iframe reports nothing");
-	check(!tap->active_for("127.0.0.1"),
-	      "so the badge stays empty on the shape most real watch pages have");
-	std::printf("\n  --    when these two start failing the tap has been "
-	             "fixed: update them and the §11.6 note in project.md\n");
+	check(!tap->sites().isEmpty(),
+	      "a player in a cross-origin iframe is reported at all");
+	check(tap->active_for("127.0.0.1"),
+	      "and filed under the page's own host, which is what the shell asks for");
+	check(!tap->sites().contains("127.0.0.2"),
+	      "not under the iframe's, which nothing would ever look up");
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;
