@@ -1320,7 +1320,30 @@ without waiting for the dialog to close.
 immediately — a removal that only edits a file would look identical in the UI
 and keep blocking until restart.
 
-The settings window is five pages now: Privacy & security, Media & players,
+### And the flagged rules, where a maintainer can find them
+
+The provenance field was carrying a flag nobody could see. A generic rule
+learned locally is marked for the shipped defaults, which is worth nothing if
+the only way to find the marked ones is reading a JSON file by hand — so the
+Filters page lists the learned site rules beside the filter list, with the flag
+spelled out in words (`→ ship as built-in`) rather than shown as a tick nobody
+can interpret. Built-ins are not listed: they come from the program and cannot
+be edited here.
+
+**Copy the flagged ones** puts them on the clipboard already written as
+`builtin("kind", "value", "note");` lines — the form `site_rules::defaults()` is
+written in, so promoting them is a paste rather than a transcription. That is
+the whole mechanism the "flag it for the next release" requirement asked for,
+and it is now end to end: learn, flag, find, promote.
+
+Learned rules can also be removed, written through immediately for the same
+reason filter removal is.
+
+**Ten checks**, including the two that keep the scope decision honest: a generic
+rule says in words that it should be shipped, a rule tied to one host does not,
+and the clipboard contains the first and not the second.
+
+The settings window is six pages: Privacy & security, Media & players,
 Downloads, Filters, Kiosk, AI.
 
 ## Settings (arch §11.3, §11.4)

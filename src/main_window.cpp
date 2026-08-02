@@ -1319,7 +1319,8 @@ void main_window::open_settings() {
 	QString ignored;
 	choose_ai(&ignored);          // make sure the providers exist to configure
 	settings_dialog dlg(m_players, m_downloads, m_torrents, m_local_ai,
-	                     m_external_ai, m_policy, m_filters, m_filters_path, this);
+	                     m_external_ai, m_policy, m_filters, m_filters_path,
+	                     m_consent, m_site_rules_path, this);
 	dlg.exec();
 	// Global defaults may have moved, and every live view was configured from
 	// the old ones. Re-apply rather than wait for the next navigation, or the

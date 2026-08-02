@@ -36,6 +36,7 @@ class torrent_download_source;
 // owns presentation and the store owns persistence and application.
 class policy_engine;
 class filter_list;
+class consent_blocker;
 class QTreeWidget;
 class QPushButton;
 
@@ -47,6 +48,8 @@ public:
 	                 claude_provider *external_ai, policy_engine *policy = nullptr,
 	                 filter_list *filters = nullptr,
 	                 const QString &filters_path = QString(),
+	                 consent_blocker *consent = nullptr,
+	                 const QString &rules_path = QString(),
 	                 QWidget *parent = nullptr);
 
 	// Saving belongs to *accepting*, not to a particular button. It hung off the
@@ -61,6 +64,7 @@ private:
 	void build_kiosk_page(QWidget *page);
 	void build_filter_page(QWidget *page);
 	void rebuild_filter_list();
+	void rebuild_site_rules();
 	void load_kiosk();
 	void apply_kiosk();
 	void build_player_page(QWidget *page);
@@ -82,6 +86,12 @@ private:
 	QTreeWidget             *m_filter_view   = nullptr;
 	QPushButton             *m_filter_remove = nullptr;
 	QLabel                  *m_filter_note   = nullptr;
+	consent_blocker         *m_consent       = nullptr;
+	QString                  m_rules_path;
+	QTreeWidget             *m_rules_view    = nullptr;
+	QPushButton             *m_rules_remove  = nullptr;
+	QPushButton             *m_rules_copy    = nullptr;
+	QLabel                  *m_rules_note    = nullptr;
 	player_launcher         *m_players  = nullptr;
 	download_manager        *m_downloads = nullptr;
 	torrent_download_source *m_torrents = nullptr;

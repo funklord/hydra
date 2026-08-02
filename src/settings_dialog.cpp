@@ -18,6 +18,10 @@
 #include <QTreeWidget>
 #include <QPushButton>
 #include "filter_list.h"
+#include "consent_blocker.h"
+
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QListWidget>
 #include <QStackedWidget>
 #include "policy_engine.h"
@@ -226,9 +230,12 @@ settings_dialog::settings_dialog(player_launcher *players,
                                   ollama_provider *local_ai,
                                   claude_provider *external_ai,
                                   policy_engine *policy, filter_list *filters,
-                                  const QString &filters_path, QWidget *parent)
+                                  const QString &filters_path,
+                                  consent_blocker *consent,
+                                  const QString &rules_path, QWidget *parent)
 	: QDialog(parent), m_policy(policy), m_filters(filters),
-	  m_filters_path(filters_path), m_players(players),
+	  m_filters_path(filters_path), m_consent(consent),
+	  m_rules_path(rules_path), m_players(players),
 	  m_downloads(downloads), m_torrents(torrents), m_local_ai(local_ai),
 	  m_external_ai(external_ai) {
 	setWindowTitle("Settings");
@@ -450,6 +457,118 @@ void settings_dialog::build_filter_page(QWidget *page) {
 	});
 
 	rebuild_filter_list();
+
+	// The second corpus, on the same page because it is the same kind of thing:
+	// small perishable facts about how sites behave, kept as data so they can be
+	// corrected without a release — and, in the stated direction, exchanged.
+	auto *rules_box = new QGroupBox("Learned site rules", page);
+	auto *rv = new QVBoxLayout(rules_box);
+	auto *rules_intro = new QLabel(
+		"Consent-banner wording and ad-blocker detector names learned on this "
+		"machine. Built-in rules are not listed: they come from the program and "
+		"cannot be edited here.", rules_box);
+	rules_intro->setWordWrap(true);
+	rv->addWidget(rules_intro);
+
+	m_rules_view = new QTreeWidget(rules_box);
+	m_rules_view->setObjectName("site_rules");
+	m_rules_view->setColumnCount(4);
+	m_rules_view->setHeaderLabels({ "Rule", "Kind", "Applies to", "Status" });
+	m_rules_view->setRootIsDecorated(false);
+	rv->addWidget(m_rules_view, 1);
+
+	auto *rrow = new QHBoxLayout;
+	m_rules_remove = new QPushButton("R&emove", rules_box);
+	m_rules_remove->setObjectName("rules_remove");
+	m_rules_remove->setEnabled(false);
+	rrow->addWidget(m_rules_remove);
+	m_rules_copy = new QPushButton("&Copy the flagged ones", rules_box);
+	m_rules_copy->setObjectName("rules_copy");
+	rrow->addWidget(m_rules_copy);
+	rrow->addStretch(1);
+	rv->addLayout(rrow);
+
+	m_rules_note = new QLabel(rules_box);
+	m_rules_note->setObjectName("rules_note");
+	m_rules_note->setWordWrap(true);
+	rv->addWidget(m_rules_note);
+	v->addWidget(rules_box);
+
+	connect(m_rules_view, &QTreeWidget::itemSelectionChanged, this, [this] {
+		m_rules_remove->setEnabled(!m_rules_view->selectedItems().isEmpty());
+	});
+	connect(m_rules_remove, &QPushButton::clicked, this, [this] {
+		const auto sel = m_rules_view->selectedItems();
+		if (sel.isEmpty() || !m_consent)
+			return;
+		site_rules kept;
+		for (const site_rule &r : m_consent->rules().all()) {
+			if (!r.builtin && r.value == sel.first()->text(0))
+				continue;
+			if (r.builtin)
+				continue;          // defaults() puts these back
+			kept.add(r);
+		}
+		m_consent->set_rules(kept);
+		if (!m_rules_path.isEmpty())
+			kept.save(m_rules_path);
+		rebuild_site_rules();
+	});
+	// What a maintainer needs and could not get: the flagged rules, in a form
+	// that can be pasted into `site_rules::defaults()`. A rule that works
+	// everywhere belongs in the binary, and "flagged" is worth nothing if
+	// finding them means reading a JSON file by hand.
+	connect(m_rules_copy, &QPushButton::clicked, this, [this] {
+		if (!m_consent)
+			return;
+		QString out;
+		for (const site_rule &r : m_consent->rules().promotable())
+			out += QString("\tbuiltin(\"%1\", \"%2\", \"%3\");\n")
+			           .arg(r.kind, QString(r.value).replace('"', "\\\""), r.note);
+		QGuiApplication::clipboard()->setText(out);
+		m_rules_note->setText(out.isEmpty()
+			? QString("Nothing is flagged, so nothing was copied.")
+			: QString("Copied %1 line(s) for site_rules::defaults().")
+			      .arg(out.count('\n')));
+	});
+
+	rebuild_site_rules();
+}
+
+void settings_dialog::rebuild_site_rules() {
+	if (!m_rules_view)
+		return;
+	m_rules_view->clear();
+	if (!m_consent) {
+		m_rules_note->setText("No rule store was supplied.");
+		return;
+	}
+	int flagged = 0;
+	for (const site_rule &r : m_consent->rules().all()) {
+		if (r.builtin)
+			continue;
+		auto *it = new QTreeWidgetItem(m_rules_view);
+		it->setText(0, r.value);
+		it->setText(1, r.kind);
+		it->setText(2, r.generic() ? QStringLiteral("every site") : r.host);
+		// The flag is the whole point of the provenance field, so it is spelled
+		// out rather than shown as a tick nobody can interpret.
+		it->setText(3, r.promote ? QStringLiteral("→ ship as built-in")
+		                          : QString());
+		if (r.promote)
+			++flagged;
+	}
+	for (int i = 0; i < 4; ++i)
+		m_rules_view->resizeColumnToContents(i);
+	m_rules_note->setText(
+		m_rules_view->topLevelItemCount() == 0
+			? QString("Nothing learned yet. Rules arrive from Tools → Cookie "
+			           "Banners We Missed.")
+			: QString("%1 learned, %2 of them flagged to be shipped as built-ins "
+			           "— a rule that works on every site belongs in the program "
+			           "rather than in one person's file.")
+			      .arg(m_rules_view->topLevelItemCount()).arg(flagged));
+	m_rules_remove->setEnabled(false);
 }
 
 void settings_dialog::rebuild_filter_list() {

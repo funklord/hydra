@@ -15,12 +15,16 @@
 #include "settings_dialog.h"
 #include "policy_engine.h"
 #include "filter_list.h"
+#include "consent_blocker.h"
+#include "site_rules.h"
 #include "player_launcher.h"
 #include "download_manager.h"
 
 #include <QApplication>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QFile>
+#include <QGuiApplication>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QComboBox>
@@ -174,6 +178,66 @@ int main(int argc, char **argv) {
 		filter_list reloaded;
 		check(reloaded.load(fpath) && reloaded.rules().size() == 1,
 		      "and the file on disk agrees without waiting for OK");
+	}
+
+	section("finding the rules that should be shipped as built-ins");
+	{
+		// The requirement this serves: a generic rule learned locally is flagged
+		// for the next release. Flagging is worth nothing if the only way to find
+		// the flagged ones is reading a JSON file by hand.
+		const QString rpath = QString::fromLocal8Bit(qgetenv("HYDRA_TEST_OUT")) +
+		                       "/site-rules.json";
+		QFile::remove(rpath);
+		consent_blocker blocker(&policy);
+		site_rules rules = site_rules::defaults();
+		rules.add(blocker.rule_from_label("Avvis alle", "reject"));
+		site_rule host_only;
+		host_only.kind = "container";
+		host_only.value = "#weird-banner";
+		host_only.host = "one.example";
+		rules.add(host_only);
+		blocker.set_rules(rules);
+
+		settings_dialog dr(&players, &downloads, nullptr, nullptr, nullptr,
+		                    &policy, nullptr, QString(), &blocker, rpath);
+		dr.show();
+		auto *view = dr.findChild<QTreeWidget *>("site_rules");
+		check(view && view->topLevelItemCount() == 2,
+		      "the learned rules are listed");
+		check(view && view->topLevelItemCount() ==
+		          [&]{ int n = 0; for (const site_rule &r : blocker.rules().all())
+		                   if (!r.builtin) ++n; return n; }(),
+		      "and the built-ins are not, since they come from the program");
+
+		QString flagged_text, host_text;
+		for (int i = 0; i < view->topLevelItemCount(); ++i) {
+			if (view->topLevelItem(i)->text(0).contains("Avvis"))
+				flagged_text = view->topLevelItem(i)->text(3);
+			if (view->topLevelItem(i)->text(0).contains("weird"))
+				host_text = view->topLevelItem(i)->text(3);
+		}
+		check(flagged_text.contains("built-in"),
+		      "a generic rule says in words that it should be shipped");
+		check(host_text.isEmpty(),
+		      "and a rule tied to one site does not, because it belongs to that "
+		      "site rather than to everyone");
+
+		auto *copy = dr.findChild<QPushButton *>("rules_copy");
+		check(copy != nullptr, "there is a way to get the flagged ones out");
+		copy->click();
+		const QString clip = QGuiApplication::clipboard()->text();
+		check(clip.contains("Avvis"), "which yields the flagged rule");
+		check(!clip.contains("weird-banner"),
+		      "and only the flagged ones");
+		check(clip.contains("builtin("),
+		      "in the form defaults() is written in, so it can be pasted there");
+
+		auto *rm = dr.findChild<QPushButton *>("rules_remove");
+		view->setCurrentItem(view->topLevelItem(0));
+		rm->click();
+		check(view->topLevelItemCount() == 1, "a learned rule can be taken back");
+		site_rules after;
+		check(after.load(rpath), "and the file is rewritten at once");
 	}
 
 	section("kiosk, which had no way to be configured at all");
