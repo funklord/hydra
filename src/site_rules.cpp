@@ -159,7 +159,8 @@ QJsonObject site_rules::export_learned() const {
 	return root;
 }
 
-site_rules::import_result site_rules::judge_import(const QJsonObject &doc) {
+site_rules::import_result site_rules::judge_import(const QJsonObject &doc,
+                                                     const QString &origin) {
 	import_result out;
 	if (doc.value("kind").toString() != "hydra-site-rules") {
 		out.refused << "not a Hydra rule file";
@@ -180,6 +181,11 @@ site_rules::import_result site_rules::judge_import(const QJsonObject &doc) {
 		r.builtin = false;
 		r.promote = false;
 		r.imported = true;
+		// The caller's label, not the document's. A file that names itself
+		// "Trusted community rules" is describing itself, which is worth exactly
+		// nothing; where it actually came from is something only the importer
+		// knows.
+		r.origin = origin;
 		const QString bad = why_unsafe(r);
 		if (bad.isEmpty())
 			out.accepted << r;
@@ -187,6 +193,17 @@ site_rules::import_result site_rules::judge_import(const QJsonObject &doc) {
 			out.refused << QString("%1 (%2): %3").arg(r.kind, r.value.left(40), bad);
 	}
 	return out;
+}
+
+int site_rules::forget_imported() {
+	int gone = 0;
+	for (int i = m_rules.size() - 1; i >= 0; --i) {
+		if (!m_rules[i].imported)
+			continue;
+		m_rules.removeAt(i);
+		++gone;
+	}
+	return gone;
 }
 
 QJsonObject site_rules::to_json() const {
@@ -203,6 +220,7 @@ QJsonObject site_rules::to_json() const {
 		if (!r.note.isEmpty()) o.insert("note", r.note);
 		if (r.promote) o.insert("promote", true);
 		if (r.imported) o.insert("imported", true);
+		if (!r.origin.isEmpty()) o.insert("origin", r.origin);
 		arr.append(o);
 	}
 	QJsonObject root;
@@ -222,6 +240,7 @@ site_rules site_rules::from_json(const QJsonObject &o) {
 		c.host  = e.value("host").toString();
 		c.note  = e.value("note").toString();
 		c.imported = e.value("imported").toBool();
+		c.origin   = e.value("origin").toString();
 		if (c.kind.isEmpty() || c.value.isEmpty())
 			continue;
 		r.add(c);

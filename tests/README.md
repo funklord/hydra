@@ -226,6 +226,11 @@ Note that it starts its policy phase from cookies **blocked**. An earlier
 version did not, so the relaxation had nothing to do and the check passed while
 testing nothing.
 
+`try_settings_ui` drives the settings window offscreen — the category list and
+page stack, every per-site feature having a control, the kiosk round trip, filter
+removal, and the learned-rule list with its import judgement. It needs no display
+server and no network, so it runs like an offline suite despite living here.
+
 Lessons that cost time, so they are written down:
 
 - **`import -window root` returns black once the screen blanks**, and hangs

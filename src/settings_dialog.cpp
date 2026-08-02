@@ -11,6 +11,7 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
@@ -22,6 +23,7 @@
 
 #include <QClipboard>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QMessageBox>
 #include <QGuiApplication>
@@ -475,8 +477,9 @@ void settings_dialog::build_filter_page(QWidget *page) {
 
 	m_rules_view = new QTreeWidget(rules_box);
 	m_rules_view->setObjectName("site_rules");
-	m_rules_view->setColumnCount(4);
-	m_rules_view->setHeaderLabels({ "Rule", "Kind", "Applies to", "Status" });
+	m_rules_view->setColumnCount(5);
+	m_rules_view->setHeaderLabels(
+		{ "Rule", "Kind", "Applies to", "Status", "From" });
 	m_rules_view->setRootIsDecorated(false);
 	rv->addWidget(m_rules_view, 1);
 
@@ -494,7 +497,29 @@ void settings_dialog::build_filter_page(QWidget *page) {
 	auto *rules_import = new QPushButton("&Import…", rules_box);
 	rules_import->setObjectName("rules_import");
 	rrow->addWidget(rules_import);
+	auto *rules_forget = new QPushButton("Forget imported", rules_box);
+	rules_forget->setObjectName("rules_forget");
+	rrow->addWidget(rules_forget);
 	rrow->addStretch(1);
+
+	// The safety valve. If a rule set turns out to be careless or hostile,
+	// undoing it has to be one action rather than a hunt through a list -- and
+	// it must not take the user's own rules with it, which is the reason
+	// `imported` is a separate field rather than something inferred.
+	connect(rules_forget, &QPushButton::clicked, this, [this] {
+		if (!m_consent)
+			return;
+		site_rules kept = m_consent->rules();
+		const int gone = kept.forget_imported();
+		m_consent->set_rules(kept);
+		if (!m_rules_path.isEmpty())
+			kept.save(m_rules_path);
+		rebuild_site_rules();
+		m_rules_note->setText(gone == 0
+			? QString("Nothing had been imported.")
+			: QString("Forgot %1 imported rule(s). What you learned here is "
+			           "untouched.").arg(gone));
+	});
 
 	// Sharing, in the only form it takes for now: a file someone sends. The
 	// transport is deliberately undecided — what a received rule has to prove is
@@ -530,7 +555,7 @@ void settings_dialog::build_filter_page(QWidget *page) {
 		}
 		const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
 		const site_rules::import_result got =
-			site_rules::judge_import(doc.object());
+			site_rules::judge_import(doc.object(), QFileInfo(path).fileName());
 
 		// Nothing is added by opening a file. What survived the check is shown,
 		// and adding it is a second, deliberate act -- a rule set from elsewhere
@@ -628,10 +653,15 @@ void settings_dialog::rebuild_site_rules() {
 		// out rather than shown as a tick nobody can interpret.
 		it->setText(3, r.promote ? QStringLiteral("→ ship as built-in")
 		                          : QString());
+		// Where it came from, because "learned here" and "somebody sent this"
+		// are the difference between a rule you vouched for and one you did not.
+		it->setText(4, r.imported
+			? (r.origin.isEmpty() ? QStringLiteral("imported") : r.origin)
+			: QStringLiteral("learned here"));
 		if (r.promote)
 			++flagged;
 	}
-	for (int i = 0; i < 4; ++i)
+	for (int i = 0; i < 5; ++i)
 		m_rules_view->resizeColumnToContents(i);
 	m_rules_note->setText(
 		m_rules_view->topLevelItemCount() == 0

@@ -32,6 +32,7 @@ struct site_rule {
 	// whoever ships the program, a learned rule was accepted by the person
 	// sitting here, and an imported one has been vouched for by neither.
 	bool    imported = false;
+	QString origin;           // where an imported rule came from, in words
 
 	bool generic() const { return host.isEmpty(); }
 };
@@ -99,10 +100,21 @@ public:
 	// would go stale the day either side changes.
 	QJsonObject export_learned() const;
 
+	// Forget everything that came from elsewhere, keeping built-ins and what was
+	// learned here. The safety valve the threat model asks for: if a rule set
+	// turns out to be careless or hostile, "undo that import" has to be one
+	// action rather than a hunt through a list, and it must not take the user's
+	// own rules with it. Returns how many went.
+	int forget_imported();
+
 	// Judge a document from elsewhere. Nothing is added to this set — the caller
 	// shows the result and adds what the user accepts, so importing can never be
 	// something that happened while a dialog was opening.
-	static import_result judge_import(const QJsonObject &doc);
+	// `origin` is recorded on each accepted rule so the list can say where it
+	// came from. It is the caller's label -- a file name, later perhaps a peer --
+	// and never anything the document claims about itself.
+	static import_result judge_import(const QJsonObject &doc,
+	                                   const QString &origin = QString());
 
 	// The breadth check, exposed because it is the whole safety story and
 	// deserves to be testable on its own. Empty return means the rule is safe to

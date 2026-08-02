@@ -822,6 +822,19 @@ provenance field was added for, now earning its keep.
 adding it is a second, deliberate act. A rule set from elsewhere should not be
 something acquired by browsing to a filename.
 
+**Where a rule came from is the importer's label, never the document's.** A file
+describing itself as "Trusted community rules" is describing itself, which is
+worth nothing; what the importer knows is the file it opened, so that is what is
+recorded and shown in the list beside "learned here". The distinction is the
+point of the column: a rule you vouched for and a rule somebody sent you should
+not look the same.
+
+**Undoing an import is one action.** *Forget imported* drops everything that came
+from elsewhere and keeps the built-ins and what was learned here — which is the
+reason `imported` is a stored field rather than something inferred. If a rule set
+turns out careless or hostile, the remedy cannot be a hunt through a list, and it
+must not cost the user their own rules.
+
 **And the same check now guards the local path**, which was the more interesting
 consequence. A learned rule carries no host, so it applies to *every* site: a
 banner whose button reads "Yes" would teach a rule that presses "Yes"

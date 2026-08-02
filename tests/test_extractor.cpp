@@ -482,6 +482,34 @@ int main(int argc, char **argv) {
 
 		check(site_rules::judge_import(QJsonObject()).accepted.isEmpty(),
 		      "a file that is not a rule file yields nothing");
+
+		// Where it came from is the importer's label, never the document's.
+		QJsonObject vain = doc;
+		vain.insert("origin", "Trusted community rules");
+		const site_rules::import_result labelled =
+			site_rules::judge_import(vain, "from-dave.json");
+		check(!labelled.accepted.isEmpty() &&
+		          labelled.accepted.first().origin == "from-dave.json",
+		      "an imported rule records where it came from");
+		check(!labelled.accepted.isEmpty() &&
+		          !labelled.accepted.first().origin.contains("Trusted"),
+		      "and a document describing itself as trusted is not believed");
+
+		// Undoing an import is one action and keeps what was learned here.
+		site_rules mixed = site_rules::defaults();
+		site_rule ours; ours.kind = "reject"; ours.value = "^nei takk$";
+		mixed.add(ours);
+		for (const site_rule &r : labelled.accepted)
+			mixed.add(r);
+		const int before = mixed.all().size();
+		const int gone = mixed.forget_imported();
+		check(gone == labelled.accepted.size(),
+		      "forgetting an import drops exactly what was imported");
+		check(mixed.all().size() == before - gone, "and nothing else");
+		bool ours_survived = false;
+		for (const site_rule &r : mixed.all())
+			if (r.value == "^nei takk$") ours_survived = true;
+		check(ours_survived, "what was learned here survives it");
 	}
 
 	section("every way of spelling the function");
