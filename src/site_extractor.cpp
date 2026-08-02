@@ -76,6 +76,38 @@ QString shape_of(const QUrl &u) {
 	for (const auto &pair : q.queryItems())
 		keys << pair.first;
 	bare.setQuery(QString());
+	// Long random-looking path tokens, before anything else touches them. A
+	// tracker that puts its payload in the *path* -- `/sbx/b/3NIK470KmUnKT…` --
+	// produces a different string every time, so digit-collapsing alone left
+	// every beacon its own shape. Three consequences, all measured on the second
+	// site: the flood was invisible, so the segment rule could not refuse one;
+	// the host looked like a page of one-offs rather than a firehose; and a
+	// model picked one and the gate accepted it as a video.
+	//
+	// Only tokens that are long *and* mix letters with digits, so ordinary path
+	// words are left alone -- `SubtitleManager` keeps its name, a 32-character
+	// hex hash does not.
+	// Note the charset: no `.` and no `-`, so a token breaks at them. With them
+	// included `cf-master.1774687168.txt` was one 24-character mixed token and
+	// collapsed whole, which erased the very shape a manifest is recognised by
+	// -- caught by the suite, which is what it is for.
+	static const QRegularExpression token("[A-Za-z0-9_*~%]{16,}");
+	QString path = bare.path();
+	QString folded;
+	int last = 0;
+	auto it = token.globalMatch(path);
+	while (it.hasNext()) {
+		const auto m = it.next();
+		const QString t = m.captured();
+		const bool has_digit = t.contains(QRegularExpression("[0-9]"));
+		const bool has_alpha = t.contains(QRegularExpression("[A-Za-z]"));
+		if (!has_digit || !has_alpha)
+			continue;
+		folded += path.mid(last, m.capturedStart() - last) + "@";
+		last = m.capturedEnd();
+	}
+	folded += path.mid(last);
+	bare.setPath(folded);
 	QString s = bare.toString(QUrl::RemoveFragment);
 	if (!keys.isEmpty())
 		s += "?" + keys.join('&');

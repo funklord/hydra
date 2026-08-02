@@ -343,6 +343,45 @@ int main(int argc, char **argv) {
 		      "a file elsewhere on the same host is left alone");
 	}
 
+	section("a tracker that hides its payload in the path");
+	{
+		// Measured on the second site: a beacon host put its per-request token in
+		// the *path* rather than the query, so digit-collapsing left every one of
+		// them its own shape. The flood was invisible, the segment rule could not
+		// refuse one, and a model picked one and the gate accepted it as a video.
+		auto sh = [](const char *u) {
+			return site_extractor::shape_of(QUrl(QString::fromUtf8(u)));
+		};
+		const QString b1 = sh("https://dx.ad.example/sbx/b/3NIK470KmUnKT_H_wS_6n362KdYJPjG4Fwi0");
+		const QString b2 = sh("https://dx.ad.example/sbx/b/kYBjpiJEbuboTnCUzuVwswf8Xayjd1Xe8qRk");
+		check(b1 == b2, "two beacons with different long path tokens are one shape");
+
+		// And the folding must not swallow what a manifest is recognised by. All
+		// three measured sites' manifests stay distinct from each other and from
+		// their neighbours -- an earlier version of this collapsed
+		// `cf-master.1774687168.txt` whole, because the token ran through the
+		// dots, and that erased the only thing naming it.
+		const QString m1 = sh("https://cdn.example/v4/db/r3rqgi/cf-master.1774687168.txt?k=a&kx=1");
+		const QString m2 = sh("https://cdn.example/v4/db/r3rqgi/index-f1-v1-a1.txt?k=a&kx=1");
+		const QString m3 = sh("https://kc.example/cdn/hls/f04a166fb1fea9f053518416e03561a4/master.txt");
+		const QString m4 = sh("https://kc.example/cdn/hls/f04a166fb1fea9f053518416e03561a4/index.txt");
+		check(m1 != m2, "a master playlist and its variant stay distinct");
+		check(m3 != m4, "even when the directory name is a 32-character hash");
+		check(m1.contains("cf-master"), "and the manifest keeps the name it is known by");
+		check(m3.contains("master"), "on both spellings of it");
+
+		// Ordinary long path words are not tokens. Only mixed letters-and-digits
+		// runs fold, so a component named for what it does keeps its name.
+		const QString a = sh("https://kc.example/player/assets/SubtitleManager.js");
+		check(a.contains("SubtitleManager"),
+		      "a long word with no digits in it is left alone");
+
+		// A real segment flood still folds, which is what the rule was for.
+		check(sh("https://cdn.example/v4/db/x/seg-1-f1-v1-a1.woff2?k=a") ==
+		          sh("https://cdn.example/v4/db/x/seg-22-f1-v1-a1.woff2?k=b"),
+		      "and numbered segments fold as they always did");
+	}
+
 	section("noticing a page that checks for an ad blocker");
 	{
 		// Measured, not imagined: this is what a real watch page loaded while
