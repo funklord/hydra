@@ -4,6 +4,7 @@
 #include "web_view_backend.h"
 #include "web_view_factory.h"
 
+#include <QHash>
 #include <QUrl>
 
 class QLabel;
@@ -38,13 +39,18 @@ class android_view : public web_view_backend {
 	Q_OBJECT
 public:
 	explicit android_view(QWidget *parent = nullptr);
+	~android_view() override;
+
+	// Called from JNI, on Android's UI thread. Static because JNI has nowhere
+	// to put a `this`; the id is how it finds its way back.
+	static void report_url(qint64 id, const QString &url);
 
 	QWidget *widget() override;
 	QUrl url() const override { return m_url; }
 	void load(const QUrl &url) override;
-	void back() override {}
-	void forward() override {}
-	void reload() override {}
+	void back() override;
+	void forward() override;
+	void reload() override;
 
 	void apply_settings(const view_settings &s) override { Q_UNUSED(s) }
 	void set_permission_decider(permission_decider fn) override { m_decider = std::move(fn); }
@@ -59,8 +65,19 @@ public:
 	QByteArray save_state() const override;
 	bool       restore_state(const QByteArray &blob) override;
 
+protected:
+	// The native view lives outside Qt's widget tree, so it has to be told
+	// where to be, every time this widget moves, resizes, or is covered.
+	bool eventFilter(QObject *o, QEvent *e) override;
+
 private:
 	void refresh();
+	void sync_geometry();
+	void on_url_from_java(const QString &url);
+
+	static QHash<qint64, android_view *> s_views;
+	qint64 m_id = 0;
+	bool   m_native = false;   // false when there is no WebView to talk to
 
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;

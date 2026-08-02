@@ -2862,11 +2862,49 @@ same tree with the same flags.
   (`SP_ArrowBack`, `SP_ArrowForward`, `SP_BrowserReload`), which is both better
   looking and not a bet on what fonts a platform ships. Verified on the device.
 
-**What it does not do:** browse. The System WebView backend, `shouldIntercept
-Request` wired to the shared `request_filter`, `addJavascriptInterface` for the
-content scripts, and `shouldOverrideUrlLoading` for `magnet:` are all still to
-write (§19.2, §19.5). What is gone is every question about whether the *rest* of
-the program can go there — it is there, and it starts.
+### The System WebView: built, and it does not paint
+
+Attempted, and the state is worth recording precisely because the next attempt
+should not start where this one did.
+
+`HydraWebView.java` creates a real `android.webkit.WebView`, adds it to the
+Activity's content view, and takes geometry, load, back/forward/reload and
+visibility from C++ over JNI; `android_view` syncs it to the widget's rect on
+every move, resize, show and hide, in device pixels (Qt reports logical ones and
+Android's layout wants physical — a factor of three on a phone). A JNI callback
+carries the page's url back onto the Qt thread. All of that works: no
+exceptions, no crashes, and the WebView plainly exists because it covers the
+placeholder with its own white background.
+
+**It does not render.** Three things were tried and the first two were real
+progress:
+
+1. The renderer process died immediately. Isolated properly rather than guessed:
+   the stock *WebView Browser Tester* on the same emulator loaded the same page
+   with no complaint, so the fault was ours. A **software layer**
+   (`LAYER_TYPE_SOFTWARE`) stopped the crashes — a hardware-accelerated WebView
+   composited over Qt's own GL surface is what it objected to.
+2. Z-order: `bringToFront()` and `setZ()`. No change.
+3. Still a blank rectangle.
+
+**So it is off by default**, behind `HYDRA_ANDROID_WEBVIEW=1`, and the honest
+placeholder is what a user sees. That is the point of the gate: a blank white
+area with no explanation is exactly the failure the placeholder was written to
+prevent, and shipping it on would make the app look broken rather than
+unfinished.
+
+**Where the next attempt should start.** Not with another Z-order guess. Qt for
+Android draws into its own `QtSurface`, and how a foreign view stacks with it is
+a fact about Qt's view hierarchy that can be read rather than probed — the
+question is whether the WebView must live *inside* `QtLayout` rather than be
+added to the Activity, and whether Qt's surface needs `setZOrderMediaOverlay`.
+Three guesses cost more than reading it will.
+
+**What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
+`request_filter`, `addJavascriptInterface` for the content scripts, and
+`shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and
+none of them are blocked by this — they are Java-side work that plugs into
+C++ that already exists.
 
 ## What is next (in order)
 
