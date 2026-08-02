@@ -17,7 +17,32 @@ set(CMAKE_AUTORCC ON)
 # instead of a confusing compile error. Developed and tested against 6.8.2.
 # Qml is here for QJSEngine only — the sandbox that runs generated site
 # extractors (architecture doc §11.5). No QML is used anywhere in the UI.
-find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets WebEngineWidgets Network WebChannel Qml)
+# Qt WebEngine is desktop-only, and that is not a packaging accident: it does
+# not exist for Android at all (architecture doc §19.2), which was verified
+# against the installed kits rather than assumed -- `libQt6WebEngine*` is absent
+# from every Android ABI and present twenty times over on the desktop one. So
+# the component is required where it exists and simply not asked for where it
+# does not, and the WebViewBackend seam supplies the difference.
+set(HYDRA_QT_COMPONENTS Widgets Network WebChannel Qml)
+if(NOT ANDROID)
+    list(APPEND HYDRA_QT_COMPONENTS WebEngineWidgets)
+endif()
+find_package(Qt6 6.4 REQUIRED COMPONENTS ${HYDRA_QT_COMPONENTS})
+
+# The only files that name a browser engine. Everything else in this list is
+# platform-neutral, which is the property step 3.5 exists to preserve -- and the
+# reason an Android build is a new pair of files here rather than a fork.
+if(ANDROID)
+    set(HYDRA_BACKEND_SOURCES)   # the System WebView backend goes here (§19.2)
+else()
+    set(HYDRA_BACKEND_SOURCES
+        src/qtwebengine_view.cpp
+        src/qtwebengine_view.h
+        src/qtwebengine_factory.cpp
+        src/qtwebengine_factory.h
+        src/qtwebengine_interceptor.cpp
+        src/qtwebengine_interceptor.h)
+endif()
 
 # libsodium is optional: without it the KeePassXC bridge reports itself
 # unusable (the protocol is end-to-end encrypted, so there is no degraded
@@ -174,17 +199,15 @@ add_executable(hydra
     # implementation, and an Android one slots in beside it later.
     src/web_view_backend.h
     src/web_view_factory.h
-    src/qtwebengine_view.cpp
-    src/qtwebengine_view.h
-    src/qtwebengine_factory.cpp
-    src/qtwebengine_factory.h
-    src/qtwebengine_interceptor.cpp
-    src/qtwebengine_interceptor.h
+    ${HYDRA_BACKEND_SOURCES}
 )
+
+if(NOT ANDROID)
+    target_link_libraries(hydra PRIVATE Qt6::WebEngineWidgets)
+endif()
 
 target_link_libraries(hydra PRIVATE
     Qt6::Widgets
-    Qt6::WebEngineWidgets
     Qt6::Network
     Qt6::WebChannel
     Qt6::Qml

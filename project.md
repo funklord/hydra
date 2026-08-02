@@ -484,8 +484,11 @@ the outline file passed on the command line.
 
 ## The WebView seam (step 3.5, done)
 
-The shell no longer names Qt WebEngine anywhere — `grep QWebEngine src/` hits
-only the four `qtwebengine_*` files, and `main_window.{h,cpp}` is clean. The
+The shell no longer uses Qt WebEngine anywhere — `grep QWebEngine src/` hits
+only the four `qtwebengine_*` files plus two *comments* in the seam headers
+explaining what the desktop side does, and `main_window.{h,cpp}` is clean. (The
+comments are worth mentioning because the grep is offered here as a check, and
+someone running it and seeing six files would reasonably doubt the claim.) The
 shape:
 
 - `web_view_backend` — one rendered page: load, back/forward/reload,
@@ -2816,6 +2819,48 @@ page.
    code will have seen a Qt newer than 6.8.2, and re-run `try_permissions`
    there to find out whether the geolocation result is Qt's behaviour or this
    packaging's.
+
+   **The configure has been tried, and it gets exactly as far as the design
+   said it would.** Two flags are needed and neither is obvious:
+
+   ```sh
+   ~/Qt/6.11.1/android_arm64_v8a/bin/qt-cmake -S . -B build-android \
+       -DQT_HOST_PATH=$HOME/Qt/6.11.1/gcc_64 \
+       -DANDROID_NDK_ROOT=$HOME/android-ndk-r29
+   ```
+
+   `QT_HOST_PATH` because a cross build needs the *host* Qt's tools and
+   otherwise picks up the system 6.8.2 ones, which it then rejects — the error
+   names `Qt6WidgetsTools`, not the host path, so it reads as a missing Widgets
+   module. `ANDROID_NDK_ROOT` because the kit's toolchain file points at
+   `/opt/android/android-ndk-r27c`, which does not exist here. **Note the
+   version gap**: that path says Qt 6.11 expects NDK r27c and r29 is what is
+   installed, which is worth remembering when something odd happens later.
+
+   With those two set, it failed on `find_package(... WebEngineWidgets)` — the
+   Android kits ship no WebEngine, exactly as §19.2 says. **That first step is
+   now taken**: the engine component and the four `qtwebengine_*` files are
+   behind `if(ANDROID)`, with an empty `HYDRA_BACKEND_SOURCES` where the System
+   WebView backend will go. Desktop configures and builds unchanged, which is
+   the property that matters — the seam was supposed to make this a two-line
+   split and it was.
+
+   **The next blocker is not Android's, it is the install's.** Configure now
+   stops on `WebChannel`, and that component is missing from *both* kits in
+   `~/Qt/6.11.1` — there is no `Qt6WebChannel` CMake package for the desktop
+   kit either. It is an installer component that was not ticked, not something
+   Android lacks; Qt ships WebChannel for Android perfectly well. **Add Qt
+   WebChannel in the Qt Maintenance Tool for both the desktop and the Android
+   kits** and this moves on. (The desktop build here is unaffected because it
+   uses the *system* Qt 6.8.2, which has it.)
+
+   Worth knowing for when the port is written: `QWebChannel` is what the
+   autofill, picker, MSE and consent bridges ride on, and Android's System
+   WebView has no equivalent — `addJavascriptInterface` over JNI is the
+   counterpart. That is behind the seam already (`set_script_bridge`), so it is
+   a backend concern rather than a shell one. Checked while here: the mentions
+   of `QWebChannel` in `mse_tap.h` and `filter_signals.h` are comments, not
+   includes, so nothing outside the backend is coupled to it.
 
 ## Sharing rule sets: the transport is open, and deliberately
 
