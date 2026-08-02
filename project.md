@@ -39,6 +39,28 @@ whatever you are touching.
 | Ollama | installed user-local at `~/.local/ollama` (release tarball, no root). **Not running** — start with `~/.local/ollama/bin/ollama serve` |
 | models | `~/.ollama/models`, ~13.7 GB: `qwen2.5-coder:7b` and `:14b` |
 | inference | **CPU-only.** Ollama drops the integrated Intel GPU, so it is 12 cores / ~29 GB. A 14B proposal takes a minute or two; 32B is not viable |
+| `~/Qt/6.11.1` | Qt online-installer kits: `gcc_64` (desktop, **with** WebEngine) and `android_arm64_v8a` / `armv7` / `x86` / `x86_64` |
+| `~/android-ndk-r29` | NDK r29 (29.0.14206865) |
+
+**The Android prerequisites arrived, and they confirm §19.2 rather than change
+it.** Checked rather than assumed: the Android kits ship **no WebEngine at all**
+— `libQt6WebEngine*` is absent from every ABI, while the desktop kit has twenty
+of them. So the `web_view_backend` seam is not a nicety for a hypothetical
+future; it is the only way this builds for Android, exactly as designed in step
+3.5.
+
+Two things the desktop `gcc_64` kit makes newly checkable, neither yet done:
+
+- **Whether the app still builds against 6.11.** The system Qt here is 6.8.2, so
+  everything measured in this file is 6.8.2. The deprecated permissions path
+  (§"Build-verification state") is still present in 6.11.1 — verified in the
+  header, behind `QT_DEPRECATED_SINCE(6, 8)` — so it should compile with
+  warnings rather than break, and `permissionRequested` / `QWebEnginePermission`
+  is the named replacement. Worth an actual build before believing it.
+- **Whether the geolocation gap is Qt's or the build's.** `try_permissions`
+  records that a *granted* geolocation request still ends as PERMISSION_DENIED
+  here because this build has no location provider. A second Qt build is the
+  cheapest way to find out whether that is universal or packaging.
 
 ### ⚠️ Do not build with unbounded `-j`
 
@@ -2676,10 +2698,36 @@ what the gate will accept. Being wrong costs one request. That is a very
 different risk from putting the same guess in the extractor itself.
 
 Verified on all three captures rather than tuned until two passed: **each site's
-manifest is now the first thing asked about on its host.** Two of the three still
-answer HLS from stale evidence; the third's manifest has since started returning
-HTML, which is the recapture trap this file already documents rather than a
-ranking failure.
+manifest is now the first thing asked about on its host.** Two of the three
+answer HLS.
+
+**The third did not, and it was our apparatus rather than the site — now
+fixed.** On a fresh capture the probe reached `master.txt` and was told
+`text/html`, opening bytes not a stream, while `curl` fetching the same url at
+the same moment got `text/plain` and `#EXTM3U`. It got it with the page's
+referer, with the player's own, with none, with a Chrome user-agent, with none,
+and with the same 2 KB `Range`: six variants right, and the one wrong was ours.
+
+Reasoning about which header it might be had failed twice, so the two requests
+were put on the wire and read. **We were sending no `Accept` header at all**,
+where curl sends `Accept: */*`. That CDN treats a request without one as a bot
+and answers with an HTML interstitial — 200, `text/html`, no `#EXTM3U`, which
+looks exactly like a manifest that has expired.
+
+```
+ours:  GET … range: … referer: … accept-encoding: zstd, br, gzip, deflate
+curl:  GET … Range: … Accept: */*
+```
+
+Both `stream_probe` and the §11.5.1 fetcher send `Accept: */*` now, before any
+caller-supplied headers so an extractor that sets its own still wins. The
+manifest answers **HLS** on that site immediately afterwards.
+
+The lesson is the one this file keeps relearning in new clothes. The probe was
+not misreporting what it received; it was *receiving something different*, and
+the cause was not in any of the four inputs anyone thinks to check — it was in
+what we failed to send. Two rounds of hypothesis cost more than one round of
+looking would have.
 
 ## First-load flicker (fixed)
 
@@ -2755,8 +2803,19 @@ page.
    is blocked on the `--host-resolver-rules` problem recorded above. This
    project's defect history is almost entirely in this category — see the
    cautions at the top of this file.
-5. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
-   Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
+5. **Android phase — no longer blocked on tooling.** `~/Qt/6.11.1` carries all
+   four Android ABIs and `~/android-ndk-r29` is present, so the reason this was
+   deferred (nothing to build with) is gone; what remains is the work itself.
+   The seam is ready and the constraint is confirmed rather than assumed — the
+   Android kits ship no WebEngine, so the System WebView backend is the first
+   piece, then the adaptive drawer layout, Intent-based player handoff, Android
+   Autofill and SAF downloads (arch §19).
+
+   Two cheaper things come first and are worth doing before any of that: build
+   the desktop app against 6.11's `gcc_64` kit, which is the first time this
+   code will have seen a Qt newer than 6.8.2, and re-run `try_permissions`
+   there to find out whether the geolocation result is Qt's behaviour or this
+   packaging's.
 
 ## Sharing rule sets: the transport is open, and deliberately
 

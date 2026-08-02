@@ -95,6 +95,15 @@ void stream_probe::probe(const QUrl &url, const stream_context &ctx,
 	                  QNetworkRequest::NoLessSafeRedirectPolicy);
 	// Ask for the opening bytes only. A server that ignores Range sends the
 	// whole thing, so the read is capped below as well.
+	// Say what we will take. A browser fetching a manifest sends `Accept: */*`
+	// and Qt sends nothing at all, and one measured CDN treats a request with no
+	// Accept as a bot and answers with an HTML interstitial instead of the
+	// playlist -- 200, `text/html`, no `#EXTM3U`. That looked exactly like a site
+	// whose manifest had expired, and cost a diagnosis: curl was right six ways
+	// and the probe was wrong, and none of referer, user-agent or Range was the
+	// difference. Set before the caller's own headers so an extractor that
+	// supplies its own Accept still wins.
+	req.setRawHeader("Accept", "*/*");
 	req.setRawHeader("Range",
 	                  QByteArray("bytes=0-") + QByteArray::number(k_sniff_bytes - 1));
 	if (!ctx.referer.isEmpty())

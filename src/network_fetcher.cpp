@@ -25,6 +25,11 @@ public slots:
 		QNetworkRequest req(url);
 		req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
 		                  QNetworkRequest::NoLessSafeRedirectPolicy);
+		// See stream_probe: a request with no Accept header is treated as a bot
+		// by at least one CDN, which answers with an HTML page rather than the
+		// thing asked for. The helper tier fetches the same kinds of address, so
+		// it wants the same header.
+		req.setRawHeader("Accept", "*/*");
 		if (max_bytes > 0)
 			req.setRawHeader("Range", QByteArray("bytes=0-") +
 			                            QByteArray::number(max_bytes - 1));
