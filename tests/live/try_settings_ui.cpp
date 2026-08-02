@@ -28,6 +28,7 @@
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QComboBox>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QSettings>
 #include <QStackedWidget>
@@ -76,6 +77,46 @@ int main(int argc, char **argv) {
 	check(pages->currentIndex() == 2, "choosing a category shows its page");
 	cats->setCurrentRow(0);
 	check(pages->currentIndex() == 0, "and going back shows the first again");
+
+	section("finding a setting without knowing which page it is on");
+	{
+		// What makes a category list scale. Six pages is already more than
+		// anyone will read through to find one switch, which is why Firefox and
+		// Chrome both have this.
+		auto *search  = dlg.findChild<QLineEdit *>("settings_search");
+		auto *results = dlg.findChild<QListWidget *>("settings_results");
+		check(search && results, "there is a search box");
+		check(results && !results->isVisible(),
+		      "showing nothing until something is typed");
+
+		search->setText("cookie");
+		check(results->count() > 0, "typing finds matches");
+		bool mentions_page = false;
+		for (int i = 0; i < results->count(); ++i)
+			if (results->item(i)->text().contains("Privacy"))
+				mentions_page = true;
+		check(mentions_page,
+		      "and each says which page it is on, since that is the question");
+
+		// A result has to take you there, or it has answered nothing.
+		search->setText("Kiosk");
+		bool jumped = false;
+		for (int i = 0; i < results->count(); ++i) {
+			const int page = results->item(i)->data(Qt::UserRole).toInt();
+			if (cats->item(page)->text() == "Kiosk") {
+				emit results->itemActivated(results->item(i));
+				jumped = (pages->currentIndex() == page);
+				break;
+			}
+		}
+		check(jumped, "choosing a result switches to its page");
+
+		search->setText("zzzzz");
+		check(results->count() == 0 && !results->isVisible(),
+		      "and nothing matching hides the list rather than leaving it stale");
+		search->clear();
+		cats->setCurrentRow(0);
+	}
 
 	section("every per-site feature is reachable here");
 	{

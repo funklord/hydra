@@ -123,12 +123,49 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// Say it once, and say what the lever is. A page that will not run because
 	// we block ads is indistinguishable from a broken site unless we tell them,
 	// and only we know it was us.
+	// A page that refuses to run because we block ads is fixed rather than
+	// merely reported, and said out loud. The alternative -- telling the user
+	// the shield exists and leaving them to it -- was tried first and is worse:
+	// the message is easy to miss and the page stays broken, which reads as a
+	// broken browser.
+	//
+	// Three things keep this from being presumptuous. It never overrides a
+	// choice the user made for that site; it writes an ordinary per-site rule
+	// the shield shows and can revert; and it happens once per site per session,
+	// so a page that keeps asking cannot put the browser in a reload loop.
 	connect(m_antiadblock, &antiadblock_watch::detected, this,
 	         [this](const QString &host, const QString &what) {
+		if (host.isEmpty())
+			return;
+		// An explicit per-site rule is the user speaking. Someone who blocked
+		// ads on this site *knowing* it might break is not to be second-guessed
+		// by the thing that noticed it broke.
+		if (m_policy->setting_for(host, policy::feature::ads) !=
+		        policy::setting::unset) {
+			m_status->showMessage(
+			    QString("%1 is checking for an ad blocker (%2). Your own setting "
+			             "for this site is left as it is.").arg(host, what), 9000);
+			return;
+		}
+		if (m_antiadblock_fixed.contains(host))
+			return;
+		m_antiadblock_fixed.insert(host);
+
+		m_policy->set_setting(host, policy::feature::ads, policy::setting::allow);
 		m_status->showMessage(
-		    QString("%1 is checking for an ad blocker (%2). If the page does not "
-		             "work, allow ads for this site in the shield.")
-		        .arg(host, what), 12000);
+		    QString("%1 would not run with ads blocked (%2), so ads are now "
+		             "allowed for this site and it is being reloaded — undo it "
+		             "in the shield.").arg(host, what), 15000);
+
+		// The allowance only affects requests from here on, and the page has
+		// already been assembled without them, so it has to be loaded again or
+		// the fix is invisible. Once per site, by the guard above.
+		if (web_view_backend *v = current_view()) {
+			if (v->url().host() == host) {
+				apply_policy(v, host);
+				v->reload();
+			}
+		}
 	});
 	// Non-empty from the start: a view can be built before any tree is loaded,
 	// and an empty rule set is a blocker that silently does nothing.

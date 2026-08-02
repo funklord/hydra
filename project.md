@@ -711,11 +711,26 @@ thing to keep true (§10). When a page fetches a script whose only job is to
 detect a blocker, the status bar says so once and names the lever: the shield's
 per-site ads setting.
 
-**It reports; it does not decide.** Turning ads back on for a site is a real
-tradeoff and the user already has the control — what was missing was any way to
-know that is the control. Whether it should go further, offering or applying the
-change the way the consent blocker relaxes cookies, is a decision left open
-rather than made quietly.
+**It fixes the page and says so** — decided, not assumed. Reporting alone was
+built first and is worse than it sounds: the message is easy to miss, the page
+stays broken, and a broken page reads as a broken browser rather than a blocked
+one. So the site's ads setting is relaxed, the page is reloaded, and the status
+bar says what happened and where to undo it.
+
+Three things keep that from being presumptuous, and each is checked:
+
+- **A choice the user made is never overridden.** An explicit per-site rule means
+  someone blocked ads there knowing it might break, and the thing that noticed it
+  broke does not get to second-guess them.
+- **It is a per-site rule**, so the global default is untouched — this cannot
+  quietly stop blocking everywhere.
+- **Once per site per session.** A page that keeps checking cannot put the
+  browser in a reload loop.
+
+The reload is not decoration: the allowance only affects requests from then on,
+and the page has already been assembled without them, so without loading it
+again the fix is invisible. Seven checks (`tests/live/try_adblock_fix`), driven
+against a page that pulls in a detector.
 
 **Nothing matches on the word "ad", deliberately.** This message tells someone to
 lower their protection, so a false positive is not cosmetic. It matches the file
@@ -1401,6 +1416,21 @@ reason filter removal is.
 **Ten checks**, including the two that keep the scope decision honest: a generic
 rule says in words that it should be shipped, a rule tied to one host does not,
 and the clipboard contains the first and not the second.
+
+### Searching the settings
+
+What makes a category list scale, and both Firefox and Chrome have it: six pages
+is already more than anyone will read through to find one switch.
+
+**The index is built by walking the pages after they are constructed**, not
+declared beside each control. A registry someone has to remember to add to is a
+registry that goes stale, and the whole point of a search box is finding the
+setting whose name nobody could remember. Labels, group titles, checkbox text
+and the labels attached to form rows are between them every word worth typing.
+
+Each result says which page it is on, because that is the question being asked,
+and choosing one **reveals the control** rather than dropping the reader at the
+top of a long page — a form row's label points at its control, not at itself.
 
 The settings window is six pages: Privacy & security, Media & players,
 Downloads, Filters, Kiosk, AI.

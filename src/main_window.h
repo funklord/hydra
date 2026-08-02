@@ -9,6 +9,7 @@
 #include <QHash>
 #include <QElapsedTimer>
 #include <QUrl>
+#include <QSet>
 #include <QStringList>
 #include <QString>
 
@@ -184,6 +185,9 @@ private:
 	autofill_controller *m_autofill     = nullptr;
 	consent_blocker     *m_consent      = nullptr;
 	antiadblock_watch   *m_antiadblock  = nullptr;
+	// Sites already fixed this session, so a page that keeps checking cannot
+	// put the browser in a reload loop.
+	QSet<QString>        m_antiadblock_fixed;
 	QString              m_site_rules_path;
 	QAction            *m_media_action  = nullptr;
 	QString             m_filters_path;

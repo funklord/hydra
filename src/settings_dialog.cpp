@@ -6,12 +6,14 @@
 #include "player_launcher.h"
 #include "torrent_download_source.h"
 
+#include <QAbstractButton>
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QAbstractButton>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
@@ -255,6 +257,15 @@ settings_dialog::settings_dialog(player_launcher *players,
 	auto *split = new QHBoxLayout;
 	outer->addLayout(split, 1);
 
+	// Firefox and Chrome both let preferences be searched, and it is what makes
+	// a category list scale: six pages is already more than anyone will read
+	// through to find one switch.
+	m_search = new QLineEdit(this);
+	m_search->setObjectName("settings_search");
+	m_search->setPlaceholderText("Find a setting…");
+	m_search->setClearButtonEnabled(true);
+	outer->addWidget(m_search);
+
 	m_categories = new QListWidget(this);
 	m_categories->setObjectName("categories");
 	m_categories->setMaximumWidth(190);
@@ -314,6 +325,39 @@ settings_dialog::settings_dialog(player_launcher *players,
 	add_page(ai_tab, "AI");
 	m_categories->setCurrentRow(0);
 
+	// Indexed after the pages are built, so what is searchable is whatever was
+	// actually put on them.
+	for (int i = 0; i < stack->count(); ++i)
+		index_pages(stack->widget(i), i);
+
+	m_results = new QListWidget(this);
+	m_results->setObjectName("settings_results");
+	m_results->setMaximumHeight(140);
+	m_results->hide();
+	outer->insertWidget(1, m_results);
+	connect(m_search, &QLineEdit::textChanged, this, &settings_dialog::run_search);
+	connect(m_results, &QListWidget::itemActivated, this,
+	         [this](QListWidgetItem *it) {
+		const int page = it->data(Qt::UserRole).toInt();
+		m_categories->setCurrentRow(page);
+		// Show the control, not merely its page. A result that drops you at the
+		// top of a long page has answered a different question than the one
+		// asked.
+		if (auto *w = it->data(Qt::UserRole + 1).value<QWidget *>()) {
+			w->setFocus(Qt::OtherFocusReason);
+			if (auto *area = qobject_cast<QScrollArea *>(
+			        m_categories->parentWidget()))
+				Q_UNUSED(area)
+			for (QWidget *p = w->parentWidget(); p; p = p->parentWidget())
+				if (auto *sa = qobject_cast<QScrollArea *>(p)) {
+					sa->ensureWidgetVisible(w);
+					break;
+				}
+		}
+	});
+	connect(m_results, &QListWidget::itemClicked, m_results,
+	         &QListWidget::itemActivated);
+
 	auto *buttons = new QDialogButtonBox(
 		QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
 	connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
@@ -335,6 +379,57 @@ settings_dialog::settings_dialog(player_launcher *players,
 
 	load();
 	load_kiosk();
+}
+
+void settings_dialog::index_pages(QWidget *page, int page_index) {
+	// Labels, group titles, checkboxes and the labels QFormLayout attaches to a
+	// control: between them that is every word a person could search for. The
+	// widget recorded is the thing to reveal, which for a form row is the
+	// control rather than its label.
+	for (QWidget *w : page->findChildren<QWidget *>()) {
+		QString text;
+		if (auto *b = qobject_cast<QAbstractButton *>(w))       text = b->text();
+		else if (auto *g = qobject_cast<QGroupBox *>(w))        text = g->title();
+		else if (auto *l = qobject_cast<QLabel *>(w))           text = l->text();
+		if (text.trimmed().isEmpty() || text.size() > 120)
+			continue;
+		text.remove('&');
+		QWidget *target = w;
+		if (auto *l = qobject_cast<QLabel *>(w)) {
+			if (l->buddy())
+				target = l->buddy();
+			// A wall of explanatory prose is not a setting. Anything long is
+			// indexed for its words but points at itself, which is fine.
+		}
+		m_index.append({ text.simplified(), page_index, target });
+	}
+}
+
+void settings_dialog::run_search(const QString &text) {
+	const QString q = text.trimmed();
+	m_results->clear();
+	if (q.size() < 2) {
+		m_results->hide();
+		return;
+	}
+	QSet<QString> seen;
+	for (const searchable &s : m_index) {
+		if (!s.text.contains(q, Qt::CaseInsensitive))
+			continue;
+		const QString key = s.text + "|" + QString::number(s.page);
+		if (seen.contains(key))
+			continue;
+		seen.insert(key);
+		auto *it = new QListWidgetItem(
+			QString("%1  —  %2").arg(s.text.left(70),
+			                          m_categories->item(s.page)->text()),
+			m_results);
+		it->setData(Qt::UserRole, s.page);
+		it->setData(Qt::UserRole + 1, QVariant::fromValue(s.widget));
+		if (m_results->count() >= 12)
+			break;
+	}
+	m_results->setVisible(m_results->count() > 0);
 }
 
 void settings_dialog::build_privacy_page(QWidget *page) {

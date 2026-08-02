@@ -65,6 +65,8 @@ private:
 	void build_filter_page(QWidget *page);
 	void rebuild_filter_list();
 	void rebuild_site_rules();
+	void index_pages(QWidget *page, int page_index);
+	void run_search(const QString &text);
 	void load_kiosk();
 	void apply_kiosk();
 	void build_player_page(QWidget *page);
@@ -101,6 +103,14 @@ private:
 	// One combo per policy feature, indexed by the enum, so a feature added to
 	// the model turns up here without anyone remembering to add a row.
 	QListWidget          *m_categories = nullptr;
+	QLineEdit            *m_search      = nullptr;
+	QListWidget          *m_results     = nullptr;
+	// Everything findable, gathered by walking the built pages rather than
+	// declared alongside each control: a registry someone has to remember to
+	// add to is a registry that goes stale, and the point of a search box is
+	// that it finds the setting nobody could remember the name of.
+	struct searchable { QString text; int page; QWidget *widget; };
+	QList<searchable>     m_index;
 	QLineEdit            *m_kiosk_home   = nullptr;
 	QSpinBox             *m_kiosk_w      = nullptr;
 	QSpinBox             *m_kiosk_h      = nullptr;
