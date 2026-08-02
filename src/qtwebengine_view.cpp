@@ -159,7 +159,8 @@ bool qtwebengine_view::restore_state(const QByteArray &blob) {
 	return ds.status() == QDataStream::Ok;
 }
 
-void qtwebengine_view::inject_script(const QString &name, const QString &source) {
+void qtwebengine_view::inject_script(const QString &name, const QString &source,
+                                      bool subframes) {
 	QWebEngineScript s;
 	s.setName(name);
 	s.setSourceCode(source);
@@ -167,13 +168,12 @@ void qtwebengine_view::inject_script(const QString &name, const QString &source)
 	// runs; and an isolated world so the page cannot read or rewrite it (§13.2).
 	s.setInjectionPoint(QWebEngineScript::DocumentCreation);
 	s.setWorldId(QWebEngineScript::ApplicationWorld);
-	// Top frame only, and for two separate reasons. Credentials and picked
-	// elements must not be reachable from a third-party iframe. And it could not
-	// currently be otherwise even where that would help: Qt installs
-	// `qt.webChannelTransport` in the main frame alone, so a content script in a
-	// subframe has nothing to connect a QWebChannel to — measured, see the MSE
-	// relay note in project.md.
-	s.setRunsOnSubFrames(false);
+	// Off by default: credentials and picked elements must not be reachable from
+	// a third-party iframe. Where it is on, the script has to survive without a
+	// bridge — Qt installs `qt.webChannelTransport` in the main frame alone, so
+	// a content script in a subframe has nothing to connect a QWebChannel to and
+	// must talk to the top frame instead. Measured; see project.md.
+	s.setRunsOnSubFrames(subframes);
 	m_page->scripts().insert(s);
 }
 

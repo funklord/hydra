@@ -825,6 +825,37 @@ free-text field is a `.*` waiting to happen. And it says in front of the person
 accepting that the rule is generic and flagged for the built-ins: they are not
 fixing one site, they are proposing something everyone would carry.
 
+### A CMP shipped as an iframe
+
+The first version was top-frame only, and a banner inside a cross-origin iframe
+was simply left standing — which is not a corner case, because delivering the
+dialog *as* an iframe is how CMP vendors ship them. Found by asking, straight
+after the same question was answered badly for the MSE tap: the shape of the
+mistake was already known, so this time it took one fixture rather than an
+afternoon.
+
+The script runs on subframes now, and a frame has no bridge to talk to — Qt puts
+the channel transport in the main frame alone. So the two halves speak to each
+other. The top frame is the only one that asks C++ anything; a child asks *it*
+for the rules and hands its dismissals back up. Two properties hold that
+together:
+
+- **The top frame decides whether to act, once, for the page.** It only answers a
+  child after C++ has said this page is one to act on, so a frame cannot talk it
+  into working on a site where the user turned the option off.
+- **A frame cannot report on behalf of a site it is not on**, because the host
+  C++ files under is the shell's and never the message's — the same rule that
+  governs autofill and the tap.
+
+This is also what earns `inject_script` its `subframes` flag. It was written
+once during the tap work, had no consumer that could use it, and was reverted
+rather than left as dead API; this is a consumer, so it is back.
+
+**One cost, stated:** the rules are posted into the child frame, so page script
+in that frame can read them. They are a public corpus by intent — the direction
+here is that they are shared — but it is worth knowing they are readable rather
+than discovering it later.
+
 **The rules are fetched per page rather than substituted at injection**, which is
 what makes a rule learned a minute ago work now. A script with the rules baked
 in carries whatever was true when its tab was built, and re-injecting to update
@@ -838,7 +869,7 @@ text, a small number of buttons. The vendor selectors are a shortcut to the same
 answer. A fixed bar with buttons on a page that merely *mentions* cookies is
 left alone, which is checked.
 
-**Verified through the real shell, 33 checks** (`tests/live/try_consent`),
+**Verified through the real shell, 34 checks** (`tests/live/try_consent`),
 against fixture banners rather than a live CMP — pinning a test to one vendor's
 current markup measures that vendor, as §11.5 already learned. The fixtures are
 the shapes that recur and each is a different decision: one offering reject

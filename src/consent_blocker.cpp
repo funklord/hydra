@@ -97,9 +97,14 @@ const char *k_script = R"JS(
   // labels, because the observer fires repeatedly and this is one finding.
   var unanswered = function (labels) {
     var key = labels.join('|');
-    if (reported[key] || !bridge) return;
+    if (reported[key]) return;
+    if (!bridge && TOP) return;
     reported[key] = 1;
-    bridge.report_unhandled(labels.join('\t'));
+    if (bridge) bridge.report_unhandled(labels.join('\t'));
+    else
+      try {
+        window.top.postMessage({ __hydra_consent_none: labels.join('\t') }, '*');
+      } catch (e) {}
   };
 
   var act = function () {
@@ -122,6 +127,11 @@ const char *k_script = R"JS(
           try { buttons[i].click(); } catch (e) { continue; }
           done = true;
           if (bridge) bridge.report_dismissed(label.slice(0, 60), tiers[t].as);
+          else if (!TOP)
+            try {
+              window.top.postMessage({ __hydra_consent_did:
+                { label: label.slice(0, 60), as: tiers[t].as } }, '*');
+            } catch (e) {}
           // Only what the click left behind. A banner that answered properly
           // usually removes itself; what it does not always undo is the scroll
           // lock, which is what makes the page unreadable.
@@ -160,6 +170,61 @@ const char *k_script = R"JS(
       obs.observe(document.documentElement, { childList: true, subtree: true });
     setTimeout(function () { obs.disconnect(); }, 15000);
   };
+
+  var TOP = (window.top === window);
+
+  // A frame is not allowed a bridge -- Qt puts the channel transport in the main
+  // frame alone -- so the two halves speak to each other instead. The top frame
+  // is the only one that can ask C++ anything, and it answers for its children;
+  // a child asks it for the rules and hands its dismissals back. Without this a
+  // CMP shipped as an iframe, which is how vendors ship them, is simply left
+  // standing.
+  //
+  // The top frame decides *whether* to act, once, for the page. A child cannot
+  // talk it into acting on a page where the user turned this off, and cannot
+  // report on behalf of a site it is not on, because the host C++ files under is
+  // the shell's and never the message's.
+  window.addEventListener('message', function (e) {
+    if (!e || !e.data) return;
+    if (TOP && e.data.__hydra_consent_need && e.source) {
+      if (!started || !e.source.postMessage) return;
+      try {
+        e.source.postMessage({ __hydra_consent_rules: RULES }, '*');
+      } catch (err) {}
+      return;
+    }
+    if (TOP && e.data.__hydra_consent_did && bridge) {
+      var d = e.data.__hydra_consent_did;
+      bridge.report_dismissed(String(d.label || '').slice(0, 60),
+                               String(d.as || '').slice(0, 20));
+      return;
+    }
+    if (TOP && e.data.__hydra_consent_none && bridge) {
+      bridge.report_unhandled(String(e.data.__hydra_consent_none).slice(0, 400));
+      return;
+    }
+    if (!TOP && e.data.__hydra_consent_rules) {
+      if (started) return;
+      RULES = e.data.__hydra_consent_rules;
+      REJECT = rx(RULES.reject);
+      ACCEPT = rx(RULES.accept);
+      started = true;
+      begin();
+    }
+  }, true);
+
+  // In a frame there is nothing to connect to; ask upward instead, until the
+  // top frame has an answer to give.
+  if (!TOP) {
+    var tries = 0;
+    var beg = function () {
+      if (started || ++tries > 40) return;
+      try { window.top.postMessage({ __hydra_consent_need: 1 }, '*'); } catch (e) {}
+      setTimeout(beg, 250);
+    };
+    beg();
+    return;
+  }
 
   var connect = function () {
     if (!window.hydraChannel) return setTimeout(connect, 50);

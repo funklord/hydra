@@ -118,10 +118,17 @@ static const char *k_foreign = R"HTML(
 </div>
 <script>wire('cc');</script>)HTML";
 
+// The same banner, but inside a cross-origin iframe — which is where a great
+// many real consent dialogs live, since that is how a CMP vendor ships one.
+static const char *k_framed = R"HTML(
+<p>article text</p>
+<iframe src="__OTHER__/reject" width="700" height="200"></iframe>)HTML";
+
 class origin : public QTcpServer {
 public:
 	QHash<QString, QString> clicked;    // path -> label
 	QString current;
+	quint16 port = 0;
 
 	void incomingConnection(qintptr fd) override {
 		auto *s = new QTcpSocket(this);
@@ -142,8 +149,12 @@ public:
 				else if (target.startsWith("/decoy"))      inner = k_decoy;
 				else if (target.startsWith("/scrolllock")) inner = k_scrolllock;
 				else if (target.startsWith("/foreign"))    inner = k_foreign;
+				else if (target.startsWith("/framed"))     inner = k_framed;
+				QByteArray page_inner(inner);
+				page_inner.replace("__OTHER__",
+				                    "http://127.0.0.2:" + QByteArray::number(port));
 				body = QByteArray("<!doctype html><html><body><h1>page</h1>"
-				                   "<script>") + k_common + "</script>" + inner +
+				                   "<script>") + k_common + "</script>" + page_inner +
 				        "</body></html>";
 			}
 
@@ -183,9 +194,13 @@ int main(int argc, char *argv[]) {
 	          "created=2026-01-01T00:00:00 | seen=2026-01-01T00:00:00\n");
 	tf.close();
 
+	// Bound on all loopback addresses so the same server can be the page's host
+	// and a *different* host for the iframe, which is what makes the framed case
+	// genuinely cross-origin rather than a same-origin one wearing a costume.
 	origin server;
-	if (!server.listen(QHostAddress::LocalHost, 0)) return 1;
+	if (!server.listen(QHostAddress::AnyIPv4, 0)) return 1;
 	const quint16 port = server.serverPort();
+	server.port = port;
 
 	policy_engine       policy;
 	request_filter      filter(&policy);
@@ -424,6 +439,14 @@ int main(int argc, char *argv[]) {
 	                                              : qPrintable(clicked_on("/foreign")));
 	check(clicked_on("/foreign") == "Avvis alle",
 	      "the banner that could not be answered a moment ago now is");
+
+	std::printf("\n== a banner inside a cross-origin iframe ==\n");
+	load("/framed", 10000);
+	std::printf("  page clicked: %s\n",
+	             clicked_on("/framed").isEmpty() ? "(nothing)"
+	                                              : qPrintable(clicked_on("/framed")));
+	check(clicked_on("/framed") == "Reject all",
+	      "a CMP shipped as an iframe is answered like any other banner");
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

@@ -59,7 +59,14 @@ public:
 	// page cannot see or tamper with it (architecture doc §13.2). Android's
 	// System WebView has its own injection mechanism, which is why this sits on
 	// the seam instead of appearing as QWebEngineScript in the shell.
-	virtual void inject_script(const QString &name, const QString &source) = 0;
+	// `subframes` defaults off and that default is the security one: a script
+	// that fills credentials or reads a picked element must not run inside a
+	// third-party iframe. The consent blocker is the exception, because the
+	// thing it acts on is frequently *shipped* as one — a CMP in an iframe is
+	// the normal way vendors deliver them, and a top-frame-only script leaves
+	// those banners standing.
+	virtual void inject_script(const QString &name, const QString &source,
+	                            bool subframes = false) = 0;
 
 	// The same, but in the page's **own** world, and in every frame.
 	//

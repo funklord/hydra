@@ -782,7 +782,9 @@ void main_window::open_node(node *n) {
 		// cookie_notices). Same isolated world as the others: it clicks the
 		// page's own buttons, so the page must not be able to rewrite it.
 		view->set_script_bridge(m_consent, consent_blocker::bridge_name());
-		view->inject_script("hydra-consent", consent_blocker::script_source());
+		// On subframes too, which is the whole difference between answering a
+		// CMP and looking at one: vendors ship them as iframes.
+		view->inject_script("hydra-consent", consent_blocker::script_source(), true);
 		view->set_script_bridge(m_mse, mse_tap::bridge_name());
 		view->inject_script("hydra-mse-relay", mse_tap::relay_source());
 		view->inject_main_world_script("hydra-mse-hook", mse_tap::hook_source());
