@@ -3001,13 +3001,20 @@ androidx.webkit is the real answer and is a dependency decision, not a line of
 code. `inject_script`'s `subframes` flag is likewise not honoured, so the consent
 script sees less here than on the desktop, where CMPs ship as iframes.
 
-One Qt detail worth keeping. Qt 6.9 has two `QMetaMethod::invoke` overloads — a
-templated one taking real values and the older one taking `QGenericArgument` —
-and they cannot be mixed. Passing `QGenericArgument` parameters with a
-`Q_RETURN_ARG` return fails with *"cannot convert formal parameter 0"*, which
-reads like an argument bug and is really overload resolution. Arguments are only
-known at runtime here, so the `QGenericArgument` form is the one that fits and
-the return argument is built by type name to match it.
+One Qt detail worth keeping, and I got its cause wrong at first. There are two
+`QMetaMethod::invoke` overload families — a templated one taking real values and
+an older one taking `QGenericArgument` — and **they cannot be mixed**. Passing
+`QGenericArgument` parameters with a `Q_RETURN_ARG` return fails with *"cannot
+convert formal parameter 0"*, which reads like an argument bug and is really
+overload resolution picking the templated form. I first wrote this down as a
+change in a newer Qt; it is not. Both families are present in the 6.8.2 this
+builds against, and the rule is that one call uses one of them.
+
+The version that *does* matter is Qt 7: the `QGenericArgument` family is declared
+under `QT_VERSION <= QT_VERSION_CHECK(7, 0, 0)`, so it goes away, and this
+function will have to be rewritten against the templated one — which takes values
+rather than type-erased pointers, so it means dispatching on arity and type
+instead of looping. Better to know now than as a build error.
 
 ### Links that are not pages
 
@@ -3061,6 +3068,51 @@ until it is answered, so dropping one does not fail a single upload — it disab
 every file input on every later page, silently. The picker was opened, dismissed
 with Back, and opened again; the second time proves the cancel was answered.
 
+### Building against Qt 6.11, which found a real break
+
+The list said two cheap things came before the Android work: build the desktop
+against 6.11's `gcc_64` kit, and re-run `try_permissions` there. Both are done,
+and the second one earned its place.
+
+**It compiles against 6.11 with no errors** — only deprecations, and those are
+concentrated in one place: the whole `QWebEnginePage` permission API, plus
+`invalidateFilter` in the sort proxy.
+
+**Then `try_permissions` went from 11 of 11 to 7 of 11**, and the interesting
+part is that it was three different things wearing one costume.
+
+1. **A genuine break.** `featurePermissionRequested` is documented as deprecated
+   but functional. On 6.11 it is not functional for geolocation: the signal never
+   arrives, nothing answers, and the page's `getCurrentPosition` callback never
+   fires. That is worse than a refusal — a refused page moves on; a page waiting
+   on a callback that will never come just stops. Migrating to
+   `QWebEnginePermission` fixes it, behind `QT_VERSION >= 6.8` so the declared
+   floor stays honest.
+2. **A test reading a renumbered enum.** The debug line printed Qt's raw feature
+   number and the driver matched on it. `QWebEnginePermission` orders its enum
+   differently, so every number in the driver silently meant a *different*
+   permission. The line now prints our own feature name, which does not renumber
+   when an engine changes its mind, and the driver matches on that.
+3. **A word that changed, not a decision.** Chromium says `NotAllowedError` for
+   a denied device and `AbortError` when it cannot open one, and which of the two
+   `getUserMedia` reports for a refused camera differs between the Chromium in
+   6.8.2 and the one in 6.11 — same machine, same run, same decision, different
+   word. Both are refusals; the check now accepts either and prints which it saw.
+
+Only the first was a bug in Hydra. The other two were the *test* being specific
+about things that were never the point, and both would have been read as
+"upgrading Qt broke permissions".
+
+**And the open question is answered.** The geolocation result was neither Qt's
+behaviour nor the packaging's: this machine has no location provider at all —
+`org.freedesktop.GeoClue2 was not provided by any .service files`. That is why
+a granted geolocation still fails, on both versions, and it is a fact about the
+machine rather than anything to fix in the browser.
+
+Both suites pass on both Qts now, and the printed refusal word differs between
+them in the output, which is the shape a version-dependent detail should have:
+visible, named, and not asserted on.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and
@@ -3113,11 +3165,11 @@ C++ that already exists.
    piece, then the adaptive drawer layout, Intent-based player handoff, Android
    Autofill and SAF downloads (arch §19).
 
-   Two cheaper things come first and are worth doing before any of that: build
-   the desktop app against 6.11's `gcc_64` kit, which is the first time this
-   code will have seen a Qt newer than 6.8.2, and re-run `try_permissions`
-   there to find out whether the geolocation result is Qt's behaviour or this
-   packaging's.
+   **Both cheaper things are done** — see the 6.11 section above. It builds
+   there with no errors, `try_permissions` passes 11 of 11 on both Qts after one
+   real fix and two test corrections, and the geolocation result turned out to be
+   neither Qt's doing nor the packaging's: this machine has no GeoClue2 service,
+   so there is no location provider to grant access to.
 
    **The configure has been tried, and it gets exactly as far as the design
    said it would.** Two flags are needed and neither is obvious:

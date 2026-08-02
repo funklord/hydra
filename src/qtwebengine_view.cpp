@@ -5,6 +5,7 @@
 #include <QIODevice>
 #include <QWebEngineView>
 #include <QWebEnginePage>
+#include <QWebEnginePermission>
 #include <QWebEngineProfile>
 #include <QWebEngineHistory>
 #include <QWebEngineSettings>
@@ -64,11 +65,60 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 		emit render_process_gone();
 	});
 
-	// Feature permissions (geo/cam/mic/notifications) answered from the
-	// decider the shell installs. Note: featurePermissionRequested is
-	// deprecated in Qt 6.8+ but still functional; migrating to
-	// QWebEnginePermission raises the Qt floor to 6.8 and is a decision, not a
-	// cleanup — and it is now confined to this file rather than the shell.
+	// Feature permissions (geo/cam/mic/notifications) answered from the decider
+	// the shell installs.
+	//
+	// Two paths, because the API changed in 6.8 and **the old one stopped
+	// working**. `featurePermissionRequested` is documented as deprecated but
+	// functional; on 6.11 it is not, for geolocation: the signal never arrives,
+	// so nothing answers, and the page's `getCurrentPosition` callback simply
+	// never fires. That is worse than a refusal — a refused page moves on, a
+	// page waiting on a callback that will never come just stops. `try_permissions`
+	// passes 11 of 11 against 6.8.2 and fails against 6.11 on exactly the checks
+	// that need geolocation, which is how this was found rather than guessed.
+	//
+	// So: `QWebEnginePermission` where it exists, and the old signal below it for
+	// the 6.4 floor the build still claims. Both answer the same decider, so the
+	// shell above this file sees no difference.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+	connect(m_page, &QWebEnginePage::permissionRequested, this,
+	         [this](QWebEnginePermission perm) {
+		using PT = QWebEnginePermission::PermissionType;
+		const QUrl origin = perm.origin();
+		policy::feature pf;
+		switch (perm.permissionType()) {
+			case PT::Geolocation:            pf = policy::feature::geolocation;   break;
+			case PT::MediaAudioCapture:      pf = policy::feature::microphone;    break;
+			case PT::MediaVideoCapture:
+			case PT::MediaAudioVideoCapture: pf = policy::feature::camera;        break;
+			case PT::Notifications:          pf = policy::feature::notifications; break;
+			default:
+				// Nothing the policy model covers — clipboard, local fonts,
+				// desktop capture, pointer lock. Refused rather than prompted,
+				// which is the same answer the old path gave.
+				perm.deny();
+				return;
+		}
+		const bool grant = m_decider ? m_decider(origin, pf) : false;
+		// What was asked and what was answered, on request. Without this the
+		// only observable is what the page ends up seeing, and "we refused" and
+		// "we granted and the engine could not deliver" look identical from
+		// there — which cost a diagnosis once already.
+		//
+		// Our feature name, not Qt's enum number. The number was readable until
+		// 6.8 renumbered the enum underneath it, at which point a driver matching
+		// on it was quietly asking about a different permission than it thought.
+		if (qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG"))
+			qWarning("permission: %s asked for %s -> %s",
+			          qPrintable(origin.toString()),
+			          policy::feature_name(pf),
+			          grant ? "GRANTED" : "denied");
+		if (grant)
+			perm.grant();
+		else
+			perm.deny();
+	});
+#else
 	connect(m_page, &QWebEnginePage::featurePermissionRequested, this,
 	         [this](const QUrl &origin, QWebEnginePage::Feature f) {
 		policy::feature pf;
@@ -93,14 +143,20 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 		// only observable is what the page ends up seeing, and "we refused" and
 		// "we granted and the engine could not deliver" look identical from
 		// there — which cost a diagnosis once already.
+		//
+		// Our feature name, not Qt's enum number. The number was readable until
+		// 6.8 renumbered the enum underneath it, at which point a driver matching
+		// on it was quietly asking about a different permission than it thought.
 		if (qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG"))
-			qWarning("permission: %s asked for feature %d -> %s",
-			          qPrintable(origin.toString()), int(f),
+			qWarning("permission: %s asked for %s -> %s",
+			          qPrintable(origin.toString()),
+			          policy::feature_name(pf),
 			          grant ? "GRANTED" : "denied");
 		m_page->setFeaturePermission(origin, f,
 			grant ? QWebEnginePage::PermissionGrantedByUser
 			      : QWebEnginePage::PermissionDeniedByUser);
 	});
+#endif
 }
 
 QWidget *qtwebengine_view::widget() {

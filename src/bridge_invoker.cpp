@@ -146,16 +146,25 @@ QString bridge_invoker::invoke(const QString &name, const QString &method,
 		generic[i] = QGenericArgument(held[i].typeName(), held[i].constData());
 	}
 
-	// One overload for every call, chosen deliberately.
+	// One overload family for every call, chosen deliberately.
 	//
-	// Qt 6.9 has two: a templated invoke() that takes real values, and the older
-	// one that takes QGenericArgument. They cannot be mixed — passing
-	// QGenericArgument for the parameters *and* a Q_RETURN_ARG return fails with
+	// QMetaMethod::invoke comes in two: a templated one taking real values, and
+	// the older one taking QGenericArgument. **They cannot be mixed.** Passing
+	// QGenericArgument parameters together with a Q_RETURN_ARG return fails with
 	// "cannot convert formal parameter 0", which reads like an argument bug and
-	// is really an overload-resolution one. Arguments are only known at runtime
-	// here, so the QGenericArgument form is the one that fits, and the return
-	// argument is built by type name to match it. Trailing empty arguments are
-	// fine for this overload, which is why the call below is not arity-switched.
+	// is really overload resolution picking the templated form and then finding
+	// a QGenericArgument where it wanted a value.
+	//
+	// Arguments are only known at runtime here, so the QGenericArgument form is
+	// the one that fits, and the return argument is built by type name to match.
+	// Trailing empty arguments are fine for it, which is why this is not
+	// arity-switched.
+	//
+	// That form is declared under `QT_VERSION <= QT_VERSION_CHECK(7, 0, 0)`, so
+	// Qt 7 removes it and this function has to be rewritten against the
+	// templated one — which, taking values rather than type-erased pointers, will
+	// mean dispatching on arity and type rather than looping. Worth knowing
+	// before it is a build error.
 	const QMetaType ret = found.returnMetaType();
 	bool    bv = false;
 	int     iv = 0;

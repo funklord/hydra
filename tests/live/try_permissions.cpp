@@ -196,24 +196,40 @@ int main(int argc, char *argv[]) {
 			std::printf("  ours  %s\n", qPrintable(l));
 	};
 	auto got = [&](const char *what) { return server->reported.value(what); };
-	// Qt's feature numbers, which the debug line prints raw: 0 Notifications,
-	// 1 Geolocation, 2 MediaAudioCapture, 3 MediaVideoCapture.
-	auto answered = [&](int feature, const char *verdict) {
-		const QString want = QString("feature %1 -> %2").arg(feature).arg(verdict);
+	// Our own feature names, as the debug line prints them. It used to print
+	// Qt's raw enum number, and this matched on that -- until 6.8 introduced
+	// QWebEnginePermission with a differently ordered enum, at which point every
+	// number here silently meant a different permission. Names do not renumber.
+	auto answered = [&](const char *feature, const char *verdict) {
+		const QString want = QString("asked for %1 -> %2").arg(feature).arg(verdict);
 		for (const QString &l : std::as_const(g_perm_log))
 			if (l.contains(want)) return true;
 		return false;
 	};
 
+	// "Refused", as the page can tell.
+	//
+	// Chromium says `NotAllowedError` when a permission is denied and
+	// `AbortError` when it cannot open the device at all — and which of the two
+	// getUserMedia reports for a denied camera changed between the Chromium in
+	// Qt 6.8.2 and the one in 6.11: same machine, same decision, same run,
+	// different word. Neither is a grant, and the thing under test is that the
+	// page did not get the device. Matching one spelling of a refusal made a Qt
+	// upgrade look like a permissions regression.
+	auto refused = [&](const char *what) {
+		const QString v = got(what);
+		return v == "NotAllowedError" || v == "AbortError";
+	};
+
 	// 1. The §7.2 defaults: every one of these is block.
 	run_case(0, "defaults: geo, camera, microphone, notifications all blocked");
-	check(answered(0, "denied") && answered(1, "denied") &&
-	       answered(2, "denied") && answered(3, "denied"),
+	check(answered("notifications", "denied") && answered("geolocation", "denied") &&
+	       answered("microphone", "denied") && answered("camera", "denied"),
 	      "all four are refused by our decider");
 	check(got("geo") == "error-1",
 	      "geolocation is refused (PERMISSION_DENIED, not merely unavailable)");
-	check(got("mic") == "NotAllowedError", "the microphone is refused");
-	check(got("cam") == "NotAllowedError", "the camera is refused");
+	check(refused("mic"), QString("the microphone is refused (%1)").arg(got("mic")));
+	check(refused("cam"), QString("the camera is refused (%1)").arg(got("cam")));
 	check(got("notify") == "denied", "notifications are refused");
 
 	// 2. Grant geolocation for this host alone. This is the row that isolates
@@ -222,11 +238,11 @@ int main(int argc, char *argv[]) {
 	policy.set_setting("127.0.0.1", policy::feature::geolocation,
 	                    policy::setting::allow);
 	run_case(1, "geolocation allowed for this host");
-	check(answered(1, "GRANTED"), "geolocation is now granted by our decider");
-	check(answered(2, "denied") && answered(3, "denied"),
+	check(answered("geolocation", "GRANTED"), "geolocation is now granted by our decider");
+	check(answered("microphone", "denied") && answered("camera", "denied"),
 	      "while microphone and camera are still refused, so the grant is "
 	      "per-feature and the enum mapping is right");
-	check(got("mic") == "NotAllowedError",
+	check(refused("mic"),
 	      "and the page still cannot open a microphone");
 	// Deliberately not asserted: what the page sees for geolocation. This build
 	// has no location provider, so a granted request still ends as
@@ -241,11 +257,11 @@ int main(int argc, char *argv[]) {
 	policy.set_setting("127.0.0.1", policy::feature::notifications,
 	                    policy::setting::allow);
 	run_case(2, "notifications allowed for this host");
-	check(answered(0, "GRANTED"), "notifications are granted by our decider");
+	check(answered("notifications", "GRANTED"), "notifications are granted by our decider");
 	check(got("notify") == "granted",
 	      "and the page really is told granted — the one feature here whose "
 	      "end-to-end outcome the engine can actually deliver");
-	check(got("cam") == "NotAllowedError",
+	check(refused("cam"),
 	      "while the camera is still refused");
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
