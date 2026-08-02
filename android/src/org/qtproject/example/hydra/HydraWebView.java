@@ -30,6 +30,19 @@ public class HydraWebView {
 
     private static final Map<Long, WebView> VIEWS = new HashMap<>();
 
+    /**
+     * Kept so every later call can be posted to the same UI-thread queue that
+     * create() used. That ordering is the whole point: runOnUiThread is FIFO, so
+     * a load posted after a create runs after it, whereas looking the view up on
+     * the calling thread finds nothing because create() has not run yet.
+     *
+     * That was the bug. load() returned silently, the WebView sat there showing
+     * its own white background over the placeholder -- which looked exactly like
+     * a page that failed to render, and sent two rounds of investigation at
+     * Z-order and compositing instead of at ordering.
+     */
+    private static Activity ACTIVITY;
+
     /** Called from C++ when a page load starts, so the shell can follow along. */
     public static native void onUrlChanged(long id, String url);
 
@@ -39,6 +52,7 @@ public class HydraWebView {
     public static void create(final Activity a, final long id) {
         if (a == null)
             return;
+        ACTIVITY = a;
         a.runOnUiThread(new Runnable() {
             @Override public void run() {
                 if (VIEWS.containsKey(id))
@@ -77,22 +91,28 @@ public class HydraWebView {
 
     // The rest post to the view's own UI thread, which is the one that made it,
     // so they need no Activity at all.
+    private static void onUi(final Runnable r) {
+        if (ACTIVITY != null)
+            ACTIVITY.runOnUiThread(r);
+    }
+
     public static void load(final long id, final String url) {
-        final WebView w = VIEWS.get(id);
-        if (w == null)
-            return;
-        w.post(new Runnable() {
-            @Override public void run() { w.loadUrl(url); }
+        onUi(new Runnable() {
+            @Override public void run() {
+                WebView w = VIEWS.get(id);
+                if (w != null)
+                    w.loadUrl(url);
+            }
         });
     }
 
     public static void setGeometry(final long id, final int x, final int y,
                                    final int width, final int height) {
-        final WebView w = VIEWS.get(id);
-        if (w == null)
-            return;
-        w.post(new Runnable() {
+        onUi(new Runnable() {
             @Override public void run() {
+                WebView w = VIEWS.get(id);
+                if (w == null)
+                    return;
                 FrameLayout.LayoutParams lp =
                     new FrameLayout.LayoutParams(Math.max(0, width), Math.max(0, height));
                 lp.leftMargin = x;
@@ -104,11 +124,11 @@ public class HydraWebView {
     }
 
     public static void setVisible(final long id, final boolean on) {
-        final WebView w = VIEWS.get(id);
-        if (w == null)
-            return;
-        w.post(new Runnable() {
+        onUi(new Runnable() {
             @Override public void run() {
+                WebView w = VIEWS.get(id);
+                if (w == null)
+                    return;
                 w.setVisibility(on ? android.view.View.VISIBLE
                                    : android.view.View.GONE);
             }
@@ -119,20 +139,21 @@ public class HydraWebView {
     public static void forward(final long id) { nav(id, 1); }
 
     public static void reload(final long id) {
-        final WebView w = VIEWS.get(id);
-        if (w == null)
-            return;
-        w.post(new Runnable() {
-            @Override public void run() { w.reload(); }
+        onUi(new Runnable() {
+            @Override public void run() {
+                WebView w = VIEWS.get(id);
+                if (w != null)
+                    w.reload();
+            }
         });
     }
 
     private static void nav(final long id, final int dir) {
-        final WebView w = VIEWS.get(id);
-        if (w == null)
-            return;
-        w.post(new Runnable() {
+        onUi(new Runnable() {
             @Override public void run() {
+                WebView w = VIEWS.get(id);
+                if (w == null)
+                    return;
                 if (dir < 0 && w.canGoBack())
                     w.goBack();
                 else if (dir > 0 && w.canGoForward())
@@ -142,11 +163,11 @@ public class HydraWebView {
     }
 
     public static void destroy(final long id) {
-        final WebView w = VIEWS.remove(id);
-        if (w == null)
-            return;
-        w.post(new Runnable() {
+        onUi(new Runnable() {
             @Override public void run() {
+                WebView w = VIEWS.remove(id);
+                if (w == null)
+                    return;
                 ViewGroup p = (ViewGroup) w.getParent();
                 if (p != null)
                     p.removeView(w);

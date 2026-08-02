@@ -2862,43 +2862,52 @@ same tree with the same flags.
   (`SP_ArrowBack`, `SP_ArrowForward`, `SP_BrowserReload`), which is both better
   looking and not a bet on what fonts a platform ships. Verified on the device.
 
-### The System WebView: built, and it does not paint
-
-Attempted, and the state is worth recording precisely because the next attempt
-should not start where this one did.
+### The System WebView: it renders
 
 `HydraWebView.java` creates a real `android.webkit.WebView`, adds it to the
-Activity's content view, and takes geometry, load, back/forward/reload and
-visibility from C++ over JNI; `android_view` syncs it to the widget's rect on
-every move, resize, show and hide, in device pixels (Qt reports logical ones and
-Android's layout wants physical — a factor of three on a phone). A JNI callback
-carries the page's url back onto the Qt thread. All of that works: no
-exceptions, no crashes, and the WebView plainly exists because it covers the
-placeholder with its own white background.
+Activity, and takes geometry, load, back/forward/reload and visibility from C++
+over JNI; `android_view` syncs it to the widget's rect on every move, resize,
+show and hide, in device pixels (Qt reports logical ones and Android's layout
+wants physical — a factor of three on a phone). A JNI callback carries the
+page's url back onto the Qt thread. **A page renders, in the page area, under
+the toolbar.**
 
-**It does not render.** Three things were tried and the first two were real
-progress:
+**Getting there took three wrong guesses and one act of reading**, and the
+reading is the part worth keeping.
 
-1. The renderer process died immediately. Isolated properly rather than guessed:
-   the stock *WebView Browser Tester* on the same emulator loaded the same page
-   with no complaint, so the fault was ours. A **software layer**
-   (`LAYER_TYPE_SOFTWARE`) stopped the crashes — a hardware-accelerated WebView
-   composited over Qt's own GL surface is what it objected to.
-2. Z-order: `bringToFront()` and `setZ()`. No change.
-3. Still a blank rectangle.
+1. The renderer process died on the first attempt. Isolated rather than assumed:
+   the stock *WebView Browser Tester* loaded the same page on the same emulator
+   without complaint, so the fault was ours. A **software layer** fixed it — a
+   hardware-accelerated WebView composited over Qt's own GL surface is what it
+   objected to.
+2. Then a blank rectangle. Guessed at Z-order twice (`bringToFront`, `setZ`) and
+   changed nothing.
+3. So: read Qt's Android sources instead. `QtSurface extends SurfaceView` with
+   `setZOrderMediaOverlay`, and `QtActivityDelegate.insertNativeView` adds
+   foreign views to `QtLayout` — which suggested the parent was wrong. **But the
+   same reading killed the Z-order theory outright:** the placeholder text was
+   *hidden* behind the blank area, so our view was already compositing above
+   Qt's surface. Z-order had never been the problem.
 
-**So it is off by default**, behind `HYDRA_ANDROID_WEBVIEW=1`, and the honest
-placeholder is what a user sees. That is the point of the gate: a blank white
-area with no explanation is exactly the failure the placeholder was written to
-prevent, and shipping it on would make the app look broken rather than
-unfinished.
+   The bug was ordering. `create()` posts to the UI thread; `load()` looked the
+   view up on the *calling* thread, found nothing because create had not run
+   yet, and returned silently. Every call now goes through the same
+   `runOnUiThread` queue, which is FIFO, so a load posted after a create runs
+   after it.
 
-**Where the next attempt should start.** Not with another Z-order guess. Qt for
-Android draws into its own `QtSurface`, and how a foreign view stacks with it is
-a fact about Qt's view hierarchy that can be read rather than probed — the
-question is whether the WebView must live *inside* `QtLayout` rather than be
-added to the Activity, and whether Qt's surface needs `setZOrderMediaOverlay`.
-Three guesses cost more than reading it will.
+A silent early return that leaves a white rectangle looks exactly like a
+rendering failure, and it sent two rounds of investigation at compositing. The
+thing that broke the deadlock was reading the sources rather than trying a
+fourth variation.
+
+**Still opt-in, behind `HYDRA_ANDROID_WEBVIEW=1`,** for a reason that is not
+about rendering: **plain HTTP is blocked.** Android refuses cleartext by default
+and a browser must allow it, but `android:usesCleartextTraffic="true"` in our
+manifest does not reach the APK — androiddeployqt regenerates that file, and the
+built manifest has `targetSdkVersion=36` and no such attribute, though it does
+carry our icon and label from the same file. Until an `http://` page loads, the
+honest placeholder stays the default. Proven with a `data:` url, which needs no
+network and therefore no policy.
 
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
