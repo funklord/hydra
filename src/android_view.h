@@ -10,31 +10,32 @@
 class QLabel;
 class request_filter;
 
-// The Android side of the WebView seam — **a placeholder, not a browser.**
+// The Android side of the WebView seam — **a System WebView, driven over JNI.**
 //
-// It exists so the Android build links and packages, which is worth having on
-// its own: the whole platform-neutral core compiles for arm64 already (fifty-one
-// translation units, no errors), and without something behind the seam that fact
-// is invisible because the link fails on three symbols `main()` names. With this
-// there is an APK, and every later piece of the port is a change to one file
-// pair rather than a change to the shell.
+// Pages load, links navigate, back returns, and the address bar follows along.
+// The WebView itself lives outside Qt's widget tree: Qt for Widgets draws into
+// its own surface and cannot host a native Android view, so `HydraWebView.java`
+// adds one to the Activity *on top* of Qt's surface and this class keeps it
+// glued to wherever the page-area widget is, in device pixels. The cost of that
+// arrangement is stated rather than hidden — this view sits above everything Qt
+// draws, so anything Qt wants to show over the page has to hide it first.
 //
-// **It renders a message saying what it is.** A stub that quietly showed a blank
-// page would be indistinguishable from a real backend that is broken, and this
-// project has spent enough time on things that look like they work. Nothing here
-// pretends: `load()` records the address and shows it, and the honest reading of
-// a screenshot is "the backend is not written yet".
+// **A QLabel stands in when there is no WebView to talk to**, which happens when
+// `HYDRA_ANDROID_WEBVIEW=0` is set or an APK was built without the `android/`
+// package source directory. It says which, because a blank page that quietly
+// means "turned off" is indistinguishable from one that means "broken".
 //
-// What the real one has to do (architecture doc §19.2, §19.5):
+// What is still missing (architecture doc §19.2, §19.5):
 //
-//   * hold an Android `WebView` through `QAndroidView`/JNI rather than a Qt
-//     widget of its own;
 //   * answer `shouldInterceptRequest` from the shared `request_filter`, which is
 //     already platform-neutral and needs no Android-specific decisions;
 //   * carry the content scripts over `addJavascriptInterface`, since there is no
 //     QWebChannel transport on this side;
 //   * and map `shouldOverrideUrlLoading` onto the external-url handler that
 //     `magnet:` links already use on the desktop.
+//
+// Until the first of those lands, the policy engine and the filter lists decide
+// nothing here: they run, and nothing asks them. That is the next piece.
 class android_view : public web_view_backend {
 	Q_OBJECT
 public:

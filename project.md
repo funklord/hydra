@@ -2900,14 +2900,33 @@ rendering failure, and it sent two rounds of investigation at compositing. The
 thing that broke the deadlock was reading the sources rather than trying a
 fourth variation.
 
-**Still opt-in, behind `HYDRA_ANDROID_WEBVIEW=1`,** for a reason that is not
-about rendering: **plain HTTP is blocked.** Android refuses cleartext by default
-and a browser must allow it, but `android:usesCleartextTraffic="true"` in our
-manifest does not reach the APK — androiddeployqt regenerates that file, and the
-built manifest has `targetSdkVersion=36` and no such attribute, though it does
-carry our icon and label from the same file. Until an `http://` page loads, the
-honest placeholder stays the default. Proven with a `data:` url, which needs no
-network and therefore no policy.
+**It is on by default**, because plain HTTP works too — and getting there
+involved being wrong twice about the same attribute.
+
+Android refuses cleartext by default, which is right for an app talking to its
+own backend and wrong for one whose whole job is loading addresses a user typed;
+without `android:usesCleartextTraffic="true"` every `http://` page fails with
+`ERR_CLEARTEXT_NOT_PERMITTED`. I added it, dumped the APK's manifest, saw it was
+absent, and concluded androiddeployqt had dropped it during the manifest merge.
+**Both halves of that were wrong.** The APK I dumped was built *ninety seconds
+before* I edited the manifest — a stale artifact. And once I rebuilt, the build
+failed outright: `Expected '>', but got ' '`, because the comment I had written
+above the attribute contained a `--`, which XML does not allow inside comments.
+The attribute had never reached a build at all. With the comment fixed, it is in
+the APK and `http://` pages load.
+
+Two lessons, and the second is the one that generalises. Checking an artifact
+proves nothing unless it is newer than the change — `stat` on both files would
+have cost seconds and saved a wrong entry in this document. And a *silent*
+absence had a loud explanation waiting one build away: the error message named
+the file, the expected character and the actual one, and I never saw it because I
+inspected output instead of running the thing that produces it.
+
+Verified end to end on a phone-shaped emulator, against a plain HTTP server on
+the host: the page renders, a link navigates, Back returns, and the address bar
+and status bar both follow the WebView through the JNI url callback. The
+placeholder is still one env var away — `HYDRA_ANDROID_WEBVIEW=0` — which is
+worth keeping for bisecting a WebView bug against the rest of the shell.
 
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and

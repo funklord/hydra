@@ -64,13 +64,15 @@ android_view::android_view(QWidget *parent) : web_view_backend(nullptr) {
 	// the android/ package source dir, say -- everything below is skipped and
 	// the placeholder above is what the user sees. A backend that half-worked
 	// would be worse than one that plainly does not.
-	// Opt-in until it paints. The native WebView is created, positioned, told to
-	// load, and does not crash -- and nothing appears, so a user gets a blank
-	// white rectangle with no explanation. That is precisely the failure the
-	// placeholder exists to prevent, and shipping it on by default would make
-	// the app look broken rather than unfinished. `HYDRA_ANDROID_WEBVIEW=1`
-	// turns it on for whoever is working on it.
-	if (qEnvironmentVariableIntValue("HYDRA_ANDROID_WEBVIEW") != 1)
+	//
+	// On by default, because it works: pages load over plain http and https,
+	// links navigate, back returns, and the address bar follows. It was opt-in
+	// while it painted nothing and while Android's cleartext policy blocked
+	// every http:// address, and both of those are fixed. `HYDRA_ANDROID_WEBVIEW=0`
+	// puts the placeholder back, which is worth keeping for anyone bisecting a
+	// WebView bug against the rest of the shell.
+	if (qEnvironmentVariableIsSet("HYDRA_ANDROID_WEBVIEW")
+	    && qEnvironmentVariableIntValue("HYDRA_ANDROID_WEBVIEW") == 0)
 		return;
 
 	m_id = next_id();
@@ -139,12 +141,15 @@ QWidget *android_view::widget() {
 void android_view::refresh() {
 	m_widget->setText(
 		QStringLiteral(
-			"<h2>No web view on this platform yet</h2>"
+			"<h2>The web view is turned off</h2>"
 			"<p>Everything else in Hydra is running: the tree, the policy "
 			"engine, the download queue and the request filter are the same "
 			"code as the desktop build.</p>"
-			"<p>What is missing is the Android side of the WebView seam — a "
-			"System WebView behind <tt>web_view_backend</tt>.</p>%1")
+			"<p>Hydra normally uses the System WebView here, behind "
+			"<tt>web_view_backend</tt>. It is off because "
+			"<tt>HYDRA_ANDROID_WEBVIEW=0</tt> was set, or because this APK was "
+			"built without the <tt>android/</tt> package source directory and "
+			"so has no <tt>HydraWebView</tt> class to talk to.</p>%1")
 			.arg(m_url.isEmpty()
 			         ? QString()
 			         : QStringLiteral("<p>It was asked to open:<br><tt>%1</tt></p>")

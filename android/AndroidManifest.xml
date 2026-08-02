@@ -14,7 +14,7 @@
          cleartext by default, which is right for an app that talks to its own
          backend and wrong for one whose entire job is loading addresses the
          user typed: an http:// page would fail with ERR_CLEARTEXT_NOT_PERMITTED
-         and look like a broken browser rather than a policy. Measured -- that is
+         and look like a broken browser rather than a policy. Measured: that is
          exactly what the first working render showed. -->
     <application android:name="org.qtproject.qt.android.bindings.QtApplication"
         android:label="Hydra"
