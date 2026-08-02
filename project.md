@@ -3184,6 +3184,52 @@ again, it stops; with the rule removed, it arrives. Fresh url each time, because
 a cached image goes unrequested for reasons that have nothing to do with
 filtering and looks identical in the log.
 
+### The cosmetic half, and the bug it uncovered
+
+`##` rules hide elements rather than blocking requests, so they cannot ride the
+interceptor — they have to reach the page. `cosmetic_filters` is that path: the
+shell says which host is on screen, an injected script asks for that host's
+selectors, and writes them into one stylesheet. `display: none !important`
+rather than removing nodes, because a removed node changes the page's own DOM in
+ways its scripts notice, and a stylesheet also applies to elements that do not
+exist yet — which is most of them, since this runs before the page's content.
+
+The page never names the host, the same way the consent bridge works: otherwise
+any site could ask what rules exist for any other, which leaks what the user has
+been doing.
+
+**It worked on the desktop and did nothing on Android**, and finding out why was
+worth more than the feature. The bridge was reachable there — `hydraCosmetic`
+appeared in the page's bridge list with no Android-specific work, which is what
+the shared `bridge_invoker` was for — but it answered `[]`. Rather than reason
+about it, I put the two facts on the wire behind `HYDRA_FILTER_DEBUG`: the rule
+file **was** read, one rule; `set_page_host` was **never called**.
+
+The cause was in the shell, not in either backend:
+
+* **Switching tabs never updated the page context at all.** It was set in exactly
+  one place — the current view's `url_changed` — and activating an already-loaded
+  tab navigates nothing, so the consent blocker went on answering `active_now()`
+  and `rules_json()` for the *previous* tab's site. A bridge built so the page
+  cannot name its own host is not much use if the shell then names the wrong one.
+  That was a desktop bug too, and had been one for as long as the bridge existed.
+* **The ordering only ever worked by accident.** `activate_node()` calls
+  `view->load()` before `setCurrentWidget()`. Qt WebEngine emits `urlChanged`
+  asynchronously, so the signal landed *after* the switch and the
+  `view == current_view()` test passed. The Android backend emits it from inside
+  `load()`, synchronously, so it arrived while the previous view was still
+  current, the test failed, and nothing was ever set.
+
+`sync_page_context()` now reads whatever is current, after the switch, and is
+called from both places. It cannot depend on which way a backend emits, because
+it does not listen for an emission.
+
+Verified on both: on the desktop the advert computes to `display: none` in the
+page's own view while the element beside it does not, and on the phone the same
+page comes up with the red block gone and the green one intact —
+`selectors=[".ad-banner"]`, `style_el=present`, `ad=none`, `keep=block`, over the
+same bridge, with no Android code written for it.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and
@@ -3228,10 +3274,9 @@ C++ that already exists.
    filter list was never consulted. One left: the KeePassXC bridge above the
    crypto layer wants `keepassxc` installed, which this machine does not have.
    This project's defect history is almost entirely in this category — see the
-   cautions at the top of this file. **The cosmetic half of §12 is still
-   unenforced**: accepted `##` rules hide nothing, because nothing injects them
-   into a page. That is the next piece of this, and it is a real gap rather than
-   a decision.
+   cautions at the top of this file. **The cosmetic half of §12 is done too** — see the section
+   above — and it uncovered a page-context bug that had been live on the desktop
+   for as long as the consent bridge has existed.
 5. **Android phase — no longer blocked on tooling.** `~/Qt/6.11.1` carries all
    four Android ABIs and `~/android-ndk-r29` is present, so the reason this was
    deferred (nothing to build with) is gone; what remains is the work itself.

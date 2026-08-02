@@ -3,6 +3,7 @@
 #include "request_filter.h"
 #include "scheme_rules.h"
 #include "filter_list.h"
+#include "cosmetic_filters.h"
 #include "policy_engine.h"
 #include "download_manager.h"
 #include "player_launcher.h"
@@ -472,6 +473,52 @@ int main(int argc, char **argv) {
 		ctx.url = QUrl("https://news.example/ad-banner.png");
 		check(!f.decide(ctx).block,
 		      "a cosmetic rule blocks no request, whatever its text happens to match");
+	}
+
+	// The cosmetic half, which was the other end of the same gap: accepted `##`
+	// rules were stored and listed and hid nothing.
+	section("cosmetic rules: which selectors reach which page");
+	{
+		filter_list list;
+		auto rule = [&](const char *text) {
+			filter_rule r;
+			filter_list::parse_rule(QString::fromLatin1(text), &r);
+			list.add(r);
+		};
+		rule("news.example##.ad-banner");
+		rule("news.example##div#promo");
+		rule("shop.example##.sponsored");
+		rule("||tracker.example^");            // network, not cosmetic
+
+		const QStringList here = cosmetic_filters::selectors_for(&list, "news.example");
+		check(here.contains(".ad-banner") && here.contains("div#promo"),
+		      "a site's own cosmetic rules are offered to it");
+		check(here.size() == 2,
+		      QString("and nothing else — not another site's, not the network rule (%1)")
+		          .arg(here.join(", ")));
+		check(cosmetic_filters::selectors_for(&list, "sport.news.example")
+		          .contains(".ad-banner"),
+		      "subdomains of the scope count, the way the rest of the policy model works");
+		check(cosmetic_filters::selectors_for(&list, "other.example").isEmpty(),
+		      "an unrelated site gets none");
+		check(cosmetic_filters::selectors_for(&list, "").isEmpty(),
+		      "and neither does a page with no host yet");
+		check(cosmetic_filters::selectors_for(nullptr, "news.example").isEmpty(),
+		      "no list, no selectors, rather than a crash");
+	}
+
+	section("cosmetic rules: an unscoped one is not applied everywhere");
+	{
+		// evaluate() rejects an unscoped cosmetic rule at accept time for being
+		// unbounded, so one can only exist in a hand-edited file. Honouring it
+		// globally would route around the check that exists to stop exactly that.
+		filter_list list;
+		filter_rule r;
+		r.text = "##.ad";
+		r.cosmetic = true;      // scope deliberately empty
+		list.add(r);
+		check(cosmetic_filters::selectors_for(&list, "news.example").isEmpty(),
+		      "a cosmetic rule with no site is applied to no site");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

@@ -24,6 +24,8 @@
 #include "request_filter.h"
 #include "qtwebengine_factory.h"
 
+#include <QWebEngineView>
+
 #include <QApplication>
 #include <QDir>
 #include <QEventLoop>
@@ -72,6 +74,11 @@ public:
 					0x00,0x02,0x02,0x44,0x01,0x00,0x3b };
 				body = QByteArray(reinterpret_cast<const char *>(gif), sizeof(gif));
 				type = "image/gif";
+			} else if (target.startsWith("/cosmetic")) {
+				body = "<!doctype html><html><body>"
+				        "<div class=\"ad-banner\">ADVERT</div>"
+				        "<div id=\"keep\">content</div>"
+				        "</body></html>";
 			} else {
 				// The page pulls its beacon from the *other* loopback host, so
 				// the request host and the site host differ by name.
@@ -194,6 +201,45 @@ int main(int argc, char *argv[]) {
 		spin(500);
 		check(beacon_arrived("d"),
 		      "with only a cosmetic rule left, the same beacon arrives");
+	}
+
+	// --- the cosmetic half, which reaches the page rather than the request ---
+	section("an accepted cosmetic rule hides the element");
+	{
+		QFile f(out + "/filters-ai.txt");
+		if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+			f.write("! written by try_filters\n"
+			         "127.0.0.1##.ad-banner\n");
+		f.close();
+		w.load_tree(tree);
+		spin(500);
+
+		bar->setText(QString("http://127.0.0.1:%1/cosmetic").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		spin(3000);
+
+		// Asked of the page itself, in the page's own world: what a user would
+		// see. A test that asked the bridge what it would send would be checking
+		// the same function the unit tests already cover.
+		auto *page_view = w.findChild<QWebEngineView *>();
+		QString hidden, kept;
+		bool answered = false;
+		if (page_view) {
+			page_view->page()->runJavaScript(
+				"[getComputedStyle(document.querySelector('.ad-banner')).display,"
+				" getComputedStyle(document.querySelector('#keep')).display].join('|')",
+				[&](const QVariant &v) {
+					const QStringList parts = v.toString().split('|');
+					if (parts.size() == 2) { hidden = parts[0]; kept = parts[1]; }
+					answered = true;
+				});
+			for (int i = 0; i < 40 && !answered; ++i)
+				spin(100);
+		}
+		check(hidden == "none",
+		      QString("the advert is display:none in the page's own view (%1)").arg(hidden));
+		check(kept != "none",
+		      QString("and the content beside it is untouched (%1)").arg(kept));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

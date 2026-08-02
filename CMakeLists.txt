@@ -128,6 +128,7 @@ qt_add_executable(hydra
     src/request_filter.cpp
     src/bridge_invoker.cpp
     src/scheme_rules.cpp
+    src/cosmetic_filters.cpp
     src/request_filter.h
     src/site_policy_dialog.cpp
     src/site_policy_dialog.h

@@ -46,6 +46,7 @@ class capture_source;
 class extractor_signals;
 class filter_signals;
 class filter_list;
+class cosmetic_filters;
 class request_filter;
 class keepass_bridge;
 class autofill_controller;
@@ -130,7 +131,10 @@ private slots:
 
 private:
 	QMenuBar *build_menu_bar();
-	void update_status();          // refresh the status bar's permanent counts
+	void update_status();
+	// Tell the page-scoped bridges which site is on screen. Called whenever that
+	// can change: a navigation in the current view, and a switch to another one.
+	void sync_page_context();          // refresh the status bar's permanent counts
 	web_view_backend *current_view() const;
 	void open_node(node *n);            // create/restore a live view and show it
 	void suspend_node(node *n);         // serialize + tear down the live view
@@ -206,6 +210,7 @@ private:
 	// Kept so the accepted rules can be handed to it once the list is loaded,
 	// which happens after construction.
 	request_filter     *m_filter        = nullptr;
+	cosmetic_filters   *m_cosmetic      = nullptr;
 	keepass_bridge     *m_keepass       = nullptr;
 	autofill_controller *m_autofill     = nullptr;
 	consent_blocker     *m_consent      = nullptr;

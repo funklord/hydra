@@ -31,6 +31,7 @@
 #include "local_proxy.h"
 #include "filter_signals.h"
 #include "filter_list.h"
+#include "cosmetic_filters.h"
 #include "filter_dialog.h"
 #include "keepass_bridge.h"
 #include "autofill_controller.h"
@@ -250,6 +251,9 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_local_proxy = new local_proxy(this);
 	m_local_proxy->start();
 	m_filters   = new filter_list;
+	// The cosmetic half of §12. It reads the same list the interceptor does, and
+	// reaches pages the only way a `##` rule can: through the DOM.
+	m_cosmetic  = new cosmetic_filters(m_filters, this);
 
 	// Saved settings are applied here rather than by the settings dialog, so
 	// they take effect on a run where that dialog is never opened — otherwise
@@ -554,6 +558,7 @@ void main_window::toggle_kiosk() {
 			show();
 			if (web_view_backend *v = current_view())
 				m_stack->setCurrentWidget(v->widget());
+			sync_page_context();
 			update_status();
 		});
 	}
@@ -798,7 +803,14 @@ bool main_window::load_tree(const QString &path) {
 	// The AI/user-authored filter list lives beside the rest, kept separate
 	// from any imported EasyList so upstream updates cannot clobber it (§12.5).
 	m_filters_path = dir + "/filters-ai.txt";
-	m_filters->load(m_filters_path);
+	const bool filters_read = m_filters->load(m_filters_path);
+	// Where the rules came from and how many, on request. A filter list that is
+	// silently empty and one that is silently ignored look identical from a page,
+	// and telling them apart by reasoning has already cost a round.
+	if (qEnvironmentVariableIsSet("HYDRA_FILTER_DEBUG"))
+		qWarning("filters: %s %s, %lld rule(s)", qPrintable(m_filters_path),
+		          filters_read ? "read" : "MISSING",
+		          static_cast<long long>(m_filters->rules().size()));
 	// And hand them to the interceptor, which is the only thing that can act on
 	// them. Loaded first so a rule accepted in an earlier session is in force
 	// before the first request of this one.
@@ -927,20 +939,18 @@ void main_window::open_node(node *n) {
 		// On subframes too, which is the whole difference between answering a
 		// CMP and looking at one: vendors ship them as iframes.
 		view->inject_script("hydra-consent", consent_blocker::script_source(), true);
+		view->set_script_bridge(m_cosmetic, cosmetic_filters::bridge_name());
+		view->inject_script("hydra-cosmetic", cosmetic_filters::script_source());
 		view->set_script_bridge(m_mse, mse_tap::bridge_name());
 		view->inject_script("hydra-mse-relay", mse_tap::relay_source());
 		view->inject_main_world_script("hydra-mse-hook", mse_tap::hook_source());
 
 		connect(view, &web_view_backend::url_changed, this, [this, view](const QUrl &u) {
 			apply_policy(view, u.host());
-			if (view == current_view())
-				m_consent->set_page_host(u.host());
-			if (view == current_view())
-				m_autofill->set_page_origin(
-					u.adjusted(QUrl::RemovePath | QUrl::RemoveQuery |
-					            QUrl::RemoveFragment).toString());
-			if (view == current_view())
+			if (view == current_view()) {
+				sync_page_context();
 				update_address(u.toString());
+			}
 		});
 
 		// Feature permissions (geo/cam/mic/notifications) answered from policy.
@@ -964,11 +974,48 @@ void main_window::open_node(node *n) {
 	n->type = node_type::open_tab;
 	m_model->refresh_node(n);
 	m_stack->setCurrentWidget(view->widget());
+	sync_page_context();
 	update_address(view->url().toString());
 	touch_lru(n->id);
 	enforce_live_cap(n->id);
 	mark_dirty();
 	update_status();
+}
+
+
+// Which site the page-scoped bridges are answering about.
+//
+// This used to happen in one place -- the current view's `url_changed` -- and
+// that was wrong twice over.
+//
+// **Switching tabs did not update it.** Activating an already-loaded tab
+// navigates nothing, so no signal arrived and the consent blocker went on
+// answering `active_now()` and `rules_json()` for the site of the tab before it.
+// A bridge deliberately built so the page cannot name its own host is not much
+// use if the shell then names the wrong one.
+//
+// **And the ordering only worked by accident.** `activate_node()` calls
+// `view->load()` before `setCurrentWidget()`. Qt WebEngine emits `urlChanged`
+// asynchronously, so the signal landed after the switch and the
+// `view == current_view()` test passed. The Android backend emits it from inside
+// `load()`, synchronously, so it arrived while the previous view was still
+// current, the test failed, and the host was never set at all -- cosmetic
+// filtering silently did nothing there while every unit test passed. Reading it
+// from whatever is current, after the switch, does not depend on which way a
+// backend emits.
+void main_window::sync_page_context() {
+	web_view_backend *v = current_view();
+	if (!v)
+		return;
+	const QUrl u = v->url();
+	if (m_consent)
+		m_consent->set_page_host(u.host());
+	if (m_cosmetic)
+		m_cosmetic->set_page_host(u.host());
+	if (m_autofill)
+		m_autofill->set_page_origin(
+			u.adjusted(QUrl::RemovePath | QUrl::RemoveQuery |
+			            QUrl::RemoveFragment).toString());
 }
 
 void main_window::suspend_node(node *n) {
