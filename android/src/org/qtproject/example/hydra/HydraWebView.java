@@ -10,6 +10,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
+import java.io.ByteArrayInputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -46,6 +47,30 @@ public class HydraWebView {
     /** Called from C++ when a page load starts, so the shell can follow along. */
     public static native void onUrlChanged(long id, String url);
 
+    /**
+     * Asks the shared request_filter about one request. Called on the WebView's
+     * network thread, not the UI thread; the C++ side only reads the policy
+     * engine, which documents itself as safe for that.
+     */
+    public static native boolean shouldBlock(String url, String accept, String pageUrl);
+
+    /**
+     * The page each WebView is on, as last reported by onPageStarted.
+     *
+     * shouldInterceptRequest needs the first-party host to apply per-site rules,
+     * and cannot ask the WebView for it: getUrl() is UI-thread only and this
+     * runs on the network thread. So the UI thread writes it here and the
+     * network thread reads it. Volatile because those are different threads and
+     * a stale read would apply the previous page's rules.
+     */
+    private static volatile String PAGE_URL = "";
+
+    /** An empty 200, which is how a WebView says "blocked". */
+    private static WebResourceResponse blocked() {
+        return new WebResourceResponse("text/plain", "utf-8",
+                                       new ByteArrayInputStream(new byte[0]));
+    }
+
     // The Activity is handed in rather than fetched: QtNative.activity() is not
     // public API in Qt 6.11, and reaching for it compiles until the day it does
     // not. C++ already has the context and can pass it.
@@ -71,7 +96,39 @@ public class HydraWebView {
                 w.setWebViewClient(new WebViewClient() {
                     @Override
                     public void onPageStarted(WebView v, String url, android.graphics.Bitmap f) {
+                        PAGE_URL = url;
                         onUrlChanged(id, url);
+                    }
+
+                    // Every subresource passes through here, on a network
+                    // thread. Returning null means "load it normally", which is
+                    // the answer for all but a few requests, so the cost of
+                    // being on this path is one JNI call per request.
+                    @Override
+                    public WebResourceResponse shouldInterceptRequest(WebView v,
+                                                                      WebResourceRequest req) {
+                        if (req == null || req.getUrl() == null)
+                            return null;
+                        // The main document is not a subresource decision: a
+                        // WebView that blocks its own page shows an empty page
+                        // with no way back, and the rules are written about what
+                        // a page loads, not about which page you may visit.
+                        if (req.isForMainFrame())
+                            return null;
+                        String accept = "";
+                        Map<String, String> headers = req.getRequestHeaders();
+                        if (headers != null) {
+                            // Header names are case-insensitive on the wire, and
+                            // this map does not fold them, so look for both.
+                            String a = headers.get("Accept");
+                            if (a == null)
+                                a = headers.get("accept");
+                            if (a != null)
+                                accept = a;
+                        }
+                        if (shouldBlock(req.getUrl().toString(), accept, PAGE_URL))
+                            return blocked();
+                        return null;
                     }
                 });
                 // Zero-sized until C++ says where the page area is; a view added

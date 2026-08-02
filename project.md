@@ -2928,6 +2928,42 @@ and status bar both follow the WebView through the JNI url callback. The
 placeholder is still one env var away — `HYDRA_ANDROID_WEBVIEW=0` — which is
 worth keeping for bisecting a WebView bug against the rest of the shell.
 
+### The filter reaches Android
+
+`shouldInterceptRequest` now asks the same `request_filter` the desktop asks, so
+ad hosts, per-origin script rules and per-site image rules apply on a phone with
+no Android-specific policy code. Two things do not carry over, and both are
+limits of the hook rather than choices:
+
+* **Referer cannot be stripped.** The hook may replace a response but not edit
+  an outgoing request; honouring it would mean re-issuing every request from
+  Java. `request_decision` is flags rather than an action precisely so a backend
+  can honour the parts it supports, and this was the case that shape was for.
+* **The resource type is not reported.** Qt WebEngine states it outright;
+  `WebResourceRequest` gives headers and a url. So `kind_from_hints()` infers it
+  — shared and tested rather than buried in a platform file, because a wrong
+  guess quietly turns a per-origin script rule into no rule at all.
+
+That inference is **deliberately cautious**. A script request sends `Accept:
+*/*`, but so does every `fetch()` and XHR, so `*/*` alone is not taken as
+evidence: only an explicit javascript media type or a `.js`/`.mjs` path counts.
+Guessing low means some scripts load on a site whose scripts are blocked;
+guessing high would block a page's data requests under a rule the user set for
+scripts, which reads as the site being broken. The suite pins both directions,
+including the cases it declines to guess.
+
+**Measured as a controlled pair**, because the obvious test proves nothing. A
+first run showed the image simply absent from the server log — but the document
+had come back `304`, so a cache hit would have looked identical. The real test
+used two image urls that had never been requested before, one per run, with only
+the policy file differing: with images blocked for the site, the document was
+fetched and the image never was; with the rule removed, both were. Same page,
+same server, distinct uncacheable urls.
+
+The main document is deliberately exempt: a WebView that blocks its own page
+shows an empty frame with no way back, and these rules are about what a page
+loads, not which pages may be visited.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and

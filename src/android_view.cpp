@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "android_view.h"
+#include "request_filter.h"
 
 #include <QLabel>
 #include <QJniEnvironment>
@@ -32,7 +33,54 @@ Java_org_qtproject_example_hydra_HydraWebView_onUrlChanged(JNIEnv *env, jclass,
 	android_view::report_url(id, s);
 }
 
+// Called from Java on the WebView's network thread, once per request. Returning
+// true makes the Java side answer with an empty response, which is how a
+// WebView blocks: there is no "cancel this request" to call.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_org_qtproject_example_hydra_HydraWebView_shouldBlock(JNIEnv *env, jclass,
+                                                           jstring url, jstring accept,
+                                                           jstring page_url) {
+	const auto pull = [env](jstring s) {
+		if (!s)
+			return QString();
+		const char *utf = env->GetStringUTFChars(s, nullptr);
+		const QString out = QString::fromUtf8(utf);
+		env->ReleaseStringUTFChars(s, utf);
+		return out;
+	};
+	return android_view::should_block(pull(url), pull(accept), pull(page_url))
+	           ? JNI_TRUE : JNI_FALSE;
+}
+
 QHash<qint64, android_view *> android_view::s_views;
+request_filter *android_view::s_filter = nullptr;
+
+bool android_view::should_block(const QString &url, const QString &accept,
+                                 const QString &page_url) {
+	if (!s_filter)
+		return false;
+
+	request_context ctx;
+	ctx.url          = QUrl(url);
+	ctx.request_host = ctx.url.host();
+	// The page's own host. Java reads it from the WebView on the UI thread and
+	// caches it, because this call arrives on a thread that may not touch the
+	// view at all. A blank one means a request racing the first navigation, and
+	// leaving site_host empty is right: no per-site rule matches, so only the
+	// rules that key off the request host apply, which is the safe subset.
+	ctx.site_host    = QUrl(page_url).host();
+	ctx.kind         = kind_from_hints(accept, ctx.url);
+
+	const request_decision d = s_filter->decide(ctx);
+	// Observers see every request here too, exactly as on the desktop: the media
+	// detector wants what loaded and filter-evolution wants what got through.
+	s_filter->notify(ctx, d);
+	// d.strip_referer is deliberately dropped. See android_view.h: this hook can
+	// replace a response but not edit a request, and silently doing nothing is
+	// better than pretending. It is not lost -- the desktop honours it, and the
+	// decision is one struct for both.
+	return d.block;
+}
 
 void android_view::report_url(qint64 id, const QString &url) {
 	// Onto the Qt thread: this arrives on Android's UI thread.
@@ -49,7 +97,9 @@ void android_view::on_url_from_java(const QString &url) {
 	emit url_changed(m_url);
 }
 
-android_view::android_view(QWidget *parent) : web_view_backend(nullptr) {
+android_view::android_view(request_filter *filter, QWidget *parent)
+    : web_view_backend(nullptr) {
+	s_filter = filter;
 	m_widget = new QLabel(parent);
 	m_widget->setObjectName("android_placeholder");
 	m_widget->setWordWrap(true);
@@ -223,5 +273,5 @@ bool android_view::restore_state(const QByteArray &blob) {
 }
 
 web_view_backend *android_factory::create_view(QWidget *parent) {
-	return new android_view(parent);
+	return new android_view(m_filter, parent);
 }
