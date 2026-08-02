@@ -126,6 +126,7 @@ qt_add_executable(hydra
     src/policy_engine.cpp
     src/policy_engine.h
     src/request_filter.cpp
+    src/bridge_invoker.cpp
     src/request_filter.h
     src/site_policy_dialog.cpp
     src/site_policy_dialog.h

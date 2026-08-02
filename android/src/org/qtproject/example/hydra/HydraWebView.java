@@ -4,6 +4,7 @@ package org.qtproject.example.hydra;
 import android.app.Activity;
 import android.graphics.Color;
 import android.view.ViewGroup;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
@@ -54,6 +55,39 @@ public class HydraWebView {
      */
     public static native boolean shouldBlock(String url, String accept, String pageUrl);
 
+    /** The method list for one bridge, as JSON. Called from the page. */
+    public static native String bridgeDescribe(long id, String name);
+
+    /** Calls one bridge method. Every argument here comes from the page. */
+    public static native String bridgeCall(long id, String name, String method, String args);
+
+    /** Everything to run at the start of a page: the shim, then the scripts. */
+    public static native String injectedScripts(long id);
+
+    /**
+     * What the page sees as `window.hydraNative`.
+     *
+     * Only methods marked @JavascriptInterface are reachable, which is the whole
+     * of Android's exposure control -- the rest is bridge_invoker's problem, and
+     * it is written for a hostile caller because this object is reachable from
+     * every frame and every origin the WebView loads.
+     *
+     * These run on a binder thread, not the UI thread; the C++ side hops to the
+     * Qt thread and waits.
+     */
+    private static class Native {
+        private final long id;
+        Native(long id) { this.id = id; }
+
+        @JavascriptInterface
+        public String describe(String name) { return bridgeDescribe(id, name); }
+
+        @JavascriptInterface
+        public String call(String name, String method, String args) {
+            return bridgeCall(id, name, method, args);
+        }
+    }
+
     /**
      * The page each WebView is on, as last reported by onPageStarted.
      *
@@ -93,11 +127,20 @@ public class HydraWebView {
                 // same page on the same emulator without a murmur. Slower, and
                 // it is the difference between a page and a blank rectangle.
                 w.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                // Before any load, so a page cannot start without it.
+                w.addJavascriptInterface(new Native(id), "hydraNative");
                 w.setWebViewClient(new WebViewClient() {
                     @Override
                     public void onPageStarted(WebView v, String url, android.graphics.Bitmap f) {
                         PAGE_URL = url;
                         onUrlChanged(id, url);
+                        // As early as a plain WebView allows. It is not before the
+                        // page's own inline scripts -- androidx.webkit's
+                        // addDocumentStartJavaScript is what that would take --
+                        // and android_view.h says so rather than implying document-start.
+                        String js = injectedScripts(id);
+                        if (js != null && !js.isEmpty())
+                            v.evaluateJavascript(js, null);
                     }
 
                     // Every subresource passes through here, on a network

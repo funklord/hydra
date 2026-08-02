@@ -2,16 +2,67 @@
 #include "android_view.h"
 #include "request_filter.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QLabel>
 #include <QJniEnvironment>
 #include <QJniObject>
 #include <QGuiApplication>
 #include <QResizeEvent>
 #include <QTimer>
+#include <functional>
 
 namespace {
 
 const char *k_cls = "org/qtproject/example/hydra/HydraWebView";
+
+// The page-side half of the bridge: the same `window.hydraChannel(cb)` the
+// desktop's QWebChannel bootstrap provides, so every injected script runs
+// unmodified on both engines.
+//
+// The desktop's proxies are asynchronous — a call takes a trailing callback and
+// the answer arrives later — because QWebChannel talks over a transport.
+// `hydraNative` is a synchronous Java call, so the callback is invoked inline.
+// That difference is invisible to a script written against the desktop shape,
+// which is the point: the scripts are the contract, not the transport.
+const char *k_bridge_bootstrap = R"JS(
+(function () {
+  if (window.hydraChannel || !window.hydraNative) return;
+  var objects = {};
+  var build = function (name) {
+    var d;
+    try { d = JSON.parse(window.hydraNative.describe(name)); } catch (e) { return null; }
+    if (!d || !d.ok) return null;
+    var proxy = {};
+    d.value.methods.forEach(function (m) {
+      proxy[m.name] = function () {
+        var args = Array.prototype.slice.call(arguments);
+        // A trailing function is the desktop's result callback, not an argument.
+        var cb = (args.length > m.args && typeof args[args.length - 1] === 'function')
+                   ? args.pop() : null;
+        var out;
+        try {
+          out = JSON.parse(window.hydraNative.call(name, m.name, JSON.stringify(args)));
+        } catch (e) { out = { ok: false }; }
+        // A failed call calls nothing back, exactly as a dropped transport
+        // message would: a script waiting on an answer waits, rather than
+        // acting on a value the shell never produced.
+        if (cb && out && out.ok) { try { cb(out.value); } catch (e) {} }
+        return out && out.ok ? out.value : undefined;
+      };
+    });
+    return proxy;
+  };
+  window.hydraChannel = function (cb) {
+    try { cb(objects); } catch (e) {}
+  };
+  window.hydraRegisterBridge = function (name) {
+    var p = build(name);
+    if (p) objects[name] = p;
+  };
+})();
+)JS";
+
 
 // One id per view, so the Java side can keep more than one WebView and the C++
 // side never holds a Java reference across threads.
@@ -50,6 +101,93 @@ Java_org_qtproject_example_hydra_HydraWebView_shouldBlock(JNIEnv *env, jclass,
 	};
 	return android_view::should_block(pull(url), pull(accept), pull(page_url))
 	           ? JNI_TRUE : JNI_FALSE;
+}
+
+
+namespace {
+
+// Runs `fn` on the Qt thread and waits for its answer. These arrive on a binder
+// thread that Android owns; the bridges are ordinary QObjects living on the Qt
+// thread, so this is the boundary rather than making every bridge thread-safe.
+// No deadlock: the Qt thread never blocks waiting on a binder thread.
+QString on_qt_thread(std::function<QString()> fn) {
+	QString out;
+	QMetaObject::invokeMethod(qApp, [&] { out = fn(); }, Qt::BlockingQueuedConnection);
+	return out;
+}
+
+// A QString as a javascript string literal, quoted and escaped by the JSON
+// writer rather than by hand: these names come from the shell, but building
+// javascript by concatenation is how the next one gets in.
+QString js_literal(const QString &s) {
+	const QByteArray j = QJsonDocument(QJsonArray{s}).toJson(QJsonDocument::Compact);
+	return QString::fromUtf8(j.mid(1, j.size() - 2));   // drop the [ ]
+}
+
+QString from_java(JNIEnv *env, jstring s) {
+	if (!s)
+		return QString();
+	const char *utf = env->GetStringUTFChars(s, nullptr);
+	const QString out = QString::fromUtf8(utf);
+	env->ReleaseStringUTFChars(s, utf);
+	return out;
+}
+
+}  // namespace
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_org_qtproject_example_hydra_HydraWebView_bridgeDescribe(JNIEnv *env, jclass,
+                                                              jlong id, jstring name) {
+	const QString n = from_java(env, name);
+	const QString r = on_qt_thread([id, n] { return android_view::describe_bridge(id, n); });
+	return env->NewStringUTF(r.toUtf8().constData());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_org_qtproject_example_hydra_HydraWebView_bridgeCall(JNIEnv *env, jclass, jlong id,
+                                                          jstring name, jstring method,
+                                                          jstring args) {
+	const QString n = from_java(env, name), m = from_java(env, method),
+	              a = from_java(env, args);
+	const QString r =
+		on_qt_thread([id, n, m, a] { return android_view::call_bridge(id, n, m, a); });
+	return env->NewStringUTF(r.toUtf8().constData());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_org_qtproject_example_hydra_HydraWebView_injectedScripts(JNIEnv *env, jclass,
+                                                               jlong id) {
+	const QString r = on_qt_thread([id] { return android_view::injected_scripts(id); });
+	return env->NewStringUTF(r.toUtf8().constData());
+}
+
+QString android_view::describe_bridge(qint64 id, const QString &name) {
+	android_view *v = s_views.value(id);
+	return v ? v->m_bridges.describe(name)
+	         : QStringLiteral(R"({"ok":false,"error":"no such view"})");
+}
+
+QString android_view::call_bridge(qint64 id, const QString &name, const QString &method,
+                                   const QString &args_json) {
+	android_view *v = s_views.value(id);
+	return v ? v->m_bridges.invoke(name, method, args_json)
+	         : QStringLiteral(R"({"ok":false,"error":"no such view"})");
+}
+
+QString android_view::injected_scripts(qint64 id) {
+	android_view *v = s_views.value(id);
+	if (!v)
+		return QString();
+	// Shim first, then the registered bridges, then the scripts that use them.
+	// A script that ran before its bridge existed would see hydraChannel hand it
+	// an object without the method it wants, which is the kind of failure that
+	// looks like a bug in the script.
+	QString out = QString::fromUtf8(k_bridge_bootstrap);
+	for (const QString &name : v->m_bridges.names())
+		out += QStringLiteral("\nwindow.hydraRegisterBridge(%1);\n").arg(js_literal(name));
+	for (const QString &src : v->m_script_sources)
+		out += "\n;(function(){\n" + src + "\n})();\n";
+	return out;
 }
 
 QHash<qint64, android_view *> android_view::s_views;
@@ -238,24 +376,26 @@ void android_view::reload() {
 
 void android_view::inject_script(const QString &name, const QString &source,
                                   bool subframes) {
-	Q_UNUSED(source)
+	// `subframes` is not honoured and cannot be: evaluateJavascript runs in the
+	// main frame. A script that only matters in an iframe -- the consent one --
+	// therefore sees less here than on the desktop, which is a gap to close with
+	// per-frame injection, not a flag to pretend about.
 	Q_UNUSED(subframes)
-	m_scripts << name;
+	m_script_names << name;
+	m_script_sources << source;
 }
 
 void android_view::inject_main_world_script(const QString &name,
                                              const QString &source) {
-	Q_UNUSED(source)
-	m_scripts << name;
+	// The same thing here. Android has one world, so the distinction the desktop
+	// draws between an isolated script and a main-world one does not exist, and
+	// both land in the page's own globals.
+	m_script_names << name;
+	m_script_sources << source;
 }
 
 void android_view::set_script_bridge(QObject *object, const QString &name) {
-	// Deliberately nothing. On Android this becomes `addJavascriptInterface`,
-	// which is a different mechanism with a different security model, and
-	// pretending to register a bridge that cannot deliver would make every
-	// script that waits for one hang instead of fail.
-	Q_UNUSED(object)
-	Q_UNUSED(name)
+	m_bridges.add(name, object);
 }
 
 QByteArray android_view::save_state() const {

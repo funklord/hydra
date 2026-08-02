@@ -2964,6 +2964,51 @@ The main document is deliberately exempt: a WebView that blocks its own page
 shows an empty frame with no way back, and these rules are about what a page
 loads, not which pages may be visited.
 
+### The content scripts run, and can call back
+
+There is no QWebChannel on Android, so `addJavascriptInterface` carries a
+two-method native object and a shim rebuilds the same `window.hydraChannel(cb)`
+the desktop scripts are written against. **They run unmodified** — autofill, the
+picker, consent and the MSE relay all registered and all reachable from a page.
+
+The marshalling is `bridge_invoker`, and it is shared and tested rather than
+living in the Android file, because this is the one place a page names what runs
+inside the shell. What it refuses is the interesting half:
+
+* **`deleteLater()` is not callable.** `QObject` publishes it as a slot, and a
+  page that could call it would delete the shell's bridge out from under the
+  browser. Methods below `QObject::staticMetaObject.methodCount()` are excluded
+  wholesale; QWebChannel draws the same line in the same place.
+* **Signals are not invokable**, so a page cannot forge a report the shell
+  believes.
+* **Arguments are type-checked, not coerced.** A string where an int belongs is
+  refused and the call does not happen. Overloads are matched on name *and*
+  arity, because picking the first name match calls whichever one moc emitted
+  first.
+
+Verified on the device, not just in the suite: a page asked for the bridge list
+and got all four, then called `rules_json()` and received 392 characters of the
+shell's real rules, then `active_now()` and got `false` — the correct answer for
+that host.
+
+**Two platform limits, stated rather than papered over.** Android has one
+javascript world, so an injected script shares globals with the page and a
+hostile page can read or replace it; the bridges were already written on the
+assumption that every argument is hostile, and here that assumption is
+load-bearing. And injection happens at `onPageStarted`, which is early but not
+before a page's own inline script — `addDocumentStartJavaScript` from
+androidx.webkit is the real answer and is a dependency decision, not a line of
+code. `inject_script`'s `subframes` flag is likewise not honoured, so the consent
+script sees less here than on the desktop, where CMPs ship as iframes.
+
+One Qt detail worth keeping. Qt 6.9 has two `QMetaMethod::invoke` overloads — a
+templated one taking real values and the older one taking `QGenericArgument` —
+and they cannot be mixed. Passing `QGenericArgument` parameters with a
+`Q_RETURN_ARG` return fails with *"cannot convert formal parameter 0"*, which
+reads like an argument bug and is really overload resolution. Arguments are only
+known at runtime here, so the `QGenericArgument` form is the one that fits and
+the return argument is built by type name to match it.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and

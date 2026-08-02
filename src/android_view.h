@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "bridge_invoker.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"
 
@@ -38,12 +39,27 @@ class request_filter;
 //   * **The resource type is not reported**, so it is inferred from the `Accept`
 //     header and the url by `kind_from_hints()`, which is shared and tested.
 //
-// What is still missing (architecture doc §19.2, §19.5):
+// **Content scripts run, and can call back.** There is no QWebChannel here, so
+// `addJavascriptInterface` carries a two-method native object and a shim builds
+// the same `window.hydraChannel(cb)` the desktop scripts are written against —
+// they run unmodified. `bridge_invoker` does the marshalling, and is where the
+// rules about what a page may call are written down.
 //
-//   * carry the content scripts over `addJavascriptInterface`, since there is no
-//     QWebChannel transport on this side;
-//   * and map `shouldOverrideUrlLoading` onto the external-url handler that
-//     `magnet:` links already use on the desktop.
+// Two more platform limits, stated rather than papered over:
+//
+//   * **No isolated world.** Qt WebEngine can run a script in a world the page
+//     cannot see; Android has one world, so an injected script shares globals
+//     with the page and a hostile page can read or replace it. The bridges are
+//     written on the assumption that every argument is hostile, which was
+//     already true on the desktop and is merely load-bearing here.
+//   * **Injection is at `onPageStarted`,** which is early but not guaranteed to
+//     beat a page's own inline script. `addDocumentStartJavaScript` from
+//     androidx.webkit is the real answer and is a dependency decision, not a
+//     line of code.
+//
+// What is still missing (architecture doc §19.2, §19.5): mapping
+// `shouldOverrideUrlLoading` onto the external-url handler that `magnet:` links
+// already use on the desktop.
 class android_view : public web_view_backend {
 	Q_OBJECT
 public:
@@ -64,6 +80,14 @@ public:
 	// still existing would be a race for no benefit.
 	static bool should_block(const QString &url, const QString &accept,
 	                          const QString &page_url);
+
+	// Called from JNI on a binder thread, for one view. The Android side hops to
+	// the Qt thread first, so these run where the bridges live.
+	static QString describe_bridge(qint64 id, const QString &name);
+	static QString call_bridge(qint64 id, const QString &name, const QString &method,
+	                            const QString &args_json);
+	// Everything to run at the start of a page, shim first.
+	static QString injected_scripts(qint64 id);
 
 	QWidget *widget() override;
 	QUrl url() const override { return m_url; }
@@ -103,7 +127,9 @@ private:
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;
 	permission_decider m_decider;
-	QStringList m_scripts;   // named, so a test can see what was asked for
+	bridge_invoker m_bridges;
+	QStringList    m_script_names;   // named, so a test can see what was asked for
+	QStringList    m_script_sources; // in registration order, which is load order
 };
 
 // The factory half. Same shape as the desktop one, so `main()` differs by two
