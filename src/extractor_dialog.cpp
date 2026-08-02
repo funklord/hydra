@@ -51,6 +51,22 @@ const char *k_system_prompt =
 	"7. Anything fetched as a `script` or an `image` is page furniture, not the "
 	"stream — returning one is rejected, so do not fall back to it.\n";
 
+// How much an address reads like a playlist. Two tiers, because "master" and
+// "m3u8" name the thing itself while "index" and "hls" merely sit near it -- on
+// one measured site `index.php?…do=getVideo` is an API and `master.txt` is the
+// manifest, and asking the wrong one first wastes the only question that host
+// gets.
+int playlistish(const QUrl &u) {
+	const QString s = (u.host() + u.path()).toLower();
+	for (const char *strong : { "m3u8", "master", "playlist", "manifest", ".mpd" })
+		if (s.contains(QLatin1String(strong)))
+			return 2;
+	for (const char *weak : { "index", "/hls", "/m3/", "stream" })
+		if (s.contains(QLatin1String(weak)))
+			return 1;
+	return 0;
+}
+
 // The shared one, so the fold the user reads, the ranking that spends the probe
 // budget and the gate's segment rule cannot drift apart.
 QString shape_of(const QString &url) {
@@ -159,8 +175,25 @@ QList<evidence_request> extractor_dialog::candidates(
 		const int flood_b = host_repeats.value(b.url.host());
 		if (flood_a != flood_b)
 			return flood_a > flood_b;         // the busiest host first
-		// Within a host: what was fetched once is the manifest, what repeated
-		// is one of its segments.
+		// Within a host, ask about the thing that looks like a playlist first.
+		//
+		// This is a *lexical* guess and it is placed here deliberately, because
+		// this is the one place where being wrong is nearly free: it decides
+		// which addresses we spend a 2 KB question on, not what the model may
+		// answer and not what the gate will accept. The words are HLS's own —
+		// master playlist, index/media playlist, `.m3u8` — so they are not one
+		// site's vocabulary.
+		//
+		// Checked against all three captures rather than tuned until two passed,
+		// which is how the rule this replaces came to be wrong on the second
+		// site: `cf-master.…txt`, `master.txt` and `…_index.m3u8` are the three
+		// manifests, and each is the first thing asked about on its host.
+		const int look_a = playlistish(a.url);
+		const int look_b = playlistish(b.url);
+		if (look_a != look_b)
+			return look_a > look_b;
+		// Then: what was fetched once is the manifest, what repeated is one of
+		// its segments.
 		const bool rep_a = repeats.value(shape_of(a.url.toString())) > 0;
 		const bool rep_b = repeats.value(shape_of(b.url.toString())) > 0;
 		return rep_a < rep_b;

@@ -2649,16 +2649,37 @@ site now reaches its media host, and the first still gets both of its manifests
 Also dropped: addresses that cannot be fetched at all. Two of dramafren's ten
 questions were going to `wss://` urls, which can never answer what they serve.
 
-**What is not fixed, stated rather than papered over.** Round-robin reaches the
-media host and then asks it the wrong question — it probes the embed page rather
-than `master.txt`, because within a host the ordering is still evidence order and
-the manifest arrives late. Two signals could fix it: deprioritising well-known
-asset extensions, and preferring later requests on the theory that a page fetches
-its furniture first and its video last. **Neither was implemented**, deliberately.
-Each helps one capture and hurts the other — later-first would put dramafren's
-init segment ahead of its manifest — and tuning a heuristic until two captures
-pass is how the last one came to be wrong on the second site. The next attempt
-wants a third capture, not a cleverer sort over these two.
+**And then a third capture made the rest answerable.** Round-robin reached the
+media host and asked it the wrong question — the embed page rather than
+`master.txt` — and the two signals available for fixing that each helped one
+capture and hurt the other. Rather than tune until two passed, which is how the
+previous rule came to be wrong, a third site was captured: kisskh, an Angular
+app whose stream comes from its own API.
+
+**Site three is the undisguised control**, and valuable for exactly that: an
+honest `…_index.m3u8` on one host and honest `.ts` segments flooding from
+another. Any extractor that cannot manage that one is broken. It also breaks the
+flood rule a third way — here the *manifest* host served a single request while
+the *segment* host flooded, and they are different hosts.
+
+With three, a signal that is not one site's vocabulary becomes visible: the
+manifests are `cf-master.…txt`, `master.txt` and `…_index.m3u8`. The words are
+HLS's own — master playlist, index playlist, `.m3u8` — so within a host the
+budget now asks about whatever reads most like a playlist first, in two tiers
+(`master`/`m3u8`/`playlist`/`manifest`/`mpd` above `index`/`hls`/`m3`/`stream`).
+The tiers matter: on site two `index.php?…do=getVideo` is an API and
+`master.txt` is the manifest, and one question is all that host gets.
+
+**This is a lexical guess, and where it sits is the point.** It decides which
+addresses are worth a 2 KB question — not what the model may answer, and not
+what the gate will accept. Being wrong costs one request. That is a very
+different risk from putting the same guess in the extractor itself.
+
+Verified on all three captures rather than tuned until two passed: **each site's
+manifest is now the first thing asked about on its host.** Two of the three still
+answer HLS from stale evidence; the third's manifest has since started returning
+HTML, which is the recapture trap this file already documents rather than a
+ranking failure.
 
 ## First-load flicker (fixed)
 
