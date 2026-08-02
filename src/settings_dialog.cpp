@@ -21,6 +21,9 @@
 #include "consent_blocker.h"
 
 #include <QClipboard>
+#include <QFileDialog>
+#include <QJsonDocument>
+#include <QMessageBox>
 #include <QGuiApplication>
 #include <QListWidget>
 #include <QStackedWidget>
@@ -485,7 +488,77 @@ void settings_dialog::build_filter_page(QWidget *page) {
 	m_rules_copy = new QPushButton("&Copy the flagged ones", rules_box);
 	m_rules_copy->setObjectName("rules_copy");
 	rrow->addWidget(m_rules_copy);
+	auto *rules_export = new QPushButton("E&xport…", rules_box);
+	rules_export->setObjectName("rules_export");
+	rrow->addWidget(rules_export);
+	auto *rules_import = new QPushButton("&Import…", rules_box);
+	rules_import->setObjectName("rules_import");
+	rrow->addWidget(rules_import);
 	rrow->addStretch(1);
+
+	// Sharing, in the only form it takes for now: a file someone sends. The
+	// transport is deliberately undecided — what a received rule has to prove is
+	// the part that had to be right first, and that does not change when the
+	// bytes eventually arrive some other way.
+	connect(rules_export, &QPushButton::clicked, this, [this] {
+		if (!m_consent)
+			return;
+		const QString path = QFileDialog::getSaveFileName(
+			this, "Export learned rules", QString(), "Rule files (*.json)");
+		if (path.isEmpty())
+			return;
+		QFile f(path);
+		if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			m_rules_note->setText("Could not write that file.");
+			return;
+		}
+		f.write(QJsonDocument(m_consent->rules().export_learned())
+		            .toJson(QJsonDocument::Indented));
+		m_rules_note->setText(QString("Exported to %1.").arg(path));
+	});
+	connect(rules_import, &QPushButton::clicked, this, [this] {
+		if (!m_consent)
+			return;
+		const QString path = QFileDialog::getOpenFileName(
+			this, "Import rules", QString(), "Rule files (*.json)");
+		if (path.isEmpty())
+			return;
+		QFile f(path);
+		if (!f.open(QIODevice::ReadOnly)) {
+			m_rules_note->setText("Could not read that file.");
+			return;
+		}
+		const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+		const site_rules::import_result got =
+			site_rules::judge_import(doc.object());
+
+		// Nothing is added by opening a file. What survived the check is shown,
+		// and adding it is a second, deliberate act -- a rule set from elsewhere
+		// is a licence to click buttons on pages you are signed into, and that
+		// is not something to acquire by browsing to a filename.
+		QString msg;
+		if (!got.accepted.isEmpty())
+			msg += QString("%1 rule(s) passed the safety check.\n")
+			           .arg(got.accepted.size());
+		for (const QString &why : got.refused)
+			msg += "Refused: " + why + "\n";
+		if (got.accepted.isEmpty()) {
+			QMessageBox::information(this, "Import rules",
+			                          msg.isEmpty() ? "Nothing to import." : msg);
+			m_rules_note->setText("Nothing was imported.");
+			return;
+		}
+		msg += "\nAdd them?";
+		if (QMessageBox::question(this, "Import rules", msg) != QMessageBox::Yes)
+			return;
+		site_rules merged = m_consent->rules();
+		for (const site_rule &r : got.accepted)
+			merged.add(r);
+		m_consent->set_rules(merged);
+		if (!m_rules_path.isEmpty())
+			merged.save(m_rules_path);
+		rebuild_site_rules();
+	});
 	rv->addLayout(rrow);
 
 	m_rules_note = new QLabel(rules_box);

@@ -27,6 +27,11 @@ struct site_rule {
 	QString note;             // where it came from, in words
 	bool    builtin = false;  // shipped in the binary
 	bool    promote = false;  // generic + learned: fold into the C++ defaults
+	// Came from somebody else's file. Kept distinct from both of the above
+	// because the three have different standing: a built-in was reviewed by
+	// whoever ships the program, a learned rule was accepted by the person
+	// sitting here, and an imported one has been vouched for by neither.
+	bool    imported = false;
 
 	bool generic() const { return host.isEmpty(); }
 };
@@ -70,6 +75,39 @@ public:
 	// provenance, same file — a learned one is generic for exactly the reason a
 	// button label is: it describes a script, not a site.
 	QStringList detectors() const;
+
+	// --- Exchanging rule sets -------------------------------------------------
+	//
+	// Local for now: a file someone sends, not a protocol. That is the whole
+	// transport decision deferred, and deliberately — what a received rule must
+	// *prove* is the part that has to be right first, and it does not change
+	// when the bytes eventually arrive over something else.
+	//
+	// **The threat is specific and worth naming.** A consent rule is a licence
+	// to click buttons on pages the user is logged into. An `accept` pattern of
+	// `^.*$` would press the first button on every banner-shaped thing on every
+	// site — "Delete account" included. So an imported rule is not trusted for
+	// being well-formed; it has to survive the same kind of breadth check §12.4
+	// runs on a filter rule before that one is allowed to block anything.
+	struct import_result {
+		QList<site_rule> accepted;
+		QStringList      refused;    // human-readable, one per rejected rule
+	};
+
+	// Everything learned here, as a document to hand to someone else. Built-ins
+	// are left out: the recipient's program already has its own, and a copy
+	// would go stale the day either side changes.
+	QJsonObject export_learned() const;
+
+	// Judge a document from elsewhere. Nothing is added to this set — the caller
+	// shows the result and adds what the user accepts, so importing can never be
+	// something that happened while a dialog was opening.
+	static import_result judge_import(const QJsonObject &doc);
+
+	// The breadth check, exposed because it is the whole safety story and
+	// deserves to be testable on its own. Empty return means the rule is safe to
+	// offer; otherwise it is the reason to refuse.
+	static QString why_unsafe(const site_rule &r);
 
 	QJsonObject to_json() const;
 	static site_rules from_json(const QJsonObject &o);

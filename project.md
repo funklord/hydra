@@ -785,6 +785,52 @@ the filter list), not a table in the binary, and the built-in set is
 deliberately thin: a long vendor list looks like thoroughness and is really
 maintenance debt.
 
+### Sharing, as far as it can go without a transport decision
+
+Proceeding under a stated assumption, since the direction was given and the
+transport was not: **sharing means a file someone sends**, exported and imported
+explicitly. No network anything. That defers the transport deliberately, because
+the part that had to be right first is what a received rule must *prove*, and
+that does not change when the bytes eventually arrive some other way.
+
+**The threat is specific and worth naming plainly.** A consent rule is a licence
+to click buttons on pages the user is signed into. An `accept` pattern of `^.*$`
+presses the first button on every banner-shaped thing on every site — "Delete
+account" included. So an imported rule is not trusted for being well-formed. It
+faces `why_unsafe`, which is §12.4's argument applied to a different corpus:
+decide what a rule *would* do before letting it do anything.
+
+| refused | because |
+|---|---|
+| `^.*$`, or anything matching an empty label | it matches everything |
+| `^(accept\|delete account)$` | it would also press "Delete account" |
+| an uncompilable pattern | it cannot be reasoned about at all |
+| a detector name under five characters | the message it drives tells someone to lower their protection |
+| `*`, `body`, `html` as a container | it matches the whole page |
+
+The decoy list it is checked against is deliberately full of destructive,
+expensive and irrelevant buttons, because those are what a hostile or careless
+rule would reach.
+
+**A sender does not describe their own rule's standing.** `builtin` and
+`promote` are taken from the document and thrown away; an imported rule is
+marked `imported`, and an imported rule is **never** proposed for our binary. It
+has been vouched for by nobody here — which is exactly the distinction the
+provenance field was added for, now earning its keep.
+
+**Nothing is added by opening a file.** What survived the check is shown, and
+adding it is a second, deliberate act. A rule set from elsewhere should not be
+something acquired by browsing to a filename.
+
+**And the same check now guards the local path**, which was the more interesting
+consequence. A learned rule carries no host, so it applies to *every* site: a
+banner whose button reads "Yes" would teach a rule that presses "Yes"
+everywhere, confirmation dialogs included. Being offered by the page is not the
+same as being safe to generalise, and the dialog says so with the reason instead
+of quietly learning it.
+
+**17 checks** on the judgement alone, plus two on the local path.
+
 **Sharing is not built and the shape for it is.** The stated direction is that
 these rule sets travel between users, peer-to-peer or otherwise; everything here
 is local. What that costs today is one field — every rule carries provenance —
@@ -2573,6 +2619,57 @@ page.
    cautions at the top of this file.
 5. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
    Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
+
+## Sharing rule sets: the transport is open, and deliberately
+
+**Why it is deferred, recorded so it is not mistaken for an oversight:** whether
+Hydra becomes part of `../fuzzypickles`, borrows its transfer machinery, or
+grows its own peer-to-peer layer is undecided. Until that is settled, picking a
+transport here would be committing the answer by accident.
+
+**What is already built does not depend on it.** `judge_import()` takes a
+*document*, not a file or a socket, and `export_learned()` produces one. The
+safety core — what a received rule must prove — is where the risk lives and it
+is transport-free. Whatever eventually carries the bytes plugs in underneath.
+
+**What fuzzypickles already has**, since it is one of the three options and the
+answer turned out to be "most of it":
+
+- **Content-addressed blobs are implemented** (`core/src/blob_internal.h`, their
+  §11): chunked, each chunk independently AEAD-sealed, with a Merkle tree over
+  the **ciphertext**. Both verifiers, bisection addressing, have-sets,
+  want/serve assignment, assembly, the wire exchange, and a CLI (`blob-add`,
+  `blob-export`, …). Their own note is that stickers, file transfer and the
+  global store are *one* mechanism, not three — a rule set would be a fourth
+  user of it rather than anything new.
+- **The Merkle-over-ciphertext ordering gives integrity without trust.** Any
+  host verifies chunks against the root with no key at all, so a relay can serve
+  bytes it cannot read. For a shared rule corpus that is exactly the property
+  wanted: distribution without the distributor being able to alter it.
+- **Sealing is deterministic**, so two people who export the same rules produce
+  the same blob — dedup and a stable identity for "this rule set" come free.
+- **A capability model and TOFU contact cards exist**, which is where an
+  *authorship* answer would come from if one is wanted.
+
+**And their §3 already settles the question I had been holding open.** Their
+`config_sync` header states it plainly: an authenticated link does **not**
+authorize what travels over it, so a config change carries its own proof rather
+than relying on the channel. Applied here that means `why_unsafe` keeps running
+even over a trusted peer link — a rule set from a friend is still a licence to
+click buttons on pages you are signed into, and a friend can be careless or
+compromised. The check is not a stand-in for a transport that has not arrived
+yet; it is the part that stays.
+
+So the three options differ in what they *add*, not in what they replace:
+
+| option | what it supplies | what it costs |
+|---|---|---|
+| part of fuzzypickles | blobs, identity, capabilities, an existing peer network | Hydra stops being a standalone Qt app with no daemon |
+| use its transfer machinery | the same blob mechanism, as a dependency | a C core dependency and a running daemon to talk to |
+| roll our own | no new dependency | rebuilding chunking, verification and peer discovery, all of which exist next door |
+
+Nothing here needs deciding to keep going: rule sets exchange as files today,
+and every option above is additive to that.
 
 ## Open decisions and risks
 

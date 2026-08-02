@@ -2,6 +2,7 @@
 #include "site_rules.h"
 
 #include <QFile>
+#include <QRegularExpression>
 #include <QJsonArray>
 #include <QJsonDocument>
 
@@ -56,7 +57,9 @@ void site_rules::add(const site_rule &r) {
 	// flag here rather than at the call sites means it cannot be forgotten by
 	// whichever path learns the next one.
 	site_rule c = r;
-	if (!c.builtin && c.generic())
+	// Generic *and ours*. A rule somebody sent is not something to propose for
+	// everyone's binary on their say-so; it has been vouched for by nobody here.
+	if (!c.builtin && !c.imported && c.generic())
 		c.promote = true;
 	m_rules.append(c);
 }
@@ -77,6 +80,115 @@ QList<site_rule> site_rules::promotable() const {
 	return out;
 }
 
+namespace {
+
+// Ordinary buttons that appear on ordinary pages. A consent pattern that fires
+// on any of these is not a consent pattern; it is a licence to press whatever
+// is in front of it. This is the same idea as §12.4's static breadth check on a
+// filter rule — decide what a rule *would* do before letting it do anything —
+// and the list is deliberately full of things that are destructive, expensive,
+// or simply nothing to do with cookies.
+const char *k_decoys[] = {
+	"Delete account", "Delete", "Buy now", "Confirm order", "Pay", "Subscribe",
+	"Unsubscribe", "Send", "Post", "Reply", "Log out", "Sign out", "Transfer",
+	"Continue to checkout", "Yes", "No", "Cancel", "Save", "Submit", "Next",
+};
+
+}  // namespace
+
+QString site_rules::why_unsafe(const site_rule &r) {
+	static const QStringList kinds = { "container", "reject", "accept", "detector" };
+	if (!kinds.contains(r.kind))
+		return QString("unknown kind \"%1\"").arg(r.kind.left(20));
+	const QString v = r.value.trimmed();
+	if (v.isEmpty())
+		return QStringLiteral("empty rule");
+	if (v.size() > 200)
+		return QStringLiteral("absurdly long");
+
+	if (r.kind == "detector") {
+		// A detector name drives a message telling someone to lower their
+		// protection, and it matches as a substring of a file name. Two letters
+		// would accuse half the web.
+		if (v.size() < 5)
+			return QStringLiteral("too short to identify a script");
+		if (!QRegularExpression("^[A-Za-z0-9._-]+$").match(v).hasMatch())
+			return QStringLiteral("a detector is a file-name fragment, not a "
+			                       "pattern");
+		return QString();
+	}
+
+	if (r.kind == "container") {
+		// A selector, not a regex. `*` or `body` would hand every page's first
+		// button to the clicker.
+		if (v == "*" || v == "body" || v == "html" || v == "div")
+			return QStringLiteral("matches the whole page");
+		return QString();
+	}
+
+	// reject / accept: a regex that will be tested against button labels.
+	QRegularExpression re(v, QRegularExpression::CaseInsensitiveOption);
+	if (!re.isValid())
+		return QStringLiteral("not a valid pattern");
+	if (re.match(QString()).hasMatch())
+		return QStringLiteral("matches an empty label, so it matches anything");
+	for (const char *d : k_decoys) {
+		const QString decoy = QString::fromUtf8(d);
+		if (re.match(decoy).hasMatch())
+			return QString("would also press \"%1\"").arg(decoy);
+	}
+	return QString();
+}
+
+QJsonObject site_rules::export_learned() const {
+	QJsonArray arr;
+	for (const site_rule &r : m_rules) {
+		if (r.builtin)
+			continue;
+		QJsonObject o;
+		o.insert("kind", r.kind);
+		o.insert("value", r.value);
+		if (!r.host.isEmpty()) o.insert("host", r.host);
+		if (!r.note.isEmpty()) o.insert("note", r.note);
+		arr.append(o);
+	}
+	QJsonObject root;
+	root.insert("version", 1);
+	root.insert("kind", "hydra-site-rules");
+	root.insert("rules", arr);
+	return root;
+}
+
+site_rules::import_result site_rules::judge_import(const QJsonObject &doc) {
+	import_result out;
+	if (doc.value("kind").toString() != "hydra-site-rules") {
+		out.refused << "not a Hydra rule file";
+		return out;
+	}
+	const QJsonArray arr = doc.value("rules").toArray();
+	if (arr.isEmpty())
+		out.refused << "the file contains no rules";
+	for (const QJsonValue &v : arr) {
+		const QJsonObject e = v.toObject();
+		site_rule r;
+		r.kind  = e.value("kind").toString();
+		r.value = e.value("value").toString();
+		r.host  = e.value("host").toString();
+		r.note  = e.value("note").toString();
+		// Never taken from the document. A sender does not get to declare that
+		// their rule is a built-in, or that it is already flagged for shipping.
+		r.builtin = false;
+		r.promote = false;
+		r.imported = true;
+		const QString bad = why_unsafe(r);
+		if (bad.isEmpty())
+			out.accepted << r;
+		else
+			out.refused << QString("%1 (%2): %3").arg(r.kind, r.value.left(40), bad);
+	}
+	return out;
+}
+
 QJsonObject site_rules::to_json() const {
 	QJsonArray arr;
 	for (const site_rule &r : m_rules) {
@@ -90,6 +202,7 @@ QJsonObject site_rules::to_json() const {
 		if (!r.host.isEmpty()) o.insert("host", r.host);
 		if (!r.note.isEmpty()) o.insert("note", r.note);
 		if (r.promote) o.insert("promote", true);
+		if (r.imported) o.insert("imported", true);
 		arr.append(o);
 	}
 	QJsonObject root;
@@ -108,6 +221,7 @@ site_rules site_rules::from_json(const QJsonObject &o) {
 		c.value = e.value("value").toString();
 		c.host  = e.value("host").toString();
 		c.note  = e.value("note").toString();
+		c.imported = e.value("imported").toBool();
 		if (c.kind.isEmpty() || c.value.isEmpty())
 			continue;
 		r.add(c);

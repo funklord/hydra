@@ -419,6 +419,17 @@ int main(int argc, char *argv[]) {
 			}
 		}
 
+		// A label too generic to apply everywhere is refused, with a reason,
+		// rather than quietly learned. The rule would carry no host.
+		{
+			const site_rule risky = blocker->rule_from_label("Yes", "accept");
+			check(!site_rules::why_unsafe(risky).isEmpty(),
+			      "a label like \"Yes\" is refused as a site-wide rule");
+			const site_rule fine = blocker->rule_from_label("Avvis alle", "reject");
+			check(site_rules::why_unsafe(fine).isEmpty(),
+			      "while a banner-specific one is fine");
+		}
+
 		const QList<site_rule> flagged = blocker->rules().promotable();
 		check(flagged.size() == 1,
 		      "accepting adds exactly one rule, flagged for the built-ins");

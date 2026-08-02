@@ -5,6 +5,10 @@
 #include "antiadblock_watch.h"
 #include "site_rules.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -410,6 +414,74 @@ int main(int argc, char **argv) {
 		check(learned.promotable().size() == 1 &&
 		          learned.promotable().first().kind == "detector",
 		      "and is flagged for the built-ins like any other generic rule");
+	}
+
+	section("what a rule from somebody else has to prove");
+	{
+		// A consent rule is a licence to click buttons on pages the user is
+		// logged into, so an imported one is not trusted for being well-formed.
+		// This is §12.4's argument applied to a different corpus: decide what a
+		// rule would do before letting it do anything.
+		auto refused = [](const char *kind, const char *value) {
+			site_rule r; r.kind = kind; r.value = value;
+			return site_rules::why_unsafe(r);
+		};
+		check(!refused("accept", "^.*$").isEmpty(),
+		      "a pattern matching everything is refused");
+		check(refused("accept", "^(ok|accept)$").isEmpty(),
+		      "while an ordinary accept pattern passes");
+		check(!refused("accept", "^(accept|delete account)$").isEmpty(),
+		      "a pattern that would also press Delete account is refused");
+		check(refused("accept", "^(accept|delete account)$").contains("Delete"),
+		      "and the reason names the button it would have pressed");
+		check(!refused("reject", "[unclosed").isEmpty(),
+		      "an uncompilable pattern is refused rather than silently ignored");
+		check(!refused("detector", "ad").isEmpty(),
+		      "a two-letter detector name is refused — it would accuse half the "
+		      "web, and the message tells someone to lower their protection");
+		check(refused("detector", "fuckadblock").isEmpty(),
+		      "while a real one passes");
+		check(!refused("container", "*").isEmpty(),
+		      "a selector matching the whole page is refused");
+		check(!refused("nonsense", "x").isEmpty(), "an unknown kind is refused");
+
+		// A sender does not get to describe their own rule's standing.
+		site_rules mine = site_rules::defaults();
+		site_rule learned; learned.kind = "reject"; learned.value = "^avvis alle$";
+		mine.add(learned);
+		const QJsonObject doc = mine.export_learned();
+		check(doc.value("rules").toArray().size() == 1,
+		      "export carries what was learned here");
+		check(QJsonDocument(doc).toJson().contains("hydra-site-rules"),
+		      "and says what kind of file it is");
+
+		QJsonObject hostile = doc;
+		QJsonArray rules = hostile.value("rules").toArray();
+		QJsonObject sneak;
+		sneak.insert("kind", "accept");
+		sneak.insert("value", "^.*$");
+		sneak.insert("builtin", true);      // claims to be shipped
+		sneak.insert("promote", true);      // claims to be already blessed
+		rules.append(sneak);
+		hostile.insert("rules", rules);
+
+		const site_rules::import_result got = site_rules::judge_import(hostile);
+		check(got.accepted.size() == 1, "the safe rule is offered");
+		check(got.refused.size() == 1, "and the dangerous one is not");
+		check(!got.accepted.isEmpty() && got.accepted.first().imported,
+		      "what is offered is marked as having come from elsewhere");
+		check(!got.accepted.isEmpty() && !got.accepted.first().builtin,
+		      "a sender cannot declare their rule a built-in");
+
+		site_rules after = site_rules::defaults();
+		for (const site_rule &r : got.accepted)
+			after.add(r);
+		check(after.promotable().isEmpty(),
+		      "and an imported rule is never proposed for our binary — it has "
+		      "been vouched for by nobody here");
+
+		check(site_rules::judge_import(QJsonObject()).accepted.isEmpty(),
+		      "a file that is not a rule file yields nothing");
 	}
 
 	section("every way of spelling the function");
