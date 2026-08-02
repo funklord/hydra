@@ -70,6 +70,7 @@ add_executable(test_settings test_settings.cpp
     ${H}/settings_dialog.cpp ${H}/download_manager.cpp ${H}/download_source.h
     ${H}/torrent_download_source.cpp ${H}/player_launcher.cpp
     ${H}/media_detector.cpp ${H}/ollama_provider.cpp ${H}/claude_provider.cpp
+    ${H}/policy.cpp ${H}/policy_engine.cpp
     ${H}/ai_provider.h)
 target_link_libraries(test_settings PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
 

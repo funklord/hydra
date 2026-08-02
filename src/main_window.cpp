@@ -1313,8 +1313,14 @@ void main_window::open_settings() {
 	QString ignored;
 	choose_ai(&ignored);          // make sure the providers exist to configure
 	settings_dialog dlg(m_players, m_downloads, m_torrents, m_local_ai,
-	                     m_external_ai, this);
+	                     m_external_ai, m_policy, this);
 	dlg.exec();
+	// Global defaults may have moved, and every live view was configured from
+	// the old ones. Re-apply rather than wait for the next navigation, or the
+	// setting appears not to have taken until the page is reloaded.
+	for (auto it = m_views_by_id.cbegin(); it != m_views_by_id.cend(); ++it)
+		if (it.value())
+			apply_policy(it.value(), it.value()->url().host());
 }
 
 void main_window::open_downloads() {

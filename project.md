@@ -1210,6 +1210,67 @@ iterating `m_transfers`, and `abort()` delivers `finished()` synchronously,
 which re-entered `teardown()` and mutated the map mid-iteration. The map is
 now emptied first.
 
+## The settings window, and what other browsers do with theirs
+
+The layout was settled by looking rather than by taste. Firefox and Chromium are
+both installed here, so their preference structures were read out of the
+shipping builds — Firefox's panes and group ids come straight out of
+`omni.ja`'s `preferences.xhtml`.
+
+**Three things came back worth copying.**
+
+- **A category list, not tabs.** Firefox, Chrome and Vivaldi all present
+  preferences as a vertical list beside a stack, and all three moved that way as
+  the count grew. The reason is mechanical: a tab strip runs out of width and
+  starts eliding or wrapping, while a list has room for a name that says what is
+  inside. Hydra had three tabs and passed four the moment site defaults arrived,
+  so it moved too.
+- **Privacy is one page, and its order is deliberate.** Firefox's privacy pane
+  runs tracking → site data → **cookie banners** → passwords → history →
+  permissions. Cookie-banner handling sitting directly after site data and
+  before permissions is the right adjacency and was adopted: a banner is a
+  question *about cookies*, and permissions are a different subject.
+- **Firefox ships the banner blocker too**, which is a useful check on the
+  design rather than a coincidence. Theirs is a single checkbox — "Automatically
+  refuse cookie banners", private browsing only, "Only on supported sites". Two
+  differences are deliberate here and worth stating. Hydra will **accept** where
+  that is the only exit a banner offers, because refusing on principle leaves
+  the page unreadable and unreadable was the problem. And it is a per-site
+  tri-state like every other blocking option rather than one global switch,
+  because the shield already governs everything else that way.
+
+**The gap the survey exposed was not layout.** Every per-site feature had a
+global default that only the shield could reach — so "what does this browser
+allow by default" was answerable only through a popup attached to whichever page
+happened to be open. There is a Privacy & security page now, built by walking
+the feature enum, with a hand-written table deciding grouping and order.
+
+**The table is not the mechanism, and that is the point.** A feature the table
+does not mention still appears, under "Other". A settings screen that silently
+omits a switch because nobody updated a list is worse than one with an untidy
+last section — and four features were added to that enum in a week. Checked by
+asserting that *every* feature has a control, so the check fails when the next
+one is added and nothing places it.
+
+**A defect it found on the way.** Saving was wired to the OK button's signal
+rather than to acceptance, so any other route — code calling `accept()`, a
+changed default button, a shortcut — would have closed the window and discarded
+everything typed into it. `accept()` is overridden now. Found by a test doing
+the obvious programmatic thing, which is the whole argument for driving a dialog
+rather than reading it.
+
+**15 checks** (`tests/live/try_settings_ui`): the list and stack exist and are
+connected both ways, privacy comes first, all sixteen features have a control
+including the banner blocker, a global default offers allow or block and never
+"default" — that is what a *site* says when it falls through to here, so
+offering it at this level would be a setting pointing at itself — accepting
+writes through to the engine and leaves untouched features alone, and cancelling
+writes nothing. Changing a default also re-applies policy to every live view, or
+the setting appears not to have taken until the page is reloaded.
+
+**Still not in here:** kiosk (§8's `kiosk_config` remains code-level defaults
+with no way to edit it), and the filter list. Those are the next two pages.
+
 ## Settings (arch §11.3, §11.4)
 
 Tools → Settings…. Two pages, both of which existed only as API before —

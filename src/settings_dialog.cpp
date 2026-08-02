@@ -11,8 +11,12 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QComboBox>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QListWidget>
+#include <QStackedWidget>
+#include "policy_engine.h"
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -139,24 +143,76 @@ void save_from(player_launcher *players, download_manager *downloads,
 
 // -------------------------------------------------------------- the dialog --
 
+namespace {
+
+// Which page a per-site feature belongs on, and in which group.
+//
+// Grouped by hand because the order is an editorial judgement -- Firefox puts
+// cookie-banner handling directly after site data and before permissions, and
+// that is the right adjacency: the banner is about cookies, and permissions are
+// a different question. But the *fallback* matters more than the table: a
+// feature not listed here still appears, under "Other". A settings screen that
+// silently omits a switch because nobody updated a list is worse than one with
+// an untidy last section, and this project has added four features to that enum
+// in a week.
+struct feature_group { policy::feature f; const char *group; };
+
+const feature_group k_privacy_layout[] = {
+	{ policy::feature::javascript,          "Content" },
+	{ policy::feature::images,              "Content" },
+	{ policy::feature::autoplay,            "Content" },
+	{ policy::feature::popups,              "Content" },
+	{ policy::feature::ads,                 "Content" },
+	{ policy::feature::cookies,             "Cookies and site data" },
+	{ policy::feature::third_party_cookies, "Cookies and site data" },
+	{ policy::feature::cookie_notices,      "Cookies and site data" },
+	{ policy::feature::geolocation,         "Permissions" },
+	{ policy::feature::camera,              "Permissions" },
+	{ policy::feature::microphone,          "Permissions" },
+	{ policy::feature::notifications,       "Permissions" },
+	{ policy::feature::referer,             "Sent with requests" },
+	{ policy::feature::autofill,            "Passwords" },
+};
+
+}  // namespace
+
 settings_dialog::settings_dialog(player_launcher *players,
                                   download_manager *downloads,
                                   torrent_download_source *torrents,
                                   ollama_provider *local_ai,
                                   claude_provider *external_ai,
-                                  QWidget *parent)
-	: QDialog(parent), m_players(players), m_downloads(downloads),
-	  m_torrents(torrents), m_local_ai(local_ai), m_external_ai(external_ai) {
+                                  policy_engine *policy, QWidget *parent)
+	: QDialog(parent), m_policy(policy), m_players(players),
+	  m_downloads(downloads), m_torrents(torrents), m_local_ai(local_ai),
+	  m_external_ai(external_ai) {
 	setWindowTitle("Settings");
 	resize(660, 620);
 
+	// A category list beside a stack, not tabs. Every browser that outgrew four
+	// preference tabs made this move -- Firefox, Chrome and Vivaldi all present a
+	// list -- and for a plain reason: tab strips run out of width and start
+	// eliding or wrapping, while a vertical list has room for a name that says
+	// what is inside. Hydra passed four the moment site defaults arrived.
 	auto *outer = new QVBoxLayout(this);
-	auto *tabs  = new QTabWidget(this);
-	outer->addWidget(tabs, 1);
+	auto *split = new QHBoxLayout;
+	outer->addLayout(split, 1);
 
+	m_categories = new QListWidget(this);
+	m_categories->setObjectName("categories");
+	m_categories->setMaximumWidth(190);
+	split->addWidget(m_categories);
+
+	auto *stack = new QStackedWidget(this);
+	stack->setObjectName("pages");
+	split->addWidget(stack, 1);
+	connect(m_categories, &QListWidget::currentRowChanged,
+	         stack, &QStackedWidget::setCurrentIndex);
+
+	auto *privacy_page = new QWidget;
 	auto *player_page = new QWidget;
 	auto *dl_page     = new QWidget;
 	auto *ai_page     = new QWidget;
+	build_privacy_page(privacy_page);
 	build_player_page(player_page);
 	build_download_page(dl_page);
 	build_ai_page(ai_page);
@@ -165,33 +221,38 @@ settings_dialog::settings_dialog(player_launcher *players,
 	// depends on the system font and the user's scaling — any fixed dialog
 	// height is a guess that silently clips the explanation on somebody's
 	// machine, which is worse than a scrollbar.
-	auto wrap = [tabs](QWidget *page) {
-		auto *area = new QScrollArea(tabs);
+	auto wrap = [stack](QWidget *page) {
+		auto *area = new QScrollArea(stack);
 		area->setWidget(page);
 		area->setWidgetResizable(true);
 		area->setFrameShape(QFrame::NoFrame);
 		return area;
 	};
-	tabs->addTab(wrap(player_page), "&Player");
-	tabs->addTab(wrap(dl_page), "&Downloads");
+	// Privacy first, because it is the one page that is about what the browser
+	// refuses to do on your behalf and the others are about conveniences.
+	auto add_page = [&](QWidget *w, const QString &name) {
+		stack->addWidget(w);
+		m_categories->addItem(name);
+	};
+	add_page(wrap(privacy_page), "Privacy && security");
+	add_page(wrap(player_page), "Media && players");
+	add_page(wrap(dl_page), "Downloads");
 
 	// The AI page scrolls, but its status line does not. It is the answer to
 	// the button directly above it, and a result that has scrolled out of
 	// sight is the same as no result — pressing Check now would appear to do
 	// nothing at all.
-	auto *ai_tab = new QWidget(tabs);
+	auto *ai_tab = new QWidget(stack);
 	auto *ai_col = new QVBoxLayout(ai_tab);
 	ai_col->setContentsMargins(0, 0, 0, 0);
 	ai_col->addWidget(wrap(ai_page), 1);
 	ai_col->addWidget(m_ai_status);
-	tabs->addTab(ai_tab, "&AI");
+	add_page(ai_tab, "AI");
+	m_categories->setCurrentRow(0);
 
 	auto *buttons = new QDialogButtonBox(
 		QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-	connect(buttons, &QDialogButtonBox::accepted, this, [this] {
-		apply();
-		accept();
-	});
+	connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 	outer->addWidget(buttons);
 
@@ -209,6 +270,83 @@ settings_dialog::settings_dialog(player_launcher *players,
 	}
 
 	load();
+}
+
+void settings_dialog::build_privacy_page(QWidget *page) {
+	auto *v = new QVBoxLayout(page);
+
+	auto *intro = new QLabel(
+		"What every site is allowed to do unless you have said otherwise for "
+		"that site. The shield in the toolbar sets exceptions per site, and an "
+		"exception always wins over what is chosen here.", page);
+	intro->setWordWrap(true);
+	v->addWidget(intro);
+
+	if (!m_policy) {
+		v->addWidget(new QLabel("No policy engine was supplied.", page));
+		v->addStretch(1);
+		return;
+	}
+
+	m_feature_combos.clear();
+	for (int i = 0; i < policy::feature_count(); ++i)
+		m_feature_combos.append(nullptr);
+
+	// Build the groups in the order the table declares them, then sweep up
+	// anything the table does not mention. The sweep is the part that matters:
+	// it is what stops a newly added feature from being invisible here.
+	QStringList order;
+	for (const feature_group &fg : k_privacy_layout)
+		if (!order.contains(QString::fromUtf8(fg.group)))
+			order << QString::fromUtf8(fg.group);
+	order << "Other";
+
+	auto row_for = [&](QFormLayout *form, policy::feature f) {
+		auto *combo = new QComboBox(page);
+		// Global defaults are always allow or block. "Default" is what a *site*
+		// says when it has no opinion and falls through to here, so offering it
+		// at this level would be a setting that points at itself.
+		combo->addItem("Allow", int(policy::setting::allow));
+		combo->addItem("Block", int(policy::setting::block));
+		const policy::setting cur = m_policy->global_default(f);
+		combo->setCurrentIndex(cur == policy::setting::block ? 1 : 0);
+		combo->setObjectName(QString("feature_%1").arg(policy::feature_name(f)));
+		m_feature_combos[int(f)] = combo;
+		form->addRow(QString(policy::feature_label(f)) + ":", combo);
+	};
+
+	for (const QString &group_name : order) {
+		auto *box = new QGroupBox(group_name, page);
+		auto *form = new QFormLayout(box);
+		int rows = 0;
+		for (int i = 0; i < policy::feature_count(); ++i) {
+			const auto f = static_cast<policy::feature>(i);
+			QString mine = "Other";
+			for (const feature_group &fg : k_privacy_layout)
+				if (fg.f == f)
+					mine = QString::fromUtf8(fg.group);
+			if (mine != group_name)
+				continue;
+			row_for(form, f);
+			++rows;
+		}
+		if (rows == 0) {
+			delete box;
+			continue;
+		}
+		v->addWidget(box);
+	}
+
+	auto *note = new QLabel(
+		"<i>Cookie consent banners</i>: blocking them means Hydra answers the "
+		"\"do you want to accept cookies?\" dialog for you, taking the least "
+		"permissive option a site actually offers. Answering one allows that "
+		"site's own cookies, because the choice is itself stored in a cookie "
+		"and would otherwise be forgotten on every visit.", page);
+	note->setWordWrap(true);
+	v->addWidget(note);
+
+	v->addStretch(1);
 }
 
 void settings_dialog::build_player_page(QWidget *page) {
@@ -598,7 +736,24 @@ void settings_dialog::update_custom_state() {
 	}
 }
 
+void settings_dialog::accept() {
+	apply();
+	QDialog::accept();
+}
+
 void settings_dialog::apply() {
+	if (m_policy) {
+		for (int i = 0; i < m_feature_combos.size(); ++i) {
+			QComboBox *c = m_feature_combos[i];
+			if (!c)
+				continue;
+			const auto want =
+				static_cast<policy::setting>(c->currentData().toInt());
+			const auto f = static_cast<policy::feature>(i);
+			if (m_policy->global_default(f) != want)
+				m_policy->set_global_default(f, want);
+		}
+	}
 	if (m_players) {
 		// The command first: selecting Custom… is only meaningful once the
 		// launcher knows what to run, and set_custom_command re-resolves

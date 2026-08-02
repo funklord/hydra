@@ -8,6 +8,7 @@
 
 class QCheckBox;
 class QComboBox;
+class QListWidget;
 class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
@@ -31,14 +32,25 @@ class torrent_download_source;
 //
 // Values are read and written through `settings_store` below, so the dialog
 // owns presentation and the store owns persistence and application.
+class policy_engine;
+
 class settings_dialog : public QDialog {
 	Q_OBJECT
 public:
 	settings_dialog(player_launcher *players, download_manager *downloads,
 	                 torrent_download_source *torrents, ollama_provider *local_ai,
-	                 claude_provider *external_ai, QWidget *parent = nullptr);
+	                 claude_provider *external_ai, policy_engine *policy = nullptr,
+	                 QWidget *parent = nullptr);
+
+	// Saving belongs to *accepting*, not to a particular button. It hung off the
+	// OK button's signal, so any other route to acceptance -- code calling
+	// accept(), a future default-button change, a shortcut -- would have closed
+	// the window and silently discarded everything typed into it. Found by a
+	// test that accepted the dialog the obvious programmatic way.
+	void accept() override;
 
 private:
+	void build_privacy_page(QWidget *page);
 	void build_player_page(QWidget *page);
 	void build_download_page(QWidget *page);
 	void build_ai_page(QWidget *page);
@@ -52,12 +64,17 @@ private:
 	void apply();
 	void update_custom_state();
 
+	policy_engine           *m_policy   = nullptr;
 	player_launcher         *m_players  = nullptr;
 	download_manager        *m_downloads = nullptr;
 	torrent_download_source *m_torrents = nullptr;
 	ollama_provider         *m_local_ai = nullptr;
 	claude_provider         *m_external_ai = nullptr;
 
+	// One combo per policy feature, indexed by the enum, so a feature added to
+	// the model turns up here without anyone remembering to add a row.
+	QListWidget          *m_categories = nullptr;
+	QList<QComboBox *>    m_feature_combos;
 	QList<QRadioButton *> m_player_buttons;
 	QVBoxLayout    *m_player_group_layout = nullptr;
 	QLineEdit      *m_custom_cmd   = nullptr;
