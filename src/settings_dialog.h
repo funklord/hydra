@@ -3,6 +3,8 @@
 
 #include "ai_provider.h"
 
+#include "kiosk_controller.h"
+
 #include <QDialog>
 #include <QList>
 
@@ -51,6 +53,9 @@ public:
 
 private:
 	void build_privacy_page(QWidget *page);
+	void build_kiosk_page(QWidget *page);
+	void load_kiosk();
+	void apply_kiosk();
 	void build_player_page(QWidget *page);
 	void build_download_page(QWidget *page);
 	void build_ai_page(QWidget *page);
@@ -74,6 +79,15 @@ private:
 	// One combo per policy feature, indexed by the enum, so a feature added to
 	// the model turns up here without anyone remembering to add a row.
 	QListWidget          *m_categories = nullptr;
+	QLineEdit            *m_kiosk_home   = nullptr;
+	QSpinBox             *m_kiosk_w      = nullptr;
+	QSpinBox             *m_kiosk_h      = nullptr;
+	QComboBox            *m_kiosk_scale  = nullptr;
+	QComboBox            *m_kiosk_fit    = nullptr;
+	QCheckBox            *m_kiosk_cursor = nullptr;
+	QSpinBox             *m_kiosk_idle   = nullptr;
+	QCheckBox            *m_kiosk_dog    = nullptr;
+	QCheckBox            *m_kiosk_escape = nullptr;
 	QList<QComboBox *>    m_feature_combos;
 	QList<QRadioButton *> m_player_buttons;
 	QVBoxLayout    *m_player_group_layout = nullptr;
@@ -121,6 +135,13 @@ void save_from(player_launcher *players, download_manager *downloads,
 // Which backend the user picked. Read straight from storage rather than held
 // on any one object, because it is a preference *about* providers rather than
 // a property of either of them.
+// Kiosk (§8). Kept here rather than on the controller for the same reason the
+// AI mode is: it is a preference *about* a session that may not exist yet, and
+// until now it was code-level defaults with no way to reach it from the app at
+// all — a presentation mode nobody could configure.
+kiosk_config kiosk();
+void set_kiosk(const kiosk_config &c);
+
 ai_choice ai_mode();
 void set_ai_mode(ai_choice mode);
 

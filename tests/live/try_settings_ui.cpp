@@ -18,6 +18,7 @@
 #include "download_manager.h"
 
 #include <QApplication>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QListWidget>
 #include <QSettings>
@@ -130,6 +131,45 @@ int main(int argc, char **argv) {
 		check(policy.global_default(policy::feature::javascript) ==
 		          policy::setting::allow,
 		      "closing without accepting changes nothing");
+	}
+
+	section("kiosk, which had no way to be configured at all");
+	{
+		settings_dialog d3(&players, &downloads, nullptr, nullptr, nullptr, &policy);
+		d3.show();
+		auto *cats3 = d3.findChild<QListWidget *>("categories");
+		bool has_kiosk = false;
+		for (int i = 0; i < cats3->count(); ++i)
+			if (cats3->item(i)->text() == "Kiosk") has_kiosk = true;
+		check(has_kiosk, "it has a page now");
+
+		auto *scale = d3.findChild<QComboBox *>("kiosk_scale");
+		auto *esc   = d3.findChild<QCheckBox *>("kiosk_escape");
+		check(scale && esc, "with the scaling path and the lockdown flag on it");
+		check(esc && esc->isChecked(),
+		      "and Esc leaves by default — the lockdown is opt-in, because "
+		      "switching it on can leave no way out but killing the process");
+
+		// Round trip through storage, since the point of the page is that the
+		// value survives to the next run.
+		scale->setCurrentIndex(scale->findData(int(scale_mode::geometric)));
+		esc->setChecked(false);
+		d3.accept();
+		const kiosk_config saved = settings_store::kiosk();
+		check(saved.scale == scale_mode::geometric, "the scaling path is saved");
+		check(!saved.allow_escape, "and so is the lockdown flag");
+
+		settings_dialog d4(&players, &downloads, nullptr, nullptr, nullptr, &policy);
+		d4.show();
+		auto *esc4 = d4.findChild<QCheckBox *>("kiosk_escape");
+		check(esc4 && !esc4->isChecked(),
+		      "and a freshly opened window shows what was stored, not the "
+		      "compiled-in default");
+		// Leave storage as found.
+		esc4->setChecked(true);
+		d4.findChild<QComboBox *>("kiosk_scale")
+		    ->setCurrentIndex(0);
+		d4.accept();
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

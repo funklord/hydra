@@ -499,8 +499,14 @@ void main_window::toggle_kiosk() {
 		return;
 	}
 
-	kiosk_config c = m_kiosk->config();
-	c.home = v->url();
+	// Saved settings, not the controller's compiled-in defaults: this is the
+	// whole difference between the kiosk page existing and mattering.
+	kiosk_config c = settings_store::kiosk();
+	// A configured home wins, because someone who set one meant it for exactly
+	// this. With none, the tab you were on is the sensible thing to show and is
+	// what it has always done.
+	if (!c.home.isValid() || c.home.toString().isEmpty())
+		c.home = v->url();
 	m_kiosk->set_config(c);
 
 	m_stack->removeWidget(v->widget());   // the controller takes it from here

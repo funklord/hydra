@@ -1268,8 +1268,35 @@ writes through to the engine and leaves untouched features alone, and cancelling
 writes nothing. Changing a default also re-applies policy to every live view, or
 the setting appears not to have taken until the page is reloaded.
 
-**Still not in here:** kiosk (§8's `kiosk_config` remains code-level defaults
-with no way to edit it), and the filter list. Those are the next two pages.
+### Kiosk, which nobody could configure
+
+§8 has had a settings gap since step 4: `kiosk_config` was code-level defaults
+with no way to reach them from the app, so a presentation mode meant for
+unattended displays could only be set up by editing the source and rebuilding.
+It has a page now — home page and idle-return, scaling path and fit and design
+size, cursor hiding, the render-process watchdog, and the escape flag.
+
+**The page carries §8.1's warning where the choice is made**, not only in the
+header file: reflow cannot stretch, so it approximates with cover; geometric is
+the only genuine per-axis path and the one that has rendered black on some GPUs,
+so it says to try it on the hardware being deployed on.
+
+**Turning Esc off is a lockdown, and it says so plainly.** Unattended displays
+need it, but switching it on can leave no way out of fullscreen except ending
+the process, so it defaults to on, is worded as a warning rather than a feature,
+and the default is asserted — a lockdown that arrived by accident would be the
+worst bug this window could have.
+
+**The shell reads the saved config now**, which is the difference between the
+page existing and mattering: entering kiosk used the controller's compiled-in
+defaults before. A configured home wins, and with none set the tab you were on
+is still what is shown.
+
+**Six more checks**, including the round trip that is the whole point — a value
+set, accepted, and read back by a *freshly opened* window rather than from the
+one that wrote it.
+
+**Still not in here:** the filter list. That is the next page.
 
 ## Settings (arch §11.3, §11.4)
 

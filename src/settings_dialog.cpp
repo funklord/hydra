@@ -11,6 +11,7 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -41,6 +42,46 @@ QSettings open_settings() {
 // --------------------------------------------------------------- the store --
 
 namespace settings_store {
+
+kiosk_config kiosk() {
+	QSettings st;
+	kiosk_config c;
+	st.beginGroup("kiosk");
+	c.home = QUrl(st.value("home").toString());
+	const int w = st.value("designWidth", 0).toInt();
+	const int h = st.value("designHeight", 0).toInt();
+	// An invalid size means "whatever the screen is", which is the useful
+	// default and cannot be spelled as a number.
+	if (w > 0 && h > 0)
+		c.design_size = QSize(w, h);
+	c.scale = static_cast<scale_mode>(
+		qBound(0, st.value("scale", int(scale_mode::reflow)).toInt(), 2));
+	c.fit = static_cast<fit_mode>(
+		qBound(0, st.value("fit", int(fit_mode::contain)).toInt(), 3));
+	c.hide_cursor = st.value("hideCursor", true).toBool();
+	c.idle_reset_seconds = qMax(0, st.value("idleReset", 0).toInt());
+	c.watchdog = st.value("watchdog", true).toBool();
+	// Defaults to true even though the stored value may say otherwise: see
+	// set_kiosk. Escape is how someone gets out.
+	c.allow_escape = st.value("allowEscape", true).toBool();
+	st.endGroup();
+	return c;
+}
+
+void set_kiosk(const kiosk_config &c) {
+	QSettings st;
+	st.beginGroup("kiosk");
+	st.setValue("home", c.home.toString());
+	st.setValue("designWidth", c.design_size.isValid() ? c.design_size.width() : 0);
+	st.setValue("designHeight", c.design_size.isValid() ? c.design_size.height() : 0);
+	st.setValue("scale", int(c.scale));
+	st.setValue("fit", int(c.fit));
+	st.setValue("hideCursor", c.hide_cursor);
+	st.setValue("idleReset", c.idle_reset_seconds);
+	st.setValue("watchdog", c.watchdog);
+	st.setValue("allowEscape", c.allow_escape);
+	st.endGroup();
+}
 
 ai_choice ai_mode() {
 	const QString v = open_settings().value("ai/mode", "automatic").toString();
@@ -209,10 +250,12 @@ settings_dialog::settings_dialog(player_launcher *players,
 	         stack, &QStackedWidget::setCurrentIndex);
 
 	auto *privacy_page = new QWidget;
+	auto *kiosk_page  = new QWidget;
 	auto *player_page = new QWidget;
 	auto *dl_page     = new QWidget;
 	auto *ai_page     = new QWidget;
 	build_privacy_page(privacy_page);
+	build_kiosk_page(kiosk_page);
 	build_player_page(player_page);
 	build_download_page(dl_page);
 	build_ai_page(ai_page);
@@ -237,6 +280,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 	add_page(wrap(privacy_page), "Privacy && security");
 	add_page(wrap(player_page), "Media && players");
 	add_page(wrap(dl_page), "Downloads");
+	add_page(wrap(kiosk_page), "Kiosk");
 
 	// The AI page scrolls, but its status line does not. It is the answer to
 	// the button directly above it, and a result that has scrolled out of
@@ -270,6 +314,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 	}
 
 	load();
+	load_kiosk();
 }
 
 void settings_dialog::build_privacy_page(QWidget *page) {
@@ -345,6 +390,87 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 		"and would otherwise be forgotten on every visit.", page);
 	note->setWordWrap(true);
 	v->addWidget(note);
+
+	v->addStretch(1);
+}
+
+void settings_dialog::build_kiosk_page(QWidget *page) {
+	auto *v = new QVBoxLayout(page);
+	auto *intro = new QLabel(
+		"Kiosk mode (View → Kiosk Mode, F11) shows a page fullscreen with no "
+		"browser furniture. These are its defaults; until now they were only "
+		"reachable by editing the source.", page);
+	intro->setWordWrap(true);
+	v->addWidget(intro);
+
+	auto *what = new QGroupBox("What it shows", page);
+	auto *wf = new QFormLayout(what);
+	m_kiosk_home = new QLineEdit(what);
+	m_kiosk_home->setPlaceholderText("blank = whatever tab you were on");
+	wf->addRow("Home page:", m_kiosk_home);
+	m_kiosk_idle = new QSpinBox(what);
+	m_kiosk_idle->setRange(0, 86400);
+	m_kiosk_idle->setSuffix(" s");
+	m_kiosk_idle->setSpecialValueText("never");
+	wf->addRow("Return home when idle:", m_kiosk_idle);
+	v->addWidget(what);
+
+	auto *how = new QGroupBox("How it is scaled", page);
+	auto *hf = new QFormLayout(how);
+	m_kiosk_scale = new QComboBox(how);
+	m_kiosk_scale->addItem("Reflow — one zoom factor, the page re-lays out",
+	                        int(scale_mode::reflow));
+	m_kiosk_scale->addItem("None — native size, cropped by the stage",
+	                        int(scale_mode::none));
+	m_kiosk_scale->addItem("Geometric — exact transform (test on the target GPU)",
+	                        int(scale_mode::geometric));
+	m_kiosk_scale->setObjectName("kiosk_scale");
+	hf->addRow("Scaling:", m_kiosk_scale);
+	m_kiosk_fit = new QComboBox(how);
+	m_kiosk_fit->addItem("Contain", int(fit_mode::contain));
+	m_kiosk_fit->addItem("Cover", int(fit_mode::cover));
+	m_kiosk_fit->addItem("Stretch", int(fit_mode::stretch));
+	m_kiosk_fit->addItem("Actual size", int(fit_mode::actual));
+	m_kiosk_fit->setObjectName("kiosk_fit");
+	hf->addRow("Fit:", m_kiosk_fit);
+	m_kiosk_w = new QSpinBox(how);
+	m_kiosk_w->setRange(0, 16384);
+	m_kiosk_w->setSpecialValueText("screen");
+	m_kiosk_h = new QSpinBox(how);
+	m_kiosk_h->setRange(0, 16384);
+	m_kiosk_h->setSpecialValueText("screen");
+	hf->addRow("Design width:", m_kiosk_w);
+	hf->addRow("Design height:", m_kiosk_h);
+	v->addWidget(how);
+
+	auto *pair_note = new QLabel(
+		"Not every pair means something. Reflow cannot stretch — one zoom "
+		"factor cannot scale the axes independently — so it approximates with "
+		"cover rather than pretending. Geometric is the only path that does "
+		"genuine per-axis stretch, and it is the one that has historically "
+		"rendered black on some GPUs, so try it on the hardware you will "
+		"deploy on.", page);
+	pair_note->setWordWrap(true);
+	v->addWidget(pair_note);
+
+	auto *unattended = new QGroupBox("Running unattended", page);
+	auto *uv = new QVBoxLayout(unattended);
+	m_kiosk_cursor = new QCheckBox("Hide the mouse pointer", unattended);
+	uv->addWidget(m_kiosk_cursor);
+	m_kiosk_dog = new QCheckBox("Reload if the page's process dies", unattended);
+	uv->addWidget(m_kiosk_dog);
+	m_kiosk_escape = new QCheckBox("Esc leaves kiosk mode", unattended);
+	m_kiosk_escape->setObjectName("kiosk_escape");
+	uv->addWidget(m_kiosk_escape);
+	auto *escape_note = new QLabel(
+		"<b>Turning that off locks the screen down.</b> Esc and F11 will not "
+		"leave, and on a machine with no keyboard shortcut left there may be no "
+		"way out except ending the process. It is here because unattended "
+		"displays need it — not because it is a normal thing to switch on.",
+		unattended);
+	escape_note->setWordWrap(true);
+	uv->addWidget(escape_note);
+	v->addWidget(unattended);
 
 	v->addStretch(1);
 }
@@ -736,8 +862,36 @@ void settings_dialog::update_custom_state() {
 	}
 }
 
+void settings_dialog::load_kiosk() {
+	const kiosk_config c = settings_store::kiosk();
+	m_kiosk_home->setText(c.home.toString());
+	m_kiosk_w->setValue(c.design_size.isValid() ? c.design_size.width() : 0);
+	m_kiosk_h->setValue(c.design_size.isValid() ? c.design_size.height() : 0);
+	m_kiosk_scale->setCurrentIndex(m_kiosk_scale->findData(int(c.scale)));
+	m_kiosk_fit->setCurrentIndex(m_kiosk_fit->findData(int(c.fit)));
+	m_kiosk_cursor->setChecked(c.hide_cursor);
+	m_kiosk_idle->setValue(c.idle_reset_seconds);
+	m_kiosk_dog->setChecked(c.watchdog);
+	m_kiosk_escape->setChecked(c.allow_escape);
+}
+
+void settings_dialog::apply_kiosk() {
+	kiosk_config c;
+	c.home = QUrl(m_kiosk_home->text().trimmed());
+	if (m_kiosk_w->value() > 0 && m_kiosk_h->value() > 0)
+		c.design_size = QSize(m_kiosk_w->value(), m_kiosk_h->value());
+	c.scale = static_cast<scale_mode>(m_kiosk_scale->currentData().toInt());
+	c.fit = static_cast<fit_mode>(m_kiosk_fit->currentData().toInt());
+	c.hide_cursor = m_kiosk_cursor->isChecked();
+	c.idle_reset_seconds = m_kiosk_idle->value();
+	c.watchdog = m_kiosk_dog->isChecked();
+	c.allow_escape = m_kiosk_escape->isChecked();
+	settings_store::set_kiosk(c);
+}
+
 void settings_dialog::accept() {
 	apply();
+	apply_kiosk();
 	QDialog::accept();
 }
 
