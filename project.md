@@ -752,10 +752,22 @@ The label is escaped before it becomes a pattern. A banner reading `(.*)` must
 not compile into a rule that matches every button on every site afterwards —
 least of all one built to be shared.
 
-What is not built is the UI: nothing yet shows the unanswered banners or offers
-to accept a rule from one. The mechanism, the scope decision, the flag and the
-round trip are all measured; the review surface is the next piece and is the
-same accept-or-refuse shape the filter and extractor loops already have.
+**Tools → Cookie Banners We Missed…** is where one becomes a rule, and it is the
+simplest of the three review loops in this project because there is no model in
+it: the evidence *is* the proposal. The banner was recorded with the labels it
+offered; all that is missing is which of them means refuse and which means
+accept, and for a language nobody here reads only a person can say. So the
+dialog asks exactly that. **Nothing is typed** — a rule is built from a label the
+page really offered, escaped, because this is a corpus meant to be shared and a
+free-text field is a `.*` waiting to happen. And it says in front of the person
+accepting that the rule is generic and flagged for the built-ins: they are not
+fixing one site, they are proposing something everyone would carry.
+
+**The rules are fetched per page rather than substituted at injection**, which is
+what makes a rule learned a minute ago work now. A script with the rules baked
+in carries whatever was true when its tab was built, and re-injecting to update
+it would leave two copies racing a guard flag. Measured, not assumed: the last
+check drives the same banner again after accepting and it is answered.
 
 **What carries unknown banners is the generic pass, not the vendor list.** A
 banner is a thing pinned over the page that talks about cookies and offers a way
@@ -764,7 +776,7 @@ text, a small number of buttons. The vendor selectors are a shortcut to the same
 answer. A fixed bar with buttons on a page that merely *mentions* cookies is
 left alone, which is checked.
 
-**Verified through the real shell, 24 checks** (`tests/live/try_consent`),
+**Verified through the real shell, 33 checks** (`tests/live/try_consent`),
 against fixture banners rather than a live CMP — pinning a test to one vendor's
 current markup measures that vendor, as §11.5 already learned. The fixtures are
 the shapes that recur and each is a different decision: one offering reject
@@ -778,9 +790,20 @@ Then the discovery half: a Norwegian banner nothing matches is left alone and
 recorded with its labels, a label becomes a generic rule, the rule is flagged for
 the built-ins, and the flag survives a save and load — the round trip being the
 part that matters, since a flag that does not persist is a flag nobody will ever
-act on.
+act on. Then the dialog itself, clicked rather than admired — the banner listed,
+the site row offering nothing because only a button can be a rule, a label
+chosen, and the rule on disk afterwards. A review UI that is correct and never
+clicked is this project's most common defect.
 
-**Three defects it found, all ours.** The button visibility test applied the
+**A fourth, in the test itself, and the same shape as two before it.** The
+round-trip phase saved a rule file into the directory the shell loads rules
+from, so the *next* run started already knowing Norwegian and the "a banner
+nothing matches" case quietly stopped testing anything. It is removed at startup
+and the round trip writes elsewhere now, and the run is checked twice in a row.
+An artefact of the last run is indistinguishable from a real result — which is
+exactly what the tree and state contamination in `try_extract` was.
+
+**Three defects it found in the feature, all ours.** The button visibility test applied the
 *container's* size threshold to buttons, so the one banner whose only exit was a
 small "OK" went unanswered — exactly the case the feature exists for. The
 activation check asked C++ once at channel-connect time and raced the shell's

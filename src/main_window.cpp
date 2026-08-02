@@ -34,6 +34,7 @@
 #include "keepass_bridge.h"
 #include "autofill_controller.h"
 #include "consent_blocker.h"
+#include "consent_dialog.h"
 #include "autofill_script.h"
 #include "element_picker.h"
 #include "picker_script.h"
@@ -114,7 +115,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_consent  = new consent_blocker(m_policy, this);
 	// Non-empty from the start: a view can be built before any tree is loaded,
 	// and an empty rule set is a blocker that silently does nothing.
-	m_consent_rules = consent_rules::defaults();
+
 	connect(m_consent, &consent_blocker::acted, this,
 	         [this](const QString &host, const QString &choice) {
 		m_status->showMessage(
@@ -434,6 +435,9 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *zap = tools_menu->addAction("&Zap an Element…", this,
 	                                      &main_window::start_element_picker);
 	zap->setStatusTip("Click a leaked ad; Escape cancels");
+	QAction *banners = tools_menu->addAction("&Cookie Banners We Missed…", this,
+	                                          &main_window::open_consent_rules);
+	banners->setStatusTip("Teach a rule from a consent banner nothing matched");
 	tools_menu->addSeparator();
 	// Ctrl+Shift+Z rather than Ctrl+Z, so this never steals undo from a focused
 	// text field in the page or the address bar.
@@ -637,6 +641,11 @@ void main_window::undo_reorganize() {
 	                       5000);
 }
 
+void main_window::open_consent_rules() {
+	consent_dialog dlg(m_consent, m_consent_rules_path, this);
+	dlg.exec();
+}
+
 void main_window::start_element_picker() {
 	web_view_backend *v = current_view();
 	if (!v) {
@@ -703,8 +712,10 @@ bool main_window::load_tree(const QString &path) {
 	// file from the start rather than something to be extracted from the binary
 	// later (§7.1, `cookie_notices`).
 	m_consent_rules_path = dir + "/consent-rules.json";
-	if (!m_consent_rules.load(m_consent_rules_path))
-		m_consent_rules = consent_rules::defaults();
+	consent_rules cr;
+	if (!cr.load(m_consent_rules_path))
+		cr = consent_rules::defaults();
+	m_consent->set_rules(cr);
 
 	const bool ok = m_model->load(path);
 	m_tree->expandAll();
@@ -753,8 +764,7 @@ void main_window::open_node(node *n) {
 		// cookie_notices). Same isolated world as the others: it clicks the
 		// page's own buttons, so the page must not be able to rewrite it.
 		view->set_script_bridge(m_consent, consent_blocker::bridge_name());
-		view->inject_script("hydra-consent",
-		                     consent_blocker::script_source(m_consent_rules));
+		view->inject_script("hydra-consent", consent_blocker::script_source());
 		view->set_script_bridge(m_mse, mse_tap::bridge_name());
 		view->inject_script("hydra-mse-relay", mse_tap::relay_source());
 		view->inject_main_world_script("hydra-mse-hook", mse_tap::hook_source());

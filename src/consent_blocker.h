@@ -43,12 +43,21 @@ class consent_blocker : public QObject {
 public:
 	explicit consent_blocker(policy_engine *policy, QObject *parent = nullptr);
 
-	// The content script, with the rule set substituted in. It is injected into
-	// every view and asks `active_now()` before it touches anything, because the
-	// per-site setting can change after a view is built and a script that
-	// assumed otherwise would keep answering banners on a site the user had just
-	// told it to leave alone.
-	static QString script_source(const consent_rules &rules);
+	// The content script. It is injected into every view and asks C++ two things
+	// before it touches anything: whether this page is one to act on, and what
+	// the rules are.
+	//
+	// Both are *asked* rather than substituted in at injection time, and that is
+	// what makes a newly learned rule work without rebuilding every view: a
+	// script with the rules baked in carries whatever was true when its tab was
+	// created, and re-injecting to update it would leave two copies racing a
+	// guard flag. Asking also keeps one source of truth, which was the point of
+	// substituting them in the first place.
+	static QString script_source();
+
+	// The rules in force. The shell owns the file; this owns the answer.
+	void set_rules(const consent_rules &r) { m_rules = r; }
+	const consent_rules &rules() const { return m_rules; }
 
 	// The object name the script expects on the bridge.
 	static const char *bridge_name() { return "hydraConsent"; }
@@ -83,6 +92,11 @@ public slots:
 	// the script before it acts; the host is the shell's, not the page's.
 	bool active_now() const { return !m_host.isEmpty() && active_for(m_host); }
 
+	// What to match with, for the page currently shown: the generic rules plus
+	// that host's own. A page cannot ask about a site it is not on, because the
+	// host is the shell's.
+	QString rules_json() const { return m_rules.for_host(m_host).to_script_literal(); }
+
 	// --- Reachable from the injected script. Every argument is hostile.
 	//
 	// `what` is a short description of the banner it acted on and `choice` is
@@ -116,4 +130,5 @@ private:
 	QString        m_host;
 	QStringList    m_dismissed;
 	QStringList    m_unhandled;
+	consent_rules  m_rules = consent_rules::defaults();
 };

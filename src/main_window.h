@@ -120,6 +120,7 @@ private slots:
 	void open_filter_evolution();
 	void toggle_password_manager();
 	void start_element_picker();
+	void open_consent_rules();
 	void undo_reorganize();
 	void on_media_found(const QString &site_host, int count);
 
@@ -181,7 +182,6 @@ private:
 	keepass_bridge     *m_keepass       = nullptr;
 	autofill_controller *m_autofill     = nullptr;
 	consent_blocker     *m_consent      = nullptr;
-	consent_rules        m_consent_rules;
 	QString              m_consent_rules_path;
 	QAction            *m_media_action  = nullptr;
 	QString             m_filters_path;

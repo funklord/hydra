@@ -161,6 +161,8 @@ add_executable(hydra
     src/consent_blocker.h
     src/consent_rules.cpp
     src/consent_rules.h
+    src/consent_dialog.cpp
+    src/consent_dialog.h
     src/autofill_script.h
     src/element_picker.cpp
     src/element_picker.h

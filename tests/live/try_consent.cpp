@@ -17,6 +17,7 @@
 #include "qtwebengine_factory.h"
 #include "consent_blocker.h"
 #include "consent_rules.h"
+#include "consent_dialog.h"
 
 #include <QApplication>
 #include <QDir>
@@ -27,6 +28,8 @@
 #include <QTcpSocket>
 #include <QTimer>
 #include <QTreeView>
+#include <QTreeWidget>
+#include <QPushButton>
 #include <QUrlQuery>
 #include <QWebEnginePage>
 #include <QWebEngineView>
@@ -165,6 +168,13 @@ int main(int argc, char *argv[]) {
 	QDir().mkpath(out);
 	QDir(out + "/state").removeRecursively();
 	QFile::remove(out + "/policy.json");
+	// The shell loads its rules from this directory, and the round-trip phase
+	// below writes a rule file. Left in place, a run starts already knowing what
+	// the previous run learned — and the "a banner nothing matches" case quietly
+	// stops testing anything. Same shape as the tree and state contamination
+	// `try_extract` had: an artefact of the last run, indistinguishable from a
+	// real result.
+	QFile::remove(out + "/consent-rules.json");
 	const QString tree = out + "/tree.txt";
 	QFile tf(tree);
 	if (!tf.open(QIODevice::WriteOnly | QIODevice::Truncate)) return 1;
@@ -334,7 +344,9 @@ int main(int argc, char *argv[]) {
 
 	// The rule file is the unit that would eventually be shared, so it has to
 	// survive a round trip carrying that flag.
-	const QString rules_path = out + "/consent-rules.json";
+	// Deliberately not the name the shell loads: this is a round-trip check, not
+	// a rule set for the next run to inherit.
+	const QString rules_path = out + "/round-trip-rules.json";
 	check(store.save(rules_path), "the rule set saves");
 	consent_rules reloaded;
 	check(reloaded.load(rules_path), "and loads again");
@@ -348,6 +360,70 @@ int main(int argc, char *argv[]) {
 	const consent_rule hostile = blocker->rule_from_label("(.*)", "accept");
 	check(hostile.value.contains("\\("),
 	      "a label that looks like a regex is escaped, not compiled");
+
+	// The review surface, driven rather than admired. A dialog that is correct
+	// and never clicked is this project's most common defect.
+	std::printf("\n== teaching a rule through the dialog ==\n");
+	{
+		const QString path = out + "/dialog-rules.json";
+		QFile::remove(path);
+		consent_dialog dlg(blocker, path);
+		dlg.show();
+		spin(400);
+
+		auto *list = dlg.findChild<QTreeWidget *>("banners");
+		check(list && list->topLevelItemCount() >= 1,
+		      "the unanswered banner is listed");
+		QPushButton *refuses = nullptr, *accepts = nullptr;
+		for (QPushButton *b : dlg.findChildren<QPushButton *>()) {
+			if (b->text().contains("refuses")) refuses = b;
+			if (b->text().contains("accepts")) accepts = b;
+		}
+		check(refuses && !refuses->isEnabled(),
+		      "and nothing can be accepted until a button is chosen");
+
+		// The site row is not a rule; only a button is.
+		if (list && list->topLevelItemCount()) {
+			list->setCurrentItem(list->topLevelItem(0));
+			spin(150);
+			check(refuses && !refuses->isEnabled(),
+			      "selecting the site row alone still offers nothing");
+
+			QTreeWidgetItem *top = list->topLevelItem(0);
+			QTreeWidgetItem *kid = nullptr;
+			for (int i = 0; i < top->childCount(); ++i)
+				if (top->child(i)->text(0) == "Avvis alle") kid = top->child(i);
+			check(kid != nullptr, "the labels the banner offered are the choices");
+			if (kid) {
+				list->setCurrentItem(kid);
+				spin(150);
+				check(refuses && refuses->isEnabled(),
+				      "choosing one enables it");
+				refuses->click();
+				spin(300);
+			}
+		}
+
+		const QList<consent_rule> flagged = blocker->rules().promotable();
+		check(flagged.size() == 1,
+		      "accepting adds exactly one rule, flagged for the built-ins");
+		check(!flagged.isEmpty() && flagged.first().kind == "reject",
+		      "of the kind the button was said to be");
+		consent_rules from_disk;
+		check(from_disk.load(path) && from_disk.promotable().size() == 1,
+		      "and it is on disk, so it survives the session");
+		Q_UNUSED(accepts)
+	}
+
+	// And the point of fetching rules per page rather than baking them in: the
+	// rule just learned applies to the next load, with no new view built.
+	std::printf("\n== the learned rule takes effect ==\n");
+	load("/foreign");
+	std::printf("  page clicked: %s\n",
+	             clicked_on("/foreign").isEmpty() ? "(nothing)"
+	                                              : qPrintable(clicked_on("/foreign")));
+	check(clicked_on("/foreign") == "Avvis alle",
+	      "the banner that could not be answered a moment ago now is");
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

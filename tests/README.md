@@ -214,8 +214,13 @@ purpose: a test pinned to one vendor's markup measures that vendor and expires
 with it.
 
 It also covers the discovery half — a banner in a language the built-in patterns
-do not know, recorded rather than silently skipped, and turned into a generic
-rule flagged for the shipped defaults.
+do not know, recorded rather than silently skipped, turned into a generic rule
+flagged for the shipped defaults, accepted **through the dialog** by clicking it,
+and then applied to the same banner on the next load.
+
+It removes `consent-rules.json` from the output directory at startup, and that
+is not tidiness: the shell loads rules from there, so a file left by the previous
+run means the next one begins already knowing what it was supposed to learn.
 
 Note that it starts its policy phase from cookies **blocked**. An earlier
 version did not, so the relaxation had nothing to do and the check passed while

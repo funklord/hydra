@@ -28,10 +28,10 @@ const char *k_script = R"JS(
   if (window.__hydra_consent) return;
   window.__hydra_consent = 1;
 
-  var RULES = __HYDRA_CONSENT_RULES__;
+  var RULES = { containers: [], reject: '', accept: '' };
   var rx = function (p) { try { return p ? new RegExp(p, 'i') : null; }
                           catch (e) { return null; } };
-  var REJECT = rx(RULES.reject), ACCEPT = rx(RULES.accept);
+  var REJECT = null, ACCEPT = null;
   var CONSENTISH = /cookie|consent|gdpr|privacy|tracking/i;
 
   var bridge = null, done = false, started = false;
@@ -178,8 +178,16 @@ const char *k_script = R"JS(
       var ask = function () {
         if (started) return;
         bridge.active_now(function (on) {
-          if (on) { started = true; begin(); }
-          else if (++asks < 20) setTimeout(ask, 250);
+          if (!on) { if (++asks < 20) setTimeout(ask, 250); return; }
+          // Rules fetched now rather than baked in when this script was
+          // injected, so a rule accepted a minute ago applies to this load.
+          bridge.rules_json(function (json) {
+            try { RULES = JSON.parse(json); } catch (e) { return; }
+            REJECT = rx(RULES.reject);
+            ACCEPT = rx(RULES.accept);
+            started = true;
+            begin();
+          });
         });
       };
       ask();
@@ -194,13 +202,7 @@ const char *k_script = R"JS(
 consent_blocker::consent_blocker(policy_engine *policy, QObject *parent)
 	: QObject(parent), m_policy(policy) {}
 
-QString consent_blocker::script_source(const consent_rules &rules) {
-	// The rules are substituted in rather than fetched by the script, so what a
-	// page can see is what it was going to be judged by anyway, and there is no
-	// second copy in JavaScript to drift from the C++ one.
-	return QString::fromUtf8(k_script)
-	    .replace("__HYDRA_CONSENT_RULES__", rules.to_script_literal());
-}
+QString consent_blocker::script_source() { return QString::fromUtf8(k_script); }
 
 void consent_blocker::set_page_host(const QString &host) {
 	m_host = host;
