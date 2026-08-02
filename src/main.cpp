@@ -18,6 +18,7 @@
 #include <QByteArray>
 #include <QDir>
 #include <QFileInfo>
+#include <QStandardPaths>
 #include <QtGlobal>
 
 int main(int argc, char *argv[]) {
@@ -82,6 +83,33 @@ int main(int argc, char *argv[]) {
 		if (QFileInfo::exists(beside))
 			tree_path = beside;
 	}
+#ifdef Q_OS_ANDROID
+	// There is no working directory worth the name on Android -- it is `/`, and
+	// nothing is writable there. Everything this program keeps lives beside the
+	// tree file (policy.json, state/, filters, site rules), so pointing the tree
+	// at app storage moves the whole set at once.
+	//
+	// Measured before it was fixed: the first run on a phone came up with an
+	// empty tree and no error, because it had looked for `./sample-tree.txt`
+	// and there was no such thing. Nothing was broken; there was simply nowhere
+	// for any of it to be.
+	{
+		const QString dir =
+			QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+		QDir().mkpath(dir);
+		tree_path = QDir(dir).filePath("tree.txt");
+		// First run gets the sample, so the app opens with something in it
+		// rather than an empty pane that looks like a failure.
+		if (!QFileInfo::exists(tree_path)) {
+			QFile seed(":/sample-tree.txt");
+			if (seed.open(QIODevice::ReadOnly)) {
+				QFile out(tree_path);
+				if (out.open(QIODevice::WriteOnly))
+					out.write(seed.readAll());
+			}
+		}
+	}
+#endif
 	w.load_tree(tree_path);
 
 	w.show();

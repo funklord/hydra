@@ -55,6 +55,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QStatusBar>
+#include <QStyle>
 #include <QMessageBox>
 #include <QActionGroup>
 #include <QAction>
@@ -286,9 +287,18 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	QToolBar *bar = new QToolBar(this);
 	bar->setMovable(false);
 
+	// Icons from the style, with the characters as their text. On the desktop
+	// the characters alone were fine; on a phone the font had no glyph for `↻`
+	// and the reload button rendered as an empty box, while back and forward
+	// happened to survive. Asking the style for the icon is both prettier and
+	// not a bet on what fonts a platform ships.
 	QAction *back_act   = bar->addAction("◀");
 	QAction *fwd_act    = bar->addAction("▶");
 	QAction *reload_act = bar->addAction("↻");
+	back_act->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
+	fwd_act->setIcon(style()->standardIcon(QStyle::SP_ArrowForward));
+	reload_act->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
+	bar->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	connect(back_act,   &QAction::triggered, this, &main_window::go_back);
 	connect(fwd_act,    &QAction::triggered, this, &main_window::go_forward);
 	connect(reload_act, &QAction::triggered, this, &main_window::reload_page);

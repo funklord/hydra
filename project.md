@@ -2834,10 +2834,16 @@ same tree with the same flags.
 
 **Four things the screenshot says, and three of them are work:**
 
-- **The tree is empty**, because `main()` loads `./sample-tree.txt` relative to
-  the working directory and on Android that is `/`. The tree, its state
-  directory and `policy.json` all need an app-storage path, and user-chosen
-  files need SAF (§19.4). Nothing crashed; it simply has nothing to show.
+- ~~The tree is empty~~ **— fixed.** `main()` loaded `./sample-tree.txt`
+  relative to the working directory, and on Android that is `/`, where nothing
+  exists and nothing is writable. It now uses `AppDataLocation`, and because
+  everything this program keeps lives *beside* the tree file — `policy.json`,
+  `state/`, the filter list, the site rules — moving the tree moves the whole
+  set at once. First run seeds it from a copy of `sample-tree.txt` compiled into
+  the binary, so the app opens with something in it rather than an empty pane
+  that reads as a failure. Verified on the device: the tree renders with its
+  bold/italic/muted state cues, and `files/tree.txt` and `files/state/` exist in
+  app storage afterwards. User-chosen files still want SAF (§19.4).
 - **The layout is desktop-shaped, and it shows.** A horizontal splitter on a
   portrait phone gives the content pane a strip too narrow to use — "Select a
   tab from the tree" is clipped at the right edge — while the tree takes half the
@@ -2846,9 +2852,11 @@ same tree with the same flags.
   splitter is unusable at this aspect ratio.
 - **The status bar's right-hand text sits hard against the screen edge**, for the
   same reason.
-- **A toolbar glyph is missing.** Back and forward render (`◀`, `▶`) and reload
-  does not — it is `↻`, and the emulator's font has no glyph for it. Icons for
-  these three rather than characters, which the desktop never needed.
+- ~~A toolbar glyph is missing~~ **— fixed.** Reload was the character `↻` and
+  the emulator's font had no glyph, so it drew an empty box while back and
+  forward happened to survive. All three now take their icon from the style
+  (`SP_ArrowBack`, `SP_ArrowForward`, `SP_BrowserReload`), which is both better
+  looking and not a bet on what fonts a platform ships. Verified on the device.
 
 **What it does not do:** browse. The System WebView backend, `shouldIntercept
 Request` wired to the shared `request_filter`, `addJavascriptInterface` for the

@@ -93,6 +93,14 @@ else()
     message(WARNING "libtorrent-rasterbar not found — BitTorrent downloads disabled")
 endif()
 
+# The sample tree, compiled in. On desktop it is read from the source directory
+# or the command line; on Android there is no such directory, so the first run
+# has to seed app storage from something the APK carries.
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/sample-tree.txt
+               ${CMAKE_CURRENT_BINARY_DIR}/sample-tree.txt COPYONLY)
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/hydra_seed.qrc
+"<RCC><qresource prefix=\"/\"><file>sample-tree.txt</file></qresource></RCC>")
+
 # `qt_add_executable`, not `add_executable`, and the difference only shows up on
 # Android: there an app is a *shared library* that the Java launcher loads
 # (`libhydra_arm64-v8a.so`), and androiddeployqt has nothing to package if the
@@ -101,6 +109,7 @@ endif()
 # in one. On desktop this is the same executable it always was.
 qt_add_executable(hydra
     icons/hydra.qrc
+    ${CMAKE_CURRENT_BINARY_DIR}/hydra_seed.qrc
     src/main.cpp
     src/main_window.cpp
     src/main_window.h
