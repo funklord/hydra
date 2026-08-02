@@ -122,11 +122,12 @@ const char *k_relay = R"JS(
   window.addEventListener('message', function (e) {
     if (e && e.data && e.data.__hydra_mse) take(e.data.__hydra_mse);
   }, true);
+  // The page's one channel, not a second one: see the bootstrap in
+  // qtwebengine_view.cpp for what building your own costs.
   var start = function () {
-    if (typeof QWebChannel === 'undefined' || !window.qt || !qt.webChannelTransport)
-      return setTimeout(start, 200);
-    new QWebChannel(qt.webChannelTransport, function (ch) {
-      bridge = ch.objects.hydraMse;
+    if (!window.hydraChannel) return setTimeout(start, 50);
+    window.hydraChannel(function (objs) {
+      bridge = objs.hydraMse;
       flush();
     });
   };

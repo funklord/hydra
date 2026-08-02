@@ -23,6 +23,7 @@ const info k_info[] = {
 	{ "autofill",          "Password autofill"   },
 	{ "extractorFetch",    "Extractor may fetch" },
 	{ "extractorDom",      "Extractor may read the page" },
+	{ "cookieNotices",     "Cookie consent banners" },
 };
 
 }  // namespace

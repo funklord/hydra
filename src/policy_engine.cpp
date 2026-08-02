@@ -42,6 +42,9 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	set_global_default(feature::camera,              setting::block);
 	set_global_default(feature::microphone,          setting::block);
 	set_global_default(feature::notifications,       setting::block);
+	// Block means "answer it and get it out of the way", which is what almost
+	// everyone wants from a consent banner and is the whole point of the option.
+	set_global_default(feature::cookie_notices,      setting::block);
 	set_global_default(feature::referer,             setting::allow);
 	// Autofill defaults on; the per-site tri-state and the strict origin gate
 	// are what actually govern it (§13.3).

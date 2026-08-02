@@ -442,6 +442,7 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Filter evolution | `filter_list.{h,cpp}`, `filter_signals.{h,cpp}`, `filter_dialog.{h,cpp}` | passive signals, dry-run validation, diff/accept |
 | Password manager | `keepass_protocol.{h,cpp}`, `keepass_bridge.{h,cpp}`, `crypto_box.{h,cpp}` | KeePassXC-Browser client; no vault, no master password |
 | Autofill | `autofill_controller.{h,cpp}`, `autofill_script.h` | QWebChannel bridge, origin gate, policy-governed |
+| Consent banners | `consent_blocker.{h,cpp}`, `consent_rules.{h,cpp}` | answers "accept cookies?" dialogs; rules as data, shareable later |
 
 Persistence: `policy.json`, `state/<id>.blob`, and the tree file all sit next to
 the outline file passed on the command line.
@@ -677,6 +678,109 @@ than guessed at), `set-login` on new-credential submit, `generate-password`,
 storing the association key encrypted at rest via Secret Service — it is in
 memory only, so pairing does not survive a restart — and the optional
 direct-`.kdbx` fallback, which §13.4 recommends against anyway.
+
+## Cookie consent banners (§7.1, done)
+
+**"Do you want to accept cookies?" — answered for you.** A blocking option
+beside ads and popups rather than a setting under cookies, because it is a
+different question: not what a site may *store*, but what it may put in front of
+the page before you are allowed to read it. `block` — the default — means the
+banner is answered and dismissed; `allow` means it is left alone and you answer
+it yourself. It appears in the shield like every other tri-state, because the
+dialog builds its rows from the feature enum.
+
+**What it answers with, and why "reject" is not always the answer.** The point
+of the option is to be able to use the page, so it takes the least permissive
+option the banner actually offers: reject-all where there is one, otherwise
+necessary-only, otherwise accept. A banner whose only exit is "OK" is a banner
+whose only dismissal is acceptance, and refusing to click it on principle leaves
+the page unreadable — which is the state the option exists to end.
+
+**It answers first and hides second, and the order is the design.** Hiding a
+banner without answering it leaves the site believing it has not been asked: the
+overlay returns next load, the scroll lock usually stays, and some players will
+not start until their consent object is set. Clicking is what ends the
+conversation. The hide pass only cleans up what a click left behind — including
+releasing `overflow: hidden` on the document, which is what makes a page
+unreadable even when the overlay itself is small.
+
+**Answering has to stick, which is why this touches cookie policy.** A consent
+choice is itself recorded in a cookie. With cookies blocked for the site there
+is nowhere to record it, so the banner returns on every load and the option
+looks broken. So dismissing one relaxes **first-party** cookies for that host —
+never third-party, which is precisely what these dialogs are bargaining for —
+and writes it as an ordinary per-site rule, visible in the shield and revertible
+there. The status bar says so when it happens: a policy change the user did not
+make should be visible at the time, not merely findable afterwards.
+
+### The rules are data, because they are going to be shared
+
+Vendor markup changes on its own schedule, so anything pinned to
+`#onetrust-banner-sdk` is a release away from useless — the argument §11.5 makes
+for extractors and §12 for filters, with the shortest half-life of the three.
+`consent_rules` is therefore a file (`consent-rules.json`, beside the tree and
+the filter list), not a table in the binary, and the built-in set is
+deliberately thin: a long vendor list looks like thoroughness and is really
+maintenance debt.
+
+**Sharing is not built and the shape for it is.** The stated direction is that
+these rule sets travel between users, peer-to-peer or otherwise; everything here
+is local. What that costs today is one field — every rule carries provenance —
+and the reason to pay it now rather than later is that retrofitting provenance
+onto a corpus people have already traded is how you end up unable to tell a rule
+you shipped from a rule a stranger sent.
+
+**A generic rule learned locally is flagged for the binary.** A rule with no
+host is a description of a *shape* banners take rather than of a site, so it
+belongs to everyone: `consent_rules::add` marks any learned generic rule
+`promote`, and `promotable()` lists them for folding into `defaults()` at the
+next release. Setting the flag at the point of insertion rather than at each
+call site is deliberate — whichever path learns the next rule cannot forget to.
+**The flagging mechanism exists; nothing discovers rules yet.** That is the next
+piece, and it is the same review-and-accept shape §12 already uses.
+
+**What carries unknown banners is the generic pass, not the vendor list.** A
+banner is a thing pinned over the page that talks about cookies and offers a way
+out, so that is what is looked for: fixed or sticky position, consent-shaped
+text, a small number of buttons. The vendor selectors are a shortcut to the same
+answer. A fixed bar with buttons on a page that merely *mentions* cookies is
+left alone, which is checked.
+
+**Verified through the real shell, 12 checks** (`tests/live/try_consent`),
+against fixture banners rather than a live CMP — pinning a test to one vendor's
+current markup measures that vendor, as §11.5 already learned. The fixtures are
+the shapes that recur and each is a different decision: one offering reject
+(taken over the accept that comes first in the DOM), one whose only exit is
+accept (taken rather than leaving the page unusable), one that is not a consent
+banner at all (nothing clicked), and one that locks scrolling (released). Then
+the policy side, starting from cookies actually blocked, and the option turned
+off for the site leaving the banner alone. Which button was clicked is reported
+by the *page*, so the claim is about what happened rather than what we intended.
+
+**Three defects it found, all ours.** The button visibility test applied the
+*container's* size threshold to buttons, so the one banner whose only exit was a
+small "OK" went unanswered — exactly the case the feature exists for. The
+activation check asked C++ once at channel-connect time and raced the shell's
+navigation signal, getting "no host yet, so no" and never asking again. And the
+first version of the policy check passed vacuously because cookies were already
+allowed globally, so the relaxation had nothing to do.
+
+### One page, one channel (a latent defect this surfaced)
+
+Every content script — autofill, the picker, the MSE relay, and now this —
+constructed its **own** `QWebChannel` over the same `qt.webChannelTransport`. A
+QWebChannel takes that transport's `onmessage` when it is built, so the last one
+constructed received every reply and the others waited forever for a handshake
+that had already been answered to somebody else. It has been visible all along
+as `channel.execCallbacks[message.id] is not a function` in the console of
+almost every live driver, and as a bridge that sometimes simply never arrived.
+Adding a fourth script turned a race that usually went the right way into one
+that never did.
+
+There is one channel per page now, built by a bootstrap injected once beside
+`qwebchannel.js`, handing out bridge objects through `window.hydraChannel(cb)`.
+Every script waits on that instead. The four live drivers report **zero** of
+those console errors afterwards, where before they appeared in nearly every run.
 
 ## The element picker (§12.1, done)
 

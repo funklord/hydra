@@ -13,6 +13,41 @@
 #include <QWebChannel>
 #include <QFile>
 
+namespace {
+
+// One QWebChannel per page, shared by every content script.
+//
+// Each script used to construct its own over the same `qt.webChannelTransport`.
+// A QWebChannel takes ownership of that transport's `onmessage` when it is
+// built, so the last one constructed received every reply and the others sat
+// waiting for a handshake that had already been answered to someone else. It
+// presented as `channel.execCallbacks[message.id] is not a function` in the
+// console -- visible for as long as there have been two of these -- and as a
+// script whose bridge simply never arrived. Adding a fourth script is what made
+// it deterministic rather than a race that usually went the right way.
+const char *k_channel_bootstrap = R"JS(
+(function () {
+  if (window.hydraChannel) return;
+  var objects = null, waiting = [];
+  window.hydraChannel = function (cb) {
+    if (objects) return cb(objects);
+    waiting.push(cb);
+  };
+  var start = function () {
+    if (typeof QWebChannel === 'undefined' || !window.qt || !qt.webChannelTransport)
+      return setTimeout(start, 50);
+    new QWebChannel(qt.webChannelTransport, function (ch) {
+      objects = ch.objects;
+      var q = waiting; waiting = [];
+      q.forEach(function (f) { try { f(objects); } catch (e) {} });
+    });
+  };
+  start();
+})();
+)JS";
+
+}  // namespace
+
 qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	: web_view_backend(nullptr) {
 	m_view = new QWebEngineView(parent);
@@ -175,6 +210,7 @@ void qtwebengine_view::set_script_bridge(QObject *object, const QString &name) {
 		QFile api(":/qtwebchannel/qwebchannel.js");
 		if (api.open(QIODevice::ReadOnly)) {
 			inject_script("qwebchannel", QString::fromUtf8(api.readAll()));
+			inject_script("hydra-channel", QString::fromUtf8(k_channel_bootstrap));
 			m_channel_api_injected = true;
 		}
 	}

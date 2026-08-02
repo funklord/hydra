@@ -33,6 +33,7 @@
 #include "filter_dialog.h"
 #include "keepass_bridge.h"
 #include "autofill_controller.h"
+#include "consent_blocker.h"
 #include "autofill_script.h"
 #include "element_picker.h"
 #include "picker_script.h"
@@ -110,6 +111,23 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 
 	m_keepass  = new keepass_bridge(this);
 	m_autofill = new autofill_controller(m_keepass, m_policy, this);
+	m_consent  = new consent_blocker(m_policy, this);
+	// Non-empty from the start: a view can be built before any tree is loaded,
+	// and an empty rule set is a blocker that silently does nothing.
+	m_consent_rules = consent_rules::defaults();
+	connect(m_consent, &consent_blocker::acted, this,
+	         [this](const QString &host, const QString &choice) {
+		m_status->showMessage(
+		    QString("Answered the cookie banner on %1 (%2)").arg(host, choice), 6000);
+	});
+	// A policy change nobody asked for has to be visible when it happens, not
+	// merely findable in the shield afterwards.
+	connect(m_consent, &consent_blocker::relaxed_cookies, this,
+	         [this](const QString &host) {
+		m_status->showMessage(
+		    QString("Allowed first-party cookies for %1 so its consent choice "
+		             "sticks — change it in the shield").arg(host), 9000);
+	});
 	m_picker   = new element_picker(this);
 	connect(m_picker, &element_picker::picked, this,
 	         [this](const picked_element &) { open_filter_evolution(); });
@@ -679,6 +697,15 @@ bool main_window::load_tree(const QString &path) {
 	m_filters_path = dir + "/filters-ai.txt";
 	m_filters->load(m_filters_path);
 
+	// Consent-banner rules, beside the rest and in the same spirit: data, not
+	// code. The built-in set is always present; the file adds to it. This is
+	// the unit a future exchange between users would move, which is why it is a
+	// file from the start rather than something to be extracted from the binary
+	// later (§7.1, `cookie_notices`).
+	m_consent_rules_path = dir + "/consent-rules.json";
+	if (!m_consent_rules.load(m_consent_rules_path))
+		m_consent_rules = consent_rules::defaults();
+
 	const bool ok = m_model->load(path);
 	m_tree->expandAll();
 	return ok;
@@ -722,12 +749,20 @@ void main_window::open_node(node *n) {
 		// §11.6, in two halves. The relay is privileged and stays isolated with
 		// the others; the hook is the only thing that goes into the page's own
 		// world, and it carries nothing.
+		// The consent banner, answered rather than merely hidden (§7.1's
+		// cookie_notices). Same isolated world as the others: it clicks the
+		// page's own buttons, so the page must not be able to rewrite it.
+		view->set_script_bridge(m_consent, consent_blocker::bridge_name());
+		view->inject_script("hydra-consent",
+		                     consent_blocker::script_source(m_consent_rules));
 		view->set_script_bridge(m_mse, mse_tap::bridge_name());
 		view->inject_script("hydra-mse-relay", mse_tap::relay_source());
 		view->inject_main_world_script("hydra-mse-hook", mse_tap::hook_source());
 
 		connect(view, &web_view_backend::url_changed, this, [this, view](const QUrl &u) {
 			apply_policy(view, u.host());
+			if (view == current_view())
+				m_consent->set_page_host(u.host());
 			if (view == current_view())
 				m_autofill->set_page_origin(
 					u.adjusted(QUrl::RemovePath | QUrl::RemoveQuery |

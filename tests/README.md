@@ -206,6 +206,17 @@ first:
   channel never connects" and produced a confident, wrong diagnosis that reached
   a commit. Any new phase here should use the same wait.
 
+`try_consent` drives the cookie-consent blocker against fixture banners — a
+reject-offering one, an accept-only one, a decoy that is not a consent banner,
+and one that locks scrolling — plus the policy side and the option turned off.
+Offline, self-checking, non-zero on failure. Fixtures rather than a live CMP on
+purpose: a test pinned to one vendor's markup measures that vendor and expires
+with it.
+
+Note that it starts its policy phase from cookies **blocked**. An earlier
+version did not, so the relaxation had nothing to do and the check passed while
+testing nothing.
+
 Lessons that cost time, so they are written down:
 
 - **`import -window root` returns black once the screen blanks**, and hangs

@@ -157,6 +157,10 @@ add_executable(hydra
     src/keepass_bridge.h
     src/autofill_controller.cpp
     src/autofill_controller.h
+    src/consent_blocker.cpp
+    src/consent_blocker.h
+    src/consent_rules.cpp
+    src/consent_rules.h
     src/autofill_script.h
     src/element_picker.cpp
     src/element_picker.h

@@ -3,6 +3,7 @@
 
 #include "tree_diff.h"   // for the §9.4 undo snapshot
 #include "site_extractor.h"
+#include "consent_rules.h"
 
 #include <QWidget>
 #include <QHash>
@@ -46,6 +47,7 @@ class filter_list;
 class request_filter;
 class keepass_bridge;
 class autofill_controller;
+class consent_blocker;
 class local_proxy;
 class element_picker;
 class ollama_provider;
@@ -178,6 +180,9 @@ private:
 	filter_list        *m_filters       = nullptr;
 	keepass_bridge     *m_keepass       = nullptr;
 	autofill_controller *m_autofill     = nullptr;
+	consent_blocker     *m_consent      = nullptr;
+	consent_rules        m_consent_rules;
+	QString              m_consent_rules_path;
 	QAction            *m_media_action  = nullptr;
 	QString             m_filters_path;
 	QAction            *m_kiosk_action  = nullptr;

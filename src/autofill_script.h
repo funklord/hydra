@@ -87,10 +87,11 @@ inline const char *source() {
   }
 
   function connect() {
-    if (typeof QWebChannel === 'undefined' || !window.qt || !qt.webChannelTransport)
-      return;
-    new QWebChannel(qt.webChannelTransport, function (channel) {
-      const af = channel.objects.hydraAutofill;
+    // Wait for the page's shared channel rather than the raw transport: it is
+    // what hands out the bridge objects now.
+    if (!window.hydraChannel) return setTimeout(connect, 50);
+    window.hydraChannel(function (objects) {
+      const af = objects.hydraAutofill;
       if (!af) return;
       af.credentials_ready.connect(function (json) {
         try { fill(JSON.parse(json)); } catch (err) { /* malformed; ignore */ }

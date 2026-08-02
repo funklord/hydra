@@ -128,10 +128,11 @@ inline const char *source() {
   }
 
   function connect() {
-    if (typeof QWebChannel === 'undefined' || !window.qt || !qt.webChannelTransport)
-      return;
-    new QWebChannel(qt.webChannelTransport, function (channel) {
-      const p = channel.objects.hydraPicker;
+    // Wait for the page's shared channel rather than the raw transport: it is
+    // what hands out the bridge objects now.
+    if (!window.hydraChannel) return setTimeout(connect, 50);
+    window.hydraChannel(function (objects) {
+      const p = objects.hydraPicker;
       if (!p) return;
       window.__hydraPickerSend = function (json) { p.element_picked(json); };
       window.__hydraPickerCancel = function () { p.cancelled(); };

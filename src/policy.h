@@ -28,6 +28,13 @@ enum class feature : int {
 	// grant the second to get the first. Both default to block.
 	extractor_fetch,
 	extractor_dom,
+	// "Do you want to accept cookies?" -- the consent banner itself, not the
+	// cookies. Blocked means the banner is answered and dismissed for you;
+	// allowed means it is left alone and you answer it yourself. It sits with
+	// the other blocking options rather than under `cookies` because it is a
+	// different question: what the *page* may put in front of you, not what it
+	// may store.
+	cookie_notices,
 	count
 };
 
