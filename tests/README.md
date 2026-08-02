@@ -63,6 +63,31 @@ Start the helper, run the suite, stop the helper.
 | `test_helpers_live` | the helper tier against a real CDN, with a hand-written extractor so a failure is the tier's and not a prompt's — takes a fresh capture from `try_extract` |
 | `test_probe`, `test_probe_ui` | a stub Ollama on 8811, plus a "blackhole" listener that accepts and never answers, for the timeout tests |
 
+### Needs a running KeePassXC
+
+`try_keepass` drives the §13.1 bridge against a real KeePassXC. Set up one that
+touches nothing of yours — its own config, its own database:
+
+```sh
+KP=/tmp/hydra-kp; mkdir -p $KP
+printf 'hydratest\nhydratest\n' | keepassxc-cli db-create $KP/test.kdbx --set-password
+printf 'hydratest\ns3cr3t-from-vault\n' | keepassxc-cli add $KP/test.kdbx \
+    --username alice --url http://127.0.0.1:9931 --password-prompt "Test Site"
+printf '[Browser]\nEnabled=true\nAlwaysAllowAccess=true\n' > $KP/keepassxc.ini
+printf 'hydratest\n' | keepassxc --config $KP/keepassxc.ini \
+    --localconfig $KP/local.ini --pw-stdin $KP/test.kdbx &
+./tests/build/try_keepass
+```
+
+Everything up to pairing runs unattended: the socket, the key exchange, and the
+answer a saved-but-unknown pairing gets. **Pairing itself needs you**, because
+KeePassXC asks a human whether this program may read the vault, and a browser
+that could answer that for itself would be the bug. For the rest:
+
+```sh
+HYDRA_KEEPASS_INTERACTIVE=1 ./tests/build/try_keepass   # then accept the dialog
+```
+
 ### Need libtorrent
 
 `test_torrent` and `test_watch` build only when `libtorrent-rasterbar` is found.

@@ -3230,6 +3230,31 @@ page comes up with the red block gone and the green one intact —
 `selectors=[".ad-banner"]`, `style_el=present`, `ad=none`, `keep=block`, over the
 same bridge, with no Android code written for it.
 
+### The KeePassXC bridge finally met KeePassXC
+
+`keepassxc` is installed now, so the last of "wired but never run" could run —
+and this project's defect history says that category is where the defects are.
+
+Set up so it disturbs nothing: its own config file, its own database, one entry,
+browser integration on. The socket appears at exactly the path `socket_path()`
+computes, `start()`'s change-public-keys exchange **completes**, the connection
+stays up after it, and a saved-but-unknown pairing is refused with KeePassXC's
+own answer rather than a guess — *"association failed, try again (code 8)"*. That
+is the case on every first run after settings are copied to a new machine, and
+"no" is the right answer for it.
+
+So the transport, the framing and the sodium key exchange work against the real
+other end, first try. Seven checks, none of them previously exercised by
+anything.
+
+**Pairing is not automated, deliberately.** `associate()` makes KeePassXC ask a
+human whether this program may read the vault — that prompt *is* the security
+boundary, and a browser able to answer it for itself would be the bug. The driver
+skips it unless `HYDRA_KEEPASS_INTERACTIVE=1` says a person is watching, and
+prints which checks went unrun rather than passing quietly without them. The
+remaining ones are behind that flag: association, a login request for a url the
+vault knows, and one for a url it does not.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and
@@ -3271,8 +3296,11 @@ C++ that already exists.
 4. **Exercise the rest of what is wired but untested.** **The ad-host half is
    done** — see the filter-enforcement section above; it needed no DNS trick at
    all, only two loopback hosts, and finding that out uncovered that the whole
-   filter list was never consulted. One left: the KeePassXC bridge above the
-   crypto layer wants `keepassxc` installed, which this machine does not have.
+   filter list was never consulted. The KeePassXC bridge has now met a real
+   KeePassXC — see the section above — and everything short of the pairing
+   dialog passes. **What is left needs a person**, not a machine: run
+   `HYDRA_KEEPASS_INTERACTIVE=1 ./tests/build/try_keepass` and accept the prompt
+   to check association and login lookup.
    This project's defect history is almost entirely in this category — see the
    cautions at the top of this file. **The cosmetic half of §12 is done too** — see the section
    above — and it uncovered a page-context bug that had been live on the desktop
