@@ -15,6 +15,9 @@
 #include <QComboBox>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QTreeWidget>
+#include <QPushButton>
+#include "filter_list.h"
 #include <QListWidget>
 #include <QStackedWidget>
 #include "policy_engine.h"
@@ -222,8 +225,10 @@ settings_dialog::settings_dialog(player_launcher *players,
                                   torrent_download_source *torrents,
                                   ollama_provider *local_ai,
                                   claude_provider *external_ai,
-                                  policy_engine *policy, QWidget *parent)
-	: QDialog(parent), m_policy(policy), m_players(players),
+                                  policy_engine *policy, filter_list *filters,
+                                  const QString &filters_path, QWidget *parent)
+	: QDialog(parent), m_policy(policy), m_filters(filters),
+	  m_filters_path(filters_path), m_players(players),
 	  m_downloads(downloads), m_torrents(torrents), m_local_ai(local_ai),
 	  m_external_ai(external_ai) {
 	setWindowTitle("Settings");
@@ -251,11 +256,13 @@ settings_dialog::settings_dialog(player_launcher *players,
 
 	auto *privacy_page = new QWidget;
 	auto *kiosk_page  = new QWidget;
+	auto *filter_page = new QWidget;
 	auto *player_page = new QWidget;
 	auto *dl_page     = new QWidget;
 	auto *ai_page     = new QWidget;
 	build_privacy_page(privacy_page);
 	build_kiosk_page(kiosk_page);
+	build_filter_page(filter_page);
 	build_player_page(player_page);
 	build_download_page(dl_page);
 	build_ai_page(ai_page);
@@ -280,6 +287,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 	add_page(wrap(privacy_page), "Privacy && security");
 	add_page(wrap(player_page), "Media && players");
 	add_page(wrap(dl_page), "Downloads");
+	add_page(wrap(filter_page), "Filters");
 	add_page(wrap(kiosk_page), "Kiosk");
 
 	// The AI page scrolls, but its status line does not. It is the answer to
@@ -392,6 +400,83 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	v->addWidget(note);
 
 	v->addStretch(1);
+}
+
+void settings_dialog::build_filter_page(QWidget *page) {
+	auto *v = new QVBoxLayout(page);
+	auto *intro = new QLabel(
+		"Rules accepted from the filter-evolution loop (Tools → Evolve Ad "
+		"Filters). Until now a rule could be accepted but never taken back "
+		"except by editing the file by hand — which is a poor answer for a list "
+		"built by accepting proposals one at a time, since the design assumes "
+		"some will turn out wrong.", page);
+	intro->setWordWrap(true);
+	v->addWidget(intro);
+
+	m_filter_view = new QTreeWidget(page);
+	m_filter_view->setObjectName("filters");
+	m_filter_view->setColumnCount(3);
+	m_filter_view->setHeaderLabels({ "Rule", "Applies to", "Why" });
+	m_filter_view->setRootIsDecorated(false);
+	v->addWidget(m_filter_view, 1);
+
+	auto *row = new QHBoxLayout;
+	m_filter_remove = new QPushButton("&Remove selected", page);
+	m_filter_remove->setObjectName("filter_remove");
+	m_filter_remove->setEnabled(false);
+	row->addWidget(m_filter_remove);
+	row->addStretch(1);
+	v->addLayout(row);
+
+	m_filter_note = new QLabel(page);
+	m_filter_note->setObjectName("filter_note");
+	m_filter_note->setWordWrap(true);
+	v->addWidget(m_filter_note);
+
+	connect(m_filter_view, &QTreeWidget::itemSelectionChanged, this, [this] {
+		m_filter_remove->setEnabled(!m_filter_view->selectedItems().isEmpty());
+	});
+	connect(m_filter_remove, &QPushButton::clicked, this, [this] {
+		const auto sel = m_filter_view->selectedItems();
+		if (sel.isEmpty() || !m_filters)
+			return;
+		// Removed from the list *and* written out here rather than at OK. A rule
+		// that is blocking something now should stop blocking it now, and the
+		// alternative is a window where pressing Cancel silently restores rules
+		// the user watched disappear.
+		if (m_filters->remove(sel.first()->text(0)) && !m_filters_path.isEmpty())
+			m_filters->save(m_filters_path);
+		rebuild_filter_list();
+	});
+
+	rebuild_filter_list();
+}
+
+void settings_dialog::rebuild_filter_list() {
+	if (!m_filter_view)
+		return;
+	m_filter_view->clear();
+	if (!m_filters) {
+		m_filter_note->setText("No filter list was supplied.");
+		return;
+	}
+	for (const filter_rule &r : m_filters->rules()) {
+		auto *it = new QTreeWidgetItem(m_filter_view);
+		it->setText(0, r.text);
+		it->setText(1, r.scope.isEmpty() ? QStringLiteral("every site") : r.scope);
+		it->setText(2, r.note);
+	}
+	for (int i = 0; i < 3; ++i)
+		m_filter_view->resizeColumnToContents(i);
+	m_filter_note->setText(
+		m_filters->rules().isEmpty()
+			? QString("No rules yet. They arrive by accepting proposals in Tools → "
+			           "Evolve Ad Filters.")
+			: QString("%1 rule(s), stored in %2")
+			      .arg(m_filters->rules().size())
+			      .arg(m_filters_path.isEmpty() ? QString("memory only")
+			                                     : m_filters_path));
+	m_filter_remove->setEnabled(false);
 }
 
 void settings_dialog::build_kiosk_page(QWidget *page) {

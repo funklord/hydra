@@ -168,6 +168,16 @@ dry_run filter_list::evaluate(const filter_rule &r, const QStringList &observed,
 	return out;
 }
 
+bool filter_list::remove(const QString &text) {
+	for (int i = 0; i < m_rules.size(); ++i) {
+		if (m_rules[i].text != text)
+			continue;
+		m_rules.removeAt(i);
+		return true;
+	}
+	return false;
+}
+
 bool filter_list::contains(const QString &text) const {
 	for (const filter_rule &r : m_rules)
 		if (r.text == text)

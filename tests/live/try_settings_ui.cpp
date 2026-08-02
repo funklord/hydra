@@ -14,11 +14,15 @@
 // banner is a question about cookies, and permissions are a different subject.
 #include "settings_dialog.h"
 #include "policy_engine.h"
+#include "filter_list.h"
 #include "player_launcher.h"
 #include "download_manager.h"
 
 #include <QApplication>
 #include <QCheckBox>
+#include <QFile>
+#include <QPushButton>
+#include <QTreeWidget>
 #include <QComboBox>
 #include <QListWidget>
 #include <QSettings>
@@ -131,6 +135,45 @@ int main(int argc, char **argv) {
 		check(policy.global_default(policy::feature::javascript) ==
 		          policy::setting::allow,
 		      "closing without accepting changes nothing");
+	}
+
+	section("filters, which could be accepted but never taken back");
+	{
+		const QString fpath = QString::fromLocal8Bit(qgetenv("HYDRA_TEST_OUT")) +
+		                       "/filters-ai.txt";
+		QFile::remove(fpath);
+		filter_list filters;
+		filter_rule a; a.text = "||ads.example.com^"; a.note = "beacon";
+		filter_rule b; b.text = "shop.example##.promo"; b.cosmetic = true;
+		b.scope = "shop.example"; b.note = "leaked banner";
+		filters.add(a);
+		filters.add(b);
+		filters.save(fpath);
+
+		settings_dialog df(&players, &downloads, nullptr, nullptr, nullptr,
+		                    &policy, &filters, fpath);
+		df.show();
+		auto *view = df.findChild<QTreeWidget *>("filters");
+		auto *rm   = df.findChild<QPushButton *>("filter_remove");
+		check(view && view->topLevelItemCount() == 2,
+		      "both accepted rules are listed");
+		check(view && view->topLevelItem(0)->text(1) == "every site",
+		      "a rule with no scope says so rather than showing an empty cell");
+		check(rm && !rm->isEnabled(), "nothing can be removed until one is picked");
+
+		view->setCurrentItem(view->topLevelItem(0));
+		check(rm && rm->isEnabled(), "picking one enables it");
+		rm->click();
+		check(filters.rules().size() == 1, "removing takes it out of the list");
+		check(!filters.blocks("https://ads.example.com/x.gif", "site.example"),
+		      "and it stops blocking immediately, not at the next restart");
+		check(view->topLevelItemCount() == 1, "the view keeps up");
+
+		// Written through at once. The alternative is a window where Cancel
+		// silently restores rules the user watched disappear.
+		filter_list reloaded;
+		check(reloaded.load(fpath) && reloaded.rules().size() == 1,
+		      "and the file on disk agrees without waiting for OK");
 	}
 
 	section("kiosk, which had no way to be configured at all");

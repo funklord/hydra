@@ -1296,7 +1296,32 @@ is still what is shown.
 set, accepted, and read back by a *freshly opened* window rather than from the
 one that wrote it.
 
-**Still not in here:** the filter list. That is the next page.
+### Filters, and taking one back
+
+The last of the pages, and it closed a gap rather than only presenting one: a
+filter rule could be **accepted and never revoked** except by hand-editing
+`filters-ai.txt`. That is a poor answer for a list built by accepting AI
+proposals one at a time, because the whole design assumes some of them will turn
+out wrong — §12.4's dry run exists precisely because a rule can look right and
+be wrong.
+
+`filter_list::remove` takes one back by its exact text, and the page lists what
+has been accepted with its scope and the note saying why it was proposed. A rule
+with no scope reads "every site" rather than showing an empty cell, since that
+is the difference between a rule affecting one page and all of them.
+
+**Removal is written through immediately, not at OK.** A rule that is blocking
+something now should stop blocking it now, and the alternative is a window where
+pressing Cancel silently restores rules the user watched disappear. Checked both
+ways: the list stops matching the URL at once, and the file on disk agrees
+without waiting for the dialog to close.
+
+**Eight checks**, and the one that matters most is that `blocks()` goes false
+immediately — a removal that only edits a file would look identical in the UI
+and keep blocking until restart.
+
+The settings window is five pages now: Privacy & security, Media & players,
+Downloads, Filters, Kiosk, AI.
 
 ## Settings (arch §11.3, §11.4)
 

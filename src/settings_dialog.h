@@ -35,6 +35,9 @@ class torrent_download_source;
 // Values are read and written through `settings_store` below, so the dialog
 // owns presentation and the store owns persistence and application.
 class policy_engine;
+class filter_list;
+class QTreeWidget;
+class QPushButton;
 
 class settings_dialog : public QDialog {
 	Q_OBJECT
@@ -42,6 +45,8 @@ public:
 	settings_dialog(player_launcher *players, download_manager *downloads,
 	                 torrent_download_source *torrents, ollama_provider *local_ai,
 	                 claude_provider *external_ai, policy_engine *policy = nullptr,
+	                 filter_list *filters = nullptr,
+	                 const QString &filters_path = QString(),
 	                 QWidget *parent = nullptr);
 
 	// Saving belongs to *accepting*, not to a particular button. It hung off the
@@ -54,6 +59,8 @@ public:
 private:
 	void build_privacy_page(QWidget *page);
 	void build_kiosk_page(QWidget *page);
+	void build_filter_page(QWidget *page);
+	void rebuild_filter_list();
 	void load_kiosk();
 	void apply_kiosk();
 	void build_player_page(QWidget *page);
@@ -70,6 +77,11 @@ private:
 	void update_custom_state();
 
 	policy_engine           *m_policy   = nullptr;
+	filter_list             *m_filters  = nullptr;
+	QString                  m_filters_path;
+	QTreeWidget             *m_filter_view   = nullptr;
+	QPushButton             *m_filter_remove = nullptr;
+	QLabel                  *m_filter_note   = nullptr;
 	player_launcher         *m_players  = nullptr;
 	download_manager        *m_downloads = nullptr;
 	torrent_download_source *m_torrents = nullptr;

@@ -45,6 +45,13 @@ public:
 	bool contains(const QString &text) const;
 	void add(const filter_rule &r);
 
+	// Take one back out, by its exact text. Accepting a rule was reversible only
+	// by hand-editing `filters-ai.txt` until now, which is a poor answer for a
+	// list built by accepting AI proposals one at a time -- the whole design
+	// assumes some of them will turn out wrong. Returns false when there was no
+	// such rule, so a caller can tell "removed" from "never there".
+	bool remove(const QString &text);
+
 	// Does this URL match any accepted network rule?
 	bool blocks(const QString &url, const QString &site_host) const;
 
