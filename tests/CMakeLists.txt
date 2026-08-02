@@ -71,7 +71,7 @@ add_executable(test_settings test_settings.cpp
     ${H}/torrent_download_source.cpp ${H}/player_launcher.cpp
     ${H}/media_detector.cpp ${H}/ollama_provider.cpp ${H}/claude_provider.cpp
     ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/request_filter.cpp
-    ${H}/filter_list.cpp ${H}/site_rules.cpp
+    ${H}/filter_list.cpp ${H}/site_rules.cpp ${H}/scheme_rules.cpp
     ${H}/ai_provider.h)
 target_link_libraries(test_settings PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
 
@@ -104,7 +104,7 @@ add_executable(test_probe_ui test_probe_ui.cpp
     ${H}/torrent_download_source.cpp ${H}/player_launcher.cpp
     ${H}/media_detector.cpp ${H}/ollama_provider.cpp ${H}/claude_provider.cpp
     ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/request_filter.cpp
-    ${H}/filter_list.cpp ${H}/site_rules.cpp
+    ${H}/filter_list.cpp ${H}/site_rules.cpp ${H}/scheme_rules.cpp
     ${H}/ai_provider.h)
 target_link_libraries(test_probe_ui PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
 

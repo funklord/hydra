@@ -64,6 +64,9 @@ public class HydraWebView {
     /** Everything to run at the start of a page: the shim, then the scripts. */
     public static native String injectedScripts(long id);
 
+    /** True when the shell took a navigation instead -- magnet: and the like. */
+    public static native boolean takeExternalUrl(String url);
+
     /**
      * What the page sees as `window.hydraNative`.
      *
@@ -141,6 +144,17 @@ public class HydraWebView {
                         String js = injectedScripts(id);
                         if (js != null && !js.isEmpty())
                             v.evaluateJavascript(js, null);
+                    }
+
+                    // Asked about every navigation, and silence is consent: a
+                    // WebView that is not told otherwise will try to load
+                    // magnet: itself and show its own error. renders_as_page()
+                    // decides, in C++, so the desktop and this cannot drift.
+                    @Override
+                    public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
+                        if (req == null || req.getUrl() == null)
+                            return false;
+                        return takeExternalUrl(req.getUrl().toString());
                     }
 
                     // Every subresource passes through here, on a network

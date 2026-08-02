@@ -1,6 +1,7 @@
 // Settings persistence and the custom-player command template.
 #include "settings_dialog.h"
 #include "request_filter.h"
+#include "scheme_rules.h"
 #include "policy_engine.h"
 #include "download_manager.h"
 #include "player_launcher.h"
@@ -337,6 +338,30 @@ int main(int argc, char **argv) {
 		data.kind = kind_from_hints("*/*", data.url);
 		check(!f.decide(data).block,
 		      "the same url fetched as data is not blocked by the image rule");
+	}
+
+	// Which urls an engine renders itself, and which the shell has to place.
+	// Both backends ask this, by different routes -- Qt WebEngine registers
+	// scheme handlers, Android's WebView asks about every navigation and treats
+	// silence as consent -- so a scheme on one list and not the other is a link
+	// that works on the desktop and dead-ends on a phone.
+	section("scheme routing: what a web engine renders itself");
+	{
+		const char *pages[] = { "https://example.com/a", "http://example.com",
+		                         "file:///tmp/x.html", "about:blank",
+		                         "data:text/html,<b>hi", "view-source:https://e.com" };
+		for (const char *u : pages)
+			check(renders_as_page(QUrl(u)), QString("%1 is a page").arg(u));
+
+		const char *elsewhere[] = { "magnet:?xt=urn:btih:abc", "mailto:a@b.c",
+		                             "tel:+123", "intent://x#Intent;end" };
+		for (const char *u : elsewhere)
+			check(!renders_as_page(QUrl(u)),
+			      QString("%1 is the shell's problem, not the engine's").arg(u));
+
+		check(renders_as_page(QUrl("HTTPS://example.com")),
+		      "the scheme is matched case-insensitively, as urls allow");
+		check(!renders_as_page(QUrl("")), "an empty url is not a page");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "android_view.h"
 #include "request_filter.h"
+#include "scheme_rules.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -154,11 +155,43 @@ Java_org_qtproject_example_hydra_HydraWebView_bridgeCall(JNIEnv *env, jclass, jl
 	return env->NewStringUTF(r.toUtf8().constData());
 }
 
+// Called from Java on the UI thread, before every navigation the WebView is
+// about to make. True means the shell took it.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_org_qtproject_example_hydra_HydraWebView_takeExternalUrl(JNIEnv *env, jclass,
+                                                               jstring url) {
+	const QString u = from_java(env, url);
+	// The answer has to come from the Qt thread: it runs the handler, which
+	// touches the download manager and the status bar.
+	return on_qt_thread([u] {
+		       return android_view::take_external_url(u) ? QStringLiteral("1")
+		                                                 : QString();
+	       }).isEmpty()
+	           ? JNI_FALSE
+	           : JNI_TRUE;
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_org_qtproject_example_hydra_HydraWebView_injectedScripts(JNIEnv *env, jclass,
                                                                jlong id) {
 	const QString r = on_qt_thread([id] { return android_view::injected_scripts(id); });
 	return env->NewStringUTF(r.toUtf8().constData());
+}
+
+std::function<void(const QUrl &)> android_view::s_external;
+
+void android_view::set_external_handler(std::function<void(const QUrl &)> fn) {
+	s_external = std::move(fn);
+}
+
+bool android_view::take_external_url(const QString &url) {
+	const QUrl u(url);
+	if (u.isEmpty() || renders_as_page(u))
+		return false;
+	if (!s_external)
+		return false;   // nothing to hand it to; let the WebView fail visibly
+	s_external(u);
+	return true;
 }
 
 QString android_view::describe_bridge(qint64 id, const QString &name) {

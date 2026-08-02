@@ -3009,6 +3009,27 @@ reads like an argument bug and is really overload resolution. Arguments are only
 known at runtime here, so the `QGenericArgument` form is the one that fits and
 the return argument is built by type name to match it.
 
+### Links that are not pages
+
+`shouldOverrideUrlLoading` is asked about every navigation and takes silence as
+consent, so a WebView told nothing will try to load `magnet:` itself and show its
+own error. It now asks the shell, and the shell answers with the same rule the
+desktop uses — `renders_as_page()`, which moved out of `main_window`'s anonymous
+namespace into `scheme_rules` so both backends read one list. A scheme on one
+list and not the other is a link that works on the desktop and dead-ends on a
+phone, and that is not a difference anybody would go looking for.
+
+Measured on the device from both ends. A page navigated itself to a `magnet:`
+url and then reported where it was: still on its own page, so the WebView never
+attempted it and never showed an error. And the shell's status bar read *"Nothing
+here can open magnet:"* — its own message, which means the url travelled the
+whole way through JNI to the download manager, which has no torrent source in the
+Android build and said so.
+
+That completes §19.5's list except the file picker: requests, scripts, bridges
+and external links all cross the seam now, and the Android backend is a set of
+platform hooks onto shared code rather than a port of the shell.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and

@@ -8,6 +8,8 @@
 #include <QHash>
 #include <QUrl>
 
+#include <functional>
+
 class QLabel;
 class request_filter;
 
@@ -57,9 +59,11 @@ class request_filter;
 //     androidx.webkit is the real answer and is a dependency decision, not a
 //     line of code.
 //
-// What is still missing (architecture doc §19.2, §19.5): mapping
-// `shouldOverrideUrlLoading` onto the external-url handler that `magnet:` links
-// already use on the desktop.
+// **Links that are not pages go where they go on the desktop.**
+// `shouldOverrideUrlLoading` asks about every navigation and takes silence as
+// consent, so anything `renders_as_page()` does not claim is handed to the
+// shell's external-url handler — the same one `magnet:` links already use, and
+// the same shared rule about which schemes those are.
 class android_view : public web_view_backend {
 	Q_OBJECT
 public:
@@ -88,6 +92,15 @@ public:
 	                            const QString &args_json);
 	// Everything to run at the start of a page, shim first.
 	static QString injected_scripts(qint64 id);
+
+	// A navigation the WebView is about to attempt. Returns true when the shell
+	// took it instead — `magnet:` and anything else that is not a page.
+	//
+	// Static, and the handler with it, because there is one shell: the factory is
+	// told the handler once, after the views exist on the desktop and before them
+	// here, and threading it through every view would make the order matter.
+	static bool take_external_url(const QString &url);
+	static void set_external_handler(std::function<void(const QUrl &)> fn);
 
 	QWidget *widget() override;
 	QUrl url() const override { return m_url; }
@@ -121,6 +134,7 @@ private:
 
 	static QHash<qint64, android_view *> s_views;
 	static request_filter *s_filter;   // one per process; see should_block()
+	static std::function<void(const QUrl &)> s_external;
 	qint64 m_id = 0;
 	bool   m_native = false;   // false when there is no WebView to talk to
 
@@ -140,7 +154,8 @@ public:
 
 	web_view_backend *create_view(QWidget *parent) override;
 	void set_external_url_handler(external_url_handler fn) override {
-		m_external = std::move(fn);
+		m_external = fn;
+		android_view::set_external_handler(fn);
 	}
 
 private:

@@ -7,6 +7,7 @@
 #include "site_policy_dialog.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"
+#include "scheme_rules.h"
 #include "kiosk_controller.h"
 #include "reorganize_dialog.h"
 #include "ollama_provider.h"
@@ -80,14 +81,6 @@ namespace {
 // not a page, which makes it a candidate for handing to something that can
 // actually deal with it. Kept as a property of the web rather than of any
 // engine, so the same rule holds behind the Android backend (§19.2).
-bool renders_as_page(const QUrl &url) {
-	static const QSet<QString> web = {
-		"http", "https", "file", "about", "data", "blob",
-		"view-source", "chrome", "qrc",
-	};
-	return web.contains(url.scheme().toLower());
-}
-
 }  // namespace
 
 main_window::main_window(web_view_factory *factory, policy_engine *policy,
