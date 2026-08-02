@@ -3136,6 +3136,54 @@ message matters — the one where no type is supported at all.
 `try_downloads` and `try_capture` are excluded from this comparison on purpose:
 they assert nothing, so they cannot disagree.
 
+### The filter list was never enforced
+
+Setting out to test the ad-host predicate turned up something larger: **every
+rule the filter-evolution loop ever produced did nothing.**
+
+`filter_list::blocks()` existed, was correct, and had no caller in the request
+path. Rules were proposed by the AI, put through the breadth check and the
+dry-run, accepted by the user, written to `filters-ai.txt`, reloaded at startup
+and listed in the settings dialog — and then no request was ever compared against
+them. The architecture assigns filter enforcement to spine 1, the interceptor
+(§12, table row "Filter evolution … Spines 1+3"), so this was a missing wire, not
+a deferral. Every part of the loop worked except the one that mattered, which is
+why nothing looked wrong.
+
+`request_filter` now takes the list and consults it, gated behind the same
+per-site `ads` setting as the seed hosts: turning ads back on for a site the
+shield says is broken has to turn *all* of this off, or the escape hatch only
+half works and the page still fails for a reason the user was told they had
+disabled.
+
+**And the thing that looked like the next obvious fix was a trap.**
+`filter_rule::scope` is documented as "domain for a site-specific rule" and
+`blocks()` ignored it, so honouring it looks like a bug fix. It is not:
+`parse_rule` fills that field with two different things — the site for a cosmetic
+rule, and *the host being blocked* for `||host^` — and `evaluate()`'s breadth
+check depends on the second meaning. Comparing a blocked host against the
+visiting site would have matched almost nothing and silently disabled every
+network rule. A whole feature turned off by a change that reads as a repair. The
+suite now pins both meanings so it is not attempted twice.
+
+What that ambiguity *had* broken is smaller and real: the settings dialog's
+"Applies to" column printed `scope` directly, so a global tracker rule was
+listed as though it only applied on the tracker's own domain. Network rules are
+global here — per-site ones want `$domain=`, which this parser does not read —
+and the column says so now.
+
+**Proved end to end, and it finally unblocks the ad-host predicate**, which the
+notes have carried as "mechanism verified, matching untested" because pointing a
+name like `doubleclick.net` at a local server needs `/etc/hosts` or
+`--host-resolver-rules`, and Qt mangles the latter by splitting the environment
+variable on spaces. The predicate never cared what the name was. `try_filters`
+puts the page on `127.0.0.1` and its beacon on `127.0.0.2` — two hosts, both
+loopback, no DNS — and runs the controlled pair: with `||127.0.0.2^` accepted the
+beacon never reaches the server; with ads allowed for the site it does; blocked
+again, it stops; with the rule removed, it arrives. Fresh url each time, because
+a cached image goes unrequested for reasons that have nothing to do with
+filtering and looks identical in the log.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and
@@ -3174,12 +3222,16 @@ C++ that already exists.
    player that silently spins looks like a broken site or a broken browser. This
    is the first thing the ad-host list has done at runtime and it is a design
    question, not a bug.
-4. **Exercise the rest of what is wired but untested.** Two left, both needing
-   something this machine does not have: the KeePassXC bridge above the crypto
-   layer wants `keepassxc` installed, and the ad-host list's matching predicate
-   is blocked on the `--host-resolver-rules` problem recorded above. This
-   project's defect history is almost entirely in this category — see the
-   cautions at the top of this file.
+4. **Exercise the rest of what is wired but untested.** **The ad-host half is
+   done** — see the filter-enforcement section above; it needed no DNS trick at
+   all, only two loopback hosts, and finding that out uncovered that the whole
+   filter list was never consulted. One left: the KeePassXC bridge above the
+   crypto layer wants `keepassxc` installed, which this machine does not have.
+   This project's defect history is almost entirely in this category — see the
+   cautions at the top of this file. **The cosmetic half of §12 is still
+   unenforced**: accepted `##` rules hide nothing, because nothing injects them
+   into a page. That is the next piece of this, and it is a real gap rather than
+   a decision.
 5. **Android phase — no longer blocked on tooling.** `~/Qt/6.11.1` carries all
    four Android ABIs and `~/android-ndk-r29` is present, so the reason this was
    deferred (nothing to build with) is gone; what remains is the work itself.

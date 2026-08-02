@@ -203,6 +203,9 @@ private:
 	element_picker     *m_picker        = nullptr;
 	filter_signals     *m_signals       = nullptr;
 	filter_list        *m_filters       = nullptr;
+	// Kept so the accepted rules can be handed to it once the list is loaded,
+	// which happens after construction.
+	request_filter     *m_filter        = nullptr;
 	keepass_bridge     *m_keepass       = nullptr;
 	autofill_controller *m_autofill     = nullptr;
 	consent_blocker     *m_consent      = nullptr;

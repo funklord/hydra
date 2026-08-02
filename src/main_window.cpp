@@ -97,6 +97,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// function it landed in touched no members, and became a segfault in every
 	// live driver the moment one did.
 	m_antiadblock = new antiadblock_watch(this);
+	m_filter = filter;
 	if (filter) {
 		filter->add_observer(m_media);
 		filter->add_observer(m_signals);
@@ -798,6 +799,11 @@ bool main_window::load_tree(const QString &path) {
 	// from any imported EasyList so upstream updates cannot clobber it (§12.5).
 	m_filters_path = dir + "/filters-ai.txt";
 	m_filters->load(m_filters_path);
+	// And hand them to the interceptor, which is the only thing that can act on
+	// them. Loaded first so a rule accepted in an earlier session is in force
+	// before the first request of this one.
+	if (m_filter)
+		m_filter->set_filter_list(m_filters);
 
 	// Consent-banner rules, beside the rest and in the same spirit: data, not
 	// code. The built-in set is always present; the file adds to it. This is

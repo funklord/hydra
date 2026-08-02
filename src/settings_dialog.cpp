@@ -780,7 +780,14 @@ void settings_dialog::rebuild_filter_list() {
 	for (const filter_rule &r : m_filters->rules()) {
 		auto *it = new QTreeWidgetItem(m_filter_view);
 		it->setText(0, r.text);
-		it->setText(1, r.scope.isEmpty() ? QStringLiteral("every site") : r.scope);
+		// Not `r.scope` directly: for a cosmetic rule that field is the site the
+		// rule applies on, but for `||host^` it is the host being *blocked*, so
+		// this column was labelling a global tracker rule as though it only
+		// applied on the tracker's own domain. Network rules are global here —
+		// per-site ones would need `$domain=`, which the parser does not read.
+		it->setText(1, r.cosmetic
+		                   ? (r.scope.isEmpty() ? QStringLiteral("every site") : r.scope)
+		                   : QStringLiteral("every site"));
 		it->setText(2, r.note);
 	}
 	for (int i = 0; i < 3; ++i)

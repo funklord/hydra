@@ -7,6 +7,7 @@
 #include <QUrl>
 
 class policy_engine;
+class filter_list;
 
 // The kinds of request every engine can distinguish. Qt WebEngine reports far
 // more resource types and Android's WebView reports fewer; this is the subset
@@ -72,6 +73,18 @@ class request_filter {
 public:
 	explicit request_filter(policy_engine *engine);
 
+	// The AI/user-authored list (§12), consulted on every request.
+	//
+	// **This was the gap.** The filter-evolution loop proposed rules, the dry-run
+	// checked them, the user accepted them and they were written to
+	// `filters-ai.txt` and listed in settings — and nothing ever asked them about
+	// a request. `filter_list::blocks()` existed with no caller in the request
+	// path, so the whole loop's output was decoration. The architecture puts
+	// filter enforcement on spine 1, the interceptor, which is here.
+	//
+	// Optional: a filter with no list behaves exactly as before.
+	void set_filter_list(const filter_list *list) { m_list = list; }
+
 	request_decision decide(const request_context &ctx) const;
 
 	// Cookie decisions are the same shape: policy plus the first-party host.
@@ -92,7 +105,8 @@ public:
 	void notify(const request_context &ctx, const request_decision &d) const;
 
 private:
-	policy_engine *m_engine;
+	policy_engine     *m_engine;
+	const filter_list *m_list = nullptr;
 	QSet<QString>  m_ad_hosts;
 	QList<request_observer *> m_observers;
 };

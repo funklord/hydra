@@ -4,6 +4,7 @@
 #include "element_picker.h"
 
 #include <QList>
+#include <QReadWriteLock>
 #include <QString>
 #include <QStringList>
 
@@ -41,6 +42,9 @@ public:
 	bool load(const QString &path);
 	bool save(const QString &path) const;
 
+	// UI thread only: this hands out a reference into the list, so it must not be
+	// held while another thread could be adding a rule. `blocks()` is the
+	// cross-thread entry point and takes a read lock of its own.
 	const QList<filter_rule> &rules() const { return m_rules; }
 	bool contains(const QString &text) const;
 	void add(const filter_rule &r);
@@ -77,5 +81,11 @@ public:
 	static bool matches(const QString &pattern, const QString &url);
 
 private:
+	bool contains_locked(const QString &text) const;
+
 	QList<filter_rule> m_rules;
+	// Guards m_rules across the one thread boundary this class has: rules are
+	// added and removed on the UI thread while the interceptor asks blocks() on
+	// Qt WebEngine's. Mutable so the const read path can take it.
+	mutable QReadWriteLock m_lock;
 };

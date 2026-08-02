@@ -2,6 +2,7 @@
 #include "settings_dialog.h"
 #include "request_filter.h"
 #include "scheme_rules.h"
+#include "filter_list.h"
 #include "policy_engine.h"
 #include "download_manager.h"
 #include "player_launcher.h"
@@ -362,6 +363,115 @@ int main(int argc, char **argv) {
 		check(renders_as_page(QUrl("HTTPS://example.com")),
 		      "the scheme is matched case-insensitively, as urls allow");
 		check(!renders_as_page(QUrl("")), "an empty url is not a page");
+	}
+
+	// The ad-host predicate, which the notes have listed as "verified mechanism,
+	// untested matching" for a long time because pointing a real ad name at a
+	// local server needs root or a Chromium flag Qt mangles. The predicate itself
+	// needs neither.
+	section("ad hosts: what the seed list matches");
+	{
+		policy_engine e;
+		request_filter f(&e);
+		check(f.is_ad_host("doubleclick.net"), "the name itself");
+		check(f.is_ad_host("stats.g.doubleclick.net"), "and any subdomain of it");
+		check(!f.is_ad_host("notdoubleclick.net"),
+		      "but not a name that merely ends with the same letters");
+		check(!f.is_ad_host("doubleclick.net.evil.example"),
+		      "and not a lookalike that puts it on the left — the trick this exists to stop");
+		check(!f.is_ad_host("example.com"), "an unrelated host is not an ad host");
+		check(!f.is_ad_host(""), "and neither is nothing");
+	}
+
+	// The filter list reaching a decision at all. It did not, for the whole life
+	// of the filter-evolution loop: rules were proposed, checked, accepted, saved
+	// and listed, and nothing asked them about a request.
+	section("accepted filter rules are enforced");
+	{
+		policy_engine e;
+		filter_list   list;
+		request_filter f(&e);
+
+		request_context ctx;
+		ctx.site_host    = "news.example";
+		ctx.request_host = "tracker.example";
+		ctx.url          = QUrl("https://tracker.example/beacon.gif");
+
+		check(!f.decide(ctx).block, "with no list, nothing new is blocked");
+
+		filter_rule r;
+		r.text = "||tracker.example^";
+		list.add(r);
+		f.set_filter_list(&list);
+		check(f.decide(ctx).block, "an accepted rule blocks the request it describes");
+
+		request_context other = ctx;
+		other.request_host = "cdn.example";
+		other.url = QUrl("https://cdn.example/logo.png");
+		check(!f.decide(other).block, "and leaves everything else alone");
+
+		// The shield's escape hatch has to turn this off too, or "allow ads here"
+		// half-works and the page still breaks for a reason the user disabled.
+		e.set_setting("news.example", policy::feature::ads, policy::setting::allow);
+		check(!f.decide(ctx).block,
+		      "allowing ads for the site stops the accepted rules too");
+	}
+
+	// What `scope` actually means, which is two things.
+	//
+	// `parse_rule` fills it with the site for a cosmetic rule and with the
+	// *blocked host* for `||host^`, and `evaluate()`'s breadth check depends on
+	// the second. Filtering requests by it — which reads like an obvious fix for
+	// "blocks() ignores scope" — would compare a blocked host against the
+	// visiting site, match almost nothing, and silently disable every network
+	// rule. These pin the real behaviour so that fix is not made twice.
+	section("network rules are global, and the field that looks like scope is not");
+	{
+		filter_rule parsed;
+		check(filter_list::parse_rule("||tracker.example^", &parsed) &&
+		          parsed.scope == "tracker.example",
+		      "a network rule's scope is the host it blocks, not a site it applies on");
+		check(filter_list::parse_rule("news.example##.ad", &parsed) &&
+		          parsed.scope == "news.example",
+		      "while a cosmetic rule's scope really is the site");
+
+		policy_engine e;
+		filter_list   list;
+		request_filter f(&e);
+		f.set_filter_list(&list);
+		filter_rule r;
+		filter_list::parse_rule("||tracker.example^", &r);
+		list.add(r);
+
+		request_context here;
+		here.site_host    = "news.example";
+		here.request_host = "tracker.example";
+		here.url          = QUrl("https://tracker.example/beacon.gif");
+		check(f.decide(here).block, "the rule blocks on the site where it was written");
+
+		request_context elsewhere = here;
+		elsewhere.site_host = "other.example";
+		check(f.decide(elsewhere).block,
+		      "and on every other site too, which is what EasyList syntax means");
+	}
+
+	section("cosmetic rules are not network rules");
+	{
+		policy_engine e;
+		filter_list   list;
+		request_filter f(&e);
+		f.set_filter_list(&list);
+		filter_rule r;
+		r.text     = "news.example##.ad-banner";
+		r.cosmetic = true;
+		list.add(r);
+
+		request_context ctx;
+		ctx.site_host = "news.example";
+		ctx.request_host = "news.example";
+		ctx.url = QUrl("https://news.example/ad-banner.png");
+		check(!f.decide(ctx).block,
+		      "a cosmetic rule blocks no request, whatever its text happens to match");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

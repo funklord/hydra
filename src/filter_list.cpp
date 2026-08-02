@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "filter_list.h"
 
+#include <QReadLocker>
+#include <QWriteLocker>
+
 #include <QFile>
 #include <QTextStream>
 #include <QUrl>
@@ -169,6 +172,7 @@ dry_run filter_list::evaluate(const filter_rule &r, const QStringList &observed,
 }
 
 bool filter_list::remove(const QString &text) {
+	QWriteLocker locker(&m_lock);
 	for (int i = 0; i < m_rules.size(); ++i) {
 		if (m_rules[i].text != text)
 			continue;
@@ -179,6 +183,13 @@ bool filter_list::remove(const QString &text) {
 }
 
 bool filter_list::contains(const QString &text) const {
+	QReadLocker locker(&m_lock);
+	return contains_locked(text);
+}
+
+// Same test, for callers that already hold the lock. Taking it twice is not a
+// deadlock with QReadWriteLock's default non-recursive mode -- it is a hang.
+bool filter_list::contains_locked(const QString &text) const {
 	for (const filter_rule &r : m_rules)
 		if (r.text == text)
 			return true;
@@ -186,12 +197,35 @@ bool filter_list::contains(const QString &text) const {
 }
 
 void filter_list::add(const filter_rule &r) {
-	if (!contains(r.text))
+	QWriteLocker locker(&m_lock);
+	if (!contains_locked(r.text))
 		m_rules.push_back(r);
 }
 
 bool filter_list::blocks(const QString &url, const QString &site_host) const {
+	// Read-locked: this is the one method called off the UI thread -- the
+	// interceptor runs on Qt WebEngine's own thread -- while rules are added and
+	// removed on the UI thread as the user accepts them. `rules()` hands out a
+	// reference and stays UI-thread-only by contract; this does not.
+	// `site_host` is unused, and that is a statement about the syntax rather than
+	// an oversight. **A network rule here applies on every site.**
+	//
+	// This looked like a bug worth fixing -- `filter_rule::scope` is documented
+	// as "domain for a site-specific rule" and blocks() ignored it -- and
+	// filtering by it turned out to be exactly wrong. `parse_rule` fills `scope`
+	// with two different things: for a cosmetic rule it is the site the rule
+	// applies *on*, and for `||host^` it is the host being blocked. `evaluate()`
+	// depends on the second meaning for its breadth check, which is why the field
+	// reads as dual rather than confused. Comparing a blocked host against the
+	// visiting site would have matched almost nothing and quietly disabled every
+	// network rule -- a whole feature turned off by a change that reads as a fix.
+	//
+	// Per-site network rules would need `$domain=`, which this parser does not
+	// implement. Until it does, the honest behaviour is the EasyList default:
+	// network rules are global, and the per-site lever is the shield's ads
+	// setting, which `request_filter` checks before ever calling this.
 	Q_UNUSED(site_host);
+	QReadLocker locker(&m_lock);
 	for (const filter_rule &r : m_rules) {
 		if (r.cosmetic)
 			continue;   // cosmetic rules need DOM injection, not request blocking
@@ -205,6 +239,7 @@ bool filter_list::load(const QString &path) {
 	QFile f(path);
 	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
 		return false;
+	QWriteLocker locker(&m_lock);
 	m_rules.clear();
 	QTextStream in(&f);
 	while (!in.atEnd()) {

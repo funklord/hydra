@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "request_filter.h"
+#include "filter_list.h"
 #include "policy_engine.h"
 
 #include <QStringList>
@@ -71,6 +72,17 @@ request_decision request_filter::decide(const request_context &ctx) const {
 	// Ads / trackers: block known ad hosts unless this site permits ads.
 	if (is_ad_host(ctx.request_host) &&
 	    !m_engine->is_allowed(feature::ads, ctx.site_host)) {
+		d.block = true;
+		return d;
+	}
+
+	// The accepted filter rules, which are ads and annoyances by another name and
+	// so answer to the same per-site switch: turning ads back on for a site the
+	// shield says is broken has to turn *all* of this off, or the escape hatch
+	// only half works and the page still fails for a reason the user was told
+	// they had disabled.
+	if (m_list && !m_engine->is_allowed(feature::ads, ctx.site_host) &&
+	    m_list->blocks(ctx.url.toString(), ctx.site_host)) {
 		d.block = true;
 		return d;
 	}

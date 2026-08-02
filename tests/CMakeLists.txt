@@ -42,14 +42,14 @@ add_executable(test_extractor test_extractor.cpp ${H}/antiadblock_watch.cpp
     ${H}/site_extractor.cpp ${H}/extractor_helpers.cpp
     ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
     ${H}/stream_probe.cpp ${H}/local_proxy.cpp
-    ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/ai_provider.h)
+    ${H}/request_filter.cpp ${H}/filter_list.cpp ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/ai_provider.h)
 target_link_libraries(test_extractor PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
 
 add_executable(test_extloop test_extloop.cpp
     ${H}/site_extractor.cpp ${H}/extractor_helpers.cpp
     ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
     ${H}/stream_probe.cpp ${H}/local_proxy.cpp
-    ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/ai_provider.h)
+    ${H}/request_filter.cpp ${H}/filter_list.cpp ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/ai_provider.h)
 target_link_libraries(test_extloop PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
 
 add_executable(test_fetcher test_fetcher.cpp ${H}/network_fetcher.cpp
@@ -92,7 +92,7 @@ target_link_libraries(test_dlheaders PRIVATE Qt6::Core Qt6::Network Qt6::Test)
 add_executable(test_helpers_live test_helpers_live.cpp ${H}/extractor_helpers.cpp
     ${H}/network_fetcher.cpp ${H}/site_extractor.cpp ${H}/stream_probe.cpp
     ${H}/local_proxy.cpp ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
-    ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp
+    ${H}/request_filter.cpp ${H}/filter_list.cpp ${H}/policy.cpp ${H}/policy_engine.cpp
     ${H}/ai_provider.h)
 target_link_libraries(test_helpers_live PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network)
 
@@ -122,7 +122,7 @@ add_executable(test_live_model test_live_model.cpp
     ${H}/site_extractor.cpp ${H}/extractor_helpers.cpp
     ${H}/extractor_dialog.cpp ${H}/extractor_signals.cpp
     ${H}/stream_probe.cpp ${H}/local_proxy.cpp
-    ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp
+    ${H}/request_filter.cpp ${H}/filter_list.cpp ${H}/policy.cpp ${H}/policy_engine.cpp
     ${H}/ollama_provider.cpp ${H}/ai_provider.h)
 target_link_libraries(test_live_model PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
 
