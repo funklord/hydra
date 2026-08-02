@@ -35,6 +35,13 @@
 
 namespace lt = libtorrent;
 
+// Where screenshots and captures land. Set HYDRA_TEST_OUT to move it.
+static QString test_out() {
+	const QByteArray e = qgetenv("HYDRA_TEST_OUT");
+	return (e.isEmpty() ? QString("/tmp/hydra-test/")
+	                    : QString::fromLocal8Bit(e) + "/");
+}
+
 static const QString OUTDIR =
 	test_out();
 
@@ -59,13 +66,6 @@ static QWidget *find_titled(const QString &title) {
 		if (w->isVisible() && w->windowTitle().contains(title))
 			return w;
 	return nullptr;
-}
-
-// Where screenshots and captures land. Set HYDRA_TEST_OUT to move it.
-static QString test_out() {
-	const QByteArray e = qgetenv("HYDRA_TEST_OUT");
-	return (e.isEmpty() ? QString("/tmp/hydra-test/")
-	                    : QString::fromLocal8Bit(e) + "/");
 }
 
 int main(int argc, char *argv[]) {

@@ -2,6 +2,8 @@
 #include "request_filter.h"
 #include "policy_engine.h"
 
+#include <QStringList>
+
 using policy::feature;
 
 request_filter::request_filter(policy_engine *engine) : m_engine(engine) {
@@ -20,6 +22,38 @@ request_filter::request_filter(policy_engine *engine) : m_engine(engine) {
 		"taboola.com",
 		"outbrain.com",
 	};
+}
+
+resource_kind kind_from_hints(const QString &accept, const QUrl &url) {
+	// The header first: it is what the engine actually asked for, and it is
+	// right even when the path carries no extension, which is most of the
+	// modern web.
+	const QString a = accept.toLower();
+	if (a.contains(QLatin1String("image/")))
+		return resource_kind::image;
+	if (a.contains(QLatin1String("javascript")) ||
+	    a.contains(QLatin1String("application/ecmascript")))
+		return resource_kind::script;
+	// `text/css`, `text/html`, `font/*` and friends are all "other" as far as
+	// the rules go, and saying so early keeps the path guessing below from
+	// firing on a stylesheet that happens to live under /js/.
+	if (a.startsWith(QLatin1String("text/")) || a.contains(QLatin1String("font/")))
+		return resource_kind::other;
+
+	// Then the path, lowercased and without a query string: `?v=3` cache
+	// busters are on nearly every script tag and would defeat a suffix match.
+	const QString path = url.path().toLower();
+	if (path.endsWith(QLatin1String(".js")) || path.endsWith(QLatin1String(".mjs")))
+		return resource_kind::script;
+	static const QStringList image_suffixes = {
+		QStringLiteral(".png"),  QStringLiteral(".jpg"), QStringLiteral(".jpeg"),
+		QStringLiteral(".gif"),  QStringLiteral(".webp"), QStringLiteral(".svg"),
+		QStringLiteral(".avif"), QStringLiteral(".ico"),  QStringLiteral(".bmp"),
+	};
+	for (const QString &s : image_suffixes)
+		if (path.endsWith(s))
+			return resource_kind::image;
+	return resource_kind::other;
 }
 
 bool request_filter::is_ad_host(const QString &host) const {

@@ -18,6 +18,13 @@
 #include <QTimer>
 #include <cstdio>
 
+// Where screenshots and captures land. Set HYDRA_TEST_OUT to move it.
+static QString test_out() {
+	const QByteArray e = qgetenv("HYDRA_TEST_OUT");
+	return (e.isEmpty() ? QString("/tmp/hydra-test/")
+	                    : QString::fromLocal8Bit(e) + "/");
+}
+
 static const QString SHOT =
 	test_out();
 
@@ -33,13 +40,6 @@ static QDialog *find_settings() {
 			if (d->windowTitle() == "Settings")
 				return d;
 	return nullptr;
-}
-
-// Where screenshots and captures land. Set HYDRA_TEST_OUT to move it.
-static QString test_out() {
-	const QByteArray e = qgetenv("HYDRA_TEST_OUT");
-	return (e.isEmpty() ? QString("/tmp/hydra-test/")
-	                    : QString::fromLocal8Bit(e) + "/");
 }
 
 int main(int argc, char *argv[]) {

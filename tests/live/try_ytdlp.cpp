@@ -13,6 +13,13 @@
 #include <QUrl>
 #include <cstdio>
 
+// Where screenshots and captures land. Set HYDRA_TEST_OUT to move it.
+static QString test_out() {
+	const QByteArray e = qgetenv("HYDRA_TEST_OUT");
+	return (e.isEmpty() ? QString("/tmp/hydra-test/")
+	                    : QString::fromLocal8Bit(e) + "/");
+}
+
 static const QString OUTDIR =
 	test_out();
 
@@ -23,13 +30,6 @@ static void grab(const QString &title, const QString &n) {
 			return;
 		}
 	std::printf("NO WINDOW '%s'\n", qPrintable(title));
-}
-
-// Where screenshots and captures land. Set HYDRA_TEST_OUT to move it.
-static QString test_out() {
-	const QByteArray e = qgetenv("HYDRA_TEST_OUT");
-	return (e.isEmpty() ? QString("/tmp/hydra-test/")
-	                    : QString::fromLocal8Bit(e) + "/");
 }
 
 int main(int argc, char *argv[]) {

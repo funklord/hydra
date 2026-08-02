@@ -30,6 +30,22 @@ struct request_context {
 	resource_kind kind = resource_kind::other;
 };
 
+// What a request is, worked out from the `Accept` header and the URL.
+//
+// Qt WebEngine states the resource type outright; Android's `WebResourceRequest`
+// does not, and offers only headers and a url. So the Android interceptor has to
+// infer it, and this is where that inference lives — shared and testable rather
+// than buried in a platform file, because a wrong guess here silently turns a
+// per-origin script rule into no rule at all.
+//
+// **Deliberately cautious.** A script request sends `Accept: */*`, but so does
+// every `fetch()` and XHR, so `*/*` alone is not taken as evidence: only an
+// explicit javascript media type or a `.js`/`.mjs` path counts. The cost of
+// guessing low is that some scripts load on a site whose scripts are blocked;
+// the cost of guessing high would be blocking a page's data requests under a
+// rule the user set for scripts, which looks like the site being broken.
+resource_kind kind_from_hints(const QString &accept, const QUrl &url);
+
 // The interceptor is a shared *sensor*, not just a gate (architecture doc §10):
 // ad-blocking, media detection, and filter-evolution signal collection all ride
 // the same stream of requests. Observers see every request and its decision.

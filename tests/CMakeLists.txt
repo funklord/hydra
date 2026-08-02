@@ -70,7 +70,8 @@ add_executable(test_settings test_settings.cpp
     ${H}/settings_dialog.cpp ${H}/download_manager.cpp ${H}/download_source.h
     ${H}/torrent_download_source.cpp ${H}/player_launcher.cpp
     ${H}/media_detector.cpp ${H}/ollama_provider.cpp ${H}/claude_provider.cpp
-    ${H}/policy.cpp ${H}/policy_engine.cpp
+    ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/request_filter.cpp
+    ${H}/filter_list.cpp ${H}/site_rules.cpp
     ${H}/ai_provider.h)
 target_link_libraries(test_settings PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
 
@@ -102,6 +103,8 @@ add_executable(test_probe_ui test_probe_ui.cpp
     ${H}/settings_dialog.cpp ${H}/download_manager.cpp ${H}/download_source.h
     ${H}/torrent_download_source.cpp ${H}/player_launcher.cpp
     ${H}/media_detector.cpp ${H}/ollama_provider.cpp ${H}/claude_provider.cpp
+    ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/request_filter.cpp
+    ${H}/filter_list.cpp ${H}/site_rules.cpp
     ${H}/ai_provider.h)
 target_link_libraries(test_probe_ui PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
 
@@ -144,8 +147,16 @@ endif()
 # --- live drivers: real shell, real display -------------------------------
 if(Qt6WebEngineWidgets_FOUND)
     file(GLOB APPSRC CONFIGURE_DEPENDS ${H}/*.cpp)
-    list(REMOVE_ITEM APPSRC ${H}/main.cpp)
+    # main.cpp has its own main(); android_view.cpp is the Android backend and
+    # needs JNI headers that exist only in the NDK, so a desktop driver that
+    # globbed it in would fail to compile for a file it never calls. The real
+    # build makes the same split with if(ANDROID) rather than a glob.
+    list(REMOVE_ITEM APPSRC ${H}/main.cpp ${H}/android_view.cpp)
     file(GLOB APPHDR CONFIGURE_DEPENDS ${H}/*.h)
+    # And its header with it: AUTOMOC generates the meta-object for any Q_OBJECT
+    # it is handed, so leaving the header in emits a vtable that references the
+    # .cpp that was just excluded.
+    list(REMOVE_ITEM APPHDR ${H}/android_view.h)
     if(PkgConfig_FOUND)
         pkg_check_modules(SODIUM QUIET libsodium)
     endif()

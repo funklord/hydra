@@ -76,8 +76,8 @@ int main(int argc, char *argv[]) {
 		QTimer::singleShot(t, [&, t] {
 			for (QWidget *ww : QApplication::topLevelWidgets())
 				if (ww->isVisible() && ww->windowTitle().contains("Downloads")) {
-					ww->grab().save(QString(test_out()
-					                        "scratchpad/live/50-capjob-%1.png").arg(t));
+					ww->grab().save((test_out() +
+					                 "scratchpad/live/50-capjob-%1.png").arg(t));
 					auto *tree = ww->findChild<QTreeWidget *>();
 					if (tree && tree->topLevelItemCount())
 						std::printf("t+%-6d row: %s | %s | %s | %s\n", t,

@@ -15,15 +15,15 @@
 #include <QWebEngineView>
 #include <cstdio>
 
-static const QString OUTDIR =
-	test_out();
-
 // Where screenshots and captures land. Set HYDRA_TEST_OUT to move it.
 static QString test_out() {
 	const QByteArray e = qgetenv("HYDRA_TEST_OUT");
 	return (e.isEmpty() ? QString("/tmp/hydra-test/")
 	                    : QString::fromLocal8Bit(e) + "/");
 }
+
+static const QString OUTDIR =
+	test_out();
 
 int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);

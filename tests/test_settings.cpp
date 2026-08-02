@@ -1,5 +1,7 @@
 // Settings persistence and the custom-player command template.
 #include "settings_dialog.h"
+#include "request_filter.h"
+#include "policy_engine.h"
 #include "download_manager.h"
 #include "player_launcher.h"
 #include "torrent_download_source.h"
@@ -281,6 +283,60 @@ int main(int argc, char **argv) {
 		p.set_selected("no-such-player");
 		check(p.warning_for(file).contains("No external player"),
 		      "no player at all is reported plainly");
+	}
+
+	// What a request is, when the engine will not say. Android's WebView hands
+	// the interceptor a url and headers and nothing else, so the kind has to be
+	// inferred -- and the inference is shared, because a wrong guess here turns
+	// a per-origin script rule into either no rule or the wrong one.
+	section("resource kind: inferred from Accept and the url");
+	{
+		struct row { const char *accept; const char *url; resource_kind want; const char *why; };
+		const row rows[] = {
+			{"image/avif,image/webp,*/*", "https://s.example/pixel", resource_kind::image,
+			 "an image Accept, with no extension in sight"},
+			{"*/*", "https://s.example/app.js", resource_kind::script,
+			 "a .js path when the header says nothing useful"},
+			{"*/*", "https://s.example/app.js?v=91ac3", resource_kind::script,
+			 "a cache-busting query does not hide the .js"},
+			{"application/javascript", "https://s.example/bundle", resource_kind::script,
+			 "an explicit javascript type beats a bare path"},
+			{"text/css", "https://s.example/js/theme", resource_kind::other,
+			 "a stylesheet living under /js/ is still a stylesheet"},
+			{"text/html", "https://s.example/page", resource_kind::other,
+			 "a document is neither"},
+			{"*/*", "https://api.example/v1/items", resource_kind::other,
+			 "a bare */* is NOT taken as script: fetch and XHR send it too"},
+			{"", "https://s.example/logo.SVG", resource_kind::image,
+			 "an upper-case extension, with no header at all"},
+			{"", "https://s.example/a.png/redirect", resource_kind::other,
+			 "an extension mid-path is not an extension"},
+		};
+		for (const row &r : rows)
+			check(kind_from_hints(QString::fromLatin1(r.accept), QUrl(r.url)) == r.want,
+			      QString::fromLatin1(r.why));
+	}
+
+	// And that the inference actually reaches a decision, since the point of it
+	// is to let one filter serve both engines.
+	section("resource kind: drives the same rules on either engine");
+	{
+		policy_engine e;
+		request_filter f(&e);
+		e.set_setting("news.example", policy::feature::images, policy::setting::block);
+
+		request_context img;
+		img.site_host = "news.example";
+		img.request_host = "cdn.example";
+		img.url = QUrl("https://cdn.example/hero");
+		img.kind = kind_from_hints("image/webp,*/*", img.url);
+		check(f.decide(img).block, "a blocked image is blocked when only headers named it");
+
+		request_context data = img;
+		data.url = QUrl("https://cdn.example/hero");
+		data.kind = kind_from_hints("*/*", data.url);
+		check(!f.decide(data).block,
+		      "the same url fetched as data is not blocked by the image rule");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

@@ -69,8 +69,18 @@ int main(int argc, char **argv) {
 	spin(2000);
 	check(probes.count() == 1, QString("one probe ran (%1)").arg(probes.count()));
 	check(btn->isEnabled(), "and it comes back");
-	check(status->text().contains("reachable"),
-	      QString("the status reports the running model (%1)").arg(status->text()));
+	// Which answer is correct depends on whether anything is actually running,
+	// and this suite is meant to need nothing but a build. So assert the shape
+	// of both answers rather than assuming a backend is up: the failure this
+	// guards against is a status that stays on "not checked yet" after a probe
+	// completes, which is what a dropped signal looks like.
+	if (status->text().contains("reachable")) {
+		check(true, QString("the status reports the running model (%1)").arg(status->text()));
+	} else {
+		check(status->text().contains("Neither backend is available"),
+		      QString("no backend is up, and the status says so (%1)").arg(status->text()));
+		std::printf("  --    (no AI backend running; the reachable path went unchecked)\n");
+	}
 
 	section("and it tests what is in the field, not what was saved");
 	auto *url = dlg.findChildren<QLineEdit *>().value(0);
