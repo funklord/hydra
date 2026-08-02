@@ -164,10 +164,18 @@ prints pass/fail and returns non-zero on failure, so it can be run like a suite:
 DISPLAY=:0 ./tests/build/try_cookies
 ```
 
-Its third-party cases report **INCONCLUSIVE** rather than passing, and that is
-correct: over plain HTTP the engine refuses a third-party cookie whatever our
-filter says, so those rows measure Chromium and not us. Do not "fix" them by
-asserting the observed behaviour.
+It runs the same three cases twice, over plain HTTP and over TLS, and only the
+TLS ones can say anything about the third-party branch: over HTTP the engine
+refuses such a cookie whatever our filter says, because `SameSite=None` needs
+`Secure` and `Secure` needs TLS. Those HTTP rows are printed as notes rather
+than asserted — do not "fix" them by asserting the observed behaviour, which is
+indistinguishable from a working filter.
+
+The TLS origin needs `openssl` on PATH; the certificate is generated per run
+rather than committed, and the driver sets
+`QTWEBENGINE_CHROMIUM_FLAGS=--ignore-certificate-errors` for its own process so
+the engine will load a self-signed page. Without `openssl` those cases are
+skipped and say so.
 
 `try_permissions` is the same shape for geolocation, camera, microphone and
 notifications, and also exits non-zero on failure. Two traps it encodes, both of

@@ -87,10 +87,9 @@ in 5**, having been 0 in 5 every time it was asked before.
   by default and grantable per host, driven through the real shell; geolocation's
   page-visible outcome is the engine's to decide and is checked at our boundary
   instead.
-- ~~The cookie filter.~~ **Half answered.** The first-party path is measured
-  through the real profile in both directions; the third-party branch cannot be
-  measured over plain HTTP at all, because the engine refuses such a cookie
-  before our filter's answer matters. It needs an HTTPS origin.
+- ~~The cookie filter.~~ **Answered, both halves.** First-party measured through
+  the real profile in both directions; third-party measured against a local TLS
+  origin, where allowing it stores the cookie and blocking it does not.
 - ~~The ad-host list at runtime.~~ **Partly answered, and not the way it was
   meant to be:** it demonstrably blocks, because a real player refuses to start
   while its anti-adblock script can see it. That proves the list acts on live
@@ -315,15 +314,31 @@ the policy differs, and the cookie goes from stored-and-returned to absent on
 both channels. That is `request_filter::allow_cookie` being consulted and obeyed
 through the real profile.
 
-**The third-party half is honestly inconclusive, and the driver says so rather
-than passing.** The cookie is refused even when policy allows it, which means
-Chromium's own rules are what stopped it: a `SameSite=None` cookie requires
-`Secure`, and `Secure` needs HTTPS, while anything else defaults to `Lax` and is
-not set in a third-party context. Over plain HTTP a third-party cookie cannot be
-set at all in this engine, so nothing here measures our filter's third-party
-branch. Testing it needs an HTTPS origin with a certificate the engine trusts.
-Writing it as a pass would have been the easiest mistake available: the observed
-behaviour is exactly what a working filter produces.
+**The third-party half needed TLS, and now has it.** Over plain HTTP the cookie
+is refused whatever the policy says — a `SameSite=None` cookie requires
+`Secure`, `Secure` requires HTTPS, and anything else defaults to `Lax` and is
+not set in a third-party context — so those rows measure Chromium and not us.
+The driver reported them as inconclusive rather than as a pass, which was the
+easiest mistake available: the observed behaviour is exactly what a working
+filter produces.
+
+It now also stands up a TLS origin, with a self-signed certificate made fresh
+each run by `openssl` (not committed — a private key in a repository is a thing
+someone eventually trusts by accident) and
+`QTWEBENGINE_CHROMIUM_FLAGS=--ignore-certificate-errors` set by the driver
+before the engine starts. One token, deliberately: Qt splits that variable on
+spaces, so a flag containing one arrives mangled.
+
+| case, over TLS | result |
+|---|---|
+| third-party blocked | `first` stored, `third` not |
+| third-party allowed | **both stored** |
+| cookies blocked for the host | neither |
+
+The middle row is what was missing. Same page, same server, one policy bit
+different, and the third-party cookie appears — so the row above it is our
+filter refusing it rather than the engine declining to store it. The
+third-party branch is measured.
 
 **And the apparatus lied again, in the usual direction.** The first version
 asked the store what it held after the page had loaded, via `loadAllCookies()`
@@ -2165,14 +2180,12 @@ page.
    player that silently spins looks like a broken site or a broken browser. This
    is the first thing the ad-host list has done at runtime and it is a design
    question, not a bug.
-4. **Exercise the rest of what is wired but untested.** What is left needs
-   something this machine does not have: the cookie filter's third-party branch
-   wants an HTTPS origin with a certificate the engine trusts, and the KeePassXC
-   bridge above the crypto layer wants `keepassxc` installed. The ad-host list's
-   matching predicate is the third, and it is blocked on the same
-   `--host-resolver-rules` problem recorded above. This project's defect history
-   is almost entirely in this category — see the cautions at the top of this
-   file.
+4. **Exercise the rest of what is wired but untested.** Two left, both needing
+   something this machine does not have: the KeePassXC bridge above the crypto
+   layer wants `keepassxc` installed, and the ad-host list's matching predicate
+   is blocked on the `--host-resolver-rules` problem recorded above. This
+   project's defect history is almost entirely in this category — see the
+   cautions at the top of this file.
 5. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
    Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
 
