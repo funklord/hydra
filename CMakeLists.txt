@@ -33,7 +33,9 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS ${HYDRA_QT_COMPONENTS})
 # platform-neutral, which is the property step 3.5 exists to preserve -- and the
 # reason an Android build is a new pair of files here rather than a fork.
 if(ANDROID)
-    set(HYDRA_BACKEND_SOURCES)   # the System WebView backend goes here (§19.2)
+    set(HYDRA_BACKEND_SOURCES
+        src/android_view.cpp
+        src/android_view.h)
 else()
     set(HYDRA_BACKEND_SOURCES
         src/qtwebengine_view.cpp
@@ -47,8 +49,20 @@ endif()
 # libsodium is optional: without it the KeePassXC bridge reports itself
 # unusable (the protocol is end-to-end encrypted, so there is no degraded
 # mode), but everything else still builds. Install libsodium-dev to enable it.
+# Cross builds must not ask the host's pkg-config. It answers, cheerfully, with
+# `-L/usr/lib/x86_64-linux-gnu -lsodium` for an arm64 target -- so the configure
+# reports the feature *enabled* and the link fails much later with something
+# that reads like a toolchain fault. Measured: the first Android configure to
+# get this far announced both optional dependencies as found.
+#
+# Off for Android until the dependency is actually built for it. That is the
+# same "found, and the feature is on; absent, and it says so" rule the desktop
+# follows -- it just has to be asked the question in the right architecture.
 find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND)
+# The guard has to be on the *query*, not on finding pkg-config: Qt's own
+# toolchain files look for it first, so PkgConfig_FOUND is already true by the
+# time this file runs and guarding the find_package changed nothing at all.
+if(PkgConfig_FOUND AND NOT ANDROID)
     pkg_check_modules(SODIUM QUIET libsodium)
 endif()
 if(SODIUM_FOUND)
@@ -67,8 +81,10 @@ endif()
 # different library with a different API (architecture doc 11.4). Ask for the
 # CMake package, which is unambiguous, and fall back to the *qualified*
 # pkg-config name -- never the bare one.
-find_package(LibtorrentRasterbar QUIET)
-if(NOT LibtorrentRasterbar_FOUND AND PkgConfig_FOUND)
+if(NOT ANDROID)
+    find_package(LibtorrentRasterbar QUIET)
+endif()
+if(NOT LibtorrentRasterbar_FOUND AND PkgConfig_FOUND AND NOT ANDROID)
     pkg_check_modules(LIBTORRENT QUIET libtorrent-rasterbar)
 endif()
 if(LibtorrentRasterbar_FOUND OR LIBTORRENT_FOUND)
@@ -77,7 +93,13 @@ else()
     message(WARNING "libtorrent-rasterbar not found — BitTorrent downloads disabled")
 endif()
 
-add_executable(hydra
+# `qt_add_executable`, not `add_executable`, and the difference only shows up on
+# Android: there an app is a *shared library* that the Java launcher loads
+# (`libhydra_arm64-v8a.so`), and androiddeployqt has nothing to package if the
+# target is an ELF executable. That is exactly what happened -- the `apk` target
+# reported success and produced no APK, because there was nothing for it to put
+# in one. On desktop this is the same executable it always was.
+qt_add_executable(hydra
     icons/hydra.qrc
     src/main.cpp
     src/main_window.cpp

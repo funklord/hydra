@@ -2768,6 +2768,94 @@ out which pane the search box searches. Search takes the full sidebar width,
 Sort sits under it, and the toolbar is left with the things that act on the
 page.
 
+## Android: it builds, and there is an APK
+
+Not a port — a **placeholder behind the seam**, which is a smaller thing that
+proves a larger one. The seam has claimed since step 3.5 that adding a platform
+is "one new backend pair plus a different two lines in `main()`". That claim is
+now measured.
+
+**The core is genuinely platform-neutral.** Fifty-one translation units compiled
+for `arm64-v8a` with **no errors** and no changes. The only link failure was the
+three `qtwebengine_factory` symbols `main()` names — exactly the file the design
+says should be the only one that knows.
+
+`android_view` is honest about what it is: it renders a message saying the web
+view is not written yet and shows the address it was asked to open. A stub that
+displayed a blank page would be indistinguishable from a real backend that is
+broken, and this project has lost enough time to things that look like they
+work. `set_script_bridge` does nothing on purpose — on Android that becomes
+`addJavascriptInterface`, and pretending to register a bridge that cannot
+deliver would make every script that waits for one hang rather than fail.
+
+### What it took, since none of it was obvious
+
+```sh
+~/Qt/6.11.1/android_arm64_v8a/bin/qt-cmake -S . -B build-android \
+    -DQT_HOST_PATH=$HOME/Qt/6.11.1/gcc_64 \
+    -DANDROID_NDK_ROOT=$HOME/android-ndk-r29 \
+    -DANDROID_SDK_ROOT=$HOME/Android/Sdk
+JAVA_HOME=$HOME/android-studio/jbr cmake --build build-android --target apk
+```
+
+- **`qt_add_executable`, not `add_executable`.** On Android an app is a *shared
+  library* the Java launcher loads (`libhydra_arm64-v8a.so`); with a plain
+  executable target `androiddeployqt` has nothing to package. The failure mode is
+  the memorable part: the `apk` target reported **success and produced no APK**,
+  because there was nothing to put in one.
+- **`JAVA_HOME` must point at a JDK.** The system `java-21-openjdk` here is a
+  runtime with no `javac`, and Gradle says so in the language of toolchain
+  capabilities rather than in English. Android Studio's bundled `jbr` has one.
+- **Optional dependencies must not be asked of the host.** The first configure
+  that got this far announced *libsodium found* and *libtorrent found* — for an
+  arm64 target, from `/usr/lib/x86_64-linux-gnu`. It would have failed at link
+  with something that reads like a toolchain fault. They are now skipped for
+  Android, and the guard has to be on the **query**: Qt's own toolchain files
+  find pkg-config first, so guarding the `find_package` changed nothing.
+- Still warned, harmlessly so far: `Android platform 'android-37' does not exist
+  in SDK`. The SDK here has `platforms/android-37.0`, with the dot, which is not
+  the name Gradle looks for. The APK builds anyway; worth remembering when
+  something stranger happens.
+
+**Desktop is untouched** — same executable, same tests, and that was checked
+after every one of these changes rather than at the end.
+
+### And it runs on a phone
+
+Installed on a running x86_64 emulator (API 30) and launched. **The whole shell
+comes up**: menu bar, toolbar with back/forward/reload, address bar, the Shield
+button, search and sort, the tree, and the status bar reading `Ready` and
+`0 / 4 live`. Displayed in 927 ms, and `logcat` has no Qt warning or error in
+it — a clean start, not a survived one.
+
+The x86_64 kit was needed for that: the APK built first was arm64, and a desktop
+emulator is x86_64, so it would not have installed. Both kits build from the
+same tree with the same flags.
+
+**Four things the screenshot says, and three of them are work:**
+
+- **The tree is empty**, because `main()` loads `./sample-tree.txt` relative to
+  the working directory and on Android that is `/`. The tree, its state
+  directory and `policy.json` all need an app-storage path, and user-chosen
+  files need SAF (§19.4). Nothing crashed; it simply has nothing to show.
+- **The layout is desktop-shaped, and it shows.** A horizontal splitter on a
+  portrait phone gives the content pane a strip too narrow to use — "Select a
+  tab from the tree" is clipped at the right edge — while the tree takes half the
+  screen. This is §19.3's adaptive drawer layout, and the screenshot is the
+  argument for it: it is not that a drawer would be *nicer*, it is that the
+  splitter is unusable at this aspect ratio.
+- **The status bar's right-hand text sits hard against the screen edge**, for the
+  same reason.
+- **A toolbar glyph is missing.** Back and forward render (`◀`, `▶`) and reload
+  does not — it is `↻`, and the emulator's font has no glyph for it. Icons for
+  these three rather than characters, which the desktop never needed.
+
+**What it does not do:** browse. The System WebView backend, `shouldIntercept
+Request` wired to the shared `request_filter`, `addJavascriptInterface` for the
+content scripts, and `shouldOverrideUrlLoading` for `magnet:` are all still to
+write (§19.2, §19.5). What is gone is every question about whether the *rest* of
+the program can go there — it is there, and it starts.
+
 ## What is next (in order)
 
 1. **Take a second evidence set, from a different site.** Everything measured

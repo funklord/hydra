@@ -2,7 +2,15 @@
 #include "main_window.h"
 #include "policy_engine.h"
 #include "request_filter.h"
+// The single place that names a concrete backend (architecture doc §19.2). The
+// whole point of the seam is that this is the only file that has to know, and
+// that is now measured rather than asserted: the other fifty-one translation
+// units compile for arm64 unchanged.
+#ifdef Q_OS_ANDROID
+#include "android_view.h"
+#else
 #include "qtwebengine_factory.h"
+#endif
 #include "torrent_download_source.h"
 
 #include <QApplication>
@@ -34,7 +42,9 @@ int main(int argc, char *argv[]) {
 	// protocols and drops such navigations before anything of ours can see them
 	// (§11.4). The list is empty when the feature is not built, and then
 	// nothing changes.
+#ifndef Q_OS_ANDROID
 	qtwebengine_factory::register_url_schemes(torrent_download_source::url_schemes());
+#endif
 
 	QApplication app(argc, argv);
 	app.setApplicationName("Hydra");
@@ -55,7 +65,11 @@ int main(int argc, char *argv[]) {
 	// Declaration order matters: each of these outlives the ones below it.
 	policy_engine       policy;
 	request_filter      filter(&policy);
+#ifdef Q_OS_ANDROID
+	android_factory factory(&filter);
+#else
 	qtwebengine_factory factory(&filter);
+#endif
 
 	main_window w(&factory, &policy, &filter);
 
