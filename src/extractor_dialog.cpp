@@ -272,6 +272,24 @@ void extractor_dialog::rebuild_payload() {
 		            "fetched with this page's context. It is the server's own "
 		            "answer, so trust it over the file extension, which on many "
 		            "sites is chosen to mislead.";
+	// Where that instruction goes decides whether it is read at all. Measured:
+	// with the note above and nothing in the tail, five runs in five wrote
+	// `endsWith('.m3u8')` over a list whose manifest was annotated HLS on the
+	// line beside it — the annotation was present, correct, and ignored. That is
+	// the same displacement the three findings below record, so it gets the same
+	// remedy: say it after the evidence, in the paragraph the model demonstrably
+	// acts on.
+	//
+	// The second half is the load-bearing one, and the first attempt at it was
+	// too subtle. Saying only that the notes "are not there on a later visit"
+	// moved three runs in five to `url.includes('-> application/vnd.apple.
+	// mpegurl')` — the annotation was finally being read, and read as part of
+	// the url, because the fold prints it on the same line and nothing said
+	// otherwise. So it now names the fields a request actually has and says
+	// plainly that the url ends where the note begins. The note exists only
+	// while the extractor is being written; a stored script runs on later visits
+	// where nothing has been probed, so it is evidence for *which* address to
+	// match, never something the script may test for.
 	// The contract again, after the evidence rather than only before it, and the
 	// exact wording is measured rather than chosen. On the synthetic set this is
 	// redundant; on evidence captured from a real page — eighteen times longer,
@@ -297,8 +315,31 @@ void extractor_dialog::rebuild_payload() {
 	           "`other` — and never `hls` or `dash`, so testing for those "
 	           "matches nothing. Anything fetched as a `script` or an `image` "
 	           "is page furniture and will be rejected, so it is not a useful "
-	           "fallback either.\n\n"
-	           "Return an object whose `url` is one of the addresses above "
+	           "fallback either.\n\n";
+	if (!m_served.isEmpty())
+		payload += "Some lines carry a `-> …` note. That is the server's own "
+		            "answer about what the address really serves, and it settles "
+		            "what the extension cannot: an address noted as HLS is the "
+		            "manifest however it is named, and one noted as video is a "
+		            "segment however it is named.\n\n"
+		            "More than one line can be noted as a stream, and they are "
+		            "not alternatives. If any line is noted as HLS or DASH, that "
+		            "line is the manifest and it is the answer — return it, with "
+		            "`kind` `hls` or `dash`. Everything the manifest describes "
+		            "reaches you as a separate request: an initialisation "
+		            "segment, then the numbered media segments. Those are pieces "
+		            "of that same stream and returning one gives a few seconds of "
+		            "video or none at all. Only return a piece when no line is "
+		            "noted as a manifest.\n\n"
+		            "The note is written here for you to read, and it is not "
+		            "part of the data your function gets. A request has `url`, "
+		            "`type` and `order` and nothing else; its `url` ends where "
+		            "the note begins, so testing the url for `->` or for a "
+		            "content type matches nothing. Read the notes now, decide "
+		            "which line is the stream, and write your function to find "
+		            "that line again by a stable part of its path — the ids and "
+		            "tokens will be different on a later visit.\n\n";
+	payload += "Return an object whose `url` is one of the addresses above "
 	           "copied exactly, whose `kind` is `hls`, `dash` or `direct`, and "
 	           "whose `headers` sets `Referer` to `page.url` — or return null "
 	           "if none of them is a stream. Reply with that JavaScript and "
@@ -404,10 +445,14 @@ void extractor_dialog::on_reply(const QString &text) {
 	const QUrl     page = m_page;
 	const auto     ev   = m_evidence;
 	helper_host   *hs   = m_helpers;
+	// Copied, not referenced: this is read on the judging thread while the probe
+	// callbacks that fill it run on this one.
+	const QSet<QString> manifests = m_manifests;
 	QPointer<extractor_dialog> self(this);
 
-	QThread *t = QThread::create([src, page, ev, hs, self] {
-		const extractor_verdict v = site_extractor::check(src, page, ev, hs);
+	QThread *t = QThread::create([src, page, ev, hs, manifests, self] {
+		const extractor_verdict v =
+			site_extractor::check(src, page, ev, hs, &manifests);
 		// Back to the UI thread, and only if the dialog is still there. A
 		// closed dialog leaves this to find a null QPointer and stop, rather
 		// than writing into freed widgets.
@@ -436,6 +481,12 @@ void extractor_dialog::on_judged(const extractor_verdict &verdict) {
 		                        ? "<br><br>A script that returns an address the "
 		                          "page never asked for is refused outright — "
 		                          "there is no safe way to accept one."
+		                        : QString()) +
+		                   (m_verdict.is_piece
+		                        ? "<br><br>An initialisation or media segment plays "
+		                          "as a fraction of a second or as nothing at all. "
+		                          "The playlist beside it is what names them in "
+		                          "order, so that is the address worth keeping."
 		                        : QString()));
 		m_status->setText("The proposal was rejected. You can send again.");
 		return;
@@ -491,6 +542,12 @@ void extractor_dialog::probe_candidates() {
 				m_served.insert(url, res.content_type.isEmpty()
 					? res.kind.toUpper()
 					: QString("%1 (%2)").arg(res.content_type, res.kind.toUpper()));
+				// A playlist is the one answer the gate can act on, so it is kept
+				// separately and normalised the way the gate compares urls.
+				if (res.kind == "hls" || res.kind == "dash")
+					m_manifests.insert(QUrl(url)
+						.adjusted(QUrl::RemoveFragment | QUrl::StripTrailingSlash)
+						.toString());
 			} else if (res.reached && res.status >= 400) {
 				m_served.insert(url, QString("%1, not established")
 				                          .arg(res.status));

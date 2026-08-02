@@ -99,6 +99,40 @@ HYDRA_MODEL_TIMEOUT_MS=900000 QT_QPA_PLATFORM=offscreen \
 the fastest way to see whether the budget went to the stream or to the page's
 beacons.
 
+**Point `try_extract` at the player mirror, not the watch page.** The measured
+site's player fails to initialise when embedded — "Failed to setup player" —
+and a capture from the watch page is 60-odd requests of furniture with no stream
+in it. The mirror on its own (`https://<player-host>/#<id>`, the address the
+watch page's iframe uses) initialises immediately and streams. The screenshots
+`try_extract` writes are how you tell the two apart in ten seconds.
+
+**Unless the mirror refuses to be loaded on its own**, which the second one
+does — it bounces to its vendor's homepage without the embedding page's referer.
+For those, pass a CSS selector as the fourth argument and the driver clicks it
+before hunting for the player, which is how a user reaches it too:
+
+```sh
+DISPLAY=:0 ./tests/build/try_extract https://site/watch/thing/ 80 /tmp/ev.json \
+    'ul.mirror li:nth-child(2) a'
+```
+
+`HYDRA_CLICKS` (default 3) sets how many times the player is clicked.
+
+**If a player ignores every click, suspect our own ad blocking before the
+driver.** The second mirror loads `fuckadblock.min.js` and will not start while
+it sees a blocker; its play button simply stays put, which looks exactly like a
+click that missed. `HYDRA_ALLOW_ADS=1` turns the ad list off for one capture and
+`HYDRA_ALLOW_POPUPS=1` lets the page open windows. Both are off by default,
+because a capture that quietly stopped blocking would be measuring a browser
+nobody runs — and when you use them, say so beside the numbers.
+
+`try_extract` writes its own one-node tree beside the output and starts it on
+`about:blank`, so each run gets a fresh state directory and the repo's
+`sample-tree.txt` is left alone. That is not tidiness: sharing the tree meant a
+run restored whatever the last one left open, and a previous page's slow
+subresources land in this capture's evidence under this capture's host once the
+navigation commits.
+
 Recapture immediately before each run. The CDN tokens are short-lived, so
 evidence even an hour old probes as 403, and the run then measures the
 un-annotated case while looking like it measured the annotated one — the
@@ -120,6 +154,41 @@ shipping path.
 
 Set `HYDRA_TEST_OUT` to choose where screenshots and captures land; it defaults
 to `/tmp/hydra-test/`.
+
+`try_cookies` needs no server of its own and no network — it stands one up in
+process and serves the page from `127.0.0.1` and a third-party image from
+`127.0.0.2`, which is what makes a stored or refused cookie attributable. It
+prints pass/fail and returns non-zero on failure, so it can be run like a suite:
+
+```sh
+DISPLAY=:0 ./tests/build/try_cookies
+```
+
+Its third-party cases report **INCONCLUSIVE** rather than passing, and that is
+correct: over plain HTTP the engine refuses a third-party cookie whatever our
+filter says, so those rows measure Chromium and not us. Do not "fix" them by
+asserting the observed behaviour.
+
+`try_permissions` is the same shape for geolocation, camera, microphone and
+notifications, and also exits non-zero on failure. Two traps it encodes, both of
+which produced a convincing false failure first:
+
+- **A permission answer is remembered per origin, and an origin includes the
+  port.** Asking twice on one port means the second answer comes from Chromium's
+  memory and never reaches our decider. It uses a fresh port per case.
+- **Geolocation cannot be judged from the page here.** With no location provider
+  in the build, a *granted* request still ends as `PERMISSION_DENIED` — the same
+  code as a refusal. `HYDRA_PERM_DEBUG=1` makes `qtwebengine_view` log what was
+  asked and what was answered, which is where that case is checked instead.
+
+`try_subframe` reproduces the MSE tap's third-party-iframe defect, also offline
+and also self-checking. It **asserts the broken behaviour**, so it is green today
+and will fail the moment someone fixes the tap — which is the intended signal,
+not a regression. Its first case is a control that proves the fixture really
+feeds a MediaSource; without that, the second case's silence would be
+indistinguishable from a fixture that never played anything. If you write a
+fixture like it, note that the hook only reports past **256 KiB** of appends, so
+a smaller one looks idle while working perfectly.
 
 Lessons that cost time, so they are written down:
 

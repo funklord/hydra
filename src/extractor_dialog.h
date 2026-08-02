@@ -98,6 +98,11 @@ private:
 	QList<evidence_request> m_evidence;
 	QString            m_proposal;
 	QHash<QString, QString> m_served;   // url -> what it actually returned
+	// The same answers, kept as the gate needs them rather than as the payload
+	// prints them: the addresses the tier positively identified as a playlist.
+	// Parsing them back out of the human sentence above would be a second
+	// spelling of one fact, and the two would drift.
+	QSet<QString>           m_manifests;
 	int                m_pending = 0;   // probes still out
 	extractor_verdict  m_verdict;
 

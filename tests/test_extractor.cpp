@@ -277,6 +277,66 @@ int main(int argc, char **argv) {
 		      "an address seen as both an image and something else still passes");
 	}
 
+	section("a piece of the stream is not the stream");
+	{
+		// The last wrong answer everything else accepted. Measured against real
+		// evidence: three runs in five returned the initialisation segment. It is
+		// fetched once, so the segment rule misses it; it is not the page and not
+		// furniture; and its body really is a stream, so even fetching it agrees.
+		// What settles it is that the server confirmed the playlist beside it.
+		QList<evidence_request> parts = sample();
+		const QString init =
+			"https://sil5.player.example/v4/db/abc/init-f1-v1-a1.woff?k=UCp";
+		parts << evidence_request{ QUrl(init), "other", parts.size() };
+
+		const QString pick =
+			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
+			"if (r[i].url.indexOf('%1')!==-1) "
+			"return { url: r[i].url, kind: 'direct' }; return null; };";
+
+		const QString manifest =
+			"https://sil5.player.example/v4/db/abc/cf-master.1774687168.txt?k=UCp&kx=17";
+		QSet<QString> manifests = { manifest };
+
+		// Without the tier's answer nothing can fire, and that is the point of
+		// making it optional: no network, no refusal.
+		check(site_extractor::check(pick.arg("init-"), page, parts).usable,
+		      "with no confirmed playlist the init segment still passes");
+
+		const extractor_verdict v =
+			site_extractor::check(pick.arg("init-"), page, parts, nullptr, &manifests);
+		check(!v.usable && v.is_piece, "with one, the init segment is refused");
+		check(!v.invented && !v.is_segment && !v.is_asset,
+		      "and not mistaken for any of the other four");
+		check(v.message.contains("cf-master"), "the reason names the playlist");
+
+		// The playlist itself is in the set, so it passes — this rule must not
+		// refuse the answer it is pointing at.
+		check(site_extractor::check(pick.arg("cf-master"), page, parts, nullptr,
+		                             &manifests).usable,
+		      "while the playlist itself still passes");
+
+		// A media playlist listed beside a master is a manifest too. Following it
+		// is the helper tier's job, and returning it is a fine answer.
+		const QString index =
+			"https://sil5.player.example/v4/db/abc/index-f1-v1-a1.txt?k=UCp";
+		parts << evidence_request{ QUrl(index), "other", parts.size() };
+		manifests.insert(index);
+		check(site_extractor::check(pick.arg("index-"), page, parts, nullptr,
+		                             &manifests).usable,
+		      "and so does a media playlist confirmed alongside it");
+
+		// Same *directory*, deliberately. A progressive file served elsewhere on
+		// that host is a better answer than the manifest, not a piece of it, and
+		// a rule that refused it would be doing harm.
+		QList<evidence_request> elsewhere = parts;
+		const QString mp4 = "https://sil5.player.example/files/movie.mp4";
+		elsewhere << evidence_request{ QUrl(mp4), "other", elsewhere.size() };
+		check(site_extractor::check(pick.arg("movie.mp4"), page, elsewhere, nullptr,
+		                             &manifests).usable,
+		      "a file elsewhere on the same host is left alone");
+	}
+
 	section("every way of spelling the function");
 	{
 		// The wrapper claimed all three forms worked. The declaration form did

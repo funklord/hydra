@@ -54,6 +54,14 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 				return;
 		}
 		const bool grant = m_decider ? m_decider(origin, pf) : false;
+		// What was asked and what was answered, on request. Without this the
+		// only observable is what the page ends up seeing, and "we refused" and
+		// "we granted and the engine could not deliver" look identical from
+		// there — which cost a diagnosis once already.
+		if (qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG"))
+			qWarning("permission: %s asked for feature %d -> %s",
+			          qPrintable(origin.toString()), int(f),
+			          grant ? "GRANTED" : "denied");
 		m_page->setFeaturePermission(origin, f,
 			grant ? QWebEnginePage::PermissionGrantedByUser
 			      : QWebEnginePage::PermissionDeniedByUser);
@@ -124,7 +132,13 @@ void qtwebengine_view::inject_script(const QString &name, const QString &source)
 	// runs; and an isolated world so the page cannot read or rewrite it (§13.2).
 	s.setInjectionPoint(QWebEngineScript::DocumentCreation);
 	s.setWorldId(QWebEngineScript::ApplicationWorld);
-	s.setRunsOnSubFrames(false);   // top frame only; cross-origin iframes do not fill
+	// Top frame only, and for two separate reasons. Credentials and picked
+	// elements must not be reachable from a third-party iframe. And it could not
+	// currently be otherwise even where that would help: Qt installs
+	// `qt.webChannelTransport` in the main frame alone, so a content script in a
+	// subframe has nothing to connect a QWebChannel to — measured, see the MSE
+	// relay note in project.md.
+	s.setRunsOnSubFrames(false);
 	m_page->scripts().insert(s);
 }
 

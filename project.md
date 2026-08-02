@@ -70,23 +70,45 @@ end to end; the extractor loop against `qwen2.5-coder` at two sizes, and one
 prompt change measured at ten runs an arm and reverted for making things worse;
 the content-type tier against the real CDN, where the manifest declares
 `application/vnd.apple.mpegurl` once it is asked with the page's context and
-403s without it; and the §11.5.1 helper tier against that same CDN, following a
-master playlist to a variant the page never requested in four calls.
+403s without it; the §11.5.1 helper tier against that same CDN, following a
+master playlist to a variant the page never requested in four calls; and — at
+last — **the extractor loop finding the real manifest on real evidence, 2 runs
+in 5**, having been 0 in 5 every time it was asked before.
 
 **Not measured, and known.**
 - Capture under *live network* conditions — the mechanism is proven locally,
   the timing against a real site is not.
-- The ad-host list at runtime; the cookie filter; the permission callbacks.
+- ~~The MSE tap on a page whose player is a third-party iframe.~~ **Answered,
+  badly:** it reports nothing there, and that is most real watch pages. Every
+  earlier verification used a player page loaded as its own document, where no
+  subframe is involved.
+- ~~The permission callbacks.~~ **Answered.** Every one of the four is refused
+  by default and grantable per host, driven through the real shell; geolocation's
+  page-visible outcome is the engine's to decide and is checked at our boundary
+  instead.
+- ~~The cookie filter.~~ **Half answered.** The first-party path is measured
+  through the real profile in both directions; the third-party branch cannot be
+  measured over plain HTTP at all, because the engine refuses such a cookie
+  before our filter's answer matters. It needs an HTTPS origin.
+- ~~The ad-host list at runtime.~~ **Partly answered, and not the way it was
+  meant to be:** it demonstrably blocks, because a real player refuses to start
+  while its anti-adblock script can see it. That proves the list acts on live
+  traffic; it still does not prove the *matching predicate* is right, which was
+  the original question. See the second-mirror section.
 - The KeePassXC bridge above the crypto layer — `keepassxc` is not installed.
 - ~~Whether the extractor prompt generalises past one synthetic evidence set.~~
   **Answered, badly:** it does not. Against evidence captured from the real
   site the loop returned prose and no parser in five runs out of five, so every
   hit-rate in this file describes the synthetic fixture and nothing else.
-- **Whether it does better now that the payload carries what each address
-  actually serves.** That change landed *after* the last measurement, and it
-  supplies exactly the signal every failing run was missing, so the 0-of-5
-  above is out of date rather than wrong. Recapture and run five before
-  concluding anything further about the prompt.
+- ~~Whether it does better now that the payload carries what each address
+  actually serves.~~ **Answered: not on its own.** Carrying the content types
+  changed nothing — 0 of 5 — until the payload's *tail* said to use them. What
+  the tier supplies and what the model reads are two different questions, and
+  only the second one moved the number. See the four arms below.
+- **Whether any of this transfers to a second site.** Everything measured
+  against a real page in this file is one site, and the fragment the working
+  runs matched (`/cf-master.`) is that site's. The loop working here is not the
+  loop working.
 - The DOM half of the helper tier (§11.5.1). The fetch half is proven against
   a live CDN; the DOM half is designed and unbuilt, and nothing has needed it.
 
@@ -270,8 +292,85 @@ at a local server needs either `/etc/hosts` (root) or Chromium's
 `--host-resolver-rules`, which Qt's `QTWEBENGINE_CHROMIUM_FLAGS` mangles because
 it splits the variable on spaces and the `MAP host ip` syntax contains one. So
 the *mechanism* is verified and only the host-matching predicate is untested at
-runtime. The cookie filter and the permission callbacks are also still
-unexercised.
+runtime.
+
+### The cookie filter, half proven
+
+`tests/live/try_cookies` drives it the way the interceptor was driven, and for
+the same reason: the page comes from `127.0.0.1` and one of its images from
+`127.0.0.2`, both loopback but *different hosts*, so first-party and third-party
+are told apart by something the test controls. The page carries a second image
+from its own host whose only job is to report the `Cookie` header it was sent,
+so the cookie's return journey is observed rather than assumed.
+
+| case | result |
+|---|---|
+| defaults (cookies allow, third-party block) | `first=1` stored **and** sent back on the next same-host request; the third party's not stored |
+| `cookies=block` for the host | nothing stored, and nothing sent on the next request either |
+| third-party cookies **allowed** | still not stored — see below |
+
+**The middle row is the one that proves anything.** Same page, same server, only
+the policy differs, and the cookie goes from stored-and-returned to absent on
+both channels. That is `request_filter::allow_cookie` being consulted and obeyed
+through the real profile.
+
+**The third-party half is honestly inconclusive, and the driver says so rather
+than passing.** The cookie is refused even when policy allows it, which means
+Chromium's own rules are what stopped it: a `SameSite=None` cookie requires
+`Secure`, and `Secure` needs HTTPS, while anything else defaults to `Lax` and is
+not set in a third-party context. Over plain HTTP a third-party cookie cannot be
+set at all in this engine, so nothing here measures our filter's third-party
+branch. Testing it needs an HTTPS origin with a certificate the engine trusts.
+Writing it as a pass would have been the easiest mistake available: the observed
+behaviour is exactly what a working filter produces.
+
+**And the apparatus lied again, in the usual direction.** The first version
+asked the store what it held after the page had loaded, via `loadAllCookies()`
+plus `cookieAdded` — which emits nothing, because an already-loaded store does
+not re-announce what it already has. It reported "(none)" for a cookie the
+server could see arriving on the very next request. Two channels disagreeing is
+what caught it; the driver now watches cookies as they arrive and prints the
+server's view beside them, so a future disagreement is visible instead of
+casting a vote.
+
+### The permission callbacks, exercised
+
+`tests/live/try_permissions` drives geolocation, camera, microphone and
+notifications through the whole chain — `main_window` installs the decider, the
+backend maps Qt's feature enum onto ours, the policy engine answers — and the
+page reports what it got by fetching `/report?…`, so what is measured is what a
+site would experience. Served from `127.0.0.1` because Chromium requires a
+secure context for these, and loopback counts.
+
+| case | result |
+|---|---|
+| the §7.2 defaults | all four refused, and the page sees `PERMISSION_DENIED`, `NotAllowedError`, `denied` |
+| geolocation allowed for the host | our decider grants it; camera and microphone still refused |
+| notifications allowed for the host | the page really is told `granted` |
+
+**The enum mapping is confirmed by construction**, which was the part most
+likely to be quietly wrong: with only the microphone blocked, Qt's feature 2 is
+what gets refused and 3 is not, so `MediaAudioCapture`→`microphone` and
+`MediaVideoCapture`→`camera` are the right way round rather than plausibly
+swapped.
+
+**Two things this cost, both worth keeping.**
+
+- **Chromium remembers a permission answer per origin, and an origin includes
+  the port.** The first version asked the same port three times, so the second
+  and third cases were answered from that memory and never reached our decider —
+  a granted feature still came back denied, which reads exactly like a broken
+  callback. Each case gets its own port now; same host, so the per-host policy
+  still applies to all three.
+- **Geolocation cannot be measured from the page on this build.** Granted, it
+  still ends as `PERMISSION_DENIED` — the engine has no location provider and
+  the API has no other word for that, so the page-visible outcome is identical
+  to a refusal. That is not our behaviour and asserting on it would be asserting
+  on the engine's build options. The assertion moved to the boundary we control:
+  `qtwebengine_view` logs what was asked and what was answered under
+  `HYDRA_PERM_DEBUG`, and the driver captures its own log. Notifications remain
+  the one feature here whose end-to-end outcome the engine can actually deliver,
+  and it is checked that way.
 
 ### Qt version floor
 
@@ -1219,9 +1318,11 @@ a way around it, and the rule stays narrow — another request on the page's own
 host is still a perfectly good answer.
 
 Extractors are stored as plain JSON per host, so they can be read, diffed and
-shared like the filter list. **77 checks** cover the accept path, both invented
+shared like the filter list. **84 checks** cover the accept path, both invented
 cases, the segment rule, the page-url rule and its two edges, the furniture
-rule and its mixed-type edge, the `type`/`kind` split, which addresses are worth
+rule and its mixed-type edge, the piece-of-the-stream rule with its
+no-tier/playlist-passes/elsewhere-on-the-host edges, the `type`/`kind` split,
+which addresses are worth
 probing and what the answers do to the payload, all three ways of spelling the
 function, the truncation trap, loops, throws, unparseable source, a script defining no
 `extract()`, an unknown stream kind, the empty sandbox, folding, fenced
@@ -1287,10 +1388,12 @@ changes shape stops producing a result rather than producing a wrong one. That
 was a real gap: the store was written and loaded but never read, so learning a
 site did nothing and the status message promised otherwise.
 
-**The review loop is exercised with a stub provider** (14 checks): the payload
+**The review loop is exercised with a stub provider** (19 checks): the payload
 is sent folded, a valid proposal becomes acceptable and stores with its fence
 stripped, an invented URL leaves the accept button disabled and stores nothing,
-and a stored script stops matching when the evidence changes.
+and a stored script stops matching when the evidence changes. Five of those run
+against a loopback CDN shaped like the measured site, so the probe → confirmed
+manifests → gate → button chain is driven rather than assumed.
 
 **Its headers are actually sent.** A learned extractor is asked for the headers
 its CDN checks, and those were being dropped on the floor — built into the
@@ -1423,6 +1526,47 @@ The seam gained `inject_main_world_script()` as a **separate call** rather than
 a flag on `inject_script()`, so the escalation is greppable. It also runs on
 subframes, which is not optional: on real sites the player is a third-party
 iframe, and a tap confined to the top frame sees nothing.
+
+**And that last sentence describes the hook only. The tap does not work in a
+third-party iframe, which is measured and is the shape most watch pages have.**
+`tests/live/try_subframe` is the reproduction: a page on `127.0.0.1` embedding a
+player from `127.0.0.2` that feeds a MediaSource. The same player as its own
+document is reported normally; inside the iframe **nothing arrives at all** — not
+a stream under the wrong name, nothing.
+
+The hook does run there. What cannot is the half that carries what it sees: the
+relay lives in the isolated world with `setRunsOnSubFrames(false)`, and the flag
+is not the whole story, because **Qt installs `qt.webChannelTransport` in the
+main frame alone** — a relay in a subframe has nothing to connect a QWebChannel
+to. Both were tried, in that order, and neither worked; the flags are back as
+they were rather than left flipped for no benefit, with the reason written where
+someone will next reach for them.
+
+**The obvious fix was attempted and is not sufficient**, which is the more
+useful finding. The hook was changed to hand its report up with
+`window.top.postMessage`, and the top frame's relay to accept it — filing under
+the relay's *own* `location.hostname` rather than anything the frame claims, so
+a frame cannot choose the name it files under, the same rule §13.2 applies to
+credentials. Instrumented, that route works: the subframe posts, the top frame's
+relay receives, `take()` runs.
+
+It still does not arrive, for a reason nothing predicted: **on a page that
+contains a cross-origin iframe, the top frame's relay never connects its
+QWebChannel.** It sits with `bridge == null` and its queue unflushed, and its
+retry loop does not even report itself waiting. The same player as its own
+document connects immediately, so the relay script is not what is wrong. That is
+where the next attempt starts; it is not the `setRunsOnSubFrames` flag and not
+the transport-is-main-frame-only rule, both of which were tried and reverted
+rather than left in for no benefit. The postMessage change was reverted with
+them, since a half of a fix is worse than none: it would have looked like the
+route was covered.
+
+**One consequence worth stating plainly.** §11.6's whole argument is that the
+tap is transport-agnostic and catches whichever mirror the user started. That
+argument holds for the hook and fails at delivery on precisely the pages it was
+written for. Every verification of the tap in this file used a player page
+loaded as its own document, which is why this went unseen: on those, frame host
+and page host are the same name and there is no subframe involved.
 
 **Capture works, and is verified end to end.** Tools → Capture Playing Video
 opens a file, arms the hook and reloads (the recorder has to be in place before
@@ -1757,6 +1901,205 @@ tier (§10), and the same tier would tell an extractor that one `.txt` is
 `application/vnd.apple.mpegurl` and the `.woff2` files are video segments.
 Prompt work should probably wait behind that.
 
+### Four more arms, with the content types in hand — and it works, sometimes
+
+The measurement the section above was waiting on. Fresh capture, five runs an
+arm, `qwen2.5-coder:14b`, one change per arm, scored on **what was picked**
+rather than on whether the button lit up:
+
+| arm | the change | found the manifest |
+|---|---|---|
+| the payload as it stood | content types annotated on each line, tail silent about them | 0/5 |
+| + the instruction in the tail | "use the notes to work out which line is the stream" | 0/5 |
+| + the field model | "the note is not part of the data your function gets" | 0/5 |
+| + manifest precedence | "a line noted HLS or DASH **is** the answer" | **2/5** |
+
+**Annotating the evidence did nothing until the tail said to read it.** The
+first arm is the one the previous session predicted would work: the manifest sat
+there annotated `-> application/vnd.apple.mpegurl (HLS)`, correct and in place,
+and five runs in five wrote `endsWith('.m3u8')` and found nothing. The note was
+present, right, and ignored. Every gain this project has had from prompt work
+has come from moving a sentence into the paragraph *after* the evidence, and
+this is the fourth time — the mid-payload sentence explaining the `-> …` syntax
+had been there all along.
+
+**Then it was read, and read as part of the url.** Arm two put the instruction in
+the tail and three runs in five wrote
+`request.url.includes('-> application/vnd.apple.mpegurl')`. That is our defect,
+not the model's, and the same one as the pasted skeleton: the fold prints the
+note on the same line as the address, so the text a reader sees and the object a
+script receives were two different things and nothing said so. Arm three names
+the fields a request actually has and says the url ends where the note begins.
+
+**Arm three is where it starts working, and it picked the wrong piece.** Four
+runs in five stopped reaching for extensions and matched the stream host by a
+stable path fragment — the behaviour rule 2 has asked for since the beginning
+and never got. Three of them returned `init-f1-v1-a1.woff`, the initialisation
+segment, because both it and the manifest carry a note saying "this is a
+stream" and nothing said they were not alternatives. Arm four says so, and two
+runs then returned `/cf-master.` matched as a fragment, `kind: 'hls'`.
+
+**What the gate did, and one correction to make.** Scored against the shipping
+path rather than `site_extractor::check()` alone, the two beacon picks were
+**refused by the content-type tier**, not by the static gate: `confirm_by_
+fetching()` fetched `region1.google-analytics.com/g/collect?…`, found no stream
+in it and disabled Accept. The harness's own `check()` call has no probe and
+reports those as `usable=1`, which reads like a gate hole and is not one. This
+is the tier doing the exact job it was built for, on an address nobody had
+thought to write a rule about.
+
+**The init segment was a real gap, and it is now the fifth gate rule.** It is
+fetched once, so the segment rule does not fire; it is not the page and not
+furniture; and when the tier fetches it the body genuinely is an ISO-BMFF
+stream, so the probe confirms it too. Everything we had said yes and the answer
+is wrong — an init segment on its own decodes to nothing. Written up below.
+
+### A piece of the stream is not the stream (the fifth gate rule)
+
+Same shape as the other four, and found the same way: by a real model, on real
+evidence, returning something no test had thought to forbid.
+
+**What settles it is what the tier already established.** The probe had
+identified `cf-master….txt` as a playlist. The parts a playlist names sit beside
+it, so a pick from the manifest's own directory that is not itself a confirmed
+manifest is one of those parts rather than an alternative to it. `check()` takes
+the confirmed manifests as an optional set; the dialog keeps them from the same
+probe replies that annotate the payload, as urls rather than as the sentence it
+prints, so the two spellings of one fact cannot drift.
+
+**Same directory, not same host, and the narrowness is the point.** A
+progressive mp4 served elsewhere on that host is a *better* answer than the
+manifest, not a piece of it, and a rule that refused it would be doing harm.
+Missing a part kept in a subdirectory is the failure this prefers to make.
+
+**It cannot fire without the tier, by construction.** No network, a CDN that
+refuses the context, a 403 — the set is empty and nothing changes. Only a
+*positive* identification is ever acted on, which is the same rule §10 already
+follows: an absent tier may not cost a proposal its accept.
+
+**The consequence to know:** this is an accept-time rule. `main_window` re-judges
+a stored extractor on every run with no probe results in hand, so the set is
+empty there and the rule is inert. That is sound as far as it goes — a script
+that picks a part never gets stored in the first place — but it is not the
+"holds whatever model is behind it" property the other four rules have, and it
+is worth knowing before relying on it.
+
+**Verified through the real dialog, not just the function.** Seven checks on the
+rule itself, and five more driving `extractor_dialog` against a loopback CDN
+shaped like the measured one — a playlist wearing `.txt`, parts wearing `.woff2`
+whose bodies really are ISO-BMFF. The dialog probes, keeps what came back, hands
+it to the judge on another thread, and refuses an init pick while still
+accepting the playlist. Written that way because the rule being right and the
+path to it being dead is precisely this project's defect history.
+
+**Then measured live, which is the only claim worth making.** Five more runs on
+the same captured evidence with the rule in place:
+
+| runs | picked | outcome |
+|---|---|---|
+| 3 of 5 | the manifest | accepted |
+| 1 of 5 | a media segment | refused, segment rule |
+| 1 of 5 | the init segment | refused, this rule, naming the playlist |
+
+**No wrong answer was accepted.** That is the property worth having — not the
+3-of-5, which is one model on one capture and will move. Every wrong pick the
+model has produced against this evidence across fifteen runs is now refused by
+some rule, and each of those rules exists because a run produced the answer it
+refuses.
+
+One thing the live run showed that the unit tests could not: the sentence named
+the *variant index* rather than the master, because it was iterating a `QSet` and
+taking whatever the hash yielded. Named in evidence order now — a player fetches
+the master and then the variant it chose, so the earlier sighting is the one to
+point someone at, and a user-facing sentence should not change between runs for
+no reason.
+
+**And the harness was corrected while it was here.** `test_live_model` printed
+its own `check()` result as `verdict:`, with no probe and no fetch of the pick —
+which is how an analytics beacon came to read as `usable=1` in these notes while
+the dialog beside it had already refused it. That line is `check-only:` now, and
+the shipping path's own words are printed as `dialog:`. The apparatus lies; this
+is the seventh time.
+
+**Two operational notes for the next capture.** The watch page still fails the
+way the section above records — "Failed to setup player", screenshotted again —
+so `try_extract` against it captures 63 requests with no stream in them. The
+mirror loaded directly (`dramafrenvip.upns.pro/#<id>`) initialises immediately
+and streams, and that is where this evidence came from. And the stream host has
+rotated since the last capture: `sil5.luminarstrategyhub.site` now, where
+project.md recorded `ssu5.stellarpathventures.space`. The path shape under it is
+unchanged, which is the argument for matching a fragment rather than a host.
+
+### The second evidence set: attempted, and blocked on input
+
+The same watch page lists a second mirror from an unrelated vendor — Abyss,
+`abyssplayer.com/<id>`, a JW Player build from `iamcdn.net`. It is the cheapest
+honest second site available: different vendor, different player, same page.
+
+**Three things were learned, and only the third is about the site.**
+
+- **Its address cannot be loaded directly.** `abyssplayer.com/<id>` on its own
+  bounces to `abyss.to/`, the vendor's marketing page. It wants the embedding
+  page's referer, so the only way in is the way a user takes: click the mirror
+  in the chooser. `try_extract` takes a CSS selector to click first now, which
+  is a general need — a watch page that puts its player behind a chooser is
+  normal, and only one iframe is ever in the initial HTML.
+- **The captures had been quietly contaminated.** The driver opened a tab on the
+  tree's first node and *then* typed the address, and that first page's slower
+  subresources were still arriving after the navigation committed — at which
+  point Chromium reports the new address as their first party, so they landed in
+  the capture under the capture's host. It presented as twelve `doc.qt.io`
+  requests in a dramafren capture. The driver now writes its own one-node tree
+  pointing at `about:blank`, in the output directory, which also gives every run
+  a fresh state directory and stops the driver rewriting `sample-tree.txt`.
+  Worth noting the underlying behaviour is not the driver's: a slow subresource
+  of the previous page can be attributed to the next one in the app too.
+- **Hydra's own ad blocking is what stops that player, and this is measured.**
+  The clicks were landing all along — every one was answered by the ad network,
+  `fleraprt.com/push` and fresh creatives from `aichouphaugn.com`, while the play
+  triangle stayed put. Eight clicks changed nothing, so more of them was not the
+  answer. What the request log showed was: the player pulls in
+  `cdnjs.cloudflare.com/ajax/libs/fuckadblock/3.2.1/fuckadblock.min.js`. It is
+  watching for a blocker before it will play. Allowing ads for the capture — and
+  *only* that, with popups still blocked, so the two are not confounded — makes
+  the play button disappear and the player begin loading.
+
+  This is the first thing the ad-host list has done at runtime, and it is worth
+  more than the capture it was chasing: **on this mirror the blocker is why the
+  video does not play**, which a user would experience as the browser being
+  broken. It also has to be weighed against the other mirror's "Failed to setup
+  player" on the same page, which now has a candidate cause.
+
+**And it still does not stream.** With ads allowed and popups allowed, four
+clicks and nearly three minutes of watching, the player spins and never contacts
+a stream host at all — 75 requests, none of them media.
+
+**The tap says it is stalled, not peer-to-peer.** `try_extract` reports what the
+§11.6 tap holds beside what the request log saw, because those answer different
+questions: a page feeding a MediaSource while fetching no media is delivering
+over something a request log cannot see, and a page doing neither has not
+started. The tap saw nothing here. It was calibrated first against the mirror
+that does play, where it reports `YES` — a "no" from an instrument that has not
+been shown to say "yes" is worth nothing.
+
+Two caveats on that reading, and the second is a defect in its own right. The
+tap is not a complete answer for WebRTC in general — it sees `MediaSource`
+feeding, and a player could in principle route bytes elsewhere. And on *this*
+page the tap could not have reported anyway, because the player is a
+cross-origin iframe and the tap does not work in one — see the §11.6 section.
+The calibration run is what carries the conclusion: it used the mirror as its
+own document, and the mirror that does play reports there.
+
+So there is still no second evidence set, and this mirror is not going to
+provide one.
+
+**What this does not establish.** One site, one model, one capture, five runs an
+arm. The working runs match `/cf-master.`, which is this site's fragment; a
+second evidence set is what would tell us whether the *method* transfers or
+whether four arms of prompt work have described one CDN very well. That is the
+same over-fitting warning the arms above were meant to escape, and it still
+applies.
+
 ## First-load flicker (fixed)
 
 The whole browser window vanished for about a third of a second on the first
@@ -1795,33 +2138,47 @@ page.
 
 ## What is next (in order)
 
-1. **Make the loop find the stream on real evidence.** Everything around it is
-   now built and measured, and it still does not work: the content-type tier
-   answers what an address serves, the probed types are folded into the payload,
-   the gate has four rules, and four prompt iterations moved the model from
-   prose to code to the right signature to attempting the real task — and never
-   to a working extractor. The last measured state is 0 of 5 on captured
-   dramafren evidence. What has *not* been tried since the payload started
-   carrying content types is simply running it again: that change landed after
-   the last measurement, and it is the one that supplies the signal every
-   failing run was missing. Recapture, run five, and read the transcript.
-2. **Try the fragment-first prompt line, on a second evidence set.** Every clean
-   pass matched a stable path fragment and every failure reached for an
-   extension, so rule 2 is the one to strengthen — but not against the one
-   fixture, which is how the last four iterations became measurements of a
-   fixture rather than of the task.
-3. **Finish the helper tier (arch §11.5.1).** The fetch half is built,
+1. **Take a second evidence set, from a different site.** Everything measured
+   here is dramafren, and the working runs match `/cf-master.` — that site's
+   fragment. Until a second site is captured, "the loop finds the stream" means
+   "the loop finds this stream". This is also where the fragment-first line for
+   rule 2 should be tried, rather than against the fixture it was derived from.
+
+   **The second mirror is exhausted**: it starts once ads are unblocked, then
+   stalls, and the tap confirms nothing is being fed to a MediaSource — see the
+   section above. A different site is the answer, and the levers to reach one
+   are now in `try_extract` (mirror chooser, click count, ads, popups).
+2. **Finish the helper tier (arch §11.5.1).** The fetch half is built,
    permissioned and proven against a live CDN: it identified the disguised
    manifest, followed it to a variant the page never requested, and the gate
    accepted that as *followed rather than invented*, in four calls and 320
    bytes. What remains is the DOM half behind §13.2, and deciding whether it is
    wanted at all — nothing has yet needed it.
-4. **Exercise what is wired but untested**, in rough order of how much is riding
-   on it: the ad-host list at runtime, the cookie filter, the permission
-   callbacks, and the KeePassXC bridge above the crypto layer (which needs
-   `keepassxc` installed). This project's defect history is almost entirely in
-   this category — see the cautions at the top of this file.
-5. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
+3. **Make the tap work in a third-party iframe**, and start at the right end.
+   Reproduced by `tests/live/try_subframe`. The hook runs in the iframe and the
+   `window.top.postMessage` route to the top frame's relay demonstrably carries
+   the report — that much was built and instrumented. The blocker is downstream
+   of both: **on a page containing a cross-origin iframe the top frame's relay
+   never connects its QWebChannel**, which is unexplained and is the thing to
+   understand before writing any more code. Ranked here rather than lower
+   because §11.6's whole argument depends on it.
+4. **Decide what to do when blocking ads breaks the page.** No longer
+   hypothetical: on the Abyss mirror the site's anti-adblock refuses to start the
+   player, and turning the ad list off is what makes it play. The shield already
+   gives a per-site tri-state, so the *mechanism* to allow it is there — what is
+   missing is any way for the user to find out that is the problem, since a
+   player that silently spins looks like a broken site or a broken browser. This
+   is the first thing the ad-host list has done at runtime and it is a design
+   question, not a bug.
+5. **Exercise the rest of what is wired but untested.** What is left needs
+   something this machine does not have: the cookie filter's third-party branch
+   wants an HTTPS origin with a certificate the engine trusts, and the KeePassXC
+   bridge above the crypto layer wants `keepassxc` installed. The ad-host list's
+   matching predicate is the third, and it is blocked on the same
+   `--host-resolver-rules` problem recorded above. This project's defect history
+   is almost entirely in this category — see the cautions at the top of this
+   file.
+6. **Android phase (deferred).** System WebView backend, adaptive drawer layout,
    Intent-based player handoff, Android Autofill, SAF downloads (arch §19).
 
 ## Open decisions and risks

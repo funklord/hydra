@@ -60,6 +60,12 @@ public:
 	bool active_for(const QString &site_host) const;
 	void clear_site(const QString &site_host);
 
+	// Every key held. The hook reports `location.hostname` of the frame it runs
+	// in, which on a page whose player is a third-party iframe is *not* the host
+	// the shell looks up — so "nothing here" and "filed under a name nobody
+	// asked for" are different answers, and without this they look the same.
+	QStringList sites() const;
+
 	// Called from the page. Untrusted input: a hostile page can call these with
 	// anything, so nothing here indexes, allocates or trusts on their say-so
 	// beyond a bounded record per site.

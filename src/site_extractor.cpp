@@ -52,6 +52,17 @@ QString normalise(const QUrl &u) {
 	return u.adjusted(QUrl::RemoveFragment | QUrl::StripTrailingSlash).toString();
 }
 
+// Where an address lives: scheme, host and the path up to its last slash, with
+// no query. The query is what rotates per request, so keeping it would mean two
+// segments from the same folder never shared a directory.
+QString directory_of(const QUrl &u) {
+	QString path = u.path();
+	const int slash = path.lastIndexOf('/');
+	if (slash >= 0)
+		path.truncate(slash + 1);
+	return u.scheme() + "://" + u.host() + path;
+}
+
 }  // namespace
 
 QString shape_of(const QUrl &u) {
@@ -181,7 +192,7 @@ extraction run(const QString &source, const QUrl &page,
 
 extractor_verdict check(const QString &source, const QUrl &page,
                          const QList<evidence_request> &evidence,
-                         helper_host *helpers) {
+                         helper_host *helpers, const QSet<QString> *manifests) {
 	extractor_verdict v;
 	v.result = run(source, page, evidence, 2000, helpers);
 
@@ -279,6 +290,57 @@ extractor_verdict check(const QString &source, const QUrl &page,
 		                     "it.")
 		                .arg(as);
 		return v;
+	}
+
+	// A fifth rule, and the last wrong answer the whole apparatus still accepted.
+	// Measured: given evidence whose content types were annotated, three runs in
+	// five returned `init-f1-v1-a1.woff` — the initialisation segment. Every
+	// existing rule says yes. It is fetched exactly once, so the segment rule
+	// does not fire; it is not the page and not furniture; and when the tier
+	// fetches it the body genuinely is an ISO-BMFF stream, so the probe confirms
+	// it. On its own it decodes to nothing.
+	//
+	// What settles it is the thing the tier already established: a manifest was
+	// found on that host, and the parts it describes sit beside it. So a pick
+	// from the manifest's own directory that is not itself a confirmed manifest
+	// is a piece of that stream rather than an alternative to it. A media
+	// playlist listed alongside a master is in the set and passes, which is
+	// right — it is a manifest, and following it is the helper tier's job.
+	//
+	// Same *directory*, not same host, and the narrowness is deliberate: a
+	// progressive mp4 served elsewhere on the same host is a better answer than
+	// the manifest, not a piece of it, and refusing that would be a rule doing
+	// harm. Missing a piece kept in a subdirectory is the failure this prefers.
+	if (manifests && !manifests->isEmpty() &&
+	     !manifests->contains(normalise(v.result.url))) {
+		const QString dir = directory_of(v.result.url);
+		// Named in the order the page fetched them, not in the set's. A player
+		// asks for the master and then for the variant it chose, so the earlier
+		// sighting is the one to send someone back to — and iterating a QSet gave
+		// whichever the hash happened to yield, which is a user-facing sentence
+		// that changes between runs for no reason.
+		QString named;
+		for (const evidence_request &r : evidence) {
+			const QString n = normalise(r.url);
+			if (!manifests->contains(n) || directory_of(r.url) != dir)
+				continue;
+			named = r.url.fileName();
+			break;
+		}
+		// A confirmed manifest the page never requested — one the helper tier
+		// followed to — is not in the evidence to be ordered. Falling back keeps
+		// the rule firing; only the sentence loses its ordering.
+		if (named.isEmpty())
+			for (const QString &m : *manifests)
+				if (directory_of(QUrl(m)) == dir) { named = QUrl(m).fileName(); break; }
+		if (!named.isEmpty()) {
+			v.is_piece = true;
+			v.message = QString("Rejected: that is one of the parts the stream at "
+			                     "%1 is made of, and the server confirmed that "
+			                     "address is the playlist. Return the playlist.")
+			                .arg(named.left(80));
+			return v;
+		}
 	}
 
 	static const QSet<QString> kinds = { "hls", "dash", "direct" };

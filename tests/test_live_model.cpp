@@ -13,7 +13,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPlainTextEdit>
+#include <QLabel>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QTimer>
 #include <cstdio>
 
@@ -148,11 +150,23 @@ int main(int argc, char **argv) {
 	QPushButton *apply = button(&dlg, "Use This");
 	std::printf("gate: %s\n", apply && apply->isEnabled() ? "ACCEPTED" : "REJECTED");
 
+	// What the *shipping path* concluded, in its own words. The line below is a
+	// second, weaker judgement — `check()` with no probe results and no fetch of
+	// the pick — and reading it as the verdict is a mistake this harness has
+	// already caused once: it scored an analytics beacon `usable=1` while the
+	// dialog beside it had refused that pick, because the content-type tier had
+	// fetched it and found no stream. `gate:` above and this are the answer;
+	// `check-only:` is a diagnostic about one rule set.
+	if (QLabel *verdict = dlg.findChild<QLabel *>("verdict"))
+		std::printf("dialog: %s\n",
+		             qPrintable(verdict->text().replace(QRegularExpression("<[^>]*>"),
+		                                                 " ").simplified().left(300)));
+
 	if (script) {
 		const extractor_verdict v =
 		    site_extractor::check(script->toPlainText(), page,
 		                           sig.evidence_for(site));
-		std::printf("verdict: usable=%d invented=%d timed_out=%d\n  %s\n",
+		std::printf("check-only: usable=%d invented=%d timed_out=%d\n  %s\n",
 		             v.usable, v.invented, v.timed_out, qPrintable(v.message.left(300)));
 		if (v.usable)
 			std::printf("  picked: %s  (kind=%s, headers=%d)\n",

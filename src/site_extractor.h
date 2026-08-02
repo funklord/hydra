@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QList>
 #include <QMap>
+#include <QSet>
 #include <QString>
 #include <QUrl>
 
@@ -38,6 +39,8 @@ struct extractor_verdict {
 	                               // the document asked about, not a stream in it
 	bool       is_asset = false;   // the browser fetched it as an image or a
 	                               // script, so it is page furniture, not video
+	bool       is_piece = false;   // a manifest was confirmed beside it, so this
+	                               // is one of the parts that manifest describes
 	bool       timed_out = false;
 	bool       helper_breach = false;  // it reached past what it was allowed, or
 	                                   // spent a budget; §11.5.1
@@ -98,9 +101,17 @@ extraction run(const QString &source, const QUrl &page,
                 helper_host *helpers = nullptr);
 
 // Runs it and then judges it. Nothing reaches the user without passing here.
+//
+// `manifests` is what the §10 content-type tier established, as normalised
+// urls: the addresses it fetched and found to be an HLS or DASH playlist. It is
+// optional in the strict sense — the tier is allowed to be absent, blocked or
+// refused, and when the set is empty this rule cannot fire and nothing changes.
+// A *positive* identification is the only thing it is ever used for, so a tier
+// that could not answer never costs a proposal its accept.
 extractor_verdict check(const QString &source, const QUrl &page,
                          const QList<evidence_request> &evidence,
-                         helper_host *helpers = nullptr);
+                         helper_host *helpers = nullptr,
+                         const QSet<QString> *manifests = nullptr);
 
 }  // namespace site_extractor
 
