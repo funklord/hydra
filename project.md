@@ -3538,6 +3538,41 @@ than a crash, which is exactly the failure this project's notes keep warning
 about, and the reason the fourth being clean is information rather than a
 formality.
 
+### The gate the reorganizer depends on
+
+`tree_diff` decides whether a language model's rearrangement of the tree is safe
+to show a diff for. A bug in it does not produce a wrong pixel — it loses
+somebody's tabs to a machine that made something up. It had no test.
+
+Thirty-three checks, no bug, and the subtle cases are the ones worth naming
+because each is a decision rather than an accident:
+
+* **A leaf that existed only inside a duplicated subtree is recovered.** Culling
+  the duplicate deletes its children with it, so recovery looks at what survived
+  the cull rather than at the proposal as it arrived. Doing it the obvious way
+  round would lose exactly the tabs the model was most confused about.
+* **A tab turned into a folder is refused as an invention, not accepted as a
+  rename.** Same id, different kind: accepting it would convert someone's tab
+  into a folder, or a folder of tabs into a single tab.
+* **An invented folder is fine and an invented leaf is fatal**, which is the
+  whole asymmetry the feature rests on — folders are the model's to make up,
+  tabs are the user's.
+* **Undo deletes invented folders but re-attaches their children first**, so
+  reverting a reorganization cannot take a tab with it.
+
+A dropped leaf also comes back with its url rather than as an empty shell, and
+returns to its original parent when that parent survived, the root when it did
+not — checked, because "put it back" has two plausible meanings and only one of
+them keeps a tab reachable.
+
+**Where the sweep stands.** Seven files that no test had ever named, now with
+643 offline checks between them: `hls_playlist`, `tree_outline`,
+`tree_serializer` and `state_store` were wrong in ways that produced plausible
+answers rather than crashes; `box_crypto`, `element_picker`, `autofill_controller`
+and `tree_diff` were right. Four and four. The ones that were right are the ones
+whose authors wrote down what they were defending against — and that is not a
+coincidence worth being coy about.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and
