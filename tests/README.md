@@ -119,6 +119,12 @@ that could answer that for itself would be the bug. For the rest:
 HYDRA_KEEPASS_INTERACTIVE=1 ./tests/build/try_keepass   # then accept the dialog
 ```
 
+**Start this only when you are at the machine.** It waits three minutes for the
+dialog and then reports the pairing as failed, which is honest but measures
+nothing — two runs were lost that way. An unconfirmed run now says so and
+declines the checks that depend on it, rather than reporting passes for an id
+and key the test itself planted.
+
 ### Need libtorrent
 
 `test_torrent` and `test_watch` build only when `libtorrent-rasterbar` is found.

@@ -142,7 +142,12 @@ in 5**, having been 0 in 5 every time it was asked before.
   while its anti-adblock script can see it. That proves the list acts on live
   traffic; it still does not prove the *matching predicate* is right, which was
   the original question. See the second-mirror section.
-- The KeePassXC bridge above the crypto layer — `keepassxc` is not installed.
+- ~~The KeePassXC bridge above the crypto layer — `keepassxc` is not installed.~~
+  **Answered up to the last step.** It is installed, and the socket, the framing,
+  the key exchange, a refused unknown pairing and — with the dialog confirmed —
+  `associate()` itself all run against the real other end. Only `get-logins` is
+  still unmet, because the run that paired aborted on a driver defect before it
+  sent one.
 - ~~Whether the extractor prompt generalises past one synthetic evidence set.~~
   **Answered, badly:** it does not. Against evidence captured from the real
   site the loop returned prose and no parser in five runs out of five, so every
@@ -3289,6 +3294,65 @@ prints which checks went unrun rather than passing quietly without them. The
 remaining ones are behind that flag: association, a login request for a url the
 vault knows, and one for a url it does not.
 
+#### Pairing was confirmed once, and it aborted the driver
+
+**`associate()` works.** With the dialog accepted, KeePassXC answered *"Paired
+with KeePassXC."* — which requires `parse_associate` to have decrypted the reply
+and found a real id in it, so the encrypted round trip is proven in both
+directions, not just the handshake.
+
+**Then the process died with `corrupted double-linked list`**, and the fault was
+the driver's. The core dump put the abort inside
+`keepass_protocol::get_logins_request`, which is nothing but `QJsonObject`
+inserts — so the heap was already broken and `realloc` merely noticed. The cause
+was three checks earlier: the bogus-pairing block connects a lambda capturing its
+own locals **by reference** to `associated_changed`, and never disconnects, while
+the bridge outlives the block. A successful pairing emits that signal a second
+time, so a dead lambda ran `message = m` against reclaimed stack and freed
+whatever the old string's d-pointer had become.
+
+It could only ever fire on the one path nobody had reached — the signal fires
+twice exactly once, when pairing first succeeds — and it took the run down before
+`get-logins` was ever sent. **A scoped connection has to be scoped at both ends**,
+which is the same lesson as the null observer registered one line early: the
+damage lands somewhere unrelated to the mistake.
+
+**And the fix exposed the check underneath it.** With the crash gone, a run whose
+dialog went unconfirmed reported *nine* passes including "it hands back an id to
+save" and "and a key with it" — against `hydra-not-a-real-pairing`, the string the
+test had planted three checks earlier via `set_association`. They were asserting
+on the test's own writes. Cleared before pairing and gated on it now, the same
+failing run reports seven and says which checks it declined to make.
+
+**Still unexercised: `get-logins`.** The crash consumed the first confirmation and
+four later attempts produced no pairing, so a login request has never reached a
+real vault. That is the whole of what remains in §13 — see the next-list.
+
+**And what stopped those four is not ours, on the evidence.** Two distinct
+behaviours, both KeePassXC's:
+
+- **It exited mid-run, once.** The vault's `Last saved` is the minute that run
+  was waiting, so the prompt appeared and was accepted and the association was
+  written — and then the process was gone, the reply never came, and it left
+  behind exactly the stale socket the precondition was written to catch. The
+  precondition cannot help here: it connected to a server that was alive at the
+  time and died afterwards.
+- **A restarted instance stopped prompting at all.** With an `associate` request
+  pending for a full three minutes against an unlocked vault, KeePassXC showed
+  nothing: no dialog, no inline banner. Not inferred from a timeout — a
+  full-screen capture, a capture of the KeePassXC window itself, and a window
+  poll every five seconds all agree, while the same instance answered the
+  handshake and refused the bogus pairing with code 8 in the same run.
+
+**The window check was wrong first, in the usual way.** `xwininfo -root
+-children` lists only *direct* children of the root, and a reparenting window
+manager puts every real window a level down — so it reported KeePassXC as a
+single 1×1 window and would have supported "there is no window there" no matter
+what was on screen. `-root -tree` finds the real 800×600 one. The conclusion
+happened to survive the correction because the screenshots were taken too, which
+is the argument for taking them: a window query answers what you asked, and a
+picture answers what is there.
+
 ### Handing a stream to a player, on a phone
 
 The desktop names a player and starts a process. Android has neither, so §19's
@@ -4056,12 +4120,30 @@ carried along as amendments to a list item.
    capture, `test_live_model <model> <ev.json>` replays it; copy the evidence
    somewhere durable at the time if the run is one worth arguing with later.
 
-2. **The KeePassXC pairing, which needs a person.** Everything short of it
-   passes: socket, key exchange, and the answer a saved-but-unknown pairing gets.
-   `associate()` makes KeePassXC ask a human whether this program may read the
-   vault, and a browser that could answer that for itself would be the bug. Run
-   `HYDRA_KEEPASS_INTERACTIVE=1 ./tests/build/try_keepass` and accept the prompt;
-   `tests/README.md` has the throwaway-vault setup.
+2. **`get-logins`, which is all that is left of §13 — and it needs a person.**
+   Pairing itself is now **proven**: confirmed once against a real KeePassXC,
+   which answered "Paired with KeePassXC." and handed back an id. But that run
+   aborted on a defect in the driver before a login request went out (see the
+   section above), and no run since has had its dialog confirmed in time. So
+   `request_logins` — a url the vault knows, and one it does not — has still
+   never met a real vault.
+
+   Both driver defects are fixed, so nothing of ours is known to be in the way.
+   `tests/README.md` has the throwaway-vault setup; then
+   `HYDRA_KEEPASS_INTERACTIVE=1 ./tests/build/try_keepass` and accept the prompt
+   within three minutes.
+
+   **What to expect, since four attempts failed on the other end.** One run had
+   its prompt accepted and the association written to the vault, and KeePassXC
+   exited before replying; a restarted instance then stopped raising the prompt
+   at all, verified by screenshot rather than inferred. So budget a KeePassXC
+   restart per attempt, and check it is still alive afterwards — `pgrep
+   keepassxc` — because a stale socket outlives it and the next run's
+   precondition will pass against nothing. If it keeps refusing to prompt, the
+   cheaper route to `get-logins` is to save a working pairing's id and key and
+   drive `set_association` + `test_association` instead, which needs no dialog;
+   that the bridge holds the pairing in memory only is a §13 gap in its own
+   right.
 
 3. **Decide whether the helper tier's DOM half is wanted at all** (arch
    §11.5.1). The fetch half is built, permissioned and proven against a live CDN.

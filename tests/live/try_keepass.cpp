@@ -120,8 +120,9 @@ int main(int argc, char **argv) {
 		// the honest answer is "no", not an error and not a silent yes.
 		bool answered = false, ok = true;
 		QString message;
-		QObject::connect(&bridge, &keepass_bridge::associated_changed,
-		                 [&](bool good, const QString &m) {
+		const QMetaObject::Connection c =
+		    QObject::connect(&bridge, &keepass_bridge::associated_changed,
+		                     [&](bool good, const QString &m) {
 			answered = true;
 			ok = good;
 			message = m;
@@ -133,6 +134,15 @@ int main(int argc, char **argv) {
 		check(answered, "a bogus pairing gets an answer rather than silence");
 		check(answered && !ok,
 		      QString("and the answer is no (%1)").arg(message));
+		// The lambda above captures this block's locals by reference, and the
+		// bridge outlives the block. Pairing emits associated_changed a second
+		// time, so leaving this connected runs a dead lambda against reclaimed
+		// stack — `message = m` frees whatever the old QString's d-pointer has
+		// become. That is a heap corruption rather than a wrong answer: it
+		// aborted this driver in `get_logins_request`, three checks and one
+		// allocation later, the first time pairing ever succeeded. A scoped
+		// connection has to be scoped at both ends.
+		QObject::disconnect(c);
 	}
 
 	section("pairing");
@@ -150,14 +160,33 @@ int main(int argc, char **argv) {
 			ok = good;
 			message = m;
 		});
-		std::printf("  --    confirm the association dialog in KeePassXC now...\n");
+		// Clear what the bogus-pairing check planted. It called set_association
+		// with an id and a key, and both are still on the bridge — so asserting
+		// below that they are non-empty asserts on what this test wrote three
+		// checks ago, not on anything KeePassXC said. Measured: on a run where
+		// the dialog was never confirmed, "hands back an id to save" and "and a
+		// key with it" both passed against `hydra-not-a-real-pairing`.
+		bridge.set_association(QString(), QString());
+
+		std::printf("  --    confirm the association dialog in KeePassXC now"
+		             " (waiting up to 3 minutes)...\n");
 		bridge.associate();
-		wait_until([&] { return answered; }, 60000);
-		check(answered && ok, QString("association succeeds once confirmed (%1)")
-		                          .arg(message));
-		check(!bridge.association_id().isEmpty(),
-		      "and it hands back an id to save");
-		check(!bridge.association_key().isEmpty(), "and a key with it");
+		wait_until([&] { return answered; }, 180000);
+		check(answered && ok,
+		      QString("association succeeds once confirmed (%1)")
+		          .arg(answered ? message
+		                        : QStringLiteral("no answer — the dialog was not "
+		                                          "confirmed in time")));
+		// Gated on the pairing having worked. Unconditionally, these report on
+		// whatever happens to be left on the bridge, which is how they passed
+		// during a failure.
+		if (ok) {
+			check(!bridge.association_id().isEmpty(),
+			      "and it hands back an id to save");
+			check(!bridge.association_key().isEmpty(), "and a key with it");
+		} else {
+			note("id and key not checked: there was no pairing to check them on.");
+		}
 
 		if (ok) {
 			QList<credential> got;
