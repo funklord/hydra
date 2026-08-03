@@ -3467,6 +3467,37 @@ keep working: nesting and dedenting, order preserved rather than sorted,
 `created`/`seen` timestamps, tags after the url, and a proposal arriving wrapped
 in prose and a code fence the way a model actually answers.
 
+### Two tabs, one history
+
+`state_store` keeps a suspended tab's navigation history in a file named after
+the node id, with unsafe characters replaced by `_`. That mapping is **not
+injective**: `a b` and `a_b` both become `a_b`, so two suspended tabs shared one
+file. The second to be restored came back wearing the first one's past — a tab
+claiming a history that belongs to a different page, which is worse than a tab
+that has forgotten.
+
+Reachable because ids come from the tree file, and that file is documented as
+human-editable and canonical. Not something the application generates on its own,
+which is why it had never been seen; entirely something it would accept.
+
+Fixed by appending a short hash of the original id — **only when sanitising
+actually changed it**. That detail is the whole compatibility story: every id the
+app generates is already safe, keeps the filename it has on disk, and loses
+nothing on upgrade. Without it the fix would have silently orphaned every
+suspended tab's history: no error, no warning, just tabs that had forgotten where
+they had been. There is a test for that specifically, which writes a blob the way
+the old code did and insists it is still found.
+
+An over-long id gets the same treatment, since truncating to fit a filename
+collides with every other id sharing its first hundred characters.
+
+The rest of the suite is the ordinary contract nobody had written down: a blob
+round-trips byte for byte, a shorter save leaves no tail of the longer one behind,
+**binary is binary** — a serialized history is full of zero bytes, and anything
+treating it as text ends the history wherever a NUL happens to fall — an empty
+blob counts as present rather than absent, an id containing `../` writes inside
+the store and not above it, and state outlives the object that wrote it.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and
