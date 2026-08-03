@@ -3364,14 +3364,18 @@ The media dialog said "Queued download to
 a path that is long, unopenable, and no longer where the file ends up. On Android
 it now says "Queued. It will appear in Downloads when it finishes."
 
-**A flake, recorded rather than explained.** `test_extloop` has now failed three
-times — 28 of 34, then 21 of 34, then 27 of 34 — and passed more than thirty
-times in between, so it is real and it is rare. **Every failure has happened
-inside a run of the whole suite list, and none has ever reproduced on demand.**
-Ruled out by trying: running it alone (twelve consecutive passes), running it
-with four cores deliberately busy, running it immediately after `test_settings`
-and after `test_extractor`, re-running the exact sequence that failed, and three
-further complete passes of the whole list.
+**A flake, recorded rather than explained.** `test_extloop` has now failed four
+times — 28, 21, 27 and 27 of 34 — and passed more than forty times in between,
+so it is real and it is rare. **Every failure has happened inside a run of the
+whole suite list, and not one has ever reproduced on demand.** Eliminated by
+trying: running it alone (twelve consecutive passes), running it with four cores
+deliberately busy, running it immediately after `test_settings` and after
+`test_extractor`, replaying the exact sequence that failed, three further
+complete passes of the whole list, four more passes saving every run's output in
+case one broke, and — the one hypothesis that looked promising, since three of
+the four failures followed a build in the same command — running it three times
+immediately after forcing a relink, in case a cold binary was the difference. It
+was not.
 
 Its assertions include wall-clock ones — "the timer fired *while* the script was
 running, 120 ms against 419 ms" — which makes scheduling the leading suspect, but
