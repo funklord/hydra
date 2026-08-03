@@ -69,14 +69,27 @@ See `project.md` for conventions, current status, and what to do next;
 ## Build & run
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j2       # name a number: bare -j is unlimited under Make
-./build/hydra                 # loads ./sample-tree.txt (copied next to binary)
-./build/hydra my-tree.txt     # or point it at your own outline file
+make                          # build
+make run                      # build and run it on sample-tree.txt
+make test                     # every suite that needs nothing but a build
+make help                     # the rest: android, install, clean, DEBUG=1 …
 ```
 
-The WebEngine-dependent sources have not yet been compiled against a real Qt
-WebEngine — see `project.md` → "Build-verification state" before you start.
+`./build/hydra my-tree.txt` to point it at your own outline file.
+
+**CMake is underneath and you can drive it directly** — the Makefile is a
+wrapper so this tree presents the same interface as the other Qt projects here,
+not a build system of its own:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j2       # name a number: bare -j is unlimited under Make
+```
+
+**Do not run `make -j` or `cmake --build -j` with no number.** The live drivers
+each compile ~61 sources and link Qt WebEngine, and there are 21 of them;
+unlimited parallelism has taken this machine's desktop session down twice. The
+Makefile defaults to `-j2` and takes `JOBS=` if you know you have the headroom.
 
 ## File format (canonical tree)
 

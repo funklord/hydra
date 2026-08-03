@@ -295,11 +295,36 @@ strawberry, the loose crop — was invisible at 256px and obvious at 16.
 ## Build & run
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j2       # a number, always: see the warning above
-./build/hydra                 # loads ./sample-tree.txt
+make                          # build
+make run                      # build and run it on sample-tree.txt
+make test                     # the 24 suites that need nothing but a build
+make help                     # android, install, clean, DEBUG=1, SANITIZE=1
 ./build/hydra my-tree.txt     # or a custom outline file
 ```
+
+**The Makefile is a wrapper over CMake, not a build system.** It exists because
+this tree was the odd one out: beerssh and fuzzypickles' `gui/` subtree both
+present `make` / `make test` / `make android` with `DEBUG=1` and `SANITIZE=1`,
+and hydra presented two different cmake invocations plus a per-binary test run
+you had to know to prefix with `QT_QPA_PLATFORM=offscreen`. Now all three look
+the same from outside. CMake underneath is unchanged and can still be driven
+directly:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j2       # a number, always: see the warning above
+```
+
+**A migration to qmake was considered and deferred rather than rejected.** The
+argument for it is real — a Makefile is easier to read than `CMakeLists.txt`,
+and beerssh ships a Qt 6 app *and* an APK from qmake today. What is keeping
+CMake is dependency discovery and the target count, and the Makefile's own
+header lists the three things a later migration has to solve so they are not
+rediscovered: 54 executables of which 21 are globbed so adding one costs
+nothing; `find_package(LibtorrentRasterbar)` disambiguating rasterbar's library
+from rakshasa's identically-named one, which pkg-config alone cannot; and the
+host pkg-config answering cheerfully for an Android cross build, which once
+reported libsodium found and failed at link looking like a toolchain fault.
 
 Requires Qt 6 with **Widgets** and **WebEngineWidgets** (Arch: `qt6-base
 qt6-webengine`; Debian/Ubuntu: `qt6-base-dev qt6-webengine-dev`), CMake ≥ 3.19,

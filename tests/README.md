@@ -14,9 +14,12 @@ reference it. Building the app never builds the tests.
 
 ## ⚠️ Build this with a job limit
 
-**Do not run `cmake --build tests/build -j` with no number.** Each live driver
-compiles ~40 app sources and links Qt WebEngine; there are a dozen of them, and
-unbounded parallelism on a many-core machine will try to hold well over 20 GB.
+**Do not run `cmake --build tests/build -j` with no number**, and do not run
+`make -j` either. Each live driver compiles **~61** app sources and links Qt
+WebEngine; there are **21** of them, and unbounded parallelism on a many-core
+machine will try to hold well over 20 GB. (Both numbers said something smaller
+for a long time, because nothing counts them — `ls src/*.cpp | wc -l` and
+`ls tests/live/try_*.cpp | wc -l` do.)
 That has taken a desktop session down on this machine — twice — and it is worse
 if a local model is loaded at the same time, because a 14B model holds ~10 GB
 before the compiler starts.
@@ -68,6 +71,17 @@ the suites below are worth more than their pass counts suggest.
 | `test_bundle` | every setting through one INI file and back, and the refusals — an import that quietly applies nothing looks exactly like one that worked |
 | `test_theme` | which colour scheme the desktop is in: `decide()` over what each source said, including the combination this machine produces, where Qt's own answer is `Unknown` |
 | `test_credstore` | where the KeePassXC pairing lives between runs: the encoding exhaustively, and — given a Secret Service and `HYDRA_SECRET_KIND` — a real save/load/replace/clear round trip |
+
+```sh
+make test                    # all of them, from the repo root
+make test-one T=test_seam    # or just one
+```
+
+`make test` builds and runs every suite in this section, reports each one's
+count, and names the ones it did **not** run and why — a suite that needs a
+helper server or a model is listed rather than quietly skipped. It sets
+`QT_QPA_PLATFORM=offscreen` and gives `test_credstore` a keyring item of its
+own, which are the two things easy to forget by hand. Driven directly it is:
 
 ```sh
 QT_QPA_PLATFORM=offscreen ./tests/build/test_seam

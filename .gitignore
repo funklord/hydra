@@ -1,6 +1,7 @@
 # Build output
 /build/
 /tests/build/
+/build-android/
 *.o
 *.obj
 *.moc
