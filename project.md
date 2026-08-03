@@ -3498,6 +3498,39 @@ treating it as text ends the history wherever a NUL happens to fall — an empty
 blob counts as present rather than absent, an id containing `../` writes inside
 the store and not above it, and state outlives the object that wrote it.
 
+### The crypto shim, which turned out to be right
+
+`box_crypto` was the last of the never-tested files, and unlike the three before
+it there was nothing wrong with it. That is worth recording as plainly as the
+bugs: thirty checks, no fix.
+
+What was tested is not the cipher — libsodium's own suite does that far better —
+but the **shim's edges**, which are the part that would be our mistake. A wrong
+key, a tampered byte, a truncated ciphertext, a reused-but-wrong nonce, a third
+party's key on either side: all refused, and nothing written to the output on the
+way out. That last one matters more than it reads. A shim that returns `false`
+on failure is the whole requirement; a shim that returns `true` with garbage
+would hand the bridge a forged reply and be indistinguishable from success.
+
+Sizes are checked before libsodium is handed a buffer, which is the difference
+between a wrong answer and a read past the end of an array — and the bridge
+builds its arguments from what arrives on a socket, so "the caller would never"
+is not an argument available here.
+
+The suite runs in both builds. Without libsodium the contract is that every call
+fails and `available()` says so, which is what makes the password manager report
+itself unusable rather than pretend; that path was compiled and run too, not
+assumed from reading the `#else`.
+
+**The tally for this sweep**, four files that no test had ever named:
+`hls_playlist` assembled video from the same opening slice repeated,
+`tree_outline` and `tree_serializer` deleted urls whenever a page title contained
+`" | "`, `state_store` handed one tab another tab's history — and `box_crypto`
+was correct. Three of the four produced a plausible-looking wrong answer rather
+than a crash, which is exactly the failure this project's notes keep warning
+about, and the reason the fourth being clean is information rather than a
+formality.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and

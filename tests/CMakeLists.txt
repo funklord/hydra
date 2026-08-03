@@ -110,6 +110,19 @@ add_executable(test_probe_ui test_probe_ui.cpp
     ${H}/ai_provider.h)
 target_link_libraries(test_probe_ui PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
 
+# The crypto shim. Built either way on purpose: without libsodium the suite
+# pins the other contract -- that every call fails and available() says so.
+if(PkgConfig_FOUND)
+    pkg_check_modules(SODIUM_T QUIET libsodium)
+endif()
+add_executable(test_crypto test_crypto.cpp ${H}/box_crypto.cpp)
+target_link_libraries(test_crypto PRIVATE Qt6::Core Qt6::Test ${SODIUM_T_LIBRARIES})
+target_include_directories(test_crypto PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR}
+    ${SODIUM_T_INCLUDE_DIRS})
+if(SODIUM_T_FOUND)
+    target_compile_definitions(test_crypto PRIVATE HYDRA_HAVE_SODIUM)
+endif()
+
 add_executable(test_state test_state.cpp ${H}/state_store.cpp)
 target_link_libraries(test_state PRIVATE Qt6::Core Qt6::Test)
 target_include_directories(test_state PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
