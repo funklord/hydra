@@ -493,6 +493,77 @@ int main(int argc, char **argv) {
 		      "and the site falls back to the defaults, which is what removal means");
 	}
 
+	section("restoring a page's defaults");
+	{
+		policy_engine p;
+		p.set_setting("news.example", policy::feature::javascript,
+		               policy::setting::block);
+
+		settings_dialog d(&players, &downloads, nullptr, nullptr, nullptr, &p);
+		d.show();
+		auto *cats2 = d.findChild<QListWidget *>("categories");
+		auto *restore = d.findChild<QPushButton *>("restore_defaults");
+		check(restore != nullptr, "there is a restore-defaults button");
+		if (!restore || !cats2) { std::printf("\n%d passed, %d failed\n", g_pass, g_fail); return 1; }
+
+		// It names the page it acts on, which is what makes one button rather
+		// than six unambiguous.
+		cats2->setCurrentRow(0);
+		check(restore->text().contains("Privacy"),
+		      QString("and it names the page (%1)").arg(restore->text()));
+
+		// Change something, restore, and check it went back.
+		auto *js = d.findChild<QComboBox *>("feature_javascript");
+		check(js != nullptr, "the privacy page has the JavaScript control");
+		const int was = js->currentIndex();
+		js->setCurrentIndex(was == 0 ? 1 : 0);
+		check(js->currentIndex() != was, "changing it takes effect in the dialog");
+		restore->click();
+		check(js->currentIndex() == was,
+		      "restoring puts it back to what a fresh install shows");
+
+		// And the page's *own* rules are not what "defaults" means.
+		auto *list = d.findChild<QTreeWidget *>("site_exceptions");
+		check(list && list->topLevelItemCount() == 1,
+		      "a site exception survives a defaults restore — it is a decision "
+		      "about one site, not a default");
+
+		// Nothing is written until OK, so Cancel is the undo. This is why the
+		// button needs no confirmation dialog.
+		js->setCurrentIndex(was == 0 ? 1 : 0);
+		const policy::setting before =
+			p.global_default(policy::feature::javascript);
+		restore->click();
+		check(p.global_default(policy::feature::javascript) == before,
+		      "restoring writes nothing on its own");
+		d.reject();
+		check(p.global_default(policy::feature::javascript) == before,
+		      "and Cancel leaves the stored settings exactly as they were");
+	}
+
+	section("the filters page has no defaults to restore");
+	{
+		// It holds rules learned on this machine rather than preferences.
+		// "Restore defaults" there would mean deleting them, which is not what
+		// the button means anywhere else — so it is off, and says why.
+		policy_engine p;
+		settings_dialog d(&players, &downloads, nullptr, nullptr, nullptr, &p);
+		d.show();
+		auto *cats3 = d.findChild<QListWidget *>("categories");
+		auto *restore = d.findChild<QPushButton *>("restore_defaults");
+		int filters_row = -1;
+		for (int i = 0; i < cats3->count(); ++i)
+			if (cats3->item(i)->text().remove('&') == "Filters")
+				filters_row = i;
+		check(filters_row >= 0, "there is a filters page");
+		cats3->setCurrentRow(filters_row);
+		check(!restore->isEnabled(), "restore is off there");
+		check(restore->toolTip().contains("learned"),
+		      "and the tooltip says why rather than leaving it mysterious");
+		cats3->setCurrentRow(0);
+		check(restore->isEnabled(), "and on again on a page that has defaults");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;
 }

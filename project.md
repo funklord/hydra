@@ -4064,6 +4064,45 @@ page, so a capture of the top of each page would have shown every list in its
 empty state — the furniture, and none of the content, which is the half that is
 hard to get right.
 
+### Restore defaults, and what it deliberately does not touch
+
+One button, in the standard place, that **names the page it acts on** — "Restore
+Kiosk defaults", "Restore Privacy & security defaults". Firefox puts one inside
+each section and Chrome has a single global reset; this is the middle, because a
+global reset of a browser holding per-site rules and learned filters is a bigger
+hammer than anyone reaches for on purpose, and naming the page is what makes one
+button unambiguous.
+
+**"Default" means what a freshly built object holds.** The values come from
+constructing a new `policy_engine`, `player_launcher`, `download_manager`,
+`ollama_provider` — the same state the program runs on the first time it starts
+— rather than from a second table of constants that would drift away from the
+first one.
+
+**No confirmation dialog, because nothing is written.** Restore changes the
+controls; OK writes them. Cancel is the undo, and a dialog that asks "are you
+sure?" about something already reversible is asking for a habit of dismissing
+questions. The tooltip says so rather than leaving the user to find out.
+
+Three things it leaves alone, each on purpose:
+
+* **Site exceptions.** They are decisions about particular sites rather than
+  defaults, they each have their own Remove, and discarding them behind a button
+  labelled "defaults" would be exactly the kind of surprise this project keeps
+  out.
+* **The Claude API key**, which was never stored and so has no default to return
+  to — clearing it would throw away something typed this session for no gain.
+* **The whole filters page.** It holds rules learned on this machine rather than
+  preferences, so "restore defaults" there would mean *delete*, which is not what
+  the button means anywhere else. It is disabled there, and the tooltip says why
+  instead of leaving a mysteriously grey button.
+
+One bug on the way, and it is the ordinary kind: the label kept Qt's generic
+"Restore Defaults" because the function that sets it ran when the first page was
+selected — which happens while the button box is still being built, so it landed
+on a null pointer and returned. A test that read the label caught it; nothing
+that only clicked the button would have.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

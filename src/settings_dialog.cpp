@@ -285,6 +285,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 	split->addWidget(m_categories);
 
 	auto *stack = new QStackedWidget(this);
+	m_stack = stack;
 	stack->setObjectName("pages");
 	split->addWidget(stack, 1);
 	connect(m_categories, &QListWidget::currentRowChanged,
@@ -391,9 +392,30 @@ settings_dialog::settings_dialog(player_launcher *players,
 	         &QListWidget::itemActivated);
 
 	auto *buttons = new QDialogButtonBox(
-		QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+		QDialogButtonBox::Ok | QDialogButtonBox::Cancel |
+			QDialogButtonBox::RestoreDefaults,
+		this);
 	connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+
+	// One button, in the standard place, that names the page it acts on.
+	//
+	// Firefox puts a "Restore Defaults" inside each section and Chrome has one
+	// global reset; this is the middle, and the middle is here because a global
+	// reset of a browser that holds per-site rules and learned filters is a
+	// bigger hammer than anyone reaches for on purpose. Naming the page in the
+	// label is what makes one button unambiguous.
+	m_restore = buttons->button(QDialogButtonBox::RestoreDefaults);
+	m_restore->setObjectName("restore_defaults");
+	connect(m_restore, &QPushButton::clicked, this, [this] {
+		restore_page_defaults(m_categories->currentRow());
+	});
+	connect(m_categories, &QListWidget::currentRowChanged, this,
+	         &settings_dialog::update_restore_button);
+	// After the button exists, not when the first page is selected: that happens
+	// while the button box is still being built, so the call landed on a null
+	// pointer and the label kept Qt's generic "Restore Defaults".
+	update_restore_button();
 	outer->addWidget(buttons);
 
 	// Opening a settings window must not reach out to the network by itself:
@@ -660,6 +682,107 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	v->addWidget(note);
 
 	v->addStretch(1);
+}
+
+
+void settings_dialog::update_restore_button() {
+	if (!m_restore || !m_categories)
+		return;
+	const int page = m_categories->currentRow();
+	QString name = page >= 0 ? m_categories->item(page)->text() : QString();
+	name.remove('&');
+
+	// The filters page holds learned data rather than preferences: accepted
+	// filter rules and consent wording this machine worked out. "Defaults" for
+	// those would mean deleting them, which is not what a Restore Defaults
+	// button means anywhere else, so the button says why it is off rather than
+	// being mysteriously grey.
+	const bool resettable = name != "Filters";
+	m_restore->setEnabled(resettable);
+	m_restore->setText(resettable ? QString("Restore %1 defaults").arg(name)
+	                               : QStringLiteral("Restore defaults"));
+	m_restore->setToolTip(
+		resettable
+			? QString("Put the %1 page back to a fresh install's settings. "
+			           "Nothing is written until you press OK, so Cancel undoes "
+			           "it.").arg(name)
+			: QStringLiteral("The filters page holds rules learned on this "
+			                  "machine, not preferences — remove them "
+			                  "individually rather than all at once."));
+}
+
+void settings_dialog::restore_page_defaults(int page) {
+	if (!m_categories || page < 0 || page >= m_categories->count())
+		return;
+	QString name = m_categories->item(page)->text();
+	name.remove('&');
+
+	// "Default" means what a freshly built object holds before anything has
+	// been stored — the same values the program runs on the first time it is
+	// started. Reading them from a new instance rather than from a second table
+	// of constants is what keeps the two from drifting apart.
+	if (name.startsWith("Privacy")) {
+		policy_engine fresh;
+		for (int i = 0; i < m_feature_combos.size(); ++i) {
+			QComboBox *c = m_feature_combos[i];
+			if (!c)
+				continue;
+			const policy::setting want =
+				fresh.global_default(static_cast<policy::feature>(i));
+			c->setCurrentIndex(want == policy::setting::block ? 1 : 0);
+		}
+		// Site exceptions are deliberately left alone. They are decisions about
+		// particular sites rather than defaults, they each have their own
+		// Remove, and quietly discarding them behind a button labelled
+		// "defaults" would be the kind of surprise this project keeps out.
+	} else if (name.startsWith("Media")) {
+		player_launcher fresh;
+		m_custom_cmd->clear();
+		for (QRadioButton *b : m_player_buttons)
+			if (b->property("player_id").toString() == fresh.selected()) {
+				b->setChecked(true);
+				break;
+			}
+	} else if (name.startsWith("Downloads")) {
+		download_manager fresh;
+		m_dir->setText(fresh.directory());
+		if (m_torrents) {
+			// The torrent knobs read their defaults from a fresh source, which
+			// is only constructible when the build has libtorrent -- and when it
+			// does not, those controls are disabled anyway.
+			torrent_download_source fresh_t;
+			m_conn_global->setValue(fresh_t.connection_limit_global());
+			m_conn_torrent->setValue(fresh_t.connection_limit_per_torrent());
+			m_seed_ratio->setValue(fresh_t.seed_ratio());
+			m_interfaces->setText(fresh_t.listen_interfaces());
+			m_sequential->setChecked(fresh_t.sequential());
+		}
+	} else if (name.startsWith("Kiosk")) {
+		const kiosk_config d;   // the struct's own initialisers are the defaults
+		m_kiosk_home->setText(d.home.toString());
+		m_kiosk_w->setValue(d.design_size.isValid() ? d.design_size.width() : 0);
+		m_kiosk_h->setValue(d.design_size.isValid() ? d.design_size.height() : 0);
+		m_kiosk_scale->setCurrentIndex(m_kiosk_scale->findData(int(d.scale)));
+		m_kiosk_fit->setCurrentIndex(m_kiosk_fit->findData(int(d.fit)));
+		m_kiosk_cursor->setChecked(d.hide_cursor);
+		m_kiosk_idle->setValue(d.idle_reset_seconds);
+		m_kiosk_dog->setChecked(d.watchdog);
+		m_kiosk_escape->setChecked(d.allow_escape);
+	} else if (name.startsWith("AI")) {
+		ollama_provider fresh_local;
+		claude_provider fresh_remote;
+		m_ollama_url->setText(fresh_local.endpoint().toString());
+		m_ollama_model->setText(fresh_local.model());
+		m_probe_timeout->setValue(fresh_local.probe_timeout());
+		m_claude_model->setText(fresh_remote.model());
+		m_ai_auto->setChecked(true);
+		// The API key is not touched: it was never stored, so it has no default
+		// to go back to, and clearing it would throw away something the user
+		// typed this session for no gain.
+	}
+
+	update_custom_state();
+	update_ai_state();
 }
 
 void settings_dialog::rebuild_exceptions() {

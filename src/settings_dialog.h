@@ -40,6 +40,7 @@ class filter_list;
 class consent_blocker;
 class QTreeWidget;
 class QPushButton;
+class QStackedWidget;
 
 class settings_dialog : public QDialog {
 	Q_OBJECT
@@ -69,6 +70,11 @@ private:
 	// used to say, gathered in one place so it can be reviewed and undone
 	// without visiting each site to find out.
 	void rebuild_exceptions();
+	// Put one page's controls back to what a fresh install would show. Not
+	// written anywhere until OK, which is why it needs no confirmation dialog:
+	// Cancel is the undo.
+	void restore_page_defaults(int page);
+	void update_restore_button();
 	void rebuild_site_rules();
 	void index_pages(QWidget *page, int page_index);
 	void run_search(const QString &text);
@@ -134,6 +140,8 @@ private:
 	// dialog with a Cancel button that had already discarded rules would be
 	// lying about what Cancel does.
 	QSet<QString>         m_dropped_patterns;
+	QPushButton          *m_restore        = nullptr;
+	QStackedWidget       *m_stack          = nullptr;
 	QList<QRadioButton *> m_player_buttons;
 	QVBoxLayout    *m_player_group_layout = nullptr;
 	QLineEdit      *m_custom_cmd   = nullptr;
