@@ -3400,6 +3400,40 @@ service configured (`settings get secure autofill_service` is empty), so what ca
 be said is that the menu no longer offers something impossible, not that filling
 works. Naming that gap is the point of writing it down.
 
+### A parser that said it was tested
+
+`hls_playlist.h` describes itself: *"the parsing is where the fiddly cases live
+(relative URIs, byte ranges, VOD versus live), so it is separated out and tested
+on its own."* It was separated out. Nothing tested it — and the claim sitting
+there unaccompanied is what made it worth looking at, because this is a parser
+for text that arrives from a CDN, and the quality list, the assembler and the
+media dialog all believe whatever it says.
+
+Thirty-five checks later, one real bug, and it is in the fiddliest of the cases
+the header names.
+
+**A byte-range playlist is one file cut into slices**, and it states an offset
+once: `#EXT-X-BYTERANGE:1000@0`, then `2000`, then `1500`. RFC 8216 §4.3.2.2 says
+an omitted offset means *the byte after the previous sub-range*. The parser
+reported `-1` for it and the assembler read `-1` as zero — so every segment after
+the first would have been fetched from the start of the file. The result is not a
+failed download or an empty one: it is a video file of the right length,
+assembled out of the same opening slice repeated, which is the worst way to be
+wrong because nothing reports it.
+
+Resolved at parse time now, where the previous segment is known, and only when
+that previous segment is a range of the same resource — which is what the spec
+requires and also what stops a stray range leaking onto an unrelated segment. The
+assembler needs no rule of its own; it sees concrete offsets.
+
+The rest of the suite is the cases a manifest can be awkward in: CRLF line
+endings, a quoted `CODECS` containing commas, an `#EXTINF` title that also
+contains one, relative and absolute URIs, absolute URIs on another host, no base
+url at all, and the two tags that carry their URI *inline* — `#EXT-X-MEDIA` and
+`#EXT-X-I-FRAME-STREAM-INF` — either of which would invent a variant and steal
+the following line if it were mistaken for `#EXT-X-STREAM-INF`. They are not, and
+now there is something that would notice if they became so.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and

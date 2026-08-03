@@ -106,6 +106,23 @@ hls_playlist parse(const QByteArray &text, const QUrl &base) {
 			seg.duration    = pending_duration;
 			seg.byte_offset = pending_offset;
 			seg.byte_length = pending_length;
+			// An omitted offset is not zero. RFC 8216 §4.3.2.2: the sub-range
+			// begins at the byte after the previous segment's sub-range, and
+			// that previous segment is required to be a slice of the same
+			// resource. Byte-range playlists say `1000@0` once and then only
+			// lengths, so reading the omission as zero fetches the first slice
+			// again for every segment -- an assembled file that is wrong without
+			// being empty, which is the worst way to be wrong.
+			//
+			// Resolved here rather than in the assembler because this is where
+			// the previous segment is known; downstream sees concrete offsets
+			// and needs no rule of its own.
+			if (seg.byte_length > 0 && seg.byte_offset < 0 && !out.segments.isEmpty()) {
+				const hls_segment &prev = out.segments.last();
+				if (prev.byte_length > 0 && prev.byte_offset >= 0 &&
+				    prev.url == seg.url)
+					seg.byte_offset = prev.byte_offset + prev.byte_length;
+			}
 			out.segments.push_back(seg);
 			have_duration  = false;
 			pending_offset = -1;

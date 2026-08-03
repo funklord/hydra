@@ -110,6 +110,10 @@ add_executable(test_probe_ui test_probe_ui.cpp
     ${H}/ai_provider.h)
 target_link_libraries(test_probe_ui PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
 
+add_executable(test_hls test_hls.cpp ${H}/hls_playlist.cpp)
+target_link_libraries(test_hls PRIVATE Qt6::Core Qt6::Test)
+target_include_directories(test_hls PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_executable(test_bridge test_bridge.cpp ${H}/bridge_invoker.cpp)
 target_link_libraries(test_bridge PRIVATE Qt6::Core Qt6::Test)
 target_include_directories(test_bridge PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
