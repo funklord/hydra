@@ -540,8 +540,8 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *kp = tools_menu->addAction("Connect to &KeePassXC…", this,
 	                                     &main_window::toggle_password_manager);
 	kp->setStatusTip(keepass_bridge::supported()
-	                     ? "Pair with a running KeePassXC for autofill"
-	                     : "Unavailable: built without libsodium");
+	                     ? QStringLiteral("Pair with a running KeePassXC for autofill")
+	                     : keepass_bridge::unavailable_reason());
 	kp->setEnabled(keepass_bridge::supported());
 	tools_menu->addSeparator();
 	QAction *reorg = tools_menu->addAction("&Reorganize Tree with AI…", this,
@@ -732,8 +732,9 @@ void main_window::open_filter_evolution() {
 
 void main_window::toggle_password_manager() {
 	if (!keepass_bridge::supported()) {
-		m_status->showMessage("Built without libsodium — install libsodium-dev "
-		                      "and rebuild.", 8000);
+		// The reason, not a guess at it: on a desktop without libsodium the
+		// answer is to install it, and on Android there is nothing to install.
+		m_status->showMessage(keepass_bridge::unavailable_reason(), 8000);
 		return;
 	}
 	if (!m_keepass->connected()) {

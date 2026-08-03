@@ -79,8 +79,19 @@ printf 'hydratest\n' | keepassxc --config $KP/keepassxc.ini \
 ./tests/build/try_keepass
 ```
 
+**Check the database actually opened.** `--pw-stdin` is taken from standard
+input, and a shell that backgrounds the process may hand it nothing — the window
+then sits on a password prompt with the vault locked, and the driver reports
+*"Database not opened (code 1)"* where it would otherwise say *"association
+failed (code 8)"*. Both are correct refusals, so the run still passes; but
+pairing needs the vault open. Unlock it in the window with `hydratest` if it is
+waiting.
+
 Everything up to pairing runs unattended: the socket, the key exchange, and the
-answer a saved-but-unknown pairing gets. **Pairing itself needs you**, because
+answer a saved-but-unknown pairing gets. The precondition **connects** rather
+than checking the path exists — that path is a symlink which outlives the
+process, so an exited KeePassXC leaves one behind and a driver that only looks
+for it reports a listening server that is not there. **Pairing itself needs you**, because
 KeePassXC asks a human whether this program may read the vault, and a browser
 that could answer that for itself would be the bug. For the rest:
 

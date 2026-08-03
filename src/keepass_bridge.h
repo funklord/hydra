@@ -25,9 +25,12 @@ class keepass_bridge : public QObject {
 public:
 	explicit keepass_bridge(QObject *parent = nullptr);
 
-	// False when built without libsodium — the protocol is end-to-end
-	// encrypted, so there is no degraded mode worth offering.
+	// False when this build cannot talk to a KeePassXC at all. Two ways that
+	// happens, and they are different enough that the UI should not merge them:
+	// no libsodium, or a platform where the browser-integration socket does not
+	// exist. `unavailable_reason()` is empty exactly when `supported()` is true.
 	static bool supported();
+	static QString unavailable_reason();
 
 	// The socket path KeePassXC listens on.
 	static QString socket_path();

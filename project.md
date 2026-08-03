@@ -3247,6 +3247,15 @@ So the transport, the framing and the sodium key exchange work against the real
 other end, first try. Seven checks, none of them previously exercised by
 anything.
 
+**And the driver's own precondition was lying.** It reported "KeePassXC is
+listening where the bridge expects it" after checking `QFile::exists` on the
+socket path — which is a symlink into the runtime directory that **outlives the
+process**. When KeePassXC exited, the driver announced a listening server and
+then failed the handshake: the one check whose job was to establish the
+precondition was the one making it up. It connects now, and distinguishes "no
+socket at all" from "a stale socket left by a KeePassXC that has exited". A test
+that reports a passing precondition it never tested is worse than having none.
+
 **Pairing is not automated, deliberately.** `associate()` makes KeePassXC ask a
 human whether this program may read the vault — that prompt *is* the security
 boundary, and a browser able to answer it for itself would be the bug. The driver
@@ -3370,6 +3379,26 @@ is worth knowing is that **the suite already prints the numbers it compares**, s
 whenever it next fails the output will say which deadline was missed and by how
 much, rather than only that something did. That is the difference between a third
 data point and a third shrug.
+
+### Autofill on Android is the platform's, and the menu now says so
+
+`keepass_bridge::supported()` checked for libsodium and nothing else, so on
+Android the Tools menu offered "Connect to KeePassXC…" — an action that cannot
+work there and whose failure message told the user to start a program that does
+not exist on a phone. KeePassXC's browser integration is a Unix socket belonging
+to a desktop application; there is nothing to connect to.
+
+`supported()` now means what it says, and `unavailable_reason()` carries *which*
+of the two reasons applies, because "no libsodium" is a thing to fix and "wrong
+platform" is not. On Android it says the system autofill service fills forms
+instead — which is true, needs nothing from this browser, and is where someone
+looking for autofill on a phone should be pointed.
+
+That is §19's autofill item, and the answer is that most of it is not ours to
+implement. **It is not verified end to end**: the emulator has no autofill
+service configured (`settings get secure autofill_service` is empty), so what can
+be said is that the menu no longer offers something impossible, not that filling
+works. Naming that gap is the point of writing it down.
 
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and

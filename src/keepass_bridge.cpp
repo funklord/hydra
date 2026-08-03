@@ -24,7 +24,29 @@ keepass_bridge::keepass_bridge(QObject *parent) : QObject(parent) {
 }
 
 bool keepass_bridge::supported() {
-	return box_crypto::available();
+	return unavailable_reason().isEmpty();
+}
+
+QString keepass_bridge::unavailable_reason() {
+#ifdef Q_OS_ANDROID
+	// Not a build option and not a missing feature: KeePassXC's browser
+	// integration is a Unix socket belonging to a desktop application, and there
+	// is no such thing to connect to on a phone. Saying "unavailable" without
+	// saying that leaves a menu item that looks broken, and offering it at all
+	// would send someone looking for a KeePassXC to start.
+	//
+	// The platform's own answer is the system autofill service, which fills
+	// WebView forms without this browser implementing anything -- §13.2's shell
+	// bridge is the desktop mechanism, not the only one that may fill a form.
+	return QStringLiteral(
+		"KeePassXC's browser integration is a desktop socket. On Android the "
+		"system autofill service fills forms instead.");
+#else
+	if (!box_crypto::available())
+		return QStringLiteral("Built without libsodium — the KeePassXC protocol "
+		                       "is end-to-end encrypted and needs it.");
+	return QString();
+#endif
 }
 
 QString keepass_bridge::socket_path() {

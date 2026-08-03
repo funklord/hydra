@@ -63,14 +63,34 @@ int main(int argc, char **argv) {
 
 	const QString sock = keepass_bridge::socket_path();
 	std::printf("  --    socket: %s\n", qPrintable(sock));
-	if (!QFile::exists(sock)) {
-		note("no KeePassXC listening — start one with browser integration on.");
-		note("Nothing below could mean anything, so this stops rather than");
-		note("reporting passes for a bridge that talked to nobody.");
-		std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
-		return 1;
+
+	// Connect, do not merely look.
+	//
+	// The first version of this checked QFile::exists on the path and reported
+	// "KeePassXC is listening" — and that path is a symlink into the runtime
+	// directory which **outlives the process**. So after KeePassXC exited, this
+	// driver announced a listening server, then failed the handshake, and the
+	// one check that was supposed to establish the precondition was the one
+	// lying about it. A test that reports a passing precondition it did not test
+	// is worse than no precondition check.
+	{
+		QLocalSocket probe;
+		probe.connectToServer(sock);
+		const bool up = probe.waitForConnected(1500);
+		probe.abort();
+		if (!up) {
+			note(QFile::exists(sock)
+			         ? "the socket path exists but nothing answers — a stale "
+			           "socket left by a KeePassXC that has exited."
+			         : "no socket at all — start KeePassXC with browser "
+			           "integration enabled.");
+			note("Nothing below could mean anything, so this stops rather than");
+			note("reporting passes for a bridge that talked to nobody.");
+			std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
+			return 1;
+		}
+		check(true, "something is listening on the socket, not just a path");
 	}
-	check(true, "KeePassXC is listening where the bridge expects it");
 
 	section("handshake: change-public-keys");
 	keepass_bridge bridge;
