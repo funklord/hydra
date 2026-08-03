@@ -71,14 +71,21 @@ node *parse_proposal(const QString &text) {
 		node *n  = new node;
 		n->id    = id;
 		n->type  = tree_outline::type_from_string(fields.value(0).trimmed());
-		n->title = fields.value(1).trimmed();
-		if (!n->is_folder())
-			n->url = fields.value(2).trimmed();
-		for (const QString &f : fields) {
-			const QString t = f.trimmed();
-			if (t.startsWith("tags="))
-				n->tags = t.mid(5).split(',', Qt::SkipEmptyParts);
+
+		// From the right, for the same reason as the tree file: the title is the
+		// one field that may contain " | ", and "Article | Site" is ordinary.
+		// Here the loss went further than a reload -- a proposal parsed this way
+		// carries the wrong url into the diff the user is asked to accept.
+		QStringList rest_fields = fields.mid(1);
+		for (auto &f : rest_fields)
+			f = f.trimmed();
+		while (!rest_fields.isEmpty() && rest_fields.last().startsWith("tags=")) {
+			n->tags = rest_fields.last().mid(5).split(',', Qt::SkipEmptyParts);
+			rest_fields.removeLast();
 		}
+		if (!n->is_folder() && rest_fields.size() >= 2)
+			n->url = rest_fields.takeLast();
+		n->title = rest_fields.join(" | ");
 
 		while (stack.size() > 1 && stack.last().depth >= depth)
 			stack.pop_back();

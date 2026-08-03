@@ -78,17 +78,37 @@ node *load(const QString &path) {
 		node *n   = new node;
 		n->id     = id.isEmpty() ? QString("n%1").arg(counter) : id;
 		n->type   = type_from_string(fields.value(0).trimmed());
-		n->title  = fields.value(1).trimmed();
-		if (!n->is_folder())
-			n->url = fields.value(2).trimmed();
 
-		for (const QString &field : fields) {
-			const QString t = field.trimmed();
+		// Fields are read **from the right**, and the title is whatever is left.
+		//
+		// Reading them left to right -- type, title, url -- assumes a title with
+		// no " | " in it, and "Article Title | Site Name" is one of the commonest
+		// shapes a page title takes on the web. Such a title used to shift every
+		// field after it: the url became the tail of the title and the real url
+		// landed in a position nothing read, so **it was lost on the next
+		// reload**. The title is the one free-form field here; the url cannot
+		// contain a space unencoded and the trailing keys cannot either, so
+		// working inwards from the end is unambiguous where working outwards
+		// from the start is not.
+		QStringList rest_fields = fields.mid(1);
+		for (auto &f : rest_fields)
+			f = f.trimmed();
+		while (!rest_fields.isEmpty()) {
+			const QString &t = rest_fields.last();
 			if (t.startsWith("created="))
 				n->created = QDateTime::fromString(t.mid(8), Qt::ISODate);
 			else if (t.startsWith("seen="))
 				n->last_seen = QDateTime::fromString(t.mid(5), Qt::ISODate);
+			else
+				break;
+			rest_fields.removeLast();
 		}
+		// A page's url is the last field before the metadata -- but only when
+		// there is something in front of it to be the title, so a node written
+		// with a title and no url does not lose the title instead.
+		if (!n->is_folder() && rest_fields.size() >= 2)
+			n->url = rest_fields.takeLast();
+		n->title = rest_fields.join(" | ");
 		if (!n->created.isValid())   n->created   = QDateTime::currentDateTime();
 		if (!n->last_seen.isValid()) n->last_seen = n->created;
 

@@ -3434,6 +3434,39 @@ url at all, and the two tags that carry their URI *inline* — `#EXT-X-MEDIA` an
 the following line if it were mistaken for `#EXT-X-STREAM-INF`. They are not, and
 now there is something that would notice if they became so.
 
+### The tree file lost urls, and the title was to blame
+
+The tree file is the source of truth for structure and order, written on every
+change and read on every launch. Nothing tested it. The first thing a round-trip
+test found is a data-loss bug that needs no unusual input at all.
+
+Fields are separated by `" | "`, and the parser read them left to right: type,
+title, url. **A title containing that separator shifted everything after it** —
+so `Some Article | The Daily Example` came back as title `Some Article`, url
+`The Daily Example`, and the real url landed in a position nothing reads. On the
+next save it was written from what had been parsed, so **the address was gone**.
+
+`Article Title | Site Name` is one of the commonest shapes a page title takes on
+the web. This was not a corner case; it was most of a news site.
+
+The fix reads the fields **from the right**. The title is the only free-form
+field: a url cannot contain an unencoded space and neither can `created=` or
+`seen=`, so working inwards from the end is unambiguous where working outwards
+from the start is not. No format change, so files already on disk read correctly
+— and one written by the old parser is beyond help either way, since the url it
+recorded is the one it invented.
+
+The same bug, from the same shortcut, was in `tree_serializer` — the AI
+reorganizer's payload. There it went further than a reload: a proposal parsed
+that way carries a wrong url into the diff the user is asked to accept, so the
+reorganizer could have been *offered* a tree with addresses replaced by fragments
+of their own titles.
+
+Twenty-nine checks now, including the ordinary things that did work and should
+keep working: nesting and dedenting, order preserved rather than sorted,
+`created`/`seen` timestamps, tags after the url, and a proposal arriving wrapped
+in prose and a code fence the way a model actually answers.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and
