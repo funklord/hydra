@@ -279,29 +279,49 @@ if(Qt6WebEngineWidgets_FOUND)
     if(PkgConfig_FOUND)
         pkg_check_modules(SODIUM QUIET libsodium)
     endif()
+    # **The app compiled once, not once per driver.** Each driver used to list
+    # ${APPSRC} itself, so CMake gave each of the 21 its own object directory and
+    # built all 58 sources into it: ~1200 compilations of the same files, 19
+    # minutes of wall clock and 41 of CPU for a full `make drivers`.
+    #
+    # A **STATIC** library rather than an OBJECT one, and that is the load-bearing
+    # word. A static archive contributes only the members that resolve an
+    # undefined symbol, which is the same closure a linker computes when pulling
+    # members out of any archive -- so a driver that touches a third of the shell
+    # links a third of it, and nothing is force-fed. An OBJECT library would put
+    # every object into every driver whether referenced or not.
+    #
+    # PUBLIC throughout, because the drivers include the app's headers: they need
+    # the same include paths and the same HYDRA_HAVE_* definitions the library was
+    # compiled with, and a header that reads a define its consumer does not have
+    # is how one translation unit ends up disagreeing with another about what a
+    # class contains.
+    add_library(hydra_app STATIC ${APPSRC} ${APPHDR})
+    target_include_directories(hydra_app PUBLIC ${H} ${SODIUM_INCLUDE_DIRS})
+    target_link_libraries(hydra_app PUBLIC Qt6::Widgets Qt6::WebEngineWidgets
+        Qt6::Network Qt6::WebChannel Qt6::Qml ${SODIUM_LIBRARIES})
+    if(TARGET Qt6::DBus)
+        target_link_libraries(hydra_app PUBLIC Qt6::DBus)
+        target_compile_definitions(hydra_app PUBLIC HYDRA_HAVE_DBUS)
+    endif()
+    if(SODIUM_FOUND)
+        target_compile_definitions(hydra_app PUBLIC HYDRA_HAVE_SODIUM)
+    endif()
+    if(SECRET_T_FOUND)
+        target_compile_definitions(hydra_app PUBLIC HYDRA_HAVE_SECRET)
+        target_include_directories(hydra_app PUBLIC ${SECRET_T_INCLUDE_DIRS})
+        target_link_libraries(hydra_app PUBLIC ${SECRET_T_LIBRARIES})
+    endif()
+    if(LibtorrentRasterbar_FOUND)
+        target_compile_definitions(hydra_app PUBLIC HYDRA_HAVE_LIBTORRENT)
+        target_link_libraries(hydra_app PUBLIC LibtorrentRasterbar::torrent-rasterbar)
+    endif()
+
     file(GLOB LIVE CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/live/try_*.cpp)
     foreach(src ${LIVE})
         get_filename_component(name ${src} NAME_WE)
-        add_executable(${name} ${src} ${APPSRC} ${APPHDR})
-        target_include_directories(${name} PRIVATE ${H} ${SODIUM_INCLUDE_DIRS})
-        target_link_libraries(${name} PRIVATE Qt6::Widgets Qt6::WebEngineWidgets
-            Qt6::Network Qt6::WebChannel Qt6::Qml ${SODIUM_LIBRARIES})
-        if(TARGET Qt6::DBus)
-            target_link_libraries(${name} PRIVATE Qt6::DBus)
-            target_compile_definitions(${name} PRIVATE HYDRA_HAVE_DBUS)
-        endif()
-        if(SODIUM_FOUND)
-            target_compile_definitions(${name} PRIVATE HYDRA_HAVE_SODIUM)
-        endif()
-        if(SECRET_T_FOUND)
-            target_compile_definitions(${name} PRIVATE HYDRA_HAVE_SECRET)
-            target_include_directories(${name} PRIVATE ${SECRET_T_INCLUDE_DIRS})
-            target_link_libraries(${name} PRIVATE ${SECRET_T_LIBRARIES})
-        endif()
-        if(LibtorrentRasterbar_FOUND)
-            target_compile_definitions(${name} PRIVATE HYDRA_HAVE_LIBTORRENT)
-            target_link_libraries(${name} PRIVATE LibtorrentRasterbar::torrent-rasterbar)
-        endif()
+        add_executable(${name} ${src})
+        target_link_libraries(${name} PRIVATE hydra_app)
     endforeach()
 else()
     message(STATUS "Qt WebEngine not found — live drivers skipped")

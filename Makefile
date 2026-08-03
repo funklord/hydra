@@ -185,7 +185,7 @@ test-one: $(TESTS_DIR)/CMakeCache.txt
 # compiles the whole app and links WebEngine, and they want a real display.
 drivers: $(TESTS_DIR)/CMakeCache.txt
 	@$(CMAKE) --build $(TESTS_DIR) -j$(JOBS)
-	@echo "live drivers built. They need a display: DISPLAY=:0 ./$(TESTS_DIR)/try_seam"
+	@echo "live drivers built. They need a display: DISPLAY=:0 ./$(TESTS_DIR)/try_cookies"
 	@echo "tests/README.md says which need a helper server, KeePassXC or a model."
 
 android:
