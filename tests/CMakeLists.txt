@@ -73,8 +73,13 @@ add_executable(test_settings test_settings.cpp
     ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/request_filter.cpp
     ${H}/filter_list.cpp ${H}/site_rules.cpp ${H}/scheme_rules.cpp
     ${H}/cosmetic_filters.cpp ${H}/settings_bundle.cpp
+    ${H}/theme.cpp ${H}/theme.h
     ${H}/ai_provider.h)
 target_link_libraries(test_settings PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
+if(TARGET Qt6::DBus)
+    target_link_libraries(test_settings PRIVATE Qt6::DBus)
+    target_compile_definitions(test_settings PRIVATE HYDRA_HAVE_DBUS)
+endif()
 
 foreach(t test_seam test_pick test_extractor test_extloop test_settings
          test_streamtype test_helpers test_fetcher)
@@ -107,8 +112,13 @@ add_executable(test_probe_ui test_probe_ui.cpp
     ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/request_filter.cpp
     ${H}/filter_list.cpp ${H}/site_rules.cpp ${H}/scheme_rules.cpp
     ${H}/cosmetic_filters.cpp ${H}/settings_bundle.cpp
+    ${H}/theme.cpp ${H}/theme.h
     ${H}/ai_provider.h)
 target_link_libraries(test_probe_ui PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
+if(TARGET Qt6::DBus)
+    target_link_libraries(test_probe_ui PRIVATE Qt6::DBus)
+    target_compile_definitions(test_probe_ui PRIVATE HYDRA_HAVE_DBUS)
+endif()
 
 # The crypto shim. Built either way on purpose: without libsodium the suite
 # pins the other contract -- that every call fails and available() says so.
@@ -145,6 +155,15 @@ target_link_libraries(test_assembler PRIVATE Qt6::Core Qt6::Network Qt6::Test)
 target_include_directories(test_assembler PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
 
 # web_view_backend.h is a Q_OBJECT with no .cpp, so AUTOMOC needs it named.
+find_package(Qt6 6.4 QUIET COMPONENTS DBus)
+add_executable(test_theme test_theme.cpp ${H}/theme.cpp ${H}/theme.h)
+target_link_libraries(test_theme PRIVATE Qt6::Widgets Qt6::Test)
+target_include_directories(test_theme PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
+if(TARGET Qt6::DBus)
+    target_link_libraries(test_theme PRIVATE Qt6::DBus)
+    target_compile_definitions(test_theme PRIVATE HYDRA_HAVE_DBUS)
+endif()
+
 add_executable(test_kiosk test_kiosk.cpp ${H}/kiosk_controller.cpp
     ${H}/web_view_backend.h)
 target_link_libraries(test_kiosk PRIVATE Qt6::Widgets Qt6::Test)
@@ -253,6 +272,10 @@ if(Qt6WebEngineWidgets_FOUND)
         target_include_directories(${name} PRIVATE ${H} ${SODIUM_INCLUDE_DIRS})
         target_link_libraries(${name} PRIVATE Qt6::Widgets Qt6::WebEngineWidgets
             Qt6::Network Qt6::WebChannel Qt6::Qml ${SODIUM_LIBRARIES})
+        if(TARGET Qt6::DBus)
+            target_link_libraries(${name} PRIVATE Qt6::DBus)
+            target_compile_definitions(${name} PRIVATE HYDRA_HAVE_DBUS)
+        endif()
         if(SODIUM_FOUND)
             target_compile_definitions(${name} PRIVATE HYDRA_HAVE_SODIUM)
         endif()

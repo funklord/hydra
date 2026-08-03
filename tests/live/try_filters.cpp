@@ -22,6 +22,9 @@
 #include "main_window.h"
 #include "policy_engine.h"
 #include "request_filter.h"
+#include <QStyleHints>
+#include "theme.h"
+#include "settings_dialog.h"
 #include "qtwebengine_factory.h"
 
 #include <QWebEngineView>
@@ -74,6 +77,13 @@ public:
 					0x00,0x02,0x02,0x44,0x01,0x00,0x3b };
 				body = QByteArray(reinterpret_cast<const char *>(gif), sizeof(gif));
 				type = "image/gif";
+			} else if (target.startsWith("/scheme")) {
+				// Reports what the page thinks the browser's colour scheme is.
+				body = "<!doctype html><html><body><script>"
+				        "new Image().src='/report?scheme='+"
+				        "(matchMedia('(prefers-color-scheme: dark)').matches"
+				        "?'dark':'light');"
+				        "</script></body></html>";
 			} else if (target.startsWith("/cosmetic")) {
 				body = "<!doctype html><html><body>"
 				        "<div class=\"ad-banner\">ADVERT</div>"
@@ -136,6 +146,13 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 	server.port = server.serverPort();
+
+	// What main() does, in the order it does it: the engine reads this flag once,
+	// at startup, so it has to be set before anything creates a profile.
+	const bool want_dark = qEnvironmentVariableIntValue("HYDRA_TEST_DARK") == 1;
+	theme::apply(want_dark ? theme::choice::dark : theme::choice::light);
+	theme::set_web_engine_scheme(want_dark ? Qt::ColorScheme::Dark
+	                                       : Qt::ColorScheme::Light);
 
 	policy_engine       policy;
 	request_filter      filter(&policy);
@@ -241,6 +258,31 @@ int main(int argc, char *argv[]) {
 		      QString("the advert is display:none in the page's own view (%1)").arg(hidden));
 		check(kept != "none",
 		      QString("and the content beside it is untouched (%1)").arg(kept));
+	}
+
+	// Does a *page* follow the browser's colour scheme?
+	//
+	// This is the half of dark mode a user actually looks at, and it is not the
+	// palette -- a web page reads `prefers-color-scheme`, which the engine takes
+	// from the application's colour scheme rather than from any QPalette. Worth
+	// checking rather than assuming, because getting the window dark and leaving
+	// every page white is a perfectly plausible way for this to half-work.
+	section("web content follows the colour scheme");
+	{
+		// Set at startup above, because the engine reads it once. The driver is
+		// run twice -- once each way -- rather than switching mid-run, which is
+		// exactly the limitation the settings page tells the user about.
+		server.asked.clear();
+		bar->setText(QString("http://127.0.0.1:%1/scheme").arg(server.port));
+		QMetaObject::invokeMethod(bar, "returnPressed");
+		spin(2500);
+		QString said;
+		for (const QString &a : std::as_const(server.asked))
+			if (a.startsWith("/report?scheme="))
+				said = a.section('=', 1);
+		check(said == (want_dark ? "dark" : "light"),
+		      QString("a page sees prefers-color-scheme: %1 (%2)")
+		          .arg(want_dark ? "dark" : "light", said));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

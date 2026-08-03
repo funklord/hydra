@@ -4,6 +4,7 @@
 #include "ai_provider.h"
 
 #include "kiosk_controller.h"
+#include "theme.h"
 
 #include <QDialog>
 #include <QSet>
@@ -60,6 +61,7 @@ public:
 	// the window and silently discarded everything typed into it. Found by a
 	// test that accepted the dialog the obvious programmatic way.
 	void accept() override;
+	void reject() override;
 
 private:
 	void build_privacy_page(QWidget *page);
@@ -143,6 +145,7 @@ private:
 	// dialog with a Cancel button that had already discarded rules would be
 	// lying about what Cancel does.
 	QSet<QString>         m_dropped_patterns;
+	QComboBox            *m_appearance     = nullptr;
 	QPushButton          *m_restore        = nullptr;
 	QStackedWidget       *m_stack          = nullptr;
 	QList<QRadioButton *> m_player_buttons;
@@ -200,5 +203,10 @@ void set_kiosk(const kiosk_config &c);
 
 ai_choice ai_mode();
 void set_ai_mode(ai_choice mode);
+
+// Light, dark, or follow the desktop. Default is to follow — see `theme.h` for
+// why that is harder than it sounds.
+theme::choice appearance();
+void          set_appearance(theme::choice c);
 
 }  // namespace settings_store

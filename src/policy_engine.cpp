@@ -15,13 +15,8 @@ using policy::setting;
 
 namespace {
 
-const char *setting_name(setting s) {
-	switch (s) {
-		case setting::allow: return "allow";
-		case setting::block: return "block";
-		default:             return "default";
-	}
-}
+// The words for a setting live in `policy` now, shared with the settings
+// bundle so the two files cannot disagree about what "block" is called.
 
 setting setting_from_name(const QString &n) {
 	if (n == "allow") return setting::allow;

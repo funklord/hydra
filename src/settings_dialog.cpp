@@ -36,6 +36,7 @@
 #include <QStackedWidget>
 #include "policy_engine.h"
 #include "settings_bundle.h"
+#include "theme.h"
 #include <QHBoxLayout>
 #include <QFrame>
 #include <QPalette>
@@ -102,6 +103,19 @@ void set_kiosk(const kiosk_config &c) {
 	st.setValue("watchdog", c.watchdog);
 	st.setValue("allowEscape", c.allow_escape);
 	st.endGroup();
+}
+
+theme::choice appearance() {
+	// Stored as the word rather than a number, because these files are meant to
+	// be read: "appearance=dark" says what it is where "appearance=2" does not.
+	return theme::from_name(
+		open_settings().value("ui/appearance", "system").toString());
+}
+
+void set_appearance(theme::choice c) {
+	QSettings s = open_settings();
+	s.setValue("ui/appearance", theme::name_of(c));
+	s.sync();
 }
 
 ai_choice ai_mode() {
@@ -601,6 +615,31 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 			order << QString::fromUtf8(fg.group);
 	order << "Other";
 
+	// Appearance first, because it is the one setting on this page that is about
+	// the browser rather than about what a site may do -- and because somebody
+	// opening settings on a machine whose theme came out wrong is looking for
+	// exactly this and should not have to scroll past fifteen permissions.
+	v->addWidget(section_heading("Appearance", page));
+	m_appearance = new QComboBox(page);
+	m_appearance->setObjectName("appearance");
+	m_appearance->addItem("Follow the desktop", int(theme::choice::system));
+	m_appearance->addItem("Light", int(theme::choice::light));
+	m_appearance->addItem("Dark", int(theme::choice::dark));
+	const theme::choice now = settings_store::appearance();
+	m_appearance->setCurrentIndex(m_appearance->findData(int(now)));
+	// Applied as it is chosen rather than on OK: this one is visible, so seeing
+	// it is how you decide whether you want it. Cancel puts back what was
+	// stored, which is what makes trying one safe.
+	connect(m_appearance, &QComboBox::currentIndexChanged, this, [this] {
+		theme::apply(static_cast<theme::choice>(m_appearance->currentData().toInt()));
+	});
+	v->addWidget(settings_row(
+		"Colour scheme",
+		"Following the desktop is the default, and it keeps following: a system "
+		"that switches at sunset takes Hydra with it. Web pages pick this up when "
+		"Hydra next starts — the engine reads it once, at launch.",
+		m_appearance, page));
+
 	for (const QString &group_name : order) {
 		QList<policy::feature> in_group;
 		for (int i = 0; i < policy::feature_count(); ++i) {
@@ -713,8 +752,11 @@ void settings_dialog::update_restore_button() {
 	if (!m_restore || !m_categories)
 		return;
 	const int page = m_categories->currentRow();
-	QString name = page >= 0 ? m_categories->item(page)->text() : QString();
-	name.remove('&');
+	// The text as it is. These are list items, which have no mnemonics, so the
+	// ampersand in "Privacy & security" is an ampersand -- stripping it left
+	// "Privacy  security" with two spaces in the button, which is what a
+	// screenshot showed and no assertion would have.
+	const QString name = page >= 0 ? m_categories->item(page)->text() : QString();
 
 	// The filters page holds learned data rather than preferences: accepted
 	// filter rules and consent wording this machine worked out. "Defaults" for
@@ -723,7 +765,13 @@ void settings_dialog::update_restore_button() {
 	// being mysteriously grey.
 	const bool resettable = name != "Filters";
 	m_restore->setEnabled(resettable);
-	m_restore->setText(resettable ? QString("Restore %1 defaults").arg(name)
+	// Escaped for a *button*, where an ampersand is a mnemonic and would be
+	// eaten -- "Privacy & security" came out as "Privacy &security" with an
+	// underlined s. A list item needs the literal character and a button needs
+	// it doubled, which is why the escaping belongs here rather than in the name.
+	QString label = name;
+	label.replace("&", "&&");
+	m_restore->setText(resettable ? QString("Restore %1 defaults").arg(label)
 	                               : QStringLiteral("Restore defaults"));
 	m_restore->setToolTip(
 		resettable
@@ -738,8 +786,7 @@ void settings_dialog::update_restore_button() {
 void settings_dialog::restore_page_defaults(int page) {
 	if (!m_categories || page < 0 || page >= m_categories->count())
 		return;
-	QString name = m_categories->item(page)->text();
-	name.remove('&');
+	const QString name = m_categories->item(page)->text();
 
 	// "Default" means what a freshly built object holds before anything has
 	// been stored — the same values the program runs on the first time it is
@@ -1753,6 +1800,14 @@ void settings_dialog::apply_kiosk() {
 	settings_store::set_kiosk(c);
 }
 
+void settings_dialog::reject() {
+	// The colour scheme was applied while the user was choosing it, so Cancel
+	// has to undo that too -- otherwise "Cancel" leaves the window in a theme
+	// nobody agreed to keep.
+	theme::apply(settings_store::appearance());
+	QDialog::reject();
+}
+
 void settings_dialog::accept() {
 	apply();
 	apply_kiosk();
@@ -1760,6 +1815,9 @@ void settings_dialog::accept() {
 }
 
 void settings_dialog::apply() {
+	if (m_appearance)
+		settings_store::set_appearance(
+			static_cast<theme::choice>(m_appearance->currentData().toInt()));
 	if (m_policy) {
 		// Exceptions the user removed. Every feature is set back to unset, which
 		// is what "falls through to the defaults" means in the policy model --

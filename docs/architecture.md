@@ -176,6 +176,35 @@ The left pane is a `QTreeView` bound to the sort/filter proxy stack over `TabTre
 
 Chrome-less presentation is inherent: the app draws no per-tab browser chrome around the web views — navigation and controls live in the app's own compact toolbar (address field, the policy shield, media badge), not in a Chromium frame. All web views share a single `QWebEngineProfile`, which is where the interceptor, cookie filter, and download handler are installed once and apply everywhere.
 
+### 6.1 Light, dark, and following the desktop
+
+The window can be told to be light, to be dark, or — the default — to be whatever
+the desktop is. **Detecting that last one is the part that needed work, because
+Qt's own answer is not enough.** On the KDE desktop this was developed on,
+`QStyleHints::colorScheme()` returns `Unknown` while the XDG desktop portal
+answers "prefer dark" and gsettings agrees; an app that trusted Qt would come up
+light on a dark desktop and have no way of knowing it had got it wrong.
+
+So detection is a ladder, each rung asked only when the one above has no opinion:
+Qt's hint (right on Windows and macOS, where Qt does read it), then the portal's
+`org.freedesktop.appearance/color-scheme` over DBus, then the palette the
+platform style already handed us — a window darker than its own text is a dark
+theme whoever failed to say so — and finally light, deliberately, because a wrong
+light guess is merely plain while a wrong dark guess is unreadable. The decision
+is a pure function of what each source said, which is why it can be tested
+against the combination this machine actually produces without needing a desktop
+to produce it. DBus is optional: Android and the other platforms have their own
+answer that Qt reads, and the build says so when it is not there.
+
+**Pages are the exception, and the UI says so.** Qt normally forwards the
+application's scheme to Chromium by watching `colorSchemeChanged` — but where Qt
+reports `Unknown`, `setColorScheme()` is a request the platform may ignore, and
+this one does: the value reads back unchanged, the signal never fires, the window
+goes dark and every page stays white. The scheme therefore reaches the engine as
+a startup flag (`preferredColorScheme`), which means `prefers-color-scheme` in a
+page follows a change only after a restart. The settings page tells the user that
+rather than leaving them to notice.
+
 ---
 
 ## 7. PolicyEngine — per-site security whitelist/blacklist
@@ -191,7 +220,7 @@ Setting  = Default(0) | Allow(1) | Block(2)      // 2 bits per feature
 Rule     = { pattern: "*.example.com", bits: uint64 }   // up to 32 features packed
 ```
 
-Each rule is one string plus one 64-bit integer; the ruleset serializes to a small JSON file.
+Each rule is one string plus one 64-bit integer; the ruleset serializes to a small INI file — one line per pattern, readable and diffable, in the same spirit as everything else on disk (§14). A JSON file from an older build is still read, once, and rewritten as INI on the next save.
 
 ### 7.2 Matching precedence
 
@@ -625,7 +654,7 @@ Everything the user owns is inspectable files under the app's config/data direct
 
 - **Tree canonical file** — the id-tagged outline (§4.4); source of truth for structure and order.
 - **State blobs** — per-suspended-tab serialized scroll/form/history, keyed by node id.
-- **Policy rules** — the packed-tri-state ruleset as JSON (§7.1).
+- **Policy rules** — the packed-tri-state ruleset as INI (§7.1), alongside the learned site rules in the same format.
 - **Filter lists** — imported EasyList (refreshed on schedule) and the separate AI/user-authored list (§12).
 - **Downloads index** — queue/history, cross-referenced to node ids.
 - **App config** — provider selection/credentials reference, kiosk presets, default policy modes.
@@ -695,7 +724,7 @@ Both Linux/X11 and Android are first-class targets, both built with **Qt Widgets
 
 ### 19.1 What is platform-neutral (reused as-is)
 
-The data and logic layers carry over verbatim: the `TabTreeModel`, the canonical outline format and `TreeOutline` parser, the `PolicyEngine` rule model (packed tri-states, precedence, JSON), the `StateStore` blob model, the sort/filter proxy, the AI serialization and diff/accept pipeline, and the filter-list format. None of these touch platform APIs. That is the majority of the interesting code, and it is why the abstraction is worth it — the seams are thin edges around a shared core.
+The data and logic layers carry over verbatim: the `TabTreeModel`, the canonical outline format and `TreeOutline` parser, the `PolicyEngine` rule model (packed tri-states, precedence, INI), the `StateStore` blob model, the sort/filter proxy, the AI serialization and diff/accept pipeline, and the filter-list format. None of these touch platform APIs. That is the majority of the interesting code, and it is why the abstraction is worth it — the seams are thin edges around a shared core.
 
 ### 19.2 The critical seam — a WebView backend
 

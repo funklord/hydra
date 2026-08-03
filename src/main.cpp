@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "main_window.h"
+#include "settings_dialog.h"   // settings_store
+#include "theme.h"
 #ifdef Q_OS_ANDROID
 #include "android_dialogs.h"
 #endif
@@ -57,6 +59,19 @@ int main(int argc, char *argv[]) {
 	android_dialogs::install();
 #endif
 	app.setApplicationName("Hydra");
+
+	// The colour scheme, before anything is shown: applying it after the first
+	// window is up means a visible flash of the wrong theme, which is the sort
+	// of thing that looks like a bug in the window manager.
+	//
+	// The watcher outlives this scope and keeps following the desktop, so a
+	// system that switches at sunset takes Hydra with it. It only acts while the
+	// choice is "system" -- someone who picked Dark meant Dark.
+	auto *appearance = new theme::watcher(&app);
+	appearance->set_choice(settings_store::appearance());
+	// And the web engine, before anything creates a profile: this one is a
+	// startup flag rather than a live setting, for the reason theme.h explains.
+	theme::set_web_engine_scheme(theme::resolve(settings_store::appearance()));
 
 	// Every size is added rather than one image scaled, because the 16px cut is
 	// drawn pixel by pixel rather than resampled and would be thrown away by a

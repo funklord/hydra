@@ -28,6 +28,7 @@
 #include <QPushButton>
 #include <QTreeWidget>
 #include "settings_bundle.h"
+#include "theme.h"
 #include <QComboBox>
 #include <QLineEdit>
 #include <QEventLoop>
@@ -347,6 +348,9 @@ int main(int argc, char **argv) {
 		// A dialog of its own, with a couple of exceptions and a filter rule in
 		// it: a screenshot of every list in its empty state shows the furniture
 		// and none of the content, which is the half that is hard to get right.
+		// Both schemes, because a dark palette is exactly the kind of change that
+		// looks fine in a passing test and wrong on a screen.
+		theme::apply(theme::choice::dark);
 		policy_engine shot_policy;
 		shot_policy.set_setting("news.example", policy::feature::javascript,
 		                         policy::setting::block);
@@ -371,8 +375,7 @@ int main(int argc, char **argv) {
 			shot_cats->setCurrentRow(i);
 			spin(250);
 			QString name = shot_cats->item(i)->text();
-			name.remove('&');
-			name.replace(' ', '-');
+			name.replace(" & ", "-").replace(' ', '-');
 			if (shot.grab().save(QString("%1/%2.png").arg(shots, name.toLower())))
 				++saved;
 			// And the bottom of anything that scrolls. A picture of the top of a
@@ -415,6 +418,18 @@ int main(int argc, char **argv) {
 				}
 			}
 		}
+		// And again in light, for comparison.
+		theme::apply(theme::choice::light);
+		spin(200);
+		for (int i = 0; i < shot_cats->count(); ++i) {
+			shot_cats->setCurrentRow(i);
+			spin(180);
+			QString name = shot_cats->item(i)->text();
+			name.replace(" & ", "-").replace(' ', '-');
+			shot.grab().save(QString("%1/%2-light.png").arg(shots, name.toLower()));
+		}
+		theme::apply(settings_store::appearance());
+
 		check(saved == shot_cats->count(),
 		      QString("every page was captured to %1 (%2)").arg(shots).arg(saved));
 		check(too_wide == 0,
@@ -554,7 +569,7 @@ int main(int argc, char **argv) {
 		auto *restore = d.findChild<QPushButton *>("restore_defaults");
 		int filters_row = -1;
 		for (int i = 0; i < cats3->count(); ++i)
-			if (cats3->item(i)->text().remove('&') == "Filters")
+			if (cats3->item(i)->text() == "Filters")
 				filters_row = i;
 		check(filters_row >= 0, "there is a filters page");
 		cats3->setCurrentRow(filters_row);
@@ -609,6 +624,51 @@ int main(int argc, char **argv) {
 			      "why Export applies first");
 		}
 		QFile::remove(file);
+	}
+
+	section("the colour scheme, chosen and previewed");
+	{
+		// The decision logic has its own suite; what is checked here is the part
+		// only the dialog can get wrong -- that choosing repaints at once, and
+		// that Cancel puts back what was stored rather than leaving the window
+		// in a theme nobody agreed to.
+		settings_store::set_appearance(theme::choice::light);
+		theme::apply(theme::choice::light);
+
+		policy_engine p;
+		settings_dialog d(&players, &downloads, nullptr, nullptr, nullptr, &p);
+		d.show();
+		auto *pick = d.findChild<QComboBox *>("appearance");
+		check(pick != nullptr, "there is a colour-scheme control");
+		if (!pick) { std::printf("\n%d passed, %d failed\n", g_pass, g_fail); return 1; }
+		check(pick->count() == 3, "with system, light and dark");
+		check(pick->currentData().toInt() == int(theme::choice::light),
+		      "showing what is stored");
+
+		const int light_window =
+			QApplication::palette().color(QPalette::Window).lightness();
+		pick->setCurrentIndex(pick->findData(int(theme::choice::dark)));
+		check(QApplication::palette().color(QPalette::Window).lightness() <
+		          light_window,
+		      "choosing dark repaints immediately, so you can see what you chose");
+
+		d.reject();
+		check(QApplication::palette().color(QPalette::Window).lightness() ==
+		          light_window,
+		      "and Cancel puts the old scheme back");
+		check(settings_store::appearance() == theme::choice::light,
+		      "with nothing stored");
+
+		settings_dialog d2(&players, &downloads, nullptr, nullptr, nullptr, &p);
+		d2.show();
+		auto *pick2 = d2.findChild<QComboBox *>("appearance");
+		pick2->setCurrentIndex(pick2->findData(int(theme::choice::dark)));
+		d2.accept();
+		check(settings_store::appearance() == theme::choice::dark,
+		      "while OK stores it");
+
+		settings_store::set_appearance(theme::choice::system);
+		theme::apply(theme::choice::system);
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

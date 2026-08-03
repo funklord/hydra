@@ -62,6 +62,7 @@ endif()
 # Off for Android until the dependency is actually built for it. That is the
 # same "found, and the feature is on; absent, and it says so" rule the desktop
 # follows -- it just has to be asked the question in the right architecture.
+find_package(Qt6 6.4 QUIET COMPONENTS DBus)
 find_package(PkgConfig QUIET)
 # The guard has to be on the *query*, not on finding pkg-config: Qt's own
 # toolchain files look for it first, so PkgConfig_FOUND is already true by the
@@ -132,6 +133,8 @@ qt_add_executable(hydra
     src/request_filter.cpp
     src/bridge_invoker.cpp
     src/settings_bundle.cpp
+    src/theme.cpp
+    src/theme.h
     src/scheme_rules.cpp
     src/cosmetic_filters.cpp
     src/request_filter.h
@@ -253,6 +256,17 @@ if(NOT MSVC)
 endif()
 
 target_link_libraries(hydra PRIVATE Qt6::WebEngineWidgets)
+endif()
+
+# The desktop's colour scheme comes over the XDG portal, which is DBus. Optional
+# on purpose: it is how *Linux* answers, and Windows, macOS and Android all have
+# their own answer that Qt already reads. Without it the theme falls back to
+# Qt's hint and then to reading the palette it was given.
+if(TARGET Qt6::DBus)
+    target_link_libraries(hydra PRIVATE Qt6::DBus)
+    target_compile_definitions(hydra PRIVATE HYDRA_HAVE_DBUS)
+else()
+    message(STATUS "Qt6::DBus not found — the desktop colour-scheme portal will not be asked")
 endif()
 
 # The Android package's own files: manifest and launcher icons, generated from
