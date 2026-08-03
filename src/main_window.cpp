@@ -163,6 +163,27 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		}
 		m_status->showMessage(why, 6000);
 	});
+	// Offering to save, which is the one path that *writes* to the vault. Asked
+	// with a plain question naming the login and the site and never showing the
+	// password -- a prompt that displays it is a prompt that shoulder-surfs --
+	// and never remembered as a preference: "never for this site" is a policy
+	// decision and belongs in the shield beside the other per-site settings,
+	// not in a checkbox on a transient dialog.
+	connect(m_autofill, &autofill_controller::save_offered, this,
+	        [this](const QString &login, const QString &host) {
+		const QString who = login.isEmpty() ? QStringLiteral("this login")
+		                                     : login;
+		const bool yes = QMessageBox::question(
+		    this, "Save to KeePassXC?",
+		    QString("Save the password for %1 at %2?").arg(who, host)) ==
+		    QMessageBox::Yes;
+		m_autofill->confirm_save(yes);
+	});
+	connect(m_autofill, &autofill_controller::save_finished, this,
+	        [this](bool, const QString &message) {
+		m_status->showMessage(message, 6000);
+	});
+
 	connect(m_autofill, &autofill_controller::credentials_ready, this,
 	        [this](const QString &) {
 		if (!m_key_action)
@@ -625,6 +646,18 @@ QMenuBar *main_window::build_menu_bar() {
 	// Enabled on whether there is one to forget, asked now rather than assumed.
 	kpf->setEnabled(keepass_bridge::supported() &&
 	                keepass_bridge::pairing_is_stored());
+	// Generating is triggered from here rather than from the page. A page could
+	// be given a way to ask, and then a page could ask unprompted -- and a
+	// browser that hands out passwords because a script requested one is a
+	// browser with a new attack surface for no benefit. The shell asks, and the
+	// injected script puts the answer in the field that wanted it.
+	QAction *kpg = tools_menu->addAction("&Generate Password", this, [this] {
+		if (m_autofill)
+			m_autofill->request_generated_password(m_autofill->page_origin());
+	});
+	kpg->setStatusTip("Ask KeePassXC for a password and put it in this page's "
+	                   "new-password field");
+	kpg->setEnabled(keepass_bridge::supported());
 	tools_menu->addSeparator();
 	QAction *reorg = tools_menu->addAction("&Reorganize Tree with AI…", this,
                                         &main_window::open_reorganizer);

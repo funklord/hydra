@@ -46,6 +46,21 @@ public slots:
 	// --- Reachable from injected page scripts. Treat every argument as hostile.
 	void request_credentials(const QString &origin);
 
+	// A login form was submitted. The page is *offering* -- nothing is stored
+	// until a person says so, and the same origin gate applies: a page may
+	// offer a credential for the site it is actually on and for nothing else.
+	void offer_to_save(const QString &origin, const QString &login,
+	                    const QString &password);
+
+	// Ask KeePassXC for a password of its own devising. Reachable from the page
+	// because a registration form is where one is wanted; it returns nothing to
+	// the page except the password it generated, and stores nothing.
+	void request_generated_password(const QString &origin);
+
+	// The shell's answer to `save_offered`: store it, or do not. Called from the
+	// prompt, never from a page.
+	void confirm_save(bool yes);
+
 	// The shell's answer to `choice_needed`: which of the offered entries to
 	// fill, by index, or a negative number to fill nothing. Called from the
 	// picker, never from a page -- it is not a slot for that reason.
@@ -72,6 +87,15 @@ signals:
 	// which is the difference between a key that appears only when things work
 	// and a key that can tell you *why* they did not.
 	void requested();
+	// A credential was submitted that is worth offering to store. Carries the
+	// login and the host to name in the prompt and **not** the password: the
+	// prompt says "save the password for alice at bank.example", because a
+	// prompt that displays it is a prompt that shoulder-surfs.
+	void save_offered(const QString &login, const QString &host);
+	// What became of that.
+	void save_finished(bool ok, const QString &message);
+	// A password KeePassXC generated, on its way to the field that asked.
+	void generated_password(const QString &password);
 	// More than one entry matched, so a person has to say which. Carries the
 	// names and logins **without the passwords**: the picker shows what is
 	// needed to tell two accounts apart and no more, and the password is
@@ -88,6 +112,11 @@ private:
 	bool    m_https_only = true;
 	int     m_next_tag = 1;
 	int     m_pending  = 0;
+	// Separate tags per kind of request. One `m_pending` was enough while a
+	// fill was the only thing in flight; a save confirmed while a generate is
+	// outstanding would otherwise answer the wrong one.
+	int     m_save_tag     = 0;
+	int     m_generate_tag = 0;
 
 	// Entries waiting on a person to choose between them. Held **here** rather
 	// than handed to the page to sort out: the old arrangement sent every
@@ -100,6 +129,12 @@ private:
 	// after the page has moved is answered with nothing rather than with a
 	// password meant for somewhere else.
 	QString m_waiting_origin;
+	// A credential a page offered, held until a person answers the prompt. Same
+	// discipline as `m_waiting`: cleared on navigation, on answer, and never
+	// written anywhere until confirmed.
+	credential m_offered;
+	QString    m_offered_origin;
+
 	// That a question was outstanding when the page moved -- **not** the
 	// answers to it, which are gone by then. Two rules meet here and the suite
 	// found the seam: credentials must not survive a navigation, and a user who

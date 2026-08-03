@@ -175,9 +175,30 @@ void keepass_bridge::request_logins(const QString &url, int request_tag) {
 		emit error("Not associated with KeePassXC.");
 		return;
 	}
-	m_pending_tag = request_tag;
+	m_pending_tags.insert("get-logins", request_tag);
 	send_encrypted("get-logins",
 	                keepass_protocol::get_logins_request(url, m_assoc_id, m_id_key_b64));
+}
+
+void keepass_bridge::save_login(const QString &url, const QString &login,
+                                const QString &password, const QString &uuid,
+                                int request_tag) {
+	if (!associated()) {
+		emit error("Not associated with KeePassXC.");
+		return;
+	}
+	m_pending_tags.insert("set-login", request_tag);
+	send_encrypted("set-login", keepass_protocol::set_login_request(
+	                                 url, login, password, uuid, m_assoc_id, m_id_key_b64));
+}
+
+void keepass_bridge::generate_password(int request_tag) {
+	// No associated() check, unlike the other requests here: KeePassXC's
+	// generator does not touch the vault, so nothing about it should need a
+	// pairing (see keepass_protocol::generate_password_request). It still
+	// needs the handshake, which send_encrypted already refuses without.
+	m_pending_tags.insert("generate-password", request_tag);
+	send_encrypted("generate-password", keepass_protocol::generate_password_request());
 }
 
 void keepass_bridge::on_readable() {
@@ -241,10 +262,10 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 		// until the page navigated. That is every site not in the vault.
 		if (action == "get-logins" &&
 		    keepass_protocol::error_code(inner) == keepass_protocol::no_logins_found) {
-			emit logins(m_pending_tag, {});
+			emit logins(m_pending_tags.value(action), {});
 			return;
 		}
-		if (action == "test-associate")
+		if (action == "test-associate") {
 			// The stored pairing is deliberately *not* dropped here. A refused
 			// test-associate means "this KeePassXC does not accept it now",
 			// which is what a locked database, a different database, or a
@@ -253,8 +274,21 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 			// the user their pairing, and re-pairing is the one step that needs
 			// a human. Forgetting stays an explicit act.
 			emit associated_changed(false, err);
-		else
+		} else if (action == "set-login") {
+			emit login_saved(m_pending_tags.value(action), false, err);
+		} else if (action == "generate-password") {
+			// login_saved has an ok flag to carry this on; password_generated
+			// does not (see the header), so an empty password on the tagged
+			// signal is what tells the caller "this one failed" -- the same
+			// reasoning get-logins already follows for "no logins found", just
+			// without a special code to distinguish failure reasons here. The
+			// generic error() still fires too, since that is the only place a
+			// human-readable reason goes.
+			emit password_generated(m_pending_tags.value(action), QString());
 			emit error(err);
+		} else {
+			emit error(err);
+		}
 		return;
 	}
 
@@ -280,6 +314,12 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 	} else if (action == "test-associate") {
 		emit associated_changed(true, "Existing pairing accepted.");
 	} else if (action == "get-logins") {
-		emit logins(m_pending_tag, keepass_protocol::parse_logins(inner));
+		emit logins(m_pending_tags.value(action), keepass_protocol::parse_logins(inner));
+	} else if (action == "set-login") {
+		emit login_saved(m_pending_tags.value(action),
+		                 keepass_protocol::parse_set_login(inner), "Saved to KeePassXC.");
+	} else if (action == "generate-password") {
+		emit password_generated(m_pending_tags.value(action),
+		                        keepass_protocol::parse_generated_password(inner));
 	}
 }

@@ -66,6 +66,34 @@ QJsonObject get_databasehash_request() {
 	return o;
 }
 
+QJsonObject set_login_request(const QString &url, const QString &login,
+                              const QString &password, const QString &uuid,
+                              const QString &assoc_id, const QString &id_key_b64) {
+	QJsonObject key;
+	key.insert("id", assoc_id);
+	key.insert("key", id_key_b64);
+	QJsonArray keys;
+	keys.append(key);
+
+	QJsonObject o;
+	o.insert("action", "set-login");
+	o.insert("url", url);
+	o.insert("submitUrl", url);
+	o.insert("login", login);
+	o.insert("password", password);
+	o.insert("keys", keys);
+	// Empty means create; the header explains why this is the whole switch.
+	if (!uuid.isEmpty())
+		o.insert("uuid", uuid);
+	return o;
+}
+
+QJsonObject generate_password_request() {
+	QJsonObject o;
+	o.insert("action", "generate-password");
+	return o;
+}
+
 QJsonObject envelope(const QString &action, const QString &client_id,
                      const QString &nonce_b64, const QString &encrypted_b64) {
 	QJsonObject o;
@@ -130,6 +158,28 @@ QList<credential> parse_logins(const QJsonObject &reply) {
 			out.push_back(c);
 	}
 	return out;
+}
+
+bool parse_set_login(const QJsonObject &reply) {
+	QString err;
+	return !is_error(reply, &err);
+}
+
+QString parse_generated_password(const QJsonObject &reply) {
+	QString err;
+	if (is_error(reply, &err))
+		return QString();
+	// The direct field, if this KeePassXC sends it that way.
+	const QString direct = reply.value("password").toString();
+	if (!direct.isEmpty())
+		return direct;
+	// Otherwise the entries-array shape, sharing parse_logins' reading of it.
+	for (const QJsonValue &v : reply.value("entries").toArray()) {
+		const QString pw = v.toObject().value("password").toString();
+		if (!pw.isEmpty())
+			return pw;
+	}
+	return QString();
 }
 
 }  // namespace keepass_protocol

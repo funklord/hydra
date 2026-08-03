@@ -69,10 +69,20 @@ public:
 	// KeePassXC does its own URL matching and may prompt per site.
 	void request_logins(const QString &url, int request_tag);
 
+	// Ask KeePassXC to store a new or updated credential for `url`.
+	// `uuid` empty means create; non-empty updates that entry.
+	void save_login(const QString &url, const QString &login,
+	                const QString &password, const QString &uuid, int request_tag);
+
+	// Ask KeePassXC to generate a password using its own policy.
+	void generate_password(int request_tag);
+
 signals:
 	void ready();                                   // handshake done
 	void associated_changed(bool ok, const QString &message);
 	void logins(int request_tag, const QList<credential> &entries);
+	void login_saved(int request_tag, bool ok, const QString &message);
+	void password_generated(int request_tag, const QString &password);
 	void error(const QString &message);
 
 private:
@@ -88,7 +98,16 @@ private:
 	QString    m_client_id;
 	QString    m_assoc_id;
 	QString    m_id_key_b64;
-	int        m_pending_tag = 0;
+	// One pending tag per action rather than the single int this was before
+	// set-login and generate-password existed. A reply's own "action" field is
+	// the only thing that says which request it answers -- there is no
+	// request-id the server echoes back -- so get-logins, set-login and
+	// generate-password each need their own slot or they would stomp on each
+	// other whenever more than one is in flight (e.g. a save while a previous
+	// lookup's reply hasn't arrived yet). This does not make two *concurrent*
+	// requests of the *same* action safe -- that limitation already existed
+	// for get-logins alone, keyed on the action string instead of nothing.
+	QHash<QString, int> m_pending_tags;
 	bool       m_handshaken  = false;
 	QByteArray m_buffer;
 };

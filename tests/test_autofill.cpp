@@ -326,6 +326,104 @@ int main(int argc, char **argv) {
 		      "and a success reply has no code at all");
 	}
 
+	section("set-login: the message shape");
+	{
+		// Create: no uuid given.
+		const QJsonObject create = keepass_protocol::set_login_request(
+		    "https://bank.example", "alice", "hunter2", QString(), "assoc-1", "idkey-b64");
+		check(create.value("action").toString() == "set-login",
+		      "the action is set-login");
+		check(create.value("url").toString() == "https://bank.example",
+		      "the url travels");
+		check(create.value("submitUrl").toString() == "https://bank.example",
+		      "submitUrl is the same url -- there is only the one we were given");
+		check(create.value("login").toString() == "alice", "the login travels");
+		check(create.value("password").toString() == "hunter2",
+		      "the password travels");
+		check(!create.contains("uuid"), "no uuid means create, and none is sent");
+
+		const QJsonArray keys = create.value("keys").toArray();
+		check(keys.size() == 1, "the association proof is a one-element keys array, "
+		                        "the same shape get-logins sends");
+		check(keys.first().toObject().value("id").toString() == "assoc-1" &&
+		          keys.first().toObject().value("key").toString() == "idkey-b64",
+		      "carrying the same assoc id and key get-logins does");
+
+		// Update: uuid given.
+		const QJsonObject update = keepass_protocol::set_login_request(
+		    "https://bank.example", "alice", "hunter3", "entry-uuid-1", "assoc-1",
+		    "idkey-b64");
+		check(update.value("uuid").toString() == "entry-uuid-1",
+		      "a non-empty uuid means update, and travels on the wire");
+	}
+
+	section("generate-password: the request has nothing to configure");
+	{
+		const QJsonObject req = keepass_protocol::generate_password_request();
+		check(req.value("action").toString() == "generate-password",
+		      "the action is generate-password");
+		check(req.size() == 1,
+		      "and there is nothing else in it -- we ask, KeePassXC decides, "
+		      "per its own configured policy (§13.1)");
+	}
+
+	section("generate-password: both known reply shapes");
+	{
+		// Shape one: a bare "password" field.
+		QJsonObject direct;
+		direct.insert("success", "true");
+		direct.insert("password", "Tr0ub4dor&3");
+		check(keepass_protocol::parse_generated_password(direct) == "Tr0ub4dor&3",
+		      "a bare password field is read directly");
+
+		// Shape two: an "entries" array, the same shape get-logins uses.
+		QJsonObject viaEntries;
+		viaEntries.insert("success", "true");
+		QJsonArray entries;
+		QJsonObject entry;
+		entry.insert("password", "correct-horse-battery-staple");
+		entries.append(entry);
+		viaEntries.insert("entries", entries);
+		check(keepass_protocol::parse_generated_password(viaEntries) ==
+		          "correct-horse-battery-staple",
+		      "or an entries array is read the same way get-logins reads one -- "
+		      "which shape a given KeePassXC sends was not something this could "
+		      "verify offline (see keepass_protocol.h), so both are handled");
+
+		// Neither shape present.
+		QJsonObject empty;
+		empty.insert("success", "true");
+		check(keepass_protocol::parse_generated_password(empty).isEmpty(),
+		      "neither shape present parses to an empty string, not a crash");
+
+		// An error reply, same two shapes error() already covers.
+		QJsonObject failed;
+		failed.insert("error", "Action cancelled or timed out");
+		failed.insert("errorCode", "13");
+		check(keepass_protocol::parse_generated_password(failed).isEmpty(),
+		      "an error reply yields no password, whichever shape it would "
+		      "otherwise have carried one in");
+	}
+
+	section("set-login: parsing the reply");
+	{
+		// No "error" key at all -- is_error() treats the key's mere presence as
+		// failure regardless of its value (see the "code travels as a string"
+		// test above), which a real reply's own `"error": ""` would trip if
+		// this test copied it verbatim. A success reply this codebase already
+		// agrees is a success looks like the "fine" object further up.
+		QJsonObject ok;
+		ok.insert("success", "true");
+		check(keepass_protocol::parse_set_login(ok), "a success reply parses ok");
+
+		QJsonObject refused;
+		refused.insert("error", "public key not found");
+		refused.insert("errorCode", "1");
+		check(!keepass_protocol::parse_set_login(refused),
+		      "an error reply does not");
+	}
+
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

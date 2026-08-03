@@ -11,8 +11,28 @@
 autofill_controller::autofill_controller(keepass_bridge *bridge, policy_engine *policy,
                                           QObject *parent)
 	: QObject(parent), m_bridge(bridge), m_policy(policy) {
-	if (m_bridge)
+	if (m_bridge) {
 		connect(m_bridge, &keepass_bridge::logins, this, &autofill_controller::on_logins);
+		connect(m_bridge, &keepass_bridge::login_saved, this,
+		        [this](int tag, bool ok, const QString &message) {
+			if (tag != m_save_tag || m_save_tag == 0)
+				return;
+			m_save_tag = 0;
+			emit save_finished(ok, ok ? QStringLiteral("Saved to KeePassXC.")
+			                          : message);
+		});
+		connect(m_bridge, &keepass_bridge::password_generated, this,
+		        [this](int tag, const QString &password) {
+			if (tag != m_generate_tag || m_generate_tag == 0)
+				return;
+			m_generate_tag = 0;
+			if (password.isEmpty()) {
+				emit refused("KeePassXC did not return a password.");
+				return;
+			}
+			emit generated_password(password);
+		});
+	}
 }
 
 void autofill_controller::set_page_origin(const QString &origin) {
@@ -26,6 +46,11 @@ void autofill_controller::set_page_origin(const QString &origin) {
 		m_choice_went_stale = true;
 	m_waiting.clear();
 	m_waiting_origin.clear();
+	// An unanswered save prompt goes with the page that raised it. Storing a
+	// credential after navigating would attach it to whichever site is open
+	// when the user finally clicks, which is not the one they typed it into.
+	m_offered = credential{};
+	m_offered_origin.clear();
 }
 
 QString autofill_controller::blocked_reason(const QString &origin) const {
@@ -67,6 +92,62 @@ void autofill_controller::request_credentials(const QString &origin) {
 	}
 	m_pending = m_next_tag++;
 	m_bridge->request_logins(m_origin, m_pending);
+}
+
+void autofill_controller::offer_to_save(const QString &origin,
+                                        const QString &login,
+                                        const QString &password) {
+	// The same gate as a fill, and for a stronger reason: a fill hands a
+	// credential to a page that may already know it, while a save writes into
+	// the vault. A page must not be able to put an entry under another site's
+	// name.
+	const QString why = blocked_reason(origin);
+	if (!why.isEmpty()) {
+		emit refused(why);
+		return;
+	}
+	if (password.isEmpty())
+		return;   // nothing to store; not worth a prompt
+
+	m_offered        = credential{ QString(), login, password };
+	m_offered_origin = m_origin;
+	emit save_offered(login, QUrl(m_origin).host());
+}
+
+void autofill_controller::confirm_save(bool yes) {
+	const credential offered = m_offered;
+	const QString origin = m_offered_origin;
+	// Taken and cleared first, so a second answer to the same prompt stores
+	// nothing -- the same rule `choose` follows, for the same reason.
+	m_offered = credential{};
+	m_offered_origin.clear();
+
+	if (!yes || offered.password.isEmpty())
+		return;
+	if (origin.isEmpty() || origin != m_origin) {
+		emit save_finished(false, "The page changed before that was saved, so "
+		                          "nothing was stored.");
+		return;
+	}
+	if (!m_bridge) {
+		emit save_finished(false, "Not connected to KeePassXC.");
+		return;
+	}
+	m_save_tag = m_next_tag++;
+	m_bridge->save_login(origin, offered.login, offered.password, QString(),
+	                      m_save_tag);
+}
+
+void autofill_controller::request_generated_password(const QString &origin) {
+	const QString why = blocked_reason(origin);
+	if (!why.isEmpty()) {
+		emit refused(why);
+		return;
+	}
+	if (!m_bridge)
+		return;
+	m_generate_tag = m_next_tag++;
+	m_bridge->generate_password(m_generate_tag);
 }
 
 void autofill_controller::offer_for_test(const QList<credential> &entries) {

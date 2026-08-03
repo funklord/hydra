@@ -19,6 +19,11 @@ policy.json
 # it. See evidence/README.md, which is itself ignored.
 /evidence/
 
+# Agent worktrees and session scratch. `.claude/worktrees/` holds entire
+# checkouts of this repo, so an unguarded `git add -A` would stage a copy of
+# the tree inside itself.
+/.claude/
+
 # Editor / OS cruft
 *.user
 .DS_Store

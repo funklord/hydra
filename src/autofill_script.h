@@ -90,6 +90,43 @@ inline const char *source() {
     }
   }
 
+  // What was in the login fields when the page was submitted.
+  //
+  // Watched in the **capture phase on the document**, for the same reason the
+  // element picker is: a page that stops its own submit event, or submits by
+  // calling form.submit() from a click handler, never reaches a listener bound
+  // to the form. This still misses a login posted by fetch() with no form
+  // involved -- said plainly rather than left to be discovered, because "the
+  // save prompt did not appear" is otherwise indistinguishable from a bug.
+  function watchSubmits(af) {
+    const report = function () {
+      for (const pw of passwordFields()) {
+        const user = usernameFor(pw);
+        // Nothing typed, nothing to offer. A prompt on an empty form is worse
+        // than no prompt: it teaches people to dismiss it.
+        if (!pw.value) continue;
+        af.offer_to_save(String(location.origin),
+                         user ? String(user.value || '') : '',
+                         String(pw.value));
+        return;
+      }
+    };
+    document.addEventListener('submit', report, true);
+    // And the button, because a form that never fires submit is common enough
+    // to be the normal case on single-page sites.
+    document.addEventListener('click', function (ev) {
+      const t = ev.target;
+      if (!t || !t.closest) return;
+      const b = t.closest('button, input[type=submit]');
+      if (!b) return;
+      const type = (b.getAttribute('type') || '').toLowerCase();
+      if (type && type !== 'submit') return;
+      // After the page has had the click, so a handler that fills a field on
+      // click is not read before it runs.
+      setTimeout(report, 0);
+    }, true);
+  }
+
   function connect() {
     // Wait for the page's shared channel rather than the raw transport: it is
     // what hands out the bridge objects now.
@@ -103,6 +140,17 @@ inline const char *source() {
       window.__hydraRequestFill = function () {
         af.request_credentials(String(location.origin));
       };
+      // Only where there is a password field to submit. A page with no login
+      // form does not need a submit watcher, and not installing one is cheaper
+      // than filtering its reports later.
+      if (passwordFields().length) watchSubmits(af);
+      // A generated password goes into the field that asked for it.
+      af.generated_password.connect(function (pw) {
+        if (!pw) return;
+        for (const f of passwordFields())
+          if ((f.autocomplete || '').toLowerCase() === 'new-password' ||
+              passwordFields().length === 1) { setValue(f, pw); break; }
+      });
       if (passwordFields().length) window.__hydraRequestFill();
     });
   }
