@@ -80,12 +80,18 @@ rebuild; the Qt 6.11 and Android trees do not, and cost a full configure and
 build to recreate.
 
 **The part worth knowing before relying on it:** the raw `ev-*.json` evidence
-captures from the extractor-loop runs are scratch too. Every conclusion drawn
-from them is written up in the sections below — that is what those sections are
-for — but the underlying captures are gone, so *re-analysing* an old run means
-re-capturing it rather than re-reading it. If a run produces evidence worth
-arguing with later, copy it somewhere durable at the time, or write down enough
-that the argument does not need the file.
+captures from the extractor-loop runs were scratch too, and every one taken
+before 2026-08-03 is gone. Every conclusion drawn from them is written up in the
+sections below — that is what those sections are for — but the captures
+themselves went with their sessions, so *re-analysing* one of those old runs
+means re-capturing it, which is not the same thing: the site has moved on since.
+
+**There is somewhere durable to put them now: `evidence/`.** It is in
+`.gitignore` beside `state/`, so captures survive the session without being
+committed — a capture is a few dozen urls belonging to somebody else's site,
+some with tokens in them, and publishing one is a separate decision from keeping
+one. `evidence/README.md` says what each capture is and how to replay it. Put a
+capture there at the time if its numbers are going to be argued with later.
 
 ### ⚠️ Do not build with unbounded `-j`
 

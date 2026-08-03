@@ -11,6 +11,13 @@ qrc_*.cpp
 /state/
 policy.json
 
+# Captured evidence from live pages. Kept on disk on purpose -- the conclusions
+# in project.md refer to these and re-capturing is not re-reading, since the
+# site moves on -- but not committed: a capture is somebody else's urls, some
+# with tokens in them, and publishing one is a separate decision from keeping
+# it. See evidence/README.md, which is itself ignored.
+/evidence/
+
 # Editor / OS cruft
 *.user
 .DS_Store
