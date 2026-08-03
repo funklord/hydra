@@ -74,6 +74,8 @@ private:
 	// written anywhere until OK, which is why it needs no confirmation dialog:
 	// Cancel is the undo.
 	void restore_page_defaults(int page);
+	void export_settings();
+	void import_settings();
 	void update_restore_button();
 	void rebuild_site_rules();
 	void index_pages(QWidget *page, int page_index);
@@ -135,6 +137,7 @@ private:
 	QTreeWidget          *m_exceptions      = nullptr;
 	QPushButton          *m_exception_drop  = nullptr;
 	QLabel               *m_exception_note  = nullptr;
+	QLabel               *m_bundle_note     = nullptr;
 	// Removals are pending until OK, like every other control on this dialog.
 	// The shield applies immediately because it is a menu on a live page; a
 	// dialog with a Cancel button that had already discarded rules would be

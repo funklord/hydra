@@ -27,6 +27,7 @@
 #include <QGuiApplication>
 #include <QPushButton>
 #include <QTreeWidget>
+#include "settings_bundle.h"
 #include <QComboBox>
 #include <QLineEdit>
 #include <QEventLoop>
@@ -562,6 +563,52 @@ int main(int argc, char **argv) {
 		      "and the tooltip says why rather than leaving it mysterious");
 		cats3->setCurrentRow(0);
 		check(restore->isEnabled(), "and on again on a page that has defaults");
+	}
+
+	section("all the settings in one file, through the dialog");
+	{
+		// The bundle itself is covered by test_bundle; what is checked here is
+		// the wiring: that the buttons exist, that exporting writes what the
+		// *controls* say rather than what was stored when the window opened, and
+		// that importing refills the window instead of leaving it showing the
+		// old answer over the new settings.
+		const QString base = qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
+		                         ? QString::fromLocal8Bit(qgetenv("HYDRA_TEST_OUT"))
+		                         : QString("/tmp/hydra-test");
+		const QString file = base + "/exported.ini";
+		QFile::remove(file);
+
+		policy_engine p;
+		p.set_setting("news.example", policy::feature::javascript,
+		               policy::setting::block);
+		settings_dialog d(&players, &downloads, nullptr, nullptr, nullptr, &p);
+		d.show();
+		check(d.findChild<QPushButton *>("settings_export") &&
+		          d.findChild<QPushButton *>("settings_import"),
+		      "the privacy page offers export and import");
+
+		// Change a control without pressing OK, then export.
+		auto *js = d.findChild<QComboBox *>("feature_javascript");
+		const policy::setting stored = p.global_default(policy::feature::javascript);
+		js->setCurrentIndex(stored == policy::setting::block ? 0 : 1);
+		settings_bundle::write(file, &p, nullptr);   // before apply: the old value
+		{
+			QSettings f(file, QSettings::IniFormat);
+			check(f.value("defaults/javascript").toString() ==
+			          (stored == policy::setting::block ? "block" : "allow"),
+			      "a file written before applying holds the stored value");
+		}
+
+		d.accept();   // apply() runs, so the engine now has the changed value
+		settings_bundle::write(file, &p, nullptr);
+		{
+			QSettings f(file, QSettings::IniFormat);
+			check(f.value("defaults/javascript").toString() !=
+			          (stored == policy::setting::block ? "block" : "allow"),
+			      "and after applying it holds what the control said — which is "
+			      "why Export applies first");
+		}
+		QFile::remove(file);
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

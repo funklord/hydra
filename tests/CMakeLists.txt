@@ -72,7 +72,7 @@ add_executable(test_settings test_settings.cpp
     ${H}/media_detector.cpp ${H}/ollama_provider.cpp ${H}/claude_provider.cpp
     ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/request_filter.cpp
     ${H}/filter_list.cpp ${H}/site_rules.cpp ${H}/scheme_rules.cpp
-    ${H}/cosmetic_filters.cpp
+    ${H}/cosmetic_filters.cpp ${H}/settings_bundle.cpp
     ${H}/ai_provider.h)
 target_link_libraries(test_settings PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
 
@@ -106,7 +106,7 @@ add_executable(test_probe_ui test_probe_ui.cpp
     ${H}/media_detector.cpp ${H}/ollama_provider.cpp ${H}/claude_provider.cpp
     ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/request_filter.cpp
     ${H}/filter_list.cpp ${H}/site_rules.cpp ${H}/scheme_rules.cpp
-    ${H}/cosmetic_filters.cpp
+    ${H}/cosmetic_filters.cpp ${H}/settings_bundle.cpp
     ${H}/ai_provider.h)
 target_link_libraries(test_probe_ui PRIVATE Qt6::Widgets Qt6::Network Qt6::Test)
 
@@ -155,6 +155,11 @@ add_executable(test_signals test_signals.cpp ${H}/filter_signals.cpp
     ${H}/filter_list.cpp)
 target_link_libraries(test_signals PRIVATE Qt6::Core Qt6::Test)
 target_include_directories(test_signals PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(test_bundle test_bundle.cpp ${H}/settings_bundle.cpp
+    ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/filter_list.cpp)
+target_link_libraries(test_bundle PRIVATE Qt6::Core Qt6::Test)
+target_include_directories(test_bundle PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test_diff test_diff.cpp ${H}/tree_diff.cpp)
 target_link_libraries(test_diff PRIVATE Qt6::Core Qt6::Test)

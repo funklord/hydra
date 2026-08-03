@@ -35,6 +35,7 @@
 #include <QListWidget>
 #include <QStackedWidget>
 #include "policy_engine.h"
+#include "settings_bundle.h"
 #include <QHBoxLayout>
 #include <QFrame>
 #include <QPalette>
@@ -670,6 +671,29 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	v->addLayout(drop_row);
 	rebuild_exceptions();
 
+	// --- All of it in one file ----------------------------------------------
+	v->addWidget(section_heading("Settings file", page));
+	m_bundle_note = dim_label(
+		"Everything on these pages, plus the site exceptions above and the "
+		"accepted filter rules, in one INI file you can read, edit and carry to "
+		"another machine.\n\nIt does not include your tabs, which have their own "
+		"file, the Claude API key, which is never written to disk, or the "
+		"learned site rules — those are imported on the Filters page, where each "
+		"one is reviewed before it takes effect.", page);
+	v->addWidget(m_bundle_note);
+
+	auto *bundle_row = new QHBoxLayout;
+	auto *do_export = new QPushButton("E&xport all settings…", page);
+	do_export->setObjectName("settings_export");
+	auto *do_import = new QPushButton("Im&port settings…", page);
+	do_import->setObjectName("settings_import");
+	connect(do_export, &QPushButton::clicked, this, &settings_dialog::export_settings);
+	connect(do_import, &QPushButton::clicked, this, &settings_dialog::import_settings);
+	bundle_row->addWidget(do_export);
+	bundle_row->addWidget(do_import);
+	bundle_row->addStretch(1);
+	v->addLayout(bundle_row);
+
 	// What used to be a footnote about cookie consent banners is now the
 	// description on that row itself, where somebody reading that row will see
 	// it. The one thing the row has no space for is the consequence, which is
@@ -783,6 +807,48 @@ void settings_dialog::restore_page_defaults(int page) {
 
 	update_custom_state();
 	update_ai_state();
+}
+
+void settings_dialog::export_settings() {
+	const QString path = QFileDialog::getSaveFileName(
+		this, "Export settings", QDir::homePath() + "/hydra-settings.ini",
+		"Settings files (*.ini)");
+	if (path.isEmpty())
+		return;
+
+	// The controls first. Exporting before applying would write the settings as
+	// they were when the window opened, which is the one thing nobody means by
+	// "export what I have".
+	apply();
+	apply_kiosk();
+	const settings_bundle::summary s =
+		settings_bundle::write(path, m_policy, m_filters);
+	m_bundle_note->setText(
+		s.ok() ? QString("Wrote %1 to %2.").arg(s.describe(), path)
+		       : QString("<b>%1</b>").arg(s.error.toHtmlEscaped()));
+}
+
+void settings_dialog::import_settings() {
+	const QString path = QFileDialog::getOpenFileName(
+		this, "Import settings", QDir::homePath(), "Settings files (*.ini)");
+	if (path.isEmpty())
+		return;
+
+	const settings_bundle::summary s =
+		settings_bundle::read(path, m_policy, m_filters);
+	if (!s.ok()) {
+		m_bundle_note->setText(QString("<b>%1</b>").arg(s.error.toHtmlEscaped()));
+		return;
+	}
+
+	// The dialog is now showing what was here before the file was read, so the
+	// controls are refilled from what the import actually applied. Without this
+	// the window would still say "allow" over a policy that now says "block",
+	// and pressing OK would write the stale answer back over the import.
+	load();
+	rebuild_exceptions();
+	rebuild_filter_list();
+	m_bundle_note->setText(QString("Read %1 from %2.").arg(s.describe(), path));
 }
 
 void settings_dialog::rebuild_exceptions() {

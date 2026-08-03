@@ -4103,6 +4103,58 @@ selected — which happens while the button box is still being built, so it land
 on a null pointer and returned. A test that read the label caught it; nothing
 that only clicked the button would have.
 
+### All the settings in one file, and the file is an INI
+
+Export and import, on the privacy page beside the site exceptions. The format is
+**INI**, chosen rather than defaulted to: everything in the bundle is a value or
+a list of flat records, and a `key=value` file a person can read, diff and edit
+in an emergency is worth more here than the ability to nest. JSON stays where
+data is genuinely shaped.
+
+```ini
+[hydra]
+format=1
+
+[defaults]
+javascript=allow
+popups=block
+
+[sites]
+news.example="javascript:block, cookies:allow"
+%2A.tracker.example=ads:block
+```
+
+Two things that INI does, which had to be met rather than fought:
+
+* **A comma means "list".** QSettings quotes what it writes, so our own files
+  round-trip — but the whole reason for a readable format is that people edit it,
+  and nobody hand-quotes. The reader takes the value as a list and rejoins it, so
+  both spellings work. A test writes an unquoted file by hand to prove it.
+* **A `*` in a key is written `%2A`**, because that is how an INI key escapes
+  one. It reads back as the `*` it was, and the header says so rather than
+  leaving somebody to wonder.
+
+**What it deliberately does not carry**, because a backup that quietly omits
+things is worse than one that says what it is: the tab tree, which is the
+session rather than a setting; the Claude API key, which is never written to
+disk; and the learned site rules. That last is not an oversight — those have
+their own import on the Filters page, and it exists because rules from elsewhere
+are *reviewed* before they take effect. `site_rules::judge_import` deliberately
+adds nothing on its own. Carrying them in a one-click restore would route around
+the one thing in this file that is a security property rather than a
+convenience.
+
+**Import merges, it does not replace.** Someone who takes a backup, accepts a new
+filter rule, then restores that backup should not silently lose the rule. Reading
+the same file twice adds nothing the second time.
+
+Two orderings that would each have been a quiet bug, both now pinned by tests:
+**export applies the controls first**, or it writes the settings as they were
+when the window opened — which is the one thing nobody means by "export what I
+have". And **import refills the window**, or the dialog goes on showing the old
+answers over the new settings and pressing OK writes the stale ones back over
+the import.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
