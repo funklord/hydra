@@ -18,6 +18,7 @@
 #include <QTimer>
 #include <QThread>
 #include <QElapsedTimer>
+#include <functional>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -27,6 +28,32 @@ static void check(bool ok, const QString &w) {
 }
 static void section(const char *n) { std::printf("\n== %s ==\n", n); }
 static void spin(int ms) { QEventLoop l; QTimer::singleShot(ms, &l, &QEventLoop::quit); l.exec(); }
+
+// Wait for the thing that has to happen, not for a number of milliseconds.
+//
+// This suite used to click a button and then `spin(400)`, `spin(600)`,
+// `spin(800)` before asserting on the result. That is a bet that judging beats
+// the clock, and on a loaded machine it sometimes did not -- a whole section
+// would fail together because the verdict had not arrived yet, which is the
+// shape of the intermittent failures recorded in project.md. A generous deadline
+// with an early exit costs nothing when things are fast and cannot lie in that
+// direction when they are slow.
+//
+// The same lesson the subframe tap taught, in the same file it was written down
+// in: a fixed wait is an instrument that invents results.
+static bool wait_for(const std::function<bool()> &done, int max_ms = 10000) {
+	QElapsedTimer t;
+	t.start();
+	while (!done() && t.elapsed() < max_ms)
+		spin(20);
+	return done();
+}
+
+// Judging is finished when the dialog has a verdict to show.
+static bool judged(QWidget *dlg) {
+	auto *v = dlg->findChild<QLabel *>("verdict");
+	return v && !v->text().isEmpty();
+}
 
 // Answers with whatever it was told to, on the next turn of the event loop.
 class stub_provider : public ai_provider {
@@ -136,7 +163,7 @@ int main(int argc, char **argv) {
 		check(apply && !apply->isEnabled(), "and nothing can be accepted yet");
 
 		send->click();
-		spin(400);
+		wait_for([&] { return judged(&dlg); });
 
 		check(!prov.last_payload.isEmpty(), "the payload was sent");
 		check(prov.last_payload.contains("cf-master"),
@@ -146,7 +173,7 @@ int main(int argc, char **argv) {
 		check(apply->isEnabled(), "a valid proposal becomes acceptable");
 
 		apply->click();
-		spin(200);
+		wait_for([&] { return store.has("site.example"); });
 		check(store.has("site.example"), "accepting stores it for the host");
 		check(store.source_for("site.example").contains("cf-master"),
 		      "with the script itself");
@@ -164,7 +191,7 @@ int main(int argc, char **argv) {
 		dlg.show();
 		spin(200);
 		button(&dlg, "Send")->click();
-		spin(400);
+		wait_for([&] { return judged(&dlg); });
 
 		QPushButton *apply = button(&dlg, "Use This");
 		check(apply && !apply->isEnabled(),
@@ -226,7 +253,7 @@ int main(int argc, char **argv) {
 		      "the playlist was identified despite its .txt extension");
 
 		send->click();
-		spin(600);
+		wait_for([&] { return judged(&dlg); });
 
 		QPushButton *apply = button(&dlg, "Use This");
 		check(apply && !apply->isEnabled(),
@@ -244,7 +271,7 @@ int main(int argc, char **argv) {
 		              "  return null;\n"
 		              "};";
 		send->click();
-		spin(800);
+		wait_for([&] { return apply && apply->isEnabled(); });
 		check(apply && apply->isEnabled(), "while the playlist itself is accepted");
 		}
 	}
@@ -335,7 +362,7 @@ int main(int argc, char **argv) {
 		      "and the transcript is hidden before anything has been done");
 
 		button(&dlg, "Send")->click();
-		spin(400);
+		wait_for([&] { return transcript && transcript->isVisible(); });
 
 		check(transcript && transcript->isVisible(),
 		      "after a helper-tier run it is shown");
@@ -445,7 +472,7 @@ int main(int argc, char **argv) {
 		dlg.show();
 		spin(200);
 		button(&dlg, "Send")->click();
-		spin(400);
+		wait_for([&] { return judged(&dlg); });
 
 		QPushButton *apply = button(&dlg, "Use This");
 		check(apply && !apply->isEnabled(), "it cannot be accepted");

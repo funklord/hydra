@@ -3364,6 +3364,262 @@ The media dialog said "Queued download to
 a path that is long, unopenable, and no longer where the file ends up. On Android
 it now says "Queued. It will appear in Downloads when it finishes."
 
+**The flake, and a cause found by reading rather than by catching it.**
+`test_extloop` failed five times over this session — 28, 21, 27, 27 and 27 of 34
+— always inside a longer run, never on demand. Seven attempts to reproduce it
+failed: alone, under load, after specific other suites, replaying the failing
+sequence, whole-list passes, capturing every run, and a cold-relink theory that
+looked promising and was not.
+
+Reading the suite found what watching it could not. Seven places did
+`send->click()` and then `spin(400)`, `spin(600)`, `spin(800)` before asserting
+on the verdict — **a bet that judging beats a fixed clock.** When it does not,
+every check in that section fails together, which is exactly the shape of the
+failures: not one assertion, a group. This project has been bitten by a fixed
+wait before and wrote it down — *"a fixed wait is an instrument that invents
+results"* — in the subframe-tap section of this same file. The instrument was
+still in the drawer.
+
+Each is now a wait on the condition itself, with a ten-second deadline and an
+early exit, so a fast machine pays nothing and a slow one is not lied to.
+
+**What is honestly claimed:** the fixed waits were wrong regardless, and they are
+gone. Twenty-five consecutive runs pass since. What is *not* claimed is a
+demonstrated fix — the failure was never reproduced on demand, so it cannot be
+reproduced against the change either. If it returns, the suite now prints the
+numbers it compared and no longer contains the most likely explanation.
+
+`try_downloads` and `try_capture` are excluded from this comparison on purpose:
+they assert nothing, so they cannot disagree.
+
+### The filter list was never enforced
+
+Setting out to test the ad-host predicate turned up something larger: **every
+rule the filter-evolution loop ever produced did nothing.**
+
+`filter_list::blocks()` existed, was correct, and had no caller in the request
+path. Rules were proposed by the AI, put through the breadth check and the
+dry-run, accepted by the user, written to `filters-ai.txt`, reloaded at startup
+and listed in the settings dialog — and then no request was ever compared against
+them. The architecture assigns filter enforcement to spine 1, the interceptor
+(§12, table row "Filter evolution … Spines 1+3"), so this was a missing wire, not
+a deferral. Every part of the loop worked except the one that mattered, which is
+why nothing looked wrong.
+
+`request_filter` now takes the list and consults it, gated behind the same
+per-site `ads` setting as the seed hosts: turning ads back on for a site the
+shield says is broken has to turn *all* of this off, or the escape hatch only
+half works and the page still fails for a reason the user was told they had
+disabled.
+
+**And the thing that looked like the next obvious fix was a trap.**
+`filter_rule::scope` is documented as "domain for a site-specific rule" and
+`blocks()` ignored it, so honouring it looks like a bug fix. It is not:
+`parse_rule` fills that field with two different things — the site for a cosmetic
+rule, and *the host being blocked* for `||host^` — and `evaluate()`'s breadth
+check depends on the second meaning. Comparing a blocked host against the
+visiting site would have matched almost nothing and silently disabled every
+network rule. A whole feature turned off by a change that reads as a repair. The
+suite now pins both meanings so it is not attempted twice.
+
+What that ambiguity *had* broken is smaller and real: the settings dialog's
+"Applies to" column printed `scope` directly, so a global tracker rule was
+listed as though it only applied on the tracker's own domain. Network rules are
+global here — per-site ones want `$domain=`, which this parser does not read —
+and the column says so now.
+
+**Proved end to end, and it finally unblocks the ad-host predicate**, which the
+notes have carried as "mechanism verified, matching untested" because pointing a
+name like `doubleclick.net` at a local server needs `/etc/hosts` or
+`--host-resolver-rules`, and Qt mangles the latter by splitting the environment
+variable on spaces. The predicate never cared what the name was. `try_filters`
+puts the page on `127.0.0.1` and its beacon on `127.0.0.2` — two hosts, both
+loopback, no DNS — and runs the controlled pair: with `||127.0.0.2^` accepted the
+beacon never reaches the server; with ads allowed for the site it does; blocked
+again, it stops; with the rule removed, it arrives. Fresh url each time, because
+a cached image goes unrequested for reasons that have nothing to do with
+filtering and looks identical in the log.
+
+### The cosmetic half, and the bug it uncovered
+
+`##` rules hide elements rather than blocking requests, so they cannot ride the
+interceptor — they have to reach the page. `cosmetic_filters` is that path: the
+shell says which host is on screen, an injected script asks for that host's
+selectors, and writes them into one stylesheet. `display: none !important`
+rather than removing nodes, because a removed node changes the page's own DOM in
+ways its scripts notice, and a stylesheet also applies to elements that do not
+exist yet — which is most of them, since this runs before the page's content.
+
+The page never names the host, the same way the consent bridge works: otherwise
+any site could ask what rules exist for any other, which leaks what the user has
+been doing.
+
+**It worked on the desktop and did nothing on Android**, and finding out why was
+worth more than the feature. The bridge was reachable there — `hydraCosmetic`
+appeared in the page's bridge list with no Android-specific work, which is what
+the shared `bridge_invoker` was for — but it answered `[]`. Rather than reason
+about it, I put the two facts on the wire behind `HYDRA_FILTER_DEBUG`: the rule
+file **was** read, one rule; `set_page_host` was **never called**.
+
+The cause was in the shell, not in either backend:
+
+* **Switching tabs never updated the page context at all.** It was set in exactly
+  one place — the current view's `url_changed` — and activating an already-loaded
+  tab navigates nothing, so the consent blocker went on answering `active_now()`
+  and `rules_json()` for the *previous* tab's site. A bridge built so the page
+  cannot name its own host is not much use if the shell then names the wrong one.
+  That was a desktop bug too, and had been one for as long as the bridge existed.
+* **The ordering only ever worked by accident.** `activate_node()` calls
+  `view->load()` before `setCurrentWidget()`. Qt WebEngine emits `urlChanged`
+  asynchronously, so the signal landed *after* the switch and the
+  `view == current_view()` test passed. The Android backend emits it from inside
+  `load()`, synchronously, so it arrived while the previous view was still
+  current, the test failed, and nothing was ever set.
+
+`sync_page_context()` now reads whatever is current, after the switch, and is
+called from both places. It cannot depend on which way a backend emits, because
+it does not listen for an emission.
+
+Verified on both: on the desktop the advert computes to `display: none` in the
+page's own view while the element beside it does not, and on the phone the same
+page comes up with the red block gone and the green one intact —
+`selectors=[".ad-banner"]`, `style_el=present`, `ad=none`, `keep=block`, over the
+same bridge, with no Android code written for it.
+
+### The KeePassXC bridge finally met KeePassXC
+
+`keepassxc` is installed now, so the last of "wired but never run" could run —
+and this project's defect history says that category is where the defects are.
+
+Set up so it disturbs nothing: its own config file, its own database, one entry,
+browser integration on. The socket appears at exactly the path `socket_path()`
+computes, `start()`'s change-public-keys exchange **completes**, the connection
+stays up after it, and a saved-but-unknown pairing is refused with KeePassXC's
+own answer rather than a guess — *"association failed, try again (code 8)"*. That
+is the case on every first run after settings are copied to a new machine, and
+"no" is the right answer for it.
+
+So the transport, the framing and the sodium key exchange work against the real
+other end, first try. Seven checks, none of them previously exercised by
+anything.
+
+**And the driver's own precondition was lying.** It reported "KeePassXC is
+listening where the bridge expects it" after checking `QFile::exists` on the
+socket path — which is a symlink into the runtime directory that **outlives the
+process**. When KeePassXC exited, the driver announced a listening server and
+then failed the handshake: the one check whose job was to establish the
+precondition was the one making it up. It connects now, and distinguishes "no
+socket at all" from "a stale socket left by a KeePassXC that has exited". A test
+that reports a passing precondition it never tested is worse than having none.
+
+**Pairing is not automated, deliberately.** `associate()` makes KeePassXC ask a
+human whether this program may read the vault — that prompt *is* the security
+boundary, and a browser able to answer it for itself would be the bug. The driver
+skips it unless `HYDRA_KEEPASS_INTERACTIVE=1` says a person is watching, and
+prints which checks went unrun rather than passing quietly without them. The
+remaining ones are behind that flag: association, a login request for a url the
+vault knows, and one for a url it does not.
+
+### Handing a stream to a player, on a phone
+
+The desktop names a player and starts a process. Android has neither, so §19's
+answer is an intent: `ACTION_VIEW` with the url and a media type, and whichever
+app the user has takes it. `player_launcher` grows one entry there — "System
+player", always present, always cautious about manifests, because which app
+answers is the system's choice and not knowable from here.
+
+The media type matters more than it looks. With none, the chooser offers every
+app that claims `http`, which on most devices means a browser — and handing the
+stream to a browser is a loop back to where it came from. `media_mime_for()` is
+shared and tested for that reason, and unrecognised urls get `video/*` rather
+than a guess at the container.
+
+**Driven on the device, and it turned up two bugs that had nothing to do with
+intents.**
+
+**Dialogs were invisible.** Tapping "Media (1)" depressed the button and showed
+nothing at all. The header had always said the native WebView sits above
+everything Qt draws; what it had not said is that this makes Qt's own dialogs
+unreachable, which is not a caveat but a bug. Qt announces the condition — a
+window covered by a modal dialog is sent `WindowBlocked`, and `WindowUnblocked`
+when it closes — so the view hides for exactly that span rather than guessing.
+
+**And then the dialog did not fit.** It came up wider than the screen, list
+visible and buttons off the right edge, with no way to scroll a dialog to reach
+them. Every dialog here was laid out for a desktop where the screen is wider than
+the contents ask for. On Android they now fill the available screen, applied by
+one application-wide event filter rather than thirty constructors.
+
+With both fixed: the media dialog shows `clip.mp4`, **Watch** hands it over, and
+`com.android.gallery3d/.app.MovieActivity` comes to the front with our url. It
+then fails to play it — `MediaPlayerNative error (1, -2147483648)` and no request
+ever reaching the server, which is that app's own cleartext policy rather than
+ours. The handoff is the part under test and the part that works; what the
+receiving app then does with a url is exactly what handing it over means.
+
+### A resumed download against a server that ignores Range
+
+Downloads work on Android — 195.3 KiB of a 195.3 KiB file, app-private storage,
+no permission asked for. Downloading the *same* file a second time reported
+**390.6 KiB**, which is exactly twice, and that is a bug in shared code that had
+nothing to do with phones.
+
+`http_download_source` sees a file already on disk, asks for `Range: bytes=N-`,
+opens the file in `Append`, and writes whatever comes back. **Range is a request,
+not a command.** A server without range support answers `200` with the whole
+body, which is correct HTTP — and the complete body then lands after the bytes
+already there, producing a file of twice the right length with stale bytes at the
+front, reported as done at 100%.
+
+Only `206` means "the rest of it". Anything else means "all of it", so the resume
+is now abandoned: seek to zero, truncate, start again. Checked once per transfer
+from whichever of `metaDataChanged`, `readyRead` or `finished` gets there first,
+because a small reply can arrive complete before anything has looked at its
+headers.
+
+**The test that should have caught this existed and could not.** There is a
+resume check in `test_seam` — "the file ends up the right size, not appended
+twice" — but it runs against a helper that always answers `206`, and only when a
+server URL is passed on the command line, which no ordinary run does. So the
+covering test was both blind to this case and usually skipped. The new one stands
+up its own server, in-process and unconditional, that ignores `Range` on purpose.
+It fails without the fix — 52345 bytes where 40000 was wanted, which is precisely
+the 12345 already on disk plus the full body — and it checks the first bytes as
+well as the count, since appending would leave the stale ones at the front and
+still be the wrong file at any length.
+
+Found on a phone against python's `http.server`. It should not have needed a
+phone, and now it does not.
+
+### Downloads that can be found afterwards
+
+Qt's download location on Android is app-private external storage. Writing there
+needs no permission and always works, which is why the download stack worked on a
+phone the day it was built — and it is also **invisible**: no file manager lists
+it, no other app can open it, and it is deleted when Hydra is uninstalled. A
+browser whose downloads cannot be found afterwards has not really downloaded
+anything.
+
+A completed file is now copied into `MediaStore.Downloads`, the shared collection
+every file manager shows. That needs no permission either — an app may always
+insert its own entries. **Chosen between two honest options**: the other is
+asking with the Storage Access Framework where each file should go, which is what
+"save as" is for and not what a browser should do to every download. The copy is
+a copy, not a move: it costs the space twice until the app's data is cleared, and
+it means a failed publish leaves a download that still exists rather than one
+that succeeded and then vanished.
+
+Measured: `content query --uri content://media/external/downloads` lists
+`clip.mp4, _size=200000` — the exact byte count, which also confirms the Range
+fix above, since the same file downloaded twice before produced 400000. A second
+download became `clip (1).mp4` rather than overwriting, which is MediaStore's own
+naming and the behaviour a browser should have.
+
+The media dialog said "Queued download to
+/storage/emulated/0/Android/data/org.qtproject.example.hydra/files/Download" —
+a path that is long, unopenable, and no longer where the file ends up. On Android
+it now says "Queued. It will appear in Downloads when it finishes."
+
 **A flake, recorded rather than explained.** `test_extloop` has now failed four
 times — 28, 21, 27 and 27 of 34 — and passed more than forty times in between,
 so it is real and it is rare. **Every failure has happened inside a run of the
@@ -3704,6 +3960,10 @@ C++ that already exists.
 
 ## What is next (in order)
 
+Rewritten after a session that closed most of what used to be on it. What is
+listed here is open; what closed is recorded in the sections above rather than
+carried along as amendments to a list item.
+
 1. **Take a second evidence set, from a different site.** Everything measured
    here is dramafren, and the working runs match `/cf-master.` — that site's
    fragment. Until a second site is captured, "the loop finds the stream" means
@@ -3711,223 +3971,36 @@ C++ that already exists.
    rule 2 should be tried, rather than against the fixture it was derived from.
 
    **The second mirror is exhausted**: it starts once ads are unblocked, then
-   stalls, and the tap confirms nothing is being fed to a MediaSource — see the
-   section above. A different site is the answer, and the levers to reach one
-   are now in `try_extract` (mirror chooser, click count, ads, popups).
-2. **Finish the helper tier (arch §11.5.1).** The fetch half is built,
-   permissioned and proven against a live CDN: it identified the disguised
-   manifest, followed it to a variant the page never requested, and the gate
-   accepted that as *followed rather than invented*, in four calls and 320
-   bytes. What remains is the DOM half behind §13.2, and deciding whether it is
-   wanted at all — nothing has yet needed it.
-3. **Decided: when blocking ads breaks the page, fix it and say so.** The open
-   question was whether the browser should offer the change or make it, and the
-   answer was to make it. On a page whose anti-adblock refuses to start, ads are
-   allowed for that site, the page reloads, and the status bar says what happened
-   and where to undo it — "so ads are now allowed for this site and it is being
-   reloaded — undo it in the shield", for fifteen seconds. Once per host, so a
-   site that keeps asking does not keep toggling.
+   stalls, and the tap confirms nothing is being fed to a MediaSource. A
+   different site is the answer, and the levers to reach one are in
+   `try_extract` (mirror chooser, click count, ads, popups). **Waiting on a site
+   to be chosen** — that was asked and answered as "I pick a similar site".
 
-   **A site the user has already ruled on is left alone.** If there is an
-   explicit per-site ads setting, the detector says the site is checking and
-   that the setting stands, rather than overriding a decision someone made on
-   purpose. That is the line between helping and interfering, and it is the part
-   worth keeping if the rest is ever revisited.
+2. **The KeePassXC pairing, which needs a person.** Everything short of it
+   passes: socket, key exchange, and the answer a saved-but-unknown pairing gets.
+   `associate()` makes KeePassXC ask a human whether this program may read the
+   vault, and a browser that could answer that for itself would be the bug. Run
+   `HYDRA_KEEPASS_INTERACTIVE=1 ./tests/build/try_keepass` and accept the prompt;
+   `tests/README.md` has the throwaway-vault setup.
 
-4. **Exercise the rest of what is wired but untested.** **The ad-host half is
-   done** — see the filter-enforcement section above; it needed no DNS trick at
-   all, only two loopback hosts, and finding that out uncovered that the whole
-   filter list was never consulted. The KeePassXC bridge has now met a real
-   KeePassXC — see the section above — and everything short of the pairing
-   dialog passes. **What is left needs a person**, not a machine: run
-   `HYDRA_KEEPASS_INTERACTIVE=1 ./tests/build/try_keepass` and accept the prompt
-   to check association and login lookup.
-   This project's defect history is almost entirely in this category — see the
-   cautions at the top of this file. **The cosmetic half of §12 is done too** — see the section
-   above — and it uncovered a page-context bug that had been live on the desktop
-   for as long as the consent bridge has existed.
-5. **Android phase — no longer blocked on tooling.** `~/Qt/6.11.1` carries all
-   four Android ABIs and `~/android-ndk-r29` is present, so the reason this was
-   deferred (nothing to build with) is gone; what remains is the work itself.
-   The seam is ready and the constraint is confirmed rather than assumed — the
-   Android kits ship no WebEngine, so the System WebView backend is the first
-   piece, then the adaptive drawer layout, Intent-based player handoff, Android
-   Autofill and SAF downloads (arch §19).
+3. **Decide whether the helper tier's DOM half is wanted at all** (arch
+   §11.5.1). The fetch half is built, permissioned and proven against a live CDN.
+   Nothing has yet needed the DOM half, and "nothing has needed it" is evidence,
+   not an excuse — this is a decision to make on purpose rather than a gap to
+   fill by default.
 
-   **Both cheaper things are done** — see the 6.11 section above. It builds
-   there with no errors, `try_permissions` passes 11 of 11 on both Qts after one
-   real fix and two test corrections, and the geolocation result turned out to be
-   neither Qt's doing nor the packaging's: this machine has no GeoClue2 service,
-   so there is no location provider to grant access to.
+4. **Android's remaining gap is the platform's autofill, and it is unverified.**
+   §19's list is otherwise done — System WebView, drawer, request filter, script
+   bridges, external links, file picker, player handoff, downloads that a file
+   manager can see. Autofill on Android is the system service's job rather than
+   this browser's, and the menu no longer offers a KeePassXC pairing that cannot
+   exist there. What is *not* established is that filling works: the emulator has
+   no autofill service configured, so that claim needs a device that does.
 
-   **The configure has been tried, and it gets exactly as far as the design
-   said it would.** Two flags are needed and neither is obvious:
-
-   ```sh
-   ~/Qt/6.11.1/android_arm64_v8a/bin/qt-cmake -S . -B build-android \
-       -DQT_HOST_PATH=$HOME/Qt/6.11.1/gcc_64 \
-       -DANDROID_NDK_ROOT=$HOME/android-ndk-r29
-   ```
-
-   `QT_HOST_PATH` because a cross build needs the *host* Qt's tools and
-   otherwise picks up the system 6.8.2 ones, which it then rejects — the error
-   names `Qt6WidgetsTools`, not the host path, so it reads as a missing Widgets
-   module. `ANDROID_NDK_ROOT` because the kit's toolchain file points at
-   `/opt/android/android-ndk-r27c`, which does not exist here. **Note the
-   version gap**: that path says Qt 6.11 expects NDK r27c and r29 is what is
-   installed, which is worth remembering when something odd happens later.
-
-   With those two set, it failed on `find_package(... WebEngineWidgets)` — the
-   Android kits ship no WebEngine, exactly as §19.2 says. **That first step is
-   now taken**: the engine component and the four `qtwebengine_*` files are
-   behind `if(ANDROID)`, with an empty `HYDRA_BACKEND_SOURCES` where the System
-   WebView backend will go. Desktop configures and builds unchanged, which is
-   the property that matters — the seam was supposed to make this a two-line
-   split and it was.
-
-   **The next blocker is not Android's, it is the install's.** Configure now
-   stops on `WebChannel`, and that component is missing from *both* kits in
-   `~/Qt/6.11.1` — there is no `Qt6WebChannel` CMake package for the desktop
-   kit either. It is an installer component that was not ticked, not something
-   Android lacks; Qt ships WebChannel for Android perfectly well. **Add Qt
-   WebChannel in the Qt Maintenance Tool for both the desktop and the Android
-   kits** and this moves on. (The desktop build here is unaffected because it
-   uses the *system* Qt 6.8.2, which has it.)
-
-   Worth knowing for when the port is written: `QWebChannel` is what the
-   autofill, picker, MSE and consent bridges ride on, and Android's System
-   WebView has no equivalent — `addJavascriptInterface` over JNI is the
-   counterpart. That is behind the seam already (`set_script_bridge`), so it is
-   a backend concern rather than a shell one. Checked while here: the mentions
-   of `QWebChannel` in `mse_tap.h` and `filter_signals.h` are comments, not
-   includes, so nothing outside the backend is coupled to it.
-
-## Sharing rule sets: the transport is open, and deliberately
-
-**Why it is deferred, recorded so it is not mistaken for an oversight:** whether
-Hydra becomes part of `../fuzzypickles`, borrows its transfer machinery, or
-grows its own peer-to-peer layer is undecided. Until that is settled, picking a
-transport here would be committing the answer by accident.
-
-**What is already built does not depend on it.** `judge_import()` takes a
-*document*, not a file or a socket, and `export_learned()` produces one. The
-safety core — what a received rule must prove — is where the risk lives and it
-is transport-free. Whatever eventually carries the bytes plugs in underneath.
-
-**What fuzzypickles already has**, since it is one of the three options and the
-answer turned out to be "most of it":
-
-- **Content-addressed blobs are implemented** (`core/src/blob_internal.h`, their
-  §11): chunked, each chunk independently AEAD-sealed, with a Merkle tree over
-  the **ciphertext**. Both verifiers, bisection addressing, have-sets,
-  want/serve assignment, assembly, the wire exchange, and a CLI (`blob-add`,
-  `blob-export`, …). Their own note is that stickers, file transfer and the
-  global store are *one* mechanism, not three — a rule set would be a fourth
-  user of it rather than anything new.
-- **The Merkle-over-ciphertext ordering gives integrity without trust.** Any
-  host verifies chunks against the root with no key at all, so a relay can serve
-  bytes it cannot read. For a shared rule corpus that is exactly the property
-  wanted: distribution without the distributor being able to alter it.
-- **Sealing is deterministic**, so two people who export the same rules produce
-  the same blob — dedup and a stable identity for "this rule set" come free.
-- **A capability model and TOFU contact cards exist**, which is where an
-  *authorship* answer would come from if one is wanted.
-
-**And their §3 already settles the question I had been holding open.** Their
-`config_sync` header states it plainly: an authenticated link does **not**
-authorize what travels over it, so a config change carries its own proof rather
-than relying on the channel. Applied here that means `why_unsafe` keeps running
-even over a trusted peer link — a rule set from a friend is still a licence to
-click buttons on pages you are signed into, and a friend can be careless or
-compromised. The check is not a stand-in for a transport that has not arrived
-yet; it is the part that stays.
-
-So the three options differ in what they *add*, not in what they replace:
-
-| option | what it supplies | what it costs |
-|---|---|---|
-| part of fuzzypickles | blobs, identity, capabilities, an existing peer network | Hydra stops being a standalone Qt app with no daemon |
-| use its transfer machinery | the same blob mechanism, as a dependency | a C core dependency and a running daemon to talk to |
-| roll our own | no new dependency | rebuilding chunking, verification and peer discovery, all of which exist next door |
-
-Nothing here needs deciding to keep going: rule sets exchange as files today,
-and every option above is additive to that.
-
-## Open decisions and risks
-
-- **Decided:** AI provider = local-first, Claude default external, others later
-  (arch §9.1).
-- **Spikes to run early:** the `QGraphicsProxyWidget` geometric-scale path for
-  kiosk (may render black on some GPUs), and local-model tree-sort quality.
-- **Interceptor limits:** request-only — no inline-script blocking, no response
-  headers; the optional local proxy (arch §10) is the upgrade path.
-- **Thread note:** `qtwebengine_interceptor::interceptRequest`, and so
-  `request_filter::decide`, may run off the UI thread; the policy_engine is only
-  mutated on the UI thread and reads tolerate a stale snapshot. Revisit if
-  mutation frequency grows.
-
-## Code style and file naming
-
-Same three rules as `../fuzzypickles` (`code-style.md` there has the worked
-examples and the reasoning):
-
-- **`snake_case`, not `camelCase`,** for identifiers this project defines. This
-  holds in Qt C++: call Qt's own `camelCase` API exactly as it is
-  (`setSourceModel`, `addWidget`), and keep every Qt virtual you override under
-  its real name (`interceptRequest`, `closeEvent`, `lessThan`,
-  `filterAcceptsRow`, `rowCount`, `data`) — but names *you* introduce stay
-  `snake_case`, including classes (`policy_engine`, not `PolicyEngine`),
-  enums, signals, and slots.
-- **Tabs for indentation, spaces for alignment** — one tab per nesting level,
-  spaces after the tabs for anything lined up within a line, so alignment
-  survives at any tab width. **Do not run `clang-format`**; with no config it
-  defaults to spaces and silently undoes this.
-- **Lowercase filenames,** `snake_case`, except where a tool won't accept it
-  (`CMakeLists.txt`, `LICENSE`, `AndroidManifest.xml`).
-
-Hydra-specific, on top of those:
-
-- C++ member variables take an `m_` prefix and are otherwise `snake_case`
-  (`m_views_by_id`, `m_save_timer`).
-- Pointers and references bind to the name: `QWidget *parent`,
-  `const QString &path`.
-- No project-wide identifier prefix (fuzzypickles' `fzp_`). Deliberate: the
-  codename is provisional, and a prefix would make renaming cost more than the
-  one `project()` line it currently costs.
-- `#pragma once`, headers alongside sources, one class per file.
-- Qt 6, C++17, Qt **Widgets only** — do not introduce QML/Qt Quick.
-- Keep the platform-neutral core (`tab_tree_model`, `tree_outline`,
-  `policy_engine`, `state_store`, `tree_sort_proxy`) free of platform APIs;
-  platform-specific behavior goes behind interfaces (the WebView-backend seam,
-  arch §19.2).
-- Persisted files live next to the tree file: `policy.json`, `state/<id>.blob`.
-
-One naming wrinkle worth knowing: the architecture doc's tri-state `Default`
-state is spelled `policy::setting::unset` in code, because `default` is a
-keyword. It means the same thing — no rule at this scope, fall through to the
-global default.
-
-## Commit conventions
-
-- **No AI-attribution trailers** (`Co-Authored-By: Claude ...` and the like) in
-  commit messages, and nothing elsewhere in the repo indicating AI involvement.
-  Messages end at their real content.
-- Documentation changes ride along with the code commit they describe rather
-  than landing on their own.
-
-## Licence
-
-**GPL-3.0-or-later.** Full text in `LICENSE`; every source file carries an
-`SPDX-License-Identifier: GPL-3.0-or-later` line rather than a copyright block.
-
-This sits correctly under the Qt WebEngine dependency, which is
-LGPLv3 / GPL / commercial (arch §2) — note that Qt WebEngine's own licensing
-constrains distribution independently of what Hydra declares, so re-check it
-against any distribution plan.
-
-## Naming
-
-"Hydra" is a working codename. Renaming = the `project()` line in
-`CMakeLists.txt` plus the `hydra` target; nothing else depends on the name. The
-architecture doc still carries the older codename "Browser Overlord" in its
-title — same project.
+5. **What is left untested now needs a window or a network.** The sweep through
+   never-tested files is finished — see the sections above; four of nine were
+   wrong. The remainder are dialogs (`media_dialog`, `filter_dialog`,
+   `reorganize_dialog`, `site_policy_dialog`), thin adapters (`capture_source`,
+   `qtwebengine_interceptor`), and the WebEngine backend, all of which the live
+   drivers already drive through the shell. A unit test for any of them would be
+   testing Qt.
