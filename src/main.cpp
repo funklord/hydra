@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "main_window.h"
+#ifdef Q_OS_ANDROID
+#include "android_dialogs.h"
+#endif
 #include "policy_engine.h"
 #include "request_filter.h"
 // The single place that names a concrete backend (architecture doc §19.2). The
@@ -48,6 +51,11 @@ int main(int argc, char *argv[]) {
 #endif
 
 	QApplication app(argc, argv);
+#ifdef Q_OS_ANDROID
+	// Dialogs here were laid out for a desktop and come up wider than a phone
+	// screen, which puts their buttons off the edge with no way to reach them.
+	android_dialogs::install();
+#endif
 	app.setApplicationName("Hydra");
 
 	// Every size is added rather than one image scaled, because the 16px cut is

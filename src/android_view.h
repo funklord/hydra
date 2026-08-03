@@ -20,8 +20,15 @@ class request_filter;
 // its own surface and cannot host a native Android view, so `HydraWebView.java`
 // adds one to the Activity *on top* of Qt's surface and this class keeps it
 // glued to wherever the page-area widget is, in device pixels. The cost of that
-// arrangement is stated rather than hidden — this view sits above everything Qt
-// draws, so anything Qt wants to show over the page has to hide it first.
+// arrangement is that this view sits above everything Qt draws — **including
+// Qt's own dialogs**, which is not a caveat but a bug: tapping "Media" depressed
+// the button and showed nothing, because the dialog opened behind the page.
+//
+// Qt announces it, so the fix is not a guess. A window covered by a modal dialog
+// receives `WindowBlocked`, and `WindowUnblocked` when it closes; the native view
+// hides for exactly that span. Non-modal windows do not send those events and
+// would still be covered — none exist in the shell today, and that is a fact
+// about the shell rather than a property to rely on.
 //
 // **A QLabel stands in when there is no WebView to talk to**, which happens when
 // `HYDRA_ANDROID_WEBVIEW=0` is set or an APK was built without the `android/`
@@ -152,6 +159,7 @@ private:
 	static std::function<void(const QUrl &)> s_external;
 	qint64 m_id = 0;
 	bool   m_native = false;   // false when there is no WebView to talk to
+	bool   m_blocked = false;  // a modal dialog is over the window
 
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;

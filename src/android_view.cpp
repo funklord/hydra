@@ -352,6 +352,18 @@ android_view::android_view(request_filter *filter, QWidget *parent)
 	m_native = !QJniEnvironment().checkAndClearExceptions();
 	if (m_native) {
 		m_widget->installEventFilter(this);
+		// And on the window, for the one thing this arrangement gets wrong.
+		//
+		// The WebView is composited *above* Qt's surface, so a Qt dialog opened
+		// over the page is invisible: the button depresses and nothing appears.
+		// The header has always said this was the cost; what it did not say is
+		// that Qt announces it. A window covered by a modal dialog is sent
+		// WindowBlocked, and unblocked again when the dialog closes, so the
+		// native view can get out of the way for exactly as long as it must.
+		//
+		// Found by tapping "Media (1)" on a phone and watching nothing happen.
+		if (QWidget *win = m_widget->window())
+			win->installEventFilter(this);
 		// The widget is only a stand-in for the page area now, so it should not
 		// be showing an explanation of itself behind a live WebView.
 		m_widget->clear();
@@ -365,6 +377,17 @@ android_view::~android_view() {
 }
 
 bool android_view::eventFilter(QObject *o, QEvent *e) {
+	// Modal dialogs, which cannot be seen while the native view is on top.
+	if (m_native && m_widget && o == m_widget->window()) {
+		if (e->type() == QEvent::WindowBlocked) {
+			m_blocked = true;
+			QJniObject::callStaticMethod<void>(k_cls, "setVisible", "(JZ)V",
+			                                    jlong(m_id), jboolean(false));
+		} else if (e->type() == QEvent::WindowUnblocked) {
+			m_blocked = false;
+			sync_geometry();
+		}
+	}
 	if (o == m_widget) {
 		switch (e->type()) {
 			case QEvent::Resize:
@@ -397,8 +420,11 @@ void android_view::sync_geometry() {
 	                                    jint(top_left.y() * dpr),
 	                                    jint(m_widget->width() * dpr),
 	                                    jint(m_widget->height() * dpr));
-	QJniObject::callStaticMethod<void>(k_cls, "setVisible", "(JZ)V",
-	                                    jlong(m_id), jboolean(m_widget->isVisible()));
+	// Never visible while a dialog is up, whatever the widget thinks: the widget
+	// is perfectly visible, it is just underneath something.
+	QJniObject::callStaticMethod<void>(
+		k_cls, "setVisible", "(JZ)V", jlong(m_id),
+		jboolean(m_widget->isVisible() && !m_blocked));
 }
 
 QWidget *android_view::widget() {

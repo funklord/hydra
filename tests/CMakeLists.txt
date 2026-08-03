@@ -153,16 +153,24 @@ endif()
 # --- live drivers: real shell, real display -------------------------------
 if(Qt6WebEngineWidgets_FOUND)
     file(GLOB APPSRC CONFIGURE_DEPENDS ${H}/*.cpp)
-    # main.cpp has its own main(); android_view.cpp is the Android backend and
-    # needs JNI headers that exist only in the NDK, so a desktop driver that
-    # globbed it in would fail to compile for a file it never calls. The real
-    # build makes the same split with if(ANDROID) rather than a glob.
-    list(REMOVE_ITEM APPSRC ${H}/main.cpp ${H}/android_view.cpp)
+    # main.cpp has its own main(); the android_* files need JNI headers that
+    # exist only in the NDK, so a desktop driver that globbed them in would fail
+    # to compile files it never calls. By pattern rather than by name: naming
+    # them one at a time has already broken this build twice, once per new
+    # Android file, and the next one would break it again.
+    list(REMOVE_ITEM APPSRC ${H}/main.cpp)
+    file(GLOB ANDROID_ONLY_SRC ${H}/android_*.cpp)
+    if(ANDROID_ONLY_SRC)
+        list(REMOVE_ITEM APPSRC ${ANDROID_ONLY_SRC})
+    endif()
     file(GLOB APPHDR CONFIGURE_DEPENDS ${H}/*.h)
-    # And its header with it: AUTOMOC generates the meta-object for any Q_OBJECT
-    # it is handed, so leaving the header in emits a vtable that references the
-    # .cpp that was just excluded.
-    list(REMOVE_ITEM APPHDR ${H}/android_view.h)
+    # And their headers with them: AUTOMOC generates the meta-object for any
+    # Q_OBJECT it is handed, so leaving a header in emits a vtable referencing
+    # the .cpp that was just excluded.
+    file(GLOB ANDROID_ONLY_HDR ${H}/android_*.h)
+    if(ANDROID_ONLY_HDR)
+        list(REMOVE_ITEM APPHDR ${ANDROID_ONLY_HDR})
+    endif()
     if(PkgConfig_FOUND)
         pkg_check_modules(SODIUM QUIET libsodium)
     endif()

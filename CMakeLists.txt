@@ -35,6 +35,8 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS ${HYDRA_QT_COMPONENTS})
 if(ANDROID)
     set(HYDRA_BACKEND_SOURCES
         src/android_view.cpp
+        src/android_intents.cpp
+        src/android_dialogs.cpp
         src/android_view.h)
 else()
     set(HYDRA_BACKEND_SOURCES

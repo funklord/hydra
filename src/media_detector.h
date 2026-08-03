@@ -33,6 +33,19 @@ struct media_item {
 	QMap<QString, QString> headers;
 };
 
+// The media type to hand a system player along with the URL.
+//
+// Android's `ACTION_VIEW` needs one: with no type, the chooser offers whatever
+// claims the scheme — a browser, most often, which would hand the stream back to
+// us in a loop. With a video type it offers video players. There is no
+// equivalent on the desktop, where the player is named outright.
+//
+// From the url alone, like the rest of §11.1's detection, and wrong the same way
+// a url can be: a `.mp4` that is really something else is a lie the server tells
+// and the player will discover. Anything unrecognised gets `video/*`, which asks
+// for a video player without claiming to know the container.
+QString media_mime_for(const QUrl &url);
+
 // The first interceptor consumer (architecture doc §10/§11): it watches the
 // request stream and classifies anything saveable, grouped by the page that
 // requested it.

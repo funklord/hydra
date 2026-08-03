@@ -57,6 +57,12 @@ public:
 
 	static const char *custom_id() { return "custom"; }
 
+	// The Android entry: hand the url to whatever app the system offers, over an
+	// `ACTION_VIEW` intent. There is no PATH to probe there and no process to
+	// start, so this is the *only* entry on that platform — and it is always
+	// "installed", because the chooser is, even if nothing behind it is.
+	static const char *system_id() { return "system"; }
+
 	// A command line with `%U` where the stream URL goes. Split on whitespace,
 	// which is enough for a player invocation and keeps the field honest about
 	// what it supports — a shell would invite quoting bugs and injection for no

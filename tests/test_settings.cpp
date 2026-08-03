@@ -7,6 +7,7 @@
 #include "policy_engine.h"
 #include "download_manager.h"
 #include "player_launcher.h"
+#include "media_detector.h"
 #include "torrent_download_source.h"
 #include "ollama_provider.h"
 #include "claude_provider.h"
@@ -519,6 +520,46 @@ int main(int argc, char **argv) {
 		list.add(r);
 		check(cosmetic_filters::selectors_for(&list, "news.example").isEmpty(),
 		      "a cosmetic rule with no site is applied to no site");
+	}
+
+	// What a system player is told the stream is. Android's ACTION_VIEW needs a
+	// media type or the chooser offers every app that claims http -- which means
+	// a browser, and handing the stream to a browser is a loop back to here.
+	section("media type: what an intent carries");
+	{
+		struct row { const char *url; const char *want; };
+		const row rows[] = {
+			{ "https://x/stream.m3u8",        "application/vnd.apple.mpegurl" },
+			{ "https://x/manifest.mpd",       "application/dash+xml" },
+			{ "https://x/clip.mp4",           "video/mp4" },
+			{ "https://x/clip.MP4",           "video/mp4" },
+			{ "https://x/clip.webm",          "video/webm" },
+			{ "https://x/song.mp3",           "audio/mpeg" },
+			{ "https://x/seg.ts",             "video/mp2t" },
+			{ "https://x/master.m3u8?v=3",    "application/vnd.apple.mpegurl" },
+			{ "https://x/watch?id=7",         "video/*" },
+			{ "https://x/no-extension",       "video/*" },
+		};
+		for (const row &r : rows)
+			check(media_mime_for(QUrl(r.url)) == QLatin1String(r.want),
+			      QString("%1 -> %2").arg(r.url, media_mime_for(QUrl(r.url))));
+		check(media_mime_for(QUrl("https://x/a.mp4/redirect")) == "video/*",
+		      "an extension mid-path is not an extension, here as elsewhere");
+	}
+
+	section("the system player entry is Android's, and only Android's");
+	{
+		player_launcher p;
+		bool has_system = false;
+		for (const player_entry &e : p.players())
+			if (e.id == player_launcher::system_id())
+				has_system = true;
+#ifdef Q_OS_ANDROID
+		check(has_system, "on Android the system chooser is the entry");
+#else
+		check(!has_system,
+		      "on the desktop there is no system entry — players are named and probed");
+#endif
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

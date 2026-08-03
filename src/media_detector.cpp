@@ -19,6 +19,28 @@ constexpr int k_max_per_site = 64;
 
 }  // namespace
 
+QString media_mime_for(const QUrl &url) {
+	const QString path = url.path().toLower();
+	struct { const char *suffix; const char *mime; } table[] = {
+		{ ".m3u8", "application/vnd.apple.mpegurl" },
+		{ ".mpd",  "application/dash+xml" },
+		{ ".mp4",  "video/mp4" },
+		{ ".m4v",  "video/mp4" },
+		{ ".webm", "video/webm" },
+		{ ".mkv",  "video/x-matroska" },
+		{ ".ts",   "video/mp2t" },
+		{ ".mov",  "video/quicktime" },
+		{ ".mp3",  "audio/mpeg" },
+		{ ".m4a",  "audio/mp4" },
+		{ ".opus", "audio/opus" },
+		{ ".flac", "audio/flac" },
+	};
+	for (const auto &row : table)
+		if (path.endsWith(QLatin1String(row.suffix)))
+			return QString::fromLatin1(row.mime);
+	return QStringLiteral("video/*");
+}
+
 media_detector::media_detector(QObject *parent) : QObject(parent) {}
 
 media_kind media_detector::classify(const QUrl &url, bool *saveable) {

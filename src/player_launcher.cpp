@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "player_launcher.h"
+#include "media_detector.h"
+#ifdef Q_OS_ANDROID
+#include "android_intents.h"
+#endif
 
 #include <QProcess>
 #include <QFileInfo>
@@ -37,6 +41,26 @@ player_launcher::player_launcher() {
 
 void player_launcher::refresh() {
 	m_players.clear();
+#ifdef Q_OS_ANDROID
+	// One entry, and no probing. Android has no PATH to search and no way to
+	// ask which app would answer an intent without resolving it, so the honest
+	// offer is "the system's chooser" rather than a list of names that would all
+	// be false.
+	{
+		player_entry e;
+		e.id        = QString::fromLatin1(system_id());
+		e.label     = "System player";
+		e.installed = true;
+		// Cautious, for the same reason Custom… is: which app takes the intent is
+		// the system's choice and the user's, so whether it reads a manifest
+		// cannot be known from here. Claiming it can is how a stream ends up
+		// handed to a player that shows a black screen.
+		e.native_streams = false;
+		m_players.push_back(e);
+	}
+	m_selected = QString::fromLatin1(system_id());
+	return;
+#endif
 	for (const known_player &k : k_known) {
 		player_entry e;
 		e.id             = QString::fromLatin1(k.id);
@@ -145,6 +169,12 @@ bool player_launcher::play(const media_item &item, QString *error,
 
 	// Always a URL, never stdin: a pipe cannot seek (§11.3).
 	const QString target = via.isValid() ? via.toString() : item.url.toString();
+
+#ifdef Q_OS_ANDROID
+	if (e->id == QLatin1String(system_id()))
+		return android_intents::open_media(QUrl(target), media_mime_for(item.url),
+		                                    error);
+#endif
 	QStringList args;
 	if (e->id == QLatin1String(custom_id())) {
 		QStringList parts = m_custom.split(QRegularExpression("\\s+"),

@@ -3255,6 +3255,43 @@ prints which checks went unrun rather than passing quietly without them. The
 remaining ones are behind that flag: association, a login request for a url the
 vault knows, and one for a url it does not.
 
+### Handing a stream to a player, on a phone
+
+The desktop names a player and starts a process. Android has neither, so §19's
+answer is an intent: `ACTION_VIEW` with the url and a media type, and whichever
+app the user has takes it. `player_launcher` grows one entry there — "System
+player", always present, always cautious about manifests, because which app
+answers is the system's choice and not knowable from here.
+
+The media type matters more than it looks. With none, the chooser offers every
+app that claims `http`, which on most devices means a browser — and handing the
+stream to a browser is a loop back to where it came from. `media_mime_for()` is
+shared and tested for that reason, and unrecognised urls get `video/*` rather
+than a guess at the container.
+
+**Driven on the device, and it turned up two bugs that had nothing to do with
+intents.**
+
+**Dialogs were invisible.** Tapping "Media (1)" depressed the button and showed
+nothing at all. The header had always said the native WebView sits above
+everything Qt draws; what it had not said is that this makes Qt's own dialogs
+unreachable, which is not a caveat but a bug. Qt announces the condition — a
+window covered by a modal dialog is sent `WindowBlocked`, and `WindowUnblocked`
+when it closes — so the view hides for exactly that span rather than guessing.
+
+**And then the dialog did not fit.** It came up wider than the screen, list
+visible and buttons off the right edge, with no way to scroll a dialog to reach
+them. Every dialog here was laid out for a desktop where the screen is wider than
+the contents ask for. On Android they now fill the available screen, applied by
+one application-wide event filter rather than thirty constructors.
+
+With both fixed: the media dialog shows `clip.mp4`, **Watch** hands it over, and
+`com.android.gallery3d/.app.MovieActivity` comes to the front with our url. It
+then fails to play it — `MediaPlayerNative error (1, -2147483648)` and no request
+ever reaching the server, which is that app's own cleartext policy rather than
+ours. The handoff is the part under test and the part that works; what the
+receiving app then does with a url is exactly what handing it over means.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and
