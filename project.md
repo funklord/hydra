@@ -4033,6 +4033,37 @@ descriptions.
 gives it. That is the guard for two of the four, and neither was visible to any
 other assertion in the suite.
 
+### Site exceptions, which had nowhere to be seen
+
+The privacy page said "the shield in the toolbar sets exceptions per site, and an
+exception always wins over what is chosen here" — and offered no way to find out
+whether you had any. The only route to a rule set months ago was to remember
+which site it was on, go back there, and open the shield. Every browser with
+per-site permissions grew this list for that reason.
+
+It is a table of the sites that have said something, and **what they said** —
+`news.example  JavaScript: block, Cookies: allow` — rather than a count or a
+checkmark. Removing one sends that site back to the defaults above it, which is
+what removal means in a model that has no delete: every feature set back to
+`unset`, so resolution falls through.
+
+Two decisions in it are worth stating:
+
+**Removals wait for OK.** The shield applies immediately, because it is a menu
+on a live page. This is a dialog with a Cancel button, and one that had already
+discarded rules would be lying about what Cancel does.
+
+**A rule that expresses nothing is not listed.** Clearing a rule's last feature
+leaves the rule behind in the engine, and offering it for removal would be
+offering something that is not there.
+
+The screenshots the driver takes now come from a dialog with exceptions and a
+filter rule in it, and it captures the *bottom* of any page that scrolls. Both
+because of this feature: the exceptions list sits below the fold on the privacy
+page, so a capture of the top of each page would have shown every list in its
+empty state — the furniture, and none of the content, which is the half that is
+hard to get right.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

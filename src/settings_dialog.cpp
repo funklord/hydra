@@ -609,6 +609,45 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 		}
 	}
 
+	// --- Site exceptions ---------------------------------------------------
+	//
+	// The page above says an exception always wins over what is chosen here,
+	// and until now there was nowhere to see one. The only way to find out that
+	// JavaScript had been blocked on some site months ago was to go back to that
+	// site and open the shield — which is fine if you remember which site, and
+	// useless otherwise. Every browser with per-site permissions grew this list
+	// for the same reason.
+	v->addWidget(section_heading("Site exceptions", page));
+	m_exception_note = dim_label(QString(), page);
+	v->addWidget(m_exception_note);
+
+	m_exceptions = new QTreeWidget(page);
+	m_exceptions->setObjectName("site_exceptions");
+	m_exceptions->setHeaderLabels({ "Site", "What differs from the defaults" });
+	m_exceptions->setRootIsDecorated(false);
+	m_exceptions->setSelectionMode(QAbstractItemView::ExtendedSelection);
+	m_exceptions->setMinimumHeight(120);
+	v->addWidget(m_exceptions);
+
+	m_exception_drop = new QPushButton("&Remove selected", page);
+	m_exception_drop->setObjectName("drop_exception");
+	m_exception_drop->setEnabled(false);
+	m_exception_drop->setToolTip(
+		"The site falls back to the defaults above. Applied when you press OK.");
+	connect(m_exceptions, &QTreeWidget::itemSelectionChanged, this, [this] {
+		m_exception_drop->setEnabled(!m_exceptions->selectedItems().isEmpty());
+	});
+	connect(m_exception_drop, &QPushButton::clicked, this, [this] {
+		for (QTreeWidgetItem *it : m_exceptions->selectedItems())
+			m_dropped_patterns.insert(it->text(0));
+		rebuild_exceptions();
+	});
+	auto *drop_row = new QHBoxLayout;
+	drop_row->addStretch(1);
+	drop_row->addWidget(m_exception_drop);
+	v->addLayout(drop_row);
+	rebuild_exceptions();
+
 	// What used to be a footnote about cookie consent banners is now the
 	// description on that row itself, where somebody reading that row will see
 	// it. The one thing the row has no space for is the consequence, which is
@@ -621,6 +660,57 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	v->addWidget(note);
 
 	v->addStretch(1);
+}
+
+void settings_dialog::rebuild_exceptions() {
+	if (!m_exceptions)
+		return;
+	m_exceptions->clear();
+	if (!m_policy) {
+		m_exception_note->setText("No policy engine was supplied.");
+		return;
+	}
+
+	int shown = 0;
+	for (const policy_engine::rule &r : m_policy->rules()) {
+		if (m_dropped_patterns.contains(r.pattern))
+			continue;
+		// A rule that expresses nothing is not an exception. They exist because
+		// clearing the last feature of a rule leaves the rule behind, and
+		// listing it would offer the user something to remove that is not there.
+		QStringList said;
+		for (int i = 0; i < policy::feature_count(); ++i) {
+			const auto f = static_cast<policy::feature>(i);
+			const policy::setting st = policy::get_setting(r.bits, f);
+			if (st == policy::setting::unset)
+				continue;
+			said << QString("%1: %2").arg(policy::feature_label(f),
+			                               st == policy::setting::allow ? "allow"
+			                                                            : "block");
+		}
+		if (said.isEmpty())
+			continue;
+		auto *it = new QTreeWidgetItem(m_exceptions);
+		it->setText(0, r.pattern);
+		it->setText(1, said.join(", "));
+		++shown;
+	}
+	for (int i = 0; i < 2; ++i)
+		m_exceptions->resizeColumnToContents(i);
+
+	m_exception_note->setText(
+		shown == 0
+			? QStringLiteral("No site has an exception yet. The shield in the "
+			                  "toolbar makes one for the site you are on.")
+			: QString("%1 site%2 with settings of their own. Removing one sends "
+			           "that site back to the defaults above.")
+			      .arg(shown)
+			      .arg(shown == 1 ? "" : "s"));
+	if (!m_dropped_patterns.isEmpty())
+		m_exception_note->setText(
+			m_exception_note->text() +
+			QString(" %1 marked for removal when you press OK.")
+			    .arg(m_dropped_patterns.size()));
 }
 
 void settings_dialog::build_filter_page(QWidget *page) {
@@ -1482,6 +1572,14 @@ void settings_dialog::accept() {
 
 void settings_dialog::apply() {
 	if (m_policy) {
+		// Exceptions the user removed. Every feature is set back to unset, which
+		// is what "falls through to the defaults" means in the policy model --
+		// there is no delete, and clearing is the same thing said properly.
+		for (const QString &pattern : m_dropped_patterns)
+			for (int i = 0; i < policy::feature_count(); ++i)
+				m_policy->set_setting(pattern, static_cast<policy::feature>(i),
+				                       policy::setting::unset);
+		m_dropped_patterns.clear();
 		for (int i = 0; i < m_feature_combos.size(); ++i) {
 			QComboBox *c = m_feature_combos[i];
 			if (!c)

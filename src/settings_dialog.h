@@ -6,6 +6,7 @@
 #include "kiosk_controller.h"
 
 #include <QDialog>
+#include <QSet>
 #include <QList>
 
 class QCheckBox;
@@ -64,6 +65,10 @@ private:
 	void build_kiosk_page(QWidget *page);
 	void build_filter_page(QWidget *page);
 	void rebuild_filter_list();
+	// The per-site exceptions list on the privacy page: what the shield has been
+	// used to say, gathered in one place so it can be reviewed and undone
+	// without visiting each site to find out.
+	void rebuild_exceptions();
 	void rebuild_site_rules();
 	void index_pages(QWidget *page, int page_index);
 	void run_search(const QString &text);
@@ -121,6 +126,14 @@ private:
 	QCheckBox            *m_kiosk_dog    = nullptr;
 	QCheckBox            *m_kiosk_escape = nullptr;
 	QList<QComboBox *>    m_feature_combos;
+	QTreeWidget          *m_exceptions      = nullptr;
+	QPushButton          *m_exception_drop  = nullptr;
+	QLabel               *m_exception_note  = nullptr;
+	// Removals are pending until OK, like every other control on this dialog.
+	// The shield applies immediately because it is a menu on a live page; a
+	// dialog with a Cancel button that had already discarded rules would be
+	// lying about what Cancel does.
+	QSet<QString>         m_dropped_patterns;
 	QList<QRadioButton *> m_player_buttons;
 	QVBoxLayout    *m_player_group_layout = nullptr;
 	QLineEdit      *m_custom_cmd   = nullptr;

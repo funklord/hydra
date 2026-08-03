@@ -343,20 +343,51 @@ int main(int argc, char **argv) {
 	// out so a change to these pages can be looked at.
 	{
 		section("pictures of each page");
+		// A dialog of its own, with a couple of exceptions and a filter rule in
+		// it: a screenshot of every list in its empty state shows the furniture
+		// and none of the content, which is the half that is hard to get right.
+		policy_engine shot_policy;
+		shot_policy.set_setting("news.example", policy::feature::javascript,
+		                         policy::setting::block);
+		shot_policy.set_setting("news.example", policy::feature::cookies,
+		                         policy::setting::allow);
+		shot_policy.set_setting("*.tracker.example", policy::feature::ads,
+		                         policy::setting::block);
+		settings_dialog shot(&players, &downloads, nullptr, nullptr, nullptr,
+		                      &shot_policy);
+		shot.resize(920, 740);
+		shot.show();
+		spin(200);
+		auto *shot_cats = shot.findChild<QListWidget *>("categories");
+		auto *shot_pages = shot.findChild<QStackedWidget *>("pages");
 		const QString base = qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
 		                         ? QString::fromLocal8Bit(qgetenv("HYDRA_TEST_OUT"))
 		                         : QString("/tmp/hydra-test");
 		const QString shots = base + "/settings";
 		QDir().mkpath(shots);
 		int saved = 0, too_wide = 0;
-		for (int i = 0; i < cats->count(); ++i) {
-			cats->setCurrentRow(i);
+		for (int i = 0; i < shot_cats->count(); ++i) {
+			shot_cats->setCurrentRow(i);
 			spin(250);
-			QString name = cats->item(i)->text();
+			QString name = shot_cats->item(i)->text();
 			name.remove('&');
 			name.replace(' ', '-');
-			if (dlg.grab().save(QString("%1/%2.png").arg(shots, name.toLower())))
+			if (shot.grab().save(QString("%1/%2.png").arg(shots, name.toLower())))
 				++saved;
+			// And the bottom of anything that scrolls. A picture of the top of a
+			// long page shows the part that was already easy to get right; the
+			// exceptions list sits below the fold on the privacy page and would
+			// never have appeared in a review.
+			if (auto *area = qobject_cast<QScrollArea *>(shot_pages->widget(i))) {
+				QScrollBar *bar = area->verticalScrollBar();
+				if (bar && bar->maximum() > 0) {
+					bar->setValue(bar->maximum());
+					spin(150);
+					shot.grab().save(
+						QString("%1/%2-bottom.png").arg(shots, name.toLower()));
+					bar->setValue(0);
+				}
+			}
 			// No page may insist on being wider than the window it lives in.
 			//
 			// A settings page is text that wraps and controls that do not need
@@ -365,13 +396,13 @@ int main(int argc, char **argv) {
 			// across a page that looks like it fits, or a control sitting under
 			// the vertical scrollbar. Both happened here; neither was visible to
 			// any other assertion.
-			if (auto *area = qobject_cast<QScrollArea *>(pages->widget(i))) {
+			if (auto *area = qobject_cast<QScrollArea *>(shot_pages->widget(i))) {
 				const int need = area->widget()->minimumSizeHint().width();
 				const int have = area->viewport()->width();
 				if (need > have) {
 					++too_wide;
 					std::printf("  --    %s needs %d px, has %d\n",
-					            qPrintable(cats->item(i)->text()), need, have);
+					            qPrintable(shot_cats->item(i)->text()), need, have);
 					for (QWidget *w : area->widget()->findChildren<QWidget *>())
 						if (w->minimumSizeHint().width() > have - 40)
 							std::printf("        %s (%s) wants %d\n",
@@ -383,11 +414,83 @@ int main(int argc, char **argv) {
 				}
 			}
 		}
-		check(saved == cats->count(),
+		check(saved == shot_cats->count(),
 		      QString("every page was captured to %1 (%2)").arg(shots).arg(saved));
 		check(too_wide == 0,
 		      QString("and no page demands more width than the window gives it "
 		               "(%1 that do)").arg(too_wide));
+	}
+
+	// The exceptions list: what the shield has been used to say, in one place.
+	//
+	// Before this there was nowhere to see a per-site rule. The page even said
+	// "an exception always wins over what is chosen here" while offering no way
+	// to find out whether you had any.
+	section("site exceptions can be reviewed and undone");
+	{
+		policy_engine p;
+		p.set_setting("news.example", policy::feature::javascript,
+		               policy::setting::block);
+		p.set_setting("news.example", policy::feature::cookies,
+		               policy::setting::allow);
+		p.set_setting("shop.example", policy::feature::images,
+		               policy::setting::block);
+		// A rule whose last feature was cleared: present in the engine, saying
+		// nothing. Offering it for removal would be offering something that is
+		// not there.
+		p.set_setting("empty.example", policy::feature::popups,
+		               policy::setting::block);
+		p.set_setting("empty.example", policy::feature::popups,
+		               policy::setting::unset);
+
+		settings_dialog d(&players, &downloads, nullptr, nullptr, nullptr, &p);
+		d.show();
+		auto *list = d.findChild<QTreeWidget *>("site_exceptions");
+		auto *drop = d.findChild<QPushButton *>("drop_exception");
+		check(list && drop, "the privacy page has an exceptions list");
+		if (!list || !drop) { std::printf("\n%d passed, %d failed\n", g_pass, g_fail); return 1; }
+
+		check(list->topLevelItemCount() == 2,
+		      QString("both sites with something to say are listed (%1)")
+		          .arg(list->topLevelItemCount()));
+		QStringList sites;
+		for (int i = 0; i < list->topLevelItemCount(); ++i)
+			sites << list->topLevelItem(i)->text(0);
+		check(!sites.contains("empty.example"),
+		      "and a rule that expresses nothing is not offered as an exception");
+
+		QString summary;
+		for (int i = 0; i < list->topLevelItemCount(); ++i)
+			if (list->topLevelItem(i)->text(0) == "news.example")
+				summary = list->topLevelItem(i)->text(1);
+		check(summary.contains("JavaScript: block") && summary.contains("Cookies: allow"),
+		      QString("each row says what differs, not merely that something does (%1)")
+		          .arg(summary));
+
+		check(!drop->isEnabled(), "Remove is off until something is selected");
+		list->topLevelItem(0)->setSelected(true);
+		check(drop->isEnabled(), "and on once it is");
+
+		const QString gone = list->topLevelItem(0)->text(0);
+		drop->click();
+		check(list->topLevelItemCount() == 1,
+		      "removing takes the row out of the list at once");
+		check(p.setting_for(gone, policy::feature::javascript) !=
+		              policy::setting::unset ||
+		          p.setting_for(gone, policy::feature::images) !=
+		              policy::setting::unset,
+		      "but the rule itself is untouched until OK — Cancel must mean it");
+
+		d.accept();
+		for (int i = 0; i < policy::feature_count(); ++i)
+			if (p.setting_for(gone, static_cast<policy::feature>(i)) !=
+			    policy::setting::unset) {
+				check(false, QString("%1 still has a setting after OK").arg(gone));
+				break;
+			}
+		check(p.effective_setting(policy::feature::javascript, gone) ==
+		          p.global_default(policy::feature::javascript),
+		      "and the site falls back to the defaults, which is what removal means");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
