@@ -658,8 +658,20 @@ int main(int argc, char **argv) {
 		int kept = 0;
 		const QString folded = extractor_dialog::summarise(real, &kept);
 		check(kept == 2, QString("ten requests fold to two lines (%1)").arg(kept));
-		check(folded.contains("more like this"),
-		      "with the flood counted rather than listed");
+		// The `seen` column, not a suffix after the url. Anything printed after
+		// an address is something a model can read as part of it — which is
+		// exactly what went wrong with the served-type note.
+		// Read out of the column rather than matched as a substring: the count
+		// is right-aligned, so a substring check is a check on the padding.
+		int most = 0;
+		for (const QString &row : folded.split('\n')) {
+			const QStringList cols = row.split(" | ");
+			if (cols.size() >= 5)
+				most = qMax(most, cols[2].trimmed().toInt());
+		}
+		check(most > 1,
+		      QString("with the flood counted in its own column rather than "
+		               "listed (%1)").arg(most));
 	}
 
 	section("choosing what to ask the server about");
@@ -735,14 +747,36 @@ int main(int argc, char **argv) {
 		               "application/vnd.apple.mpegurl (HLS)");
 		int kept = 0;
 		const QString with = extractor_dialog::summarise(ev, &kept, &served);
-		check(with.contains("-> application/vnd.apple.mpegurl (HLS)"),
-		      "the served type is written beside the address it belongs to");
-		check(with.count("->") == 1,
-		      "and only beside addresses that were actually asked about");
+		check(with.contains("| application/vnd.apple.mpegurl (HLS) | https://"),
+		      "the served type is a column of its own, with the url after it");
+		// **The url is last and nothing follows it.** This is the whole point of
+		// the column: while the note was appended as `url -> type`, four runs in
+		// five wrote `url.includes('->')` and matched nothing, and the two that
+		// worked did so through an extension fallback that only works on a site
+		// which does not disguise its manifest.
+		for (const QString &row : with.split('\n')) {
+			const QStringList cols = row.split(" | ");
+			if (cols.size() < 5)
+				continue;
+			check(cols.last().startsWith("http"),
+			      "every evidence row ends with its url and nothing after it");
+			break;
+		}
+		check(!with.contains("->"),
+		      "and no arrow anywhere, so a url cannot be tested for one");
+		int annotated = 0;
+		for (const QString &row : with.split('\n')) {
+			const QStringList cols = row.split(" | ");
+			if (cols.size() >= 5 && cols[3].trimmed() != "-")
+				++annotated;
+		}
+		check(annotated == 1,
+		      QString("and only addresses actually asked about carry one (%1)")
+		          .arg(annotated));
 
 		const QString without = extractor_dialog::summarise(ev, &kept);
-		check(!without.contains("->"),
-		      "with nothing added when the tier did not run");
+		check(without.contains(" | - | https://"),
+		      "with every serves column a dash when the tier did not run");
 	}
 
 	section("the store");
@@ -781,8 +815,15 @@ int main(int argc, char **argv) {
 		const QString folded = extractor_dialog::summarise(many, &kept);
 		check(kept == 3, QString("252 requests fold to 3 shapes (%1)").arg(kept));
 		check(folded.contains("cf-master"), "the manifest survives folding");
-		check(folded.contains("+249 more like this"),
-		      "and the repeats are counted rather than silently dropped");
+		int biggest = 0;
+		for (const QString &row : folded.split('\n')) {
+			const QStringList cols = row.split(" | ");
+			if (cols.size() >= 5)
+				biggest = qMax(biggest, cols[2].trimmed().toInt());
+		}
+		check(biggest == 250,
+		      QString("and the repeats are counted rather than silently dropped "
+		               "(%1)").arg(biggest));
 		check(folded.count('\n') + 1 == 3, "one line per shape");
 	}
 

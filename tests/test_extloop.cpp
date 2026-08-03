@@ -168,8 +168,19 @@ int main(int argc, char **argv) {
 		check(!prov.last_payload.isEmpty(), "the payload was sent");
 		check(prov.last_payload.contains("cf-master"),
 		      "and contains the request that matters");
-		check(prov.last_payload.contains("more like this"),
-		      "with the segment flood folded rather than sent whole");
+		// The flood is a count in the `seen` column now. It used to be a
+		// "(+N more like this)" suffix printed after the url, which is the same
+		// mistake the served-type note made: anything trailing an address can
+		// be read as part of it.
+		int most = 0;
+		for (const QString &row : prov.last_payload.split('\n')) {
+			const QStringList cols = row.split(" | ");
+			if (cols.size() >= 5)
+				most = qMax(most, cols[2].trimmed().toInt());
+		}
+		check(most > 1,
+		      QString("with the segment flood folded rather than sent whole (%1)")
+		          .arg(most));
 		check(apply->isEnabled(), "a valid proposal becomes acceptable");
 
 		apply->click();

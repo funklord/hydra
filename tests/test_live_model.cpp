@@ -129,10 +129,27 @@ int main(int argc, char **argv) {
 	// silently measures the un-annotated case instead of the annotated one.
 	QPlainTextEdit *payload = dlg.findChild<QPlainTextEdit *>("payload");
 	const QString shown = payload ? payload->toPlainText() : QString();
+	// Counted off the `serves` column rather than a `->` marker, which the
+	// payload no longer contains -- that marker was the defect, not the format.
+	// Counting a string that has stopped occurring reports zero annotations
+	// forever and reads exactly like a probe budget that failed, so this walks
+	// the rows instead.
+	int n_answered = 0, n_refused = 0;
+	const QStringList rows = shown.split('\n');
+	for (const QString &row : rows) {
+		const QStringList cols = row.split(QStringLiteral(" | "));
+		if (cols.size() < 5)
+			continue;   // not an evidence row
+		const QString serves = cols[3].trimmed();
+		if (serves == QLatin1String("-") || serves.isEmpty())
+			continue;
+		if (serves.contains(QLatin1String("not established")))
+			++n_refused;
+		else
+			++n_answered;
+	}
 	std::printf("payload: %d chars, %d addresses answered, %d refused\n",
-	             int(shown.size()), int(shown.count(QStringLiteral("   -> "))) -
-	                 int(shown.count(QStringLiteral("not established"))),
-	             int(shown.count(QStringLiteral("not established"))));
+	             int(shown.size()), n_answered, n_refused);
 	// **What was actually sent**, on request. Counts say how much of the payload
 	// was annotated; they cannot say *which* addresses, and that is the
 	// difference between a run that measures the model and a run that measures

@@ -201,6 +201,40 @@ in it. The mirror on its own (`https://<player-host>/#<id>`, the address the
 watch page's iframe uses) initialises immediately and streams. The screenshots
 `try_extract` writes are how you tell the two apart in ten seconds.
 
+**Look at the player in the screenshot before believing anything else.** A
+poster image behind the play button means the mirror is alive; **a black
+rectangle with only a play triangle means it is not**, and that is the cheapest
+triage available — it costs one glance and saves a capture, five model runs and
+the write-up of a number that measured nothing. Confirmed the expensive way:
+a black-player capture of dramafren's VidHide mirror produced exactly **one**
+request to the media host, no segments at all, and a manifest that answered 502
+to everything. Everything downstream of that is arithmetic on nothing.
+
+The reason it is worth stating as a rule: **a mirror that has no video still
+loads, still runs its ads, and still looks like a player.** These are
+ad-revenue pages, and showing you a play button for something that is not there
+is not a malfunction from their point of view. So "the page loaded and the
+player appeared" is not evidence that there is a video, and neither is a capture
+with eighty requests in it.
+
+**Mirrors are not interchangeable, and which ones work is platform-dependent.**
+On Linux, dramafren's **Upnshare** and **VidHide** are the ones worth trying;
+the others may be Windows-only or simply broken. When one gives a black player,
+try the next rather than concluding the site is down — measured the same
+afternoon, VidHide gave a dead 502 manifest and Upnshare gave a complete stream
+from the same episode.
+
+**Find the mirror's own address rather than clicking blind.** dramafren's mirror
+list carries each player's iframe base64-encoded in a `data-em` attribute, so
+the direct url is one decode away and can be handed straight to `try_extract`:
+
+```sh
+curl -s <watch-page> | python3 -c "
+import re,sys,base64
+for m in re.finditer(r'data-em=\"([^\"]+)\"\s*data-index=\"(\d)\"[^>]*>\s*(\w+)', sys.stdin.read(), re.S):
+    print(m.group(2), m.group(3), re.search(r'SRC=\"([^\"]+)\"', base64.b64decode(m.group(1)).decode(), re.I).group(1))"
+```
+
 **Unless the mirror refuses to be loaded on its own**, which the second one
 does — it bounces to its vendor's homepage without the embedding page's referer.
 For those, pass a CSS selector as the fourth argument and the driver clicks it
