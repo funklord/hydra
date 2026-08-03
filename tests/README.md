@@ -322,6 +322,7 @@ site nobody controls.
 | `try_media` | a site url | the media path pointed at a real site, reporting what it sees |
 | `try_frame` | a site url | whether a player iframe loads in a *plain* view, with none of our machinery |
 | `try_extract` | a site url | a full turn of the extractor loop on evidence from a live page |
+| `try_autofill` | nothing | the key on the toolbar: that it appears for a page with a login form *whether or not* the fill is allowed, carries the reason, answers a click, and goes down on navigation. Needs no KeePassXC — autofill is HTTPS-only, so a login form over plain http is refused for a reason the shell knows on its own |
 | `try_ytdlp` | a site url | yt-dlp resolution driven through the shell's own menus |
 | `try_settings` | nothing | the Settings dialog driven through the real window |
 

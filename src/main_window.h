@@ -221,6 +221,7 @@ private:
 	QSet<QString>        m_antiadblock_fixed;
 	QString              m_site_rules_path;
 	QAction            *m_media_action  = nullptr;
+	QAction            *m_key_action    = nullptr;
 	QString             m_filters_path;
 	QAction            *m_kiosk_action  = nullptr;
 	QAction            *m_undo_action   = nullptr;

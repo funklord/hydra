@@ -3599,8 +3599,38 @@ why. The script keeps its `length > 1` guard as belt and braces: it should never
 fire now, and if it does, filling the first of several is a guess about which
 account someone wanted.
 
-**Still not built from §13.2:** the key icon itself — refusals currently go to
-the status bar — plus `set-login` on new-credential submit and
+### The key, which §13.2 asked for as an icon and gets as a word
+
+It appears when a page has a login form, and **before the gate runs** rather than
+after — which is the whole design. A key that showed up only when a fill
+succeeded would be absent from exactly the pages where someone needs to know
+why nothing happened. Four states, each a different thing to do next: hidden,
+`Key` (this page has a form), `Key ✓` (filled, click to do it again) and
+`Key ✕` with the refusal in its tooltip. Clicking re-runs the whole gate rather
+than re-opening a cached answer, because caching the answer means holding
+credentials past the fill that asked for them.
+
+**A word, not an icon**, and that is a deliberate deviation from §13.2's
+wording: this toolbar is made of text actions — Media, Shield — and the icon set
+is the app's own mark at seven sizes, not a symbol library. Inventing one glyph
+for one affordance would make it the odd one out.
+
+**The tooltip is where the reason lives**, not the status bar. A status message
+is gone in six seconds and the empty form is still sitting there; this project
+has already recorded a defect where a message was written into a label something
+else overwrote.
+
+`try_autofill` drives it through the real shell, **8 checks, no KeePassXC
+needed** — autofill is HTTPS-only by default, so a login form served over plain
+http is refused for a reason the shell knows on its own, which makes the whole
+chain observable without a vault or a pairing dialog. Two defects in the driver
+before it worked, both this project's own recurring shapes: it took the first
+`QLineEdit` it found, which is the sidebar's *search* box, so every navigation
+filtered the tree instead of loading anything; and it never activated a tree
+node, so there was no view to navigate at all. Both failed by blaming the
+feature.
+
+**Still not built from §13.2:** `set-login` on new-credential submit, and
 `generate-password`.
 
 ### A pairing that survives a restart (§13.1, §14)

@@ -65,8 +65,13 @@ signals:
 	// Delivered back to the page: a JSON array of {name, login, password}.
 	// **At most one entry**, and only ever the one that is going to be filled.
 	void credentials_ready(const QString &json);
-	// A human-readable refusal, for the key icon's tooltip.
+	// A human-readable refusal, for the key's tooltip.
 	void refused(const QString &reason);
+	// A page asked. Emitted before the gate runs, so the shell learns this page
+	// has a login form on it whether or not the fill is going to be allowed --
+	// which is the difference between a key that appears only when things work
+	// and a key that can tell you *why* they did not.
+	void requested();
 	// More than one entry matched, so a person has to say which. Carries the
 	// names and logins **without the passwords**: the picker shows what is
 	// needed to tell two accounts apart and no more, and the password is

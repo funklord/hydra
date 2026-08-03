@@ -141,8 +141,36 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// the status bar carries it meanwhile. Silence here is the thing to avoid:
 	// "nothing stored for this site" and "KeePassXC is not running" produce the
 	// same empty form, and only one of them is worth doing something about.
+	// The key's four states. Each is a different thing to do next, which is why
+	// they read differently rather than all being "autofill unavailable".
+	connect(m_autofill, &autofill_controller::requested, this, [this] {
+		if (!m_key_action)
+			return;
+		m_key_action->setVisible(true);
+		m_key_action->setText("Key");
+		m_key_action->setToolTip("This page has a login form. Click to fill it "
+		                          "from KeePassXC.");
+	});
 	connect(m_autofill, &autofill_controller::refused, this,
-	        [this](const QString &why) { m_status->showMessage(why, 6000); });
+	        [this](const QString &why) {
+		// On the key *and* in the status bar. The tooltip is where it stays
+		// readable -- a status message is gone in six seconds and the form is
+		// still sitting there empty.
+		if (m_key_action) {
+			m_key_action->setVisible(true);
+			m_key_action->setText("Key ✕");
+			m_key_action->setToolTip(why);
+		}
+		m_status->showMessage(why, 6000);
+	});
+	connect(m_autofill, &autofill_controller::credentials_ready, this,
+	        [this](const QString &) {
+		if (!m_key_action)
+			return;
+		m_key_action->setVisible(true);
+		m_key_action->setText("Key ✓");
+		m_key_action->setToolTip("Filled from KeePassXC. Click to fill again.");
+	});
 	m_consent  = new consent_blocker(m_policy, this);
 	// Say it once, and say what the lever is. A page that will not run because
 	// we block ads is indistinguishable from a broken site unless we tell them,
@@ -374,6 +402,23 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_media_action->setToolTip("Watch or download media on this page");
 	m_media_action->setVisible(false);
 	connect(m_media_action, &QAction::triggered, this, &main_window::open_media);
+
+	// §13.2 asks for a key icon in the field or the toolbar. It is a *text*
+	// action here, beside Media and Shield, because that is what this toolbar
+	// is made of -- inventing a glyph for one affordance would make it the odd
+	// one out, and the icon set in `icons/` is the app's own mark at seven
+	// sizes, not a symbol library. The behaviour §13.2 wants is the same either
+	// way: it appears when a page has a login form, and it says what happened.
+	m_key_action = bar->addAction("Key");
+	m_key_action->setVisible(false);
+	connect(m_key_action, &QAction::triggered, this, [this] {
+		// Ask again, through the whole gate. Cheaper designs were available --
+		// re-opening the last picker, or caching the entries -- and both mean
+		// holding credentials for longer than the fill that asked for them.
+		// Re-asking costs one round trip to a local socket and keeps §13.3.
+		if (m_autofill)
+			m_autofill->request_credentials(m_autofill->page_origin());
+	});
 
 	QAction *shield_act = bar->addAction("Shield");
 	shield_act->setToolTip("Site controls");
@@ -1109,10 +1154,16 @@ void main_window::sync_page_context() {
 		m_consent->set_page_host(u.host());
 	if (m_cosmetic)
 		m_cosmetic->set_page_host(u.host());
-	if (m_autofill)
+	// The key belongs to the page that raised it: a new document has not asked
+	// for anything yet, and a tick left over from the last one would claim a
+	// fill that did not happen here.
+	if (m_key_action)
+		m_key_action->setVisible(false);
+	if (m_autofill) {
 		m_autofill->set_page_origin(
 			u.adjusted(QUrl::RemovePath | QUrl::RemoveQuery |
 			            QUrl::RemoveFragment).toString());
+	}
 }
 
 void main_window::suspend_node(node *n) {

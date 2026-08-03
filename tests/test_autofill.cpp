@@ -239,6 +239,32 @@ int main(int argc, char **argv) {
 		      "and says why, since the user did click something");
 	}
 
+	section("the key hears about a page whether or not the fill is allowed");
+	{
+		// The affordance §13.2 asks for is only useful if it appears on the
+		// pages that have something to say. A `requested` that fired after the
+		// gate would show the key exactly when everything worked and hide it
+		// when autofill was blocked -- which is the page where a user needs to
+		// see it and read why.
+		autofill_controller a(nullptr, &policy);
+		QSignalSpy asked(&a, &autofill_controller::requested);
+		QSignalSpy refused(&a, &autofill_controller::refused);
+		a.set_page_origin("https://site.example");
+
+		a.request_credentials("https://evil.example");
+		check(asked.count() == 1,
+		      "a request from the wrong origin still raises the key");
+		check(refused.count() == 1, "and is refused");
+
+		policy.set_setting("site.example", policy::feature::autofill,
+		                    policy::setting::block);
+		a.request_credentials("https://site.example");
+		check(asked.count() == 2,
+		      "and so does one the user has blocked autofill for");
+		policy.set_setting("site.example", policy::feature::autofill,
+		                    policy::setting::unset);
+	}
+
 	section("no logins at all is said, not left silent");
 	{
 		autofill_controller a(nullptr, &policy);

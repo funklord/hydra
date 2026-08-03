@@ -55,6 +55,11 @@ QString autofill_controller::blocked_reason(const QString &origin) const {
 }
 
 void autofill_controller::request_credentials(const QString &origin) {
+	// Before the gate, deliberately. A page with a login form that autofill is
+	// blocked on is exactly the page where the user needs to see the affordance
+	// and read the reason; announcing only the allowed ones would hide the key
+	// precisely when it has something to say.
+	emit requested();
 	const QString why = blocked_reason(origin);
 	if (!why.isEmpty()) {
 		emit refused(why);
