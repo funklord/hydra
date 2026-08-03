@@ -13,6 +13,14 @@ struct node;
 // The single source of truth for the tree (architecture doc §5.1). Exposes
 // node attributes through custom roles so the sort/filter proxy can order and
 // filter without the model caring how.
+// **Needs a QApplication, not merely a QCoreApplication.** It answers
+// `DecorationRole` with a style icon and `FontRole` with a font, so it asks
+// `QApplication::style()` — which is null when there is no GUI application, and
+// dereferencing it crashes inside `data()`. That is the right failure for a
+// misuse rather than something to guard: a model handing back blank icons is
+// harder to trace than a crash where the mistake was made. Written down here
+// because the crash's stack frame says `data()` and not "you used the wrong
+// application class", and a test suite found that out the slow way.
 class tab_tree_model : public QAbstractItemModel {
 	Q_OBJECT
 public:

@@ -3573,6 +3573,35 @@ and `tree_diff` were right. Four and four. The ones that were right are the ones
 whose authors wrote down what they were defending against — and that is not a
 coincidence worth being coy about.
 
+### The model, checked against Qt's own rules
+
+Everything the user sees of the tree goes through `tab_tree_model` and
+`tree_sort_proxy`. A model that lies about its own shape does not produce a wrong
+answer — it produces a crash inside Qt's view code, in a stack with no frames of
+ours in it. Neither had a test.
+
+The interesting half is not hand-written: `QAbstractItemModelTester` walks a
+model and checks the contract — parent/index round trips, row counts, the order
+of the signals around a change — which is the part assertions cover badly. Both
+the model and the proxy pass it with **no complaints**, and pass it *through* a
+sort-mode change and a filter being set and cleared, since a proxy's contract is
+easiest to break while it is moving.
+
+The behavioural half pins what a search means, including the part that surprises:
+searching keeps a hit **and its ancestors**, not its descendants, so matching a
+folder by name shows the folder without its contents. That is what the header
+describes, and now a test says it out loud, so changing it is a decision rather
+than a slip.
+
+**One crash, and it was the test's.** The first run segfaulted inside
+`QAbstractItemModelTester`, in `tab_tree_model::data()`. The cause is that this
+is a *GUI* model — it answers `DecorationRole` with a style icon — and it was
+being tested under a `QCoreApplication`, where `QApplication::style()` is null.
+The fix was the test, not the model: a model handing back blank icons instead of
+crashing would be harder to trace than the crash, so there is no guard, and the
+requirement is written where the next person will look. A stack frame saying
+`data()` does not say "you used the wrong application class".
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and

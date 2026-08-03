@@ -134,6 +134,11 @@ if(SODIUM_T_FOUND)
     target_compile_definitions(test_autofill PRIVATE HYDRA_HAVE_SODIUM)
 endif()
 
+add_executable(test_model test_model.cpp ${H}/tab_tree_model.cpp
+    ${H}/tree_sort_proxy.cpp ${H}/tree_outline.cpp ${H}/tree_diff.cpp)
+target_link_libraries(test_model PRIVATE Qt6::Widgets Qt6::Test)
+target_include_directories(test_model PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_executable(test_diff test_diff.cpp ${H}/tree_diff.cpp)
 target_link_libraries(test_diff PRIVATE Qt6::Core Qt6::Test)
 target_include_directories(test_diff PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
