@@ -22,9 +22,13 @@ QStringList vendored_candidates() {
 	const QByteArray env = qgetenv("HYDRA_YTDLP");
 	if (!env.isEmpty())
 		out << QString::fromLocal8Bit(env);
-	for (const QString &rel : { "third_party/yt-dlp", "../third_party/yt-dlp",
-	                             "../../third_party/yt-dlp" })
-		out << QDir(app).absoluteFilePath(rel);
+	// `const char *`, not `const QString &`: an initializer list of string
+	// literals makes a temporary QString per iteration, and binding a reference
+	// to it is the kind of thing that is safe here and is not safe one refactor
+	// later. The conversion happens at the call below either way.
+	for (const char *rel : { "third_party/yt-dlp", "../third_party/yt-dlp",
+	                          "../../third_party/yt-dlp" })
+		out << QDir(app).absoluteFilePath(QLatin1String(rel));
 	out << QDir::current().absoluteFilePath("third_party/yt-dlp");
 	return out;
 }

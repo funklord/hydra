@@ -34,7 +34,22 @@ void tree_sort_proxy::set_sort_mode(sort_mode mode) {
 
 void tree_sort_proxy::set_search_text(const QString &text) {
 	m_search = text.trimmed();
+	// `invalidateFilter()` is deprecated from 6.9 in favour of a begin/end pair,
+	// and the pair does not exist before it, so both spellings are here.
+	//
+	// **Measured before changed**: the deprecated call still filters correctly on
+	// 6.11 — `test_model`'s twenty-four checks pass there — so this is
+	// forward-compatibility rather than a repair. That distinction is worth
+	// making because the *other* deprecation this project met, the WebEngine
+	// permission API, was documented as functional and was not: geolocation
+	// silently stopped arriving. A deprecation warning says nothing about
+	// whether the thing still works; only running it does.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
+	beginFilterChange();
+	endFilterChange();
+#else
 	invalidateFilter();
+#endif
 }
 
 bool tree_sort_proxy::lessThan(const QModelIndex &left, const QModelIndex &right) const {

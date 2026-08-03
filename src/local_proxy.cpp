@@ -99,7 +99,14 @@ QUrl local_proxy::publish(const QUrl &upstream, const stream_context &ctx) {
 	QRandomGenerator::system()->generate(raw.begin(), raw.end());
 	const QString token = QString::fromLatin1(raw.toHex());
 
-	m_published.insert(token, entry{upstream, ctx});
+	// Named rather than brace-initialised: `entry` has grown to eight members
+	// with defaults, and `entry{upstream, ctx}` leaves six to be filled in
+	// silently by position. That is correct today and is one reordered member
+	// away from not being.
+	entry e;
+	e.upstream = upstream;
+	e.ctx      = ctx;
+	m_published.insert(token, e);
 
 	QUrl local;
 	local.setScheme("http");

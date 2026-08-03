@@ -37,6 +37,11 @@ pkill -f 'ollama serve'
 
 ### Need nothing but a build
 
+Twelve of these were written in one sweep through code that no test had ever
+named. Four of the nine files that sweep covered were wrong — see `project.md` —
+and every one of those bugs produced a plausible answer rather than a crash, so
+the suites below are worth more than their pass counts suggest.
+
 | suite | covers |
 |---|---|
 | `test_seam` | the download transport seam: routing, consent gate, per-source concurrency, cancel, failure paths, pump re-entrancy |
@@ -47,6 +52,19 @@ pkill -f 'ollama serve'
 | `test_extractor` | the generated-extractor sandbox and the rules that a proposal cannot invent a URL, return a segment, or return the page itself |
 | `test_extloop` | the review loop end to end with a stub provider standing in for a model |
 | `test_settings` | settings persistence, the uninstalled-player fallback, the custom-player command template |
+| `test_ytdlp` | parsing yt-dlp's answer and the format preference — the risky part is reading the JSON, not running the process |
+| `test_bridge` | calling a shell object from a page by name, and above all what it refuses — `deleteLater()`, signals, unchecked argument types |
+| `test_hls` | the HLS manifest parser: variants, segments, byte ranges, and the tags that carry their URI inline and would steal the next line |
+| `test_assembler` | assembling a stream into one file against an in-process CDN that honours `Range`, including the byte-range playlist the parser fix was for |
+| `test_tree` | the tree file and the AI payload, round-tripped — including a title containing the field separator, which used to lose the url |
+| `test_state` | per-node suspended state: byte-for-byte blobs, binary with NULs, and two ids that must not share one file |
+| `test_crypto` | the crypto shim's edges — wrong key, tampered byte, short buffer — and the contract when libsodium is absent |
+| `test_picker` | what "zap this" hands the shell, and that a page cannot say which site it is |
+| `test_autofill` | the gate between a page and the vault: origin, HTTPS, policy, and the order the refusals come in |
+| `test_diff` | "no node left behind" — the reorganizer's repair rules and the undo snapshot |
+| `test_model` | the tree model against Qt's own `QAbstractItemModelTester`, plus sorting and the search that must keep a hit's ancestors |
+| `test_signals` | the evidence the filter loop reasons from, and why observed and suspect are different lists |
+| `test_kiosk` | kiosk mode's borrow-and-return contract: the widget goes back where it came from |
 
 ```sh
 QT_QPA_PLATFORM=offscreen ./tests/build/test_seam
@@ -190,6 +208,33 @@ shipping path.
 
 Set `HYDRA_TEST_OUT` to choose where screenshots and captures land; it defaults
 to `/tmp/hydra-test/`.
+
+**What exists.** The ones that assert print `N passed, M failed` and return
+non-zero on failure, so they can be run like suites; the rest are observational
+and report what they saw, which is the honest shape for a driver pointed at a
+site nobody controls.
+
+| driver | needs | what it drives |
+|---|---|---|
+| `try_cookies` | nothing | the cookie filter, first- and third-party, over HTTP and TLS |
+| `try_consent` | nothing | the consent blocker end to end, and that it follows the visible tab |
+| `try_permissions` | nothing | geolocation, camera, microphone, notifications, observed from the page's side |
+| `try_filters` | nothing | whether an accepted filter rule actually stops a request, and the cosmetic half |
+| `try_adblock_fix` | nothing | a page that will not run with ads blocked, fixed automatically — and a site the user ruled on being left alone |
+| `try_subframe` | nothing | whether the media tap sees a player inside a third-party iframe |
+| `try_settings_ui` | nothing | the settings window's layout and its site-defaults page |
+| `try_keepass` | a running KeePassXC | the §13.1 bridge — see above for the setup |
+| `try_flicker` | nothing | what is actually on screen in the moments after a tab opens |
+| `try_downloads`, `try_watch` | network | a real HTTP download and a real torrent side by side in the downloads window |
+| `try_capture` | a site url | arming a capture from a page and watching it land in the downloads window |
+| `try_cancel` | a site url | cancelling a capture mid-recording |
+| `try_tap`, `try_taprow` | a site url | the MSE tap on a real player, and how its row reads in the media dialog |
+| `try_mse` | a site url | whether a main-world tap sees the bytes whatever the transport |
+| `try_media` | a site url | the media path pointed at a real site, reporting what it sees |
+| `try_frame` | a site url | whether a player iframe loads in a *plain* view, with none of our machinery |
+| `try_extract` | a site url | a full turn of the extractor loop on evidence from a live page |
+| `try_ytdlp` | a site url | yt-dlp resolution driven through the shell's own menus |
+| `try_settings` | nothing | the Settings dialog driven through the real window |
 
 `try_cookies` needs no server of its own and no network — it stands one up in
 process and serves the page from `127.0.0.1` and a third-party image from

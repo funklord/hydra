@@ -241,7 +241,17 @@ qt_add_executable(hydra
 )
 
 if(NOT ANDROID)
-    target_link_libraries(hydra PRIVATE Qt6::WebEngineWidgets)
+    # Warnings on, and not as a gesture: the whole of src/ compiles clean under
+# these on both the Qt this is built against and the newest one it has been
+# tried on, which was measured rather than hoped. The point of a clean build is
+# that the next warning is visible instead of being the sixth in a list nobody
+# reads. Not -Werror: a warning that appears on somebody else's compiler should
+# not stop them building.
+if(NOT MSVC)
+    target_compile_options(hydra PRIVATE -Wall -Wextra)
+endif()
+
+target_link_libraries(hydra PRIVATE Qt6::WebEngineWidgets)
 endif()
 
 # The Android package's own files: manifest and launcher icons, generated from

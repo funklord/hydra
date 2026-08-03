@@ -3958,6 +3958,34 @@ belongs.
 none of them are blocked by this — they are Java-side work that plugs into
 C++ that already exists.
 
+### A warning-clean build, measured rather than declared
+
+Turning `-Wall -Wextra` on is easy to do as a gesture. The question worth asking
+first is what it costs, so it was measured: the whole of `src/` produced **five
+warnings** across three toolchains — gcc against 6.8.2, gcc against 6.11, and
+clang for Android — and none of the five was a bug.
+
+Four were `entry{upstream, ctx}` filling six further members by position;
+correct today and one reordered member away from not being, so the fields are
+named now. The fifth was a range-for over string literals binding a `const
+QString &` to a temporary per iteration: safe here, and the kind of safe that
+stops being safe one refactor later.
+
+The flags are on for the app's own target, and **not** `-Werror`: a warning that
+appears on somebody else's compiler should not stop them building. The point is
+that the next warning is visible rather than sixth in a list nobody reads.
+
+One deprecation was left, and it is worth recording what was done about it rather
+than only that it was fixed. `QSortFilterProxyModel::invalidateFilter()` is
+deprecated from 6.9 in favour of a begin/end pair that does not exist before it,
+so both spellings are now present behind a version check. **The deprecated call
+was tested before it was replaced** — `test_model`'s twenty-four checks pass on
+6.11 with it — so this is forward-compatibility and not a repair. That
+distinction matters here because the *other* deprecation this project met, the
+WebEngine permission API, was documented as functional and was not: geolocation
+had silently stopped arriving. A deprecation warning says nothing about whether
+the thing still works. Only running it does.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
