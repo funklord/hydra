@@ -37,6 +37,8 @@ if(ANDROID)
         src/android_view.cpp
         src/android_intents.cpp
         src/android_dialogs.cpp
+        src/android_downloads.cpp
+        src/android_downloads.h
         src/android_view.h)
 else()
     set(HYDRA_BACKEND_SOURCES

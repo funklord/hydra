@@ -3326,6 +3326,43 @@ still be the wrong file at any length.
 Found on a phone against python's `http.server`. It should not have needed a
 phone, and now it does not.
 
+### Downloads that can be found afterwards
+
+Qt's download location on Android is app-private external storage. Writing there
+needs no permission and always works, which is why the download stack worked on a
+phone the day it was built — and it is also **invisible**: no file manager lists
+it, no other app can open it, and it is deleted when Hydra is uninstalled. A
+browser whose downloads cannot be found afterwards has not really downloaded
+anything.
+
+A completed file is now copied into `MediaStore.Downloads`, the shared collection
+every file manager shows. That needs no permission either — an app may always
+insert its own entries. **Chosen between two honest options**: the other is
+asking with the Storage Access Framework where each file should go, which is what
+"save as" is for and not what a browser should do to every download. The copy is
+a copy, not a move: it costs the space twice until the app's data is cleared, and
+it means a failed publish leaves a download that still exists rather than one
+that succeeded and then vanished.
+
+Measured: `content query --uri content://media/external/downloads` lists
+`clip.mp4, _size=200000` — the exact byte count, which also confirms the Range
+fix above, since the same file downloaded twice before produced 400000. A second
+download became `clip (1).mp4` rather than overwriting, which is MediaStore's own
+naming and the behaviour a browser should have.
+
+The media dialog said "Queued download to
+/storage/emulated/0/Android/data/org.qtproject.example.hydra/files/Download" —
+a path that is long, unopenable, and no longer where the file ends up. On Android
+it now says "Queued. It will appear in Downloads when it finishes."
+
+**One flake, recorded rather than explained.** `test_extloop` came back 28 of 34
+once, immediately after a parallel build, and has passed six times since —
+including with four cores deliberately busy. Its assertions include wall-clock
+ones ("the timer fired *while* the script was running, 120 ms against 419 ms"),
+which are the obvious suspects, but that is a guess and this file does not keep
+guesses. It is written down so the next occurrence is a second data point rather
+than a first.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and

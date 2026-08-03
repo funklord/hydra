@@ -32,6 +32,9 @@
 #include "filter_signals.h"
 #include "filter_list.h"
 #include "cosmetic_filters.h"
+#ifdef Q_OS_ANDROID
+#include "android_downloads.h"
+#endif
 #include "filter_dialog.h"
 #include "keepass_bridge.h"
 #include "autofill_controller.h"
@@ -197,6 +200,29 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 
 	m_players   = new player_launcher;
 	m_downloads = new download_manager(this);
+#ifdef Q_OS_ANDROID
+	// A download nobody can find afterwards has not really been downloaded: Qt's
+	// download location on Android is app-private and invisible to every file
+	// manager, so a finished file is copied into the shared Downloads collection.
+	{
+		auto *publisher = new android_downloads(m_downloads, this);
+		connect(publisher, &android_downloads::published, this,
+		         [this](const QString &, const QString &) {
+			// Said in our own status bar rather than a system toast, because the
+			// browser knows when it is showing something else that matters more.
+			m_status->showMessage("Saved to Downloads.", 6000);
+		});
+		connect(publisher, &android_downloads::failed, this,
+		         [this](const QString &path, const QString &why) {
+			// Named, because the file is still there and still openable: the
+			// copy failed, not the download.
+			m_status->showMessage(QString("Downloaded, but not copied to "
+			                               "Downloads (%1). It is at %2")
+			                          .arg(why, path),
+			                       10000);
+		});
+	}
+#endif
 	// The manager has no transport of its own (§11.4); give it one. Sources are
 	// tried in order, so adding a torrent source later is one line here.
 	m_downloads->add_source(new http_download_source);

@@ -216,7 +216,18 @@ void media_dialog::save(const media_item &item) {
 	// A learned stream carries the headers its CDN checks; without them the
 	// download is refused where Watch would have succeeded.
 	const int id = m_downloads->enqueue(item.url, m_node_id, &error, item.headers);
-	m_status->setText(id ? QString("Queued download to %1.")
-	                           .arg(m_downloads->directory())
-	                     : "<b>" + error.toHtmlEscaped() + "</b>");
+	// Where it lands, as the user will actually find it.
+	//
+	// On Android naming the directory is worse than useless: Qt downloads into
+	// app-private storage, whose path is long, unopenable by any file manager,
+	// and not where the finished file ends up anyway -- it is copied into the
+	// shared Downloads collection when it completes (§19).
+#ifdef Q_OS_ANDROID
+	const QString where = QStringLiteral("Queued. It will appear in Downloads "
+	                                      "when it finishes.");
+#else
+	const QString where =
+		QString("Queued download to %1.").arg(m_downloads->directory());
+#endif
+	m_status->setText(id ? where : "<b>" + error.toHtmlEscaped() + "</b>");
 }
