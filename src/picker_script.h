@@ -70,6 +70,13 @@ inline const char *source() {
     let s = '<' + el.tagName.toLowerCase();
     for (const a of Array.from(el.attributes)) {
       if (a.name === 'style') continue;
+      // `value` is whatever the user typed. Text nodes are already dropped
+      // here, which is what §12.2's "strip personal data" was taken to mean,
+      // but an input's value is not a text node and is the most personal thing
+      // on a page -- an address, a search, a card number. The snippet exists to
+      // show the model an element's *shape*, and a value never contributes to
+      // that, so there is nothing to weigh against dropping it.
+      if (a.name === 'value') continue;
       s += ' ' + a.name + '="' + String(a.value).slice(0, 80) + '"';
     }
     s += '>';

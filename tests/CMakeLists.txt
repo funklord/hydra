@@ -123,6 +123,10 @@ if(SODIUM_T_FOUND)
     target_compile_definitions(test_crypto PRIVATE HYDRA_HAVE_SODIUM)
 endif()
 
+add_executable(test_picker test_picker.cpp ${H}/element_picker.cpp)
+target_link_libraries(test_picker PRIVATE Qt6::Core Qt6::Test)
+target_include_directories(test_picker PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_executable(test_state test_state.cpp ${H}/state_store.cpp)
 target_link_libraries(test_state PRIVATE Qt6::Core Qt6::Test)
 target_include_directories(test_state PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})

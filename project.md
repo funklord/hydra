@@ -3364,21 +3364,24 @@ The media dialog said "Queued download to
 a path that is long, unopenable, and no longer where the file ends up. On Android
 it now says "Queued. It will appear in Downloads when it finishes."
 
-**A flake, recorded rather than explained.** `test_extloop` has now failed twice
-— 28 of 34, then 21 of 34 — and passed more than twenty times since, so it is
-real and it is rare. Both failures happened inside a run of the whole suite list;
-neither reproduced. Ruled out by trying: running it alone (12 consecutive
-passes), running it with four cores deliberately busy, running it immediately
-after `test_settings` and after `test_extractor`, and re-running the exact
-sequence that failed.
+**A flake, recorded rather than explained.** `test_extloop` has now failed three
+times — 28 of 34, then 21 of 34, then 27 of 34 — and passed more than thirty
+times in between, so it is real and it is rare. **Every failure has happened
+inside a run of the whole suite list, and none has ever reproduced on demand.**
+Ruled out by trying: running it alone (twelve consecutive passes), running it
+with four cores deliberately busy, running it immediately after `test_settings`
+and after `test_extractor`, re-running the exact sequence that failed, and three
+further complete passes of the whole list.
 
 Its assertions include wall-clock ones — "the timer fired *while* the script was
 running, 120 ms against 419 ms" — which makes scheduling the leading suspect, but
 that is a hypothesis and this file does not record hypotheses as findings. What
 is worth knowing is that **the suite already prints the numbers it compares**, so
 whenever it next fails the output will say which deadline was missed and by how
-much, rather than only that something did. That is the difference between a third
-data point and a third shrug.
+much. Chasing it further has been stopped deliberately rather than forgotten:
+three attempts to reproduce have cost more than the failure does, and the next
+occurrence inside a full run will be more informative than another hour of
+guessing at it now.
 
 ### Autofill on Android is the platform's, and the menu now says so
 
