@@ -5,6 +5,8 @@
 
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QApplication>
+#include <QDialog>
 #include <QFileDialog>
 #include <QLabel>
 #include <QJniEnvironment>
@@ -352,18 +354,18 @@ android_view::android_view(request_filter *filter, QWidget *parent)
 	m_native = !QJniEnvironment().checkAndClearExceptions();
 	if (m_native) {
 		m_widget->installEventFilter(this);
-		// And on the window, for the one thing this arrangement gets wrong.
+		// And on the application, for the one thing this arrangement gets wrong.
 		//
 		// The WebView is composited *above* Qt's surface, so a Qt dialog opened
 		// over the page is invisible: the button depresses and nothing appears.
-		// The header has always said this was the cost; what it did not say is
-		// that Qt announces it. A window covered by a modal dialog is sent
-		// WindowBlocked, and unblocked again when the dialog closes, so the
-		// native view can get out of the way for exactly as long as it must.
-		//
 		// Found by tapping "Media (1)" on a phone and watching nothing happen.
-		if (QWidget *win = m_widget->window())
-			win->installEventFilter(this);
+		//
+		// The first fix used QEvent::WindowBlocked, which Qt sends to a window
+		// covered by a *modal* dialog. That was half of it, and the half that was
+		// easy to believe: the downloads dialog is shown rather than exec'd, sends
+		// no such event, and came up with the page drawn through the middle of it.
+		// Counting visible dialogs instead needs no assumption about modality.
+		qApp->installEventFilter(this);
 		// The widget is only a stand-in for the page area now, so it should not
 		// be showing an explanation of itself behind a live WebView.
 		m_widget->clear();
@@ -377,16 +379,22 @@ android_view::~android_view() {
 }
 
 bool android_view::eventFilter(QObject *o, QEvent *e) {
-	// Modal dialogs, which cannot be seen while the native view is on top.
-	if (m_native && m_widget && o == m_widget->window()) {
-		if (e->type() == QEvent::WindowBlocked) {
-			m_blocked = true;
-			QJniObject::callStaticMethod<void>(k_cls, "setVisible", "(JZ)V",
-			                                    jlong(m_id), jboolean(false));
-		} else if (e->type() == QEvent::WindowUnblocked) {
-			m_blocked = false;
-			sync_geometry();
-		}
+	// Any dialog at all, modal or not: while one is up the native view has to be
+	// out of the way, because it is drawn over everything Qt renders.
+	if (m_native && (e->type() == QEvent::Show || e->type() == QEvent::Hide) &&
+	    qobject_cast<QDialog *>(o)) {
+		int open = 0;
+		for (QWidget *w : QApplication::topLevelWidgets())
+			if (w->isVisible() && qobject_cast<QDialog *>(w))
+				++open;
+		// The event arrives *before* the widget's visibility changes, so a dialog
+		// being shown is not yet in that count and one being hidden still is.
+		if (e->type() == QEvent::Show)
+			++open;
+		else
+			--open;
+		m_blocked = open > 0;
+		sync_geometry();
 	}
 	if (o == m_widget) {
 		switch (e->type()) {

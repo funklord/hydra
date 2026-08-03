@@ -24,11 +24,12 @@ class request_filter;
 // Qt's own dialogs**, which is not a caveat but a bug: tapping "Media" depressed
 // the button and showed nothing, because the dialog opened behind the page.
 //
-// Qt announces it, so the fix is not a guess. A window covered by a modal dialog
-// receives `WindowBlocked`, and `WindowUnblocked` when it closes; the native view
-// hides for exactly that span. Non-modal windows do not send those events and
-// would still be covered — none exist in the shell today, and that is a fact
-// about the shell rather than a property to rely on.
+// The view therefore hides while any dialog is visible, counted rather than
+// inferred. The first attempt used `WindowBlocked`, which Qt sends to a window
+// covered by a *modal* dialog — and that missed the downloads dialog, which is
+// shown rather than exec'd and came up with the page drawn through the middle of
+// it. Counting needs no assumption about modality, and "none of the shell's
+// windows are non-modal" was exactly the kind of claim that was false already.
 //
 // **A QLabel stands in when there is no WebView to talk to**, which happens when
 // `HYDRA_ANDROID_WEBVIEW=0` is set or an APK was built without the `android/`

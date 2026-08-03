@@ -124,10 +124,40 @@ void http_download_source::wire(transfer *t) {
 	QNetworkReply *reply = t->reply;
 	const int id = t->id;
 
-	connect(reply, &QNetworkReply::readyRead, this, [this, reply, id] {
+	// Did the server actually honour the Range we asked for?
+	//
+	// **It does not have to, and many do not** — a server with no Range support
+	// answers 200 with the whole body, which is a correct HTTP response and a
+	// disaster for a file opened in Append: the complete body lands after the
+	// bytes already on disk and the result is a file of exactly twice the right
+	// size, reported as 100% because the byte count is whatever is on disk.
+	// Measured, on a phone, by downloading the same 195 KiB file twice and
+	// watching the download list say 390.6 KiB.
+	//
+	// Only 206 means "the rest of it". Anything else means "all of it", so the
+	// resume is abandoned and the file starts again from nothing.
+	const auto honour_range = [this, reply, id] {
+		transfer *t = find(id);
+		if (!t || !t->file || t->base == 0 || t->range_checked)
+			return;
+		t->range_checked = true;
+		const int code =
+			reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+		if (code == 206)
+			return;
+		t->file->seek(0);
+		t->file->resize(0);
+		t->base = 0;
+	};
+
+	connect(reply, &QNetworkReply::metaDataChanged, this, honour_range);
+
+	connect(reply, &QNetworkReply::readyRead, this, [this, reply, id, honour_range] {
 		transfer *t = find(id);
 		if (!t || !t->file)
 			return;
+		// Before the first write, in case metaDataChanged never arrived.
+		honour_range();
 		t->file->write(reply->readAll());
 		download_progress p;
 		p.state    = download_state::running;
@@ -152,13 +182,15 @@ void http_download_source::wire(transfer *t) {
 		emit progressed(id, p);
 	});
 
-	connect(reply, &QNetworkReply::finished, this, [this, reply, id] {
+	connect(reply, &QNetworkReply::finished, this, [this, reply, id, honour_range] {
 		transfer *t = find(id);
 		reply->deleteLater();
 		if (!t)
 			return;
-		if (t->file)
+		if (t->file) {
+			honour_range();
 			t->file->write(reply->readAll());
+		}
 		if (t->cancelled)
 			teardown(t, false, "Cancelled.");
 		else if (reply->error() != QNetworkReply::NoError)

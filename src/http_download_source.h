@@ -52,6 +52,11 @@ private:
 		qint64   base = 0;        // bytes already on disk when we resumed
 		QString  path;
 		bool     cancelled = false;
+		// Whether the answer to "did the server honour our Range" has been read
+		// yet. Asked once per transfer, from whichever of metaDataChanged,
+		// readyRead or finished happens first -- a small reply can arrive
+		// complete before anything has had a chance to look at its headers.
+		bool     range_checked = false;
 	};
 
 	void wire(transfer *t);

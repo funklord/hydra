@@ -3292,6 +3292,40 @@ ever reaching the server, which is that app's own cleartext policy rather than
 ours. The handoff is the part under test and the part that works; what the
 receiving app then does with a url is exactly what handing it over means.
 
+### A resumed download against a server that ignores Range
+
+Downloads work on Android — 195.3 KiB of a 195.3 KiB file, app-private storage,
+no permission asked for. Downloading the *same* file a second time reported
+**390.6 KiB**, which is exactly twice, and that is a bug in shared code that had
+nothing to do with phones.
+
+`http_download_source` sees a file already on disk, asks for `Range: bytes=N-`,
+opens the file in `Append`, and writes whatever comes back. **Range is a request,
+not a command.** A server without range support answers `200` with the whole
+body, which is correct HTTP — and the complete body then lands after the bytes
+already there, producing a file of twice the right length with stale bytes at the
+front, reported as done at 100%.
+
+Only `206` means "the rest of it". Anything else means "all of it", so the resume
+is now abandoned: seek to zero, truncate, start again. Checked once per transfer
+from whichever of `metaDataChanged`, `readyRead` or `finished` gets there first,
+because a small reply can arrive complete before anything has looked at its
+headers.
+
+**The test that should have caught this existed and could not.** There is a
+resume check in `test_seam` — "the file ends up the right size, not appended
+twice" — but it runs against a helper that always answers `206`, and only when a
+server URL is passed on the command line, which no ordinary run does. So the
+covering test was both blind to this case and usually skipped. The new one stands
+up its own server, in-process and unconditional, that ignores `Range` on purpose.
+It fails without the fix — 52345 bytes where 40000 was wanted, which is precisely
+the 12345 already on disk plus the full body — and it checks the first bytes as
+well as the count, since appending would leave the stale ones at the front and
+still be the wrong file at any length.
+
+Found on a phone against python's `http.server`. It should not have needed a
+phone, and now it does not.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and

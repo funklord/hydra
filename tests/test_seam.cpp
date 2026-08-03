@@ -5,6 +5,9 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QTcpServer>
+#include <QTcpSocket>
+#include <QDir>
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
@@ -341,6 +344,85 @@ static void test_pause() {
 	check(job_by_id(m, id)->status == download_state::running, "back to running");
 }
 
+
+// ------------------------------------------------- a server that says no --
+// Range is a request, not a command: a server may answer 200 with the whole
+// body instead, and that is correct HTTP. The download source used to ask for
+// a range, open the file in Append, and write whatever came back -- so against
+// a server like this one a resumed download appended the complete body to the
+// bytes already on disk and produced a file of exactly twice the right size,
+// reported as done.
+//
+// The helper this suite used always answered 206, so the case never arose. This
+// one is in-process and unconditional, because the bug was found on a phone
+// against python's http.server and should not have needed a phone.
+class no_range_server : public QTcpServer {
+public:
+	static const int k_size = 40000;
+
+	void incomingConnection(qintptr fd) override {
+		auto *s = new QTcpSocket(this);
+		s->setSocketDescriptor(fd);
+		connect(s, &QTcpSocket::readyRead, this, [s] {
+			const QByteArray head = s->readAll();
+			if (!head.contains("\r\n\r\n"))
+				return;
+			// Deliberately ignoring any Range header, and saying 200.
+			const QByteArray body(k_size, 'z');
+			s->write("HTTP/1.1 200 OK\r\nContent-Type: video/mp4\r\n"
+			          "Content-Length: " + QByteArray::number(body.size()) +
+			          "\r\nConnection: close\r\n\r\n" + body);
+			s->flush();
+			s->disconnectFromHost();
+		});
+	}
+};
+
+static void test_resume_against_a_server_that_ignores_range(const QString &tmp) {
+	section("http source: a server that ignores Range does not corrupt the file");
+
+	no_range_server server;
+	if (!server.listen(QHostAddress::LocalHost, 0)) {
+		std::printf("  --    could not listen; skipped\n");
+		return;
+	}
+	const QString url = QString("http://127.0.0.1:%1/clip.mp4").arg(server.serverPort());
+
+	// A file already on disk, as a half-finished download would leave.
+	QFile::remove(tmp + "/clip.mp4");
+	{
+		QFile f(tmp + "/clip.mp4");
+		f.open(QIODevice::WriteOnly);
+		f.write(QByteArray(12345, 'x'));
+	}
+
+	download_manager m;
+	m.add_source(new http_download_source);
+	m.set_directory(tmp);
+	QString err;
+	const int id = m.enqueue(QUrl(url), QString(), &err);
+	QElapsedTimer t;
+	t.start();
+	while (job_by_id(m, id) && !job_by_id(m, id)->terminal() && t.elapsed() < 8000)
+		spin(20);
+
+	const download_job *j = job_by_id(m, id);
+	check(j && j->status == download_state::done, "the job completes");
+	const qint64 on_disk = QFileInfo(tmp + "/clip.mp4").size();
+	check(on_disk == no_range_server::k_size,
+	      QString("and the file is the size the server sent, not that plus what "
+	               "was already there (%1, wanted %2)")
+	          .arg(on_disk)
+	          .arg(no_range_server::k_size));
+	// The bytes matter as much as the count: appending would leave the old 'x'
+	// bytes at the front and still be the wrong file even at the right length.
+	QFile check_file(tmp + "/clip.mp4");
+	check_file.open(QIODevice::ReadOnly);
+	const QByteArray head = check_file.read(16);
+	check(!head.contains('x'),
+	      "and it is the server's bytes from the first one, not the stale ones");
+}
+
 // ------------------------------------------------------------------- http --
 // The transport that moved behind the seam must behave exactly as before.
 static void test_http_against_server(const QString &base, const QString &tmp) {
@@ -398,6 +480,8 @@ int main(int argc, char **argv) {
 	test_cancel_and_failure();
 	test_reentrancy();
 	test_pause();
+
+	test_resume_against_a_server_that_ignores_range(QDir::tempPath());
 
 	if (argc > 2)
 		test_http_against_server(QString::fromLocal8Bit(argv[1]),
