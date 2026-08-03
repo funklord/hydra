@@ -133,6 +133,26 @@ int main(int argc, char **argv) {
 	             int(shown.size()), int(shown.count(QStringLiteral("   -> "))) -
 	                 int(shown.count(QStringLiteral("not established"))),
 	             int(shown.count(QStringLiteral("not established"))));
+	// **What was actually sent**, on request. Counts say how much of the payload
+	// was annotated; they cannot say *which* addresses, and that is the
+	// difference between a run that measures the model and a run that measures
+	// the payload. A miss with the stream absent from the payload is not the
+	// model failing to find it -- that is how the second site's 0 of 5 turned
+	// out to be a probe budget that never reached the media host, and reading
+	// the counts alone would have blamed the model twice.
+	const QByteArray dump_to = qgetenv("HYDRA_DUMP_PAYLOAD");
+	if (!dump_to.isEmpty()) {
+		QFile f(QString::fromLocal8Bit(dump_to));
+		if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			f.write(shown.toUtf8());
+			f.close();
+			std::printf("payload written to %s\n", dump_to.constData());
+		} else {
+			// Said out loud rather than skipped: a dump that silently did not
+			// happen looks exactly like a payload that was empty.
+			std::printf("could not write the payload to %s\n", dump_to.constData());
+		}
+	}
 	std::printf("sending after %lld ms...\n", qint64(waited.elapsed()));
 	send->click();
 	loop.exec();

@@ -126,7 +126,10 @@ the content-type tier against the real CDN, where the manifest declares
 403s without it; the §11.5.1 helper tier against that same CDN, following a
 master playlist to a variant the page never requested in four calls; and — at
 last — **the extractor loop finding the real manifest on real evidence, 2 runs
-in 5**, having been 0 in 5 every time it was asked before.
+in 5**, having been 0 in 5 every time it was asked before; and the same 2 in 5
+on a **third site** whose manifest shares no fragment with it, with the payload
+dumped and read to confirm the evidence carried the manifest annotated, so those
+five runs measure the model rather than the probe budget.
 
 **Not measured, and known.**
 - Capture under *live network* conditions — the mechanism is proven locally,
@@ -163,11 +166,13 @@ in 5**, having been 0 in 5 every time it was asked before.
   changed nothing — 0 of 5 — until the payload's *tail* said to use them. What
   the tier supplies and what the model reads are two different questions, and
   only the second one moved the number. See the four arms below.
-- ~~Whether any of this transfers to a second site.~~ **Answered: it does not,
-  yet.** A second site was captured and the loop scored 0 of 5 there — but the
-  cause is measured and is upstream of the model: the probe budget never reached
-  the media host, so the payload carried no content types at all. See the
-  second-evidence-set section.
+- ~~Whether any of this transfers to a second site.~~ **Answered on a third
+  one: it transfers, and not by the mechanism built for it.** kisskh scored 2 of
+  5 with the manifest present and annotated in the payload — but both hits came
+  from an `.m3u8` extension fallback and no run read the annotation, so the
+  result would be 0 on a site that disguises its manifest. Site 2 remains
+  unmeasured under working conditions: its 0 of 5 predates the round-robin
+  budget that would have reached its media host.
 - The DOM half of the helper tier (§11.5.1). The fetch half is proven against
   a live CDN; the DOM half is designed and unbuilt, and nothing has needed it.
 
@@ -2772,6 +2777,82 @@ the cause was not in any of the four inputs anyone thinks to check — it was in
 what we failed to send. Two rounds of hypothesis cost more than one round of
 looking would have.
 
+## The loop on a third site: 2 of 5, and for the wrong reason
+
+The measurement item 1 existed for. Everything before it was dramafren, where
+both winning runs matched `/cf-master.` — that site's own fragment — so "the loop
+finds the stream" meant "the loop finds this stream". A fresh capture of kisskh
+(89 requests, episode 24 of drama 10826) and five runs of `qwen2.5-coder:14b`
+answer it.
+
+**The headline is real: 2 of 5, and the two are exact.** Both returned
+`https://hls.cdnvideo11.shop/hls07/10826/Ep24.v990_index.m3u8`, the gate accepted
+both, and it confirmed HLS from the body rather than the name. That is the same
+rate as dramafren's best, on a site that shares no fragment with it. The loop is
+not pinned to one site.
+
+**And the payload is exonerated, which is the part that had to be checked first.**
+Site 2's 0 of 5 turned out to be a probe budget that never reached the media
+host, so a miss here proves nothing until the payload is read. It now can be:
+`HYDRA_DUMP_PAYLOAD=<path>` writes exactly what was sent. The manifest is there,
+annotated correctly, and it is the *only* address that answered — the other four
+probes went to Firebase and Google endpoints that 403'd or 404'd. The round-robin
+budget and the playlist-first ranking spent their one useful answer on precisely
+the right line. **So these five runs measure the model.**
+
+### Both hits found it by extension, and none of the five read the note
+
+Which is why "2 of 5" is the wrong number to remember.
+
+| run | verdict | how it tried |
+|---|---|---|
+| 1 | rejected | `url.includes('->')`, then fell back to `ngsw-worker.js` — Angular's service worker |
+| 2 | nothing | `url.includes('->')` and nothing else |
+| 3 | nothing | looked for the literal `/manifest.m3u8`, which no site here serves |
+| 4 | **accepted** | three `url.includes('->')` branches, then `path.endsWith('.m3u8')` |
+| 5 | **accepted** | `url.includes('->')` first, then `url.endsWith('.m3u8')` |
+
+**Four of the five tested the url for `->`.** The annotation is printed on the
+same line as the address, and the model reads it as part of the address — so
+those branches match nothing, every time. Both hits reached the manifest through
+a *fallback* on the `.m3u8` extension. **Not one run used the note.**
+
+**That is a mechanism failing silently on the one site where it does not
+matter.** kisskh is the undisguised control: its manifest honestly ends in
+`.m3u8`, so an extension test finds it. dramafren's is `/cf-master.<digits>.txt`
+and site 2's is `master.txt` — both invisible to every parser above. The
+content-type annotation exists precisely to survive that disguise, and on this
+evidence it was never once consulted. A capture that hides its manifest would
+have scored these same five runs at 0.
+
+**The remedy for this was already found, written down, and does not transfer.**
+`extractor_dialog.cpp` records the identical failure and its fix: the payload's
+tail now says *"its `url` ends where the note begins, so testing the url for
+`->` or for a content type matches nothing."* That wording was measured on
+dramafren's evidence and moved the number there. It is present in the payload
+sent here — checked in the dump, not assumed — and four runs in five ignored it.
+
+So the over-fitting warning this project keeps repeating applies one level up
+from where it was aimed. It is not only that an *extractor* can be fitted to one
+site; **the prompt is fitted to one site's evidence too**, and a wording
+validated on a single capture is a wording validated on a single capture. The
+honest reading of today: the loop generalises, and the reason it generalises here
+is a heuristic that will not.
+
+**What is worth trying next, and in this order.** Give the note somewhere to live
+that is not the url — a fourth field on each request, so `->` cannot be read as
+part of the address and the instruction not to read it that way becomes
+unnecessary. Prose has now failed twice at teaching a shape the data itself could
+carry. Then re-run all three captures, because a change measured on one of them
+is exactly what this section is about.
+
+### The timing note was optimistic
+
+This file says a 14B proposal takes "a minute or two" on this machine. Measured
+across five: **333 s, 124 s, 173 s, 311 s, 274 s.** The first includes loading
+9.9 GB of weights; the rest do not, and still average over three minutes on a
+9.3 KB payload. Budget twenty minutes for five runs, not ten.
+
 ## First-load flicker (fixed)
 
 The whole browser window vanished for about a third of a second on the first
@@ -4223,23 +4304,25 @@ Rewritten after a session that closed most of what used to be on it. What is
 listed here is open; what closed is recorded in the sections above rather than
 carried along as amendments to a list item.
 
-1. **Measure the loop against sites two and three.** The evidence sets exist now
-   — three of them, and the probe budget was rebuilt around what they disagreed
-   about, so each site's manifest is the first thing asked about on its own host
-   and all three answer HLS. What has *not* happened is a model run since. The
-   only hit rate this file records for a second site is the **0 of 5** taken
-   while the probe was still blind to the media host, which measures the
-   blindness rather than the model, and the section above says so.
+1. **Carry the content-type note outside the url, then re-measure all three
+   captures.** The loop scores **2 of 5 on kisskh**, a site sharing no fragment
+   with dramafren, so it is not pinned to one site — but both hits came from an
+   `.m3u8` extension fallback and **none of the five runs read the annotation**,
+   because four of them tested `url.includes('->')` and the note is printed on
+   the same line as the address. kisskh is the undisguised control, so the
+   heuristic that carried it will not carry a site that hides its manifest, and
+   the mechanism built for exactly that case went unused. See the section above.
 
-   So the open question is narrow and worth stating that way: does the loop find
-   the stream on a site whose fragment is not `/cf-master.`? Two of the three
-   sites have never been asked under working conditions.
+   The prompt already tells the model the url ends where the note begins; that
+   wording was measured on dramafren's evidence, is present in what was sent
+   here — confirmed with `HYDRA_DUMP_PAYLOAD`, not assumed — and was ignored
+   four times in five. Prose has failed twice at teaching a shape, so give each
+   request a fourth field instead and let the data carry it. Then re-run
+   dramafren, site 2 and kisskh, since a change measured on one capture is the
+   thing this whole item exists to distrust.
 
-   **The cost is a fresh capture each time**, and that is the part to plan for
-   rather than discover: `ev-*.json` goes to the session scratchpad, so the
-   captures behind every conclusion above are gone. `try_extract` takes the
-   capture, `test_live_model <model> <ev.json>` replays it; copy the evidence
-   somewhere durable at the time if the run is one worth arguing with later.
+   Site 2 has still never been measured with a payload that reached its media
+   host; its recorded 0 of 5 predates the round-robin budget.
 
 2. **§13 is closed; what is left of the password manager is UI.** `get-logins`
    ran against a real vault and repeats unattended, so nothing in the protocol,

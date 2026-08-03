@@ -186,6 +186,14 @@ HYDRA_MODEL_TIMEOUT_MS=900000 QT_QPA_PLATFORM=offscreen \
 the fastest way to see whether the budget went to the stream or to the page's
 beacons.
 
+**`HYDRA_DUMP_PAYLOAD=<path>` writes exactly what was sent to the model**, and
+it is what turns a miss into a finding. The run already prints how many
+addresses were annotated, but a count cannot say *which* — and a miss with the
+stream absent from the payload measures the probe budget, while a miss with it
+present and annotated measures the model. Those are different bugs in different
+files. The second site's 0 of 5 was the first kind and was read as the second
+for a while; do not repeat that by reasoning from the counts.
+
 **Point `try_extract` at the player mirror, not the watch page.** The measured
 site's player fails to initialise when embedded — "Failed to setup player" —
 and a capture from the watch page is 60-odd requests of furniture with no stream
