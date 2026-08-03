@@ -3664,6 +3664,38 @@ case-insensitive and the fixture was not. Finding that out took printing the
 requests, which is the same move that settled the `Accept`-header business
 earlier in this file — when a client and a server disagree, read the wire.
 
+### Kiosk mode, the last feature nothing had run
+
+Kiosk was the only feature in the shell with neither a unit test nor a live
+driver, and it is the one that takes a live tab's widget *out of the window*,
+reparents it into a fullscreen stage of its own, and promises to give it back. A
+mistake there is not a wrong pixel; it is a tab that has vanished when you leave
+kiosk mode.
+
+Twenty-two checks, no bug. The contract holds: the widget comes back as a child
+of where it came from, entering twice is refused rather than nested, entering
+with no view is refused, and exiting when nothing is active does nothing instead
+of crashing. Reflow asks for a zoom factor and puts it back to 1.0 on the way
+out; `stretch` under reflow — which a single zoom factor cannot express — still
+enters and behaves as cover, rather than pretending. Idle reset walks back to the
+home url on its own, and **zero seconds means off rather than immediately**,
+because a kiosk that resets under someone's hands is worse than one that never
+does.
+
+**No web engine needed**, which is why this is a unit test and not a live driver:
+kiosk asks a view only for its widget, its url, a zoom factor and a settings
+application. A fake backend answers all four.
+
+Two things the first draft got wrong, both mine and both instructive. It asserted
+the widget was *visible* again after exit — but the controller's contract is to
+hand it back to `restore_to`, and re-adding it to a layout is the caller's job;
+`main_window` does exactly that in its `left` handler. Asserting that here would
+have been asserting somebody else's work and failing for the right reason. And it
+put the fake backend on the stack while parenting it to its own widget, as the
+real backends do — so deleting the window freed a stack object and the run ended
+in `free(): invalid size`. Qt's ownership graph is not somewhere a stack object
+belongs.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and

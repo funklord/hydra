@@ -144,6 +144,12 @@ add_executable(test_assembler test_assembler.cpp ${H}/hls_assembler.cpp
 target_link_libraries(test_assembler PRIVATE Qt6::Core Qt6::Network Qt6::Test)
 target_include_directories(test_assembler PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
 
+# web_view_backend.h is a Q_OBJECT with no .cpp, so AUTOMOC needs it named.
+add_executable(test_kiosk test_kiosk.cpp ${H}/kiosk_controller.cpp
+    ${H}/web_view_backend.h)
+target_link_libraries(test_kiosk PRIVATE Qt6::Widgets Qt6::Test)
+target_include_directories(test_kiosk PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_executable(test_signals test_signals.cpp ${H}/filter_signals.cpp
     ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp
     ${H}/filter_list.cpp)
