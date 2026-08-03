@@ -99,6 +99,28 @@ bool embeds_a_token(const QString &source, const QList<evidence_request> &eviden
 	return false;
 }
 
+// Does the proposal match on the position of a request in this visit's list?
+//
+// `order` is a real field, so this compiles, runs, and returns the right answer
+// on this evidence — and it is this capture's ordering, not a property of the
+// site. One extra advert, one request that lost a race, and the numbers shift.
+//
+// Anticipated rather than measured, and worth saying which: the notes moved out
+// of the rows and into a legend keyed by order number precisely so the model
+// would stop reaching for a field, and `order` is the field that legend hands
+// it. The two arrangements before this one each fixed a symptom and produced
+// the next, so this is the next one, guarded before it can be accepted and
+// stored.
+bool matches_on_order(const QString &source) {
+	// Either side of the comparison, and the thing being indexed can be any
+	// ordinary expression — `x.order === 3`, but also `3 === r[i].order`, which
+	// the first version of this missed because it only allowed a bare
+	// identifier before `.order` and real code writes `r[i]`.
+	static const QRegularExpression compare(
+	    R"((\.\s*order\s*[=!]=+\s*[0-9]+)|([0-9]+\s*[=!]=+\s*[\w$\.\[\]'"]*\.\s*order\b))");
+	return compare.match(source).hasMatch();
+}
+
 // Does the proposal try to read the served-type note at run time?
 //
 // It is a column of the table the model is shown, never a field of the requests
@@ -382,6 +404,15 @@ extractor_verdict check(const QString &source, const QUrl &page,
 		v.message = "Rejected: the script has this visit's ids or tokens written "
 		            "into it, so it answers for this page load and no other. "
 		            "Match a stable part of the address instead.";
+		return v;
+	}
+
+	if (matches_on_order(source)) {
+		v.hardcoded = true;
+		v.message = "Rejected: the script matches on `order`, which is where a "
+		            "request happened to fall in this visit's list. One advert "
+		            "more or one race lost and it is a different number. Match a "
+		            "stable part of the address instead.";
 		return v;
 	}
 

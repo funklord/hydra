@@ -43,12 +43,13 @@ const char *k_system_prompt =
 	"3. A manifest may be disguised: master playlists are routinely served with "
 	"innocuous extensions and query strings, so do not decide by extension "
 	"alone.\n"
-	"4. The evidence is a table: `order | type | seen | serves | url`. `seen` is "
-	"how many times the page fetched that shape — a high count means segments, "
-	"and a manifest is fetched once. `serves` is what the server answered when "
-	"that address was fetched, or `-` where it was not asked. **The url is the "
-	"last column and nothing follows it**, so `serves` is never part of a url "
-	"and testing a url for it matches nothing.\n"
+	"4. The evidence is a table: `order | type | seen | url`. `seen` is how many "
+	"times the page fetched that shape — a high count means segments, and a "
+	"manifest is fetched once. Some rows have a note below the table saying what "
+	"that address turned out to serve; read those notes to decide *which* row is "
+	"the stream, then find that row again by a stable part of its url. Do not "
+	"match on `order`: it is this visit's position in the list and will be a "
+	"different number next time.\n"
 	"5. Prefer the manifest over any individual segment.\n"
 	"6. Return null if nothing in the list is a stream. Returning nothing is a "
 	"clean answer; a guess is not.\n"
@@ -86,7 +87,7 @@ QString extractor_dialog::summarise(const QList<evidence_request> &evidence,
 	QHash<QString, int> seen_shape;
 	QHash<QString, int> repeats;
 	QList<QString> order;
-	QStringList serves, urls, kinds;
+	QStringList urls, kinds;
 	QList<int> orders;
 
 	for (const evidence_request &r : evidence) {
@@ -110,10 +111,6 @@ QString extractor_dialog::summarise(const QList<evidence_request> &evidence,
 		// model the url ends where the note begins; the layout was saying the
 		// opposite the whole time, and layout won. With the url last, nothing
 		// trails it and there is nothing to mistake for part of it.
-		QString what = served ? served->value(r.url.toString()) : QString();
-		if (what.isEmpty())
-			what = QStringLiteral("-");
-		serves << what;
 		urls << r.url.toString().left(300);
 		orders << r.order;
 		kinds << r.kind;
@@ -125,10 +122,9 @@ QString extractor_dialog::summarise(const QList<evidence_request> &evidence,
 	// anything printed after an address is something that can be read as part
 	// of it.
 	for (int i = 0; i < order.size(); ++i)
-		lines << QString("%1 | %2 | %3 | %4 | %5")
+		lines << QString("%1 | %2 | %3 | %4")
 		             .arg(orders[i], 4).arg(kinds[i], -6)
-		             .arg(1 + repeats.value(order[i]), 4).arg(serves[i])
-		             .arg(urls[i]);
+		             .arg(1 + repeats.value(order[i]), 4).arg(urls[i]);
 	if (kept)
 		*kept = lines.size();
 	return lines.join('\n');
@@ -355,14 +351,34 @@ void extractor_dialog::rebuild_payload() {
 	               .arg(kept).arg(m_evidence.size());
 	// Name the columns. The middle one is the browser's resource type, and
 	// unlabelled it reads as anything the reader likes.
-	payload += "order | type | seen | serves | url\n";
+	payload += "order | type | seen | url\n";
 	payload += folded;
-	if (!m_served.isEmpty())
-		payload += "\n\nThe `serves` column is what that address actually "
-		            "returned when it was fetched with this page's context. It is "
-		            "the server's own answer, so trust it over the file extension, "
-		            "which on many sites is chosen to mislead. `-` means it was "
-		            "not asked, not that it is not a stream.";
+	// **A legend, not a column.** Third arrangement of the same fact, and the
+	// first two each fixed the previous symptom and produced the next one: the
+	// note appended to the url gave `url.includes('->')`, and the note as a
+	// column named `serves` gave `request.serves` -- undefined at run time, in
+	// eight runs of ten across both sites. Anything printed *as part of a row*
+	// reads as a property of that row.
+	//
+	// So it is printed away from the rows entirely, keyed by the order number,
+	// and phrased as something that was found out rather than something a
+	// request carries. The join is done by eye, here, now -- which is the only
+	// place it can be done, since nothing is probed on a later visit.
+	if (!m_served.isEmpty()) {
+		payload += "\n\nWhat some of those addresses turned out to serve, found "
+		            "by fetching them with this page's context. This is the "
+		            "server's own answer, so it outranks the file extension, "
+		            "which on many sites is chosen to mislead:\n";
+		for (const evidence_request &r : m_evidence) {
+			const QString what = m_served.value(r.url.toString());
+			if (what.isEmpty())
+				continue;
+			payload += QString("  request %1 turned out to be %2\n")
+			               .arg(r.order).arg(what);
+		}
+		payload += "Addresses not listed here were never asked, which is not the "
+		            "same as being asked and found ordinary.";
+	}
 	// Where that instruction goes decides whether it is read at all. Measured:
 	// with the note above and nothing in the tail, five runs in five wrote
 	// `endsWith('.m3u8')` over a list whose manifest was annotated HLS on the
@@ -408,31 +424,30 @@ void extractor_dialog::rebuild_payload() {
 	           "is page furniture and will be rejected, so it is not a useful "
 	           "fallback either.\n\n";
 	if (!m_served.isEmpty())
-		payload += "Some rows have a `serves` column that is not `-`. That is "
-		            "the server's own answer about what the address really "
-		            "serves, and it settles what the extension cannot: a row "
-		            "whose `serves` says HLS is the manifest however it is "
-		            "named, and one that says video is a segment however it is "
-		            "named.\n\n"
-		            "More than one row can say so, and they are "
-		            "not alternatives. If any row's `serves` says HLS or DASH, "
-		            "that row is the manifest and it is the answer — return it, with "
+		payload += "The notes under the table settle what the extension cannot: "
+		            "an address noted as HLS is the manifest however it is named, "
+		            "and one noted as video is a segment however it is named.\n\n"
+		            "More than one note can say so, and they are "
+		            "not alternatives. If any note says HLS or DASH, "
+		            "that address is the manifest and it is the answer — return it, with "
 		            "`kind` `hls` or `dash`. Everything the manifest describes "
 		            "reaches you as a separate request: an initialisation "
 		            "segment, then the numbered media segments. Those are pieces "
 		            "of that same stream and returning one gives a few seconds of "
 		            "video or none at all. Only return a piece when no line is "
 		            "noted as a manifest.\n\n"
-		            "`serves` is a column of this table, for you to read now. It "
-		            "is **not** a field on the requests your function receives — "
-		            "those have `url`, `type` and `order` and nothing else, so "
-		            "`request.serves` is undefined and testing a url for a "
-		            "content type matches nothing. It cannot be otherwise: a "
-		            "stored extractor runs on later visits where nothing has "
-		            "been fetched to ask. So read the `serves` column now, decide "
-		            "which row is the stream, and write your function to find "
-		            "that row again by a stable part of its url — the ids and "
-		            "tokens will be different on a later visit.\n\n";
+		            "Those notes are for you, reading this now. They are not "
+		            "data your function will get: a request has `url`, `type` "
+		            "and `order` and nothing else, and there is no field holding "
+		            "what an address serves. It cannot be otherwise — your "
+		            "function runs on later visits where nothing has been "
+		            "fetched to ask, so anything it could read would be empty.\n\n"
+		            "Which means the work happens in two steps, and only the "
+		            "second one is code. **Now:** read the notes and decide which "
+		            "address is the stream. **In your function:** find that "
+		            "address again by a stable part of its url. Its ids, tokens "
+		            "and position in the list will all be different next time; "
+		            "the shape of its path will not.\n\n";
 	payload += "Return an object whose `url` is one of the addresses above "
 	           "copied exactly, whose `kind` is `hls`, `dash` or `direct`, and "
 	           "whose `headers` sets `Referer` to `page.url` — or return null "

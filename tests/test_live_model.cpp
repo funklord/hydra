@@ -134,16 +134,20 @@ int main(int argc, char **argv) {
 	// Counting a string that has stopped occurring reports zero annotations
 	// forever and reads exactly like a probe budget that failed, so this walks
 	// the rows instead.
+	// Counted off the legend under the table. This has now had to be rewritten
+	// for every arrangement of the note -- `->` suffix, `serves` column, and now
+	// "request N turned out to be …" -- and each time the old counter would have
+	// gone on reporting a confident **zero**, which reads exactly like a probe
+	// budget that never reached the media host. That is the wrong diagnosis in
+	// the wrong file, and it is the mistake this line keeps being one edit away
+	// from making.
 	int n_answered = 0, n_refused = 0;
-	const QStringList rows = shown.split('\n');
-	for (const QString &row : rows) {
-		const QStringList cols = row.split(QStringLiteral(" | "));
-		if (cols.size() < 5)
-			continue;   // not an evidence row
-		const QString serves = cols[3].trimmed();
-		if (serves == QLatin1String("-") || serves.isEmpty())
+	for (const QString &row : shown.split('\n')) {
+		const QString line = row.trimmed();
+		if (!line.startsWith(QLatin1String("request ")) ||
+		    !line.contains(QLatin1String("turned out to be")))
 			continue;
-		if (serves.contains(QLatin1String("not established")))
+		if (line.contains(QLatin1String("not established")))
 			++n_refused;
 		else
 			++n_answered;

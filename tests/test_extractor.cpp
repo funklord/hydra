@@ -602,6 +602,26 @@ int main(int argc, char **argv) {
 		check(site_extractor::check(bracketed, page, ev).reads_note,
 		      "however it is spelled");
 
+		// 3. Matching on where a request fell in this visit's list. The notes
+		// are keyed by order number so the model reads them by eye — and `order`
+		// is a real field, so a script can join on it, compile, run, and be
+		// right about this capture and nothing else. One advert more and the
+		// numbers move.
+		const QString by_order =
+			"extract = function (p, r) {\n"
+			"  var m = r.find(function (x) { return x.order === 3; });\n"
+			"  return m ? { url: m.url, kind: 'hls' } : null; };";
+		const extractor_verdict o = site_extractor::check(by_order, page, ev);
+		check(!o.usable, "a script matching on `order` is refused");
+		check(o.hardcoded, "as answering for this visit only");
+		check(o.message.contains("this visit's list"),
+		      "saying what order actually is");
+		check(site_extractor::check(
+		          "extract = function (p, r) { for (var i=0;i<r.length;i++) "
+		          "if (3 === r[i].order) return { url: r[i].url, kind: 'hls' }; "
+		          "return null; };", page, ev).hardcoded,
+		      "whichever side of the comparison it is written on");
+
 		// And the refusals must not catch a parser doing exactly the right
 		// thing: matching a stable fragment of the path, with no token in it.
 		const QString good =
@@ -765,7 +785,7 @@ int main(int argc, char **argv) {
 		int most = 0;
 		for (const QString &row : folded.split('\n')) {
 			const QStringList cols = row.split(" | ");
-			if (cols.size() >= 5)
+			if (cols.size() >= 4)
 				most = qMax(most, cols[2].trimmed().toInt());
 		}
 		check(most > 1,
@@ -846,8 +866,8 @@ int main(int argc, char **argv) {
 		               "application/vnd.apple.mpegurl (HLS)");
 		int kept = 0;
 		const QString with = extractor_dialog::summarise(ev, &kept, &served);
-		check(with.contains("| application/vnd.apple.mpegurl (HLS) | https://"),
-		      "the served type is a column of its own, with the url after it");
+		check(!with.contains("application/vnd.apple.mpegurl"),
+		      "the served type is no longer printed in the rows at all");
 		// **The url is last and nothing follows it.** This is the whole point of
 		// the column: while the note was appended as `url -> type`, four runs in
 		// five wrote `url.includes('->')` and matched nothing, and the two that
@@ -855,7 +875,7 @@ int main(int argc, char **argv) {
 		// which does not disguise its manifest.
 		for (const QString &row : with.split('\n')) {
 			const QStringList cols = row.split(" | ");
-			if (cols.size() < 5)
+			if (cols.size() < 4)
 				continue;
 			check(cols.last().startsWith("http"),
 			      "every evidence row ends with its url and nothing after it");
@@ -863,19 +883,10 @@ int main(int argc, char **argv) {
 		}
 		check(!with.contains("->"),
 		      "and no arrow anywhere, so a url cannot be tested for one");
-		int annotated = 0;
-		for (const QString &row : with.split('\n')) {
-			const QStringList cols = row.split(" | ");
-			if (cols.size() >= 5 && cols[3].trimmed() != "-")
-				++annotated;
-		}
-		check(annotated == 1,
-		      QString("and only addresses actually asked about carry one (%1)")
-		          .arg(annotated));
-
 		const QString without = extractor_dialog::summarise(ev, &kept);
-		check(without.contains(" | - | https://"),
-		      "with every serves column a dash when the tier did not run");
+		check(without == with,
+		      "and the rows are identical whether or not the tier ran, since the "
+		      "note is not in them");
 	}
 
 	section("the store");
@@ -917,7 +928,7 @@ int main(int argc, char **argv) {
 		int biggest = 0;
 		for (const QString &row : folded.split('\n')) {
 			const QStringList cols = row.split(" | ");
-			if (cols.size() >= 5)
+			if (cols.size() >= 4)
 				biggest = qMax(biggest, cols[2].trimmed().toInt());
 		}
 		check(biggest == 250,

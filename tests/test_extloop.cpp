@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
 		int most = 0;
 		for (const QString &row : prov.last_payload.split('\n')) {
 			const QStringList cols = row.split(" | ");
-			if (cols.size() >= 5)
+			if (cols.size() >= 4)
 				most = qMax(most, cols[2].trimmed().toInt());
 		}
 		check(most > 1,

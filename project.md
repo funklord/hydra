@@ -38,6 +38,22 @@ large edit here: this file is the thing the next session trusts, and a stale
 copy of a section is indistinguishable from a current one — the same shape as
 the stale rule file that quietly stopped `try_consent` testing anything.
 
+**Two checks worth running on this file, because both have caught real drift:**
+
+```sh
+grep '^###' project.md | sort | uniq -d          # a section said twice
+# every filename in the implemented table still exists
+sed -n '/^| Area | Files | Notes |/,/^$/p' project.md |
+  grep -oE '`[a-z_]+\.\{h,cpp\}`' | tr -d '`' | sed 's/\.{h,cpp}/.h/' |
+  sort -u | while read f; do [ -f "src/$f" ] || echo "MISSING src/$f"; done
+```
+
+The second one found `crypto_box` and `consent_rules` in the table long after
+they had become `box_crypto` and `site_rules` — and this same file documents the
+`site_rules` rename in prose a thousand lines further down. **A table of
+filenames rots silently**, because nothing compiles it and the prose beside it
+stays true.
+
 ### On this machine
 
 | thing | state |
@@ -294,10 +310,14 @@ On Linux this is an X11 / XWayland app: `main.cpp` forces
 `QT_QPA_PLATFORM=xcb` there unless the environment already set it. That forcing
 is guarded to desktop Linux, so other platforms keep Qt's own default plugin.
 
-Two optional dependencies, both on the same pattern — found, and the feature is
-on; absent, and it reports itself unavailable with no degraded mode:
+Three optional dependencies. Two are on the same pattern — found, and the
+feature is on; absent, and it reports itself unavailable with no degraded mode:
 `libsodium` (KeePassXC bridge) and `libtorrent-rasterbar` (BitTorrent
-downloads). On Debian/Ubuntu: `libsodium-dev libtorrent-rasterbar-dev`.
+downloads). The third, `libsecret`, degrades rather than disappearing: without
+it the KeePassXC pairing still works and simply does not survive a restart, so
+its absence is a configure-time `STATUS` and not a `WARNING` — the build is
+smaller, not broken. On Debian/Ubuntu:
+`libsodium-dev libtorrent-rasterbar-dev libsecret-1-dev`.
 
 **Watch the library name.** Both rasterbar's and rakshasa's unrelated libraries
 install a pkg-config file called `libtorrent`, and the bare name resolves to
@@ -514,14 +534,22 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Downloads UI | `downloads_dialog.{h,cpp}` | one list for every source, progress bars, public-transfer marking (Ctrl+J) |
 | Settings | `settings_dialog.{h,cpp}` | player radio group, download folder, BitTorrent caps/ratio/interface; QSettings |
 | Filter evolution | `filter_list.{h,cpp}`, `filter_signals.{h,cpp}`, `filter_dialog.{h,cpp}` | passive signals, dry-run validation, diff/accept |
-| Password manager | `keepass_protocol.{h,cpp}`, `keepass_bridge.{h,cpp}`, `crypto_box.{h,cpp}` | KeePassXC-Browser client; no vault, no master password |
+| Password manager | `keepass_protocol.{h,cpp}`, `keepass_bridge.{h,cpp}`, `box_crypto.{h,cpp}` | KeePassXC-Browser client; no vault, no master password |
+| Pairing at rest | `credential_store.{h,cpp}` | the association key in the session's Secret Service, libsecret optional; without it the pairing does not survive a restart and the app says so |
 | Autofill | `autofill_controller.{h,cpp}`, `autofill_script.h` | QWebChannel bridge, origin gate, policy-governed |
-| Consent banners | `consent_blocker.{h,cpp}`, `consent_rules.{h,cpp}`, `consent_dialog.{h,cpp}` | answers "accept cookies?" dialogs; rules as data, shareable later |
+| Consent banners | `consent_blocker.{h,cpp}`, `site_rules.{h,cpp}`, `consent_dialog.{h,cpp}` | answers "accept cookies?" dialogs; rules as data, shareable later |
 | Anti-adblock notice | `antiadblock_watch.{h,cpp}` | says so when a page is checking for a blocker, and names the lever |
 | Shared rule store | `site_rules.{h,cpp}` | consent-banner and detector rules as one file, with provenance; the unit a future exchange would move |
 
-Persistence: `policy.json`, `state/<id>.blob`, and the tree file all sit next to
-the outline file passed on the command line.
+Persistence: `policy.ini`, `state/<id>.blob`, and the tree file all sit next to
+the outline file passed on the command line — checked against
+`main_window.cpp`, which is the only place that names the path, because this
+line said `policy.json` for as long as the INI migration had been done and
+written up elsewhere in this file.
+
+The one thing that does **not** sit there is the KeePassXC association key,
+which is in the session keyring instead (§13.1, §14). It is the only secret this
+project keeps, and a file beside the tree is exactly where it must not be.
 
 ## The WebView seam (step 3.5, done)
 
@@ -866,7 +894,7 @@ make should be visible at the time, not merely findable afterwards.
 Vendor markup changes on its own schedule, so anything pinned to
 `#onetrust-banner-sdk` is a release away from useless — the argument §11.5 makes
 for extractors and §12 for filters, with the shortest half-life of the three.
-`consent_rules` is therefore a file (`consent-rules.json`, beside the tree and
+`site_rules` is therefore a file (`site-rules.ini`, beside the tree and
 the filter list), not a table in the binary, and the built-in set is
 deliberately thin: a long vendor list looks like thoroughness and is really
 maintenance debt.
@@ -2802,7 +2830,7 @@ the right line. **So these five runs measure the model.**
 
 ### Both hits found it by extension, and none of the five read the note
 
-Which is why "2 of 5" is the wrong number to remember.
+Which is why "2 of 5" was the wrong number to remember.
 
 | run | verdict | how it tried |
 |---|---|---|
@@ -2812,39 +2840,102 @@ Which is why "2 of 5" is the wrong number to remember.
 | 4 | **accepted** | three `url.includes('->')` branches, then `path.endsWith('.m3u8')` |
 | 5 | **accepted** | `url.includes('->')` first, then `url.endsWith('.m3u8')` |
 
-**Four of the five tested the url for `->`.** The annotation is printed on the
-same line as the address, and the model reads it as part of the address — so
-those branches match nothing, every time. Both hits reached the manifest through
-a *fallback* on the `.m3u8` extension. **Not one run used the note.**
+**Four of the five tested the url for `->`.** The annotation was printed on the
+same line as the address, and the model read it as part of the address — so
+those branches matched nothing, every time. Both hits reached the manifest
+through a *fallback* on the `.m3u8` extension. **Not one run used the note.**
 
-**That is a mechanism failing silently on the one site where it does not
-matter.** kisskh is the undisguised control: its manifest honestly ends in
-`.m3u8`, so an extension test finds it. dramafren's is `/cf-master.<digits>.txt`
-and site 2's is `master.txt` — both invisible to every parser above. The
-content-type annotation exists precisely to survive that disguise, and on this
-evidence it was never once consulted. A capture that hides its manifest would
-have scored these same five runs at 0.
+kisskh is the undisguised control: its manifest honestly ends in `.m3u8`, so an
+extension test finds it. dramafren's is `cf-master.<digits>.txt` and its
+segments wear `.woff2`. The content-type note exists precisely to survive that,
+and on this evidence it was never once consulted — so the same five runs would
+have scored 0 on a capture that hides its manifest.
 
-**The remedy for this was already found, written down, and does not transfer.**
-`extractor_dialog.cpp` records the identical failure and its fix: the payload's
-tail now says *"its `url` ends where the note begins, so testing the url for
-`->` or for a content type matches nothing."* That wording was measured on
-dramafren's evidence and moved the number there. It is present in the payload
-sent here — checked in the dump, not assumed — and four runs in five ignored it.
+### Three arrangements of one fact, and the third one works
 
-So the over-fitting warning this project keeps repeating applies one level up
-from where it was aimed. It is not only that an *extractor* can be fitted to one
-site; **the prompt is fitted to one site's evidence too**, and a wording
-validated on a single capture is a wording validated on a single capture. The
-honest reading of today: the loop generalises, and the reason it generalises here
-is a heuristic that will not.
+The fix took three tries because each one fixed the previous symptom and
+produced the next. All three were measured, five runs a site, and the whole
+progression is worth keeping because the shape of it generalises: **the model
+believed what the layout implied, not what the prose said**, every time.
 
-**What is worth trying next, and in this order.** Give the note somewhere to live
-that is not the url — a fourth field on each request, so `->` cannot be read as
-part of the address and the instruction not to read it that way becomes
-unnecessary. Prose has now failed twice at teaching a shape the data itself could
-carry. Then re-run all three captures, because a change measured on one of them
-is exactly what this section is about.
+| arrangement | what the model then wrote | dramafren | kisskh |
+|---|---|---|---|
+| note appended to the url, `url -> type` | `url.includes('->')`, 4 of 5 | not run | 2 of 5, both by `.m3u8` fallback |
+| note as a column named `serves` | `request.serves`, 8 of 10 | 0 of 5 | 0 of 5 |
+| note as a legend keyed by request number | `url.includes('cf-master')` | **3 of 5** | 0 of 5 |
+
+**The prose never changed its meaning across those three.** It said the url ends
+where the note begins, then that `serves` is a column and not a field, then the
+same thing again. What changed was where the note was *printed*, and that is
+what moved the number both times.
+
+**Arrangement two is the instructive one.** Moving the note into its own column
+with the url last did exactly what it was designed to do — `url.includes('->')`
+went to **0 of 15 runs** and never came back. And the result got *worse*,
+because the misconception it replaced had an accidental fallback and the new one
+did not: a model reaching for `request.serves` gets `undefined`, returns null,
+and the run reports "the script found nothing". Fixing the symptom removed the
+crutch that had been carrying the score.
+
+**Arrangement three prints the note away from the rows entirely** — under the
+table, keyed by request number, phrased as something that *turned out to be*
+rather than something a request carries — and splits the work in two in the
+prompt: read the notes now, find the address again by its shape in the function.
+
+**On the site that needs it, three runs in five now return this:**
+
+```js
+if (request.url.includes('cf-master')) { … }
+```
+
+A stable path fragment, no tokens, picking the master manifest on a site with no
+`.m3u8` anywhere and segments disguised as web fonts. That parser survives the
+next visit, which nothing this project produced before today did.
+
+### What kisskh's 0 of 5 measures, and it is not blindness
+
+Checked before it was written down: its manifest **is** in the payload and **is**
+annotated — *"request 44 turned out to be application/vnd.apple.mpegurl (HLS)"*
+— so these runs measure the model. Every failure was refused by a different
+layer, and none was a false accept:
+
+| run | refused by |
+|---|---|
+| 1, 3 | the token check — this visit's ids written into the script |
+| 2 | the content-type tier — it picked a Google Analytics beacon |
+| 4, 5 | the furniture rule — the browser fetched that as an image |
+
+It is worth being plain that this is **worse than the 2 of 5 it started with**,
+and worth being equally plain that the 2 of 5 was never capability: it was an
+extension test on the one site where an extension test works. What the loop does
+now is reach for the note, and kisskh is the harder needle for that — one
+annotated address among eighty-nine requests, most of them Google and Firebase
+furniture, where dramafren's media host offers three in a row.
+
+### The gate had to grow twice on the way
+
+Neither of these is a wrong *answer*. Both are answers that pass every other
+check and leave a stored extractor that fails on the next visit — accepted,
+saved for the host, and broken later with nothing pointing back at the moment it
+was accepted.
+
+- **Tokens written into the script.** A model wrote a lookup table of the five
+  annotated urls, tokens and all, and searched it. Genuinely requested,
+  genuinely a manifest, genuinely fetched once. `embeds_a_token` asks the
+  question `shape_of` already answers for addresses — query values of eight
+  characters or more, digit runs of six or more in the path are the parts that
+  rotate — and refuses a script repeating one verbatim. It runs *after* the
+  invented rule, because a url the page never requested is a more basic fault;
+  putting it first broke the test that pins that, and the test was right.
+- **Matching on `order`.** Anticipated rather than measured, and flagged as such
+  in the code: the legend is keyed by request number, and `order` is a real
+  field, so joining on it compiles, runs, and is right about this capture only.
+  Guarded before it could be accepted and stored.
+
+And a script reading the note at run time is refused *before* it runs, because
+running it hides the cause: it returns null and the gate says "found nothing",
+which reads as a model that could not find the stream rather than one that found
+it and asked the wrong object.
 
 ### The timing note was optimistic
 
@@ -2958,7 +3049,7 @@ same tree with the same flags.
 - ~~The tree is empty~~ **— fixed.** `main()` loaded `./sample-tree.txt`
   relative to the working directory, and on Android that is `/`, where nothing
   exists and nothing is writable. It now uses `AppDataLocation`, and because
-  everything this program keeps lives *beside* the tree file — `policy.json`,
+  everything this program keeps lives *beside* the tree file — `policy.ini`,
   `state/`, the filter list, the site rules — moving the tree moves the whole
   set at once. First run seeds it from a copy of `sample-tree.txt` compiled into
   the binary, so the app opens with something in it rather than an empty pane
@@ -4304,25 +4395,32 @@ Rewritten after a session that closed most of what used to be on it. What is
 listed here is open; what closed is recorded in the sections above rather than
 carried along as amendments to a list item.
 
-1. **Carry the content-type note outside the url, then re-measure all three
-   captures.** The loop scores **2 of 5 on kisskh**, a site sharing no fragment
-   with dramafren, so it is not pinned to one site — but both hits came from an
-   `.m3u8` extension fallback and **none of the five runs read the annotation**,
-   because four of them tested `url.includes('->')` and the note is printed on
-   the same line as the address. kisskh is the undisguised control, so the
-   heuristic that carried it will not carry a site that hides its manifest, and
-   the mechanism built for exactly that case went unused. See the section above.
+1. **The loop works on a disguised manifest; make it work on a noisy capture.**
+   Three runs in five on dramafren now return `url.includes('cf-master')` — a
+   stable fragment, no tokens, the master manifest on a site with no `.m3u8`
+   anywhere. That is the case the whole content-type tier exists for and the
+   first output here that would survive a second visit. See the three-arrangement
+   section above; the short version is that the note had to be printed *away
+   from the rows*, and prose never moved the number in three attempts while
+   layout moved it twice.
 
-   The prompt already tells the model the url ends where the note begins; that
-   wording was measured on dramafren's evidence, is present in what was sent
-   here — confirmed with `HYDRA_DUMP_PAYLOAD`, not assumed — and was ignored
-   four times in five. Prose has failed twice at teaching a shape, so give each
-   request a fourth field instead and let the data carry it. Then re-run
-   dramafren, site 2 and kisskh, since a change measured on one capture is the
-   thing this whole item exists to distrust.
+   **kisskh is 0 of 5 and that is the open question.** Its manifest is in the
+   payload and annotated, so the runs measure the model. The difference from
+   dramafren is noise: one useful note among eighty-nine requests of Google and
+   Firebase furniture, against three in a row on a clean media host. Every
+   failure was refused by a different layer — two wrote this visit's tokens into
+   the script, two picked an image, one picked an analytics beacon — so there
+   are no false accepts to chase, only a hit rate.
+
+   Worth trying, in this order: spend more of the probe budget where the
+   evidence is noisy, since one annotated address out of eighty-nine is a thin
+   thread to pull on; and feed the gate's own refusal back for a single retry,
+   since those messages now name exactly what to change and most failures are
+   one edit from correct.
 
    Site 2 has still never been measured with a payload that reached its media
-   host; its recorded 0 of 5 predates the round-robin budget.
+   host, and its domain is not recorded anywhere — only its player CDN
+   (`kisscloud.online`). That is a gap in these notes rather than in the code.
 
 2. **§13 is closed; what is left of the password manager is UI.** `get-logins`
    ran against a real vault and repeats unattended, so nothing in the protocol,
