@@ -18,6 +18,14 @@ autofill_controller::autofill_controller(keepass_bridge *bridge, policy_engine *
 void autofill_controller::set_page_origin(const QString &origin) {
 	m_origin  = origin;
 	m_pending = 0;   // a navigation abandons any fill in flight
+	// And anything waiting on a person, for the same reason: a picker still on
+	// screen when the page moves is offering to fill a form that is gone. The
+	// entries go; the fact that a question was open stays, so an answer that
+	// arrives afterwards can be explained rather than ignored.
+	if (!m_waiting.isEmpty())
+		m_choice_went_stale = true;
+	m_waiting.clear();
+	m_waiting_origin.clear();
 }
 
 QString autofill_controller::blocked_reason(const QString &origin) const {
@@ -56,19 +64,90 @@ void autofill_controller::request_credentials(const QString &origin) {
 	m_bridge->request_logins(m_origin, m_pending);
 }
 
+void autofill_controller::offer_for_test(const QList<credential> &entries) {
+	m_pending = m_next_tag++;
+	on_logins(m_pending, entries);
+}
+
+// One entry, on its way to the page. The only path that puts a password across
+// the boundary, so it is the only place that builds the payload.
+void autofill_controller::deliver(const credential &c) {
+	QJsonObject o;
+	o.insert("name", c.name);
+	o.insert("login", c.login);
+	o.insert("password", c.password);
+	QJsonArray arr;
+	arr.append(o);
+	emit credentials_ready(QString::fromUtf8(
+		QJsonDocument(arr).toJson(QJsonDocument::Compact)));
+}
+
 void autofill_controller::on_logins(int tag, const QList<credential> &entries) {
 	if (tag != m_pending || m_pending == 0)
 		return;   // a stale reply, e.g. from before a navigation
 	m_pending = 0;
+	m_waiting.clear();
+	m_waiting_origin.clear();
+	m_choice_went_stale = false;
 
-	QJsonArray arr;
-	for (const credential &c : entries) {
-		QJsonObject o;
-		o.insert("name", c.name);
-		o.insert("login", c.login);
-		o.insert("password", c.password);
-		arr.append(o);
+	if (entries.isEmpty()) {
+		// Said rather than left silent: "nothing stored for this site" and
+		// "KeePassXC is not answering" look identical from the page, and the
+		// key icon is where the difference belongs.
+		emit refused("No credentials stored for this site.");
+		return;
 	}
-	emit credentials_ready(QString::fromUtf8(
-		QJsonDocument(arr).toJson(QJsonDocument::Compact)));
+
+	if (entries.size() == 1) {
+		deliver(entries.first());
+		return;
+	}
+
+	// **More than one, so a person decides -- and the passwords stay here.**
+	// This used to hand the page every match and let the injected script sort
+	// it out, and the script's answer to more than one was to fill nothing. So
+	// a vault with three logins for a site sent three passwords across the
+	// boundary and used none of them, which is the worst of both: no fill, and
+	// credentials delivered for a fill that never happened. §13.3 says they are
+	// held only for the fill that asked.
+	m_waiting        = entries;
+	m_waiting_origin = m_origin;
+	QStringList labels;
+	for (const credential &c : entries) {
+		// What tells two accounts apart, and nothing else. Never the password:
+		// the picker is a window, and a window is a thing people photograph,
+		// screen-share and leave open.
+		labels << (c.name.isEmpty() ? c.login
+		                            : QString("%1 — %2").arg(c.login, c.name));
+	}
+	emit choice_needed(labels);
+}
+
+void autofill_controller::choose(int index) {
+	const QList<credential> waiting = m_waiting;
+	const QString origin = m_waiting_origin;
+	// Taken and cleared first, so no path can answer the same prompt twice --
+	// a double-click on the picker, or a second dialog raised while the first
+	// was still up, must not fill twice.
+	m_waiting.clear();
+	m_waiting_origin.clear();
+
+	if (waiting.isEmpty() && m_choice_went_stale) {
+		m_choice_went_stale = false;
+		emit refused("The page changed while you were choosing, so nothing was "
+		             "filled.");
+		return;
+	}
+	if (index < 0 || index >= waiting.size())
+		return;   // dismissed, which is a legitimate answer and fills nothing
+	// The page may have navigated while the picker was open. Filling then would
+	// put one site's password into another's form, which is the exact failure
+	// the origin gate exists to prevent -- and the gate cannot see this one,
+	// because the request that fetched these entries passed it at the time.
+	if (origin.isEmpty() || origin != m_origin) {
+		emit refused("The page changed while you were choosing, so nothing was "
+		             "filled.");
+		return;
+	}
+	deliver(waiting.at(index));
 }

@@ -644,9 +644,12 @@ while getting there, both now handled:
   kiosk while its children still exist.
 
 **Not done from §8:** the off-the-record profile (a factory-level concern),
-`disableInput`, an escape *gesture* as opposed to the flag, and any settings UI
-— `kiosk_config` is currently code-level defaults with no way to edit it from
-the app.
+`disableInput`, and an escape *gesture* as opposed to the flag. ~~And any
+settings UI — `kiosk_config` is currently code-level defaults with no way to
+edit it from the app.~~ **That one was built** — see "Kiosk, which nobody could
+configure" below. This line went on claiming otherwise for as long as the
+section describing the fix sat a thousand lines further down, which is the third
+time this file has contradicted itself about work it records elsewhere.
 
 ## AI reorganizer (step 5, done)
 
@@ -3561,6 +3564,45 @@ happened to survive the correction because the screenshots were taken too, which
 is the argument for taking them: a window query answers what you asked, and a
 picture answers what is there.
 
+### More than one login is a question, and the passwords stay out of the page
+
+The §13.2 gap that mattered most, and it turned out to be a leak rather than a
+missing convenience. `get-logins` returns every entry KeePassXC matched; the
+controller serialised **all of them** into the page's isolated world, and the
+injected script's answer to more than one was `if (entries.length > 1) return;`.
+
+So a vault holding a work and a personal login for one site put **two passwords
+across the boundary and filled neither**. No fill, and credentials delivered for
+a fill that never happened — the exact thing §13.3's "held only for the fill that
+asked" is about. It had been that way since step 7 and read as a deliberate
+choice, because the note beside it said multiple matches are "left alone rather
+than guessed at". They were left alone *after* being sent.
+
+**The decision moved into C++**, which is the only side that is trusted. One
+match fills as before; several raise a picker; none says so instead of leaving an
+empty form that looks identical to a broken bridge. What the picker shows is the
+login and the entry name — what tells two accounts apart — and **never the
+password**: a picker is a window, and windows get photographed, screen-shared and
+left open. The passwords stay in the controller until an index comes back.
+
+**The suite found a seam between two of the rules**, which is the part worth
+recording. Credentials must not survive a navigation, so `set_page_origin` clears
+what is waiting — and that also erased the fact that a question was open, so a
+user who clicked *OK* after the page moved got silence. Both rules are right; the
+fix is that the entries go and one bool stays, so the answer can be explained
+rather than ignored. Written as a check first, which is why it was found at all.
+
+**17 checks**, including that no label contains a password, that the delivered
+JSON contains the chosen entry and *not* the other one, that answering twice
+fills once, and that a choice arriving after a navigation fills nothing and says
+why. The script keeps its `length > 1` guard as belt and braces: it should never
+fire now, and if it does, filling the first of several is a guess about which
+account someone wanted.
+
+**Still not built from §13.2:** the key icon itself — refusals currently go to
+the status bar — plus `set-login` on new-credential submit and
+`generate-password`.
+
 ### A pairing that survives a restart (§13.1, §14)
 
 Built because the alternative was worse than inconvenient: with the association
@@ -4449,10 +4491,12 @@ carried along as amendments to a list item.
 
 2. **§13 is closed; what is left of the password manager is UI.** `get-logins`
    ran against a real vault and repeats unattended, so nothing in the protocol,
-   the transport or the crypto is unexercised any more. Still not built, from
-   §13.2/§13.3 rather than §13.1: the key icon and entry picker (a single match
-   fills automatically; multiple matches are deliberately left alone rather than
-   guessed at), `set-login` on new-credential submit, and `generate-password`.
+   the transport or the crypto is unexercised any more. **The entry picker is
+   built** — see the section above, where "multiple matches are left alone"
+   turned out to mean the passwords were sent to the page and then not used.
+   Still not built, from §13.2 rather than §13.1: the key icon itself (refusals
+   go to the status bar meanwhile), `set-login` on new-credential submit, and
+   `generate-password`.
 
    The one durable caution from getting here, since it cost five attempts and
    none of it was ours: **restart KeePassXC before an interactive pairing.** A

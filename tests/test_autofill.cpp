@@ -25,6 +25,14 @@ static void check(bool ok, const QString &w) {
 }
 static void section(const char *n) { std::printf("\n== %s ==\n", n); }
 
+// Two logins for one site, which is the case the picker exists for.
+static QList<credential> two_entries() {
+	QList<credential> two;
+	two << credential{ "Work", "alice", "pw-work" }
+	    << credential{ "Personal", "alice2", "pw-home" };
+	return two;
+}
+
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication app(argc, argv);
@@ -148,6 +156,100 @@ int main(int argc, char **argv) {
 		check(ready.count() == 0,
 		      "and a request that passes the gate still delivers nothing without "
 		      "a paired KeePassXC");
+	}
+
+	section("more than one login is a question, and the passwords stay here");
+	{
+		// The delivery half needs a paired KeePassXC and lives in try_keepass.
+		// What is checked here is the part that runs before any of that: what
+		// the controller does with a set of entries, and above all what it does
+		// *not* put across the boundary.
+		//
+		// The old arrangement handed the page every match and let the injected
+		// script decide; the script's answer to more than one was to fill
+		// nothing. So three logins for a site sent three passwords into the page
+		// and used none of them -- no fill, and credentials delivered for a fill
+		// that never happened.
+		autofill_controller a(nullptr, &policy);
+		QSignalSpy ready(&a, &autofill_controller::credentials_ready);
+		QSignalSpy asked(&a, &autofill_controller::choice_needed);
+		QSignalSpy refused(&a, &autofill_controller::refused);
+		a.set_page_origin("https://site.example");
+
+		a.offer_for_test(two_entries());
+
+		check(asked.count() == 1, "two matches asks which");
+		check(ready.count() == 0, "and delivers nothing until it is answered");
+		const QStringList labels = asked.takeFirst().at(0).toStringList();
+		check(labels.size() == 2, "with one label per entry");
+		// The claim the whole design rests on.
+		check(!labels.join('\n').contains("pw-work") &&
+		          !labels.join('\n').contains("pw-home"),
+		      "and no password in any of them");
+		check(labels.at(0).contains("alice") && labels.at(0).contains("Work"),
+		      QString("naming what tells the accounts apart (%1)").arg(labels.at(0)));
+
+		a.choose(1);
+		check(ready.count() == 1, "choosing delivers");
+		const QString json = ready.takeFirst().at(0).toString();
+		check(json.contains("pw-home"), "the one that was chosen");
+		check(!json.contains("pw-work"),
+		      "and only that one -- the other never reaches the page");
+
+		// Answering twice must not fill twice: a double-click on the picker, or
+		// a second dialog raised over the first.
+		a.choose(0);
+		check(ready.count() == 0, "and a second answer to the same question fills nothing");
+	}
+	{
+		autofill_controller a(nullptr, &policy);
+		QSignalSpy ready(&a, &autofill_controller::credentials_ready);
+		QSignalSpy asked(&a, &autofill_controller::choice_needed);
+		a.set_page_origin("https://site.example");
+
+		QList<credential> one;
+		one << credential{ "Work", "alice", "pw-work" };
+		a.offer_for_test(one);
+		check(asked.count() == 0, "one match asks nothing");
+		check(ready.count() == 1, "and fills straight away");
+
+		// Dismissing is a legitimate answer, not an error.
+		autofill_controller b(nullptr, &policy);
+		QSignalSpy bready(&b, &autofill_controller::credentials_ready);
+		QSignalSpy brefused(&b, &autofill_controller::refused);
+		b.set_page_origin("https://site.example");
+		b.offer_for_test(two_entries());
+		b.choose(-1);
+		check(bready.count() == 0, "dismissing the picker fills nothing");
+		check(brefused.count() == 0, "and is not reported as a refusal");
+
+		// And the case the origin gate cannot see: the request passed the gate
+		// when it was made, and the page moved while the picker was open.
+		autofill_controller c(nullptr, &policy);
+		QSignalSpy cready(&c, &autofill_controller::credentials_ready);
+		QSignalSpy crefused(&c, &autofill_controller::refused);
+		c.set_page_origin("https://site.example");
+		c.offer_for_test(two_entries());
+		c.set_page_origin("https://elsewhere.example");
+		c.choose(0);
+		check(cready.count() == 0,
+		      "a choice answered after the page moved fills nothing");
+		check(crefused.count() == 1 &&
+		          crefused.takeFirst().at(0).toString().contains("changed while"),
+		      "and says why, since the user did click something");
+	}
+
+	section("no logins at all is said, not left silent");
+	{
+		autofill_controller a(nullptr, &policy);
+		QSignalSpy ready(&a, &autofill_controller::credentials_ready);
+		QSignalSpy refused(&a, &autofill_controller::refused);
+		a.set_page_origin("https://site.example");
+		a.offer_for_test({});
+		check(ready.count() == 0, "an empty vault answer delivers nothing");
+		check(refused.count() == 1 &&
+		          refused.takeFirst().at(0).toString().contains("No credentials"),
+		      "and says so, because an empty form looks the same as a broken bridge");
 	}
 
 	section("\"no logins found\" is an answer, not an error");

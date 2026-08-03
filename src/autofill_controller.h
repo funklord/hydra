@@ -46,14 +46,36 @@ public slots:
 	// --- Reachable from injected page scripts. Treat every argument as hostile.
 	void request_credentials(const QString &origin);
 
+	// The shell's answer to `choice_needed`: which of the offered entries to
+	// fill, by index, or a negative number to fill nothing. Called from the
+	// picker, never from a page -- it is not a slot for that reason.
+	void choose(int index);
+
+	// Hand the controller a reply as if KeePassXC had sent one.
+	//
+	// A test seam, and named so nobody mistakes it for anything else. The
+	// decision this class makes -- fill one, ask about several, say so about
+	// none -- is worth checking without a paired vault, and the path that
+	// normally reaches it needs a live bridge, a socket and a human confirming
+	// a dialog. Not a slot, so no page can reach it; `try_keepass` covers the
+	// same code arriving from a real KeePassXC.
+	void offer_for_test(const QList<credential> &entries);
+
 signals:
 	// Delivered back to the page: a JSON array of {name, login, password}.
+	// **At most one entry**, and only ever the one that is going to be filled.
 	void credentials_ready(const QString &json);
 	// A human-readable refusal, for the key icon's tooltip.
 	void refused(const QString &reason);
+	// More than one entry matched, so a person has to say which. Carries the
+	// names and logins **without the passwords**: the picker shows what is
+	// needed to tell two accounts apart and no more, and the password is
+	// still held here until `choose` says where it is going.
+	void choice_needed(const QStringList &labels);
 
 private:
 	void on_logins(int tag, const QList<credential> &entries);
+	void deliver(const credential &c);
 
 	keepass_bridge *m_bridge = nullptr;
 	policy_engine  *m_policy = nullptr;
@@ -61,4 +83,22 @@ private:
 	bool    m_https_only = true;
 	int     m_next_tag = 1;
 	int     m_pending  = 0;
+
+	// Entries waiting on a person to choose between them. Held **here** rather
+	// than handed to the page to sort out: the old arrangement sent every
+	// matching credential across the boundary and the script then refused to
+	// fill any of them, so a vault holding three logins for a site put three
+	// passwords into the page and used none. Cleared on navigation, on choice,
+	// and on refusal -- §13.3's "held only for the fill that asked".
+	QList<credential> m_waiting;
+	// The origin the waiting entries were fetched for. A choice that arrives
+	// after the page has moved is answered with nothing rather than with a
+	// password meant for somewhere else.
+	QString m_waiting_origin;
+	// That a question was outstanding when the page moved -- **not** the
+	// answers to it, which are gone by then. Two rules meet here and the suite
+	// found the seam: credentials must not survive a navigation, and a user who
+	// clicked something deserves to be told why nothing happened. Dropping the
+	// passwords satisfies the first; one bool satisfies the second.
+	bool m_choice_went_stale = false;
 };

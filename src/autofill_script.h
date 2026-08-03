@@ -74,6 +74,10 @@ inline const char *source() {
     if (!entries || !entries.length) return;
     // Multiple matches are the user's choice to make; take the first only
     // when there is exactly one, otherwise leave it to the toolbar UI.
+    // Belt and braces. C++ now picks when there is more than one and sends
+    // exactly the chosen entry, so this should never fire -- and if it ever
+    // does, filling the first of several is a guess about which account
+    // someone wanted, which is not a guess a page script gets to make.
     if (entries.length > 1) return;
     const e = entries[0];
     for (const pw of passwordFields()) {

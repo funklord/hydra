@@ -64,6 +64,7 @@
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QStyle>
+#include <QInputDialog>
 #include <QMessageBox>
 #include <QActionGroup>
 #include <QAction>
@@ -121,6 +122,27 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 
 	m_keepass  = new keepass_bridge(this);
 	m_autofill = new autofill_controller(m_keepass, m_policy, this);
+	// More than one login for a site is a question only the user can answer, and
+	// it is asked here rather than in the page: the controller holds the
+	// passwords until the answer comes back, so the picker is a list of names
+	// and the page learns nothing until a choice is made.
+	connect(m_autofill, &autofill_controller::choice_needed, this,
+	        [this](const QStringList &labels) {
+		bool ok = false;
+		const QString pick = QInputDialog::getItem(
+		    this, "Which login?",
+		    "More than one login is stored for this site:", labels, 0,
+		    /*editable=*/false, &ok);
+		// A dismissed dialog fills nothing, which is a legitimate answer and
+		// not an error worth a message.
+		m_autofill->choose(ok ? labels.indexOf(pick) : -1);
+	});
+	// The refusal is the key icon's job (§13.2) and there is no key icon yet, so
+	// the status bar carries it meanwhile. Silence here is the thing to avoid:
+	// "nothing stored for this site" and "KeePassXC is not running" produce the
+	// same empty form, and only one of them is worth doing something about.
+	connect(m_autofill, &autofill_controller::refused, this,
+	        [this](const QString &why) { m_status->showMessage(why, 6000); });
 	m_consent  = new consent_blocker(m_policy, this);
 	// Say it once, and say what the lever is. A page that will not run because
 	// we block ads is indistinguishable from a broken site unless we tell them,
