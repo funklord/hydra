@@ -65,6 +65,8 @@ the suites below are worth more than their pass counts suggest.
 | `test_model` | the tree model against Qt's own `QAbstractItemModelTester`, plus sorting and the search that must keep a hit's ancestors |
 | `test_signals` | the evidence the filter loop reasons from, and why observed and suspect are different lists |
 | `test_kiosk` | kiosk mode's borrow-and-return contract: the widget goes back where it came from |
+| `test_bundle` | every setting through one INI file and back, and the refusals — an import that quietly applies nothing looks exactly like one that worked |
+| `test_theme` | which colour scheme the desktop is in: `decide()` over what each source said, including the combination this machine produces, where Qt's own answer is `Unknown` |
 
 ```sh
 QT_QPA_PLATFORM=offscreen ./tests/build/test_seam

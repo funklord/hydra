@@ -27,6 +27,17 @@ This file is a running log and is long. The fastest orientation is: **What is
 implemented** (the table below), then **What is next**, then the section for
 whatever you are touching.
 
+**And the log itself can go wrong in the way the code does.** A revision that
+rewrote a finding — the `test_extloop` flake, once "recorded rather than
+explained" and later explained — was *added* rather than applied, leaving
+**254 lines duplicated** and the two copies contradicting each other about
+whether the cause was known. It survived ten commits, because a section that
+reads correctly reads correctly the second time too. Found by
+`grep '^###' project.md | sort | uniq -d`, which is worth running after any
+large edit here: this file is the thing the next session trusts, and a stale
+copy of a section is indistinguishable from a current one — the same shape as
+the stale rule file that quietly stopped `try_consent` testing anything.
+
 ### On this machine
 
 | thing | state |
@@ -49,18 +60,32 @@ of them. So the `web_view_backend` seam is not a nicety for a hypothetical
 future; it is the only way this builds for Android, exactly as designed in step
 3.5.
 
-Two things the desktop `gcc_64` kit makes newly checkable, neither yet done:
+Of the two things the desktop `gcc_64` kit made newly checkable, one is now
+settled and one is not:
 
-- **Whether the app still builds against 6.11.** The system Qt here is 6.8.2, so
-  everything measured in this file is 6.8.2. The deprecated permissions path
-  (§"Build-verification state") is still present in 6.11.1 — verified in the
-  header, behind `QT_DEPRECATED_SINCE(6, 8)` — so it should compile with
-  warnings rather than break, and `permissionRequested` / `QWebEnginePermission`
-  is the named replacement. Worth an actual build before believing it.
+- **It does build against 6.11**, warning-clean, and is built that way routinely
+  now alongside 6.8.2 and Android. The system Qt here is still 6.8.2, so where a
+  measurement in this file does not say otherwise it was taken on 6.8.2.
 - **Whether the geolocation gap is Qt's or the build's.** `try_permissions`
   records that a *granted* geolocation request still ends as PERMISSION_DENIED
   here because this build has no location provider. A second Qt build is the
   cheapest way to find out whether that is universal or packaging.
+
+### What does not survive a session
+
+Out-of-tree build dirs, screenshots and captured evidence are written to the
+session scratchpad, which is cleared when the session ends. `build/` and
+`tests/build/` are in-tree and do survive, so the desktop suite runs without a
+rebuild; the Qt 6.11 and Android trees do not, and cost a full configure and
+build to recreate.
+
+**The part worth knowing before relying on it:** the raw `ev-*.json` evidence
+captures from the extractor-loop runs are scratch too. Every conclusion drawn
+from them is written up in the sections below — that is what those sections are
+for — but the underlying captures are gone, so *re-analysing* an old run means
+re-capturing it rather than re-reading it. If a run produces evidence worth
+arguing with later, copy it somewhere durable at the time, or write down enough
+that the argument does not need the file.
 
 ### ⚠️ Do not build with unbounded `-j`
 
@@ -3389,260 +3414,6 @@ demonstrated fix — the failure was never reproduced on demand, so it cannot be
 reproduced against the change either. If it returns, the suite now prints the
 numbers it compared and no longer contains the most likely explanation.
 
-`try_downloads` and `try_capture` are excluded from this comparison on purpose:
-they assert nothing, so they cannot disagree.
-
-### The filter list was never enforced
-
-Setting out to test the ad-host predicate turned up something larger: **every
-rule the filter-evolution loop ever produced did nothing.**
-
-`filter_list::blocks()` existed, was correct, and had no caller in the request
-path. Rules were proposed by the AI, put through the breadth check and the
-dry-run, accepted by the user, written to `filters-ai.txt`, reloaded at startup
-and listed in the settings dialog — and then no request was ever compared against
-them. The architecture assigns filter enforcement to spine 1, the interceptor
-(§12, table row "Filter evolution … Spines 1+3"), so this was a missing wire, not
-a deferral. Every part of the loop worked except the one that mattered, which is
-why nothing looked wrong.
-
-`request_filter` now takes the list and consults it, gated behind the same
-per-site `ads` setting as the seed hosts: turning ads back on for a site the
-shield says is broken has to turn *all* of this off, or the escape hatch only
-half works and the page still fails for a reason the user was told they had
-disabled.
-
-**And the thing that looked like the next obvious fix was a trap.**
-`filter_rule::scope` is documented as "domain for a site-specific rule" and
-`blocks()` ignored it, so honouring it looks like a bug fix. It is not:
-`parse_rule` fills that field with two different things — the site for a cosmetic
-rule, and *the host being blocked* for `||host^` — and `evaluate()`'s breadth
-check depends on the second meaning. Comparing a blocked host against the
-visiting site would have matched almost nothing and silently disabled every
-network rule. A whole feature turned off by a change that reads as a repair. The
-suite now pins both meanings so it is not attempted twice.
-
-What that ambiguity *had* broken is smaller and real: the settings dialog's
-"Applies to" column printed `scope` directly, so a global tracker rule was
-listed as though it only applied on the tracker's own domain. Network rules are
-global here — per-site ones want `$domain=`, which this parser does not read —
-and the column says so now.
-
-**Proved end to end, and it finally unblocks the ad-host predicate**, which the
-notes have carried as "mechanism verified, matching untested" because pointing a
-name like `doubleclick.net` at a local server needs `/etc/hosts` or
-`--host-resolver-rules`, and Qt mangles the latter by splitting the environment
-variable on spaces. The predicate never cared what the name was. `try_filters`
-puts the page on `127.0.0.1` and its beacon on `127.0.0.2` — two hosts, both
-loopback, no DNS — and runs the controlled pair: with `||127.0.0.2^` accepted the
-beacon never reaches the server; with ads allowed for the site it does; blocked
-again, it stops; with the rule removed, it arrives. Fresh url each time, because
-a cached image goes unrequested for reasons that have nothing to do with
-filtering and looks identical in the log.
-
-### The cosmetic half, and the bug it uncovered
-
-`##` rules hide elements rather than blocking requests, so they cannot ride the
-interceptor — they have to reach the page. `cosmetic_filters` is that path: the
-shell says which host is on screen, an injected script asks for that host's
-selectors, and writes them into one stylesheet. `display: none !important`
-rather than removing nodes, because a removed node changes the page's own DOM in
-ways its scripts notice, and a stylesheet also applies to elements that do not
-exist yet — which is most of them, since this runs before the page's content.
-
-The page never names the host, the same way the consent bridge works: otherwise
-any site could ask what rules exist for any other, which leaks what the user has
-been doing.
-
-**It worked on the desktop and did nothing on Android**, and finding out why was
-worth more than the feature. The bridge was reachable there — `hydraCosmetic`
-appeared in the page's bridge list with no Android-specific work, which is what
-the shared `bridge_invoker` was for — but it answered `[]`. Rather than reason
-about it, I put the two facts on the wire behind `HYDRA_FILTER_DEBUG`: the rule
-file **was** read, one rule; `set_page_host` was **never called**.
-
-The cause was in the shell, not in either backend:
-
-* **Switching tabs never updated the page context at all.** It was set in exactly
-  one place — the current view's `url_changed` — and activating an already-loaded
-  tab navigates nothing, so the consent blocker went on answering `active_now()`
-  and `rules_json()` for the *previous* tab's site. A bridge built so the page
-  cannot name its own host is not much use if the shell then names the wrong one.
-  That was a desktop bug too, and had been one for as long as the bridge existed.
-* **The ordering only ever worked by accident.** `activate_node()` calls
-  `view->load()` before `setCurrentWidget()`. Qt WebEngine emits `urlChanged`
-  asynchronously, so the signal landed *after* the switch and the
-  `view == current_view()` test passed. The Android backend emits it from inside
-  `load()`, synchronously, so it arrived while the previous view was still
-  current, the test failed, and nothing was ever set.
-
-`sync_page_context()` now reads whatever is current, after the switch, and is
-called from both places. It cannot depend on which way a backend emits, because
-it does not listen for an emission.
-
-Verified on both: on the desktop the advert computes to `display: none` in the
-page's own view while the element beside it does not, and on the phone the same
-page comes up with the red block gone and the green one intact —
-`selectors=[".ad-banner"]`, `style_el=present`, `ad=none`, `keep=block`, over the
-same bridge, with no Android code written for it.
-
-### The KeePassXC bridge finally met KeePassXC
-
-`keepassxc` is installed now, so the last of "wired but never run" could run —
-and this project's defect history says that category is where the defects are.
-
-Set up so it disturbs nothing: its own config file, its own database, one entry,
-browser integration on. The socket appears at exactly the path `socket_path()`
-computes, `start()`'s change-public-keys exchange **completes**, the connection
-stays up after it, and a saved-but-unknown pairing is refused with KeePassXC's
-own answer rather than a guess — *"association failed, try again (code 8)"*. That
-is the case on every first run after settings are copied to a new machine, and
-"no" is the right answer for it.
-
-So the transport, the framing and the sodium key exchange work against the real
-other end, first try. Seven checks, none of them previously exercised by
-anything.
-
-**And the driver's own precondition was lying.** It reported "KeePassXC is
-listening where the bridge expects it" after checking `QFile::exists` on the
-socket path — which is a symlink into the runtime directory that **outlives the
-process**. When KeePassXC exited, the driver announced a listening server and
-then failed the handshake: the one check whose job was to establish the
-precondition was the one making it up. It connects now, and distinguishes "no
-socket at all" from "a stale socket left by a KeePassXC that has exited". A test
-that reports a passing precondition it never tested is worse than having none.
-
-**Pairing is not automated, deliberately.** `associate()` makes KeePassXC ask a
-human whether this program may read the vault — that prompt *is* the security
-boundary, and a browser able to answer it for itself would be the bug. The driver
-skips it unless `HYDRA_KEEPASS_INTERACTIVE=1` says a person is watching, and
-prints which checks went unrun rather than passing quietly without them. The
-remaining ones are behind that flag: association, a login request for a url the
-vault knows, and one for a url it does not.
-
-### Handing a stream to a player, on a phone
-
-The desktop names a player and starts a process. Android has neither, so §19's
-answer is an intent: `ACTION_VIEW` with the url and a media type, and whichever
-app the user has takes it. `player_launcher` grows one entry there — "System
-player", always present, always cautious about manifests, because which app
-answers is the system's choice and not knowable from here.
-
-The media type matters more than it looks. With none, the chooser offers every
-app that claims `http`, which on most devices means a browser — and handing the
-stream to a browser is a loop back to where it came from. `media_mime_for()` is
-shared and tested for that reason, and unrecognised urls get `video/*` rather
-than a guess at the container.
-
-**Driven on the device, and it turned up two bugs that had nothing to do with
-intents.**
-
-**Dialogs were invisible.** Tapping "Media (1)" depressed the button and showed
-nothing at all. The header had always said the native WebView sits above
-everything Qt draws; what it had not said is that this makes Qt's own dialogs
-unreachable, which is not a caveat but a bug. Qt announces the condition — a
-window covered by a modal dialog is sent `WindowBlocked`, and `WindowUnblocked`
-when it closes — so the view hides for exactly that span rather than guessing.
-
-**And then the dialog did not fit.** It came up wider than the screen, list
-visible and buttons off the right edge, with no way to scroll a dialog to reach
-them. Every dialog here was laid out for a desktop where the screen is wider than
-the contents ask for. On Android they now fill the available screen, applied by
-one application-wide event filter rather than thirty constructors.
-
-With both fixed: the media dialog shows `clip.mp4`, **Watch** hands it over, and
-`com.android.gallery3d/.app.MovieActivity` comes to the front with our url. It
-then fails to play it — `MediaPlayerNative error (1, -2147483648)` and no request
-ever reaching the server, which is that app's own cleartext policy rather than
-ours. The handoff is the part under test and the part that works; what the
-receiving app then does with a url is exactly what handing it over means.
-
-### A resumed download against a server that ignores Range
-
-Downloads work on Android — 195.3 KiB of a 195.3 KiB file, app-private storage,
-no permission asked for. Downloading the *same* file a second time reported
-**390.6 KiB**, which is exactly twice, and that is a bug in shared code that had
-nothing to do with phones.
-
-`http_download_source` sees a file already on disk, asks for `Range: bytes=N-`,
-opens the file in `Append`, and writes whatever comes back. **Range is a request,
-not a command.** A server without range support answers `200` with the whole
-body, which is correct HTTP — and the complete body then lands after the bytes
-already there, producing a file of twice the right length with stale bytes at the
-front, reported as done at 100%.
-
-Only `206` means "the rest of it". Anything else means "all of it", so the resume
-is now abandoned: seek to zero, truncate, start again. Checked once per transfer
-from whichever of `metaDataChanged`, `readyRead` or `finished` gets there first,
-because a small reply can arrive complete before anything has looked at its
-headers.
-
-**The test that should have caught this existed and could not.** There is a
-resume check in `test_seam` — "the file ends up the right size, not appended
-twice" — but it runs against a helper that always answers `206`, and only when a
-server URL is passed on the command line, which no ordinary run does. So the
-covering test was both blind to this case and usually skipped. The new one stands
-up its own server, in-process and unconditional, that ignores `Range` on purpose.
-It fails without the fix — 52345 bytes where 40000 was wanted, which is precisely
-the 12345 already on disk plus the full body — and it checks the first bytes as
-well as the count, since appending would leave the stale ones at the front and
-still be the wrong file at any length.
-
-Found on a phone against python's `http.server`. It should not have needed a
-phone, and now it does not.
-
-### Downloads that can be found afterwards
-
-Qt's download location on Android is app-private external storage. Writing there
-needs no permission and always works, which is why the download stack worked on a
-phone the day it was built — and it is also **invisible**: no file manager lists
-it, no other app can open it, and it is deleted when Hydra is uninstalled. A
-browser whose downloads cannot be found afterwards has not really downloaded
-anything.
-
-A completed file is now copied into `MediaStore.Downloads`, the shared collection
-every file manager shows. That needs no permission either — an app may always
-insert its own entries. **Chosen between two honest options**: the other is
-asking with the Storage Access Framework where each file should go, which is what
-"save as" is for and not what a browser should do to every download. The copy is
-a copy, not a move: it costs the space twice until the app's data is cleared, and
-it means a failed publish leaves a download that still exists rather than one
-that succeeded and then vanished.
-
-Measured: `content query --uri content://media/external/downloads` lists
-`clip.mp4, _size=200000` — the exact byte count, which also confirms the Range
-fix above, since the same file downloaded twice before produced 400000. A second
-download became `clip (1).mp4` rather than overwriting, which is MediaStore's own
-naming and the behaviour a browser should have.
-
-The media dialog said "Queued download to
-/storage/emulated/0/Android/data/org.qtproject.example.hydra/files/Download" —
-a path that is long, unopenable, and no longer where the file ends up. On Android
-it now says "Queued. It will appear in Downloads when it finishes."
-
-**A flake, recorded rather than explained.** `test_extloop` has now failed four
-times — 28, 21, 27 and 27 of 34 — and passed more than forty times in between,
-so it is real and it is rare. **Every failure has happened inside a run of the
-whole suite list, and not one has ever reproduced on demand.** Eliminated by
-trying: running it alone (twelve consecutive passes), running it with four cores
-deliberately busy, running it immediately after `test_settings` and after
-`test_extractor`, replaying the exact sequence that failed, three further
-complete passes of the whole list, four more passes saving every run's output in
-case one broke, and — the one hypothesis that looked promising, since three of
-the four failures followed a build in the same command — running it three times
-immediately after forcing a relink, in case a cold binary was the difference. It
-was not.
-
-Its assertions include wall-clock ones — "the timer fired *while* the script was
-running, 120 ms against 419 ms" — which makes scheduling the leading suspect, but
-that is a hypothesis and this file does not record hypotheses as findings. What
-is worth knowing is that **the suite already prints the numbers it compares**, so
-whenever it next fails the output will say which deadline was missed and by how
-much. Chasing it further has been stopped deliberately rather than forgotten:
-three attempts to reproduce have cost more than the failure does, and the next
-occurrence inside a full run will be more informative than another hour of
-guessing at it now.
-
 ### Autofill on Android is the platform's, and the menu now says so
 
 `keepass_bridge::supported()` checked for libsodium and nothing else, so on
@@ -4187,23 +3958,103 @@ come from somebody else. That is a different thing from storage, it is reviewed
 rather than loaded, and it has its own trust model; moving it is a separate
 decision from moving the file this machine keeps for itself.
 
+## Light and dark, and why Qt's answer was not enough
+
+Asked for late, and the request came with a condition attached — *"this
+detection needs to work well"* — which turned out to be the whole job. Default
+is to follow the desktop, with light and dark as explicit overrides.
+
+**Qt gets it wrong here, silently.** On this KDE desktop
+`QStyleHints::colorScheme()` returns `Unknown`, while the XDG desktop portal
+answers "prefer dark" and gsettings agrees. Every example of this in Qt's own
+documentation reads the style hint and stops. Doing that would have shipped a
+browser that comes up light on a dark desktop with no indication anything had
+gone wrong — the failure mode this project keeps running into, where the code
+looks right and the answer is wrong.
+
+So detection is a ladder, each rung asked only when the one above has no
+opinion: Qt's hint (correct on Windows and macOS, where Qt does read it), the
+portal's `org.freedesktop.appearance/color-scheme` over DBus, then the palette
+the platform style already handed us — a window darker than its own text is a
+dark theme however badly it was announced — and finally light, deliberately,
+because a wrong light guess is merely plain while a wrong dark guess is
+unreadable text on a pale window.
+
+`decide()` is a pure function of what each source said, which is the only reason
+`test_theme` can cover the combination *this* machine produces without needing a
+desktop that produces it. DBus is optional and the build says so when it is
+missing; the Android build was run to confirm it takes the fallback rather than
+failing to configure.
+
+### Pages are a separate mechanism, and the UI admits it
+
+Qt forwards the application's scheme to Chromium by watching
+`colorSchemeChanged`. But where Qt reports `Unknown`, `setColorScheme()` is a
+*request the platform may ignore* — and this one does, without complaint: the
+value reads back unchanged, the signal never fires, so the window goes dark and
+every page stays white. Measured before it was worked around, not assumed.
+
+The scheme therefore reaches the engine as a startup flag
+(`preferredColorScheme`), which Chromium reads once. The cost is real and is
+stated in the settings row rather than left to be discovered: pages pick up a
+change when Hydra next starts. `try_filters` runs the driver both ways through
+the real startup order and checks what `matchMedia('(prefers-color-scheme:
+dark)')` actually reports inside a page.
+
+### The bug the screenshots caught, and the two guards that did not
+
+The descriptions under every settings row were dimmed by taking the current text
+colour, lightening it, and writing the result into the widget's palette. That is
+a snapshot. The labels are built once, so a colour computed under a dark theme
+stayed put when the theme went light — **every description went white on
+white**, in the dialog whose own colour-scheme control previews live.
+
+78 assertions passed. It was unmissable in the light screenshot, which is the
+case for writing the pictures out, and the case for looking at them.
+
+Writing the regression guard was the more useful half, because two versions of
+it passed with the bug still in place:
+
+- **Searching by colour role found nothing.** The buggy code dimmed by writing a
+  colour, not by setting a role, so a role-based search matched zero labels and
+  the check passed on an empty set. A check that can silently match nothing is
+  not a check — the labels are named now and the count is asserted.
+- **Building the dialog fresh under each scheme also passed**, because a colour
+  frozen under the theme that is still current is the right colour. The bug only
+  exists across a *change*. So the guard now builds under one scheme and
+  switches to the other, which is both the sequence that breaks and the sequence
+  a user performs.
+
+Only after both were fixed did it report the failure: a gap of 16 of 255 with
+the bug reintroduced, 120 with it fixed. The fix itself is one line —
+`setForegroundRole(QPalette::PlaceholderText)`, which the style recomputes on
+every palette change.
+
+---
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
 listed here is open; what closed is recorded in the sections above rather than
 carried along as amendments to a list item.
 
-1. **Take a second evidence set, from a different site.** Everything measured
-   here is dramafren, and the working runs match `/cf-master.` — that site's
-   fragment. Until a second site is captured, "the loop finds the stream" means
-   "the loop finds this stream". This is also where the fragment-first line for
-   rule 2 should be tried, rather than against the fixture it was derived from.
+1. **Measure the loop against sites two and three.** The evidence sets exist now
+   — three of them, and the probe budget was rebuilt around what they disagreed
+   about, so each site's manifest is the first thing asked about on its own host
+   and all three answer HLS. What has *not* happened is a model run since. The
+   only hit rate this file records for a second site is the **0 of 5** taken
+   while the probe was still blind to the media host, which measures the
+   blindness rather than the model, and the section above says so.
 
-   **The second mirror is exhausted**: it starts once ads are unblocked, then
-   stalls, and the tap confirms nothing is being fed to a MediaSource. A
-   different site is the answer, and the levers to reach one are in
-   `try_extract` (mirror chooser, click count, ads, popups). **Waiting on a site
-   to be chosen** — that was asked and answered as "I pick a similar site".
+   So the open question is narrow and worth stating that way: does the loop find
+   the stream on a site whose fragment is not `/cf-master.`? Two of the three
+   sites have never been asked under working conditions.
+
+   **The cost is a fresh capture each time**, and that is the part to plan for
+   rather than discover: `ev-*.json` goes to the session scratchpad, so the
+   captures behind every conclusion above are gone. `try_extract` takes the
+   capture, `test_live_model <model> <ev.json>` replays it; copy the evidence
+   somewhere durable at the time if the run is one worth arguing with later.
 
 2. **The KeePassXC pairing, which needs a person.** Everything short of it
    passes: socket, key exchange, and the answer a saved-but-unknown pairing gets.

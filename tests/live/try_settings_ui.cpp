@@ -36,6 +36,7 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QDir>
+#include <QLabel>
 #include <QListWidget>
 #include <QSettings>
 #include <QStackedWidget>
@@ -435,6 +436,82 @@ int main(int argc, char **argv) {
 		check(too_wide == 0,
 		      QString("and no page demands more width than the window gives it "
 		               "(%1 that do)").arg(too_wide));
+	}
+
+	section("descriptions stay legible in both schemes");
+	{
+		// The bug this exists for: the descriptions were dimmed by computing a
+		// lighter version of the text colour and writing it into the widget's
+		// palette. That is a one-time snapshot -- the labels are built once, so
+		// a colour worked out under a dark theme stayed put when the theme went
+		// light, and the help text under every row went white on white. It
+		// passed every assertion there was, and was obvious the moment anyone
+		// looked at the screenshot.
+		//
+		// So: composite what each description would actually be painted in over
+		// the window behind it, and insist the two are far enough apart to read.
+		// Returns the worst gap and, just as importantly, how many labels it
+		// found: a check that silently matches nothing is not a check. The old
+		// buggy version dimmed by writing a colour rather than by role, so a
+		// role-based search would have found zero labels and passed.
+		auto worst_contrast = [](QWidget *w, int *seen) {
+			int worst = 255;
+			const QColor bg = w->palette().color(QPalette::Window);
+			const auto labels = w->findChildren<QLabel *>("help");
+			for (QLabel *l : labels) {
+				// Whatever role it paints with, and whatever palette it is
+				// carrying -- which is the point: a frozen palette is the bug.
+				const QColor raw = l->palette().color(l->foregroundRole());
+				// Alpha is how a light theme usually dims: blend it out by hand,
+				// because a colour at 50% is not 50% of the way to unreadable.
+				const qreal a = raw.alphaF();
+				const QColor fg(qRound(raw.red()   * a + bg.red()   * (1 - a)),
+				                 qRound(raw.green() * a + bg.green() * (1 - a)),
+				                 qRound(raw.blue()  * a + bg.blue()  * (1 - a)));
+				worst = std::min(worst, std::abs(fg.lightness() - bg.lightness()));
+				++*seen;
+			}
+			return worst;
+		};
+
+		// Built under one scheme, then switched to the other -- which is the
+		// sequence that breaks, and the one that happens for real: the dialog is
+		// open, the user changes the colour scheme, and it previews live.
+		// Building it fresh under each scheme hides the bug completely, because
+		// a colour frozen under the theme that is still current looks fine.
+		const theme::choice both[] = {theme::choice::dark, theme::choice::light};
+		for (theme::choice built_under : both) {
+			for (theme::choice then : both) {
+				if (built_under == then)
+					continue;
+				theme::apply(built_under);
+				policy_engine   probe_policy;
+				settings_dialog probe(&players, &downloads, nullptr, nullptr,
+				                       nullptr, &probe_policy);
+				probe.show();
+				spin(200);
+				theme::apply(then);
+				spin(200);
+
+				auto *cats = probe.findChild<QListWidget *>("categories");
+				int worst = 255, seen = 0;
+				for (int i = 0; cats && i < cats->count(); ++i) {
+					cats->setCurrentRow(i);
+					spin(60);
+					worst = std::min(worst, worst_contrast(&probe, &seen));
+				}
+				probe.close();
+				check(seen > 20,
+				      QString("there is help text to check at all (%1 labels)")
+				          .arg(seen));
+				check(worst >= 40,
+				      QString("help text built %1 stays readable after switching "
+				               "to %2 (worst gap %3 of 255)")
+				          .arg(theme::name_of(built_under), theme::name_of(then))
+				          .arg(worst));
+			}
+		}
+		theme::apply(settings_store::appearance());
 	}
 
 	// The exceptions list: what the shield has been used to say, in one place.

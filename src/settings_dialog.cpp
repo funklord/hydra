@@ -517,14 +517,33 @@ namespace {
 
 QLabel *dim_label(const QString &text, QWidget *parent) {
 	auto *l = new QLabel(text, parent);
+	// Named so a test can find every description and check it is legible,
+	// whatever it is being coloured by -- searching for the colouring itself
+	// would stop finding them the moment the colouring is what broke.
+	l->setObjectName("help");
 	l->setWordWrap(true);
 	QFont f = l->font();
 	f.setPointSizeF(f.pointSizeF() * 0.92);
 	l->setFont(f);
-	QPalette pal = l->palette();
-	pal.setColor(QPalette::WindowText,
-	              pal.color(QPalette::WindowText).lighter(160));
-	l->setPalette(pal);
+	// Dimmed by *role*, not by writing a colour in. Setting a palette on the
+	// widget freezes it: these labels are built once, and a colour computed
+	// under the theme that happened to be current stays put when the theme
+	// changes. That is not hypothetical -- lightening the text worked in dark
+	// and left white-on-white the moment the scheme went light, which is what
+	// the live preview in this very dialog does.
+	//
+	// PlaceholderText is the role Qt already keeps a legible dimmed foreground
+	// in, and asking for it by name means the style recomputes it on every
+	// palette change for free.
+	// Dimmed by *role*, not by writing a colour in. Setting a palette on the
+	// widget freezes it: these labels are built once, and a colour computed
+	// under whichever theme was current stays put when the theme changes. Not
+	// hypothetical -- lightening the text read fine in dark and went white on
+	// white the moment the scheme went light, which is exactly what the live
+	// preview in this dialog does. PlaceholderText is the role Qt already keeps
+	// a legible dimmed foreground in, and asking for it by name means the style
+	// recomputes it on every palette change for free.
+	l->setForegroundRole(QPalette::PlaceholderText);
 	return l;
 }
 
