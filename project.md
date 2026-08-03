@@ -3602,6 +3602,39 @@ crashing would be harder to trace than the crash, so there is no guard, and the
 requirement is written where the next person will look. A stack frame saying
 `data()` does not say "you used the wrong application class".
 
+### The evidence the loop reasons from
+
+`filter_signals` produces two lists and they are not the same thing. **Observed**
+is everything a page asked for — the corpus a proposed rule is simulated against,
+so the dry-run can say "this would have blocked four of these". **Suspects** is
+the much smaller set that got through *and* looks ad-shaped, which is what the
+model is shown.
+
+Confusing them is not a crash. It is a dry-run reporting a rule as harmless
+because the corpus was too small to contain a counterexample, or a model
+proposing rules against the site's own assets. Twenty-five checks, no bug, and
+three rules worth naming because each exists to prevent a specific bad outcome:
+
+* **A site's own request is never a suspect**, whatever it looks like — a
+  first-party path containing `/ads/` is a house ad, and a rule against one is
+  how a filter list breaks the page it was meant to fix. Its subdomains count as
+  its own; a host that merely *ends with the same letters* does not.
+* **A blocked request is not evidence of a missing rule** — it is the system
+  working. It stays in the corpus, because a rule should still be simulated
+  against it, but it is never offered as a gap.
+* **Neither list can grow without bound.** Both cap at four hundred per site.
+  This is fed from the interceptor on every request, and a page that asks for
+  thousands of distinct urls — infinite scroll, a tracker with a nonce in every
+  path — would otherwise be a memory leak that a site controls.
+
+**Where the sweep ends.** Nine files that no test had ever named, 692 offline
+checks: four were wrong — `hls_playlist`, `tree_outline`, `tree_serializer`,
+`state_store` — and five were right: `box_crypto`, `element_picker`,
+`autofill_controller`, `tree_diff`, `filter_signals`, plus `tab_tree_model` and
+`tree_sort_proxy` against Qt's own model contract. What is left unnamed by any
+test now needs a window or a network to exercise, and the live drivers already
+drive most of it through the shell.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and
