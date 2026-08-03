@@ -143,11 +143,11 @@ in 5**, having been 0 in 5 every time it was asked before.
   traffic; it still does not prove the *matching predicate* is right, which was
   the original question. See the second-mirror section.
 - ~~The KeePassXC bridge above the crypto layer — `keepassxc` is not installed.~~
-  **Answered up to the last step.** It is installed, and the socket, the framing,
-  the key exchange, a refused unknown pairing and — with the dialog confirmed —
-  `associate()` itself all run against the real other end. Only `get-logins` is
-  still unmet, because the run that paired aborted on a driver defect before it
-  sent one.
+  **Answered, all of it.** Socket, framing, key exchange, a refused unknown
+  pairing, `associate()`, a stored pairing restored and accepted, and
+  `get-logins` returning a real entry and an empty answer for a url the vault
+  does not know. §13 has no unexercised path left, and because the pairing
+  persists it re-runs unattended rather than once.
 - ~~Whether the extractor prompt generalises past one synthetic evidence set.~~
   **Answered, badly:** it does not. Against evidence captured from the real
   site the loop returned prose and no parser in five runs out of five, so every
@@ -738,9 +738,13 @@ re-pointing the gate.
 
 **libsodium is now installed here, so the crypto path is verified**: X25519
 keypairs, a seal/open round-trip, and rejection of a tampered ciphertext, a
-wrong nonce and a wrong key all pass. What remains unexercised is everything
+wrong nonce and a wrong key all pass. ~~What remains unexercised is everything
 above the crypto — the socket handshake, association, and `get-logins` have
-never run, because KeePassXC itself is not installed. Also not done from §13: the key icon and entry-picker UI (a single
+never run, because KeePassXC itself is not installed.~~ **All of it runs now.**
+KeePassXC is installed, and the handshake, association, a stored pairing
+restored and accepted, and `get-logins` against a real vault are measured — see
+"The KeePassXC bridge finally met KeePassXC" and "A pairing that survives a
+restart". Also not done from §13: the key icon and entry-picker UI (a single
 match fills automatically; multiple matches are deliberately left alone rather
 than guessed at), `set-login` on new-credential submit, `generate-password`,
 storing the association key encrypted at rest via Secret Service — it is in
@@ -3324,9 +3328,10 @@ test had planted three checks earlier via `set_association`. They were asserting
 on the test's own writes. Cleared before pairing and gated on it now, the same
 failing run reports seven and says which checks it declined to make.
 
-**Still unexercised: `get-logins`.** The crash consumed the first confirmation and
-four later attempts produced no pairing, so a login request has never reached a
-real vault. That is the whole of what remains in §13 — see the next-list.
+**`get-logins` was reached later the same session**, once the pairing was made to
+persist — see "A pairing that survives a restart" below. What follows is why it
+took six attempts to get one confirmation, and it is worth keeping because none
+of it was ours.
 
 **And what stopped those four is not ours, on the evidence.** Two distinct
 behaviours, both KeePassXC's:
@@ -3430,12 +3435,38 @@ check, and the next line printed the *previous* pairing's name. The assertions
 were correct and their evidence was not, which is the same failure as every
 entry in the apparatus list above: load first, then report what was seen.
 
-**What is still not measured: the restore path against a real KeePassXC.** The
-store round-trips, and the driver is restructured so `get-logins` runs by
-whichever route left it paired — but nothing has yet stored a *real* pairing,
-because no confirmation has landed since the feature was built. The unattended
-run reports "nothing stored yet" and skips honestly, which is the correct shape
-and is not the same as a pass.
+### And it closed §13: `get-logins` ran, unattended
+
+**One dialog, once.** A confirmation was accepted, the pairing went to the
+keyring, and every run since has restored it, had it accepted — *"Existing
+pairing accepted."* — and gone straight to the vault with no human anywhere:
+`alice` and a 17-character password out of a real KeePassXC, over a real socket,
+through the real crypto. **15 passed, 0 failed**, and it repeats. The last part
+of §13 that had never run has now run, and can be re-run on demand, which is the
+part that matters more than the first success.
+
+**And the first unattended run immediately found a defect nothing else could
+have.** A url the vault has no entry for came back as *"No logins found (code
+15)"* — KeePassXC reports "nothing stored" as an **error** — and `handle()`
+routed every error to `error()`. So `request_logins` for a site not in the vault
+emitted no `logins` signal at all, and `autofill_controller`, whose `m_pending`
+only clears on that signal or on a navigation, left the fill pending until the
+page changed. **That is every site not in the vault, which is nearly all of
+them**, and it is the ordinary case rather than an edge one.
+
+Error 15 is now delivered as an empty result. The code travels as a *string*, so
+`error_code()` reads it as one: a numeric read of a JSON string is 0, which is
+also the answer for "no error", and getting that wrong would silently turn every
+failure into a success. Six checks pin that offline; the routing itself sits
+behind a socket and a handshake, so the driver is what proves it.
+
+**The lesson is about what persistence bought, not about the bug.** The defect
+was reachable only from a request that needed a pairing, and a pairing needed a
+person — so for as long as the association lived in memory, this could only have
+been found by a human sitting through a dialog and then thinking to ask about a
+site that is *not* in their vault. Making the pairing durable turned a
+once-ever, human-gated path into one that runs on every build, and the first
+time it did, it failed.
 
 ### Handing a stream to a player, on a phone
 
@@ -4204,32 +4235,20 @@ carried along as amendments to a list item.
    capture, `test_live_model <model> <ev.json>` replays it; copy the evidence
    somewhere durable at the time if the run is one worth arguing with later.
 
-2. **`get-logins`, which is all that is left of §13 — and it needs a person.**
-   Pairing itself is now **proven**: confirmed once against a real KeePassXC,
-   which answered "Paired with KeePassXC." and handed back an id. But that run
-   aborted on a defect in the driver before a login request went out (see the
-   section above), and no run since has had its dialog confirmed in time. So
-   `request_logins` — a url the vault knows, and one it does not — has still
-   never met a real vault.
+2. **§13 is closed; what is left of the password manager is UI.** `get-logins`
+   ran against a real vault and repeats unattended, so nothing in the protocol,
+   the transport or the crypto is unexercised any more. Still not built, from
+   §13.2/§13.3 rather than §13.1: the key icon and entry picker (a single match
+   fills automatically; multiple matches are deliberately left alone rather than
+   guessed at), `set-login` on new-credential submit, and `generate-password`.
 
-   Both driver defects are fixed and the pairing now persists, so nothing of
-   ours is known to be in the way, and **this is a one-time cost rather than a
-   per-run one**: the first confirmation is stored in the keyring and every run
-   after it restores the pairing and goes straight to the login requests.
-
-   **Restart KeePassXC first.** Measured across five attempts: a freshly started
-   instance raises the *New key association request* window — confirmed on
-   screen at a real size — and an instance that has already served one
-   association stops raising it, while still answering the handshake and
-   refusing a bogus pairing in the same run. One instance also exited mid-run
-   after writing the association to the vault, so check `pgrep keepassxc`
-   afterwards; a stale socket outlives it and the next precondition passes
-   against nothing.
-
-   ```sh
-   HYDRA_KEEPASS_INTERACTIVE=1 ./tests/build/try_keepass   # accept within 3 min
-   ./tests/build/try_keepass                               # every run after: no dialog
-   ```
+   The one durable caution from getting here, since it cost five attempts and
+   none of it was ours: **restart KeePassXC before an interactive pairing.** A
+   freshly started instance raises the association window; one that has already
+   served an association stops raising it, while still answering the handshake
+   in the same run. And the dialog **requires a name** — dismissing it empty
+   creates no association and sends no reply at all, which is indistinguishable
+   from not clicking.
 
 3. **Decide whether the helper tier's DOM half is wanted at all** (arch
    §11.5.1). The fetch half is built, permissioned and proven against a live CDN.

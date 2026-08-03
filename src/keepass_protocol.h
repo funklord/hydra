@@ -52,6 +52,18 @@ QJsonObject envelope(const QString &action, const QString &client_id,
 // error, so every parse checks for that first.
 bool is_error(const QJsonObject &reply, QString *message);
 
+// The numeric code beside that message, 0 when there is none. Exposed because
+// one of them is not a failure at all -- see below.
+int error_code(const QJsonObject &reply);
+
+// **"No logins found" is an answer, not an error.** KeePassXC reports a url it
+// has no entry for as error 15, and treating it like the rest means a
+// `get-logins` for any site not in the vault -- which is most sites -- never
+// produces a reply at all, so whoever asked waits until the page navigates.
+// Measured against a real KeePassXC, once a stored pairing made the request
+// reachable without a human.
+constexpr int no_logins_found = 15;
+
 bool parse_associate(const QJsonObject &reply, QString *assoc_id);
 QList<credential> parse_logins(const QJsonObject &reply);
 

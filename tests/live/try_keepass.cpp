@@ -297,10 +297,22 @@ int main(int argc, char **argv) {
 			none = entries;
 			answered2 = true;
 		});
+		last_error.clear();
 		bridge.request_logins("http://no-such-site.invalid", 8);
 		wait_until([&] { return answered2; }, 20000);
+		// Reported as what happened, not as a verdict. "Comes back empty" can
+		// fail two entirely different ways -- an answer carrying entries that
+		// should not exist, or no answer at all -- and a caller waiting forever
+		// is a very different defect from a caller told the wrong thing.
 		check(answered2 && none.isEmpty(),
-		      "a url with nothing stored comes back empty rather than wrong");
+		      QString("a url with nothing stored comes back empty rather than "
+		               "wrong (%1)")
+		          .arg(!answered2
+		                   ? QStringLiteral("no logins reply in 20s; error was: ") +
+		                         (last_error.isEmpty()
+		                              ? QStringLiteral("(none reported)")
+		                              : last_error)
+		                   : QString("replied with %1 entries").arg(none.size())));
 		QObject::disconnect(c2);
 	}
 

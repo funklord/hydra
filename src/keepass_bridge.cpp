@@ -234,6 +234,16 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 
 	QString err;
 	if (keepass_protocol::is_error(inner, &err)) {
+		// A url KeePassXC has no entry for is reported as an error, and it is
+		// not one: it is the answer "nothing here". Delivered as an empty
+		// result, because the alternative is what this used to do -- emit
+		// error() and never emit logins(), leaving the fill that asked pending
+		// until the page navigated. That is every site not in the vault.
+		if (action == "get-logins" &&
+		    keepass_protocol::error_code(inner) == keepass_protocol::no_logins_found) {
+			emit logins(m_pending_tag, {});
+			return;
+		}
 		if (action == "test-associate")
 			// The stored pairing is deliberately *not* dropped here. A refused
 			// test-associate means "this KeePassXC does not accept it now",

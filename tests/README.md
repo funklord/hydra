@@ -131,7 +131,7 @@ keyring, so every later run restores it, `test-associate`s it, and goes straight
 to the login requests with no dialog at all. That is the whole point of
 `credential_store`, and it is why `get-logins` is reachable unattended.
 
-**Restart KeePassXC before an interactive run.** Measured, after four attempts
+**Restart KeePassXC before an interactive run.** Measured, after five attempts
 that produced nothing: a freshly started KeePassXC raises the *New key
 association request* window, and an instance that has already served one
 association stops raising it — same unlocked vault, same socket, same code-8
@@ -139,6 +139,11 @@ answer to a bogus pairing in the same run. One instance also exited mid-run
 having written the association to the vault, leaving a stale socket behind, so
 check `pgrep keepassxc` afterwards: the driver's precondition connects, and a
 server that was alive when it connected can still be gone a minute later.
+
+**Type a name in the dialog.** Accepting it with the name box empty creates no
+association and sends no reply at all, so the driver waits out its full three
+minutes and reports exactly what it reports when nobody clicked. The vault's
+modification time is how to tell the two apart afterwards.
 
 The driver writes to its **own** keyring item (`HYDRA_SECRET_KIND` defaults to
 `keepassxc-association-try-keepass` here) so a test run can never overwrite or

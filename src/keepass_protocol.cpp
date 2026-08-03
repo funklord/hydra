@@ -96,6 +96,13 @@ bool is_error(const QJsonObject &reply, QString *message) {
 	return false;
 }
 
+int error_code(const QJsonObject &reply) {
+	// The wire carries it as a string, which is why this is not a plain
+	// toInt() on the value: a numeric read of a JSON string is 0, and 0 is the
+	// same answer this gives for "no error at all".
+	return reply.value("errorCode").toString().toInt();
+}
+
 bool parse_associate(const QJsonObject &reply, QString *assoc_id) {
 	QString err;
 	if (is_error(reply, &err))

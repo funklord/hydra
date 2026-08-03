@@ -9,9 +9,12 @@
 // `tests/live/try_keepass.cpp`. Everything here is the refusal half, which is
 // the half that matters when it is wrong.
 #include "autofill_controller.h"
+#include "keepass_protocol.h"
 #include "policy_engine.h"
 
 #include <QCoreApplication>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QSignalSpy>
 #include <cstdio>
 
@@ -145,6 +148,54 @@ int main(int argc, char **argv) {
 		check(ready.count() == 0,
 		      "and a request that passes the gate still delivers nothing without "
 		      "a paired KeePassXC");
+	}
+
+	section("\"no logins found\" is an answer, not an error");
+	{
+		// Found against a real KeePassXC, and only once a stored pairing made
+		// `get-logins` reachable without a human confirming a dialog. A url the
+		// vault has no entry for comes back as error 15 -- so routing it like
+		// any other error meant no `logins` signal was ever emitted for it, and
+		// the fill that asked stayed pending until the page navigated. That is
+		// every site not in the vault, which is nearly all of them.
+		//
+		// The routing itself lives in `keepass_bridge::handle`, behind a socket
+		// and a handshake, so `try_keepass` is what proves it end to end. What
+		// is pinned here is the fact it depends on: which code, read how.
+		QJsonObject no_logins;
+		no_logins.insert("error", "No logins found");
+		no_logins.insert("errorCode", "15");
+		QString message;
+		check(keepass_protocol::is_error(no_logins, &message),
+		      "KeePassXC reports \"nothing stored\" as an error");
+		check(keepass_protocol::error_code(no_logins) ==
+		          keepass_protocol::no_logins_found,
+		      QString("and the code is the one we single out (%1)")
+		          .arg(keepass_protocol::error_code(no_logins)));
+		check(keepass_protocol::parse_logins(no_logins).isEmpty(),
+		      "and it parses to no entries rather than a bad one");
+
+		// The code travels as a *string*. A numeric read of a JSON string is 0,
+		// which is also this function's answer for "no error", so getting that
+		// wrong would silently turn every error into no error.
+		QJsonObject numeric;
+		numeric.insert("error", "No logins found");
+		numeric.insert("errorCode", 15);
+		check(keepass_protocol::error_code(numeric) == 0,
+		      "a code sent as a number rather than a string reads as 0, not 15");
+
+		QJsonObject other;
+		other.insert("error", "Database not opened");
+		other.insert("errorCode", "1");
+		check(keepass_protocol::error_code(other) == 1,
+		      "a different failure keeps its own code and stays an error");
+
+		QJsonObject fine;
+		fine.insert("success", "true");
+		fine.insert("entries", QJsonArray());
+		check(!keepass_protocol::is_error(fine, &message) &&
+		          keepass_protocol::error_code(fine) == 0,
+		      "and a success reply has no code at all");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
