@@ -191,6 +191,11 @@ int main(int argc, char *argv[]) {
 	if (!tf.open(QIODevice::WriteOnly | QIODevice::Truncate)) return 1;
 	tf.write("- [f0] folder | Capture\n"
 	          "  - [a1] unopened | Blank | about:blank | "
+	          "created=2026-01-01T00:00:00 | seen=2026-01-01T00:00:00\n"
+	          // A second tab, for the tab-switching check at the end. It is
+	          // loaded once and then left alone, which is exactly the state that
+	          // used to go unnoticed.
+	          "  - [a2] unopened | Second | about:blank | "
 	          "created=2026-01-01T00:00:00 | seen=2026-01-01T00:00:00\n");
 	tf.close();
 
@@ -458,6 +463,57 @@ int main(int argc, char *argv[]) {
 	                                              : qPrintable(clicked_on("/framed")));
 	check(clicked_on("/framed") == "Reject all",
 	      "a CMP shipped as an iframe is answered like any other banner");
+
+	// Does the consent bridge follow the *visible* tab?
+	//
+	// It did not, and nothing here noticed. The page host was set in one place —
+	// the current view's url_changed — so switching to an already-loaded tab
+	// navigated nothing, sent no signal, and left the blocker answering
+	// active_now() and rules_json() for the site of the tab before it. A bridge
+	// deliberately built so a page cannot name its own host is worth little if
+	// the shell then names the wrong one.
+	//
+	// Found on Android, where the same gap was total rather than partial: that
+	// backend emits url_changed from inside load(), before the stack switches, so
+	// the host was never set even once.
+	std::printf("\n== the page context follows the tab, not the last navigation ==\n");
+	{
+		auto *model = tree_view->model();
+		const QModelIndex folder = model->index(0, 0);
+		const QModelIndex first  = model->index(0, 0, folder);
+		const QModelIndex second = model->index(1, 0, folder);
+		check(second.isValid(), "the fixture has a second tab to switch to");
+
+		if (second.isValid()) {
+			// Give each tab a page on a host of its own. Two loopback addresses,
+			// as everywhere else here, so the hosts differ by name.
+			emit tree_view->activated(first);
+			spin(800);
+			bar->setText(QString("http://127.0.0.1:%1/plain").arg(port));
+			QMetaObject::invokeMethod(bar, "returnPressed");
+			spin(2500);
+			const QString host_one = blocker->page_host();
+
+			emit tree_view->activated(second);
+			spin(800);
+			bar->setText(QString("http://127.0.0.2:%1/plain").arg(port));
+			QMetaObject::invokeMethod(bar, "returnPressed");
+			spin(2500);
+			check(blocker->page_host() == "127.0.0.2",
+			      QString("the second tab's host is current while it is (%1)")
+			          .arg(blocker->page_host()));
+
+			// The whole point: back to the first tab, which navigates nothing.
+			emit tree_view->activated(first);
+			spin(2000);
+			check(blocker->page_host() == host_one,
+			      QString("switching back restores the first tab's host without a "
+			               "navigation (%1, wanted %2)")
+			          .arg(blocker->page_host(), host_one));
+			check(blocker->page_host() != "127.0.0.2",
+			      "and does not leave the other tab's site in force");
+		}
+	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

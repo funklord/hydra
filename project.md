@@ -3355,13 +3355,21 @@ The media dialog said "Queued download to
 a path that is long, unopenable, and no longer where the file ends up. On Android
 it now says "Queued. It will appear in Downloads when it finishes."
 
-**One flake, recorded rather than explained.** `test_extloop` came back 28 of 34
-once, immediately after a parallel build, and has passed six times since —
-including with four cores deliberately busy. Its assertions include wall-clock
-ones ("the timer fired *while* the script was running, 120 ms against 419 ms"),
-which are the obvious suspects, but that is a guess and this file does not keep
-guesses. It is written down so the next occurrence is a second data point rather
-than a first.
+**A flake, recorded rather than explained.** `test_extloop` has now failed twice
+— 28 of 34, then 21 of 34 — and passed more than twenty times since, so it is
+real and it is rare. Both failures happened inside a run of the whole suite list;
+neither reproduced. Ruled out by trying: running it alone (12 consecutive
+passes), running it with four cores deliberately busy, running it immediately
+after `test_settings` and after `test_extractor`, and re-running the exact
+sequence that failed.
+
+Its assertions include wall-clock ones — "the timer fired *while* the script was
+running, 120 ms against 419 ms" — which makes scheduling the leading suspect, but
+that is a hypothesis and this file does not record hypotheses as findings. What
+is worth knowing is that **the suite already prints the numbers it compares**, so
+whenever it next fails the output will say which deadline was missed and by how
+much, rather than only that something did. That is the difference between a third
+data point and a third shrug.
 
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
@@ -3387,20 +3395,20 @@ C++ that already exists.
    accepted that as *followed rather than invented*, in four calls and 320
    bytes. What remains is the DOM half behind §13.2, and deciding whether it is
    wanted at all — nothing has yet needed it.
-3. **Decide how far to go when blocking ads breaks the page.** The detection
-   half is built: a page that checks for a blocker is noticed and the user is
-   told, once, with the shield named as the lever (see above). What is open is
-   whether it should offer or apply the change itself, the way answering a
-   consent banner relaxes first-party cookies. That is a judgement about how
-   much the browser should undo on the user's behalf, not a missing mechanism.
-   The old note follows. No longer
-   hypothetical: on the Abyss mirror the site's anti-adblock refuses to start the
-   player, and turning the ad list off is what makes it play. The shield already
-   gives a per-site tri-state, so the *mechanism* to allow it is there — what is
-   missing is any way for the user to find out that is the problem, since a
-   player that silently spins looks like a broken site or a broken browser. This
-   is the first thing the ad-host list has done at runtime and it is a design
-   question, not a bug.
+3. **Decided: when blocking ads breaks the page, fix it and say so.** The open
+   question was whether the browser should offer the change or make it, and the
+   answer was to make it. On a page whose anti-adblock refuses to start, ads are
+   allowed for that site, the page reloads, and the status bar says what happened
+   and where to undo it — "so ads are now allowed for this site and it is being
+   reloaded — undo it in the shield", for fifteen seconds. Once per host, so a
+   site that keeps asking does not keep toggling.
+
+   **A site the user has already ruled on is left alone.** If there is an
+   explicit per-site ads setting, the detector says the site is checking and
+   that the setting stands, rather than overriding a decision someone made on
+   purpose. That is the line between helping and interfering, and it is the part
+   worth keeping if the rest is ever revisited.
+
 4. **Exercise the rest of what is wired but untested.** **The ad-host half is
    done** — see the filter-enforcement section above; it needed no DNS trick at
    all, only two loopback hosts, and finding that out uncovered that the whole
