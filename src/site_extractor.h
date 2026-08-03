@@ -44,6 +44,10 @@ struct extractor_verdict {
 	bool       timed_out = false;
 	bool       helper_breach = false;  // it reached past what it was allowed, or
 	                                   // spent a budget; §11.5.1
+	bool       hardcoded = false;  // it embeds a token from this capture, so it
+	                               // answers for this visit and no other
+	bool       reads_note = false; // it reads the `serves` column at run time,
+	                               // where that column does not exist
 	QString    message;
 	extraction result;
 };

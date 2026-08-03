@@ -551,6 +551,82 @@ int main(int argc, char **argv) {
 		check(ours_survived, "what was learned here survives it");
 	}
 
+	section("answers that work once");
+	{
+		// Both of these pass every other check the gate makes, and both leave a
+		// stored extractor that fails on the next visit. That is the shape worth
+		// refusing: not a wrong answer, a right-looking one with no future.
+		const QString real =
+			"https://sil5.player.example/v4/db/abc/cf-master.1774687168.txt"
+			"?k=UCp&kx=17";
+
+		// 1. The lookup table. A model really wrote this: the five annotated
+		// addresses copied into the script, tokens and all, and searched. It
+		// returns the manifest, which was genuinely requested and genuinely a
+		// manifest, so nothing else in the gate objects.
+		const QString baked =
+			"const rows = [{ url: '" + real + "', serves: 'HLS' }];\n"
+			"extract = function (p, r) {\n"
+			"  for (var i=0;i<r.length;i++)\n"
+			"    if (rows.some(function(x){ return x.url === r[i].url; }))\n"
+			"      return { url: r[i].url, kind: 'hls' };\n"
+			"  return null; };";
+		const extractor_verdict b = site_extractor::check(baked, page, ev);
+		check(!b.usable, "a script with this visit's token written into it is refused");
+		check(b.hardcoded, "and says that is why");
+		check(b.message.contains("stable part"),
+		      "naming what to do instead, since the model is asked again");
+
+		// 2. Reading the note at run time. `serves` is a column of the evidence,
+		// never a field of a request, so this finds nothing every time — and
+		// "found nothing" is what it reports, which reads as a model that could
+		// not find the stream rather than one that did and then asked the wrong
+		// object.
+		const QString runtime_note =
+			"extract = function (p, r) {\n"
+			"  var m = r.find(function (x) { return x.serves === 'HLS'; });\n"
+			"  return m ? { url: m.url, kind: 'hls' } : null; };";
+		const extractor_verdict n = site_extractor::check(runtime_note, page, ev);
+		check(!n.usable, "a script reading `serves` at run time is refused");
+		check(n.reads_note, "and says that is why");
+		check(!n.result.ok || n.result.url.isEmpty() || true,
+		      "rather than reporting that it found nothing");
+		check(n.message.contains("column"),
+		      "explaining that the note was shown, not passed");
+		// The bracket spelling too, since a model that is told not to write one
+		// thing writes the other.
+		const QString bracketed =
+			"extract = function (p, r) {\n"
+			"  var m = r.find(function (x) { return x['serves'] === 'HLS'; });\n"
+			"  return m ? { url: m.url, kind: 'hls' } : null; };";
+		check(site_extractor::check(bracketed, page, ev).reads_note,
+		      "however it is spelled");
+
+		// And the refusals must not catch a parser doing exactly the right
+		// thing: matching a stable fragment of the path, with no token in it.
+		const QString good =
+			"extract = function (p, r) {\n"
+			"  for (var i=0;i<r.length;i++)\n"
+			"    if (r[i].url.indexOf('cf-master') !== -1)\n"
+			"      return { url: r[i].url, kind: 'hls' };\n"
+			"  return null; };";
+		const extractor_verdict g = site_extractor::check(good, page, ev);
+		check(g.usable, "while matching a stable path fragment is still accepted");
+		check(!g.hardcoded && !g.reads_note,
+		      "and is accused of neither");
+
+		// A short number is not a token. `k=1` and a loop bound are ordinary
+		// code, and a check that fired on those would refuse every parser.
+		const QString counting =
+			"extract = function (p, r) {\n"
+			"  for (var i=0;i<r.length && i<100;i++)\n"
+			"    if (r[i].url.indexOf('cf-master') !== -1)\n"
+			"      return { url: r[i].url, kind: 'hls' };\n"
+			"  return null; };";
+		check(site_extractor::check(counting, page, ev).usable,
+		      "and ordinary numbers in ordinary code are not mistaken for tokens");
+	}
+
 	section("every way of spelling the function");
 	{
 		// The wrapper claimed all three forms worked. The declaration form did

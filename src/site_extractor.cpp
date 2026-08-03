@@ -62,6 +62,62 @@ QString wrap(const QString &source) {
 	    "})()").arg(source);
 }
 
+// Does the proposal carry a value that only this page load has?
+//
+// The rotating parts of these addresses are the query values and the long digit
+// runs in the path — `?k=4_Lxg1uYRS4SPCO4a_CE8A&kx=1785787643`, or the
+// `1742380998` in `cf-master.1742380998.txt`. `shape_of` already treats exactly
+// those as the variable parts, so this asks the same question of the *script*:
+// if a run of characters appears both in the evidence's variable parts and
+// verbatim in the source, the script is answering from this capture rather than
+// from the shape of the address.
+//
+// Measured: a model wrote a lookup table of the five annotated urls, tokens and
+// all, and searched it. Every check the gate had passed — the address really
+// was requested, really was a manifest, really was fetched once — and the
+// extractor would have failed on the next visit, stored, with nothing pointing
+// back here.
+//
+// Short values are ignored deliberately. `k=1` or a two-digit number is not a
+// token and appears in ordinary code, so the floor is set where a coincidence
+// stops being plausible.
+bool embeds_a_token(const QString &source, const QList<evidence_request> &evidence) {
+	static const QRegularExpression long_digits("[0-9]{6,}");
+	QSet<QString> variable;
+	for (const evidence_request &r : evidence) {
+		const QUrlQuery q(r.url);
+		for (const auto &kv : q.queryItems())
+			if (kv.second.size() >= 8)
+				variable.insert(kv.second);
+		auto it = long_digits.globalMatch(r.url.path());
+		while (it.hasNext())
+			variable.insert(it.next().captured(0));
+	}
+	for (const QString &token : variable)
+		if (source.contains(token))
+			return true;
+	return false;
+}
+
+// Does the proposal try to read the served-type note at run time?
+//
+// It is a column of the table the model is shown, never a field of the requests
+// the script receives — it cannot be, because a stored extractor runs on later
+// visits where nothing has been fetched to ask. A script reading it gets
+// `undefined` every time, so it reports "found nothing" and looks like a model
+// that could not find the stream, when it is a model that found it and then
+// asked the wrong object about it.
+//
+// Measured: with the note moved into its own column, every run stopped testing
+// urls for `->` -- and four in five started reading `request.serves` instead.
+// The layout fixed how the note was *read*; it did not fix where the model
+// thought the note lived.
+bool reads_serves(const QString &source) {
+	static const QRegularExpression access(
+	    R"((\.\s*serves\b)|(\[\s*['"]serves['"]\s*\]))");
+	return access.match(source).hasMatch();
+}
+
 QString normalise(const QUrl &u) {
 	// Compared as text, but with the pieces that vary between two sightings of
 	// the same request removed. A fragment never reaches the server at all.
@@ -242,6 +298,29 @@ extractor_verdict check(const QString &source, const QUrl &page,
                          const QList<evidence_request> &evidence,
                          helper_host *helpers, const QSet<QString> *manifests) {
 	extractor_verdict v;
+
+	// --- Read before it is run ------------------------------------------
+	//
+	// Both of these produce a *usable-looking* answer on this evidence and a
+	// broken extractor on the next visit, which is the worst shape a defect can
+	// have here: the proposal is accepted, stored for the host, and fails later
+	// with nothing to connect it back to this moment. They are checked
+	// statically because running the script reports each as something else — a
+	// baked-in token looks like a correct answer, and a read of a column that
+	// does not exist looks like "the script found nothing".
+	//
+	// This is §12.4's argument once more: decide what a proposal *would* do
+	// before letting it do it.
+	if (reads_serves(source)) {
+		v.reads_note = true;
+		v.message = "Rejected: the script reads a `serves` value at run time. "
+		            "That is a column of the evidence you were shown, not a "
+		            "field of a request — it is undefined here, and there is "
+		            "nothing to probe on a later visit. Decide from it now and "
+		            "match the address.";
+		return v;
+	}
+
 	v.result = run(source, page, evidence, 2000, helpers);
 
 	// A script that reached past what it was allowed, or spent a budget, does
@@ -290,6 +369,19 @@ extractor_verdict check(const QString &source, const QUrl &page,
 		v.is_page = true;
 		v.message = "Rejected: that is the page's own address, not a stream "
 		            "inside it.";
+		return v;
+	}
+
+	// Asked after "was this even requested", because a script that returns an
+	// address the page never fetched has a more basic problem than a stale
+	// token, and saying so names the right fault. Everything reaching here
+	// returned something real -- which is precisely what makes a baked-in token
+	// dangerous, since every other check is satisfied.
+	if (embeds_a_token(source, evidence)) {
+		v.hardcoded = true;
+		v.message = "Rejected: the script has this visit's ids or tokens written "
+		            "into it, so it answers for this page load and no other. "
+		            "Match a stable part of the address instead.";
 		return v;
 	}
 

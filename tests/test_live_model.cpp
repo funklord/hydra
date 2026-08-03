@@ -194,10 +194,24 @@ int main(int argc, char **argv) {
 	// dialog beside it had refused that pick, because the content-type tier had
 	// fetched it and found no stream. `gate:` above and this are the answer;
 	// `check-only:` is a diagnostic about one rule set.
-	if (QLabel *verdict = dlg.findChild<QLabel *>("verdict"))
-		std::printf("dialog: %s\n",
-		             qPrintable(verdict->text().replace(QRegularExpression("<[^>]*>"),
-		                                                 " ").simplified().left(300)));
+	if (QLabel *verdict = dlg.findChild<QLabel *>("verdict")) {
+		// Elided in the middle, not the tail. **The reason is at the end** —
+		// "It does not look like a stream: served as …" comes after the address
+		// it is talking about, so a plain `left(300)` keeps the pick and throws
+		// away the verdict on it. With a long analytics url that is exactly what
+		// happened: the line read "Accepted. Picks a hls stream…" beside a
+		// `gate: REJECTED`, and the sentence explaining the contradiction had
+		// been cut off by this very print. Two readers spent time on an
+		// inconsistency that only existed in the log.
+		const QString full = verdict->text()
+		                         .replace(QRegularExpression("<[^>]*>"), " ")
+		                         .simplified();
+		const QString shown =
+		    full.size() <= 320
+		        ? full
+		        : full.left(170) + " […] " + full.right(140);
+		std::printf("dialog: %s\n", qPrintable(shown));
+	}
 
 	if (script) {
 		const extractor_verdict v =
