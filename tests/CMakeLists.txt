@@ -139,6 +139,11 @@ add_executable(test_model test_model.cpp ${H}/tab_tree_model.cpp
 target_link_libraries(test_model PRIVATE Qt6::Widgets Qt6::Test)
 target_include_directories(test_model PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
 
+add_executable(test_assembler test_assembler.cpp ${H}/hls_assembler.cpp
+    ${H}/hls_playlist.cpp ${H}/local_proxy.cpp)
+target_link_libraries(test_assembler PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+target_include_directories(test_assembler PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_executable(test_signals test_signals.cpp ${H}/filter_signals.cpp
     ${H}/request_filter.cpp ${H}/policy.cpp ${H}/policy_engine.cpp
     ${H}/filter_list.cpp)

@@ -3635,6 +3635,35 @@ checks: four were wrong — `hls_playlist`, `tree_outline`, `tree_serializer`,
 test now needs a window or a network to exercise, and the live drivers already
 drive most of it through the shell.
 
+### Assembling the file, not just parsing the manifest
+
+Fixing the byte-range offset in the parser was half the story. What matters is
+the file that comes out, so `test_assembler` runs the whole thing against an
+in-process server that speaks enough HTTP to be a CDN — including honouring
+`Range`, since a server that ignored it would make the case under test pass for
+the wrong reason.
+
+**And this is where the original bug shows its real shape.** With the parser fix
+removed, the assembled file is *the right length* — 9000 bytes, exactly as
+intended — and the wrong bytes: the assembler asked for `0-3999`, then `0-2999`,
+then `0-1999`, so the file is the opening of the stream three times over. A test
+that compared sizes would have passed. Only comparing the bytes catches it, which
+is the whole reason the fixture uses three distinguishable fills rather than
+random data.
+
+Also pinned: segments concatenate in order; a master playlist follows the
+widest variant and never fetches the others; a missing segment fails once and
+does **not** report completion, because a half file that claims to be whole is
+worse than an error; and a manifest that is not there fails rather than waiting.
+
+**One more fixture that lied.** The first run failed at three times the expected
+length, which looks exactly like the bug it was written to catch. It was not: the
+assembler had sent precisely the right ranges, and the *server* was looking for
+`Range:` while Qt puts header names on the wire lowercased. Header names are
+case-insensitive and the fixture was not. Finding that out took printing the
+requests, which is the same move that settled the `Accept`-header business
+earlier in this file — when a client and a server disagree, read the wire.
+
 **What is not in doubt:** the seam. `shouldInterceptRequest` onto the shared
 `request_filter`, `addJavascriptInterface` for the content scripts, and
 `shouldOverrideUrlLoading` for `magnet:` are all still to write (§19.5), and
