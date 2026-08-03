@@ -9,6 +9,9 @@
 #include <QAbstractButton>
 #include <QCheckBox>
 #include <QDialogButtonBox>
+#include <QFont>
+#include <QFrame>
+#include <QPalette>
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
@@ -33,6 +36,9 @@
 #include <QStackedWidget>
 #include "policy_engine.h"
 #include <QHBoxLayout>
+#include <QFrame>
+#include <QPalette>
+#include <QFont>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -254,17 +260,24 @@ settings_dialog::settings_dialog(player_launcher *players,
 	// eliding or wrapping, while a vertical list has room for a name that says
 	// what is inside. Hydra passed four the moment site defaults arrived.
 	auto *outer = new QVBoxLayout(this);
-	auto *split = new QHBoxLayout;
-	outer->addLayout(split, 1);
 
 	// Firefox and Chrome both let preferences be searched, and it is what makes
 	// a category list scale: six pages is already more than anyone will read
 	// through to find one switch.
+	//
+	// **Above** the pages, which is where both of them put it and where a reader
+	// looks first. It was below, under the page stack and next to the OK button,
+	// which is where a filter for a *result list* would go -- and it read as one.
+	// Nothing asserted the position and nothing could: it took looking at a
+	// screenshot, which is why this driver now takes them.
 	m_search = new QLineEdit(this);
 	m_search->setObjectName("settings_search");
 	m_search->setPlaceholderText("Find a setting…");
 	m_search->setClearButtonEnabled(true);
 	outer->addWidget(m_search);
+
+	auto *split = new QHBoxLayout;
+	outer->addLayout(split, 1);
 
 	m_categories = new QListWidget(this);
 	m_categories->setObjectName("categories");
@@ -299,6 +312,21 @@ settings_dialog::settings_dialog(player_launcher *players,
 		area->setWidget(page);
 		area->setWidgetResizable(true);
 		area->setFrameShape(QFrame::NoFrame);
+		// Never sideways. Everything on these pages wraps or is a control, so a
+		// horizontal scrollbar can only ever mean the layout is a few pixels
+		// out — and that is exactly how it appeared: the vertical scrollbar
+		// arrives, takes ~15px off the viewport, and content laid out at the
+		// wider size then overflows by that much. The result was a full-width
+		// scrollbar whose slider filled its own track, scrolling nothing, on
+		// pages that measured as fitting comfortably.
+		area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		// A gutter, set here so every page gets the same one rather than each
+		// remembering to. Without it a right-aligned control ends exactly where
+		// the vertical scrollbar begins, which reads as clipping — it was
+		// mistaken for clipping here, and the difference is a margin rather
+		// than a layout fault.
+		if (QLayout *lay = page->layout())
+			lay->setContentsMargins(16, 12, 22, 16);
 		return area;
 	};
 	// Privacy first, because it is the one page that is about what the browser
@@ -307,8 +335,11 @@ settings_dialog::settings_dialog(player_launcher *players,
 		stack->addWidget(w);
 		m_categories->addItem(name);
 	};
-	add_page(wrap(privacy_page), "Privacy && security");
-	add_page(wrap(player_page), "Media && players");
+	// A QListWidgetItem draws its text literally -- no mnemonics -- so "&&"
+	// arrived on screen as two ampersands. The escape belongs to menus and
+	// buttons, not here.
+	add_page(wrap(privacy_page), "Privacy & security");
+	add_page(wrap(player_page), "Media & players");
 	add_page(wrap(dl_page), "Downloads");
 	add_page(wrap(filter_page), "Filters");
 	add_page(wrap(kiosk_page), "Kiosk");
@@ -334,6 +365,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 	m_results->setObjectName("settings_results");
 	m_results->setMaximumHeight(140);
 	m_results->hide();
+	// Directly under the box that fills it, which is now index 1.
 	outer->insertWidget(1, m_results);
 	connect(m_search, &QLineEdit::textChanged, this, &settings_dialog::run_search);
 	connect(m_results, &QListWidget::itemActivated, this,
@@ -432,6 +464,91 @@ void settings_dialog::run_search(const QString &text) {
 	m_results->setVisible(m_results->count() > 0);
 }
 
+
+// --- browser-shaped rows ---------------------------------------------------
+//
+// A settings row here is what Firefox and Chrome both settled on: the name of
+// the thing, one line under it saying what the thing *is*, and the control on
+// the right. The alternative -- a QFormLayout of "Label:" and a combo -- fits
+// more rows on the screen and tells you nothing, so the reader has to already
+// know what "Referer header" means before the page can help them.
+//
+// The description is dimmed and one step smaller, which is the whole visual
+// grammar: it says "context, not another setting" without needing a rule about
+// it.
+namespace {
+
+QLabel *dim_label(const QString &text, QWidget *parent) {
+	auto *l = new QLabel(text, parent);
+	l->setWordWrap(true);
+	QFont f = l->font();
+	f.setPointSizeF(f.pointSizeF() * 0.92);
+	l->setFont(f);
+	QPalette pal = l->palette();
+	pal.setColor(QPalette::WindowText,
+	              pal.color(QPalette::WindowText).lighter(160));
+	l->setPalette(pal);
+	return l;
+}
+
+// A section heading: bold, with a hairline under it. Not a QGroupBox -- a box
+// around every three rows is a lot of furniture for something whose only job is
+// to say "these belong together".
+QWidget *section_heading(const QString &text, QWidget *parent) {
+	auto *holder = new QWidget(parent);
+	auto *v = new QVBoxLayout(holder);
+	v->setContentsMargins(0, 14, 0, 4);
+	v->setSpacing(4);
+	auto *title = new QLabel(text, holder);
+	QFont f = title->font();
+	f.setBold(true);
+	title->setFont(f);
+	v->addWidget(title);
+	auto *line = new QFrame(holder);
+	line->setFrameShape(QFrame::HLine);
+	line->setFrameShadow(QFrame::Plain);
+	v->addWidget(line);
+	return holder;
+}
+
+// One row. `control` is adopted; `help` may be empty for settings whose name is
+// the whole story.
+// `wide` is for controls that hold text rather than a choice -- a path, a
+// hostname. A combo box wants its own width and looks wrong stretched; a line
+// edit squeezed to its size hint shows the *end* of a path and nothing else,
+// which is the half nobody needs.
+QWidget *settings_row(const QString &title, const QString &help,
+                       QWidget *control, QWidget *parent, bool wide = false) {
+	auto *row = new QWidget(parent);
+	auto *h = new QHBoxLayout(row);
+	h->setContentsMargins(0, 6, 0, 6);
+	h->setSpacing(12);
+
+	auto *text_col = new QVBoxLayout;
+	text_col->setSpacing(2);
+	auto *name = new QLabel(title, row);
+	name->setWordWrap(true);
+	text_col->addWidget(name);
+	if (!help.isEmpty())
+		text_col->addWidget(dim_label(help, row));
+	h->addLayout(text_col, wide ? 1 : 2);
+
+	// The control keeps to its own width and sits against the right edge, so a
+	// column of them lines up however long the descriptions are -- unless it is
+	// one of the wide ones, which take a share of the row instead.
+	control->setParent(row);
+	if (wide)
+		h->addWidget(control, 1, Qt::AlignTop);
+	else
+		h->addWidget(control, 0, Qt::AlignRight | Qt::AlignTop);
+
+	// So search can jump to the control rather than to its name.
+	name->setBuddy(control);
+	return row;
+}
+
+}  // namespace
+
 void settings_dialog::build_privacy_page(QWidget *page) {
 	auto *v = new QVBoxLayout(page);
 
@@ -461,49 +578,46 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 			order << QString::fromUtf8(fg.group);
 	order << "Other";
 
-	auto row_for = [&](QFormLayout *form, policy::feature f) {
-		auto *combo = new QComboBox(page);
-		// Global defaults are always allow or block. "Default" is what a *site*
-		// says when it has no opinion and falls through to here, so offering it
-		// at this level would be a setting that points at itself.
-		combo->addItem("Allow", int(policy::setting::allow));
-		combo->addItem("Block", int(policy::setting::block));
-		const policy::setting cur = m_policy->global_default(f);
-		combo->setCurrentIndex(cur == policy::setting::block ? 1 : 0);
-		combo->setObjectName(QString("feature_%1").arg(policy::feature_name(f)));
-		m_feature_combos[int(f)] = combo;
-		form->addRow(QString(policy::feature_label(f)) + ":", combo);
-	};
-
 	for (const QString &group_name : order) {
-		auto *box = new QGroupBox(group_name, page);
-		auto *form = new QFormLayout(box);
-		int rows = 0;
+		QList<policy::feature> in_group;
 		for (int i = 0; i < policy::feature_count(); ++i) {
 			const auto f = static_cast<policy::feature>(i);
 			QString mine = "Other";
 			for (const feature_group &fg : k_privacy_layout)
 				if (fg.f == f)
 					mine = QString::fromUtf8(fg.group);
-			if (mine != group_name)
-				continue;
-			row_for(form, f);
-			++rows;
+			if (mine == group_name)
+				in_group << f;
 		}
-		if (rows == 0) {
-			delete box;
+		if (in_group.isEmpty())
 			continue;
+
+		v->addWidget(section_heading(group_name, page));
+		for (policy::feature f : in_group) {
+			auto *combo = new QComboBox(page);
+			// Global defaults are always allow or block. "Default" is what a
+			// *site* says when it has no opinion and falls through to here, so
+			// offering it at this level would be a setting that points at itself.
+			combo->addItem("Allow", int(policy::setting::allow));
+			combo->addItem("Block", int(policy::setting::block));
+			const policy::setting cur = m_policy->global_default(f);
+			combo->setCurrentIndex(cur == policy::setting::block ? 1 : 0);
+			combo->setObjectName(QString("feature_%1").arg(policy::feature_name(f)));
+			m_feature_combos[int(f)] = combo;
+			v->addWidget(settings_row(policy::feature_label(f),
+			                           policy::feature_help(f), combo, page));
 		}
-		v->addWidget(box);
 	}
 
-	auto *note = new QLabel(
-		"<i>Cookie consent banners</i>: blocking them means Hydra answers the "
-		"\"do you want to accept cookies?\" dialog for you, taking the least "
-		"permissive option a site actually offers. Answering one allows that "
-		"site's own cookies, because the choice is itself stored in a cookie "
-		"and would otherwise be forgotten on every visit.", page);
-	note->setWordWrap(true);
+	// What used to be a footnote about cookie consent banners is now the
+	// description on that row itself, where somebody reading that row will see
+	// it. The one thing the row has no space for is the consequence, which is
+	// worth keeping because it surprises people.
+	auto *note = dim_label(
+		"Answering a consent banner allows that site's own cookies: the answer "
+		"is itself stored in a cookie, and would otherwise be forgotten on every "
+		"visit.", page);
+	v->addSpacing(10);
 	v->addWidget(note);
 
 	v->addStretch(1);
@@ -561,14 +675,17 @@ void settings_dialog::build_filter_page(QWidget *page) {
 	// The second corpus, on the same page because it is the same kind of thing:
 	// small perishable facts about how sites behave, kept as data so they can be
 	// corrected without a release — and, in the stated direction, exchanged.
-	auto *rules_box = new QGroupBox("Learned site rules", page);
+	// A heading and a dimmed line rather than a titled box: the page above it
+	// is already a heading and a table, and one bordered frame among them looks
+	// like the frame means something.
+	auto *rules_box = new QWidget(page);
 	auto *rv = new QVBoxLayout(rules_box);
-	auto *rules_intro = new QLabel(
+	rv->setContentsMargins(0, 0, 0, 0);
+	rv->addWidget(section_heading("Learned site rules", rules_box));
+	rv->addWidget(dim_label(
 		"Consent-banner wording and ad-blocker detector names learned on this "
 		"machine. Built-in rules are not listed: they come from the program and "
-		"cannot be edited here.", rules_box);
-	rules_intro->setWordWrap(true);
-	rv->addWidget(rules_intro);
+		"cannot be edited here.", rules_box));
 
 	m_rules_view = new QTreeWidget(rules_box);
 	m_rules_view->setObjectName("site_rules");
@@ -812,21 +929,28 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 	intro->setWordWrap(true);
 	v->addWidget(intro);
 
-	auto *what = new QGroupBox("What it shows", page);
-	auto *wf = new QFormLayout(what);
-	m_kiosk_home = new QLineEdit(what);
+	v->addWidget(section_heading("What it shows", page));
+
+	m_kiosk_home = new QLineEdit(page);
 	m_kiosk_home->setPlaceholderText("blank = whatever tab you were on");
-	wf->addRow("Home page:", m_kiosk_home);
-	m_kiosk_idle = new QSpinBox(what);
+	v->addWidget(settings_row(
+		"Home page",
+		"Where kiosk mode starts, and where it returns to when left alone.",
+		m_kiosk_home, page, /*wide=*/true));
+
+	m_kiosk_idle = new QSpinBox(page);
 	m_kiosk_idle->setRange(0, 86400);
 	m_kiosk_idle->setSuffix(" s");
 	m_kiosk_idle->setSpecialValueText("never");
-	wf->addRow("Return home when idle:", m_kiosk_idle);
-	v->addWidget(what);
+	v->addWidget(settings_row(
+		"Return home when idle",
+		"How long an abandoned session sits before it walks back to the home "
+		"page. Never means never.",
+		m_kiosk_idle, page));
 
-	auto *how = new QGroupBox("How it is scaled", page);
-	auto *hf = new QFormLayout(how);
-	m_kiosk_scale = new QComboBox(how);
+	v->addWidget(section_heading("How it is scaled", page));
+
+	m_kiosk_scale = new QComboBox(page);
 	m_kiosk_scale->addItem("Reflow — one zoom factor, the page re-lays out",
 	                        int(scale_mode::reflow));
 	m_kiosk_scale->addItem("None — native size, cropped by the stage",
@@ -834,52 +958,66 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 	m_kiosk_scale->addItem("Geometric — exact transform (test on the target GPU)",
 	                        int(scale_mode::geometric));
 	m_kiosk_scale->setObjectName("kiosk_scale");
-	hf->addRow("Scaling:", m_kiosk_scale);
-	m_kiosk_fit = new QComboBox(how);
+	v->addWidget(settings_row(
+		"Scaling",
+		"Reflow re-lays the page out at a zoom factor and is the robust choice. "
+		"Geometric transforms the pixels exactly, and is the one that has "
+		"historically rendered black on some GPUs — try it on the hardware you "
+		"will deploy on.",
+		m_kiosk_scale, page, /*wide=*/true));
+
+	m_kiosk_fit = new QComboBox(page);
 	m_kiosk_fit->addItem("Contain", int(fit_mode::contain));
 	m_kiosk_fit->addItem("Cover", int(fit_mode::cover));
 	m_kiosk_fit->addItem("Stretch", int(fit_mode::stretch));
 	m_kiosk_fit->addItem("Actual size", int(fit_mode::actual));
 	m_kiosk_fit->setObjectName("kiosk_fit");
-	hf->addRow("Fit:", m_kiosk_fit);
-	m_kiosk_w = new QSpinBox(how);
+	v->addWidget(settings_row(
+		"Fit",
+		"How the design size meets the screen — the same words CSS uses. Not "
+		"every pair means something: reflow cannot stretch, because one zoom "
+		"factor cannot scale the axes independently, so it approximates with "
+		"cover rather than pretending.",
+		m_kiosk_fit, page));
+
+	m_kiosk_w = new QSpinBox(page);
 	m_kiosk_w->setRange(0, 16384);
 	m_kiosk_w->setSpecialValueText("screen");
-	m_kiosk_h = new QSpinBox(how);
+	m_kiosk_h = new QSpinBox(page);
 	m_kiosk_h->setRange(0, 16384);
 	m_kiosk_h->setSpecialValueText("screen");
-	hf->addRow("Design width:", m_kiosk_w);
-	hf->addRow("Design height:", m_kiosk_h);
-	v->addWidget(how);
+	auto *size_pair = new QWidget(page);
+	auto *sh = new QHBoxLayout(size_pair);
+	sh->setContentsMargins(0, 0, 0, 0);
+	sh->addWidget(m_kiosk_w);
+	sh->addWidget(new QLabel("×", size_pair));
+	sh->addWidget(m_kiosk_h);
+	v->addWidget(settings_row(
+		"Design size",
+		"The size the page was built for. Leave both on \"screen\" to use "
+		"whatever display it ends up on.",
+		size_pair, page));
 
-	auto *pair_note = new QLabel(
-		"Not every pair means something. Reflow cannot stretch — one zoom "
-		"factor cannot scale the axes independently — so it approximates with "
-		"cover rather than pretending. Geometric is the only path that does "
-		"genuine per-axis stretch, and it is the one that has historically "
-		"rendered black on some GPUs, so try it on the hardware you will "
-		"deploy on.", page);
-	pair_note->setWordWrap(true);
-	v->addWidget(pair_note);
+	v->addWidget(section_heading("Running unattended", page));
 
-	auto *unattended = new QGroupBox("Running unattended", page);
-	auto *uv = new QVBoxLayout(unattended);
-	m_kiosk_cursor = new QCheckBox("Hide the mouse pointer", unattended);
-	uv->addWidget(m_kiosk_cursor);
-	m_kiosk_dog = new QCheckBox("Reload if the page's process dies", unattended);
-	uv->addWidget(m_kiosk_dog);
-	m_kiosk_escape = new QCheckBox("Esc leaves kiosk mode", unattended);
+	m_kiosk_cursor = new QCheckBox(page);
+	v->addWidget(settings_row("Hide the mouse pointer",
+	                           "There is usually no mouse on a kiosk, and a "
+	                           "stationary cursor on a display looks like a "
+	                           "fault.", m_kiosk_cursor, page));
+	m_kiosk_dog = new QCheckBox(page);
+	v->addWidget(settings_row("Reload if the page's process dies",
+	                           "A renderer crash leaves a blank screen that "
+	                           "nobody is there to notice.", m_kiosk_dog, page));
+	m_kiosk_escape = new QCheckBox(page);
 	m_kiosk_escape->setObjectName("kiosk_escape");
-	uv->addWidget(m_kiosk_escape);
-	auto *escape_note = new QLabel(
-		"<b>Turning that off locks the screen down.</b> Esc and F11 will not "
-		"leave, and on a machine with no keyboard shortcut left there may be no "
-		"way out except ending the process. It is here because unattended "
-		"displays need it — not because it is a normal thing to switch on.",
-		unattended);
-	escape_note->setWordWrap(true);
-	uv->addWidget(escape_note);
-	v->addWidget(unattended);
+	v->addWidget(settings_row(
+		"Esc leaves kiosk mode",
+		"Turning this off locks the screen down: Esc and F11 will not leave, and "
+		"on a machine with no keyboard shortcut left there may be no way out "
+		"except ending the process. It is here because unattended displays need "
+		"it — not because it is a normal thing to switch on.",
+		m_kiosk_escape, page));
 
 	v->addStretch(1);
 }
@@ -894,31 +1032,36 @@ void settings_dialog::build_player_page(QWidget *page) {
 	intro->setWordWrap(true);
 	v->addWidget(intro);
 
-	auto *group = new QGroupBox("External player", page);
-	m_player_group_layout = new QVBoxLayout(group);
-	populate_players();
+	v->addWidget(section_heading("External player", page));
 
-	auto *rescan = new QPushButton("&Rescan for players", group);
+	// The radio list stays a list: this is one choice among several, and a
+	// column of names with their availability beside them is the clearest way
+	// to show which ones exist on this machine.
+	auto *group = new QWidget(page);
+	m_player_group_layout = new QVBoxLayout(group);
+	m_player_group_layout->setContentsMargins(0, 0, 0, 0);
+	populate_players();
+	v->addWidget(group);
+
+	auto *rescan = new QPushButton("&Rescan for players", page);
 	rescan->setObjectName("rescan_players");
 	rescan->setToolTip("Look again at PATH — use this after installing one");
 	connect(rescan, &QPushButton::clicked, this, &settings_dialog::rescan_players);
-	m_player_group_layout->addWidget(rescan);
-	v->addWidget(group);
+	v->addWidget(settings_row("Rescan",
+	                           "Look at PATH again, after installing one.",
+	                           rescan, page));
 
-	auto *custom_box = new QGroupBox("Custom command", page);
-	auto *cf = new QFormLayout(custom_box);
-	m_custom_cmd = new QLineEdit(custom_box);
+	v->addWidget(section_heading("Custom command", page));
+	m_custom_cmd = new QLineEdit(page);
 	m_custom_cmd->setPlaceholderText("mpv --fullscreen %U");
-	cf->addRow("Command:", m_custom_cmd);
-	auto *hint = new QLabel(
-		"<small><b>%U</b> is replaced by the stream URL; if you leave it out "
-		"the URL is appended. Arguments are split on spaces — this is not a "
-		"shell, so quoting and pipes will not work.</small>", custom_box);
-	hint->setWordWrap(true);
-	cf->addRow(hint);
 	connect(m_custom_cmd, &QLineEdit::textChanged, this,
 	         &settings_dialog::update_custom_state);
-	v->addWidget(custom_box);
+	v->addWidget(settings_row(
+		"Command",
+		"%U is replaced by the stream URL; leave it out and the URL is "
+		"appended. Arguments are split on spaces — this is not a shell, so "
+		"quoting and pipes will not work.",
+		m_custom_cmd, page, /*wide=*/true));
 
 	m_player_note = new QLabel(page);
 	m_player_note->setWordWrap(true);
@@ -929,8 +1072,10 @@ void settings_dialog::build_player_page(QWidget *page) {
 void settings_dialog::build_download_page(QWidget *page) {
 	auto *v = new QVBoxLayout(page);
 
-	auto *where = new QGroupBox("Location", page);
+	v->addWidget(section_heading("Location", page));
+	auto *where = new QWidget(page);
 	auto *wh    = new QHBoxLayout(where);
+	wh->setContentsMargins(0, 0, 0, 0);
 	m_dir = new QLineEdit(where);
 	auto *browse = new QPushButton("Browse…", where);
 	wh->addWidget(m_dir, 1);
@@ -941,10 +1086,23 @@ void settings_dialog::build_download_page(QWidget *page) {
 		if (!d.isEmpty())
 			m_dir->setText(d);
 	});
-	v->addWidget(where);
+	v->addWidget(settings_row("Save files to",
+	                           "Where a download lands unless something says "
+	                           "otherwise.", where, page, /*wide=*/true));
 
-	auto *bt = new QGroupBox("BitTorrent", page);
-	auto *bf = new QFormLayout(bt);
+	// The whole BitTorrent section can be unavailable, so it is built into a
+	// holder that can be disabled in one move -- a heading and six rows greyed
+	// individually would look like six separate accidents.
+	auto *bt = new QWidget(page);
+	auto *bv = new QVBoxLayout(bt);
+	bv->setContentsMargins(0, 0, 0, 0);
+
+	const bool have_torrents = torrent_download_source::available() && m_torrents;
+	bv->addWidget(section_heading(have_torrents
+	                                  ? QStringLiteral("BitTorrent")
+	                                  : QStringLiteral("BitTorrent — unavailable "
+	                                                    "in this build"),
+	                              bt));
 
 	m_conn_global = new QSpinBox(bt);
 	m_conn_global->setRange(10, 20000);
@@ -952,52 +1110,66 @@ void settings_dialog::build_download_page(QWidget *page) {
 	m_conn_torrent = new QSpinBox(bt);
 	m_conn_torrent->setRange(5, 5000);
 	m_conn_torrent->setSingleStep(10);
-	bf->addRow("Connections, all torrents:", m_conn_global);
-	bf->addRow("Connections, per torrent:", m_conn_torrent);
 
-	// The §11.4 argument in one sentence, where the person changing the number
-	// can read it.
-	auto *caps_note = new QLabel(
-		"<small>Swarm speed comes from holding many mostly-slow peers rather "
-		"than a few fast ones, so these are the numbers that matter. Defaults "
-		"here are already well above a typical desktop client's; raise them "
-		"further if your connection and file-descriptor limit allow.</small>",
-		bt);
-	caps_note->setWordWrap(true);
-	bf->addRow(caps_note);
+	// The §11.4 argument, split across the two rows it actually applies to,
+	// rather than as a paragraph underneath both.
+	bv->addWidget(settings_row(
+		"Connections, all torrents",
+		"Swarm speed comes from holding many mostly-slow peers rather than a few "
+		"fast ones, so this is the number that matters. The default is already "
+		"well above a typical desktop client's.",
+		m_conn_global, bt));
+	bv->addWidget(settings_row(
+		"Connections, per torrent",
+		"Raise it further if your connection and file-descriptor limit allow.",
+		m_conn_torrent, bt));
 
 	m_seed_ratio = new QDoubleSpinBox(bt);
 	m_seed_ratio->setRange(0.0, 100.0);
 	m_seed_ratio->setSingleStep(0.1);
 	m_seed_ratio->setDecimals(2);
 	m_seed_ratio->setSpecialValueText("Do not seed");
-	bf->addRow("Seed until ratio:", m_seed_ratio);
+	bv->addWidget(settings_row(
+		"Seed until ratio",
+		"How much to give back before a finished torrent stops uploading.",
+		m_seed_ratio, bt));
 
-	m_sequential = new QCheckBox("Download in order by default", bt);
-	m_sequential->setToolTip(
-		"Slightly slower overall, but the file is playable from the start. "
-		"Watch turns this on for one torrent regardless.");
-	bf->addRow(QString(), m_sequential);
+	m_sequential = new QCheckBox(bt);
+	bv->addWidget(settings_row(
+		"Download in order by default",
+		"Slightly slower overall, and the file is playable from the start. Watch "
+		"turns this on for one torrent regardless.",
+		m_sequential, bt));
 
 	m_interfaces = new QLineEdit(bt);
 	m_interfaces->setPlaceholderText("0.0.0.0:6881  (blank = any interface)");
-	bf->addRow("Listen on:", m_interfaces);
-
+	m_interfaces->setMinimumWidth(260);
 	// Not a VPN, and says so. §11.4 decided Hydra ships no tunnel; this is the
 	// field that makes the user's own system-level choice reliable instead of
 	// competing with it.
-	auto *iface_note = new QLabel(
-		"<small>Hydra does not tunnel torrent traffic. If you run a VPN at the "
-		"system level, naming its interface here (for example "
-		"<tt>tun0:6881</tt>) keeps torrent traffic on it, and announces stop if "
-		"that interface goes away.</small>", bt);
-	iface_note->setWordWrap(true);
-	bf->addRow(iface_note);
+	bv->addWidget(settings_row(
+		"Listen on",
+		"Hydra does not tunnel torrent traffic. If you run a VPN at the system "
+		"level, naming its interface here — tun0:6881, say — keeps torrent "
+		"traffic on it, and announces stop if that interface goes away.",
+		m_interfaces, bt, /*wide=*/true));
 
-	if (!torrent_download_source::available() || !m_torrents) {
-		bt->setEnabled(false);
-		bt->setTitle("BitTorrent — unavailable in this build");
-		bt->setToolTip("Built without libtorrent-rasterbar");
+	if (!have_torrents) {
+		// The *controls* are disabled, not the whole section.
+		//
+		// Disabling the container greys the explanations too, and an explanation
+		// is exactly what someone wants to read when a feature is unavailable --
+		// "what would this have done, and what do I need to get it?". Chrome
+		// makes the same distinction. It also avoids a palette fight: a label
+		// with an explicit foreground colour does not reliably follow its
+		// parent into the disabled colour group, which showed up here as grey
+		// titles above full-contrast descriptions.
+		for (QWidget *w : QList<QWidget *>{ m_conn_global, m_conn_torrent,
+		                                     m_seed_ratio, m_sequential,
+		                                     m_interfaces }) {
+			w->setEnabled(false);
+			w->setToolTip("Built without libtorrent-rasterbar");
+		}
 	}
 	v->addWidget(bt);
 	v->addStretch(1);
@@ -1077,8 +1249,13 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	intro->setWordWrap(true);
 	v->addWidget(intro);
 
-	auto *group = new QGroupBox("Which backend", page);
+	v->addWidget(section_heading("Which backend", page));
+
+	// A radio group stays a radio group: three mutually exclusive answers to
+	// one question, which is exactly what radios are for.
+	auto *group = new QWidget(page);
 	auto *gv    = new QVBoxLayout(group);
+	gv->setContentsMargins(0, 0, 0, 0);
 
 	m_ai_auto = new QRadioButton(
 		"Automatic — use the local model when it is running", group);
@@ -1098,63 +1275,62 @@ void settings_dialog::build_ai_page(QWidget *page) {
 		connect(b, &QRadioButton::toggled, this, &settings_dialog::update_ai_state);
 	}
 	v->addWidget(group);
+	v->addWidget(dim_label(
+		"Local only means the AI features become unavailable when no local "
+		"model is running, rather than quietly switching to a service.", page));
 
-	auto *local_box = new QGroupBox("Local model (Ollama)", page);
-	auto *lf = new QFormLayout(local_box);
-	m_ollama_url = new QLineEdit(local_box);
+	v->addWidget(section_heading("Local model (Ollama)", page));
+	m_ollama_url = new QLineEdit(page);
 	m_ollama_url->setPlaceholderText("http://localhost:11434");
-	m_ollama_model = new QLineEdit(local_box);
+	v->addWidget(settings_row("Endpoint", "Where Ollama is listening.",
+	                           m_ollama_url, page, /*wide=*/true));
+	m_ollama_model = new QLineEdit(page);
 	m_ollama_model->setPlaceholderText("llama3");
-	m_probe_timeout = new QSpinBox(local_box);
+	v->addWidget(settings_row("Model", "Which model to ask for.",
+	                           m_ollama_model, page, /*wide=*/true));
+
+	m_probe_timeout = new QSpinBox(page);
 	m_probe_timeout->setRange(100, 15000);
 	m_probe_timeout->setSingleStep(250);
 	m_probe_timeout->setSuffix(" ms");
-	lf->addRow("Endpoint:", m_ollama_url);
-	lf->addRow("Model:", m_ollama_model);
-	lf->addRow("Reachability timeout:", m_probe_timeout);
-
-	m_check_local = new QPushButton("&Check now", local_box);
-	m_check_local->setObjectName("check_local");
-	m_check_local->setToolTip("Ask the endpoint above whether it is there");
-	connect(m_check_local, &QPushButton::clicked, this,
-	         &settings_dialog::check_local_model);
-	lf->addRow(QString(), m_check_local);
-
 	// Why anyone would touch this: the cost is only paid when the endpoint
 	// stops being local, and then it is paid every time.
-	auto *probe_note = new QLabel(
-		"<small>Rechecked whenever a backend is needed, since Ollama is started "
-		"and stopped like any service. Loopback answers in about a millisecond; "
-		"a remote host that <i>drops</i> packets never answers at all and costs "
-		"this whole timeout each time — so lower it if the endpoint is not on "
-		"this machine.</small>", local_box);
-	probe_note->setWordWrap(true);
-	lf->addRow(probe_note);
-	v->addWidget(local_box);
+	v->addWidget(settings_row(
+		"Reachability timeout",
+		"Rechecked whenever a backend is needed, since Ollama is started and "
+		"stopped like any service. Loopback answers in about a millisecond; a "
+		"remote host that drops packets never answers at all and costs this "
+		"whole timeout each time — so lower it if the endpoint is not on this "
+		"machine.",
+		m_probe_timeout, page));
 
-	auto *ext_box = new QGroupBox("Claude", page);
-	auto *ef = new QFormLayout(ext_box);
-	m_claude_model = new QLineEdit(ext_box);
+	m_check_local = new QPushButton("&Check now", page);
+	m_check_local->setObjectName("check_local");
+	connect(m_check_local, &QPushButton::clicked, this,
+	         &settings_dialog::check_local_model);
+	v->addWidget(settings_row("Check the local model",
+	                           "Ask the endpoint above whether it is there.",
+	                           m_check_local, page));
+
+	v->addWidget(section_heading("Claude", page));
+	m_claude_model = new QLineEdit(page);
 	m_claude_model->setPlaceholderText("claude-opus-5");
-	ef->addRow("Model:", m_claude_model);
+	v->addWidget(settings_row("Model", "Which Claude model to send to.",
+	                           m_claude_model, page, /*wide=*/true));
 
-	m_claude_key = new QLineEdit(ext_box);
+	m_claude_key = new QLineEdit(page);
 	m_claude_key->setEchoMode(QLineEdit::Password);
 	m_claude_key->setPlaceholderText("from ANTHROPIC_API_KEY");
-	ef->addRow("API key:", m_claude_key);
-
 	// Not persisted, and it says so rather than letting someone find out. The
 	// settings file is plain INI and an API key does not belong in one; the
 	// same reasoning that keeps it out of the tree and policy files applies
 	// here, and writing it anywhere readable would be security theatre.
-	auto *key_note = new QLabel(
-		"<small>The key is <b>not saved</b> — it is kept in memory for this "
-		"session only. Set <tt>ANTHROPIC_API_KEY</tt> in your environment for "
-		"it to persist; this settings file is plain text and a credential does "
-		"not belong in one.</small>", ext_box);
-	key_note->setWordWrap(true);
-	ef->addRow(key_note);
-	v->addWidget(ext_box);
+	v->addWidget(settings_row(
+		"API key",
+		"Not saved — kept in memory for this session only. Set "
+		"ANTHROPIC_API_KEY in your environment for it to persist; this settings "
+		"file is plain text and a credential does not belong in one.",
+		m_claude_key, page, /*wide=*/true));
 
 	// Created here but *not* added to this layout: the constructor pins it
 	// below the scroll area so it is always visible.

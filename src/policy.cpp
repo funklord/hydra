@@ -5,25 +5,51 @@ namespace policy {
 
 namespace {
 
-struct info { const char *name; const char *label; };
+struct info { const char *name; const char *label; const char *help; };
 
 const info k_info[] = {
-	{ "javascript",        "JavaScript"          },
-	{ "cookies",           "Cookies"             },
-	{ "thirdPartyCookies", "Third-party cookies" },
-	{ "ads",               "Ads / trackers"      },
-	{ "popups",            "Popups"              },
-	{ "images",            "Images"              },
-	{ "autoplay",          "Autoplay media"      },
-	{ "geolocation",       "Location"            },
-	{ "camera",            "Camera"              },
-	{ "microphone",        "Microphone"          },
-	{ "notifications",     "Notifications"       },
-	{ "referer",           "Referer header"      },
-	{ "autofill",          "Password autofill"   },
-	{ "extractorFetch",    "Extractor may fetch" },
-	{ "extractorDom",      "Extractor may read the page" },
-	{ "cookieNotices",     "Cookie consent banners" },
+	{ "javascript", "JavaScript",
+	  "Scripts a site runs. Most of the modern web stops working without it, "
+	  "which is exactly why it is worth turning off for a few sites." },
+	{ "cookies", "Cookies",
+	  "What a site may store to recognise you when you come back." },
+	{ "thirdPartyCookies", "Third-party cookies",
+	  "Cookies set by other sites embedded in this one — the ordinary way "
+	  "tracking follows you from one site to the next." },
+	{ "ads", "Ads / trackers",
+	  "Requests to known ad and tracking hosts, plus any filter rules you have "
+	  "accepted. Allowing them here also turns off those rules for the site." },
+	{ "popups", "Popups",
+	  "Windows a page opens on its own, rather than because you clicked." },
+	{ "images", "Images",
+	  "Pictures. Blocking them is faster and leaves some pages unreadable." },
+	{ "autoplay", "Autoplay media",
+	  "Video and audio that starts playing without being asked." },
+	{ "geolocation", "Location",
+	  "Where you are, when a page asks for it." },
+	{ "camera", "Camera",
+	  "Seeing through the camera, when a page asks." },
+	{ "microphone", "Microphone",
+	  "Listening through the microphone, when a page asks." },
+	{ "notifications", "Notifications",
+	  "Messages a site can put on your desktop, including after you have left "
+	  "it." },
+	{ "referer", "Referer header",
+	  "Telling a site which page you arrived from." },
+	{ "autofill", "Password autofill",
+	  "Filling saved logins from KeePassXC. Limited to HTTPS pages unless that "
+	  "requirement is turned off, because filling a password over plain HTTP "
+	  "puts it on the wire." },
+	{ "extractorFetch", "Extractor may fetch",
+	  "Lets a learned extractor fetch a manifest the page had already asked "
+	  "for, which is what streams hidden behind one need." },
+	{ "extractorDom", "Extractor may read the page",
+	  "Lets a learned extractor read the page itself, including whatever you "
+	  "are logged in to. A much stronger power than fetching." },
+	{ "cookieNotices", "Cookie consent banners",
+	  "The \"do you want to accept cookies?\" banner itself. Blocking it means "
+	  "Hydra answers it for you, taking the least permissive option the site "
+	  "actually offers." },
 };
 
 }  // namespace
@@ -40,6 +66,13 @@ const char *feature_label(feature f) {
 	if (i < 0 || i >= feature_count())
 		return "";
 	return k_info[i].label;
+}
+
+const char *feature_help(feature f) {
+	const int i = static_cast<int>(f);
+	if (i < 0 || i >= feature_count())
+		return "";
+	return k_info[i].help;
 }
 
 feature feature_from_name(const QString &name) {

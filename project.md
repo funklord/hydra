@@ -3986,6 +3986,53 @@ WebEngine permission API, was documented as functional and was not: geolocation
 had silently stopped arriving. A deprecation warning says nothing about whether
 the thing still works. Only running it does.
 
+### The settings pages, made browser-shaped
+
+The category list and the search box were already there. What was not was the
+thing those two exist to serve: a page that explains itself. Every page was a
+`QGroupBox` of `"Label:"` and a control — which fits more rows on a screen and
+tells the reader nothing, so they have to already know what "Referer header"
+means before the page can help them.
+
+Every row is now what Firefox and Chrome both settled on: **the name of the
+setting, one line under it saying what it is, and the control on the right.**
+The descriptions live in `policy.cpp` beside the labels, so a new feature that
+arrives without one is visibly missing it. They describe the *power* rather than
+the state — "where you are, when a page asks" is true whichever way the setting
+is set, while "sites cannot see where you are" would be a lie half the time.
+
+Sections are a bold heading and a hairline instead of a bordered box: a frame
+around every three rows is a lot of furniture for something whose only job is to
+say "these belong together".
+
+**Four defects that only a screenshot could show**, which is why this driver now
+takes them:
+
+* The category list read **"Privacy && security"**. A `QListWidgetItem` draws its
+  text literally — the ampersand escape belongs to menus and buttons.
+* The search box was **below** the pages, next to OK, where a filter for a
+  *result list* would go. It reads as one there. Both browsers put it on top.
+* A horizontal scrollbar across pages that measured as fitting comfortably. The
+  vertical scrollbar arrives, takes fifteen pixels off the viewport, and content
+  already laid out at the wider size overflows by exactly that much. Sideways
+  scrolling is now off: everything on these pages wraps, so a horizontal bar can
+  only ever mean the layout is a few pixels out.
+* Controls sitting flush against that scrollbar, which reads as clipping and is
+  a missing margin. There is a gutter now, set once where pages are wrapped
+  rather than in each page.
+
+The disabled BitTorrent section changed shape too. Disabling the whole container
+greyed the explanations, and an explanation is exactly what someone wants to read
+when a feature is unavailable — *what would this have done, and what do I need?*
+Only the controls are disabled now. It also sidesteps a palette fight: a label
+with an explicit foreground colour does not reliably follow its parent into the
+disabled colour group, which showed up as grey titles above full-contrast
+descriptions.
+
+`try_settings_ui` gained a check that no page demands more width than its window
+gives it. That is the guard for two of the four, and neither was visible to any
+other assertion in the suite.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

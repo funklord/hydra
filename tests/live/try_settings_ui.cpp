@@ -29,6 +29,11 @@
 #include <QTreeWidget>
 #include <QComboBox>
 #include <QLineEdit>
+#include <QEventLoop>
+#include <QTimer>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QDir>
 #include <QListWidget>
 #include <QSettings>
 #include <QStackedWidget>
@@ -40,6 +45,14 @@ static void check(bool ok, const QString &w) {
 	else    { ++g_fail; std::printf("  FAIL  %s\n", qPrintable(w)); }
 }
 static void section(const char *n) { std::printf("\n== %s ==\n", n); }
+
+// Let the stack finish switching before a picture is taken; everything else in
+// this driver is synchronous and needs no waiting at all.
+static void spin(int ms) {
+	QEventLoop l;
+	QTimer::singleShot(ms, &l, &QEventLoop::quit);
+	l.exec();
+}
 
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -58,6 +71,7 @@ int main(int argc, char **argv) {
 
 	section("the window is a list of categories, not a tab strip");
 	settings_dialog dlg(&players, &downloads, nullptr, nullptr, nullptr, &policy);
+	dlg.resize(920, 740);
 	dlg.show();
 
 	auto *cats  = dlg.findChild<QListWidget *>("categories");
@@ -318,6 +332,62 @@ int main(int argc, char **argv) {
 		d4.findChild<QComboBox *>("kiosk_scale")
 		    ->setCurrentIndex(0);
 		d4.accept();
+	}
+
+	// A picture of every page, because this is a *layout* driver and layout is
+	// the one thing assertions are bad at. A row can be present, correctly
+	// parented and searchable while sitting on top of its own description.
+	//
+	// Not asserted on -- nothing here compares pixels, which would fail on a
+	// different font before it ever caught a real regression. They are written
+	// out so a change to these pages can be looked at.
+	{
+		section("pictures of each page");
+		const QString base = qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
+		                         ? QString::fromLocal8Bit(qgetenv("HYDRA_TEST_OUT"))
+		                         : QString("/tmp/hydra-test");
+		const QString shots = base + "/settings";
+		QDir().mkpath(shots);
+		int saved = 0, too_wide = 0;
+		for (int i = 0; i < cats->count(); ++i) {
+			cats->setCurrentRow(i);
+			spin(250);
+			QString name = cats->item(i)->text();
+			name.remove('&');
+			name.replace(' ', '-');
+			if (dlg.grab().save(QString("%1/%2.png").arg(shots, name.toLower())))
+				++saved;
+			// No page may insist on being wider than the window it lives in.
+			//
+			// A settings page is text that wraps and controls that do not need
+			// to grow, so a page that wants more width is always one widget
+			// refusing to shrink — and the symptom is a horizontal scrollbar
+			// across a page that looks like it fits, or a control sitting under
+			// the vertical scrollbar. Both happened here; neither was visible to
+			// any other assertion.
+			if (auto *area = qobject_cast<QScrollArea *>(pages->widget(i))) {
+				const int need = area->widget()->minimumSizeHint().width();
+				const int have = area->viewport()->width();
+				if (need > have) {
+					++too_wide;
+					std::printf("  --    %s needs %d px, has %d\n",
+					            qPrintable(cats->item(i)->text()), need, have);
+					for (QWidget *w : area->widget()->findChildren<QWidget *>())
+						if (w->minimumSizeHint().width() > have - 40)
+							std::printf("        %s (%s) wants %d\n",
+							            qPrintable(w->objectName().isEmpty()
+							                           ? QString(w->metaObject()->className())
+							                           : w->objectName()),
+							            w->metaObject()->className(),
+							            w->minimumSizeHint().width());
+				}
+			}
+		}
+		check(saved == cats->count(),
+		      QString("every page was captured to %1 (%2)").arg(shots).arg(saved));
+		check(too_wide == 0,
+		      QString("and no page demands more width than the window gives it "
+		               "(%1 that do)").arg(too_wide));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

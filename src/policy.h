@@ -49,6 +49,12 @@ inline int feature_count() { return static_cast<int>(feature::count); }
 const char *feature_name(feature f);
 // Human label (UI).
 const char *feature_label(feature f);
+// One line saying what the setting governs, shown under the label the way a
+// browser's settings page does. It describes the *power*, not the state, so it
+// reads correctly whichever way the setting is set — "where you are, when a page
+// asks" is true whether that is allowed or blocked, while "sites cannot see
+// where you are" would be a lie half the time.
+const char *feature_help(feature f);
 // Parse a machine name; returns feature::count on failure.
 feature     feature_from_name(const QString &name);
 
