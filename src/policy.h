@@ -58,6 +58,17 @@ const char *feature_help(feature f);
 // Parse a machine name; returns feature::count on failure.
 feature     feature_from_name(const QString &name);
 
+// --- one line of settings, as the INI files write it ------------------------
+//
+// "javascript:block, cookies:allow" — the encoding shared by the policy file
+// and the exported settings bundle. Shared because two encoders for one line
+// drift, and the drift is invisible until a file written by one is read by the
+// other.
+QString  settings_to_line(quint64 bits);
+quint64  settings_from_line(const QString &line);
+const char *setting_word(setting s);
+setting     setting_from_word(const QString &word);
+
 // --- 2-bit packing into a quint64 -----------------------------------------
 inline setting get_setting(quint64 bits, feature f) {
 	const int shift = 2 * static_cast<int>(f);

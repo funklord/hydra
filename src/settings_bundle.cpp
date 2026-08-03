@@ -27,37 +27,8 @@ QSettings app_settings() {
 	return QSettings(QSettings::IniFormat, QSettings::UserScope, "hydra", "hydra");
 }
 
-const char *setting_word(policy::setting s) {
-	switch (s) {
-		case policy::setting::allow: return "allow";
-		case policy::setting::block: return "block";
-		case policy::setting::unset: break;
-	}
-	return "default";
-}
-
-policy::setting setting_from_word(const QString &w) {
-	if (w.compare("allow", Qt::CaseInsensitive) == 0)
-		return policy::setting::allow;
-	if (w.compare("block", Qt::CaseInsensitive) == 0)
-		return policy::setting::block;
-	return policy::setting::unset;
-}
-
-// "javascript:block, cookies:allow" — one line per site, which is the whole
-// reason this is readable. A group per site would nest three deep for a fact
-// that fits on one line.
-QString rule_to_line(quint64 bits) {
-	QStringList parts;
-	for (int i = 0; i < policy::feature_count(); ++i) {
-		const auto f = static_cast<policy::feature>(i);
-		const policy::setting s = policy::get_setting(bits, f);
-		if (s == policy::setting::unset)
-			continue;
-		parts << QString("%1:%2").arg(policy::feature_name(f), setting_word(s));
-	}
-	return parts.join(", ");
-}
+// The line encoding and the words for a setting live in `policy`, so this file
+// and the policy file cannot drift apart about what "javascript:block" means.
 
 }  // namespace
 
@@ -98,14 +69,14 @@ summary write(const QString &path, const policy_engine *policy_in,
 		for (int i = 0; i < policy::feature_count(); ++i) {
 			const auto feat = static_cast<policy::feature>(i);
 			f.setValue(policy::feature_name(feat),
-			            setting_word(policy_in->global_default(feat)));
+			            policy::setting_word(policy_in->global_default(feat)));
 			++out.defaults;
 		}
 		f.endGroup();
 
 		f.beginGroup(k_group_sites);
 		for (const policy_engine::rule &r : policy_in->rules()) {
-			const QString line = rule_to_line(r.bits);
+			const QString line = policy::settings_to_line(r.bits);
 			// A rule that says nothing is not an exception; see the settings
 			// dialog, which does not list them either.
 			if (line.isEmpty() || r.pattern.isEmpty())
@@ -180,7 +151,7 @@ summary read(const QString &path, policy_engine *policy_out, filter_list *filter
 		f.beginGroup(k_group_defaults);
 		for (const QString &key : f.allKeys()) {
 			const policy::feature feat = policy::feature_from_name(key);
-			const policy::setting want = setting_from_word(f.value(key).toString());
+			const policy::setting want = policy::setting_from_word(f.value(key).toString());
 			// A global default is always allow or block; "default" there would
 			// point at itself, so an unreadable word is skipped rather than
 			// guessed at.
@@ -210,7 +181,7 @@ summary read(const QString &path, policy_engine *policy_out, filter_list *filter
 					continue;
 				const policy::feature feat =
 					policy::feature_from_name(kv[0].trimmed());
-				const policy::setting want = setting_from_word(kv[1].trimmed());
+				const policy::setting want = policy::setting_from_word(kv[1]);
 				if (feat == policy::feature::count)
 					continue;
 				policy_out->set_setting(pattern, feat, want);

@@ -108,7 +108,8 @@ int main(int argc, char *argv[]) {
 	                        ? qgetenv("HYDRA_TEST_OUT") : QString("/tmp/hydra-test");
 	QDir().mkpath(out);
 	QDir(out + "/state").removeRecursively();
-	QFile::remove(out + "/policy.json");
+	QFile::remove(out + "/policy.ini");
+	QFile::remove(out + "/policy.json");   // and the file it migrates from
 
 	// The rules, written where the shell will find them — through the real file
 	// it loads at startup, not injected past it. A rule that only works when a

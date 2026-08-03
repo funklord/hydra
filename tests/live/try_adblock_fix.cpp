@@ -89,7 +89,8 @@ int main(int argc, char *argv[]) {
 	                        ? qgetenv("HYDRA_TEST_OUT") : QString("/tmp/hydra-test");
 	QDir().mkpath(out);
 	QDir(out + "/state").removeRecursively();
-	QFile::remove(out + "/policy.json");
+	QFile::remove(out + "/policy.ini");
+	QFile::remove(out + "/policy.json");   // and the file it migrates from
 	const QString tree = out + "/tree.txt";
 	QFile tf(tree);
 	if (!tf.open(QIODevice::WriteOnly | QIODevice::Truncate)) return 1;

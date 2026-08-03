@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "policy.h"
 
+#include <QStringList>
+
 namespace policy {
 
 namespace {
@@ -73,6 +75,49 @@ const char *feature_help(feature f) {
 	if (i < 0 || i >= feature_count())
 		return "";
 	return k_info[i].help;
+}
+
+const char *setting_word(setting s) {
+	switch (s) {
+		case setting::allow: return "allow";
+		case setting::block: return "block";
+		case setting::unset: break;
+	}
+	return "default";
+}
+
+setting setting_from_word(const QString &word) {
+	const QString w = word.trimmed();
+	if (w.compare("allow", Qt::CaseInsensitive) == 0) return setting::allow;
+	if (w.compare("block", Qt::CaseInsensitive) == 0) return setting::block;
+	return setting::unset;
+}
+
+QString settings_to_line(quint64 bits) {
+	QStringList parts;
+	for (int i = 0; i < feature_count(); ++i) {
+		const auto f = static_cast<feature>(i);
+		const setting s = get_setting(bits, f);
+		if (s == setting::unset)
+			continue;
+		parts << QString("%1:%2").arg(feature_name(f), setting_word(s));
+	}
+	return parts.join(", ");
+}
+
+quint64 settings_from_line(const QString &line) {
+	quint64 bits = 0;
+	for (const QString &part : line.split(',', Qt::SkipEmptyParts)) {
+		const QStringList kv = part.split(':');
+		if (kv.size() != 2)
+			continue;   // one unreadable field costs only itself
+		const feature f = feature_from_name(kv[0].trimmed());
+		const setting s = setting_from_word(kv[1]);
+		if (f == feature::count || s == setting::unset)
+			continue;
+		bits = with_setting(bits, f, s);
+	}
+	return bits;
 }
 
 feature feature_from_name(const QString &name) {

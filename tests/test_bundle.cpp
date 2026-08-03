@@ -9,6 +9,7 @@
 #include "settings_bundle.h"
 #include "filter_list.h"
 #include "policy_engine.h"
+#include "site_rules.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -203,6 +204,147 @@ int main(int argc, char **argv) {
 		check(s.sites == 2,
 		      QString("and the site with nothing usable is not counted (%1)")
 		          .arg(s.sites));
+	}
+
+	section("the policy file is an INI, and reads the JSON it used to be");
+	{
+		const QString ini = dir + "/policy.ini";
+		QFile::remove(ini);
+
+		policy_engine p;
+		p.set_global_default(policy::feature::popups, policy::setting::block);
+		p.set_setting("news.example", policy::feature::javascript,
+		               policy::setting::block);
+		p.set_setting("*.ads.example", policy::feature::ads, policy::setting::block);
+		check(p.save(ini), "it saves");
+
+		const QString text = slurp(ini);
+		check(text.contains("kind=policy"), "the file says what it is");
+		check(text.contains("[defaults]") && text.contains("popups=block"),
+		      "defaults are readable lines");
+		check(text.contains("news.example"), "and so are the site rules");
+
+		policy_engine back;
+		check(back.load(ini), "it loads");
+		check(back.global_default(policy::feature::popups) == policy::setting::block,
+		      "the default comes back");
+		check(back.setting_for("news.example", policy::feature::javascript) ==
+		          policy::setting::block, "and the site rule");
+		check(back.setting_for("*.ads.example", policy::feature::ads) ==
+		          policy::setting::block, "wildcards included");
+
+		// **The migration**, which is the part that could lose somebody's rules.
+		// A policy.json written by an older build must still be read, once,
+		// without anybody being told to convert anything.
+		const QString legacy = dir + "/legacy-policy.json";
+		{
+			QFile f(legacy);
+			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			f.write("{\n"
+			         "  \"globalDefaults\": { \"images\": \"block\" },\n"
+			         "  \"rules\": [ { \"pattern\": \"old.example\",\n"
+			         "      \"settings\": { \"javascript\": \"block\" } } ]\n"
+			         "}\n");
+		}
+		policy_engine migrated;
+		check(migrated.load(legacy), "an old JSON policy file still loads");
+		check(migrated.global_default(policy::feature::images) == policy::setting::block,
+		      "with its defaults");
+		check(migrated.setting_for("old.example", policy::feature::javascript) ==
+		          policy::setting::block, "and its site rules");
+
+		// And the same call given the *new* name finds the old file beside it,
+		// which is what happens on the first run after an upgrade.
+		const QString renamed = dir + "/legacy-policy.ini";
+		QFile::remove(renamed);
+		policy_engine after_upgrade;
+		check(after_upgrade.load(renamed),
+		      "asking for the .ini finds the .json left next to it");
+		check(after_upgrade.setting_for("old.example", policy::feature::javascript) ==
+		          policy::setting::block,
+		      "and nothing is lost by the rename");
+		check(after_upgrade.save(renamed) && slurp(renamed).contains("kind=policy"),
+		      "the next save writes the new format");
+	}
+
+	section("hand-editing the policy file works, which is why it is an INI");
+	{
+		const QString hand = dir + "/hand-policy.ini";
+		QFile f(hand);
+		f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+		// Unquoted commas, as a person would write them.
+		f.write("[hydra]\nformat=1\nkind=policy\n\n"
+		         "[defaults]\njavascript=block\n\n"
+		         "[sites]\nmine.example=images:block, ads:allow\n");
+		f.close();
+
+		policy_engine p;
+		check(p.load(hand), "a file written by hand loads");
+		check(p.global_default(policy::feature::javascript) == policy::setting::block,
+		      "its default is applied");
+		check(p.setting_for("mine.example", policy::feature::images) ==
+		              policy::setting::block &&
+		          p.setting_for("mine.example", policy::feature::ads) ==
+		              policy::setting::allow,
+		      "and both halves of an unquoted line are read");
+	}
+
+	section("the site-rules file is an INI too");
+	{
+		const QString ini = dir + "/site-rules.ini";
+		QFile::remove(ini);
+
+		site_rules r = site_rules::defaults();
+		const int builtins = r.all().size();
+		site_rule learned;
+		learned.kind  = "container";
+		learned.value = "#cookie-wall";
+		learned.host  = "news.example";
+		learned.note  = "seen here";
+		r.add(learned);
+		check(r.save(ini), "it saves");
+
+		const QString text = slurp(ini);
+		check(text.contains("kind=siteRules"), "the file says what it is");
+		check(text.contains("cookie-wall"), "and the learned rule is in it");
+		check(!text.contains("size=0"), "with something in the array");
+
+		site_rules back;
+		check(back.load(ini), "it loads");
+		check(back.all().size() == builtins + 1,
+		      QString("the built-ins are still there and the learned one arrives "
+		               "(%1, wanted %2)").arg(back.all().size()).arg(builtins + 1));
+		bool found = false;
+		for (const site_rule &x : back.all())
+			if (x.value == "#cookie-wall" && x.host == "news.example" &&
+			    x.note == "seen here" && !x.builtin)
+				found = true;
+		check(found, "with its host and note, and not marked built-in");
+
+		// A built-in is not written to the file -- it comes from the binary, and
+		// a copy would be a stale duplicate the day one changes.
+		check(!text.contains("builtin=true"), "built-ins are not written out");
+
+		// The migration, again the part that matters.
+		const QString legacy = dir + "/legacy-rules.json";
+		{
+			QFile f(legacy);
+			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			f.write("{\"version\":1,\"rules\":[{\"kind\":\"detector\","
+			         "\"value\":\"adblockDetector\",\"note\":\"old file\"}]}");
+		}
+		site_rules migrated;
+		check(migrated.load(legacy), "an old JSON rules file still loads");
+		check(migrated.detectors().contains("adblockDetector"),
+		      "and its rules are there");
+
+		const QString renamed = dir + "/legacy-rules.ini";
+		QFile::remove(renamed);
+		site_rules after_upgrade;
+		check(after_upgrade.load(renamed),
+		      "asking for the .ini finds the .json beside it");
+		check(after_upgrade.detectors().contains("adblockDetector"),
+		      "so an upgrade costs nothing");
 	}
 
 	if (!qEnvironmentVariableIsSet("HYDRA_KEEP_BUNDLE"))

@@ -121,11 +121,19 @@ public:
 	// offer; otherwise it is the reason to refuse.
 	static QString why_unsafe(const site_rule &r);
 
+	// Kept for the exchange document, which is a different thing from storage:
+	// `judge_import` reads what somebody else sent, and that is reviewed before
+	// it is added rather than loaded.
 	QJsonObject to_json() const;
 	static site_rules from_json(const QJsonObject &o);
 
+	// INI, with the old JSON read once so a format change costs nobody their
+	// rules. See policy_engine, which moved the same way for the same reason.
 	bool load(const QString &path);
 	bool save(const QString &path) const;
+
+	// The format this file used to be in, kept only to read what is on disk.
+	bool load_json(const QString &path);
 
 	// What the page-side script is handed: one JSON literal, so the script
 	// carries no rules of its own that could drift from these.

@@ -178,14 +178,16 @@ int main(int argc, char *argv[]) {
 	                        ? qgetenv("HYDRA_TEST_OUT") : QString("/tmp/hydra-test");
 	QDir().mkpath(out);
 	QDir(out + "/state").removeRecursively();
-	QFile::remove(out + "/policy.json");
+	QFile::remove(out + "/policy.ini");
+	QFile::remove(out + "/policy.json");   // and the file it migrates from
 	// The shell loads its rules from this directory, and the round-trip phase
 	// below writes a rule file. Left in place, a run starts already knowing what
 	// the previous run learned — and the "a banner nothing matches" case quietly
 	// stops testing anything. Same shape as the tree and state contamination
 	// `try_extract` had: an artefact of the last run, indistinguishable from a
 	// real result.
-	QFile::remove(out + "/site-rules.json");
+	QFile::remove(out + "/site-rules.ini");
+	QFile::remove(out + "/site-rules.ini");
 	const QString tree = out + "/tree.txt";
 	QFile tf(tree);
 	if (!tf.open(QIODevice::WriteOnly | QIODevice::Truncate)) return 1;

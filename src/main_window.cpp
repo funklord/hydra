@@ -824,7 +824,10 @@ bool main_window::load_tree(const QString &path) {
 	delete m_state;
 	m_state = new state_store(dir + "/state");
 
-	m_policy_path = dir + "/policy.json";
+	// .ini, and the loader reads a policy.json left by an older build once —
+	// the first save writes the new file and the old one simply stops being
+	// consulted. Nobody has to migrate anything by hand.
+	m_policy_path = dir + "/policy.ini";
 	m_policy->load(m_policy_path);   // no-op if the file doesn't exist yet
 
 	// The AI/user-authored filter list lives beside the rest, kept separate
@@ -849,7 +852,7 @@ bool main_window::load_tree(const QString &path) {
 	// the unit a future exchange between users would move, which is why it is a
 	// file from the start rather than something to be extracted from the binary
 	// later (§7.1, `cookie_notices`).
-	m_site_rules_path = dir + "/site-rules.json";
+	m_site_rules_path = dir + "/site-rules.ini";
 	site_rules cr;
 	if (!cr.load(m_site_rules_path))
 		cr = site_rules::defaults();

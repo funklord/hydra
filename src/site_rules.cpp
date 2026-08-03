@@ -2,6 +2,8 @@
 #include "site_rules.h"
 
 #include <QFile>
+#include <QSettings>
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -248,7 +250,7 @@ site_rules site_rules::from_json(const QJsonObject &o) {
 	return r;
 }
 
-bool site_rules::load(const QString &path) {
+bool site_rules::load_json(const QString &path) {
 	QFile f(path);
 	if (!f.open(QIODevice::ReadOnly))
 		return false;
@@ -259,11 +261,76 @@ bool site_rules::load(const QString &path) {
 	return true;
 }
 
+bool site_rules::load(const QString &path) {
+	// INI first, then the JSON this file used to be. A rule set is small,
+	// perishable and hand-editable by design -- the reason it is data rather
+	// than code -- so it belongs in the format a person can repair. Reading the
+	// old file once and writing the new one on the next save is what keeps that
+	// change from costing anybody the rules they had.
+	if (QFileInfo::exists(path)) {
+		QSettings f(path, QSettings::IniFormat);
+		if (f.status() == QSettings::NoError &&
+		    f.value("hydra/kind").toString() == "siteRules") {
+			// Built-ins are not in the file and must not be dropped by reading
+			// one: start from the defaults and add what was stored, exactly as
+			// the JSON path does through from_json.
+			site_rules loaded = site_rules::defaults();
+			const int n = f.beginReadArray("rules");
+			for (int i = 0; i < n; ++i) {
+				f.setArrayIndex(i);
+				site_rule r;
+				r.kind     = f.value("kind").toString();
+				r.value    = f.value("value").toString();
+				r.host     = f.value("host").toString();
+				r.note     = f.value("note").toString();
+				r.promote  = f.value("promote", false).toBool();
+				r.imported = f.value("imported", false).toBool();
+				r.origin   = f.value("origin").toString();
+				if (!r.kind.isEmpty() && !r.value.isEmpty())
+					loaded.add(r);
+			}
+			f.endArray();
+			*this = loaded;
+			return true;
+		}
+	}
+
+	if (load_json(path))
+		return true;
+	QString legacy = path;
+	if (legacy.endsWith(".ini")) {
+		legacy.chop(4);
+		legacy += ".json";
+	}
+	return legacy != path && load_json(legacy);
+}
+
 bool site_rules::save(const QString &path) const {
-	QFile f(path);
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-		return false;
-	return f.write(QJsonDocument(to_json()).toJson(QJsonDocument::Indented)) > 0;
+	QFile::remove(path);
+	QSettings f(path, QSettings::IniFormat);
+	f.setValue("hydra/format", 1);
+	f.setValue("hydra/kind", "siteRules");
+
+	f.beginWriteArray("rules");
+	int n = 0;
+	for (const site_rule &r : m_rules) {
+		// Built-ins stay out, as they did in the JSON: they come from the binary,
+		// and a copy in the file is a stale duplicate the day one changes.
+		if (r.builtin)
+			continue;
+		f.setArrayIndex(n++);
+		f.setValue("kind", r.kind);
+		f.setValue("value", r.value);
+		if (!r.host.isEmpty())   f.setValue("host", r.host);
+		if (!r.note.isEmpty())   f.setValue("note", r.note);
+		if (r.promote)           f.setValue("promote", true);
+		if (r.imported)          f.setValue("imported", true);
+		if (!r.origin.isEmpty()) f.setValue("origin", r.origin);
+	}
+	f.endArray();
+
+	f.sync();
+	return f.status() == QSettings::NoError;
 }
 
 QStringList site_rules::detectors() const {

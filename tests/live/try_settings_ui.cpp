@@ -242,7 +242,7 @@ int main(int argc, char **argv) {
 		// for the next release. Flagging is worth nothing if the only way to find
 		// the flagged ones is reading a JSON file by hand.
 		const QString rpath = QString::fromLocal8Bit(qgetenv("HYDRA_TEST_OUT")) +
-		                       "/site-rules.json";
+		                       "/site-rules.ini";
 		QFile::remove(rpath);
 		consent_blocker blocker(&policy);
 		site_rules rules = site_rules::defaults();

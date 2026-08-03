@@ -157,7 +157,8 @@ target_link_libraries(test_signals PRIVATE Qt6::Core Qt6::Test)
 target_include_directories(test_signals PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test_bundle test_bundle.cpp ${H}/settings_bundle.cpp
-    ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/filter_list.cpp)
+    ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/filter_list.cpp
+    ${H}/site_rules.cpp)
 target_link_libraries(test_bundle PRIVATE Qt6::Core Qt6::Test)
 target_include_directories(test_bundle PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
 

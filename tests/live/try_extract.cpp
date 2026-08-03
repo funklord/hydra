@@ -115,6 +115,7 @@ int main(int argc, char *argv[]) {
 	// under this capture's host. Twelve `doc.qt.io` requests in a dramafren
 	// capture is how that presented. A blank first page has nothing to straggle.
 	const QString tree = shot_dir + "/tree.txt";
+	QFile::remove(shot_dir + "/policy.ini");
 	QFile::remove(shot_dir + "/policy.json");
 	QDir(shot_dir + "/state").removeRecursively();
 	QDir().mkpath(shot_dir);

@@ -36,6 +36,8 @@ public:
 
 	const QVector<rule> &rules() const { return m_rules; }
 
+	// INI. A JSON file at the old path is read once and rewritten as INI on the
+	// next save, so nobody has to run a migration or lose their rules to one.
 	bool load(const QString &path);
 	bool save(const QString &path) const;
 
@@ -46,6 +48,10 @@ signals:
 	void changed();
 
 private:
+	// The format this file used to be in, kept only to read what is already on
+	// disk. Nothing writes it.
+	bool load_json(const QString &path);
+
 	static bool match_pattern(const QString &pattern, const QString &host, int &specificity);
 	rule       *find_rule(const QString &pattern);
 	const rule *find_rule(const QString &pattern) const;

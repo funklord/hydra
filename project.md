@@ -4155,6 +4155,38 @@ have". And **import refills the window**, or the dialog goes on showing the old
 answers over the new settings and pressing OK writes the stale ones back over
 the import.
 
+### policy and site-rules move to INI as well
+
+If the format is good enough for the exported bundle it is good enough for the
+files that bundle is made of. `policy.json` is now `policy.ini` and
+`site-rules.json` is `site-rules.ini`, in the same shape the bundle uses — and
+the line encoding is shared in `policy.cpp` rather than written twice, because
+two encoders for `javascript:block` drift and the drift is invisible until a file
+written by one is read by the other.
+
+**The migration is the part that could have cost somebody their rules**, so it is
+not a step anybody runs. `load()` reads the INI; if there is no INI it reads the
+JSON next to it, and the next save writes the new file. Both are tested: an old
+JSON file loads, and asking for the `.ini` finds the `.json` beside it — which is
+exactly the first run after an upgrade.
+
+Built-ins still stay out of the rules file, as they did in JSON: they come from
+the binary, and a copy on disk is a stale duplicate the day one changes. A load
+starts from the built-in defaults and adds what was stored, so reading a file
+cannot lose them.
+
+**And the live drivers had to be told.** Eight of them remove `policy.json` to
+start from a clean slate — which after this change removed a file nothing writes,
+leaving a stale `policy.ini` to carry between runs and quietly contaminate the
+next one. They remove both now. Nothing failed to catch it; there was nothing
+that *could* have, which is the same shape as the tree-file bug earlier in this
+session: a rename that keeps compiling.
+
+What stays JSON is the *exchange* document — what `judge_import` reads when rules
+come from somebody else. That is a different thing from storage, it is reviewed
+rather than loaded, and it has its own trust model; moving it is a separate
+decision from moving the file this machine keeps for itself.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

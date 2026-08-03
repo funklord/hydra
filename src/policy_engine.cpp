@@ -2,6 +2,9 @@
 #include "policy_engine.h"
 
 #include <QFile>
+#include <QVariant>
+#include <QSettings>
+#include <QFileInfo>
 #include <QStringList>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -144,7 +147,7 @@ void policy_engine::set_setting(const QString &pattern, feature f, setting s) {
 	emit changed();
 }
 
-bool policy_engine::load(const QString &path) {
+bool policy_engine::load_json(const QString &path) {
 	QFile file(path);
 	if (!file.open(QIODevice::ReadOnly))
 		return false;
@@ -180,37 +183,81 @@ bool policy_engine::load(const QString &path) {
 	return true;
 }
 
-bool policy_engine::save(const QString &path) const {
-	QJsonObject gd;
-	for (int i = 0; i < policy::feature_count(); ++i) {
-		const feature f = static_cast<feature>(i);
-		gd.insert(policy::feature_name(f), setting_name(global_default(f)));
-	}
 
-	QJsonArray arr;
-	for (const rule &r : m_rules) {
-		QJsonObject settings;
-		for (int i = 0; i < policy::feature_count(); ++i) {
-			const feature f = static_cast<feature>(i);
-			const setting s = policy::get_setting(r.bits, f);
-			if (s != setting::unset)
-				settings.insert(policy::feature_name(f), setting_name(s));
+bool policy_engine::load(const QString &path) {
+	// INI first, and the old JSON if that is what is there.
+	//
+	// The file moved from JSON to INI because everything in it is a value or a
+	// line of them, and a key=value file can be read and repaired by a person
+	// with no tools. The migration is not a separate step anybody has to run:
+	// a JSON file at the old path is read once, and the next save writes INI.
+	// Losing somebody's site rules to a format change would be the worst
+	// possible way to make a file more readable.
+	if (QFileInfo::exists(path)) {
+		QSettings f(path, QSettings::IniFormat);
+		if (f.status() == QSettings::NoError &&
+		    f.value("hydra/kind").toString() == "policy") {
+			m_rules.clear();
+			f.beginGroup("defaults");
+			for (const QString &key : f.allKeys()) {
+				const feature fe = policy::feature_from_name(key);
+				const setting st = policy::setting_from_word(f.value(key).toString());
+				if (fe != feature::count && st != setting::unset)
+					set_global_default(fe, st);
+			}
+			f.endGroup();
+			f.beginGroup("sites");
+			for (const QString &pattern : f.allKeys()) {
+				// A comma means "list" to QSettings, and a hand-edited file will
+				// not be quoted; taking it as a list and rejoining reads both.
+				const QVariant raw = f.value(pattern);
+				const QString line = raw.typeId() == QMetaType::QStringList
+				                         ? raw.toStringList().join(',')
+				                         : raw.toString();
+				rule r;
+				r.pattern = pattern;
+				r.bits    = policy::settings_from_line(line);
+				if (!r.pattern.isEmpty() && r.bits != 0)
+					m_rules.push_back(r);
+			}
+			f.endGroup();
+			emit changed();
+			return true;
 		}
-		if (settings.isEmpty())
-			continue;  // don't persist empty rules
-		QJsonObject o;
-		o.insert("pattern", r.pattern);
-		o.insert("settings", settings);
-		arr.append(o);
 	}
 
-	QJsonObject root;
-	root.insert("globalDefaults", gd);
-	root.insert("rules", arr);
+	// The legacy path: same name with .json, or the given file if it is JSON.
+	if (load_json(path))
+		return true;
+	QString legacy = path;
+	if (legacy.endsWith(".ini"))
+		legacy.chop(4), legacy += ".json";
+	return legacy != path && load_json(legacy);
+}
 
-	QFile file(path);
-	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
-		return false;
-	file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-	return true;
+bool policy_engine::save(const QString &path) const {
+	QFile::remove(path);
+	QSettings f(path, QSettings::IniFormat);
+	f.setValue("hydra/format", 1);
+	f.setValue("hydra/kind", "policy");
+
+	f.beginGroup("defaults");
+	for (int i = 0; i < policy::feature_count(); ++i) {
+		const auto fe = static_cast<feature>(i);
+		f.setValue(policy::feature_name(fe),
+		            policy::setting_word(global_default(fe)));
+	}
+	f.endGroup();
+
+	f.beginGroup("sites");
+	for (const rule &r : m_rules) {
+		const QString line = policy::settings_to_line(r.bits);
+		if (line.isEmpty())
+			continue;   // a rule that says nothing is not written
+		f.setValue(r.pattern, line);
+	}
+	f.endGroup();
+
+	f.sync();
+	return f.status() == QSettings::NoError;
 }
