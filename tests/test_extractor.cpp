@@ -573,6 +573,29 @@ int main(int argc, char **argv) {
 		check(site_extractor::check(var_, page, ev).usable,
 		      "and a var-initialised function expression is accepted");
 
+		// "Every way" was three ways. The wrapper declared `var extract;` beside
+		// the proposal, so a `const` or `let` of the same name was "Identifier
+		// extract has already been declared" — a SyntaxError raised before the
+		// proposal ran at all, naming *our* variable, about a parser that was
+		// correct. Five runs in five against real evidence died there while the
+		// section above reported that every spelling worked.
+		const QString const_ = "const extract = function (p, r) " + body;
+		const QString let_   = "let extract = function (p, r) " + body;
+		const QString arrow  = "const extract = (p, r) => " + body;
+
+		check(site_extractor::check(const_, page, ev).usable,
+		      "a const-declared function expression is accepted");
+		check(site_extractor::check(let_, page, ev).usable,
+		      "and a let-declared one");
+		check(site_extractor::check(arrow, page, ev).usable,
+		      "and an arrow function, which is what a model actually wrote");
+
+		// The reason the outer `var` is still there: a bare assignment must not
+		// leave a global behind, and the scope that lets `const` through must
+		// not break that.
+		check(site_extractor::check(assign, page, ev).usable,
+		      "and a bare assignment still works alongside all of them");
+
 		// The guard still has to fire when there really is no extract().
 		const extractor_verdict none =
 			site_extractor::check("var other = 1;", page, ev);

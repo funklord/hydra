@@ -35,14 +35,30 @@ namespace {
 // A declaration with no initialiser does not disturb the hoisted binding, so
 // both forms now arrive intact. A real model wrote the broken-by-us form on
 // its first properly-formatted answer against real evidence.
+// And `const extract = …` is the third form, which the arrangement above
+// rejected outright: a `var extract;` in the same scope as a `const extract`
+// is "Identifier extract has already been declared", a SyntaxError raised
+// before a line of the proposal runs. Measured, and it cost everything — five
+// runs in five against real evidence died there, and the message names our
+// wrapper's variable rather than anything the model did, so it reads like the
+// model produced nonsense when it had in fact produced a correct parser.
+//
+// The source therefore gets a scope of its own. A declaration of any kind
+// (`function`, `var`, `let`, `const`) binds inside it and is handed back; a
+// bare `extract = …` with no declaration finds the outer `var` and assigns
+// that instead of leaking a global, which is what the outer one is still for.
 QString wrap(const QString &source) {
 	return QStringLiteral(
 	    "(function(){\n"
 	    "  var extract;\n"
-	    "  %1\n"
-	    "  if (typeof extract !== 'function')\n"
-	    "    throw new Error('the script defines no extract() function');\n"
-	    "  return extract;\n"
+	    "  var inner = (function(){\n"
+	    "    %1\n"
+	    "    ;\n"
+	    "    return typeof extract !== 'undefined' ? extract : undefined;\n"
+	    "  })();\n"
+	    "  if (typeof inner === 'function') return inner;\n"
+	    "  if (typeof extract === 'function') return extract;\n"
+	    "  throw new Error('the script defines no extract() function');\n"
 	    "})()").arg(source);
 }
 
