@@ -16,6 +16,7 @@
 // `HYDRA_KEEPASS_INTERACTIVE=1`, and the run says plainly which parts went
 // unchecked. Everything before it — socket, handshake, key exchange, the
 // not-associated path — runs unattended.
+#include "credential_store.h"
 #include "keepass_bridge.h"
 #include "keepass_protocol.h"
 
@@ -52,6 +53,16 @@ static bool wait_until(const std::function<bool()> &done, int max_ms) {
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication app(argc, argv);
+
+	// **Never the real pairing.** This driver pairs with a throwaway vault and
+	// stores what comes back, and the store addresses one keyring item by fixed
+	// attributes -- so under the default name a test run would overwrite, and
+	// later delete, whatever the user had actually paired. Set before any call
+	// that could reach the store, because the name is read once and cached.
+	if (qgetenv("HYDRA_SECRET_KIND").isEmpty())
+		qputenv("HYDRA_SECRET_KIND", "keepassxc-association-try-keepass");
+	std::printf("  --    keyring item: %s\n",
+	             qgetenv("HYDRA_SECRET_KIND").constData());
 
 	section("what is needed to run at all");
 	check(keepass_bridge::supported(),
@@ -145,8 +156,54 @@ int main(int argc, char **argv) {
 		QObject::disconnect(c);
 	}
 
+	// A pairing that survives a restart (§13.1). This is what makes everything
+	// below reachable without a person: the first confirmed run stores it, and
+	// every run after restores it and goes straight to the requests. Before it
+	// existed, the association lived in this process's memory, so `get-logins`
+	// could only ever be reached in the same run that showed the dialog -- and
+	// the one run that ever managed it died before getting there.
+	section("the stored pairing");
+	bool paired = false;
+	{
+		bool answered = false, ok = false;
+		QString message;
+		const QMetaObject::Connection c =
+		    QObject::connect(&bridge, &keepass_bridge::associated_changed,
+		                     [&](bool good, const QString &m) {
+			answered = true;
+			ok = good;
+			message = m;
+		});
+		if (!bridge.restore_pairing()) {
+			note(credential_store::available()
+			         ? QStringLiteral("nothing stored yet — this run has to pair "
+			                           "the slow way, and will store it.")
+			         : credential_store::unavailable_reason());
+		} else {
+			check(!bridge.association_id().isEmpty() &&
+			          !bridge.association_key().isEmpty(),
+			      "a stored pairing loads with both halves");
+			bridge.test_association();
+			wait_until([&] { return answered; }, 8000);
+			check(answered, "and KeePassXC answers whether it still holds");
+			paired = answered && ok;
+			check(paired,
+			      QString("and it is accepted with no dialog (%1)")
+			          .arg(answered ? message
+			                        : QStringLiteral("no answer")));
+			if (!paired)
+				note("a stored pairing KeePassXC will not accept is kept, not "
+				      "dropped: a locked vault looks the same from here.");
+		}
+		QObject::disconnect(c);
+	}
+
 	section("pairing");
-	if (qEnvironmentVariableIntValue("HYDRA_KEEPASS_INTERACTIVE") != 1) {
+	if (paired) {
+		note("skipped, and that is the result: the stored pairing was accepted,");
+		note("so no human was asked. Tools ▸ Forget KeePassXC Pairing, or");
+		note("clearing the keyring item, puts the dialog back.");
+	} else if (qEnvironmentVariableIntValue("HYDRA_KEEPASS_INTERACTIVE") != 1) {
 		note("skipped: association needs a human to confirm the dialog in");
 		note("KeePassXC, which is the point of it. Re-run with");
 		note("HYDRA_KEEPASS_INTERACTIVE=1 and accept the prompt to check the");
@@ -154,8 +211,9 @@ int main(int argc, char **argv) {
 	} else {
 		bool answered = false, ok = false;
 		QString message;
-		QObject::connect(&bridge, &keepass_bridge::associated_changed,
-		                 [&](bool good, const QString &m) {
+		const QMetaObject::Connection c =
+		    QObject::connect(&bridge, &keepass_bridge::associated_changed,
+		                     [&](bool good, const QString &m) {
 			answered = true;
 			ok = good;
 			message = m;
@@ -177,57 +235,73 @@ int main(int argc, char **argv) {
 		          .arg(answered ? message
 		                        : QStringLiteral("no answer — the dialog was not "
 		                                          "confirmed in time")));
+		paired = answered && ok;
 		// Gated on the pairing having worked. Unconditionally, these report on
 		// whatever happens to be left on the bridge, which is how they passed
 		// during a failure.
-		if (ok) {
+		if (paired) {
 			check(!bridge.association_id().isEmpty(),
 			      "and it hands back an id to save");
 			check(!bridge.association_key().isEmpty(), "and a key with it");
+			// The claim the whole feature rests on, asked of the store rather
+			// than of the bridge: what is in this process's memory is not what
+			// the next run will find.
+			check(keepass_bridge::pairing_is_stored(),
+			      "and it is on disk, so the next run needs no dialog");
 		} else {
 			note("id and key not checked: there was no pairing to check them on.");
 		}
+		QObject::disconnect(c);
+	}
 
-		if (ok) {
-			QList<credential> got;
-			bool arrived = false;
-			QObject::connect(&bridge, &keepass_bridge::logins,
-			                 [&](int tag, const QList<credential> &entries) {
-				if (tag != 7)
-					return;
-				got = entries;
-				arrived = true;
-			});
-			bridge.request_logins("http://127.0.0.1:9931", 7);
-			wait_until([&] { return arrived; }, 20000);
-			check(arrived, "a login request for a url in the vault is answered");
-			check(arrived && !got.isEmpty(),
-			      QString("and the entry comes back (%1 found)").arg(got.size()));
-			if (!got.isEmpty()) {
-				check(got.first().login == "alice",
-				      QString("with the username from the vault (%1)")
-				          .arg(got.first().login));
-				// Printed as a length, not a value: a password in a log is a
-				// password on disk, and this one is only a fixture today.
-				check(!got.first().password.isEmpty(),
-				      QString("and a password, %1 characters, not shown here")
-				          .arg(got.first().password.size()));
-			}
-
-			QList<credential> none;
-			bool answered2 = false;
-			QObject::connect(&bridge, &keepass_bridge::logins,
-			                 [&](int tag, const QList<credential> &entries) {
-				if (tag != 8)
-					return;
-				none = entries;
-				answered2 = true;
-			});
-			bridge.request_logins("http://no-such-site.invalid", 8);
-			wait_until([&] { return answered2; }, 20000);
-			check(answered2 && none.isEmpty(),
-			      "a url with nothing stored comes back empty rather than wrong");
+	// Reached by either route, which is the point of hoisting it out of the
+	// interactive branch: once a pairing holds, these need nobody.
+	section("asking the vault");
+	if (!paired) {
+		note("skipped: no pairing, so a login request could only fail.");
+	} else {
+		QList<credential> got;
+		bool arrived = false;
+		const QMetaObject::Connection c1 =
+		    QObject::connect(&bridge, &keepass_bridge::logins,
+		                     [&](int tag, const QList<credential> &entries) {
+			if (tag != 7)
+				return;
+			got = entries;
+			arrived = true;
+		});
+		bridge.request_logins("http://127.0.0.1:9931", 7);
+		wait_until([&] { return arrived; }, 20000);
+		check(arrived, "a login request for a url in the vault is answered");
+		check(arrived && !got.isEmpty(),
+		      QString("and the entry comes back (%1 found)").arg(got.size()));
+		if (!got.isEmpty()) {
+			check(got.first().login == "alice",
+			      QString("with the username from the vault (%1)")
+			          .arg(got.first().login));
+			// Printed as a length, not a value: a password in a log is a
+			// password on disk, and this one is only a fixture today.
+			check(!got.first().password.isEmpty(),
+			      QString("and a password, %1 characters, not shown here")
+			          .arg(got.first().password.size()));
 		}
+		QObject::disconnect(c1);
+
+		QList<credential> none;
+		bool answered2 = false;
+		const QMetaObject::Connection c2 =
+		    QObject::connect(&bridge, &keepass_bridge::logins,
+		                     [&](int tag, const QList<credential> &entries) {
+			if (tag != 8)
+				return;
+			none = entries;
+			answered2 = true;
+		});
+		bridge.request_logins("http://no-such-site.invalid", 8);
+		wait_until([&] { return answered2; }, 20000);
+		check(answered2 && none.isEmpty(),
+		      "a url with nothing stored comes back empty rather than wrong");
+		QObject::disconnect(c2);
 	}
 
 	bridge.disconnect_now();

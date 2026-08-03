@@ -52,6 +52,20 @@ public:
 	QString association_key() const { return m_id_key_b64; }
 	void test_association();
 
+	// Load the pairing the last run stored, if there is one. Returns whether
+	// anything was loaded -- not whether it still works, which only KeePassXC
+	// can say and `test_association()` is what asks.
+	bool restore_pairing();
+
+	// Drop the stored pairing and the one in memory. The user's way out of
+	// having granted this program access to their vault, and the reason a
+	// stored secret needs a visible off switch rather than only an on one.
+	bool forget_pairing();
+
+	// Whether a pairing is on disk for a *later* run, which is a different
+	// question from `associated()` -- that one is about this run's memory.
+	static bool pairing_is_stored();
+
 	// KeePassXC does its own URL matching and may prompt per site.
 	void request_logins(const QString &url, int request_tag);
 

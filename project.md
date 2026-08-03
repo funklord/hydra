@@ -3353,6 +3353,90 @@ happened to survive the correction because the screenshots were taken too, which
 is the argument for taking them: a window query answers what you asked, and a
 picture answers what is there.
 
+### A pairing that survives a restart (§13.1, §14)
+
+Built because the alternative was worse than inconvenient: with the association
+in memory only, **the one step that needs a human was needed on every launch** —
+and `get-logins`, the last unexercised part of §13, could only ever be reached in
+the same run that showed the dialog. Four attempts and one heap corruption later,
+that had happened exactly never.
+
+`credential_store` puts it in the **session's Secret Service** (libsecret,
+optional at build time on the same terms as libsodium and libtorrent). The
+refusal that shapes it: §14 also permits "the app's encrypted config", and an
+encrypted config the app opens unattended must keep its key on disk beside it —
+obfuscation wearing the word encryption. There is no third option that is honest,
+so where there is no Secret Service the pairing simply does not persist and the
+app says which of the two reasons applies. Missing libsecret is a `STATUS`, not a
+`WARNING`, unlike the other two optional dependencies: it costs convenience, not a
+feature, and a warning would say something is wrong about a build that is merely
+smaller.
+
+**Only the key needs protecting, and both halves travel together anyway.** The id
+is the name the user typed into KeePassXC's dialog; it is not secret, but half a
+pairing is not a pairing, so they are stored as one blob — `base64(id)` and the
+key separated by a space, which is unambiguous precisely because neither half can
+contain one. That encoding is a pure function, tested against names with spaces,
+apostrophes, newlines, non-ASCII and 300 characters, because a blob that decodes
+to the wrong id produces a pairing KeePassXC refuses and an error message about
+*association* rather than about storage.
+
+**It is stored at the one moment it is known good** — inside the `associate`
+reply handler, not by the caller — so no path can pair and forget to save.
+Failing to store is reported as its own outcome rather than as a failure to pair,
+because this run works either way and the difference only shows up next launch.
+
+**A refused `test-associate` deliberately does not delete it.** A locked vault, a
+different database, and a pairing KeePassXC has genuinely forgotten are the same
+answer from out here, and dropping the pairing on that would make locking your
+vault cost you the one step that needs a human. Forgetting is an explicit act:
+**Tools ▸ Forget KeePassXC Pairing**, confirmed, and enabled only when there is
+one to forget. A stored secret with an on switch and no off switch is the wrong
+half of the feature to build.
+
+**A comment that had been describing a thing that could not happen.** The shell
+already said "a stored pairing is tested rather than re-created, so the user is
+not asked to confirm on every launch" — and `associated()` only ever answered for
+this process's memory, which on a fresh launch is empty, so the test branch was
+unreachable and every launch re-paired. The comment was right about the intent and
+wrong about the code for as long as there was nowhere to store anything.
+
+**Two traps, both paid for.** `libsecret` pulls in gio, `GDBusInterfaceInfo` has a
+member called `signals`, and Qt `#define`s `signals` to `public` — so the include
+has to come before any Qt header or the build dies inside a system header with an
+error that blames glib for something Qt did. And the calls are synchronous
+because libsecret's async API wants a GLib main loop a Qt app is not guaranteed to
+be running; they can block on a locked keyring, so every caller is a user-driven
+moment and none of them is startup.
+
+**30 checks** (`test_credstore`), of which 10 are a real save/load/replace/clear
+against the running gnome-keyring — including that a second save *replaces* rather
+than accumulating, since two items under one set of attributes means lookups
+return whichever the service felt like.
+
+**The suite refuses to touch the service unless told where to write.** Every call
+addresses one item by fixed attributes, so a suite exercising save-and-clear under
+the real name would delete the user's actual pairing — silently, and only on the
+machines where the feature works. `HYDRA_SECRET_KIND` renames the item; the suite
+declines and says why when it is unset, and `try_keepass` sets its own before
+anything can reach the store. Refusing rather than skipping quietly, because a run
+that deleted a real pairing would look exactly like one that passed.
+
+**And the harness lied once more, in a new way worth recording.** Three checks
+read `check(load(&id), QString("…(%1)").arg(id))` — and **C++ does not order the
+evaluation of a call's arguments**, so the message was formatted before `load()`
+wrote to `id`. The output said `comes back byte for byte ()` beside a passing
+check, and the next line printed the *previous* pairing's name. The assertions
+were correct and their evidence was not, which is the same failure as every
+entry in the apparatus list above: load first, then report what was seen.
+
+**What is still not measured: the restore path against a real KeePassXC.** The
+store round-trips, and the driver is restructured so `get-logins` runs by
+whichever route left it paired — but nothing has yet stored a *real* pairing,
+because no confirmation has landed since the feature was built. The unattended
+run reports "nothing stored yet" and skips honestly, which is the correct shape
+and is not the same as a pass.
+
 ### Handing a stream to a player, on a phone
 
 The desktop names a player and starts a process. Android has neither, so §19's
@@ -4128,22 +4212,24 @@ carried along as amendments to a list item.
    `request_logins` — a url the vault knows, and one it does not — has still
    never met a real vault.
 
-   Both driver defects are fixed, so nothing of ours is known to be in the way.
-   `tests/README.md` has the throwaway-vault setup; then
-   `HYDRA_KEEPASS_INTERACTIVE=1 ./tests/build/try_keepass` and accept the prompt
-   within three minutes.
+   Both driver defects are fixed and the pairing now persists, so nothing of
+   ours is known to be in the way, and **this is a one-time cost rather than a
+   per-run one**: the first confirmation is stored in the keyring and every run
+   after it restores the pairing and goes straight to the login requests.
 
-   **What to expect, since four attempts failed on the other end.** One run had
-   its prompt accepted and the association written to the vault, and KeePassXC
-   exited before replying; a restarted instance then stopped raising the prompt
-   at all, verified by screenshot rather than inferred. So budget a KeePassXC
-   restart per attempt, and check it is still alive afterwards — `pgrep
-   keepassxc` — because a stale socket outlives it and the next run's
-   precondition will pass against nothing. If it keeps refusing to prompt, the
-   cheaper route to `get-logins` is to save a working pairing's id and key and
-   drive `set_association` + `test_association` instead, which needs no dialog;
-   that the bridge holds the pairing in memory only is a §13 gap in its own
-   right.
+   **Restart KeePassXC first.** Measured across five attempts: a freshly started
+   instance raises the *New key association request* window — confirmed on
+   screen at a real size — and an instance that has already served one
+   association stops raising it, while still answering the handshake and
+   refusing a bogus pairing in the same run. One instance also exited mid-run
+   after writing the association to the vault, so check `pgrep keepassxc`
+   afterwards; a stale socket outlives it and the next precondition passes
+   against nothing.
+
+   ```sh
+   HYDRA_KEEPASS_INTERACTIVE=1 ./tests/build/try_keepass   # accept within 3 min
+   ./tests/build/try_keepass                               # every run after: no dialog
+   ```
 
 3. **Decide whether the helper tier's DOM half is wanted at all** (arch
    §11.5.1). The fetch half is built, permissioned and proven against a live CDN.

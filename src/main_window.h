@@ -124,6 +124,7 @@ private slots:
 	void open_media();
 	void open_filter_evolution();
 	void toggle_password_manager();
+	void forget_keepass_pairing();
 	void start_element_picker();
 	void open_site_rules();
 	void undo_reorganize();

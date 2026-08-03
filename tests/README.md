@@ -67,6 +67,7 @@ the suites below are worth more than their pass counts suggest.
 | `test_kiosk` | kiosk mode's borrow-and-return contract: the widget goes back where it came from |
 | `test_bundle` | every setting through one INI file and back, and the refusals — an import that quietly applies nothing looks exactly like one that worked |
 | `test_theme` | which colour scheme the desktop is in: `decide()` over what each source said, including the combination this machine produces, where Qt's own answer is `Unknown` |
+| `test_credstore` | where the KeePassXC pairing lives between runs: the encoding exhaustively, and — given a Secret Service and `HYDRA_SECRET_KIND` — a real save/load/replace/clear round trip |
 
 ```sh
 QT_QPA_PLATFORM=offscreen ./tests/build/test_seam
@@ -121,9 +122,28 @@ HYDRA_KEEPASS_INTERACTIVE=1 ./tests/build/try_keepass   # then accept the dialog
 
 **Start this only when you are at the machine.** It waits three minutes for the
 dialog and then reports the pairing as failed, which is honest but measures
-nothing — two runs were lost that way. An unconfirmed run now says so and
+nothing — several runs were lost that way. An unconfirmed run now says so and
 declines the checks that depend on it, rather than reporting passes for an id
 and key the test itself planted.
+
+**And only the first run needs you.** The pairing is stored in the session
+keyring, so every later run restores it, `test-associate`s it, and goes straight
+to the login requests with no dialog at all. That is the whole point of
+`credential_store`, and it is why `get-logins` is reachable unattended.
+
+**Restart KeePassXC before an interactive run.** Measured, after four attempts
+that produced nothing: a freshly started KeePassXC raises the *New key
+association request* window, and an instance that has already served one
+association stops raising it — same unlocked vault, same socket, same code-8
+answer to a bogus pairing in the same run. One instance also exited mid-run
+having written the association to the vault, leaving a stale socket behind, so
+check `pgrep keepassxc` afterwards: the driver's precondition connects, and a
+server that was alive when it connected can still be gone a minute later.
+
+The driver writes to its **own** keyring item (`HYDRA_SECRET_KIND` defaults to
+`keepassxc-association-try-keepass` here) so a test run can never overwrite or
+delete a pairing you actually use. `test_credstore` refuses to touch the service
+at all unless that variable names something other than the real item.
 
 ### Need libtorrent
 

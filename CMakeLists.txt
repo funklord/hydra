@@ -98,6 +98,25 @@ else()
     message(WARNING "libtorrent-rasterbar not found — BitTorrent downloads disabled")
 endif()
 
+# libsecret is optional on the same terms again, and this one degrades rather
+# than disappearing: without it the KeePassXC pairing still works, it just lives
+# in memory and has to be confirmed again after a restart (architecture doc
+# §13.1). That is a real feature loss and the app says so, but it is not a
+# reason to refuse to build.
+#
+# Not a *warning* when missing, unlike the two above. The feature it costs is
+# convenience, and a warning here would say "something is wrong" about a build
+# that is merely smaller. Off for Android for the reason libsodium is: the
+# host's pkg-config will answer questions about the host.
+if(PkgConfig_FOUND AND NOT ANDROID)
+    pkg_check_modules(SECRET QUIET libsecret-1)
+endif()
+if(SECRET_FOUND)
+    message(STATUS "libsecret found — the KeePassXC pairing will survive a restart")
+else()
+    message(STATUS "libsecret not found — the KeePassXC pairing will not survive a restart")
+endif()
+
 # The sample tree, compiled in. On desktop it is read from the source directory
 # or the command line; on Android there is no such directory, so the first run
 # has to seed app storage from something the APK carries.
@@ -218,6 +237,8 @@ qt_add_executable(hydra
     # client, the QWebChannel autofill layer, and Autofill as a policy feature.
     src/box_crypto.cpp
     src/box_crypto.h
+    src/credential_store.cpp
+    src/credential_store.h
     src/keepass_protocol.cpp
     src/keepass_protocol.h
     src/keepass_bridge.cpp
@@ -288,6 +309,12 @@ if(SODIUM_FOUND)
     target_compile_definitions(hydra PRIVATE HYDRA_HAVE_SODIUM)
     target_include_directories(hydra PRIVATE ${SODIUM_INCLUDE_DIRS})
     target_link_libraries(hydra PRIVATE ${SODIUM_LIBRARIES})
+endif()
+
+if(SECRET_FOUND)
+    target_compile_definitions(hydra PRIVATE HYDRA_HAVE_SECRET)
+    target_include_directories(hydra PRIVATE ${SECRET_INCLUDE_DIRS})
+    target_link_libraries(hydra PRIVATE ${SECRET_LIBRARIES})
 endif()
 
 if(LibtorrentRasterbar_FOUND)

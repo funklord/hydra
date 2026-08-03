@@ -36,6 +36,7 @@
 #include "android_downloads.h"
 #endif
 #include "filter_dialog.h"
+#include "credential_store.h"
 #include "keepass_bridge.h"
 #include "autofill_controller.h"
 #include "consent_blocker.h"
@@ -543,6 +544,20 @@ QMenuBar *main_window::build_menu_bar() {
 	                     ? QStringLiteral("Pair with a running KeePassXC for autofill")
 	                     : keepass_bridge::unavailable_reason());
 	kp->setEnabled(keepass_bridge::supported());
+	// A pairing that is kept between runs has to be removable between runs, and
+	// from here rather than from a keyring editor. It is the user's record of
+	// having let this program at their vault; storing it silently and offering
+	// no way back would be the wrong half of the feature to build.
+	QAction *kpf = tools_menu->addAction("&Forget KeePassXC Pairing", this,
+	                                      &main_window::forget_keepass_pairing);
+	kpf->setStatusTip(
+	    credential_store::available()
+	        ? QStringLiteral("Remove the stored pairing; KeePassXC will ask "
+	                          "again next time")
+	        : credential_store::unavailable_reason());
+	// Enabled on whether there is one to forget, asked now rather than assumed.
+	kpf->setEnabled(keepass_bridge::supported() &&
+	                keepass_bridge::pairing_is_stored());
 	tools_menu->addSeparator();
 	QAction *reorg = tools_menu->addAction("&Reorganize Tree with AI…", this,
                                         &main_window::open_reorganizer);
@@ -741,7 +756,13 @@ void main_window::toggle_password_manager() {
 		connect(m_keepass, &keepass_bridge::ready, this, [this] {
 			// A stored pairing is tested rather than re-created, so the user is
 			// not asked to confirm a new connection on every launch (§13.1).
-			if (m_keepass->associated())
+			//
+			// This comment described what was *meant* to happen for as long as
+			// there was nowhere to store a pairing: `associated()` only ever
+			// answered for this process's memory, which on a fresh launch is
+			// empty, so the test branch was unreachable and every launch asked
+			// the user to confirm again. Loading it is what makes it true.
+			if (m_keepass->restore_pairing() || m_keepass->associated())
 				m_keepass->test_association();
 			else
 				m_keepass->associate();
@@ -753,6 +774,30 @@ void main_window::toggle_password_manager() {
 	} else {
 		m_status->showMessage("Already paired with KeePassXC.", 4000);
 	}
+}
+
+void main_window::forget_keepass_pairing() {
+	if (!keepass_bridge::pairing_is_stored()) {
+		m_status->showMessage(credential_store::available()
+		                          ? QStringLiteral("No stored KeePassXC pairing.")
+		                          : credential_store::unavailable_reason(),
+		                      6000);
+		return;
+	}
+	// Confirmed, because the cost of undoing it is the one step that needs a
+	// human at the KeePassXC end -- this is cheap to click and not cheap to
+	// reverse.
+	if (QMessageBox::question(
+	        this, "Forget KeePassXC pairing",
+	        "Remove the stored pairing?\n\nKeePassXC will ask you to confirm a "
+	        "new connection the next time this browser asks for a password. "
+	        "Nothing in your vault is changed.") != QMessageBox::Yes)
+		return;
+	const bool gone = m_keepass->forget_pairing();
+	m_status->showMessage(gone ? QStringLiteral("KeePassXC pairing forgotten.")
+	                           : QStringLiteral(
+	                                 "Could not remove the stored pairing."),
+	                      6000);
 }
 
 void main_window::undo_reorganize() {

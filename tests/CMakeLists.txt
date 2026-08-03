@@ -124,6 +124,7 @@ endif()
 # pins the other contract -- that every call fails and available() says so.
 if(PkgConfig_FOUND)
     pkg_check_modules(SODIUM_T QUIET libsodium)
+    pkg_check_modules(SECRET_T QUIET libsecret-1)
 endif()
 add_executable(test_crypto test_crypto.cpp ${H}/box_crypto.cpp)
 target_link_libraries(test_crypto PRIVATE Qt6::Core Qt6::Test ${SODIUM_T_LIBRARIES})
@@ -133,9 +134,22 @@ if(SODIUM_T_FOUND)
     target_compile_definitions(test_crypto PRIVATE HYDRA_HAVE_SODIUM)
 endif()
 
+# Where the pairing is kept between runs. Built either way, like test_crypto:
+# without libsecret the suite pins the other contract -- every call fails and
+# unavailable_reason() says why -- and the encoding half is pure and runs
+# anywhere.
+add_executable(test_credstore test_credstore.cpp ${H}/credential_store.cpp)
+target_link_libraries(test_credstore PRIVATE Qt6::Core Qt6::Test
+    ${SECRET_T_LIBRARIES})
+target_include_directories(test_credstore PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR}
+    ${SECRET_T_INCLUDE_DIRS})
+if(SECRET_T_FOUND)
+    target_compile_definitions(test_credstore PRIVATE HYDRA_HAVE_SECRET)
+endif()
+
 add_executable(test_autofill test_autofill.cpp ${H}/autofill_controller.cpp
     ${H}/keepass_bridge.cpp ${H}/keepass_protocol.cpp ${H}/box_crypto.cpp
-    ${H}/policy.cpp ${H}/policy_engine.cpp)
+    ${H}/credential_store.cpp ${H}/policy.cpp ${H}/policy_engine.cpp)
 target_link_libraries(test_autofill PRIVATE Qt6::Core Qt6::Network Qt6::Test
     ${SODIUM_T_LIBRARIES})
 target_include_directories(test_autofill PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR}
@@ -278,6 +292,11 @@ if(Qt6WebEngineWidgets_FOUND)
         endif()
         if(SODIUM_FOUND)
             target_compile_definitions(${name} PRIVATE HYDRA_HAVE_SODIUM)
+        endif()
+        if(SECRET_T_FOUND)
+            target_compile_definitions(${name} PRIVATE HYDRA_HAVE_SECRET)
+            target_include_directories(${name} PRIVATE ${SECRET_T_INCLUDE_DIRS})
+            target_link_libraries(${name} PRIVATE ${SECRET_T_LIBRARIES})
         endif()
         if(LibtorrentRasterbar_FOUND)
             target_compile_definitions(${name} PRIVATE HYDRA_HAVE_LIBTORRENT)

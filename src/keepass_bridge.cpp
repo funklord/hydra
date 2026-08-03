@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "keepass_bridge.h"
 #include "box_crypto.h"
+#include "credential_store.h"
 
 #include <QJsonDocument>
 #include <QLocalSocket>
@@ -144,6 +145,22 @@ void keepass_bridge::set_association(const QString &id, const QString &id_key_b6
 	m_id_key_b64 = id_key_b64;
 }
 
+bool keepass_bridge::restore_pairing() {
+	QString id, key;
+	if (!credential_store::load(&id, &key))
+		return false;
+	set_association(id, key);
+	return true;
+}
+
+bool keepass_bridge::forget_pairing() {
+	m_assoc_id.clear();
+	m_id_key_b64.clear();
+	return credential_store::clear();
+}
+
+bool keepass_bridge::pairing_is_stored() { return credential_store::has_pairing(); }
+
 void keepass_bridge::test_association() {
 	if (m_assoc_id.isEmpty()) {
 		emit associated_changed(false, "No stored pairing.");
@@ -218,6 +235,13 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 	QString err;
 	if (keepass_protocol::is_error(inner, &err)) {
 		if (action == "test-associate")
+			// The stored pairing is deliberately *not* dropped here. A refused
+			// test-associate means "this KeePassXC does not accept it now",
+			// which is what a locked database, a different database, or a
+			// vault that has not been opened yet all look like from out here.
+			// Throwing the pairing away on that would make a locked vault cost
+			// the user their pairing, and re-pairing is the one step that needs
+			// a human. Forgetting stays an explicit act.
 			emit associated_changed(false, err);
 		else
 			emit error(err);
@@ -228,7 +252,18 @@ void keepass_bridge::handle(const QJsonObject &reply) {
 		QString id;
 		if (keepass_protocol::parse_associate(inner, &id)) {
 			m_assoc_id = id;
-			emit associated_changed(true, "Paired with KeePassXC.");
+			// Stored here rather than by the caller, at the one moment the
+			// pairing is known good, so no path can pair and forget to save.
+			// Failing to store is not failing to pair: this run works either
+			// way, and the difference only shows up next launch, so it is said
+			// rather than treated as an error.
+			const bool kept = credential_store::save(m_assoc_id, m_id_key_b64);
+			emit associated_changed(
+			    true, kept ? QStringLiteral("Paired with KeePassXC.")
+			               : QStringLiteral(
+			                     "Paired with KeePassXC, but the pairing could "
+			                     "not be stored and will have to be confirmed "
+			                     "again next time."));
 		} else {
 			emit associated_changed(false, "KeePassXC declined the pairing.");
 		}
