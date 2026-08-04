@@ -83,6 +83,16 @@ public:
 
 	bool load_tree(const QString &path);
 
+	// Open an address as a tab, for a url handed to us from outside: the
+	// desktop entry declares `Exec=hydra %U` and registers http and https, so
+	// every link clicked in another application arrives here as argv[1].
+	//
+	// Before this existed that argument was read as a *tree path*, which does
+	// not exist, so the window came up empty and the link was silently
+	// dropped -- a browser that installs as the default browser and then
+	// discards what it is asked to open.
+	void open_url(const QUrl &url);
+
 protected:
 	void closeEvent(QCloseEvent *event) override;
 	void resizeEvent(QResizeEvent *event) override;

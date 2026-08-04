@@ -109,15 +109,66 @@ int main(int argc, char *argv[]) {
 
 	main_window w(&factory, &policy, &filter);
 
+	// **The argument may be a url rather than a tree.** The desktop entry says
+	// `Exec=hydra %U` and claims http, https and text/html, so once this is
+	// installed as the default browser every clicked link arrives as argv[1].
+	// Read as a tree path it names no file, the window comes up empty, and the
+	// link is gone -- which is what a browser that cannot open a link looks
+	// like from the outside.
+	//
+	// Only schemes a page can be at. A path is not a url and `file:` is not
+	// treated as one either: `hydra ./tree.txt` has always meant the tree, and
+	// this must not quietly change what that does.
+	QString open_arg;
+	if (argc > 1) {
+		const QUrl candidate = QUrl::fromUserInput(QString::fromLocal8Bit(argv[1]));
+		const QString scheme = candidate.scheme();
+		if (candidate.isValid() && (scheme == "http" || scheme == "https") &&
+		    !QFileInfo::exists(QString::fromLocal8Bit(argv[1])))
+			open_arg = candidate.toString();
+	}
+
 	// Tree file: first CLI arg, else ./sample-tree.txt next to the binary or cwd.
-	QString tree_path = (argc > 1) ? QString::fromLocal8Bit(argv[1])
-	                               : QStringLiteral("sample-tree.txt");
+	QString tree_path = (argc > 1 && open_arg.isEmpty())
+	                        ? QString::fromLocal8Bit(argv[1])
+	                        : QStringLiteral("sample-tree.txt");
 	if (!QFileInfo::exists(tree_path)) {
 		const QString beside = QDir(QCoreApplication::applicationDirPath())
 		                           .filePath("sample-tree.txt");
 		if (QFileInfo::exists(beside))
 			tree_path = beside;
 	}
+#ifndef Q_OS_ANDROID
+	// **An installed copy has nowhere in the build tree to fall back to**, and
+	// until this was here it fell back to a *relative* path -- so `hydra` run
+	// from a package wrote its tree, its policy, its filters and its state
+	// directory into whatever directory it happened to be launched from. From a
+	// desktop entry that is the user's home; from a file manager it is whatever
+	// folder was open. Found by running the packaged binary: two tabs appeared
+	// in the repository's own `sample-tree.txt`, which is a tracked file.
+	//
+	// So the same answer Android already needed, for the same reason and with
+	// the same seed: everything this program keeps lives beside the tree file,
+	// so putting the tree in app data moves the whole set at once.
+	//
+	// Only when nothing was found. Running from a build or source directory
+	// still picks up the `sample-tree.txt` next to it, which is what makes
+	// `make run` work on a checkout.
+	if (!QFileInfo::exists(tree_path)) {
+		const QString dir =
+			QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+		QDir().mkpath(dir);
+		tree_path = QDir(dir).filePath("tree.txt");
+		if (!QFileInfo::exists(tree_path)) {
+			QFile seed(":/sample-tree.txt");
+			if (seed.open(QIODevice::ReadOnly)) {
+				QFile out(tree_path);
+				if (out.open(QIODevice::WriteOnly))
+					out.write(seed.readAll());
+			}
+		}
+	}
+#endif
 #ifdef Q_OS_ANDROID
 	// There is no working directory worth the name on Android -- it is `/`, and
 	// nothing is writable there. Everything this program keeps lives beside the
@@ -146,6 +197,10 @@ int main(int argc, char *argv[]) {
 	}
 #endif
 	w.load_tree(tree_path);
+	// After the tree, so the tab lands in a loaded tree rather than being
+	// dropped when the file replaces the model underneath it.
+	if (!open_arg.isEmpty())
+		w.open_url(QUrl(open_arg));
 
 	w.show();
 	return app.exec();

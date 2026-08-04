@@ -5347,6 +5347,47 @@ directory moves with the id**, so a device carrying the old build keeps its
 files under the old path and the new build starts empty. At 0.1, with no users,
 that is the whole cost.
 
+### Trying the package found two things building it could not
+
+The .deb built, declared the right dependencies and installed cleanly into a
+temporary root. Running the binary out of it found two defects that no amount of
+inspecting the package would have shown, because both are about what happens
+when the program is *started the way a package starts it*.
+
+**A url handed in from outside was silently discarded.** The desktop entry says
+`Exec=hydra %U` and registers `text/html`, `x-scheme-handler/http` and
+`x-scheme-handler/https`, so once installed as the default browser every clicked
+link arrives as `argv[1]`. That argument was only ever read as a *tree path*. A
+url names no file, so the fallback ran, the window came up with an empty tree,
+and the link was gone. From the outside that is a browser that cannot open a
+link — installed, running, and useless for the one thing the package claims it
+does. `main_window::open_url` exists now and `main()` recognises `http` and
+`https`; a path is still a path, and `file:` is deliberately not treated as a
+url, since `hydra ./tree.txt` has always meant the tree.
+
+**And the program wrote its state into whatever directory it was launched
+from.** With no `sample-tree.txt` in the working directory and none beside the
+binary — which is the situation for `/usr/bin/hydra`, and only for an installed
+copy — the path stayed *relative*. From a desktop entry that is the user's home;
+from a file manager, whichever folder was open. Android had already needed the
+answer to this and written down the reasoning; the desktop had the same hole for
+the same reason and did not.
+
+It was found the blunt way: running the packaged binary from the source tree
+appended two tabs to the repository's own `sample-tree.txt`, a tracked file.
+That is as clear a demonstration as the bug will ever give.
+
+Both verified by running the *packaged* binary from an empty directory: nothing
+is written there, `~/.local/share/Hydra/` holds `tree.txt` and `state/`, and the
+tree contains the address that was passed in, carrying the page title the engine
+resolved — which is also the proof that WebEngine renders from the package.
+
+Worth keeping about the method: **the build binary could not have found either
+bug.** CMake copies `sample-tree.txt` next to it, so the beside-the-binary branch
+always matches and the installed path is never taken. The first attempt at
+testing this "passed" for exactly that reason. Verifying packaging means running
+what was packaged, from somewhere the source tree is not.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
