@@ -93,8 +93,10 @@ private slots:
 	void on_tree_context_menu(const QPoint &pos);
 	void edit_node_properties(node *n);
 	void import_firefox_tabs();
-	void show_firefox_tabs(const QList<session_import::imported_tab> &tabs,
-	                        bool from_poll);
+	void import_chromium_tabs();
+	void show_mirror_tabs(const QString &source, const QString &label,
+	                       const QList<session_import::imported_tab> &tabs,
+	                       bool from_poll);
 	void on_sort_mode_changed(int combo_index);
 	void on_search_changed(const QString &text);
 	void navigate_to_address();
@@ -228,6 +230,7 @@ private:
 	QAction            *m_media_action  = nullptr;
 	QAction            *m_key_action    = nullptr;
 	session_mirror     *m_fx_mirror     = nullptr;
+	session_mirror     *m_cr_mirror     = nullptr;
 	QString             m_filters_path;
 	QAction            *m_kiosk_action  = nullptr;
 	QAction            *m_undo_action   = nullptr;

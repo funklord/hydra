@@ -10,8 +10,10 @@ session_mirror::session_mirror(QObject *parent) : QObject(parent) {
 	connect(m_timer, &QTimer::timeout, this, [this] { poll_once(); });
 }
 
-void session_mirror::start(const QString &session_file, int interval_ms) {
-	m_path = session_file;
+void session_mirror::start(const QString &source, const QString &session_file,
+                            int interval_ms) {
+	m_source = source;
+	m_path   = session_file;
 	// Forget what the last source looked like, or switching profiles would look
 	// like "nothing changed" and show the previous browser's tabs for ever.
 	m_fingerprint.clear();
@@ -65,7 +67,9 @@ bool session_mirror::poll_once() {
 
 	QString error;
 	const QList<session_import::imported_tab> tabs =
-		session_import::firefox_tabs(m_path, &error);
+		m_source == QLatin1String("chromium")
+			? session_import::chromium_tabs(m_path, &error)
+			: session_import::firefox_tabs(m_path, &error);
 	if (tabs.isEmpty()) {
 		// A browser mid-write can hand back a partial file, so this is not
 		// necessarily wrong -- it is only worth saying once, and the next poll

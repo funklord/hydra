@@ -70,7 +70,7 @@ the suites below are worth more than their pass counts suggest.
 | `test_kiosk` | kiosk mode's borrow-and-return contract: the widget goes back where it came from |
 | `test_bundle` | every setting through one INI file and back, and the refusals — an import that quietly applies nothing looks exactly like one that worked |
 | `test_theme` | which colour scheme the desktop is in: `decide()` over what each source said, including the combination this machine produces, where Qt's own answer is `Unknown` |
-| `test_session` | reading another browser's open tabs off disk: the mozlz4 container, both LZ4 decoders against a *reference implementation* on this machine's real Firefox session, and the profiles.ini trap where `Default=1` names a stub; and the poller, driven against a real file rewritten underneath it |
+| `test_session` | reading another browser's open tabs off disk: the mozlz4 container, both LZ4 decoders against a *reference implementation* on this machine's real Firefox session, and the profiles.ini trap where `Default=1` names a stub; the poller, driven against a real file rewritten underneath it; and the Chromium SNSS replay, against both a live session and a log the suite builds itself |
 | `test_credstore` | where the KeePassXC pairing lives between runs: the encoding exhaustively, and — given a Secret Service and `HYDRA_SECRET_KIND` — a real save/load/replace/clear round trip |
 
 ```sh

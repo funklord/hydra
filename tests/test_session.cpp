@@ -15,6 +15,7 @@
 #include <QFileInfo>
 #include <QTemporaryDir>
 #include <QThread>
+#include <QUrl>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -270,7 +271,7 @@ int main(int argc, char **argv) {
 		int changes = 0;
 		QObject::connect(&mirror, &session_mirror::tabs_changed,
 		                 [&](const QList<session_import::imported_tab> &) { ++changes; });
-		mirror.start(path, 60000);   // long interval; polls are driven by hand
+		mirror.start("firefox", path, 60000);   // long interval; polls are driven by hand
 		check(changes == 1, "starting it reports once, so turning it on does something");
 
 		check(!mirror.poll_once(),
@@ -290,6 +291,147 @@ int main(int argc, char **argv) {
 		write_session("https://c.test/3");
 		check(mirror.poll_once(), "a genuinely different tab set does report");
 		check(changes == 2, "and emits exactly once for it");
+	}
+
+	section("Chromium, which writes a command log rather than a document");
+	{
+		// Every constant here came from Chromium's own source -- vendored in
+		// this tree because Qt WebEngine bundles it -- and was then checked
+		// against a live file. Unlike the Firefox path there is **no reference
+		// implementation to compare against**: nothing else on a normal machine
+		// reads these. So this checks structure and plausibility, which is
+		// weaker, and says so rather than implying otherwise.
+		QString err;
+
+		QByteArray junk("not a session file at all");
+		check(session_import::replay_snss(junk, &err).isEmpty(),
+		      "a file that is not SNSS is refused");
+		check(err.contains("signature"), QString("saying why (%1)").arg(err));
+
+		// The version is internal API with no stability promise, so an unknown
+		// one is refused *by number* rather than parsed hopefully.
+		QByteArray future;
+		future.append(QByteArray::fromHex("534e5353"));   // 'SNSS'
+		future.append(QByteArray::fromHex("63000000"));   // version 99
+		err.clear();
+		check(session_import::replay_snss(future, &err).isEmpty(),
+		      "and so is a version this reader does not know");
+		check(err.contains("99"),
+		      QString("naming the version, which is the first thing worth "
+		               "knowing when this breaks (%1)").arg(err));
+
+		// Encrypted files are versions 2 and 4, and there is no key here.
+		QByteArray encrypted;
+		encrypted.append(QByteArray::fromHex("534e5353"));
+		encrypted.append(QByteArray::fromHex("02000000"));
+		err.clear();
+		check(session_import::replay_snss(encrypted, &err).isEmpty(),
+		      "an encrypted session is refused rather than read as rubbish");
+
+		const QString profile = session_import::chromium_profile();
+		const QString path    = session_import::chromium_session_path(profile);
+		if (path.isEmpty()) {
+			note("skipped the live replay: no Chromium profile on this machine.");
+		} else {
+			err.clear();
+			const auto tabs = session_import::chromium_tabs(path, &err);
+			check(!tabs.isEmpty(),
+			      QString("a live session replays to open tabs (%1%2)")
+			          .arg(tabs.size()).arg(err.isEmpty() ? "" : ", " + err));
+
+			// Plausibility, since there is nothing to diff against. A parser
+			// that had the offsets wrong would produce mojibake and fragments
+			// of other fields, not a list of addresses.
+			int addressable = 0;
+			for (const auto &t : tabs) {
+				const QUrl u(t.url);
+				if (u.isValid() && !u.scheme().isEmpty() && !t.title.isEmpty())
+					++addressable;
+			}
+			check(!tabs.isEmpty() && addressable == tabs.size(),
+			      QString("and every one is a valid address with a label "
+			               "(%1 of %2)").arg(addressable).arg(tabs.size()));
+			if (!tabs.isEmpty())
+				note(QString("first: %1  <%2>")
+				         .arg(tabs.first().title.left(44), tabs.first().url.left(58)));
+		}
+	}
+
+	section("replaying a log the reader built itself");
+	{
+		// The properties that only a log can have, driven on one made here so
+		// they are exercised whether or not a Chromium profile exists.
+		auto cmd = [](quint8 id, const QByteArray &payload) {
+			QByteArray out;
+			const quint16 size = quint16(payload.size() + 1);
+			out.append(char(size & 0xff)).append(char(size >> 8));
+			out.append(char(id));
+			out.append(payload);
+			return out;
+		};
+		auto i32 = [](qint32 v) {
+			QByteArray b(4, 0);
+			memcpy(b.data(), &v, 4);
+			return b;
+		};
+		auto nav = [&](qint32 tab, qint32 index, const QByteArray &url,
+		               const QString &title) {
+			QByteArray body;
+			QByteArray inner = i32(tab) + i32(index);
+			inner += i32(url.size()) + url;
+			inner += QByteArray((4 - url.size() % 4) % 4, '\0');
+			const QByteArray t16(reinterpret_cast<const char *>(title.utf16()),
+			                      title.size() * 2);
+			inner += i32(title.size()) + t16;
+			inner += QByteArray((4 - t16.size() % 4) % 4, '\0');
+			body = i32(inner.size()) + inner;   // the pickle's own size header
+			return cmd(6, body);
+		};
+
+		QByteArray f;
+		f.append(QByteArray::fromHex("534e5353"));
+		f.append(QByteArray::fromHex("03000000"));
+		f += cmd(0, i32(10) + i32(1));                   // tab 1 in window 10
+		f += nav(1, 0, "https://one.test/a", "One A");
+		f += nav(1, 1, "https://one.test/b", "One B");
+		f += cmd(7, i32(1) + i32(1));                    // tab 1 is on entry 1
+		f += cmd(0, i32(10) + i32(2));                   // tab 2 in window 10
+		f += nav(2, 0, "https://two.test/", "Two");
+		f += cmd(7, i32(2) + i32(0));
+
+		QString err;
+		auto tabs = session_import::replay_snss(f, &err);
+		check(tabs.size() == 2,
+		      QString("two tabs replay out (%1%2)").arg(tabs.size())
+		          .arg(err.isEmpty() ? "" : ", " + err));
+		// The property a document format would not have: the tab is at the
+		// entry it selected, not the last one written.
+		check(tabs.size() == 2 && tabs.at(0).url == "https://one.test/b",
+		      QString("the first is on the entry it selected (%1)")
+		          .arg(tabs.isEmpty() ? QString() : tabs.at(0).url));
+
+		// A tab closed later in the log is gone, however many navigations it
+		// accumulated first. This is the whole reason the log has to be
+		// replayed rather than scanned for urls.
+		QByteArray with_close = f + cmd(16, i32(2) + i32(0) + i32(0) + i32(0));
+		tabs = session_import::replay_snss(with_close, &err);
+		check(tabs.size() == 1,
+		      QString("a tab closed later in the log does not come back (%1)")
+		          .arg(tabs.size()));
+		check(tabs.size() == 1 && tabs.first().url.startsWith("https://one.test"),
+		      "and the one that stayed is the one that stayed");
+
+		// Same for a whole window.
+		QByteArray with_window_close = f + cmd(17, i32(10) + i32(0) + i32(0) + i32(0));
+		check(session_import::replay_snss(with_window_close, &err).isEmpty(),
+		      "closing the window takes its tabs with it");
+
+		// A half-written final record is normal, not corruption: the file is
+		// being appended to by a running browser.
+		QByteArray truncated = f;
+		truncated.chop(5);
+		check(!session_import::replay_snss(truncated, &err).isEmpty(),
+		      "a truncated tail still yields the tabs before it");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

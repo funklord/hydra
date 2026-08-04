@@ -34,7 +34,12 @@ public:
 
 	// Off by default. This reads another program's files on a schedule, which
 	// is not something to start doing because the feature exists.
-	void start(const QString &session_file, int interval_ms = 15000);
+	// `source` decides which reader runs: "firefox" or "chromium". One class
+	// for both because everything around the reading -- the cheap stat, the
+	// fingerprint, emitting only on a real change -- is identical, and two
+	// copies of that would drift.
+	void start(const QString &source, const QString &session_file,
+	            int interval_ms = 15000);
 	void stop();
 	bool running() const;
 
@@ -59,6 +64,7 @@ signals:
 
 private:
 	QTimer  *m_timer = nullptr;
+	QString  m_source;
 	QString  m_path;
 	QString  m_fingerprint;
 	QString  m_last_error;

@@ -82,4 +82,32 @@ QList<imported_tab> firefox_tabs(const QString &session_file, QString *error = n
 // can be tested without a real profile.
 QList<imported_tab> parse_firefox_session(const QByteArray &json, QString *error = nullptr);
 
+// --- Chromium -------------------------------------------------------------
+//
+// Chromium does not write a document; it writes a **command log**. The file is
+// `SNSS` plus a version, then a run of records -- a uint16 length, a one-byte
+// command id, and a payload -- and the current set of tabs is what you get by
+// *replaying* them in order. There is no snapshot to read.
+//
+// Every constant and every payload layout below was taken from Chromium's own
+// source, which is vendored in this tree already because Qt WebEngine bundles
+// it (`components/sessions/core/`), and then checked against a live file. That
+// matters more here than for Firefox: this is versioned internal API with no
+// stability promise, so the parser reports the version it saw and refuses one
+// it does not know rather than guessing at a layout that has moved.
+//
+// Unlike the Firefox path there is **no reference implementation to compare
+// against** -- nothing else on a normal machine reads these files. So the suite
+// checks structure and plausibility, which is weaker, and says so.
+
+QString chromium_profile(const QString &root = QString());
+// The most recently written `Sessions/Session_*`, or empty.
+QString chromium_session_path(const QString &profile);
+
+// Replay a session file into the tabs it leaves open.
+QList<imported_tab> chromium_tabs(const QString &session_file, QString *error = nullptr);
+// The same, over bytes already in hand, so the replay is testable without a
+// Chromium profile.
+QList<imported_tab> replay_snss(const QByteArray &file, QString *error = nullptr);
+
 }  // namespace session_import

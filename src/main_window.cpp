@@ -129,9 +129,16 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// differ, so this connection does not fire every time Firefox saves a
 	// scroll position.
 	m_fx_mirror = new session_mirror(this);
+	m_cr_mirror = new session_mirror(this);
+	connect(m_cr_mirror, &session_mirror::tabs_changed, this,
+	        [this](const QList<session_import::imported_tab> &tabs) {
+		show_mirror_tabs("chromium", "Chromium", tabs, /*from_poll=*/true);
+	});
+	connect(m_cr_mirror, &session_mirror::failed, this,
+	        [this](const QString &why) { m_status->showMessage(why, 8000); });
 	connect(m_fx_mirror, &session_mirror::tabs_changed, this,
 	        [this](const QList<session_import::imported_tab> &tabs) {
-		show_firefox_tabs(tabs, /*from_poll=*/true);
+		show_mirror_tabs("firefox", "Firefox", tabs, /*from_poll=*/true);
 	});
 	connect(m_fx_mirror, &session_mirror::failed, this,
 	        [this](const QString &why) { m_status->showMessage(why, 8000); });
@@ -690,6 +697,29 @@ QMenuBar *main_window::build_menu_bar() {
 	// Off unless asked for. Reading another program's files on a schedule is
 	// not something to start doing because the feature exists, and the label
 	// says what it costs rather than only what it gives.
+	QAction *impc = tools_menu->addAction("Import Tabs from &Chromium", this,
+	                                       [this] { import_chromium_tabs(); });
+	impc->setStatusTip("Replay Chromium's session log and show the tabs it "
+	                    "leaves open");
+	QAction *syncc = tools_menu->addAction("Keep &Chromium Tabs in Sync");
+	syncc->setCheckable(true);
+	syncc->setStatusTip("Re-read Chromium's session every 15 seconds; it flushes "
+	                     "about every 2.5 seconds, so this is the fresher of the two");
+	connect(syncc, &QAction::toggled, this, [this](bool on) {
+		if (!on) {
+			m_cr_mirror->stop();
+			m_status->showMessage("No longer following Chromium.", 5000);
+			return;
+		}
+		const QString path = session_import::chromium_session_path(
+			session_import::chromium_profile());
+		if (path.isEmpty()) {
+			m_status->showMessage("No Chromium session file to follow.", 8000);
+			return;
+		}
+		m_cr_mirror->start("chromium", path);
+	});
+
 	QAction *sync = tools_menu->addAction("&Keep Firefox Tabs in Sync");
 	sync->setCheckable(true);
 	sync->setStatusTip("Re-read Firefox's session every 15 seconds while it is "
@@ -706,7 +736,7 @@ QMenuBar *main_window::build_menu_bar() {
 			m_status->showMessage("No Firefox session file to follow.", 8000);
 			return;
 		}
-		m_fx_mirror->start(path);
+		m_fx_mirror->start("firefox", path);
 	});
 
 	QAction *kpg = tools_menu->addAction("&Generate Password", this, [this] {
@@ -1406,7 +1436,7 @@ void main_window::import_firefox_tabs() {
 		return;
 	}
 
-	show_firefox_tabs(tabs, /*from_poll=*/false);
+	show_mirror_tabs("firefox", "Firefox", tabs, /*from_poll=*/false);
 	m_status->showMessage(
 	    QString("Read %1 tabs from Firefox, as of %2. Drag one into your tree to "
 	             "keep it.")
@@ -1416,8 +1446,34 @@ void main_window::import_firefox_tabs() {
 
 // The mirror folder, from either route. Shared so a poll and a menu click
 // cannot drift into building the tree two different ways.
-void main_window::show_firefox_tabs(const QList<session_import::imported_tab> &tabs,
-                                     bool from_poll) {
+void main_window::import_chromium_tabs() {
+	const QString profile = session_import::chromium_profile();
+	const QString path    = session_import::chromium_session_path(profile);
+	if (path.isEmpty()) {
+		m_status->showMessage(profile.isEmpty()
+		                          ? "No Chromium profile found."
+		                          : "That Chromium profile has no session file.",
+		                      8000);
+		return;
+	}
+	QString error;
+	const QList<session_import::imported_tab> tabs =
+		session_import::chromium_tabs(path, &error);
+	if (tabs.isEmpty()) {
+		m_status->showMessage(error.isEmpty() ? "No open tabs found." : error, 8000);
+		return;
+	}
+	show_mirror_tabs("chromium", "Chromium", tabs, /*from_poll=*/false);
+	m_status->showMessage(
+	    QString("Replayed %1 tabs from Chromium, as of %2. Drag one into your "
+	             "tree to keep it.")
+	        .arg(tabs.size())
+	        .arg(QFileInfo(path).lastModified().toString("HH:mm")), 12000);
+}
+
+void main_window::show_mirror_tabs(const QString &source, const QString &label,
+                                    const QList<session_import::imported_tab> &tabs,
+                                    bool from_poll) {
 	QList<node *> nodes;
 	for (const session_import::imported_tab &t : tabs) {
 		node *n = new node;
@@ -1426,7 +1482,7 @@ void main_window::show_firefox_tabs(const QList<session_import::imported_tab> &t
 		// it is on screen -- so an id that collided with a real tab's would make
 		// `node_by_id` answer with somebody else's session, and that lookup is
 		// what the lifecycle and the AI payload both use.
-		n->id        = QString("fx-%1").arg(nodes.size());
+		n->id        = QString("%1-%2").arg(source).arg(nodes.size());
 		n->type      = node_type::unopened_tab;
 		n->title     = t.title;
 		n->url       = t.url;
@@ -1434,8 +1490,9 @@ void main_window::show_firefox_tabs(const QList<session_import::imported_tab> &t
 		n->last_seen = n->created;
 		nodes << n;
 	}
-	m_model->replace_mirror("firefox",
-	                         QString("Firefox (%1 tabs)").arg(nodes.size()), nodes);
+	m_model->replace_mirror(source,
+	                         QString("%1 (%2 tabs)").arg(label).arg(nodes.size()),
+	                         nodes);
 	// Expanding the whole tree is right for a menu click and wrong for a
 	// background refresh: it would fold the user's folders open again every
 	// time Firefox opened a tab. The row signals already leave everything else
@@ -1444,7 +1501,7 @@ void main_window::show_firefox_tabs(const QList<session_import::imported_tab> &t
 		m_tree->expandAll();
 	else
 		m_status->showMessage(
-		    QString("Firefox now has %1 tabs open.").arg(nodes.size()), 4000);
+		    QString("%1 now has %2 tabs open.").arg(label).arg(nodes.size()), 4000);
 }
 
 void main_window::edit_node_properties(node *n) {

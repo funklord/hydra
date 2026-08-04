@@ -5,6 +5,11 @@
 #include <lz4.h>
 #endif
 
+#include <QFileInfo>
+#include <QHash>
+#include <QSet>
+#include <QPair>
+#include <algorithm>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -277,6 +282,260 @@ QList<imported_tab> firefox_tabs(const QString &session_file, QString *error) {
 	if (json.isEmpty())
 		return {};
 	return parse_firefox_session(json, error);
+}
+
+
+// --- Chromium -------------------------------------------------------------
+
+namespace {
+
+// From components/sessions/core/command_storage_backend.cc.
+constexpr qint32 k_snss_signature = 0x53534E53;   // 'SNSS' little-endian
+constexpr qint32 k_version_plain  = 1;
+constexpr qint32 k_version_marker = 3;            // what Chromium writes today
+
+// From components/sessions/core/session_service_commands.cc. Only the ones this
+// needs: a tab's identity, where it lives, which entry of its history it is on,
+// and whether it has gone away.
+constexpr quint8 k_cmd_set_tab_window            = 0;
+constexpr quint8 k_cmd_set_tab_index_in_window   = 2;
+constexpr quint8 k_cmd_update_tab_navigation     = 6;
+constexpr quint8 k_cmd_set_selected_nav_index    = 7;
+constexpr quint8 k_cmd_tab_closed                = 16;
+constexpr quint8 k_cmd_window_closed             = 17;
+
+// A reader over a command payload that cannot walk off the end. Chromium's
+// `base::Pickle` writes an int as four bytes and a string as a length followed
+// by its bytes padded up to four, and every accessor here refuses rather than
+// reads past `m_end`.
+class payload_reader {
+public:
+	payload_reader(const char *data, int size) : m_p(data), m_end(data + size) {}
+	bool ok() const { return m_ok; }
+	qint32 read_int() {
+		if (!m_ok || m_end - m_p < 4) { m_ok = false; return 0; }
+		qint32 v;
+		memcpy(&v, m_p, 4);
+		m_p += 4;
+		return v;
+	}
+	QString read_string() {
+		const qint32 n = read_int();
+		if (!m_ok || n < 0 || m_end - m_p < n) { m_ok = false; return {}; }
+		const QString s = QString::fromUtf8(m_p, n);
+		m_p += (n + 3) & ~3;   // padded to four
+		if (m_p > m_end) m_ok = false;
+		return s;
+	}
+	QString read_string16() {
+		const qint32 n = read_int();   // a count of characters, not bytes
+		if (!m_ok || n < 0 || (m_end - m_p) / 2 < n) { m_ok = false; return {}; }
+		const QString s = QString::fromUtf16(
+			reinterpret_cast<const char16_t *>(m_p), n);
+		m_p += (2 * n + 3) & ~3;
+		if (m_p > m_end) m_ok = false;
+		return s;
+	}
+private:
+	const char *m_p;
+	const char *m_end;
+	bool m_ok = true;
+};
+
+struct replay_tab {
+	qint32  window = 0;
+	int     index_in_window = -1;
+	qint32  selected = -1;
+	QHash<qint32, QPair<QString, QString>> navigations;   // index -> (url, title)
+	int     first_seen = 0;   // to keep a stable order when nothing else says
+};
+
+}  // namespace
+
+QList<imported_tab> replay_snss(const QByteArray &file, QString *error) {
+	auto fail = [&](const QString &why) {
+		if (error)
+			*error = why;
+		return QList<imported_tab>();
+	};
+	if (file.size() < 8)
+		return fail("session file is too short to have a header");
+	qint32 sig = 0, version = 0;
+	memcpy(&sig, file.constData(), 4);
+	memcpy(&version, file.constData() + 4, 4);
+	if (sig != k_snss_signature)
+		return fail("not a Chromium session file (bad signature)");
+	// Versions 2 and 4 are the encrypted ones, and there is no key here to read
+	// them with. Saying which version was found beats "could not read it": this
+	// is internal API and the number is the first thing worth knowing when it
+	// stops working.
+	if (version != k_version_plain && version != k_version_marker)
+		return fail(QString("unsupported Chromium session version %1 "
+		                     "(encrypted, or newer than this reader)").arg(version));
+
+	QHash<qint32, replay_tab> tabs;
+	QSet<qint32> closed_windows;
+	int seen = 0;
+	int pos = 8;
+	while (pos + 2 <= file.size()) {
+		quint16 size = 0;
+		memcpy(&size, file.constData() + pos, 2);
+		pos += 2;
+		// A truncated tail is normal, not corruption: this file is being
+		// written by a running browser and the last record may be half there.
+		if (size == 0 || pos + size > file.size())
+			break;
+		const quint8 id = quint8(file.at(pos));
+		const char *body = file.constData() + pos + 1;
+		const int body_size = size - 1;
+		pos += size;
+
+		payload_reader r(body, body_size);
+		switch (id) {
+		case k_cmd_update_tab_navigation: {
+			// A pickle: its own uint32 size, then the tab id, then the entry.
+			payload_reader p(body, body_size);
+			p.read_int();                       // pickle payload size
+			const qint32 tab = p.read_int();
+			const qint32 index = p.read_int();
+			const QString url = p.read_string();
+			const QString title = p.read_string16();
+			if (!p.ok() || url.isEmpty())
+				break;
+			replay_tab &t = tabs[tab];
+			if (t.first_seen == 0)
+				t.first_seen = ++seen;
+			// Last writer wins: a tab that navigated twice at the same index
+			// has been rewritten, and the later record is where it is now.
+			t.navigations.insert(index, { url, title });
+			break;
+		}
+		case k_cmd_set_selected_nav_index: {
+			const qint32 tab = r.read_int();
+			const qint32 index = r.read_int();
+			if (!r.ok())
+				break;
+			replay_tab &t = tabs[tab];
+			if (t.first_seen == 0)
+				t.first_seen = ++seen;
+			t.selected = index;
+			break;
+		}
+		case k_cmd_set_tab_window: {
+			const qint32 window = r.read_int();
+			const qint32 tab = r.read_int();
+			if (!r.ok())
+				break;
+			replay_tab &t = tabs[tab];
+			if (t.first_seen == 0)
+				t.first_seen = ++seen;
+			t.window = window;
+			break;
+		}
+		case k_cmd_set_tab_index_in_window: {
+			const qint32 tab = r.read_int();
+			const qint32 index = r.read_int();
+			if (!r.ok())
+				break;
+			tabs[tab].index_in_window = index;
+			break;
+		}
+		case k_cmd_tab_closed: {
+			// The struct's first field is the id; whatever padding follows it
+			// is not read, so this does not depend on the compiler's layout.
+			const qint32 tab = r.read_int();
+			if (r.ok())
+				tabs.remove(tab);
+			break;
+		}
+		case k_cmd_window_closed: {
+			const qint32 window = r.read_int();
+			if (r.ok())
+				closed_windows.insert(window);
+			break;
+		}
+		default:
+			break;   // everything else is state this does not need
+		}
+	}
+
+	// What survived, in the order the browser would show it.
+	QList<QPair<QPair<qint32, int>, imported_tab>> ordered;
+	for (auto it = tabs.constBegin(); it != tabs.constEnd(); ++it) {
+		const replay_tab &t = it.value();
+		if (closed_windows.contains(t.window))
+			continue;
+		if (t.navigations.isEmpty())
+			continue;
+		// The entry the tab is actually on. Falling back to the highest index
+		// rather than the first: a tab whose selected index was never recorded
+		// is one that has not navigated since the log began, and its latest
+		// entry is the better guess at what is on screen.
+		qint32 idx = t.selected;
+		if (!t.navigations.contains(idx)) {
+			idx = -1;
+			for (auto n = t.navigations.constBegin(); n != t.navigations.constEnd(); ++n)
+				idx = qMax(idx, n.key());
+		}
+		const auto nav = t.navigations.value(idx);
+		imported_tab tab;
+		tab.url    = nav.first;
+		tab.title  = nav.second.isEmpty() ? nav.first : nav.second;
+		tab.window = int(t.window);
+		if (tab.url.isEmpty())
+			continue;
+		ordered << qMakePair(qMakePair(t.window,
+			t.index_in_window >= 0 ? t.index_in_window : t.first_seen), tab);
+	}
+	std::sort(ordered.begin(), ordered.end(),
+	          [](const auto &a, const auto &b) { return a.first < b.first; });
+
+	QList<imported_tab> out;
+	for (const auto &o : ordered)
+		out << o.second;
+	if (out.isEmpty() && error)
+		*error = "no open tabs found in the Chromium session";
+	return out;
+}
+
+QString chromium_profile(const QString &root_in) {
+	// Chromium and Chrome keep the same layout in different directories, and a
+	// machine may have either, both, or neither.
+	const QStringList roots = root_in.isEmpty()
+		? QStringList{ QDir::homePath() + "/.config/chromium",
+		                QDir::homePath() + "/.config/google-chrome" }
+		: QStringList{ root_in };
+	for (const QString &root : roots) {
+		const QString def = root + "/Default";
+		if (QFile::exists(def + "/Preferences") || QDir(def + "/Sessions").exists())
+			return def;
+	}
+	return QString();
+}
+
+QString chromium_session_path(const QString &profile) {
+	if (profile.isEmpty())
+		return QString();
+	QDir dir(profile + "/Sessions");
+	if (!dir.exists())
+		return QString();
+	// The newest `Session_*`. Chromium keeps more than one and the number in
+	// the name is a timestamp, but sorting by mtime asks the question directly
+	// rather than depending on how that number is formed.
+	QFileInfoList files = dir.entryInfoList({ "Session_*" }, QDir::Files, QDir::Time);
+	return files.isEmpty() ? QString() : files.first().absoluteFilePath();
+}
+
+QList<imported_tab> chromium_tabs(const QString &session_file, QString *error) {
+	QFile f(session_file);
+	if (!f.open(QIODevice::ReadOnly)) {
+		if (error)
+			*error = "cannot read " + session_file;
+		return {};
+	}
+	const QByteArray raw = f.readAll();
+	f.close();
+	return replay_snss(raw, error);
 }
 
 }  // namespace session_import

@@ -403,10 +403,51 @@ mozlz4 file rewritten underneath it: an untouched file reports nothing, a
 rewritten file holding the *same* tabs reports nothing, and a genuinely
 different tab set reports exactly once.
 
-**Not done: Chromium.** Its sessions are an SNSS command log that has to be
-*replayed* to reconstruct state, the format is versioned internal API, and the
-flush interval is ~2.5 s from its own source — fresher than Firefox's and
-considerably more work to read.
+### Chromium, which writes a command log rather than a document
+
+**There is no snapshot to read.** The file is `SNSS` and a version, then a run
+of records — a uint16 length, a one-byte command id, a payload — and the set of
+open tabs is what you get by *replaying* them in order. A tab that navigated
+twenty times is twenty records; a tab that was closed is still all of them,
+followed by a close.
+
+**Every constant came from Chromium's own source, which is already in this
+tree**: Qt WebEngine bundles Chromium, so `components/sessions/core/` is sitting
+in the Qt sources this project builds against. The container framing is
+`command_storage_backend.cc`, the ids are `session_service_commands.cc`, and the
+navigation payload is a `base::Pickle` whose field order is
+`serialized_navigation_entry.cc`. Each was then checked against a live file
+rather than trusted.
+
+The layouts, since they are the part that rots: a navigation is a pickle —
+its own uint32 size, then `int32 tab_id`, `int32 index`, a length-prefixed utf-8
+url padded to four bytes, a length-prefixed **utf-16** title whose length counts
+*characters*. The others are raw structs, not pickles: selected-index and
+set-tab-window are two `int32`s, and the close commands lead with the id, which
+is all this reads — so nothing here depends on how a compiler padded them.
+
+**The version is refused by number when it is not one this knows.** Versions 2
+and 4 are the encrypted variants and there is no key here; anything higher is
+newer than this reader. Saying *which* version was found beats "could not read
+it", because this is internal API with no stability promise and the number is
+the first thing worth knowing when it stops working.
+
+**Replayed live: 129 tabs, every one a valid address with a label.**
+
+**The honest gap: there is nothing to compare against.** The Firefox decoder
+could be checked byte for byte against python's `lz4.block`, and nothing else on
+a normal machine reads an SNSS file. So the suite checks structure and
+plausibility — a parser with the offsets wrong produces mojibake and fragments
+of neighbouring fields, not 129 valid urls — and it builds a log of its own to
+drive the properties only a log has: that a tab sits at the entry it *selected*
+rather than the last one written, that a tab closed later in the log does not
+come back however many navigations it accumulated first, that closing a window
+takes its tabs, and that a half-written final record is normal rather than
+corruption, because the file is being appended to by a running browser.
+
+**And it is the fresher of the two.** `command_storage_manager.cc` sets
+`kSaveDelay` to 2500 ms, against a Firefox interval this project could not read
+off disk at all. The harder format is the more current one.
 
 ## The icon## The icon## The icon
 
