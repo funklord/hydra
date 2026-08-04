@@ -4151,6 +4151,14 @@ On desktop the same action goes to the system's default handler, which for an
 http address is usually another browser. That is a smaller feature and it says
 so rather than pretending to be the Android behaviour.
 
+**Driven on the desktop, and proved by the other application fetching it.**
+`try_handoff` serves the address it hands over, so the check is that a second
+client comes and asks for it — `QDesktopServices::openUrl` returning true would
+prove almost nothing, since it answers true for a great many things it has
+merely passed to a launcher. One request arrives after the handoff, from the
+desktop's own default browser. `about:blank` is refused rather than handed over,
+because it means nothing outside this browser.
+
 **What is not verified.** The emulator has no VLC, NewPipe or YouTube app, so
 "the right app takes it and keeps playing with the screen off" is checkable only
 on a real phone. What is checked here is that the entry exists and that the C++
