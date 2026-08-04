@@ -4,6 +4,7 @@
 #include "annoyance_log.h"
 
 #include <QDialog>
+#include <QStringList>
 
 class QListWidget;
 
@@ -35,6 +36,28 @@ public:
 
 	// The machine-readable form, for `annoyance_log::set_outcome`.
 	static QString name_of(action a);
+
+	// One row per *shape*, in the order the shapes were first seen, with how
+	// many addresses fell into each.
+	//
+	// **For display only. The report keeps every address**, because that is the
+	// corpus a proposed rule gets simulated against and collapsing it would
+	// throw away the evidence. This is about what a person reads: measured on a
+	// real site, three of five suspects were one analytics endpoint with
+	// different query strings, which is three lines saying the same thing to
+	// somebody deciding what to do about it.
+	//
+	// "Same" here means *same endpoint*: the query dropped entirely, and
+	// `site_extractor::shape_of` asked about the rest so that digit runs and
+	// long mixed-case path tokens still fold. That is deliberately coarser than
+	// shape_of alone, which keeps query keys -- right for the extractor, where
+	// two addresses with different keys are different questions, and wrong
+	// here, where they are the same beacon reported twice.
+	struct group {
+		QString url;     // the first address seen with this shape
+		int     count;   // how many addresses share it
+	};
+	static QList<group> collapse_by_shape(const QStringList &urls);
 
 private:
 	action       m_chosen = action::recorded;

@@ -5708,10 +5708,8 @@ Two things that run showed, neither of them a defect:
   the rule proposer.
 - **Three of the five are the same endpoint** with different query strings.
   Harmless for proposing a rule, since the simulation runs against the whole
-  corpus, but as three lines in a dialog somebody is reading it is noise.
-  Collapsing near-identical addresses by shape *for display only* would make
-  the list easier to act on. Not done: it changes how evidence is presented,
-  which is a decision rather than a fix.
+  corpus, but as three lines in a dialog somebody is reading it is noise. Now
+  collapsed — see below, including the version of it that did not work.
 
 The earlier run against a news front page returned zero suspects, and that is a
 legitimate answer rather than a failure — a front page loaded once without
@@ -5730,6 +5728,40 @@ worth having later — a confirmation that a *newly applied filter rule did not
 break the page*, since over-blocking is silent and nothing here would otherwise
 find out — and that is a different feature with a different trigger, offered
 only when there is something to confirm.
+
+### Collapsing the suspect list, and the first answer that collapsed nothing
+
+The dialog now shows one row per *endpoint*, with `\u00d7N` when a row stands for
+more than one address and a tooltip saying so. The report keeps every address —
+collapsing is for reading, and the full list is the corpus a proposed rule gets
+simulated against.
+
+**The obvious implementation does not work, and the measurement is why.**
+`site_extractor::shape_of` is this project's shared answer to "same shape", so
+grouping by it was the first version and reusing it was the right instinct: one
+definition of sameness rather than two. It collapsed nothing. `shape_of` drops
+query *values* while keeping their *keys*, because for the extractor two
+addresses with different keys are different questions — and kisskh's three calls
+to one analytics endpoint carry **41, 42 and 44 different keys**. Three shapes,
+three rows, no improvement, in exactly the case the change existed to fix.
+
+So the query is dropped entirely and `shape_of` is asked about the rest. That
+keeps the hard part where it already lives: digit runs and long mixed-case path
+tokens still fold, so a beacon whose payload is in the *path* —
+`beacon.min.js/v4513226cdae…` — collapses with the next one, which dropping the
+query alone would not have managed.
+
+Two notions of "same address" now exist on purpose, which is worth naming rather
+than leaving to be discovered: **shape_of is for deciding what to fetch, and is
+right to care about query keys; this is for deciding what to show, and is right
+not to.** Coarser, and only ever applied to display.
+
+Checked against the captured addresses rather than invented ones: five real
+suspects read as three endpoints, the analytics row standing for its three
+calls, and two Cloudflare beacons differing only by a path token folding into
+one. Had the test been written with plausible-looking URLs instead of the ones
+the site actually sent, the first implementation would have passed it — the
+three analytics calls look identical until you count their query keys.
 
 ### Report-only drivers are not failures
 

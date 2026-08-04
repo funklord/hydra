@@ -1,8 +1,9 @@
 // The "something got through here" log: what it keeps and what a round trip
 // through disk does to it.
 #include "annoyance_log.h"
+#include "annoyed_dialog.h"
 
-#include <QCoreApplication>
+#include <QApplication>
 #include <QDir>
 #include <QFile>
 #include <cstdio>
@@ -26,7 +27,7 @@ static annoyance_report make(const QString &host, const QStringList &suspects) {
 
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
-	QCoreApplication app(argc, argv);
+	QApplication app(argc, argv);
 
 	section("filing a report");
 	{
@@ -119,6 +120,62 @@ int main(int argc, char **argv) {
 		check(!log.load(QDir::temp().filePath("hydra-no-such-annoyance.ini")),
 		      "loading a file that does not exist says so");
 		check(log.is_empty(), "and leaves nothing behind");
+	}
+
+	section("collapsing a suspect list into something readable");
+	{
+		// **Real addresses, from the kisskh capture.** The three analytics calls
+		// are the case this exists for, and they are not as similar as they look:
+		// their query strings carry 41, 42 and 44 *different keys*. An earlier
+		// version grouped by `site_extractor::shape_of`, which keeps query keys,
+		// so it saw three shapes and collapsed nothing at all.
+		const QStringList suspects = {
+			"https://region1.analytics.google.com/g/collect?v=2&tid=G-R3CRN9FY5Q"
+			"&gtm=45je67u0&_p=1785782589217&_gaz=1&gcd=13l3l3l2l1l1&npa=1",
+			"https://region1.analytics.google.com/g/collect?v=2&tid=G-R3CRN9FY5Q"
+			"&gtm=45je67u0&_p=1785782589217&gcd=13l3l3l2l1l1&npa=1&ibt=1",
+			"https://region1.analytics.google.com/g/collect?v=2&tid=G-R3CRN9FY5Q"
+			"&gtm=45je67u0&_p=1785782589217&gcd=13l3l3l2l1l1&npa=1&ibt=1&ngs=1",
+			"https://static.cloudflareinsights.com/beacon.min.js/"
+			"v4513226cdae34746b4dedf0b4dfa099e1781791509496",
+			"https://www.google.se/ads/ga-audiences?v=1&t=sr&tid=G-R3CRN9FY5Q",
+		};
+		const auto groups = annoyed_dialog::collapse_by_shape(suspects);
+		check(groups.size() == 3,
+		      QString("five addresses read as three endpoints (%1)")
+		          .arg(groups.size()));
+		if (groups.size() == 3) {
+			check(groups[0].count == 3,
+			      QString("the analytics endpoint stands for its three calls (%1)")
+			          .arg(groups[0].count));
+			check(groups[1].count == 1 && groups[2].count == 1,
+			      "and the other two stand for themselves");
+			check(groups[0].url.contains("g/collect"),
+			      "the row shows the first address seen, not a reconstruction");
+		}
+
+		// The path-token case, which is why the query is dropped *and*
+		// `shape_of` is still asked about the rest: two beacons whose payload is
+		// in the path, not the query.
+		const auto beacons = annoyed_dialog::collapse_by_shape({
+			"https://static.cloudflareinsights.com/beacon.min.js/"
+			"v4513226cdae34746b4dedf0b4dfa099e1781791509496",
+			"https://static.cloudflareinsights.com/beacon.min.js/"
+			"v9922117bbcf01122a9ffe1234567890abcdef1234567890",
+		});
+		check(beacons.size() == 1 && beacons[0].count == 2,
+		      QString("two beacons differing only by a path token fold together (%1)")
+		          .arg(beacons.size()));
+
+		// Order is first-seen, so the list does not reshuffle itself between
+		// reports of the same page.
+		const auto order = annoyed_dialog::collapse_by_shape(
+		    { "https://b.test/two", "https://a.test/one", "https://b.test/two" });
+		check(order.size() == 2 && order[0].url.contains("b.test"),
+		      "groups keep the order their shapes first appeared in");
+
+		check(annoyed_dialog::collapse_by_shape({}).isEmpty(),
+		      "and nothing collapses to nothing");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

@@ -59,8 +59,10 @@ add_executable(test_replay test_replay.cpp
     ${H}/network_fetcher.cpp)
 target_link_libraries(test_replay PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
 
-add_executable(test_annoyance test_annoyance.cpp ${H}/annoyance_log.cpp)
-target_link_libraries(test_annoyance PRIVATE Qt6::Core Qt6::Test)
+add_executable(test_annoyance test_annoyance.cpp ${H}/annoyance_log.cpp
+    ${H}/annoyed_dialog.cpp ${H}/site_extractor.cpp ${H}/extractor_helpers.cpp
+    ${H}/stream_probe.cpp ${H}/network_fetcher.cpp)
+target_link_libraries(test_annoyance PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
 target_include_directories(test_annoyance PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test_fetcher test_fetcher.cpp ${H}/network_fetcher.cpp

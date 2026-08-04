@@ -1,12 +1,46 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "annoyed_dialog.h"
 
+#include "site_extractor.h"
+
 #include <QDialogButtonBox>
 #include <QLabel>
+#include <QHash>
 #include <QListWidget>
 #include <QPushButton>
 #include <QUrl>
 #include <QVBoxLayout>
+
+QList<annoyed_dialog::group> annoyed_dialog::collapse_by_shape(
+		const QStringList &urls) {
+	QList<group> out;
+	QHash<QString, int> at;   // shape -> index into `out`
+	for (const QString &u : urls) {
+		// **The query goes, and that is the whole correction.**
+		// `site_extractor::shape_of` keeps query *keys*, because for the
+		// extractor two addresses with different keys are different questions.
+		// For reading a suspect list they are the same beacon: measured on
+		// kisskh, three calls to one analytics endpoint carried 41, 42 and 44
+		// keys, so shape_of saw three shapes and collapsed nothing -- which was
+		// the exact case this exists to fix.
+		//
+		// So the query is dropped first and `shape_of` is still asked about the
+		// rest, which is where the hard part lives: it collapses digit runs and
+		// long mixed-case path tokens, so a beacon whose *path* carries the
+		// payload still folds together.
+		QUrl endpoint = QUrl(u);
+		endpoint.setQuery(QString());
+		const QString shape = site_extractor::shape_of(endpoint);
+		const auto it = at.constFind(shape);
+		if (it != at.constEnd()) {
+			++out[it.value()].count;
+			continue;
+		}
+		at.insert(shape, int(out.size()));
+		out.append(group{ u, 1 });
+	}
+	return out;
+}
 
 QString annoyed_dialog::name_of(action a) {
 	switch (a) {
@@ -40,8 +74,21 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 
 	m_suspects = new QListWidget(this);
 	m_suspects->setObjectName("suspects");
-	for (const QString &u : report.suspects)
-		m_suspects->addItem(u);
+	for (const group &g : collapse_by_shape(report.suspects)) {
+		auto *row = new QListWidgetItem(
+		    g.count > 1 ? QString("%1        \u00d7%2").arg(g.url).arg(g.count)
+		                : g.url,
+		    m_suspects);
+		// The collapsing is for reading; the addresses are still the evidence,
+		// so the row says how many it stands for and does not pretend the rest
+		// are gone.
+		row->setToolTip(g.count > 1
+		                    ? QString("%1\n\nand %2 more address%3 of the same "
+		                               "shape")
+		                          .arg(g.url).arg(g.count - 1)
+		                          .arg(g.count == 2 ? "" : "es")
+		                    : g.url);
+	}
 	if (report.suspects.isEmpty()) {
 		// Said plainly rather than left blank. An empty list reads as "nothing
 		// was captured"; this is the more useful statement that the network
