@@ -5124,6 +5124,83 @@ about writing two clauses is exactly such a change and remains unmeasured. What
 the corpus does is make sure that when those runs finally happen, they are the
 only ones that ever have to.
 
+### The two-clause rule, measured — and the regression it caused
+
+Both captures, five runs each, through `tests/live/measure.sh` at `nice 19` on a
+machine sitting at load 85. The answer is **no**, and one of the runs found
+something worse than a null result.
+
+| | before | after |
+|---|---|---|
+| dramafren | 3 of 5 | 2 of 5 (one run never answered) |
+| kisskh | 0 of 5 | 0 of 5 |
+
+**The `seen` field is being used**, which it never was: five of the nine replies
+that came back test it, against zero in every earlier run. That part worked. The
+rest did not — one reply in nine carries both clauses, so the rule asking for two
+tests mostly produced one.
+
+**And a failure mode appeared that no earlier run had ever produced.** Four of
+the nine answered runs picked *the page's own address*, a refusal that occurs
+nowhere in the fifteen replies recorded before today. The cause is mine and it is
+plainly readable in what they wrote:
+
+    if (request.seen === 1 && request.type === 'other') { ... }
+
+Row 0 of the table is the page itself: fetched once, type `other`. So the first
+thing that filter matches is the document, every time. The rule said `seen === 1`
+was how to find a manifest; it is equally true of the page, and `find()` returns
+the page first. The prompt now says so — `seen` narrows a search and never
+decides one, and the page's own address is to be skipped — but that is a fix
+made after the measurement, not measured.
+
+Nothing was accepted wrongly: the gate refused all four. The cost was four
+attempts spent on an answer the prompt had aimed at the wrong row.
+
+**This is what the corpus is for.** All nine replies are in `evidence/replies`
+with the verdict each got; the corpus is 24 now and `make replay` reproduces
+every one. The next change to the gate is measured for free, and the next change
+to the prompt starts from a baseline that is written down rather than remembered.
+
+The honest summary of the day's prompt work: the field that was described but
+never wired is now wired and used, the rule that was supposed to exploit it
+misfires, and the evidence for both is on disk instead of in a log that will be
+gone tomorrow.
+
+### The menus, arranged the way people already expect
+
+Tools held twenty items in the order they were built — Downloads, an AI parser,
+a video capture, Settings, KeePassXC, then two importers with a sync toggle
+wedged between them and an "open in another app" in the middle of the pair.
+There was no Edit menu at all, so Undo lived at the bottom of Tools and rename
+and delete lived nowhere but a right-click. Every addition had a reason. The
+order was nobody's decision.
+
+Rearranged to the conventions desktop software settled on between about 1995 and
+2010: **File, Edit, View, Go, Tools, Help**; Quit last in File, About last in
+Help, Settings last in Tools under a separator; related items in groups of a few.
+
+- **File** gained New Tab, New Folder, Open Location and an **Import** submenu
+  holding both importers, which the flat list had made impossible — they were
+  four items apart.
+- **Edit** is new: Undo at the top where three decades of software has put it,
+  then Copy Address, Duplicate, Rename, Delete, Select All, Find in Tree. Rename
+  and Delete had no menu at all before this.
+- **Tools** went from twenty flat items to ten, with **Media**, **Passwords** and
+  **Follow Other Browsers** submenus. The two sync toggles are together for the
+  first time; they are the same feature twice and were four items apart, so
+  turning both on meant finding the second by reading.
+- The **context menu** put Delete *below* Properties, which is the irreversible
+  item where every file manager of the period puts the harmless one. Delete is
+  now above it and Properties is last, on its own.
+
+`try_menus` asserts all of it — the bar's order, the three strong tails, that no
+menu exceeds twelve items, that both importers sit together, and that Delete
+precedes Properties in the context menu. 22 checks. The rules are written as
+assertions rather than as a comment because this is a list that rots by
+appending, and it will stop being anyone's decision again the moment it is not
+checked.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

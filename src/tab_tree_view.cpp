@@ -78,19 +78,31 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 		menu.addSeparator();
 	}
 
+	// **Ordered the way a file manager's context menu has been since Explorer:**
+	// open at the top, then the things you do *with* the item, then the things
+	// you make, then the destructive one, and Properties last on its own.
+	//
+	// Delete used to sit *below* Properties, which puts the irreversible action
+	// where three decades of muscle memory expects the harmless one.
 	QAction *copy_url_a = nullptr, *dup_a = nullptr, *external_a = nullptr;
 	if (n && !n->url.isEmpty()) {
 		copy_url_a = menu.addAction("&Copy Address");
 		external_a = menu.addAction("Open in &Another App…");
+		menu.addSeparator();
 	}
-	if (n)
-		dup_a = menu.addAction("&Duplicate");
 
 	QAction *tab_a    = menu.addAction("New &Tab Here");
 	QAction *folder_a = menu.addAction("New &Folder Here");
-	menu.addSeparator();
-	QAction *props_a = n ? menu.addAction("&Properties…") : nullptr;
-	QAction *del_a   = n ? menu.addAction("&Delete") : nullptr;
+	if (n)
+		dup_a = menu.addAction("D&uplicate");
+
+	QAction *del_a = nullptr, *props_a = nullptr;
+	if (n) {
+		menu.addSeparator();
+		del_a = menu.addAction("&Delete");
+		menu.addSeparator();
+		props_a = menu.addAction("P&roperties…");
+	}
 
 	QAction *chosen = menu.exec(viewport()->mapToGlobal(pos));
 	if (!chosen)

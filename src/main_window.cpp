@@ -70,6 +70,7 @@
 #include <QStatusBar>
 #include <QStyle>
 #include <QClipboard>
+#include <QGuiApplication>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -610,12 +611,65 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 }
 
 QMenuBar *main_window::build_menu_bar() {
+	// **Arranged the way desktop applications settled on between about 1995 and
+	// 2010**, because that is the arrangement people already know: File, Edit,
+	// View, Go, Tools, Help, in that order; the destructive and the rare below
+	// the common; Quit last in File and About last in Help; related items in
+	// separator-delimited groups of a few rather than one long list.
+	//
+	// The list this replaces had grown by appending. Tools held twenty items in
+	// the order they were built -- Downloads, then an AI parser, then a video
+	// capture, then Settings, then KeePassXC, then two importers with a sync
+	// toggle wedged between them and an "open in another app" in the middle of
+	// the pair. There was no Edit menu at all, so Undo lived at the bottom of
+	// Tools and rename and delete lived nowhere. Nothing was wrong with any one
+	// addition; the order was simply nobody's decision.
 	QMenuBar *menu = new QMenuBar(this);
 	// Keep the bar inside the window; this is an X11-only app and a platform
 	// menu bar would detach it from a widget we lay out ourselves.
 	menu->setNativeMenuBar(false);
 
+	// ---- File: make things, bring things in, write things out, leave --------
 	QMenu *file_menu = menu->addMenu("&File");
+	QAction *new_tab_act = file_menu->addAction("New &Tab", QKeySequence::AddTab,
+	                                            this, &main_window::new_tab);
+	new_tab_act->setStatusTip("Add an empty tab under the selected folder");
+	QAction *new_folder_act =
+	    file_menu->addAction("New &Folder", QKeySequence("Ctrl+Shift+N"), this,
+	                          &main_window::new_folder);
+	new_folder_act->setStatusTip("Add a folder under the selection");
+	file_menu->addSeparator();
+
+	QAction *loc_act = file_menu->addAction("Open &Location…",
+	                                         QKeySequence("Ctrl+L"), this, [this] {
+		if (m_address) {
+			m_address->setFocus(Qt::ShortcutFocusReason);
+			m_address->selectAll();
+		}
+	});
+	loc_act->setStatusTip("Type an address");
+	QAction *ext = file_menu->addAction("Open in &Another App…", this, [this] {
+		if (web_view_backend *v = current_view())
+			open_url_externally(v->url());
+		else
+			m_status->showMessage("No page is open.", 5000);
+	});
+	ext->setStatusTip("Hand this address to another application — on a phone "
+	                   "that is how audio keeps playing with the screen off");
+	file_menu->addSeparator();
+
+	// Both importers together, which is the one thing the flat list made
+	// impossible: they were separated by an unrelated action and a sync toggle.
+	QMenu *import_menu = file_menu->addMenu("&Import");
+	QAction *imp = import_menu->addAction("Tabs from &Firefox", this,
+	                                       [this] { import_firefox_tabs(); });
+	imp->setStatusTip("Read the tabs Firefox has open and show them in a folder "
+	                   "of their own");
+	QAction *impc = import_menu->addAction("Tabs from &Chromium", this,
+	                                        [this] { import_chromium_tabs(); });
+	impc->setStatusTip("Replay Chromium's session log and show the tabs it "
+	                    "leaves open");
+
 	QAction *save_act = file_menu->addAction("&Save Tree", QKeySequence::Save,
 	                                         this, &main_window::flush_tree);
 	save_act->setStatusTip("Write the canonical tree file now");
@@ -624,11 +678,64 @@ QMenuBar *main_window::build_menu_bar() {
 	                                         this, &QWidget::close);
 	quit_act->setStatusTip("Suspend live tabs, save, and exit");
 
-	QMenu *go_menu = menu->addMenu("&Go");
-	go_menu->addAction("&Back", QKeySequence::Back, this, &main_window::go_back);
-	go_menu->addAction("&Forward", QKeySequence::Forward, this, &main_window::go_forward);
-	go_menu->addAction("&Reload", QKeySequence::Refresh, this, &main_window::reload_page);
+	// ---- Edit: the menu this application did not have -----------------------
+	//
+	// Undo first, which is where three decades of software has put it. It was at
+	// the bottom of Tools, below four AI actions, under a name that only made
+	// sense if you already knew what had happened.
+	QMenu *edit_menu = menu->addMenu("&Edit");
+	// Ctrl+Shift+Z rather than Ctrl+Z, so this never steals undo from a focused
+	// text field in the page or the address bar.
+	m_undo_action = edit_menu->addAction("&Undo Reorganize",
+	                                      QKeySequence("Ctrl+Shift+Z"), this,
+	                                      &main_window::undo_reorganize);
+	m_undo_action->setEnabled(false);
+	m_undo_action->setStatusTip("Put the tree back the way it was before the "
+	                             "last accepted reorganization");
+	edit_menu->addSeparator();
 
+	QAction *copy_addr = edit_menu->addAction("&Copy Address",
+	                                           QKeySequence("Ctrl+Shift+C"), this,
+	                                           [this] {
+		if (node *n = selected_node())
+			if (!n->url.isEmpty())
+				QGuiApplication::clipboard()->setText(n->url);
+	});
+	copy_addr->setStatusTip("Copy the selected tab's address");
+	QAction *dup_act = edit_menu->addAction("D&uplicate", this, [this] {
+		if (node *n = selected_node())
+			m_model->duplicate_node(n);
+	});
+	dup_act->setStatusTip("Make a copy of the selection beside it");
+	edit_menu->addSeparator();
+
+	QAction *ren_act = edit_menu->addAction("&Rename…", QKeySequence(Qt::Key_F2),
+	                                         this, [this] {
+		if (node *n = selected_node())
+			m_tree->edit_properties(n);
+	});
+	ren_act->setStatusTip("Edit the selection's title, address and notes");
+	QAction *del_act = edit_menu->addAction("&Delete", QKeySequence::Delete, this,
+	                                         [this] {
+		if (node *n = selected_node())
+			m_model->remove_node(n);
+	});
+	del_act->setStatusTip("Remove the selection and everything inside it");
+	edit_menu->addSeparator();
+
+	QAction *all_act = edit_menu->addAction("Select &All", QKeySequence::SelectAll,
+	                                         this, [this] { m_tree->selectAll(); });
+	all_act->setStatusTip("Select every visible row");
+	QAction *find_act = edit_menu->addAction("&Find in Tree…",
+	                                          QKeySequence::Find, this, [this] {
+		if (m_search) {
+			m_search->setFocus(Qt::ShortcutFocusReason);
+			m_search->selectAll();
+		}
+	});
+	find_act->setStatusTip("Filter the tree by title or address");
+
+	// ---- View ---------------------------------------------------------------
 	QMenu *view_menu = menu->addMenu("&View");
 	QMenu *sort_menu = view_menu->addMenu("&Sort By");
 	// The sort actions drive the toolbar combo rather than the proxy directly,
@@ -647,44 +754,74 @@ QMenuBar *main_window::build_menu_bar() {
 	view_menu->addAction("&Expand All", this, [this] { m_tree->expandAll(); });
 	view_menu->addAction("&Collapse All", this, [this] { m_tree->collapseAll(); });
 	view_menu->addSeparator();
+	// Full screen last in View, which is where it has been since this menu had
+	// a Toolbars submenu above it.
 	m_kiosk_action = view_menu->addAction("&Kiosk Mode", QKeySequence(Qt::Key_F11),
 	                                       this, &main_window::toggle_kiosk);
 	m_kiosk_action->setCheckable(true);
 	m_kiosk_action->setStatusTip("Fullscreen chrome-less presentation; Esc returns");
 
+	// ---- Go -----------------------------------------------------------------
+	QMenu *go_menu = menu->addMenu("&Go");
+	go_menu->addAction("&Back", QKeySequence::Back, this, &main_window::go_back);
+	go_menu->addAction("&Forward", QKeySequence::Forward, this, &main_window::go_forward);
+	go_menu->addSeparator();
+	go_menu->addAction("&Reload", QKeySequence::Refresh, this, &main_window::reload_page);
+
+	// ---- Tools: grouped, with Settings last ---------------------------------
+	//
+	// Settings at the bottom under a separator is the strongest convention this
+	// menu has, and it was fourth from the top between a video capture and an
+	// AI parser.
 	QMenu *tools_menu = menu->addMenu("&Tools");
 	QAction *dl = tools_menu->addAction("&Downloads…", QKeySequence("Ctrl+J"),
 	                                     this, &main_window::open_downloads);
 	dl->setStatusTip("Show transfers in progress and finished");
-	QAction *learn = tools_menu->addAction("&Learn This Site…", this,
-	                                        &main_window::learn_this_site);
-	learn->setStatusTip("Ask for a parser that finds this site's stream, and "
-	                     "check it against what the page really requested");
-	m_capture_action = tools_menu->addAction("&Capture Playing Video", this,
+	tools_menu->addSeparator();
+
+	QMenu *media_menu = tools_menu->addMenu("&Media");
+	QAction *find = media_menu->addAction("&Find Media on This Page…", this,
+	                                       &main_window::find_media_with_ytdlp);
+	find->setStatusTip("Ask yt-dlp what the video on this page is");
+	m_capture_action = media_menu->addAction("&Capture Playing Video", this,
 	                                          &main_window::toggle_capture);
 	m_capture_action->setCheckable(true);
 	m_capture_action->setStatusTip("Record what this page plays, for sites where "
 	                                "no stream URL can be found");
-	QAction *find = tools_menu->addAction("&Find Media on This Page…", this,
-	                                       &main_window::find_media_with_ytdlp);
-	find->setStatusTip("Ask yt-dlp what the video on this page is");
-	QAction *prefs = tools_menu->addAction("&Settings…", this,
-	                                        &main_window::open_settings);
-	prefs->setStatusTip("Player, download folder and BitTorrent options");
-	tools_menu->addSeparator();
-	tools_menu->addAction("&Site Controls…", this, &main_window::open_site_controls);
-	QAction *kp = tools_menu->addAction("Connect to &KeePassXC…", this,
-	                                     &main_window::toggle_password_manager);
+	media_menu->addSeparator();
+	QAction *learn = media_menu->addAction("&Learn This Site…", this,
+	                                        &main_window::learn_this_site);
+	learn->setStatusTip("Ask for a parser that finds this site's stream, and "
+	                     "check it against what the page really requested");
+
+	// Everything KeePassXC in one place, in the order a person meets it: pair,
+	// use, unpair.
+	QMenu *pw_menu = tools_menu->addMenu("&Passwords");
+	QAction *kp = pw_menu->addAction("&Connect to KeePassXC…", this,
+	                                  &main_window::toggle_password_manager);
 	kp->setStatusTip(keepass_bridge::supported()
 	                     ? QStringLiteral("Pair with a running KeePassXC for autofill")
 	                     : keepass_bridge::unavailable_reason());
 	kp->setEnabled(keepass_bridge::supported());
+	// Generating is triggered from here rather than from the page. A page could
+	// be given a way to ask, and then a page could ask unprompted -- and a
+	// browser that hands out passwords because a script requested one is a
+	// browser with a new attack surface for no benefit. The shell asks, and the
+	// injected script puts the answer in the field that wanted it.
+	QAction *kpg = pw_menu->addAction("&Generate Password", this, [this] {
+		if (m_autofill)
+			m_autofill->request_generated_password(m_autofill->page_origin());
+	});
+	kpg->setStatusTip("Ask KeePassXC for a password and put it in this page's "
+	                   "new-password field");
+	kpg->setEnabled(keepass_bridge::supported());
+	pw_menu->addSeparator();
 	// A pairing that is kept between runs has to be removable between runs, and
 	// from here rather than from a keyring editor. It is the user's record of
 	// having let this program at their vault; storing it silently and offering
 	// no way back would be the wrong half of the feature to build.
-	QAction *kpf = tools_menu->addAction("&Forget KeePassXC Pairing", this,
-	                                      &main_window::forget_keepass_pairing);
+	QAction *kpf = pw_menu->addAction("&Forget Pairing", this,
+	                                   &main_window::forget_keepass_pairing);
 	kpf->setStatusTip(
 	    credential_store::available()
 	        ? QStringLiteral("Remove the stored pairing; KeePassXC will ask "
@@ -693,34 +830,32 @@ QMenuBar *main_window::build_menu_bar() {
 	// Enabled on whether there is one to forget, asked now rather than assumed.
 	kpf->setEnabled(keepass_bridge::supported() &&
 	                keepass_bridge::pairing_is_stored());
-	// Generating is triggered from here rather than from the page. A page could
-	// be given a way to ask, and then a page could ask unprompted -- and a
-	// browser that hands out passwords because a script requested one is a
-	// browser with a new attack surface for no benefit. The shell asks, and the
-	// injected script puts the answer in the field that wanted it.
-	tools_menu->addSeparator();
-	QAction *imp = tools_menu->addAction("Import Tabs from &Firefox", this,
-	                                      [this] { import_firefox_tabs(); });
-	imp->setStatusTip("Read the tabs Firefox has open and show them in a folder "
-	                   "of their own");
+
+	// The two mirrors together. They are the same feature twice and were four
+	// items apart, so turning both on meant finding the second one by reading.
+	QMenu *follow_menu = tools_menu->addMenu("Follow Other &Browsers");
 	// Off unless asked for. Reading another program's files on a schedule is
 	// not something to start doing because the feature exists, and the label
 	// says what it costs rather than only what it gives.
-	QAction *ext = tools_menu->addAction("Open This Page in &Another App…", this,
-	                                      [this] {
-		if (web_view_backend *v = current_view())
-			open_url_externally(v->url());
-		else
-			m_status->showMessage("No page is open.", 5000);
+	QAction *sync = follow_menu->addAction("Keep &Firefox Tabs in Sync");
+	sync->setCheckable(true);
+	sync->setStatusTip("Re-read Firefox's session every 15 seconds while it is "
+	                    "running");
+	connect(sync, &QAction::toggled, this, [this](bool on) {
+		if (!on) {
+			m_fx_mirror->stop();
+			m_status->showMessage("No longer following Firefox.", 5000);
+			return;
+		}
+		const QString path = session_import::firefox_session_path(
+			session_import::firefox_profile());
+		if (path.isEmpty()) {
+			m_status->showMessage("No Firefox session file to follow.", 8000);
+			return;
+		}
+		m_fx_mirror->start("firefox", path);
 	});
-	ext->setStatusTip("Hand this address to another application — on a phone "
-	                   "that is how audio keeps playing with the screen off");
-
-	QAction *impc = tools_menu->addAction("Import Tabs from &Chromium", this,
-	                                       [this] { import_chromium_tabs(); });
-	impc->setStatusTip("Replay Chromium's session log and show the tabs it "
-	                    "leaves open");
-	QAction *syncc = tools_menu->addAction("Keep &Chromium Tabs in Sync");
+	QAction *syncc = follow_menu->addAction("Keep &Chromium Tabs in Sync");
 	syncc->setCheckable(true);
 	syncc->setStatusTip("Re-read Chromium's session every 15 seconds; it flushes "
 	                     "about every 2.5 seconds, so this is the fresher of the two");
@@ -739,35 +874,9 @@ QMenuBar *main_window::build_menu_bar() {
 		m_cr_mirror->start("chromium", path);
 	});
 
-	QAction *sync = tools_menu->addAction("&Keep Firefox Tabs in Sync");
-	sync->setCheckable(true);
-	sync->setStatusTip("Re-read Firefox's session every 15 seconds while it is "
-	                    "running");
-	connect(sync, &QAction::toggled, this, [this](bool on) {
-		if (!on) {
-			m_fx_mirror->stop();
-			m_status->showMessage("No longer following Firefox.", 5000);
-			return;
-		}
-		const QString path = session_import::firefox_session_path(
-			session_import::firefox_profile());
-		if (path.isEmpty()) {
-			m_status->showMessage("No Firefox session file to follow.", 8000);
-			return;
-		}
-		m_fx_mirror->start("firefox", path);
-	});
-
-	QAction *kpg = tools_menu->addAction("&Generate Password", this, [this] {
-		if (m_autofill)
-			m_autofill->request_generated_password(m_autofill->page_origin());
-	});
-	kpg->setStatusTip("Ask KeePassXC for a password and put it in this page's "
-	                   "new-password field");
-	kpg->setEnabled(keepass_bridge::supported());
 	tools_menu->addSeparator();
 	QAction *reorg = tools_menu->addAction("&Reorganize Tree with AI…", this,
-                                        &main_window::open_reorganizer);
+	                                        &main_window::open_reorganizer);
 	reorg->setStatusTip("Propose a new tree layout; nothing changes until you accept");
 	QAction *eva = tools_menu->addAction("Evolve Ad &Filters…", this,
 	                                      &main_window::open_filter_evolution);
@@ -778,16 +887,14 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *banners = tools_menu->addAction("&Cookie Banners We Missed…", this,
 	                                          &main_window::open_site_rules);
 	banners->setStatusTip("Teach a rule from a consent banner nothing matched");
-	tools_menu->addSeparator();
-	// Ctrl+Shift+Z rather than Ctrl+Z, so this never steals undo from a focused
-	// text field in the page or the address bar.
-	m_undo_action = tools_menu->addAction("&Undo Reorganize",
-	                                       QKeySequence("Ctrl+Shift+Z"), this,
-	                                       &main_window::undo_reorganize);
-	m_undo_action->setEnabled(false);
-	m_undo_action->setStatusTip("Put the tree back the way it was before the "
-	                             "last accepted reorganization");
 
+	tools_menu->addSeparator();
+	tools_menu->addAction("Site &Controls…", this, &main_window::open_site_controls);
+	QAction *prefs = tools_menu->addAction("&Settings…", QKeySequence::Preferences,
+	                                        this, &main_window::open_settings);
+	prefs->setStatusTip("Player, download folder and BitTorrent options");
+
+	// ---- Help ---------------------------------------------------------------
 	QMenu *help_menu = menu->addMenu("&Help");
 	help_menu->addAction("&About", this, &main_window::on_about);
 
@@ -1463,6 +1570,22 @@ void main_window::forget_subtree(node *n) {
 void main_window::save_tree_soon() {
 	if (!m_tree_path.isEmpty() && m_save_timer)
 		m_save_timer->start();
+}
+
+// The row itself, where `selected_parent` answers "where would a new child go".
+// Both exist because the menu needs the first and creation needs the second, and
+// one standing in for the other is how "New Folder" started making siblings of
+// the thing that was clicked.
+node *main_window::selected_node() const {
+	const QModelIndexList sel = m_tree->selectionModel()
+		? m_tree->selectionModel()->selectedIndexes() : QModelIndexList();
+	for (const QModelIndex &i : sel) {
+		if (i.column() != 0)
+			continue;
+		if (node *n = m_model->node_for_index(m_proxy->mapToSource(i)))
+			return n;
+	}
+	return nullptr;
 }
 
 node *main_window::selected_parent() const {
