@@ -7,7 +7,7 @@
 
 namespace {
 
-const char *k_cls = "org/qtproject/example/hydra/HydraIntents";
+const char *k_cls = "se/vibes/hydra/HydraIntents";
 
 }  // namespace
 

@@ -5327,14 +5327,25 @@ under a name that says what it is.
 Verified with `aapt2` (`versionCode='1' versionName='0.1'`, `native-code:
 'arm64-v8a'`, label Hydra) and `apksigner` (debug key, signature valid).
 
-**One thing left, and it is a decision rather than a defect.** The application
-id is still `org.qtproject.example.hydra` — Qt's example namespace, carried from
-the template. It installs and runs, so it does not block evaluation, but it is
-not an identity to publish under: it collides with every other Qt example app,
+**The application id was Qt's example namespace and now is not.** It was
+`org.qtproject.example.hydra`, carried from the template — it installs and runs,
+so it never blocked evaluation, but it collides with every other Qt example app,
 and an application id cannot be changed later without every installation
-becoming a separate app that cannot upgrade the first. Changing it means
-renaming the Java package directories under `android/src/` as well. It is the
-owner's namespace to choose, so it is recorded here rather than guessed at.
+becoming a separate app that cannot upgrade the first. That made it cheap now
+and expensive after anyone installs. It is `se.vibes.hydra`.
+
+The rename is nine places and **three of them are strings**:
+`android_view.cpp`, `android_downloads.cpp` and `android_intents.cpp` each hold
+a JNI class name like `"org/qtproject/example/hydra/HydraWebView"`. Those are
+looked up by name at runtime, so a missed one compiles, links, packages and
+installs, and then the WebView simply does not come up on a device. The Java
+files moved with `git mv`, their `package` lines changed, and the manifest with
+them; the manifest's other class references are Qt's own bindings and stay.
+
+One consequence worth knowing rather than discovering: **the app's data
+directory moves with the id**, so a device carrying the old build keeps its
+files under the old path and the new build starts empty. At 0.1, with no users,
+that is the whole cost.
 
 ### Report-only drivers are not failures
 

@@ -18,7 +18,7 @@
 
 namespace {
 
-const char *k_cls = "org/qtproject/example/hydra/HydraWebView";
+const char *k_cls = "se/vibes/hydra/HydraWebView";
 
 // The page-side half of the bridge: the same `window.hydraChannel(cb)` the
 // desktop's QWebChannel bootstrap provides, so every injected script runs

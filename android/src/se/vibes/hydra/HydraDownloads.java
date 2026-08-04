@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-package org.qtproject.example.hydra;
+package se.vibes.hydra;
 
 import android.app.Activity;
 import android.content.ContentResolver;
