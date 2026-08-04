@@ -14,6 +14,7 @@
 #include <QStringList>
 #include <QString>
 
+class annoyance_log;
 class tab_tree_view;
 class QSplitter;
 class QStackedWidget;
@@ -149,6 +150,9 @@ private slots:
 	void forget_keepass_pairing();
 	void start_element_picker();
 	void open_site_rules();
+	// One click, at the moment something got through. See annoyance_log.h for
+	// why this is worth a toolbar slot of its own rather than a menu item.
+	void report_annoyance();
 	void undo_reorganize();
 	void on_media_found(const QString &site_host, int count);
 
@@ -229,6 +233,9 @@ private:
 	local_proxy        *m_local_proxy   = nullptr;
 	element_picker     *m_picker        = nullptr;
 	filter_signals     *m_signals       = nullptr;
+	annoyance_log      *m_annoyances    = nullptr;
+	QString             m_annoyances_path;
+	QAction            *m_annoyed_action = nullptr;
 	filter_list        *m_filters       = nullptr;
 	// Kept so the accepted rules can be handed to it once the list is loaded,
 	// which happens after construction.

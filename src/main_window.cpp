@@ -36,6 +36,7 @@
 #ifdef Q_OS_ANDROID
 #include "android_downloads.h"
 #endif
+#include "annoyed_dialog.h"
 #include "filter_dialog.h"
 #include "credential_store.h"
 #include "keepass_bridge.h"
@@ -136,6 +137,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// second sensor.
 	m_media      = new media_detector(this);
 	m_signals    = new filter_signals(this);
+	m_annoyances = new annoyance_log();
 	m_ex_signals = new extractor_signals(this);
 	// Constructed before it is registered, which is not a style point: an
 	// observer added while still null was harmless for exactly as long as the
@@ -521,6 +523,21 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		if (m_autofill)
 			m_autofill->request_credentials(m_autofill->page_origin());
 	});
+
+	// **On the toolbar rather than in a menu, and that is the whole design.**
+	// The value of this button is that it costs one click *at the moment*
+	// something got through. Two clicks and a menu someone has to learn is a
+	// button nobody presses while annoyed, which is the only time it is worth
+	// pressing. See annoyance_log.h.
+	m_annoyed_action = bar->addAction("Annoyed");
+	m_annoyed_action->setIcon(themed_icon({ "face-angry", "face-sad",
+	                                         "emblem-important" }, style(),
+	                                       QStyle::SP_MessageBoxWarning));
+	m_annoyed_action->setToolTip("Something got through here");
+	m_annoyed_action->setStatusTip("Record what this page was doing, and pick a "
+	                                "tool if one fits");
+	connect(m_annoyed_action, &QAction::triggered, this,
+	         &main_window::report_annoyance);
 
 	QAction *shield_act = bar->addAction("Shield");
 	shield_act->setIcon(themed_icon({ "security-high", "security-medium",
@@ -1101,6 +1118,67 @@ void main_window::open_media() {
 	dlg.exec();
 }
 
+void main_window::report_annoyance() {
+	web_view_backend *v = current_view();
+	if (!v) {
+		m_status->showMessage("Open a page first — there is nothing to report "
+		                       "about an empty tab.", 5000);
+		return;
+	}
+	const QUrl page = v->url();
+	const QString host = page.host();
+	if (host.isEmpty()) {
+		m_status->showMessage("This page has no site to file against.", 5000);
+		return;
+	}
+
+	// **Nothing is captured here that was not already being collected.**
+	// `filter_signals` accumulates the ad-shaped requests and the full corpus
+	// as a side effect of the interceptor; this takes a copy of them at the
+	// moment the button was pressed. That is the whole trick -- the report is a
+	// marker on existing evidence, so filing one costs a click and no memory.
+	annoyance_report r;
+	r.when     = QDateTime::currentDateTime();
+	r.host     = host;
+	r.page     = page.toString();
+	if (m_signals) {
+		r.suspects = m_signals->suspects_for(host);
+		r.observed = m_signals->count_for(host);
+	}
+
+	// Filed *before* the dialog, deliberately. Somebody who presses this and
+	// then closes the window has still told us something, and losing that
+	// because they did not pick one of three tools would make the button a
+	// worse version of the tools it is meant to feed.
+	if (m_annoyances) {
+		m_annoyances->add(r);
+		if (!m_annoyances_path.isEmpty())
+			m_annoyances->save(m_annoyances_path);
+	}
+
+	annoyed_dialog dlg(r, this);
+	dlg.exec();
+	const annoyed_dialog::action chose = dlg.chosen();
+	if (m_annoyances) {
+		m_annoyances->set_outcome(host, annoyed_dialog::name_of(chose));
+		if (!m_annoyances_path.isEmpty())
+			m_annoyances->save(m_annoyances_path);
+	}
+
+	switch (chose) {
+	case annoyed_dialog::action::zap:     start_element_picker();   break;
+	case annoyed_dialog::action::evolve:  open_filter_evolution();  break;
+	case annoyed_dialog::action::consent: open_site_rules();        break;
+	case annoyed_dialog::action::recorded:
+		m_status->showMessage(
+		    QString("Recorded. %1 report%2 filed against %3.")
+		        .arg(m_annoyances ? m_annoyances->count_for(host) : 0)
+		        .arg((m_annoyances && m_annoyances->count_for(host) == 1) ? "" : "s")
+		        .arg(host), 6000);
+		break;
+	}
+}
+
 void main_window::open_filter_evolution() {
 	web_view_backend *v = current_view();
 	if (!v) {
@@ -1231,6 +1309,10 @@ bool main_window::event(QEvent *e) {
 main_window::~main_window() {
 	delete m_players;
 	delete m_filters;
+	// Not a QObject, so it has no parent to take it. Kept as a raw pointer to
+	// match the two above rather than being the one member with a different
+	// lifetime idiom.
+	delete m_annoyances;
 	// Leave kiosk while our children still exist: the controller hands the
 	// presented view's widget back to the stack, and doing that after the
 	// stack has been destroyed is a use-after-free. Destructor bodies run
@@ -1253,6 +1335,13 @@ bool main_window::load_tree(const QString &path) {
 
 	// The AI/user-authored filter list lives beside the rest, kept separate
 	// from any imported EasyList so upstream updates cannot clobber it (§12.5).
+	// Beside the policy, because a record of what somebody found annoying is a
+	// record of where they have been, and it belongs where they can read and
+	// clear it rather than in a store they cannot see.
+	m_annoyances_path = dir + "/annoyances.ini";
+	if (m_annoyances)
+		m_annoyances->load(m_annoyances_path);
+
 	m_filters_path = dir + "/filters-ai.txt";
 	const bool filters_read = m_filters->load(m_filters_path);
 	// Where the rules came from and how many, on request. A filter list that is

@@ -5633,6 +5633,61 @@ are faithful; colours and icons are not. `SWEEP_ONSCREEN=1` exists for when
 appearance is the question -- and using it means taking over a screen, so it is
 worth asking first.
 
+### One click for "something got through here"
+
+Asked for as an annoyed/happy pair, built as the annoyed half only, because the
+two halves are not worth the same and pretending otherwise would have shipped a
+smiley nobody presses.
+
+**Annoyed is strong because it removes the diagnosis step.** The three teaching
+tools this project already has — the element picker, filter evolution, the
+consent-rule editor — all require knowing *what* went wrong before you can
+reach them. The hard part of writing a filter rule is not the rule; it is being
+back in the moment where the thing happened with the traffic still in front of
+you. A toolbar button costs one click at exactly that moment.
+
+**It captures nothing new**, which is why it is a small class and not a
+subsystem. `filter_signals` is already accumulating, per site, the ad-shaped
+requests that got through and the whole corpus a candidate rule is simulated
+against. A report is a *marker* on evidence that exists.
+
+**On the toolbar rather than in a menu**, and that is the design rather than a
+placement preference. Two clicks and a menu somebody has to learn is a button
+nobody presses while annoyed, which is the only time it is worth pressing.
+
+**The report is filed before the dialog opens.** Somebody who presses it and
+then closes the window has still said something, and losing that because they
+did not pick one of three tools would make this a worse version of the tools it
+feeds. `try_annoyed` exists mostly to hold that property: it dismisses the
+dialog and checks the count went up anyway.
+
+**And the dialog shows the evidence rather than thanking you.** A button whose
+click produces nothing visible teaches people it is theatre — the same defect as
+a permission for a capability that does not exist, which this project removed
+two sections ago. So the suspects are on screen, the counts are stated, and
+"Propose Filter Rules" is *disabled* when nothing ad-shaped was seen, with the
+tooltip saying why. An empty list says so in words: nothing on the network
+looked ad-shaped, so this is likely cosmetic, a consent banner, or the site
+itself — which is a more useful sentence than a blank box.
+
+**Stored beside the policy**, as `annoyances.ini`, because a record of what
+somebody found annoying is a record of where they have been. It belongs where
+they can read and clear it, not in a store they cannot see; `clear_host` and
+`clear_all` exist for that and are tested.
+
+One detail that decided a design choice: suspects are stored as a `QStringList`
+and handed to `QSettings` as one, rather than joined into a string. Real
+analytics addresses contain commas — `tag_exp=1~2~3&list=a,b,c` — so a joined
+string cannot be split back. The offline suite files a report with two such
+addresses and checks they survive the round trip.
+
+**The happy half is deliberately not built.** As a satisfaction signal it is
+sparse and skewed: people do not click when things work. There is one version
+worth having later — a confirmation that a *newly applied filter rule did not
+break the page*, since over-blocking is silent and nothing here would otherwise
+find out — and that is a different feature with a different trigger, offered
+only when there is something to confirm.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

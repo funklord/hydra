@@ -270,6 +270,8 @@ qt_add_executable(hydra
     src/autofill_controller.h
     src/consent_blocker.cpp
     src/consent_blocker.h
+    src/annoyance_log.cpp
+    src/annoyed_dialog.cpp
     src/site_rules.cpp
     src/site_rules.h
     src/consent_dialog.cpp
