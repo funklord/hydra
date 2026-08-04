@@ -40,6 +40,22 @@ arch=$(dpkg-architecture -qDEB_HOST_ARCH 2>/dev/null || dpkg --print-architectur
 
 [ -x "$BIN" ] || { echo "no binary at $BIN -- run make first"; exit 1; }
 
+# The staging tree is created by this script and is disposable by construction,
+# which is what makes clearing it wholesale acceptable. It is also an absolute
+# path by now -- resolved above so dpkg-shlibdeps can find it after a `cd` --
+# so the "relative" test a build directory gets does not apply, and something
+# has to stand in for it. A caller passing a wrong second argument must not be
+# able to turn this line into an erasure.
+case "$STAGE" in
+	"" | "/" | "$HOME" | "$HOME/") echo "refusing to clear staging path: '$STAGE'"; exit 1 ;;
+	*..*) echo "refusing a staging path containing '..': $STAGE"; exit 1 ;;
+esac
+# And it must be somewhere this script would have put it: either absent, or a
+# directory that already looks like the staging tree it is about to replace.
+if [ -e "$STAGE" ] && [ ! -d "$STAGE/DEBIAN" ] && [ -n "$(ls -A "$STAGE" 2>/dev/null)" ]; then
+	echo "refusing to clear $STAGE: not empty and not a previous staging tree"
+	exit 1
+fi
 rm -rf "$STAGE"
 mkdir -p "$STAGE/usr/bin" "$STAGE/DEBIAN" "$OUT"
 

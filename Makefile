@@ -279,9 +279,29 @@ uninstall:
 # The build output only. `evidence/` is deliberately not touched: it is
 # gitignored, it is what the numbers in project.md refer to, and re-capturing
 # is not the same as re-reading because the sites move on.
+# Each directory is checked before it is removed, and named as it goes. These
+# are build trees, created by the build and disposable by construction, which is
+# the one shape where clearing a directory wholesale is acceptable at all -- but
+# every one of them is an overridable variable, and an unset or mistyped
+# override in an `rm -rf $$(VAR)` is exactly how a clean target eats something
+# it should not. `make clean BUILD_DIR=$$HOME` must not be a way to lose a home
+# directory.
+#
+# The test is deliberately strict rather than clever: non-empty, relative, no
+# `..`, and not `.` itself. Anything else is refused and said out loud, because
+# a clean that silently skipped what it was asked to remove is its own problem.
 clean:
-	@rm -rf $(BUILD_DIR) $(TESTS_DIR) $(ANDROID_BUILD_DIR)
-	@echo "removed build output; evidence/ and the source tree are untouched"
+	@for d in $(BUILD_DIR) $(TESTS_DIR) $(ANDROID_BUILD_DIR); do \
+	   case "$$d" in \
+	     "" ) echo "refusing to remove an empty path"; continue ;; \
+	     /* ) echo "refusing to remove absolute path: $$d"; continue ;; \
+	     . | ./ ) echo "refusing to remove the source tree: $$d"; continue ;; \
+	     *..* ) echo "refusing to remove a path containing '..': $$d"; continue ;; \
+	   esac; \
+	   test -e "$$d" || continue; \
+	   rm -rf "$$d" && echo "removed $$d"; \
+	 done
+	@echo "evidence/ and the source tree are untouched"
 
 # DOC CHECKS
 #   Both of these have caught real drift in project.md, which is the file the

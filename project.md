@@ -5388,6 +5388,37 @@ always matches and the installed path is never taken. The first attempt at
 testing this "passed" for exactly that reason. Verifying packaging means running
 what was packaged, from somewhere the source tree is not.
 
+### A clean target that could have eaten a home directory
+
+Re-reading the global guidelines turned up a rule this project was not
+following, and it is one of the ones stated with the failure that produced it:
+a `clean` target removes the files it names and lists them, because it is the
+one target everybody runs without reading.
+
+This one was:
+
+    rm -rf $(BUILD_DIR) $(TESTS_DIR) $(ANDROID_BUILD_DIR)
+
+Build trees are created by the build and disposable by construction, which is
+the one shape where clearing a directory wholesale is allowed at all. But all
+three are overridable variables with relative defaults and nothing checked
+them, so `make clean BUILD_DIR=$HOME` was a way to lose a home directory, and a
+mistyped override was a way to do it by accident.
+
+Each path is now tested before it is removed and named as it goes: non-empty,
+relative, no `..`, not `.` itself. Refusals are printed rather than skipped
+silently, since a clean that quietly did not clean is its own problem. Verified
+by trying to break it -- `make clean BUILD_DIR=/ TESTS_DIR=..` refuses both and
+touches nothing.
+
+The same reasoning reached the new `make-deb.sh`, which clears its staging tree.
+That path is *absolute* by the time it is used, because `dpkg-shlibdeps` has to
+run from elsewhere, so the relative test cannot apply and something had to stand
+in for it: the script refuses `/`, `$HOME` and anything containing `..`, and
+refuses any existing directory that is not empty and does not already look like
+a staging tree. Verified the same way, by pointing it at `src/` and watching it
+decline.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
