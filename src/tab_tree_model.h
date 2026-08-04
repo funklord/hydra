@@ -111,6 +111,16 @@ public:
 	// person retype it would orphan a tab's history with no warning.
 	void  update_node(node *n, const QString &title, const QString &url,
 	                   const QStringList &tags);
+
+	// A title that came from the page rather than from a person.
+	//
+	// Refused on a node somebody has named: that is the whole distinction. A
+	// tab called "Bank — statements" should stay called that when it is used,
+	// while a tab that has only ever worn the page's own title should follow
+	// the page. Returns whether anything changed, so a caller can avoid saving
+	// the tree for a title that is already right -- `titleChanged` fires
+	// several times during an ordinary page load.
+	bool  set_page_title(node *n, const QString &title);
 	// A duplicate under the same parent, with an id of its own.
 	node *duplicate_node(node *n);
 

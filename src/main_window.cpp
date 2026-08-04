@@ -476,10 +476,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// One place to persist, however the change was made -- a drag, a rename, a
 	// new folder. The tree file is the canonical record and a change that
 	// survived only until the next launch would be worse than a refusal.
-	connect(m_model, &tab_tree_model::structure_changed, this, [this] {
-		if (!m_tree_path.isEmpty())
-			m_model->save(m_tree_path);
-	});
+	connect(m_model, &tab_tree_model::structure_changed, this,
+	        &main_window::save_tree_soon);
 	m_tree->setHeaderHidden(true);
 	m_tree->setUniformRowHeights(true);
 	// The menu lives in the view; these are the only two entries it cannot
@@ -1202,6 +1200,16 @@ void main_window::open_node(node *n) {
 		view->inject_script("hydra-mse-relay", mse_tap::relay_source());
 		view->inject_main_world_script("hydra-mse-hook", mse_tap::hook_source());
 
+		// The page's own name for itself, which the tree had no way to hear.
+		// `set_page_title` refuses it on a tab somebody has named, so this can
+		// be connected unconditionally.
+		connect(view, &web_view_backend::title_changed, this,
+		        [this, view](const QString &t) {
+			const QString id = m_views_by_id.key(view);
+			if (node *n = id.isEmpty() ? nullptr : m_model->node_by_id(id))
+				if (m_model->set_page_title(n, t))
+					save_tree_soon();
+		});
 		connect(view, &web_view_backend::url_changed, this, [this, view](const QUrl &u) {
 			apply_policy(view, u.host());
 			if (view == current_view()) {
@@ -1347,6 +1355,20 @@ void main_window::on_tree_activated(const QModelIndex &proxy_index) {
 // Where a new node goes: beside whatever is selected, or at the top level when
 // nothing is. Dropping it at the root regardless would be simpler and wrong --
 // a new tab made while working inside a folder belongs in that folder.
+// Coalesced, because titles arrive in bursts. `titleChanged` fires several
+// times during an ordinary page load -- the url, then the real title, sometimes
+// a revision from script -- and writing the whole tree for each would be a lot
+// of io for one settled answer.
+//
+// This is the debounce the shell already had for structural saves rather than a
+// second one beside it. The first version of this function built its own timer
+// and the compiler caught the duplicate member, which is the same "two records
+// of one thing" the reorder flag and the live-view map both turned out to be.
+void main_window::save_tree_soon() {
+	if (!m_tree_path.isEmpty() && m_save_timer)
+		m_save_timer->start();
+}
+
 node *main_window::selected_parent() const {
 	const QModelIndexList sel = m_tree->selectionModel()
 		? m_tree->selectionModel()->selectedIndexes() : QModelIndexList();

@@ -38,6 +38,16 @@ struct node {
 	// `mirror` -- which is exactly what "keep this one" means.
 	QString   mirror;
 
+	// Somebody named this, so browsing must not rename it back.
+	//
+	// The two cases are genuinely different and only the node can tell them
+	// apart: a title that arrived from the page should follow the page, and a
+	// title a person typed should not be quietly replaced the next time that
+	// tab loads something. This is stored rather than derived because there is
+	// nothing to derive it from -- a title is just a string, and "did a human
+	// choose this" is not recoverable from the string afterwards.
+	bool      renamed = false;
+
 	node        *parent = nullptr;
 	QList<node *> children;
 

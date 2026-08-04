@@ -306,6 +306,48 @@ child makes a ring, the outline writer recurses forever, and everything below
 the drag disappears from the file. §9.4 refuses the same move for the reorganizer
 and this is that rule one gesture closer to the user.
 
+### A tab's name, and the two different things it can be
+
+Reported rather than found: browsing to another page left the old label in
+place. The cause was one layer down — **`web_view_backend` had no title at
+all**, no signal and no getter, so a tab wore whatever the tree file said or
+somebody typed, permanently. The seam carries one now and the desktop backend
+forwards Qt's, which already falls back to the url for a document with no title.
+
+**The interesting half is the distinction.** A title that arrived from the page
+should follow the page. A title a person typed should not be quietly replaced
+the next time that tab loads something — a tab called "Bank — statements" that
+renames itself to "Log in" the moment it is used has lost the thing it was
+called for. So the node records whether it was *chosen*, and that is stored
+rather than derived: a title is a string, and "did a human pick this" cannot be
+recovered from the string afterwards.
+
+Only the properties editor and the rename prompt route through `update_node`,
+so that is where being chosen is marked — and only on an actual change, so
+opening the editor and pressing OK does not pin a title nobody touched.
+`set_page_title` refuses on a chosen node and returns whether anything changed,
+which lets the caller skip a save for a title that is already right.
+
+**Clearing the name gives the tab back to the page.** Emptying the field is the
+natural way to say "stop calling it that"; the alternative, a checkbox marked
+*follow the page title*, explains a mechanism where the gesture already says it.
+The label falls back to the address meanwhile, which is what an unvisited tab
+wears anyway.
+
+**In the file it is one more trailing key, written only when true** (`named=1`),
+so an ordinary tree does not grow a column of `named=0` and a file written
+before this existed reads as "not chosen". That last part needed care rather
+than luck: the reader takes trailing `key=value` fields from the right and stops
+at the first it does not recognise, so an unknown key at the end would have
+stopped `created=` and `seen=` from ever being read. There is a check that a
+pre-flag file still parses its dates.
+
+**Saving is coalesced**, because titles arrive in bursts — the url, then the
+real title, sometimes a revision from script. It reuses the debounce the shell
+already had rather than adding one beside it; the first attempt built a second
+timer and the compiler caught the duplicate member, which is the same "two
+records of one thing" as the reorder flag and the live-view map.
+
 ### You could not make a tab
 
 Asked how to create one, the honest answer was that you could not. A tab could

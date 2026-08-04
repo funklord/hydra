@@ -95,8 +95,20 @@ public:
 	virtual QByteArray save_state() const = 0;
 	virtual bool       restore_state(const QByteArray &blob) = 0;
 
+	// What the page currently calls itself, for a caller that needs it now
+	// rather than on the next change. Not pure: a backend with no notion of a
+	// title answers with nothing and callers fall back, which is the same thing
+	// they do before a page has loaded.
+	virtual QString page_title() const { return QString(); }
+
 signals:
 	void url_changed(const QUrl &url);
+
+	// What the page calls itself. The seam had no title at all, so a tab was
+	// labelled with whatever the tree file said or somebody typed, for ever --
+	// browsing to another page left the old name in place. A backend that has
+	// no notion of a title simply never emits this.
+	void title_changed(const QString &title);
 
 	// The engine's render process died. Kiosk mode's watchdog reloads on this
 	// so an unattended screen self-heals (architecture doc §8.3).

@@ -535,6 +535,100 @@ int main(int argc, char **argv) {
 		      "and the new tab is in it -- this one is the user's, so it keeps");
 	}
 
+	section("a tab's name follows the page, unless somebody chose it");
+	{
+		// Two different things wearing one field. A title that arrived from the
+		// page should follow the page; a title a person typed should not be
+		// quietly replaced the next time that tab loads something. Before this,
+		// the seam carried no title at all -- a tab wore whatever the file said
+		// for ever.
+		tab_tree_model m;
+		m.load(path);
+		node *t = m.root()->children.first()->children.first();
+
+		check(m.set_page_title(t, "First page"), "a page title is taken");
+		check(t->title == "First page", "and shows");
+		check(m.set_page_title(t, "Second page"), "and is replaced on the next page");
+		check(t->title == "Second page", "by the newer one");
+		check(!m.set_page_title(t, "Second page"),
+		      "while the same title again changes nothing, so nothing is saved");
+		check(!t->renamed, "and none of that counts as being named");
+
+		// Now a person names it.
+		m.update_node(t, "My bank", t->url, t->tags);
+		check(t->renamed, "typing a name marks it as chosen");
+		check(!m.set_page_title(t, "Bank plc — log in"),
+		      "and the page can no longer rename it");
+		check(t->title == "My bank", "so the chosen name stays");
+
+		// Opening the editor and pressing OK without touching the name must not
+		// pin a title nobody chose.
+		tab_tree_model m2;
+		m2.load(path);
+		node *u = m2.root()->children.first()->children.first();
+		m2.set_page_title(u, "From the page");
+		m2.update_node(u, u->title, u->url, u->tags);
+		check(!u->renamed,
+		      "pressing OK without changing the name does not pin it");
+		check(m2.set_page_title(u, "Still following"),
+		      "so it goes on following the page");
+
+		// Clearing the name hands it back.
+		m.update_node(t, QString(), t->url, t->tags);
+		check(!t->renamed, "clearing the name un-chooses it");
+		check(!t->title.isEmpty(),
+		      QString("leaving a label rather than a blank row (%1)").arg(t->title));
+		check(m.set_page_title(t, "Bank plc — log in"),
+		      "and the page may name it again");
+		check(t->title == "Bank plc — log in", "which it does");
+	}
+
+	section("being named survives a save, or it was not worth recording");
+	{
+		tab_tree_model m;
+		m.load(path);
+		node *a = m.root()->children.first()->children.first();
+		node *b = m.root()->children.first()->children.last();
+		m.update_node(a, "Chosen name", a->url, a->tags);
+		m.set_page_title(b, "Page name");
+		const QString saved = dir + "/named.txt";
+		check(m.save(saved), "the tree saves");
+
+		tab_tree_model r;
+		check(r.load(saved), "and loads");
+		node *ra = r.node_by_id(a->id);
+		node *rb = r.node_by_id(b->id);
+		check(ra && ra->renamed, "the chosen name is still chosen");
+		check(rb && !rb->renamed, "and the page's name is still the page's");
+		check(ra && ra->title == "Chosen name", "with the names intact");
+		// The flag is only written when true, so an ordinary tree does not grow
+		// a column of `named=0`.
+		QFile f(saved);
+		f.open(QIODevice::ReadOnly);
+		const QString text = QString::fromUtf8(f.readAll());
+		f.close();
+		check(text.count("named=1") == 1 && !text.contains("named=0"),
+		      "and only the chosen one carries a marker in the file");
+
+		// A file written before this existed says nothing, and that must read
+		// as "not chosen" rather than as a parse failure.
+		const QString old = dir + "/old-format.txt";
+		QFile o(old);
+		o.open(QIODevice::WriteOnly | QIODevice::Truncate);
+		o.write("- [z1] unopened | Old tab | https://old.test/ | "
+		         "created=2026-01-01T00:00:00 | seen=2026-01-02T00:00:00\n");
+		o.close();
+		tab_tree_model legacy;
+		check(legacy.load(old), "a tree from before the flag loads");
+		node *z = legacy.node_by_id("z1");
+		check(z && !z->renamed, "as not chosen");
+		check(z && z->title == "Old tab" && z->url == "https://old.test/",
+		      "with its title and address where they were");
+		check(z && z->last_seen.isValid(),
+		      "and its dates still parsed, which a new trailing key could have "
+		      "broken by stopping the reader early");
+	}
+
 	QDir(dir).removeRecursively();
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

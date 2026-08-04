@@ -60,6 +60,11 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	setParent(m_view);
 
 	connect(m_view, &QWebEngineView::urlChanged, this, &qtwebengine_view::url_changed);
+	// Qt gives the page's own title, and falls back to the url when a document
+	// has none -- which is the right label either way, so it is passed on as it
+	// comes rather than second-guessed here.
+	connect(m_view, &QWebEngineView::titleChanged, this,
+	        &qtwebengine_view::title_changed);
 	connect(m_view, &QWebEngineView::renderProcessTerminated, this,
 	         [this](QWebEnginePage::RenderProcessTerminationStatus, int) {
 		emit render_process_gone();
@@ -245,6 +250,10 @@ void qtwebengine_view::inject_main_world_script(const QString &name,
 	s.setWorldId(QWebEngineScript::MainWorld);
 	s.setRunsOnSubFrames(true);
 	m_page->scripts().insert(s);
+}
+
+QString qtwebengine_view::page_title() const {
+	return m_view ? m_view->title() : QString();
 }
 
 void qtwebengine_view::set_script_bridge(QObject *object, const QString &name) {

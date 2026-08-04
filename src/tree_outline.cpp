@@ -99,6 +99,8 @@ node *load(const QString &path) {
 				n->created = QDateTime::fromString(t.mid(8), Qt::ISODate);
 			else if (t.startsWith("seen="))
 				n->last_seen = QDateTime::fromString(t.mid(5), Qt::ISODate);
+			else if (t.startsWith("named="))
+				n->renamed = t.mid(6) == "1";
 			else
 				break;
 			rest_fields.removeLast();
@@ -143,7 +145,13 @@ static void write_node(QTextStream &out, node *n, int depth) {
 		     << " | " << n->title
 		     << " | " << n->url
 		     << " | created=" << n->created.toString(Qt::ISODate)
-		     << " | seen="    << n->last_seen.toString(Qt::ISODate) << "\n";
+		     << " | seen="    << n->last_seen.toString(Qt::ISODate);
+		// Only when true, so a file full of ordinary tabs does not grow a column
+		// of `named=0`. The reader treats absence as false, which is also what
+		// every file written before this existed says.
+		if (n->renamed)
+			out << " | named=1";
+		out << "\n";
 	}
 	for (node *c : n->children)
 		write_node(out, c, depth + 1);

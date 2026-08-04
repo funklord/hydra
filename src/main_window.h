@@ -90,6 +90,7 @@ protected:
 
 private slots:
 	void on_tree_activated(const QModelIndex &proxy_index);
+	void save_tree_soon();
 	void new_tab();
 	void new_folder();
 	node *selected_parent() const;

@@ -399,13 +399,39 @@ void tab_tree_model::update_node(node *n, const QString &title,
                                   const QString &url, const QStringList &tags) {
 	if (!n)
 		return;
-	n->title = title;
+	// Coming through here means a person did it -- this is what the properties
+	// editor and the rename prompt call, and nothing else does. Marked only on
+	// an actual change, so opening the editor and pressing OK does not pin a
+	// title nobody touched.
+	//
+	// **Clearing the name gives the tab back to the page.** Emptying the field
+	// is the natural way to say "stop calling it that", and the alternative --
+	// a checkbox marked "follow the page title" beside the name -- explains a
+	// mechanism where the gesture already says it. The label falls back to the
+	// address meanwhile, which is what an unvisited tab wears anyway, and the
+	// next title the page reports replaces it.
+	if (title.trimmed().isEmpty()) {
+		n->renamed = false;
+		n->title   = url.isEmpty() ? QStringLiteral("New tab") : url;
+	} else {
+		if (title != n->title)
+			n->renamed = true;
+		n->title = title;
+	}
 	n->url   = url;
 	n->tags  = tags;
 	refresh_node(n);
 	// Saved like a move is: what a tab is called is as much a part of the
 	// canonical file as where it sits.
 	emit structure_changed();
+}
+
+bool tab_tree_model::set_page_title(node *n, const QString &title) {
+	if (!n || title.isEmpty() || n->renamed || title == n->title)
+		return false;
+	n->title = title;
+	refresh_node(n);
+	return true;
 }
 
 node *tab_tree_model::duplicate_node(node *n) {
