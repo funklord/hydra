@@ -29,9 +29,16 @@ static const QString SHOT =
 	test_out();
 
 static void screen(const QString &name) {
+	// **Make the directory first.** `import` cannot create one, so with a fresh
+	// HYDRA_TEST_OUT every screenshot this driver exists to produce failed to
+	// write -- while the run still printed "done" and exited 0. A driver whose
+	// entire output is pictures, reporting success having written none, is the
+	// apparatus lying in the usual direction.
+	QDir().mkpath(SHOT);
 	// The whole root window: proves this is genuinely on screen rather than a
 	// widget rendered into an offscreen buffer.
-	QProcess::execute("import", {"-window", "root", SHOT + name});
+	if (QProcess::execute("import", {"-window", "root", SHOT + name}) != 0)
+		std::printf("  !!    could not write %s\n", qPrintable(SHOT + name));
 }
 
 static QDialog *find_settings() {

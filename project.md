@@ -202,6 +202,15 @@ segfaulted at once, in a feature unrelated to the one at fault. The registration
 now refuses a null outright, so the next one is a mistake where it is made
 rather than undefined behaviour somewhere later.
 
+**And two more from the same family, both found by running everything at once.**
+A driver that asserts nothing exits 0 whatever it saw, so a sweep reading "no
+`N passed` line" as failure reports false alarms — four of this project's
+drivers are report-only and `tests/README.md` now names them. Worse,
+`try_settings` had been writing **no screenshots at all**: `import` cannot
+create a directory, so with a fresh output path every capture failed while the
+run printed "done" and exited 0. A driver whose entire output is pictures,
+reporting success having produced none.
+
 **A caution learned repeatedly.** Six separate defects this project has hit were
 wiring that existed but was never exercised — a signal never connected, a
 message written into a label something else overwrote, a store that was saved
