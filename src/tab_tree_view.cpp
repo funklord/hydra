@@ -78,9 +78,11 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 		menu.addSeparator();
 	}
 
-	QAction *copy_url_a = nullptr, *dup_a = nullptr;
-	if (n && !n->url.isEmpty())
+	QAction *copy_url_a = nullptr, *dup_a = nullptr, *external_a = nullptr;
+	if (n && !n->url.isEmpty()) {
 		copy_url_a = menu.addAction("&Copy Address");
+		external_a = menu.addAction("Open in &Another App…");
+	}
 	if (n)
 		dup_a = menu.addAction("&Duplicate");
 
@@ -96,6 +98,7 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	if (chosen == open_a)           emit open_requested(n);
 	else if (chosen == sus_a)       emit suspend_requested(n);
 	else if (chosen == copy_url_a)  QGuiApplication::clipboard()->setText(n->url);
+	else if (chosen == external_a)  emit open_externally_requested(n);
 	else if (chosen == dup_a)       m->duplicate_node(n);
 	else if (chosen == folder_a) {
 		// Into the folder that was clicked, or beside a tab -- which is what a

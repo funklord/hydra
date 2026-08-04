@@ -40,6 +40,10 @@ signals:
 	// store. Everything else on the menu -- duplicate, new folder, delete,
 	// properties -- is the model's own business and is done here.
 	void open_requested(node *n);
+	// Hand this address to another application. The view cannot do it: on
+	// Android it is an intent through the activity, on desktop the system's
+	// default handler, and neither is a tree's business.
+	void open_externally_requested(node *n);
 	void suspend_requested(node *n);
 
 protected:

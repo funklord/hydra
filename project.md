@@ -4099,7 +4099,71 @@ site that is *not* in their vault. Making the pairing durable turned a
 once-ever, human-gated path into one that runs on every build, and the first
 time it did, it failed.
 
-### Handing a stream to a player, on a phone
+### Background audio on Android, and why the browser hands over
+
+The need is ordinary: play something, turn the screen off, read a message, keep
+listening. **A browser tab is the wrong container for it**, and the reasons stack
+in a way worth writing down once so it is not re-derived each time somebody asks.
+
+**The site stops itself.** YouTube pauses on `visibilitychange` when its page is
+hidden. That is not Android and not the engine — it is the site, deliberately,
+and it is what Premium sells. Beating it means injecting script to swallow the
+event.
+
+**Android stops the process.** A backgrounded app with no foreground service is
+throttled and then killed. Reliable background audio needs a foreground service
+plus a `MediaSession` with a media notification: lock-screen controls, headphone
+buttons, the lot. That is real Android work and it is not a WebView setting. Qt's
+Android integration also calls `WebView.onPause()` on activity pause, so that
+would have to be opted out of as well.
+
+**And it would be a Chromium-class renderer kept alive to play audio**, which is
+battery spent for nothing.
+
+**yt-dlp cannot help here, and this was checked rather than assumed.** On the
+desktop the vendored copy resolves YouTube fine — it returned an audio-only
+stream (itag 251, `audio/webm`) on request. On the device, `which python3
+python` returns **nothing**: `ytdlp_resolver` runs `yt-dlp` from PATH or the
+vendored copy through `python3`, and Android has neither. So **YouTube does not
+resolve on Android**, and the routes to changing that are shipping a Python
+runtime in the APK or reimplementing YouTube's signature and `n`-parameter
+descrambling in C++ — the second changes weekly and is a standing commitment.
+
+**Even a successful resolve would be the wrong answer.** The url that came back
+carried `expire=` about six hours out and is bound to the requesting address. It
+plays now and is dead tomorrow, so it is a thing to listen to once and not a
+thing to keep.
+
+**So the browser hands over.** VLC, NewPipe and YouTube itself all resolve a
+page on their own *and* run a media notification, which is the entire feature.
+**Tools ▸ Open This Page in Another App**, and the same entry on any tab's
+context menu.
+
+**The type is the whole trick, and it is the opposite of the media path's.**
+`open_media` names a media type precisely to keep browsers out of the chooser —
+it is handing over a stream somebody already found. `open_externally` names
+**no type at all**, because it is handing over a *page*, and the apps worth
+reaching are the ones registered for that host. Forcing `video/*` would hide
+every one of them behind players expecting a file. Two intents, opposite
+decisions, and each is wrong for the other's job.
+
+On desktop the same action goes to the system's default handler, which for an
+http address is usually another browser. That is a smaller feature and it says
+so rather than pretending to be the Android behaviour.
+
+**What is not verified.** The emulator has no VLC, NewPipe or YouTube app, so
+"the right app takes it and keeps playing with the screen off" is checkable only
+on a real phone. What is checked here is that the entry exists and that the C++
+side reports a refusal rather than doing nothing when no app answers.
+
+**If an integrated solution is ever wanted**, the shape is known and the cost is
+the point: a foreground service and a `MediaSession` on the Android side, script
+injection to suppress the site's own pause, and a decision about what to do when
+the engine is asked to keep a renderer alive for audio. That is three separate
+commitments, and the handoff above buys the whole use case for one menu entry —
+which is why it comes first rather than last.
+
+### Handing a stream to a player, on a phone### Handing a stream to a player, on a phone
 
 The desktop names a player and starts a process. Android has neither, so §19's
 answer is an intent: `ACTION_VIEW` with the url and a media type, and whichever

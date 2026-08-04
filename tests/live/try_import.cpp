@@ -191,6 +191,9 @@ int main(int argc, char *argv[]) {
 		check(popped, "a menu actually appears on a right-click");
 		check(seen.contains("&Open") && seen.contains("&Suspend"),
 		      "offering the two things the shell has to carry out");
+		check(seen.contains("Open in &Another App…"),
+		      "including the handoff, which on a phone is how audio keeps "
+		      "playing with the screen off");
 		check(seen.contains("&Duplicate") && seen.contains("New &Folder Here") &&
 		          seen.contains("&Delete") && seen.contains("&Properties…"),
 		      QString("and the ones the view does itself (%1)").arg(seen.join(", ")));

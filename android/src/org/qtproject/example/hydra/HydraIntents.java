@@ -45,4 +45,34 @@ public class HydraIntents {
             return false;
         }
     }
+
+    /**
+     * ACTION_VIEW with the address and **no type at all**, which is the
+     * opposite decision from openMedia above and is deliberate.
+     *
+     * openMedia is handing over a stream somebody has already found, so naming
+     * a media type keeps browsers out of the chooser. This is handing over a
+     * *page* — a youtube.com/watch address, say — and the apps worth reaching
+     * are exactly the ones that register for that host: YouTube itself, VLC,
+     * NewPipe. Every one of them resolves the page on its own, and forcing
+     * video/* would hide all three behind players expecting a media file.
+     *
+     * The use this exists for: background audio. A page cannot keep playing
+     * with the screen off -- the site pauses itself when hidden, and Android
+     * suspends a process with no foreground service -- while those apps run a
+     * media notification and are built for exactly that. So the browser stops
+     * trying to be a media player and hands over instead.
+     */
+    public static boolean openExternally(final Activity a, final String url) {
+        if (a == null || url == null || url.isEmpty())
+            return false;
+        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            a.startActivity(i);
+            return true;
+        } catch (ActivityNotFoundException e) {
+            return false;
+        }
+    }
 }

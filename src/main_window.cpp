@@ -39,6 +39,9 @@
 #include "filter_dialog.h"
 #include "credential_store.h"
 #include "keepass_bridge.h"
+#ifdef Q_OS_ANDROID
+#include "android_intents.h"
+#endif
 #include "session_import.h"
 #include "autofill_controller.h"
 #include "consent_blocker.h"
@@ -67,6 +70,7 @@
 #include <QStatusBar>
 #include <QStyle>
 #include <QClipboard>
+#include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QInputDialog>
@@ -485,6 +489,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// suspending needs the state store.
 	connect(m_tree, &tab_tree_view::open_requested, this, &main_window::open_node);
 	connect(m_tree, &tab_tree_view::suspend_requested, this, &main_window::suspend_node);
+	connect(m_tree, &tab_tree_view::open_externally_requested, this,
+	        [this](node *n) { if (n) open_url_externally(QUrl(n->url)); });
 	m_tree->expandAll();
 	connect(m_tree, &QTreeView::activated, this, &main_window::on_tree_activated);
 #ifdef Q_OS_ANDROID
@@ -689,6 +695,16 @@ QMenuBar *main_window::build_menu_bar() {
 	// Off unless asked for. Reading another program's files on a schedule is
 	// not something to start doing because the feature exists, and the label
 	// says what it costs rather than only what it gives.
+	QAction *ext = tools_menu->addAction("Open This Page in &Another App…", this,
+	                                      [this] {
+		if (web_view_backend *v = current_view())
+			open_url_externally(v->url());
+		else
+			m_status->showMessage("No page is open.", 5000);
+	});
+	ext->setStatusTip("Hand this address to another application — on a phone "
+	                   "that is how audio keeps playing with the screen off");
+
 	QAction *impc = tools_menu->addAction("Import Tabs from &Chromium", this,
 	                                       [this] { import_chromium_tabs(); });
 	impc->setStatusTip("Replay Chromium's session log and show the tabs it "
@@ -1364,6 +1380,42 @@ void main_window::on_tree_activated(const QModelIndex &proxy_index) {
 // second one beside it. The first version of this function built its own timer
 // and the compiler caught the duplicate member, which is the same "two records
 // of one thing" the reorder flag and the live-view map both turned out to be.
+// Hand an address to another application.
+//
+// **The one place where the two platforms mean genuinely different things**, so
+// it says which rather than pretending they are the same. On Android this is an
+// untyped `ACTION_VIEW`, and the apps that answer for a site are the ones that
+// can do what a browser tab cannot: keep audio playing with the screen off.
+// YouTube pauses itself when its page is hidden and Android suspends a process
+// with no foreground service, so a tab is the wrong container for listening to
+// something -- while VLC, NewPipe and YouTube itself run a media notification
+// and are built for exactly that.
+//
+// On desktop it goes to the system's default handler, which for an http address
+// is usually another browser. That is a smaller feature and an honest one; it
+// is not pretending to be the Android behaviour.
+void main_window::open_url_externally(const QUrl &url) {
+	if (!url.isValid() || url.scheme().isEmpty() || url.scheme() == "about") {
+		m_status->showMessage("There is no address to hand over.", 6000);
+		return;
+	}
+#ifdef Q_OS_ANDROID
+	QString error;
+	if (!android_intents::open_externally(url, &error))
+		m_status->showMessage(error, 8000);
+	else
+		m_status->showMessage("Handed to another app.", 4000);
+#else
+	// Not `QDesktopServices` blindly: it answers true for a great many things,
+	// and a silent nothing is the failure this project keeps writing down.
+	if (!QDesktopServices::openUrl(url))
+		m_status->showMessage("Nothing on this system offered to open that "
+		                       "address.", 8000);
+	else
+		m_status->showMessage("Opened in this system's default application.", 4000);
+#endif
+}
+
 void main_window::save_tree_soon() {
 	if (!m_tree_path.isEmpty() && m_save_timer)
 		m_save_timer->start();

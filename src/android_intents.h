@@ -21,4 +21,14 @@ namespace android_intents {
 // silently doing nothing would look like the player failing to start.
 bool open_media(const QUrl &url, const QString &mime, QString *error);
 
+// `ACTION_VIEW` with the address and **no type**, which is the opposite
+// decision from `open_media` and is the point of having both.
+//
+// `open_media` hands over a stream that has already been found, so naming a
+// media type keeps browsers out of the chooser. This hands over a *page*, and
+// the apps worth reaching are the ones registered for that host -- YouTube
+// itself, VLC, NewPipe -- each of which resolves the page on its own. Forcing
+// `video/*` would hide all of them behind players expecting a file.
+bool open_externally(const QUrl &url, QString *error);
+
 }  // namespace android_intents
