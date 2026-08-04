@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "main_window.h"
 #include "tab_tree_model.h"
+#include "tab_tree_view.h"
 #include "tree_sort_proxy.h"
 #include "state_store.h"
 #include "policy_engine.h"
@@ -470,7 +471,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	outer->addWidget(bar);
 
 	// --- Central splitter ----------------------------------------------
-	m_tree = new QTreeView(this);
+	m_tree = new tab_tree_view(this);
 	m_tree->setModel(m_proxy);
 	// One place to persist, however the change was made -- a drag, a rename, a
 	// new folder. The tree file is the canonical record and a change that
@@ -482,15 +483,6 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_tree->setHeaderHidden(true);
 	m_tree->setUniformRowHeights(true);
 	m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
-	// File-manager gestures. `DragDrop` rather than `InternalMove` because the
-	// model also publishes urls, so a tab can be dragged out to another
-	// application -- InternalMove would refuse to hand anything over.
-	m_tree->setDragEnabled(true);
-	m_tree->setAcceptDrops(true);
-	m_tree->setDropIndicatorShown(true);
-	m_tree->setDragDropMode(QAbstractItemView::DragDrop);
-	m_tree->setDefaultDropAction(Qt::MoveAction);
-	m_tree->setSelectionMode(QAbstractItemView::ExtendedSelection);
 	m_tree->expandAll();
 	connect(m_tree, &QTreeView::activated, this, &main_window::on_tree_activated);
 #ifdef Q_OS_ANDROID
@@ -1550,14 +1542,8 @@ void main_window::on_sort_mode_changed(int combo_index) {
 	using SM = tree_sort_proxy::sort_mode;
 	static const SM modes[] = { SM::tree_order, SM::title_asc,
 	                            SM::newest_created, SM::recently_seen };
-	if (combo_index >= 0 && combo_index < 4) {
+	if (combo_index >= 0 && combo_index < 4)
 		m_proxy->set_sort_mode(modes[combo_index]);
-		// Dropping *between* rows is a position, and a position only means
-		// something in tree order -- sorted by title, the row would jump back
-		// the instant it re-sorted. Dropping *onto* a folder stays available in
-		// every mode, so the honest half of the gesture keeps working.
-		m_model->set_reorder_allowed(modes[combo_index] == SM::tree_order);
-	}
 	m_tree->expandAll();
 }
 

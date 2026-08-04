@@ -75,7 +75,12 @@ public:
 	// The happy consequence is that the proxy's index mapping stops being a
 	// problem: reordering is only live in the one mode where the proxy's order
 	// and the model's are the same.
-	void set_reorder_allowed(bool on) { m_reorder_allowed = on; }
+	//
+	// **Enforced by the view, not by a flag here.** This class held a
+	// `reorder_allowed` bool that the shell set from the sort combo -- two calls
+	// that had to be kept in step, so any other route to changing the sort left
+	// a stale answer behind. `tab_tree_view` asks the proxy at the moment of the
+	// gesture instead, and the model simply honours whatever row it is handed.
 
 	// --- Operations the context menu offers -------------------------------
 	// Each mutates the tree and emits `structure_changed`, so the shell saves
@@ -134,5 +139,4 @@ private:
 	QString               m_path;
 	node                 *m_root = nullptr;
 	QHash<QString, node *> m_id_index;
-	bool                   m_reorder_allowed = true;
 };

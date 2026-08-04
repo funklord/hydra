@@ -11,6 +11,10 @@ tree_sort_proxy::tree_sort_proxy(QObject *parent)
 	set_sort_mode(sort_mode::tree_order);
 }
 
+bool tree_sort_proxy::in_tree_order() const {
+	return sortRole() == tab_tree_model::tree_order_role;
+}
+
 void tree_sort_proxy::set_sort_mode(sort_mode mode) {
 	switch (mode) {
 		case sort_mode::tree_order:

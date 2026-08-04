@@ -259,6 +259,40 @@ scroll position and half-filled form would be restored into the other — and is
 demoted to `unopened`, because a copy is a second bookmark of an address rather
 than a second live view of it.
 
+### Who decides, and the field that had to go
+
+The first arrangement put a `reorder_allowed` bool on the model and had the
+shell set it from the sort combo. Two calls that had to be kept in step by hand
+— so any other route to changing the sort, a settings restore or a shortcut or
+a test, would leave the model believing a stale answer and dropping rows at
+positions that mean nothing. That is the same shape as every "wired but never
+exercised" defect recorded above: state that must be *remembered*, in an object
+that cannot check it.
+
+**The view decides now**, because it is the only object that can see both
+things: the model cannot see which sort is active, and the proxy cannot see
+where the pointer is. `tab_tree_view` refuses a between-rows drop by ignoring
+the drag event when the indicator is between rows and the proxy is not in tree
+order — no indicator, no drop, and a drop *onto* a folder still works in every
+mode.
+
+**And the answer is derived rather than stored.** The proxy already encodes it:
+`sortRole() == tree_order_role` *is* the question. So there is no second copy to
+keep in sync — not a flag on the model, not a mirrored enum on the proxy. The
+model simply honours whatever row it is handed, the view never hands it a
+meaningless one, and a sort changed by any route at all is reflected
+immediately.
+
+That is also what makes the subclass worth having rather than configuring a
+plain `QTreeView` at the call site: the gesture set lives in one place, so a
+second tree — or a test — cannot get a differently configured one.
+
+**Filtering was the other worry, and it is Qt's problem rather than ours.**
+Checked rather than assumed: with a search active, proxy row N is not source row
+N, and a drop aimed at the one visible row lands beside *that* row rather than
+at the raw index. `QSortFilterProxyModel::dropMimeData` maps it, and there is a
+test that would notice if that ever stopped being true.
+
 **Reparenting always; reordering only in tree order.** A drop *between* two rows
 means "put it here", and that has no stable meaning sorted by title or by date —
 the row would jump back the instant it re-sorted, which reads as the app

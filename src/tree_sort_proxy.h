@@ -15,6 +15,16 @@ public:
 	explicit tree_sort_proxy(QObject *parent = nullptr);
 
 	void set_sort_mode(sort_mode mode);
+
+	// Whether the rows are in the tree's own order right now.
+	//
+	// **Derived, not stored.** The view needs this to decide whether a drop
+	// between two rows means anything, and the obvious implementations are both
+	// worse: a flag on the model that the shell must remember to update, or a
+	// copy of the mode kept here beside the sort role that already encodes it.
+	// `setSortRole` is the state; asking it cannot go stale, and there is
+	// nothing to keep in step.
+	bool in_tree_order() const;
 	void set_search_text(const QString &text);
 
 protected:

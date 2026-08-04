@@ -382,6 +382,105 @@ int main(int argc, char **argv) {
 		      "and holds what the source has now, not the union of both reads");
 	}
 
+	section("dropping while the tree is filtered");
+	{
+		// The hazard: a drop between two rows is a *position*, the view hands
+		// that position through the proxy, and while a search is active proxy
+		// row N is not source row N. If nothing maps it, a drop lands somewhere
+		// other than where it was aimed -- and silently, since the row it
+		// displaces looks plausible.
+		tab_tree_model m;
+		check(m.load(path), "a tree loads");
+		tree_sort_proxy proxy;
+		proxy.setSourceModel(&m);
+		proxy.set_sort_mode(tree_sort_proxy::sort_mode::tree_order);
+
+		node *work = m.root()->children.first();
+		check(work->children.size() >= 2, "a folder with several tabs");
+		// Titles in the fixture: "Zebra notes", "Apple docs", ...
+		QStringList before;
+		for (node *c : work->children)
+			before << c->title;
+
+		// Hide everything but one of them.
+		proxy.set_search_text("Apple");
+		const QModelIndex pf = proxy.mapFromSource(m.index_for_node(work));
+		check(pf.isValid(), "the folder is still visible while filtered");
+		check(proxy.rowCount(pf) == 1,
+		      QString("and shows only what matched (%1 of %2)")
+		          .arg(proxy.rowCount(pf)).arg(before.size()));
+
+		// Take a tab from elsewhere and drop it at proxy row 0 of that folder --
+		// which, filtered, is a different source row from 0.
+		node *loose = nullptr;
+		for (node *c : m.root()->children)
+			if (!c->is_folder()) loose = c;
+		check(loose != nullptr, "there is a tab outside that folder to move");
+		if (loose) {
+			const QString moved = loose->id;
+			QMimeData *md = m.mimeData({ m.index_for_node(loose) });
+			// Through the *proxy*, which is what the view talks to.
+			const bool dropped = proxy.dropMimeData(md, Qt::MoveAction, 0, 0, pf);
+			check(dropped, "the drop is accepted through the proxy");
+			delete md;
+
+			node *landed = m.node_by_id(moved);
+			check(landed && landed->parent == work,
+			      "and it lands in the folder that was aimed at");
+			if (landed && landed->parent == work) {
+				const int at = work->children.indexOf(landed);
+				// Proxy row 0 is the *matching* row -- "Apple docs" -- which sits
+				// at source index 1. Landing at source 0 would mean the position
+				// was passed through unmapped.
+				const int apple = [&] {
+					for (int i = 0; i < work->children.size(); ++i)
+						if (work->children.at(i)->title.startsWith("Apple"))
+							return i;
+					return -1;
+				}();
+				check(at >= 0 && apple >= 0,
+				      QString("both are placed (dropped at %1, Apple at %2)")
+				          .arg(at).arg(apple));
+				// The claim: it went next to what the user could actually see,
+				// not to the raw row number the view happened to use.
+				check(qAbs(at - apple) <= 1,
+				      QString("beside the row it was dropped on, not at the "
+				               "unmapped index (at %1, Apple at %2)")
+				          .arg(at).arg(apple));
+			}
+		}
+		proxy.set_search_text("");
+	}
+
+	section("who decides whether a between-rows drop means anything");
+	{
+		// This used to be a bool on the model that the shell set from the sort
+		// combo -- two calls that had to be kept in step, so any other route to
+		// changing the sort left the model believing a stale answer. The proxy
+		// already encodes it in its sort role, so the question is asked rather
+		// than mirrored and there is nothing to keep in sync.
+		tab_tree_model m;
+		m.load(path);
+		tree_sort_proxy proxy;
+		proxy.setSourceModel(&m);
+
+		proxy.set_sort_mode(tree_sort_proxy::sort_mode::tree_order);
+		check(proxy.in_tree_order(), "tree order says so");
+		proxy.set_sort_mode(tree_sort_proxy::sort_mode::title_asc);
+		check(!proxy.in_tree_order(), "sorting by title says otherwise");
+		proxy.set_sort_mode(tree_sort_proxy::sort_mode::newest_created);
+		check(!proxy.in_tree_order(), "and so does sorting by date");
+		proxy.set_sort_mode(tree_sort_proxy::sort_mode::tree_order);
+		check(proxy.in_tree_order(), "and it comes back");
+
+		// The property the old arrangement could not have: nobody had to be
+		// told. The answer follows the sort with no second call anywhere.
+		proxy.set_sort_mode(tree_sort_proxy::sort_mode::recently_seen);
+		check(!proxy.in_tree_order(),
+		      "a sort changed by any route at all is reflected immediately, "
+		      "because nothing is storing a copy of it");
+	}
+
 	QDir(dir).removeRecursively();
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

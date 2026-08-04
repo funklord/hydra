@@ -14,7 +14,7 @@
 #include <QStringList>
 #include <QString>
 
-class QTreeView;
+class tab_tree_view;
 class QSplitter;
 class QStackedWidget;
 class QLineEdit;
@@ -170,7 +170,7 @@ private:
 
 	tab_tree_model  *m_model = nullptr;
 	tree_sort_proxy *m_proxy = nullptr;
-	QTreeView       *m_tree  = nullptr;
+	tab_tree_view   *m_tree  = nullptr;
 	QWidget         *m_sidebar = nullptr;      // tree + search + sort
 	QSplitter       *m_splitter = nullptr;
 	QAction         *m_drawer_action = nullptr;

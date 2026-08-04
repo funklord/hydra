@@ -270,10 +270,6 @@ bool tab_tree_model::dropMimeData(const QMimeData *data, Qt::DropAction action,
 	node *target = parent.isValid() ? node_for_index(parent) : m_root;
 	if (!target || !target->is_folder())
 		return false;
-	// Between-rows drops are a position, and a position only means anything in
-	// tree order. Elsewhere the drop is treated as "into this folder".
-	if (!m_reorder_allowed)
-		row = -1;
 
 	const QStringList ids =
 		QString::fromUtf8(data->data("application/x-hydra-node-ids")).split('\n');

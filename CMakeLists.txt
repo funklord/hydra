@@ -156,6 +156,8 @@ qt_add_executable(hydra
     src/main_window.h
     src/tab_tree_model.cpp
     src/tab_tree_model.h
+    src/tab_tree_view.cpp
+    src/tab_tree_view.h
     src/tree_sort_proxy.cpp
     src/tree_sort_proxy.h
     src/tree_outline.cpp
