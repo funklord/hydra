@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// **Guarded here, not only by the build system.** CMake adds this file only
+// inside `if(ANDROID)`, and until it also said so itself the file depended on a
+// build file to be correct: anything reading the tree rather than the build --
+// an indexer, a language server, a static analyser, `fmake` -- reached
+// `<QJniEnvironment>` on a desktop and stopped. Measured, not imagined.
+//
+// `<QtGlobal>` first, and it is load-bearing: the compiler defines `__ANDROID__`
+// but **`Q_OS_ANDROID` is Qt's**, so testing it before any Qt header is included
+// is false everywhere -- including on Android, where it would empty this file in
+// the one build that needs it.
+#include <QtGlobal>
+#ifdef Q_OS_ANDROID
+
 #include "android_downloads.h"
 #include "download_manager.h"
 #include "media_detector.h"
@@ -62,3 +75,4 @@ QString android_downloads::publish(const QString &path, const QString &mime,
 		*error = "Could not copy the file into the shared Downloads folder.";
 	return uri;
 }
+#endif   // Q_OS_ANDROID

@@ -5523,6 +5523,41 @@ was this project solving that with an archive, not fmake solving it.
 Suggestions went to `fmake/suggestions/hydra.md`, which replaced the
 documentation-based version wholesale.
 
+### The four files that needed a build system to be correct
+
+Running fmake found them and the fix is worth having whether fmake is ever
+adopted. `android_view.cpp`, `android_downloads.cpp`, `android_intents.cpp` and
+`android_dialogs.cpp` were added to the build only inside `if(ANDROID)` and said
+nothing about it themselves, so anything reading the *tree* rather than the
+build file -- an indexer, a language server, a static analyser -- reached
+`<QJniEnvironment>` on a desktop and stopped.
+
+The callers were already doing this correctly: `main.cpp`, `main_window.cpp` and
+`player_launcher.cpp` all wrap their `#include "android_*.h"` in
+`#ifdef Q_OS_ANDROID`. Only the implementations were relying on CMake.
+
+**The guard has a trap in it, and getting it wrong fails in the other
+direction.** `Q_OS_ANDROID` is not the compiler's -- the compiler defines
+`__ANDROID__`, and `Q_OS_ANDROID` comes from Qt's `qsystemdetection.h`, reached
+through `qglobal.h`. A file that opens with `#ifdef Q_OS_ANDROID` before any Qt
+header has been included therefore tests false *everywhere*, including on
+Android, where it would empty exactly the four files the Android build needs.
+So each begins `#include <QtGlobal>` and the include is load-bearing.
+
+**And a passing build proves nothing here**, which is the part worth
+remembering. The callers guard their calls too, so an emptied
+`android_view.cpp` compiles *and links* and produces an apk -- one with no
+WebView in it. `make apk` succeeding was not evidence. What settled it was
+looking in the built library:
+
+    android_view         123 defined symbols
+    android_downloads     39 defined symbols
+    android_intents        2 defined symbols
+
+Desktop: all four now compile to nothing, checked with `-fsyntax-only`. fmake
+gets past them and produces a complete plan for the tree, and noticed on its own
+that `moc_android_downloads.cpp` now "defines nothing reachable".
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

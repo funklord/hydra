@@ -1,5 +1,5 @@
-/home/nabbe/src/hydra/src/.fmake/obj/f8cfef7fad61/android_dialogs.cpp.o: \
- /home/nabbe/src/hydra/src/android_dialogs.cpp /usr/include/stdc-predef.h \
+/home/nabbe/src/hydra/src/.fmake/obj/f8cfef7fad61/android_intents.cpp.o: \
+ /home/nabbe/src/hydra/src/android_intents.cpp /usr/include/stdc-predef.h \
  /usr/include/x86_64-linux-gnu/qt6/QtCore/QtGlobal \
  /usr/include/x86_64-linux-gnu/qt6/QtCore/qglobal.h \
  /usr/include/c++/14/type_traits \
