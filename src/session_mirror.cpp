@@ -27,6 +27,10 @@ void session_mirror::start(const QString &source, const QString &session_file,
 }
 
 void session_mirror::stop() { m_timer->stop(); }
+int session_mirror::interval_ms() const {
+	return m_timer ? m_timer->interval() : 0;
+}
+
 bool session_mirror::running() const { return m_timer->isActive(); }
 
 QString session_mirror::fingerprint(const QList<session_import::imported_tab> &tabs) {

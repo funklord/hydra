@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
 
 	section("Firefox");
 	{
-		QAction *a = action_named(&w, "Import Tabs from &Firefox");
+		QAction *a = action_named(&w, "Tabs from &Firefox");
 		check(a != nullptr, "the menu offers it");
 		if (a) {
 			a->trigger();
@@ -111,7 +111,7 @@ int main(int argc, char *argv[]) {
 
 	section("Chromium");
 	{
-		QAction *a = action_named(&w, "Import Tabs from &Chromium");
+		QAction *a = action_named(&w, "Tabs from &Chromium");
 		check(a != nullptr, "the menu offers it");
 		if (a) {
 			a->trigger();
@@ -194,8 +194,8 @@ int main(int argc, char *argv[]) {
 		check(seen.contains("Open in &Another App…"),
 		      "including the handoff, which on a phone is how audio keeps "
 		      "playing with the screen off");
-		check(seen.contains("&Duplicate") && seen.contains("New &Folder Here") &&
-		          seen.contains("&Delete") && seen.contains("&Properties…"),
+		check(seen.contains("Dup&licate") && seen.contains("New &Folder Here") &&
+		          seen.contains("&Delete") && seen.contains("P&roperties…"),
 		      QString("and the ones the view does itself (%1)").arg(seen.join(", ")));
 	}
 

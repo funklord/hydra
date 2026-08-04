@@ -5570,6 +5570,69 @@ Desktop: all four now compile to nothing, checked with `-fsyntax-only`. fmake
 gets past them and produces a complete plan for the tree, and noticed on its own
 that `moc_android_downloads.cpp` now "defines nothing reachable".
 
+### Chromium's mirror, measured rather than guessed — and a sweep that was lying
+
+Item 4 asked whether following Chromium's session more closely was "worth the
+reads", which is a question nobody had answered. On a real 2.2 MB session file
+holding 131 tabs:
+
+    stat only        0.006 ms per poll
+    read + replay    1.3   ms per poll
+
+**The reads were never the constraint.** A poll that finds nothing changed costs
+six microseconds; the whole of `replay_snss` over two megabytes costs less than
+a frame. Chromium now polls at 5 s rather than 15 s -- not 2.5 s, which would
+run in lockstep with the writer for no perceptible freshness and is the interval
+most likely to catch a flush half-written. A partial read is survivable rather
+than impossible (`replay_snss` treats a truncated tail as normal, so it yields a
+prefix and the next poll corrects it), and that risk rises with frequency and is
+unmeasured. It is the reason for 5 s and not something faster.
+
+**Then the sweep found what the measurement was standing on.** Running every
+driver -- which had not been done since the menus were rearranged -- turned up
+regressions in three of them, all mine, all from renaming things:
+
+- `try_import` looked for `Import Tabs from &Firefox`, now `Tabs from &Firefox`
+  under **File > Import**; and for `&Duplicate` and `&Properties…`, now
+  `Dup&licate` and `P&roperties…` after the Alt-key collisions were fixed.
+- `try_handoff` looked for `Open This Page in &Another App`, now
+  `Open in &Another App` in File.
+
+Every one of those was introduced by a commit that reported itself green,
+because after restructuring the menus I ran **only the driver I had just
+written**. `make test` covers the offline suites and says nothing about menu
+labels; `try_menus` asserts the structure I designed, not the labels other
+drivers depend on. The rule that would have caught it is dull: *a change to
+anything a driver asserts on means running the drivers, not the one you are
+thinking about.*
+
+**And the sweep itself was reporting nonsense.** It globbed `"$BIN"/try_*`,
+which also matches CMake's `try_*_autogen/` **directories** -- and `ls` on a
+directory lists what is inside, so it tried to run `timestamp`,
+`moc_predefs.h` and `mocs_compilation.cpp` as drivers and reported **165
+failures over 13 real results**. It globs executable regular files now. That is
+the second time this script's own bookkeeping has been the thing that lied, the
+first being report-only drivers counted as failures.
+
+It also now names the two drivers that were never going to run here --
+`try_extract` takes a url argument, `try_watch` needs a live network -- rather
+than counting them as failures. 14 passed, 11 report-only, 0 failed.
+
+**The sweep runs offscreen now**, which it should have from the start. Twenty-
+seven drivers putting real windows on a real screen takes over somebody's
+desktop for minutes, and it was doing exactly that while they were working.
+Every driver passes under `QT_QPA_PLATFORM=offscreen`, and `try_menus` scores
+*better* there -- 28 of 28 against 25 of 26 -- because on a live desktop it
+competes with whatever else is mapped, which means the display was not merely
+rude but a source of false failures.
+
+**What offscreen does not reproduce is appearance.** With no platform theme the
+icon-theme search paths differ, so the toolbar renders with Qt's built-in icons
+rather than the desktop's Breeze. Structure, ordering, mnemonics and behaviour
+are faithful; colours and icons are not. `SWEEP_ONSCREEN=1` exists for when
+appearance is the question -- and using it means taking over a screen, so it is
+worth asking first.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
@@ -5707,11 +5770,12 @@ carried along as amendments to a list item.
    like files, are made from a menu, rename with the distinction between a name
    a person chose and a name the page supplied, and another browser's open tabs
    appear in a mirror folder that is never written to the tree file. What is not
-   done: **Chromium's mirror is polled on the same 15 s timer as Firefox's, and
-   its source flushes every 2.5 s** — so it could be followed six times more
-   closely than it is, and nothing has measured whether that is worth the reads.
-   And a mirrored tab cannot be *opened* in place; it has to be dragged into the
-   tree first, which is defensible and has never been put to anyone.
+   done: a mirrored tab cannot be *opened* in place; it has to be dragged into
+   the tree first, which is defensible and has never been put to anyone.
+
+   The poll interval is settled — measured at 1.3 ms per read of a real 2.2 MB
+   session file, so Chromium follows at 5 s rather than 15 s. See the section
+   above for the numbers and for why not 2.5 s.
 
 5. **What is left untested now needs a window or a network.** The sweep through
    never-tested files is finished — see the sections above; four of nine were

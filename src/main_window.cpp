@@ -165,6 +165,11 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// scroll position.
 	m_fx_mirror = new session_mirror(this);
 	m_cr_mirror = new session_mirror(this);
+	// Named so a driver can tell them apart; they are otherwise identical
+	// objects and `findChildren` would return them in construction order,
+	// which is not a fact worth depending on.
+	m_fx_mirror->setObjectName("firefox_mirror");
+	m_cr_mirror->setObjectName("chromium_mirror");
 	connect(m_cr_mirror, &session_mirror::tabs_changed, this,
 	        [this](const QList<session_import::imported_tab> &tabs) {
 		show_mirror_tabs("chromium", "Chromium", tabs, /*from_poll=*/true);
@@ -923,7 +928,12 @@ QMenuBar *main_window::build_menu_bar() {
 			m_status->showMessage("No Chromium session file to follow.", 8000);
 			return;
 		}
-		m_cr_mirror->start("chromium", path);
+		// Chromium's session flushes about every 2.5 s, six times more often
+		// than Firefox's timer assumed. Measured at 1.3 ms per read of a real
+		// 2.2 MB file, so following it more closely costs nothing worth
+		// counting -- see the constant's own note.
+		m_cr_mirror->start("chromium", path,
+		                    session_mirror::k_chromium_interval_ms);
 	});
 
 	tools_menu->addSeparator();

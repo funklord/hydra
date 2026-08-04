@@ -39,11 +39,41 @@ public:
 	// fingerprint, emitting only on a real change -- is identical, and two
 	// copies of that would drift.
 	void start(const QString &source, const QString &session_file,
-	            int interval_ms = 15000);
+	            int interval_ms = k_default_interval_ms);
+
+	// **Measured, because the interval was a guess and the guess was wrong in a
+	// direction nobody checked.** Both mirrors ran on 15 s while Chromium's
+	// source flushes about every 2.5 s, and the note said nothing had measured
+	// whether following it more closely was worth the reads. On a real 2.2 MB
+	// session file holding 131 tabs:
+	//
+	//     stat only        0.006 ms per poll
+	//     read + replay    1.3   ms per poll
+	//
+	// So the reads were never the constraint. A poll that finds nothing changed
+	// costs six microseconds, and the whole of `replay_snss` over two megabytes
+	// costs less than a frame. Chromium therefore polls at 5 s -- not 2.5 s,
+	// which would run in lockstep with the writer for no freshness anyone can
+	// perceive, and which is the interval most likely to catch a flush
+	// half-written.
+	//
+	// A partial read is survivable rather than impossible: `replay_snss` treats
+	// a truncated tail as normal, so a half-written file yields a *prefix* of
+	// the tabs, the fingerprint changes, and the mirror briefly shows fewer.
+	// The next poll restores it. That risk rises with polling frequency and has
+	// not been measured; it is the reason for 5 s rather than something faster.
+	static constexpr int k_default_interval_ms  = 15000;
+	static constexpr int k_chromium_interval_ms = 5000;
 	void stop();
 	bool running() const;
 
 	QString path() const { return m_path; }
+
+	// What the timer is set to, exposed so a driver can catch the regression
+	// that matters: the interval is passed at one call site, and dropping that
+	// argument reverts Chromium to the 15 s default silently -- nothing fails,
+	// the mirror is merely six times staler than it was measured to need.
+	int interval_ms() const;
 
 	// What the tabs currently reduce to. Exposed for the suite: the interesting
 	// property is that two different *files* holding the same tabs produce the

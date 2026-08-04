@@ -1,8 +1,23 @@
 #!/bin/bash
 # Run every live driver and say what happened. Needs a display.
 #
-#   DISPLAY=:0 tests/live/sweep.sh            # all of them
-#   DISPLAY=:0 tests/live/sweep.sh try_import # just these
+#   tests/live/sweep.sh                       # all of them, offscreen
+#   tests/live/sweep.sh try_import            # just these
+#   SWEEP_ONSCREEN=1 tests/live/sweep.sh      # on the real display instead
+#
+# **Offscreen by default, and that is not only politeness.** These drivers put
+# real windows on a real screen, and a sweep of twenty-seven of them takes over
+# somebody's desktop for minutes at a time. Every one of them passes under
+# `QT_QPA_PLATFORM=offscreen`, and `try_menus` actually scores *better* there --
+# 28 of 28 against 25 of 26 -- because on a live desktop it competes with
+# whatever else is mapped.
+#
+# **What offscreen does not reproduce is appearance.** With no platform theme
+# the icon-theme search paths differ, so the toolbar renders with Qt built-in
+# icons rather than the desktop's, and a screenshot taken here is not a picture
+# of what a user sees. Structure, ordering, mnemonics and behaviour are all
+# faithful; colours and icons are not. Use `SWEEP_ONSCREEN=1` when appearance is
+# the question, and expect to be looking at somebody's screen while you do.
 #
 # **Two kinds of driver, and conflating them was worth a bug twice.** Most print
 # a trailing "N passed, M failed" and are judged on it. A few -- try_flicker,
@@ -25,15 +40,46 @@ if [ -z "$drivers" ]; then
 	# Globbed off what was built, so a new try_*.cpp joins the sweep by
 	# existing. The alternative is a list here that silently stops covering
 	# whatever was added last.
-	drivers=$(ls "$BIN"/try_* 2>/dev/null | xargs -n1 basename)
+	#
+	# **Executable regular files, and that is not pedantry.** The first version
+	# globbed `"$BIN"/try_*`, which also matches CMake's `try_*_autogen/`
+	# *directories* -- and `ls` on a directory lists what is inside it, so the
+	# sweep tried to run `timestamp`, `moc_predefs.h` and `mocs_compilation.cpp`
+	# as drivers. It reported 165 failures over 13 real results, which is a
+	# summary nobody can read and the second time this script's own bookkeeping
+	# has been the thing that lied.
+	drivers=$(find "$BIN" -maxdepth 1 -type f -executable -name 'try_*' \
+	          -printf '%f\n' 2>/dev/null | sort)
 fi
 [ -z "$drivers" ] && { echo "no drivers built -- run: make drivers"; exit 1; }
 
 pass=0 fail=0 report=0 failed=""
+# Drivers that are tools rather than tests: they take arguments, or they need a
+# network the sweep has no business assuming. Named with the reason, because
+# "it failed" and "it was never going to run here" are different facts and this
+# script has already conflated two kinds of outcome once.
+skip_reason() {
+	case "$1" in
+		try_extract) echo "a capture tool; takes a url argument" ;;
+		try_watch)   echo "needs a live network" ;;
+		*)           echo "" ;;
+	esac
+}
+
 for d in $drivers; do
+	why=$(skip_reason "$d")
+	if [ -n "$why" ] && [ -z "${SWEEP_ALL:-}" ]; then
+		printf '  skip   %-16s %s\n' "$d" "$why"
+		continue
+	fi
 	log="$OUT/$d.log"
-	HYDRA_TEST_OUT="$OUT/$d.out" timeout "${SWEEP_TIMEOUT:-300}" "$BIN/$d" \
-		>"$log" 2>&1
+	if [ -n "${SWEEP_ONSCREEN:-}" ]; then
+		HYDRA_TEST_OUT="$OUT/$d.out" timeout "${SWEEP_TIMEOUT:-300}" "$BIN/$d" \
+			>"$log" 2>&1
+	else
+		QT_QPA_PLATFORM=offscreen HYDRA_TEST_OUT="$OUT/$d.out" \
+			timeout "${SWEEP_TIMEOUT:-300}" "$BIN/$d" >"$log" 2>&1
+	fi
 	rc=$?
 	last=$(grep -E 'passed,' "$log" | tail -1)
 	if [ -n "$last" ]; then

@@ -130,7 +130,7 @@ int main(int argc, char *argv[]) {
 
 	section("handing it to whatever the desktop uses");
 	{
-		QAction *a = action_named(&w, "Open This Page in &Another App");
+		QAction *a = action_named(&w, "Open in &Another App");
 		check(a != nullptr, "the menu offers the handoff");
 		if (a) {
 			a->trigger();

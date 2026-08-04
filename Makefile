@@ -202,7 +202,7 @@ test-one: $(TESTS_DIR)/CMakeCache.txt
 # compiles the whole app and links WebEngine, and they want a real display.
 drivers: $(TESTS_DIR)/CMakeCache.txt
 	@$(CMAKE) --build $(TESTS_DIR) -j$(JOBS)
-	@echo "live drivers built. They need a display: DISPLAY=:0 ./$(TESTS_DIR)/try_cookies"
+	@echo "live drivers built. Run them offscreen: QT_QPA_PLATFORM=offscreen ./$(TESTS_DIR)/try_cookies"
 	@echo "tests/README.md says which need a helper server, KeePassXC or a model."
 
 # Score the recorded model replies against the current gate. No model, no
@@ -212,7 +212,9 @@ replay: $(TESTS_DIR)/CMakeCache.txt
 	@$(CMAKE) --build $(TESTS_DIR) -j$(JOBS) --target test_replay >/dev/null
 	@$(TEST_ENV) ./$(TESTS_DIR)/test_replay
 
-# Run them all and summarise. Wants a display, so it is not part of `test`.
+# Run them all and summarise. Offscreen by default, so it does not take over a
+# desktop; SWEEP_ONSCREEN=1 uses the real display, which is only needed when
+# appearance rather than behaviour is the question.
 # Pass DRIVERS=... for a subset: make sweep DRIVERS="try_import try_delete".
 sweep: drivers
 	@tests/live/sweep.sh $(DRIVERS)
