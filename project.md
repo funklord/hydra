@@ -4956,22 +4956,18 @@ carried along as amendments to a list item.
    host, and its domain is not recorded anywhere — only its player CDN
    (`kisscloud.online`). That is a gap in these notes rather than in the code.
 
-2. **§13 is closed; what is left of the password manager is UI.** `get-logins`
-   ran against a real vault and repeats unattended, so nothing in the protocol,
-   the transport or the crypto is unexercised any more. **The entry picker is
-   built** — see the section above, where "multiple matches are left alone"
-   turned out to mean the passwords were sent to the page and then not used.
-   Still not built, from §13.2 rather than §13.1: the key icon itself (refusals
-   go to the status bar meanwhile), `set-login` on new-credential submit, and
-   `generate-password`.
+2. **§13 is finished.** `get-logins` runs unattended against a real vault, the
+   entry picker decides in C++ so only the chosen password crosses into the
+   page, the key sits on the toolbar carrying its refusal, `set-login` offers to
+   save on submit and `generate-password` fills a registration field. Nothing in
+   §13 is unbuilt or unexercised.
 
-   The one durable caution from getting here, since it cost five attempts and
-   none of it was ours: **restart KeePassXC before an interactive pairing.** A
-   freshly started instance raises the association window; one that has already
-   served an association stops raising it, while still answering the handshake
-   in the same run. And the dialog **requires a name** — dismissing it empty
-   creates no association and sends no reply at all, which is indistinguishable
-   from not clicking.
+   The durable caution, since it cost five attempts and none of it was ours:
+   **restart KeePassXC before an interactive pairing.** A freshly started
+   instance raises the association window; one that has already served an
+   association stops raising it, while still answering the handshake in the same
+   run. And the dialog **requires a name** — dismissing it empty creates no
+   association and sends no reply, which is indistinguishable from not clicking.
 
 3. **Decide whether the helper tier's DOM half is wanted at all** (arch
    §11.5.1). The fetch half is built, permissioned and proven against a live CDN.
@@ -4987,7 +4983,17 @@ carried along as amendments to a list item.
    exist there. What is *not* established is that filling works: the emulator has
    no autofill service configured, so that claim needs a device that does.
 
-5. **What is left untested now needs a window or a network.** The sweep through
+5. **The tab tree grew hands, and two things are open behind it.** Tabs move
+   like files, are made from a menu, rename with the distinction between a name
+   a person chose and a name the page supplied, and another browser's open tabs
+   appear in a mirror folder that is never written to the tree file. What is not
+   done: **Chromium's mirror is polled on the same 15 s timer as Firefox's, and
+   its source flushes every 2.5 s** — so it could be followed six times more
+   closely than it is, and nothing has measured whether that is worth the reads.
+   And a mirrored tab cannot be *opened* in place; it has to be dragged into the
+   tree first, which is defensible and has never been put to anyone.
+
+6. **What is left untested now needs a window or a network.** The sweep through
    never-tested files is finished — see the sections above; four of nine were
    wrong. The remainder are dialogs (`media_dialog`, `filter_dialog`,
    `reorganize_dialog`, `site_policy_dialog`), thin adapters (`capture_source`,

@@ -94,6 +94,12 @@ private:
 	stream_probe      *m_probe    = nullptr;
 	helper_host       *m_helpers  = nullptr;
 	QString            m_site;
+	// What the last refused attempt was, and why. Fed back into the next
+	// payload: the gate's refusals name exactly what to change, and until now
+	// none of them reached the model -- "you can send again" sent the identical
+	// prompt, so a second attempt had no more to go on than the first.
+	QString            m_last_refused_source;
+	QString            m_last_refused_reason;
 	QUrl               m_page;
 	QList<evidence_request> m_evidence;
 	QString            m_proposal;

@@ -191,6 +191,34 @@ int main(int argc, char **argv) {
 	QPushButton *apply = button(&dlg, "Use This");
 	std::printf("gate: %s\n", apply && apply->isEnabled() ? "ACCEPTED" : "REJECTED");
 
+	// **One retry, with the refusal in hand.** Off unless asked for, so the
+	// baseline stays the baseline. The dialog folds the gate's own message and
+	// the rejected source into the next payload, which is the whole hypothesis:
+	// most refusals here are one edit from correct and the model has never been
+	// told what was wrong. Without this the "send again" the dialog offers
+	// re-sends an identical prompt, so a second attempt knows no more than the
+	// first did.
+	if (qEnvironmentVariableIntValue("HYDRA_RETRY") == 1 &&
+	    apply && !apply->isEnabled() && send && send->isEnabled()) {
+		std::printf("\n--- refused; retrying once with the reason ---\n");
+		answered = false;
+		QElapsedTimer again;
+		again.start();
+		send->click();
+		loop.exec();
+		if (!answered) {
+			std::printf("no answer to the retry within the timeout\n");
+		} else {
+			std::printf("retry answered after %lld ms\n", qint64(again.elapsed()));
+			if (script)
+				std::printf("\n----- what the retry returned -----\n%s\n"
+				             "-----------------------------------\n",
+				             qPrintable(script->toPlainText().left(1200)));
+			std::printf("gate after retry: %s\n",
+			             apply->isEnabled() ? "ACCEPTED" : "REJECTED");
+		}
+	}
+
 	// What the *shipping path* concluded, in its own words. The line below is a
 	// second, weaker judgement — `check()` with no probe results and no fetch of
 	// the pick — and reading it as the verdict is a mistake this harness has

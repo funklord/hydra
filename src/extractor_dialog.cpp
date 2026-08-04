@@ -448,6 +448,17 @@ void extractor_dialog::rebuild_payload() {
 		            "address again by a stable part of its url. Its ids, tokens "
 		            "and position in the list will all be different next time; "
 		            "the shape of its path will not.\n\n";
+	// The correction, last of all, for the reason every other instruction in
+	// this payload sits where it does: measured, the model acts on the tail.
+	if (!m_last_refused_reason.isEmpty()) {
+		payload += "One more thing, and it is the most important. **A previous "
+		            "attempt was rejected.** This is what it returned:\n\n";
+		payload += m_last_refused_source + "\n\n";
+		payload += "It was refused because: " + m_last_refused_reason + "\n\n";
+		payload += "Do not send that again. The reason above says what to "
+		            "change; everything else about the task is unchanged.\n\n";
+	}
+
 	payload += "Return an object whose `url` is one of the addresses above "
 	           "copied exactly, whose `kind` is `hls`, `dash` or `direct`, and "
 	           "whose `headers` sets `Referer` to `page.url` — or return null "
@@ -597,7 +608,17 @@ void extractor_dialog::on_judged(const extractor_verdict &verdict) {
 		                          "The playlist beside it is what names them in "
 		                          "order, so that is the address worth keeping."
 		                        : QString()));
-		m_status->setText("The proposal was rejected. You can send again.");
+		// Remembered for the next send. A rejected attempt plus the reason it
+		// was rejected is far more than the first attempt had, and the gate's
+		// messages are written to be acted on -- "the script reads a `serves`
+		// value at run time ... decide from it now and match the address" is an
+		// instruction, not just a complaint.
+		if (m_script)
+			m_last_refused_source = m_script->toPlainText().left(1200);
+		m_last_refused_reason = m_verdict.message;
+		rebuild_payload();   // so the next send carries the correction
+		m_status->setText("The proposal was rejected. Sending again now tells the "
+		                   "model what was wrong with it.");
 		return;
 	}
 
