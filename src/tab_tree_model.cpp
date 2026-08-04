@@ -402,3 +402,57 @@ node *tab_tree_model::duplicate_node(node *n) {
 	emit structure_changed();
 	return c;
 }
+
+// --- Mirrors of other browsers --------------------------------------------
+
+void tab_tree_model::mark_mirror(node *n, const QString &source) {
+	if (!n)
+		return;
+	n->mirror = source;
+	for (node *c : n->children)
+		mark_mirror(c, source);
+}
+
+node *tab_tree_model::replace_mirror(const QString &source, const QString &title,
+                                      const QList<node *> &tabs) {
+	if (source.isEmpty())
+		return nullptr;
+	beginResetModel();
+
+	// Drop the previous mirror for this source wholesale. Only one folder can
+	// be the mirror of a given browser, so finding it by source rather than by
+	// title means renaming the folder does not orphan it.
+	for (int i = m_root->children.size() - 1; i >= 0; --i) {
+		node *c = m_root->children.at(i);
+		if (c->mirror == source) {
+			m_root->children.removeAt(i);
+			delete c;
+		}
+	}
+
+	node *folder = new node;
+	folder->id        = unused_id("m");
+	folder->type      = node_type::folder;
+	folder->title     = title;
+	folder->created   = QDateTime::currentDateTime();
+	folder->last_seen = folder->created;
+	folder->parent    = m_root;
+	for (node *t : tabs) {
+		t->parent = folder;
+		t->order  = folder->children.size();
+		folder->children << t;
+	}
+	// Mirrors sit at the top, where a thing that is not yours is easiest to
+	// tell apart from the tree you built.
+	m_root->children.prepend(folder);
+	for (int i = 0; i < m_root->children.size(); ++i)
+		m_root->children[i]->order = i;
+	mark_mirror(folder, source);
+
+	reindex();
+	endResetModel();
+	// **Not** `structure_changed`: that signal means "save the tree", and a
+	// mirror is the one thing that must not be saved. The shell shows it and
+	// forgets it, which is what makes it safe to replace on every refresh.
+	return folder;
+}

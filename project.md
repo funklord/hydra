@@ -297,7 +297,80 @@ deliberate, since a first run has no file yet, but nothing says so and the two
 cases deserve different words. Left alone rather than changed blind, because
 changing it would change what happens on somebody's first launch.
 
-## The icon## The icon
+## Another browser's tabs, in a folder of their own (§4)
+
+Tabs rather than bookmarks, because a bookmark is something filed once and the
+thing worth bringing across is the working set someone actually has in front of
+them. **Tools ▸ Import Tabs from Firefox** reads what Firefox last wrote and
+shows it; it never attaches to a running browser, needs no extension installed,
+and cannot disturb what it reads.
+
+**The file is not JSON.** Firefox writes `mozLz40\0`, a little-endian uint32 of
+the decompressed size, then a raw LZ4 block. On this machine that is 1.5 MB
+expanding to 5.8 MB and holding **81 open tabs**.
+
+**Both decoders are kept, and the reason is the machine this was written on.**
+There was no `liblz4-dev` here at the time, so as an optional dependency the
+feature would have been dead exactly where it was being built — untestable, and
+"install something first" is a poor answer for reading a file the user already
+has. So `session_import` carries a small bounds-checked LZ4 block decoder.
+liblz4 arrived later and is now used where present, because it is audited and
+this parses a file another program wrote; the built-in stays as the fallback.
+
+**The suite drives both against an implementation nobody here wrote** —
+python's `lz4.block` — on the real session file, and they agree byte for byte
+over 5,791,500 bytes. That comparison is the only reason to trust a
+decompressor someone wrote by hand. The built-in is exercised *even though the
+build does not use it*, because a fallback nothing runs is a fallback that has
+already stopped working.
+
+**The profile trap, which would have made this look like it worked.**
+`profiles.ini` here marks `Default=1` on a profile holding four certificate
+databases and nothing else — no session, no history — while the profile actually
+in use is named by an `[Install…]` section. An importer that trusts `Default=1`
+imports zero tabs and reports success. The install-locked entry wins, and
+`Default=1` is used only when nothing overrides it.
+
+**`recovery.jsonlz4` over `sessionstore.jsonlz4`**, deliberately: the second only
+exists after a clean shutdown, so preferring it would import a stale set from a
+browser that is running right now — which is the common case for someone
+reaching for this.
+
+**A tab's `index` is where it is, not where it ended up.** It is 1-based and
+points into that tab's own history, so a tab someone pressed Back on twice
+imports as the page they are looking at rather than the one they navigated away
+from. `_closedTabs` is deliberately ignored: those are what the user closed, and
+resurrecting them answers a question nobody asked.
+
+### The mirror, and the one thing it must never do
+
+Imported tabs go in a folder marked `mirror`, and **a mirror is never written to
+the tree file**. `tree_outline::write_node` returns early on one, subtree and
+all. Saving it would resurrect a stale copy of another browser's tabs on the
+next launch, indistinguishable from tabs the user had filed themselves — and
+they would keep coming back, since nothing would ever delete them.
+
+Re-reading **replaces** the folder rather than merging into it: a merge leaves
+tabs closed elsewhere sitting here for ever, which is the failure mode of every
+stale mirror. That is also what makes the polled version later the same
+mechanism rather than a second one.
+
+Ids are scoped to the mirror (`fx-0`, `fx-1`, …) because a mirrored tab is in
+`m_id_index` while it is on screen, and an id colliding with a real tab's would
+make `node_by_id` — which the lifecycle and the AI payload both use — answer
+with somebody else's session.
+
+**Dragging one out is how you keep it.** The drop makes a copy with no `mirror`
+set and an id of its own, so it becomes an ordinary tab in your tree, saved like
+any other. That fell out of the drag-and-drop work rather than needing anything
+of its own.
+
+**Not done:** polling, and Chromium. Chromium's sessions are an SNSS command log
+that has to be *replayed* to reconstruct state, its format is versioned internal
+API, and the flush interval is ~2.5 s from its own source — fresher than
+Firefox's and considerably more work to read.
+
+## The icon## The icon## The icon
 
 `icons/` holds the app icon and `icons/build_icons.py` regenerates every size
 from `hydra-master.png`. One drawing, downscaled, with the small sizes

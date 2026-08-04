@@ -128,6 +128,13 @@ node *load(const QString &path) {
 }
 
 static void write_node(QTextStream &out, node *n, int depth) {
+	// A mirror is a view of another browser's session, not part of this tree.
+	// Writing it would resurrect a stale copy of somebody else's tabs on the
+	// next launch, indistinguishable from tabs the user had filed themselves --
+	// and the whole subtree goes with it, since a child of a mirror is
+	// mirrored too.
+	if (!n->mirror.isEmpty())
+		return;
 	const QString indent(depth * 2, ' ');
 	if (n->is_folder()) {
 		out << indent << "- [" << n->id << "] folder | " << n->title << "\n";

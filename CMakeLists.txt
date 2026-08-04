@@ -117,6 +117,23 @@ else()
     message(STATUS "libsecret not found — the KeePassXC pairing will not survive a restart")
 endif()
 
+# liblz4 is optional and this one degrades to our own code rather than to
+# nothing. Firefox's session file is a raw LZ4 block, and `session_import`
+# carries a small bounds-checked decoder for it so the feature works on a
+# machine without the library -- including the one it was written on, where the
+# only way to test it at all was to implement it. Where liblz4 *is* present it
+# is used instead: it is audited and this parses a file another program wrote,
+# and "we have a verified implementation" is a weaker argument than "we use the
+# one everyone else uses".
+if(PkgConfig_FOUND AND NOT ANDROID)
+    pkg_check_modules(LZ4 QUIET liblz4)
+endif()
+if(LZ4_FOUND)
+    message(STATUS "liblz4 found — used to read Firefox sessions")
+else()
+    message(STATUS "liblz4 not found — the built-in LZ4 decoder will be used instead")
+endif()
+
 # The sample tree, compiled in. On desktop it is read from the source directory
 # or the command line; on Android there is no such directory, so the first run
 # has to seed app storage from something the APK carries.
@@ -238,6 +255,8 @@ qt_add_executable(hydra
     src/box_crypto.cpp
     src/box_crypto.h
     src/credential_store.cpp
+    src/session_import.cpp
+    src/session_import.h
     src/credential_store.h
     src/keepass_protocol.cpp
     src/keepass_protocol.h
@@ -309,6 +328,12 @@ if(SODIUM_FOUND)
     target_compile_definitions(hydra PRIVATE HYDRA_HAVE_SODIUM)
     target_include_directories(hydra PRIVATE ${SODIUM_INCLUDE_DIRS})
     target_link_libraries(hydra PRIVATE ${SODIUM_LIBRARIES})
+endif()
+
+if(LZ4_FOUND)
+    target_compile_definitions(hydra PRIVATE HYDRA_HAVE_LZ4)
+    target_include_directories(hydra PRIVATE ${LZ4_INCLUDE_DIRS})
+    target_link_libraries(hydra PRIVATE ${LZ4_LIBRARIES})
 endif()
 
 if(SECRET_FOUND)

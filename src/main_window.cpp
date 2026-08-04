@@ -38,6 +38,7 @@
 #include "filter_dialog.h"
 #include "credential_store.h"
 #include "keepass_bridge.h"
+#include "session_import.h"
 #include "autofill_controller.h"
 #include "consent_blocker.h"
 #include "consent_dialog.h"
@@ -670,6 +671,12 @@ QMenuBar *main_window::build_menu_bar() {
 	// browser that hands out passwords because a script requested one is a
 	// browser with a new attack surface for no benefit. The shell asks, and the
 	// injected script puts the answer in the field that wanted it.
+	tools_menu->addSeparator();
+	QAction *imp = tools_menu->addAction("Import Tabs from &Firefox", this,
+	                                      [this] { import_firefox_tabs(); });
+	imp->setStatusTip("Read the tabs Firefox has open and show them in a folder "
+	                   "of their own");
+
 	QAction *kpg = tools_menu->addAction("&Generate Password", this, [this] {
 		if (m_autofill)
 			m_autofill->request_generated_password(m_autofill->page_origin());
@@ -1342,6 +1349,57 @@ void main_window::on_tree_context_menu(const QPoint &pos) {
 // sits. The id is shown and not editable -- it keys `state/<id>.blob` and the
 // outline file, so retyping it would orphan a tab's history with no warning,
 // which is exactly the kind of silent loss this project keeps finding.
+// Another browser's open tabs, in a folder of their own.
+//
+// One-shot: this reads what Firefox last wrote and shows it. It does not attach
+// to a running browser, needs no extension, and cannot disturb what it reads --
+// the cost being that it sees the world as of that browser's last flush, which
+// the status line says rather than leaving to be discovered.
+void main_window::import_firefox_tabs() {
+	const QString profile = session_import::firefox_profile();
+	const QString path    = session_import::firefox_session_path(profile);
+	if (path.isEmpty()) {
+		m_status->showMessage(
+		    profile.isEmpty()
+		        ? "No Firefox profile found."
+		        : "That Firefox profile has no session file to read.", 8000);
+		return;
+	}
+
+	QString error;
+	const QList<session_import::imported_tab> tabs =
+		session_import::firefox_tabs(path, &error);
+	if (tabs.isEmpty()) {
+		m_status->showMessage(error.isEmpty() ? "No open tabs found." : error, 8000);
+		return;
+	}
+
+	QList<node *> nodes;
+	for (const session_import::imported_tab &t : tabs) {
+		node *n = new node;
+		// Ids scoped to the mirror. A mirrored tab is never written to the tree
+		// file and never gets a state blob, but it *is* in `m_id_index` while
+		// it is on screen -- so an id that collided with a real tab's would make
+		// `node_by_id` answer with somebody else's session, and that lookup is
+		// what the lifecycle and the AI payload both use.
+		n->id        = QString("fx-%1").arg(nodes.size());
+		n->type      = node_type::unopened_tab;
+		n->title     = t.title;
+		n->url       = t.url;
+		n->created   = QDateTime::currentDateTime();
+		n->last_seen = n->created;
+		nodes << n;
+	}
+	m_model->replace_mirror("firefox", QString("Firefox (%1 tabs)").arg(nodes.size()),
+	                         nodes);
+	m_tree->expandAll();
+	m_status->showMessage(
+	    QString("Read %1 tabs from Firefox, as of %2. Drag one into your tree to "
+	             "keep it.")
+	        .arg(nodes.size())
+	        .arg(QFileInfo(path).lastModified().toString("HH:mm")), 12000);
+}
+
 void main_window::edit_node_properties(node *n) {
 	if (!n)
 		return;

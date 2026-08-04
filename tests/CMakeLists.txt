@@ -138,6 +138,19 @@ endif()
 # without libsecret the suite pins the other contract -- every call fails and
 # unavailable_reason() says why -- and the encoding half is pure and runs
 # anywhere.
+# Built with liblz4 when the app is, so the suite exercises the decoder the app
+# actually uses -- and it drives the built-in one either way.
+if(PkgConfig_FOUND)
+    pkg_check_modules(LZ4_T QUIET liblz4)
+endif()
+add_executable(test_session test_session.cpp ${H}/session_import.cpp)
+target_link_libraries(test_session PRIVATE Qt6::Core Qt6::Test ${LZ4_T_LIBRARIES})
+target_include_directories(test_session PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR}
+    ${LZ4_T_INCLUDE_DIRS})
+if(LZ4_T_FOUND)
+    target_compile_definitions(test_session PRIVATE HYDRA_HAVE_LZ4)
+endif()
+
 add_executable(test_credstore test_credstore.cpp ${H}/credential_store.cpp)
 target_link_libraries(test_credstore PRIVATE Qt6::Core Qt6::Test
     ${SECRET_T_LIBRARIES})

@@ -325,6 +325,63 @@ int main(int argc, char **argv) {
 		      "with what was inside it, rather than leaving orphans in the index");
 	}
 
+	section("a mirror is shown and never written");
+	{
+		// The invariant the whole design rests on. A mirror is another browser's
+		// session; saving it would resurrect a stale copy of somebody else's
+		// tabs on the next launch, indistinguishable from tabs the user had
+		// filed themselves -- and they would keep coming back, because nothing
+		// would ever delete them.
+		tab_tree_model m;
+		check(m.load(path), "a tree loads");
+		const int real_top = m.root()->children.size();
+
+		QList<node *> tabs;
+		for (int i = 0; i < 3; ++i) {
+			node *n = new node;
+			n->id    = QString("fx-%1").arg(i);
+			n->type  = node_type::unopened_tab;
+			n->title = QString("Elsewhere %1").arg(i);
+			n->url   = QString("https://elsewhere.test/%1").arg(i);
+			tabs << n;
+		}
+		node *mirror = m.replace_mirror("firefox", "Firefox (3 tabs)", tabs);
+		check(mirror != nullptr, "a mirror folder appears");
+		check(m.root()->children.size() == real_top + 1, "beside the real tree");
+		check(m.root()->children.first() == mirror,
+		      "at the top, where a thing that is not yours is easiest to spot");
+		check(!mirror->mirror.isEmpty() &&
+		          mirror->children.first()->mirror == "firefox",
+		      "and everything under it is marked as belonging to the source");
+
+		const QString saved = dir + "/with-mirror.txt";
+		check(m.save(saved), "the tree saves");
+		tab_tree_model reloaded;
+		check(reloaded.load(saved), "and loads again");
+		bool found_mirror = false;
+		for (node *c : reloaded.root()->children)
+			if (c->title.startsWith("Firefox"))
+				found_mirror = true;
+		check(!found_mirror,
+		      "with no trace of the mirror in it -- the file is this tree, not "
+		      "a copy of another browser's");
+		check(reloaded.root()->children.size() == real_top,
+		      "and the real tree is intact around where it was");
+
+		// Re-reading replaces rather than accumulating: a merge would leave
+		// tabs the user closed in the other browser sitting here for ever.
+		QList<node *> again;
+		node *one = new node;
+		one->id = "fx-0"; one->type = node_type::unopened_tab;
+		one->title = "Only one now"; one->url = "https://elsewhere.test/0";
+		again << one;
+		m.replace_mirror("firefox", "Firefox (1 tab)", again);
+		check(m.root()->children.size() == real_top + 1,
+		      "a second import does not add a second folder");
+		check(m.root()->children.first()->children.size() == 1,
+		      "and holds what the source has now, not the union of both reads");
+	}
+
 	QDir(dir).removeRecursively();
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

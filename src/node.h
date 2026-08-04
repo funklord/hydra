@@ -23,6 +23,21 @@ struct node {
 
 	int       order = 0;          // canonical sibling order as loaded from disk
 
+	// Non-empty when this node is a *mirror* of somewhere else -- the name of
+	// the source, e.g. "firefox". Set on the folder and on everything under it.
+	//
+	// Two things follow, and both are the point. A mirror is **not written to
+	// the tree file**: it is a view of another browser's session, and saving it
+	// would resurrect a stale copy of somebody else's tabs as real ones on the
+	// next launch, indistinguishable from tabs the user had filed themselves.
+	// And a mirror can be *replaced* wholesale when the source is re-read,
+	// which is what makes the polled version later the same mechanism as the
+	// one-shot one rather than a second.
+	//
+	// Dragging a mirrored tab into the tree copies it, and the copy has no
+	// `mirror` -- which is exactly what "keep this one" means.
+	QString   mirror;
+
 	node        *parent = nullptr;
 	QList<node *> children;
 

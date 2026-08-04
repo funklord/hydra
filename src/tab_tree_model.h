@@ -81,6 +81,20 @@ public:
 	// Each mutates the tree and emits `structure_changed`, so the shell saves
 	// once, in one place, however the change was made.
 	node *add_folder(node *parent, const QString &title);
+
+	// Create or replace the mirror folder for `source`, holding `tabs`.
+	//
+	// Replace rather than merge, and that is the design: re-reading a session
+	// is not a diff, it is a fresh answer to "what does that browser have open
+	// now". Merging would leave tabs the user closed elsewhere sitting in this
+	// tree forever, which is the failure mode of every stale mirror.
+	//
+	// Anything the user dragged *out* of the mirror is untouched by this, since
+	// a drag out makes a copy with no `mirror` set -- that copy is theirs.
+	node *replace_mirror(const QString &source, const QString &title,
+	                      const QList<node *> &tabs);
+	// Every node under `n` is marked as belonging to the same source.
+	static void mark_mirror(node *n, const QString &source);
 	bool  remove_node(node *n);
 	// Edit what a node *is*, as opposed to where it sits. The id is deliberately
 	// not editable: it keys the state blob and the outline file, and letting a
