@@ -5675,6 +5675,49 @@ somebody found annoying is a record of where they have been. It belongs where
 they can read and clear it, not in a store they cannot see; `clear_host` and
 `clear_all` exist for that and are tested.
 
+**Running it against a real site found a bug that every check had passed
+over.** Pointed at a live news front page, the report came back
+`0 requests seen, 0 ad-shaped` while all fourteen checks reported success. The
+cause: `filter_signals::count_for` counts *suspects*, not everything observed —
+and its declaration sat directly under the comment describing `observed_for`,
+so the next caller to arrive read it as that list's count. The dialog had been
+saying "N requests seen, N of them ad-shaped" on every page, and on a page with
+no ad-shaped traffic both numbers are zero, which is indistinguishable from a
+report that captured nothing.
+
+Fixed to `observed_for(host).size()`, and the declaration moved up beside the
+list it actually counts. The guard that would have caught it is now in the
+driver — *any page that loaded at all made at least one request* — and it was
+proved by putting the bug back: `0 seen, 0 ad-shaped`, one failure. With the
+fix, the same page reports one.
+
+**And then it was demonstrated, on a site chosen for being full of ads.**
+kisskh, the second capture site, reports `59 requests seen, 5 ad-shaped`, and
+the five are real: a Cloudflare beacon, three Google Analytics `collect` calls
+and a `google.se/ads/ga-audiences` tag. So the dialog shows a populated list and
+*Propose Filter Rules* is enabled rather than greyed out with a reason.
+
+Two things that run showed, neither of them a defect:
+
+- **All five are analytics and tracking, not display advertising.** What is
+  visibly annoying on that site — overlays, popups, creatives — is not in the
+  list, because `looks_ad_shaped` sees only network requests that are
+  third-party *and* match a URL shape. That is the division the funnel was
+  designed around rather than a gap in it, and it is evidence that offering all
+  three tools was right: on this site the useful one is **Zap an Element**, not
+  the rule proposer.
+- **Three of the five are the same endpoint** with different query strings.
+  Harmless for proposing a rule, since the simulation runs against the whole
+  corpus, but as three lines in a dialog somebody is reading it is noise.
+  Collapsing near-identical addresses by shape *for display only* would make
+  the list easier to act on. Not done: it changes how evidence is presented,
+  which is a decision rather than a fix.
+
+The earlier run against a news front page returned zero suspects, and that is a
+legitimate answer rather than a failure — a front page loaded once without
+consent accepted is mostly first-party. Whether `looks_ad_shaped` is well tuned
+is a question older than this feature and was left alone.
+
 One detail that decided a design choice: suspects are stored as a `QStringList`
 and handed to `QSettings` as one, rather than joined into a string. Real
 analytics addresses contain commas — `tag_exp=1~2~3&list=a,b,c` — so a joined

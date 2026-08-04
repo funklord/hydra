@@ -1143,7 +1143,11 @@ void main_window::report_annoyance() {
 	r.page     = page.toString();
 	if (m_signals) {
 		r.suspects = m_signals->suspects_for(host);
-		r.observed = m_signals->count_for(host);
+		// `observed_for`, not `count_for`: the latter counts *suspects*, so
+		// using it here made the dialog say "N requests seen, N of them
+		// ad-shaped" for every page. Caught by pointing the driver at a real
+		// site, where both numbers came back 0 while every check passed.
+		r.observed = m_signals->observed_for(host).size();
 	}
 
 	// Filed *before* the dialog, deliberately. Somebody who presses this and

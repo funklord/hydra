@@ -31,9 +31,14 @@ public:
 
 	// Requests that got through and look ad-shaped, for this page.
 	QStringList suspects_for(const QString &site_host) const;
+	// How many of those there are. **Suspects, not everything observed** --
+	// this sat directly under `observed_for` and was read as its count by the
+	// next caller to arrive, who then showed "N requests seen, M ad-shaped"
+	// with N and M always equal. Moved up beside the list it actually counts.
+	int count_for(const QString &site_host) const;
+
 	// Everything seen on this page — the corpus a rule is simulated against.
 	QStringList observed_for(const QString &site_host) const;
-	int count_for(const QString &site_host) const;
 
 	void clear_site(const QString &site_host);
 

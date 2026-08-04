@@ -23,6 +23,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QTreeView>
+#include <QUrl>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -65,6 +66,16 @@ int main(int argc, char *argv[]) {
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
 
+	// A real site, on request. The default is a page with no advertising at
+	// all, which exercises the plumbing and tells you nothing about whether the
+	// captured evidence is any use -- so pass a url to try it where there is
+	// something to catch:
+	//
+	//     QT_QPA_PLATFORM=offscreen ./tests/build/try_annoyed https://news.site/
+	const QString target = argc > 1 ? QString::fromLocal8Bit(argv[1])
+	                                 : QStringLiteral("https://example.com/");
+	const QString target_host = QUrl(target).host();
+
 	const QString out = qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
 	                        ? qgetenv("HYDRA_TEST_OUT") : QString("/tmp/hydra-annoyed");
 	QDir(out).removeRecursively();
@@ -72,9 +83,10 @@ int main(int argc, char *argv[]) {
 	const QString tree = out + "/tree.txt";
 	QFile tf(tree);
 	if (!tf.open(QIODevice::WriteOnly | QIODevice::Truncate)) return 1;
-	tf.write("- [f0] folder | Mine\n"
-	          "  - [a1] unopened | A page | https://example.com/ | "
-	          "created=2026-01-01T00:00:00 | seen=2026-01-01T00:00:00\n");
+	tf.write(QString("- [f0] folder | Mine\n"
+	                  "  - [a1] unopened | A page | %1 | "
+	                  "created=2026-01-01T00:00:00 | seen=2026-01-01T00:00:00\n")
+	              .arg(target).toUtf8());
 	tf.close();
 
 	policy_engine       policy;
@@ -110,7 +122,10 @@ int main(int argc, char *argv[]) {
 		auto *tree_view = w.findChild<QTreeView *>();
 		emit tree_view->activated(
 			tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
-		spin(2500);
+		// Long enough for third-party traffic to arrive: ad-shaped requests are
+		// mostly late, after the document and its own scripts.
+		spin(qEnvironmentVariableIsSet("HYDRA_SETTLE")
+		         ? qEnvironmentVariableIntValue("HYDRA_SETTLE") : 2500);
 
 		bool saw = false;
 		answer(&saw, "Just Record It", false);
@@ -120,15 +135,31 @@ int main(int argc, char *argv[]) {
 
 		annoyance_log log;
 		check(log.load(out + "/annoyances.ini"), "and a report file exists");
-		check(log.count_for("example.com") == 1,
+		check(log.count_for(target_host) == 1,
 		      QString("with one report against the site (%1)")
-		          .arg(log.count_for("example.com")));
-		if (log.count_for("example.com") == 1) {
-			const annoyance_report r = log.for_host("example.com").first();
+		          .arg(log.count_for(target_host)));
+		if (log.count_for(target_host) == 1) {
+			const annoyance_report r = log.for_host(target_host).first();
 			check(r.when.isValid(), "carrying when it was filed");
-			check(r.page.contains("example.com"), "and what was open");
+			check(r.page.contains(target_host), "and what was open");
 			check(r.outcome == "recorded",
 			      QString("and what came of it (%1)").arg(r.outcome));
+			// **The check that would have caught the accessor mix-up.** The
+			// report used `count_for`, which counts *suspects*, so `observed`
+			// was always equal to the suspect count -- and on a page with no
+			// ad-shaped traffic that is zero, which is what a report captures
+			// nothing looks like. Any page that loaded at all made at least one
+			// request.
+			check(r.observed > 0,
+			      QString("and how much the page actually requested (%1 seen, "
+			               "%2 ad-shaped)")
+			          .arg(r.observed).arg(r.suspects.size()));
+			check(r.observed >= r.suspects.size(),
+			      "with the ad-shaped ones a subset of what was seen");
+			std::printf("     captured: %d requests seen, %lld ad-shaped\n",
+			             r.observed, qint64(r.suspects.size()));
+			for (int i = 0; i < r.suspects.size() && i < 8; ++i)
+				std::printf("       %s\n", qPrintable(r.suspects[i].left(96)));
 		}
 	}
 
@@ -145,20 +176,20 @@ int main(int argc, char *argv[]) {
 
 		annoyance_log log;
 		log.load(out + "/annoyances.ini");
-		check(log.count_for("example.com") == 2,
+		check(log.count_for(target_host) == 2,
 		      QString("and the dismissed press was filed anyway (%1)")
-		          .arg(log.count_for("example.com")));
+		          .arg(log.count_for(target_host)));
 	}
 
 	section("forgetting it");
 	{
 		annoyance_log log;
 		log.load(out + "/annoyances.ini");
-		log.clear_host("example.com");
+		log.clear_host(target_host);
 		check(log.save(out + "/annoyances.ini"), "a site's reports can be cleared");
 		annoyance_log back;
 		back.load(out + "/annoyances.ini");
-		check(back.count_for("example.com") == 0,
+		check(back.count_for(target_host) == 0,
 		      "and stay cleared, since this is a record of where somebody has been");
 	}
 
