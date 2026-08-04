@@ -270,18 +270,23 @@ int main(int argc, char **argv) {
 		policy_engine pol;
 		check(!pol.is_allowed(policy::feature::extractor_fetch, "site.example"),
 		      "fetching is blocked by default");
-		check(!pol.is_allowed(policy::feature::extractor_dom, "site.example"),
-		      "and so is reading the page");
 
-		// Two powers, not one. Reading a manifest the page already fetched is
-		// not comparable to reading the DOM of a logged-in page, and granting
-		// the first must not grant the second.
+		// **The two-powers checks that stood here are gone with the permission
+		// they tested.** §11.5.1 splits the helper tier into fetching and
+		// reading the page precisely so that granting the first cannot grant
+		// the second, and this asserted it. The DOM half is designed and
+		// unbuilt, so its permission is no longer offered -- a control read by
+		// nothing, whose own description promised access to "whatever you are
+		// logged in to".
+		//
+		// Testing that separation now would mean keeping the permission alive
+		// to have something to assert about, which is the tail wagging the dog.
+		// It comes back with the capability. What is still true is tested:
+		// fetching is per-site, revocable, and does not leak.
 		pol.set_setting("site.example", policy::feature::extractor_fetch,
 		                 policy::setting::allow);
 		check(pol.is_allowed(policy::feature::extractor_fetch, "site.example"),
 		      "allowing fetch on one site allows it there");
-		check(!pol.is_allowed(policy::feature::extractor_dom, "site.example"),
-		      "and still does not let it read the page");
 		check(!pol.is_allowed(policy::feature::extractor_fetch, "other.example"),
 		      "nor does it leak to another site");
 
@@ -303,17 +308,26 @@ int main(int argc, char **argv) {
 		check(reloaded.load(path), "and loads");
 		check(reloaded.is_allowed(policy::feature::extractor_fetch, "site.example"),
 		      "with the grant intact");
-		check(!reloaded.is_allowed(policy::feature::extractor_dom, "site.example"),
-		      "and nothing granted that was not");
+		// An old policy file may still carry `extractorDom`. The loader must
+		// ignore it rather than mistake it for something: `feature_from_name`
+		// answers `count` and every caller skips that.
+		check(policy::feature_from_name("extractorDom") == policy::feature::count,
+		      "and a permission we no longer offer is ignored, not misread");
 		QFile::remove(path);
 
 		// The name is what a stored file and any future migration key on.
 		check(QString(policy::feature_name(policy::feature::extractor_fetch))
 		          == "extractorFetch",
 		      "the machine name is stable");
-		check(policy::feature_from_name("extractorDom") ==
-		          policy::feature::extractor_dom,
+		check(policy::feature_from_name("extractorFetch") ==
+		          policy::feature::extractor_fetch,
 		      "and parses back");
+		// The DOM half of §11.5.1 is designed and unbuilt, so its permission is
+		// not offered. An old policy file may still carry the key, and the
+		// loader must ignore it rather than mistake it for something: every
+		// caller of `feature_from_name` skips `feature::count`.
+		check(policy::feature_from_name("extractorDom") == policy::feature::count,
+		      "a permission for a capability that does not exist is not offered");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

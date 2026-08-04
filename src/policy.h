@@ -22,12 +22,21 @@ enum class feature : int {
 	notifications,
 	referer,
 	autofill,
-	// The §11.5.1 helper tier, as two powers rather than one. Reading a
-	// manifest the page already fetched is not comparable to reading the DOM of
-	// a logged-in page, and a single "advanced extractor" switch would quietly
-	// grant the second to get the first. Both default to block.
+	// The §11.5.1 helper tier. Two powers rather than one, deliberately:
+	// reading a manifest the page already fetched is not comparable to reading
+	// the DOM of a logged-in page, and a single "advanced extractor" switch
+	// would quietly grant the second to get the first. Defaults to block.
+	//
+	// **`extractor_dom` is deliberately absent, and its design is not.** The DOM
+	// half of §11.5.1 is designed and unbuilt, so the permission was offered and
+	// read by nothing: denying it gave false assurance and granting it did
+	// nothing, for a control whose own description says it grants access to
+	// "whatever you are logged in to". A permission is a promise about what the
+	// program will do, and one for a capability that does not exist is a promise
+	// nobody is keeping. It comes back with the capability, under this name, in
+	// this position -- rules persist by name, so nothing on disk depends on
+	// where it sits.
 	extractor_fetch,
-	extractor_dom,
 	// "Do you want to accept cookies?" -- the consent banner itself, not the
 	// cookies. Blocked means the banner is answered and dismissed for you;
 	// allowed means it is left alone and you answer it yourself. It sits with

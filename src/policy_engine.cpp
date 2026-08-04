@@ -48,9 +48,11 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	// are what actually govern it (§13.3).
 	set_global_default(feature::autofill,            setting::allow);
 	// The helper tier is off until a site is explicitly trusted with it: it is
-	// the only feature here that lets generated code cause a request.
+	// the only feature here that lets generated code cause a request. The DOM
+	// half of §11.5.1 has no default here because it has no permission -- it is
+	// designed and unbuilt, and a default for a capability that does not exist
+	// is a setting nothing can honour.
 	set_global_default(feature::extractor_fetch,     setting::block);
-	set_global_default(feature::extractor_dom,       setting::block);
 }
 
 QString policy_engine::etld_plus_one(const QString &host) {

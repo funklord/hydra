@@ -470,7 +470,10 @@ It is source and tooling, not a build dependency: nothing in `CMakeLists.txt` re
 
 ### 11.5.1 The helper tier: letting a script look, without letting it reach
 
-**Status: the fetch half is complete and reachable — fetcher, transcript, off-thread execution and the per-site permission. DOM is designed only.** `helper_allowlist`,
+**Status: the fetch half is complete and reachable — fetcher, transcript, off-thread execution and the per-site permission. DOM is designed only, and its permission is deliberately not offered.**
+
+`extractorFetch` exists in the policy table and is enforced. **`extractorDom` does not**, and its absence is a decision rather than an oversight: a permission is a promise about what the program will do, and one for a capability that does not exist is a promise nobody is keeping. Offered, it read as a live control described as granting access to "whatever you are logged in to" — denying it gave false assurance and granting it did nothing. It returns with the capability, under that name. Rules persist by name rather than by index, so nothing on disk depends on where it sits in the enum, and a policy file still carrying the key is ignored rather than misread.
+ `helper_allowlist`,
 `helper_host` and the budgets are built and exercised offline against an
 injected fetcher, and `site_extractor::run` exposes them to a script as `hydra`
 when — and only when — a host is supplied. Built ahead of a site that demands
@@ -517,7 +520,7 @@ Two details of the rendering are load-bearing rather than cosmetic. A refused ca
 
 **Re-judging, and what determinism is not.** A stored extractor is re-judged on every run today, and that continues: the four answer rules that need no network (invented, segment, page, furniture) are unchanged — the fifth, which asks whether the pick is a part of a confirmed playlist, is an accept-time rule only, since nothing has been probed on a later run — and the allowlist is enforced *at call time* on every run rather than replayed from the transcript. Deliberately **not** attempted: making a helper-tier run reproducible. The site changes — that is the entire reason this exists — so a replay harness would be testing a fossil. What is guaranteed is failure-closed behaviour, not identical behaviour.
 
-**Policy integration is the existing one.** Two new per-site tri-states in the §7 PolicyEngine — `extractorFetch` and `extractorDom`, each `Allow | Block | Default` with the global default **Block** — governed by the same URL-bar editor and precedence rules as every other feature, and appearing in it automatically because that editor iterates `feature_count()` rather than a hand-written list. On a site with no rule, `extractor_dialog` is handed no `helper_host` at all, so the script has no `hydra` in scope and cannot tell the surface exists. A stored extractor records which tier it needs; if that permission is later revoked, it fails closed and reports why rather than degrading to a guess. A tier-1 extractor is unaffected and keeps working.
+**Policy integration is the existing one.** Per-site tri-states in the §7 PolicyEngine, `Allow | Block | Default` with the global default **Block** — governed by the same URL-bar editor and precedence rules as every other feature, and appearing in it automatically because that editor iterates `feature_count()` rather than a hand-written list. On a site with no rule, `extractor_dialog` is handed no `helper_host` at all, so the script has no `hydra` in scope and cannot tell the surface exists. A stored extractor records which tier it needs; if that permission is later revoked, it fails closed and reports why rather than degrading to a guess. A tier-1 extractor is unaffected and keeps working.
 
 **What the gate gains.** The answer rules are untouched. Added are *process* rules, checked the same way and reported the same way: no address outside the allowlist was touched, no budget was exceeded, and no call happened after the deadline. A violation is a named rejection, not a warning.
 

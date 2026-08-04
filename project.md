@@ -4100,6 +4100,18 @@ also the answer for "no error", and getting that wrong would silently turn every
 failure into a success. Six checks pin that offline; the routing itself sits
 behind a socket and a handshake, so the driver is what proves it.
 
+**The durable caution, since it cost five attempts and none of it was ours:
+restart KeePassXC before an interactive pairing.** A freshly started instance
+raises the association window; one that has already served an association stops
+raising it, while still answering the handshake in the same run -- so the
+transport looks healthy and the dialog that should appear simply does not. And
+the dialog **requires a name**: dismissing it empty creates no association and
+sends no reply, which is indistinguishable from never having clicked.
+
+This was in the next-list for a while, attached to an item that was finished.
+It belongs here, beside the pairing it is about, because that is where anyone
+hitting it will be looking.
+
 **The lesson is about what persistence bought, not about the bug.** The defect
 was reachable only from a request that needed a pairing, and a pairing needed a
 person — so for as long as the association lived in memory, this could only have
@@ -5667,26 +5679,23 @@ carried along as amendments to a list item.
    stream to be found. The line that used to sit here saying otherwise was
    stale.
 
-2. **§13 is finished.** `get-logins` runs unattended against a real vault, the
-   entry picker decides in C++ so only the chosen password crosses into the
-   page, the key sits on the toolbar carrying its refusal, `set-login` offers to
-   save on submit and `generate-password` fills a registration field. Nothing in
-   §13 is unbuilt or unexercised.
+2. **The helper tier's DOM half stays designed, and its permission is gone**
+   (arch §11.5.1). The decision was put with evidence rather than made by
+   default: on both measured captures the stream was *in the request log*, so
+   the DOM half would have added nothing; and the other use the design names —
+   following a master playlist to a variant — is already done in C++, where
+   `hls_assembler` owns `hls_playlist` and parses `EXT-X-STREAM-INF` itself.
 
-   The durable caution, since it cost five attempts and none of it was ours:
-   **restart KeePassXC before an interactive pairing.** A freshly started
-   instance raises the association window; one that has already served an
-   association stops raising it, while still answering the handshake in the same
-   run. And the dialog **requires a name** — dismissing it empty creates no
-   association and sends no reply, which is indistinguishable from not clicking.
+   What was wrong regardless of the decision: `extractorDom` was a live per-site
+   control that **no code read**, described to the user as granting access to
+   "whatever you are logged in to". Denying it gave false assurance; granting it
+   did nothing. It is removed. The design stays, so the day a site demands it is
+   still short, and the permission comes back with the capability.
 
-3. **Decide whether the helper tier's DOM half is wanted at all** (arch
-   §11.5.1). The fetch half is built, permissioned and proven against a live CDN.
-   Nothing has yet needed the DOM half, and "nothing has needed it" is evidence,
-   not an excuse — this is a decision to make on purpose rather than a gap to
-   fill by default.
+   Still open: nothing has needed the DOM half *yet*, and that is still evidence
+   rather than proof. Two captures is two.
 
-4. **Android's remaining gap is the platform's autofill, and it is unverified.**
+3. **Android's remaining gap is the platform's autofill, and it is unverified.**
    §19's list is otherwise done — System WebView, drawer, request filter, script
    bridges, external links, file picker, player handoff, downloads that a file
    manager can see. Autofill on Android is the system service's job rather than
@@ -5694,7 +5703,7 @@ carried along as amendments to a list item.
    exist there. What is *not* established is that filling works: the emulator has
    no autofill service configured, so that claim needs a device that does.
 
-5. **The tab tree grew hands, and two things are open behind it.** Tabs move
+4. **The tab tree grew hands, and two things are open behind it.** Tabs move
    like files, are made from a menu, rename with the distinction between a name
    a person chose and a name the page supplied, and another browser's open tabs
    appear in a mirror folder that is never written to the tree file. What is not
@@ -5704,7 +5713,7 @@ carried along as amendments to a list item.
    And a mirrored tab cannot be *opened* in place; it has to be dragged into the
    tree first, which is defensible and has never been put to anyone.
 
-6. **What is left untested now needs a window or a network.** The sweep through
+5. **What is left untested now needs a window or a network.** The sweep through
    never-tested files is finished — see the sections above; four of nine were
    wrong. The remainder are dialogs (`media_dialog`, `filter_dialog`,
    `reorganize_dialog`, `site_policy_dialog`), thin adapters (`capture_source`,

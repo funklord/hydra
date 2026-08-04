@@ -45,9 +45,6 @@ const info k_info[] = {
 	{ "extractorFetch", "Extractor may fetch",
 	  "Lets a learned extractor fetch a manifest the page had already asked "
 	  "for, which is what streams hidden behind one need." },
-	{ "extractorDom", "Extractor may read the page",
-	  "Lets a learned extractor read the page itself, including whatever you "
-	  "are logged in to. A much stronger power than fetching." },
 	{ "cookieNotices", "Cookie consent banners",
 	  "The \"do you want to accept cookies?\" banner itself. Blocking it means "
 	  "Hydra answers it for you, taking the least permissive option the site "
