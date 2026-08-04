@@ -5419,6 +5419,110 @@ refuses any existing directory that is not empty and does not already look like
 a staging tree. Verified the same way, by pointing it at `src/` and watching it
 decline.
 
+### situ, evaluated against the parsers rather than in the abstract
+
+The standing directive is to test `situ` for viability against the project in
+front of you. So two schemas were written from `session_import.cpp` and
+compiled: `snss.situ` for Chromium's session framing, and `pickle.situ` for
+`base::Pickle` as it appears inside those records.
+
+**The result that decides it.** `pickle_string16` is a UTF-16 string whose
+length counts *characters*, so the byte run is `length * 2` with `length` a
+`u32`. The capability map came back with
+
+    nav_entry.title.data   size=Bounded(0, 8589934590)
+
+which is 2 x 4294967295 -- the overflow this project's `payload_reader` guards
+by hand, and guards with a *division* precisely so the multiplication cannot
+wrap:
+
+    if (!m_ok || n < 0 || (m_end - m_p) / 2 < n) { m_ok = false; return {}; }
+
+That line took care to write and is invisible on inspection. situ derived the
+same fact from the schema and printed it. **That is materially better rather
+than tidier**, which is the bar the directive sets.
+
+**What fits.** The SNSS header and its length-prefixed record stream
+(`records[] while (...)`, structurally the same as netlink's TLV walk), and the
+whole Pickle layer including four-byte padding via
+`align_up(length, 4) - length`.
+
+**What does not, and it is the largest piece.** The LZ4 block decompressor is
+not a layout at all: it reads a token, a literal run, a back-reference and a
+match length, and writes into a *different* buffer with overlapping copies.
+No schema describes that, and situ generating no allocation is the reason.
+It stays hand-written -- which is fine, since it is the one part already
+verified byte-identical against python's `lz4.block` over 5,791,500 bytes.
+The replay itself -- command dispatch, last-writer-wins, ordering -- is
+application logic and equally out of scope.
+
+**What adoption would cost**, and why this is a recommendation rather than a
+change: `situc` is Python 3.11 at build time, and this build has no code
+generation beyond Qt's `moc`. Adding a generator means adding a build
+dependency to the `.deb` as well. The alternative is committing the generated
+`.h`/`.c` and regenerating by hand, which wants a blessed workflow that situ
+does not currently document.
+
+So: **worth adopting for the SNSS and Pickle readers, on the committed-
+generated-files model, and not for anything else here.** Not done in this pass;
+it is a bounded piece of work with a real dependency question attached, and the
+decision is the user's. Suggestions for situ itself went to that project.
+
+The measurement stops short of one thing, said plainly: the generated code was
+produced and its map read, but it was not compiled by a C compiler, linked into
+hydra, or run against a real session file. The next step, if this is taken up,
+is to run both readers over the same captured file and diff them -- which is a
+harness shape this project already has.
+
+### fmake, run on `src/` rather than reasoned about
+
+The earlier assessment of fmake from this project was written from its
+documentation. Running it changed two conclusions, in both directions.
+
+**More was inferred than expected, with no configuration.** 45 moc invocations,
+one per `Q_OBJECT` header, matching what `AUTOMOC` does -- including
+`network_fetcher.cpp`, a `Q_OBJECT` in a *source* file, which needs the
+include-the-output form and was not missed. Qt's whole include and define set.
+And a link set derived from symbols that is **smaller** than the one
+`CMakeLists.txt` names, with every declined library explained by the header that
+suggested it.
+
+**It cannot build this tree**, and the reason is ours rather than fmake's.
+`src/` holds four `android_*.cpp` that CMake adds only inside `if(ANDROID)`.
+They carry no self-guard, because the build system is what excludes them, so
+fmake schedules all four and stops at
+
+    android_view.cpp:12:10: fatal error: QJniEnvironment: No such file or directory
+
+Worth knowing independently of fmake: **those four files depend on a build
+system to exclude them and say nothing about it themselves.** Any tool that
+reads the tree rather than the build file -- an indexer, a language server, a
+static analyser, a new contributor -- meets the same wall.
+
+**And the optional-dependency finding is the sharp one.** `credential_store.cpp`
+is `#ifdef HYDRA_HAVE_SECRET` throughout; `theme.cpp` guards its portal query
+with `#ifdef HYDRA_HAVE_DBUS`. Both macros are defined by CMake *after*
+`pkg_check_modules` finds the library. fmake compiled both files with the macros
+undefined, so the bodies vanished, so no symbol needed the libraries, so fmake
+correctly declined to link them:
+
+    (not linked)  libsecret/secret.h at credential_store.cpp:9 suggests libsecret-1, but no symbol needs it
+
+Every step is right and the result is a browser with no keyring and no
+colour-scheme detection, built without a warning. The chain is worth
+understanding because it is not a bug in either tool: fmake reasons from symbols
+in objects, and that evidence is downstream of a decision it cannot see.
+
+**Verdict, unchanged in substance and now on evidence:** fmake reads this tree
+impressively and cannot build it, and the two blockers are a filename
+convention and a way to say "found means defined". Section 17's claim that
+fmake would make our static library unnecessary is **still unverified** -- the
+build fails before reaching a link, and the 19m17s-to-6m57s figure it quotes
+was this project solving that with an archive, not fmake solving it.
+
+Suggestions went to `fmake/suggestions/hydra.md`, which replaced the
+documentation-based version wholesale.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
