@@ -30,6 +30,9 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QContextMenuEvent>
+#include <QHash>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QRegularExpression>
 #include <QTimer>
 #include <cstdio>
@@ -142,6 +145,43 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	section("no two items in a menu answer the same Alt key");
+	{
+		// **Found by looking at the screenshots, not by the checks above.** The
+		// order was right and every label was sensible, and Edit still had
+		// `&Undo Reorganize` beside `D&uplicate` -- both claiming Alt+U -- while
+		// Tools had `&Cookie Banners We Missed` beside `Site &Controls`, both
+		// claiming Alt+C. Qt matches mnemonics case-insensitively and simply
+		// cycles between the collisions, so nothing looks broken; the key just
+		// stops doing what it says.
+		//
+		// This is the check that would have caught it, so it exists now.
+		for (QAction *top : bar->actions()) {
+			QMenu *m = top->menu();
+			if (!m)
+				continue;
+			QHash<QChar, QString> claimed;
+			QStringList clashes;
+			for (QAction *a : m->actions()) {
+				const QString t = a->text();
+				const int amp = t.indexOf('&');
+				if (a->isSeparator() || amp < 0 || amp + 1 >= t.size())
+					continue;
+				const QChar key = t.at(amp + 1).toLower();
+				if (claimed.contains(key))
+					clashes << QString("%1 vs %2 (Alt+%3)")
+					               .arg(claimed.value(key), t, QString(key.toUpper()));
+				else
+					claimed.insert(key, t);
+			}
+			check(clashes.isEmpty(),
+			      QString("%1: %2").arg(top->text().remove('&'),
+			                             clashes.isEmpty()
+			                                 ? QStringLiteral("every Alt key is its own")
+			                                 : clashes.join("; ")));
+		}
+	}
+
 	section("no menu is a list to read");
 	for (QAction *a : bar->actions()) {
 		QMenu *m = a->menu();
@@ -188,6 +228,40 @@ int main(int argc, char *argv[]) {
 		check(subs.size() >= 3,
 		      QString("the twenty flat items became %1 submenus plus the rest")
 		          .arg(subs.size()));
+	}
+
+	// A picture of each menu, when asked for. The assertions above say the order
+	// is right; they cannot say it *looks* right -- mnemonic collisions, a
+	// separator in an odd place, a submenu arrow missing, a label that wraps.
+	// Popups are their own windows, so this grabs the screen rather than the
+	// widget.
+	if (qEnvironmentVariableIsSet("HYDRA_SHOTS")) {
+		const QString dir = QString::fromLocal8Bit(qgetenv("HYDRA_SHOTS"));
+		QDir().mkpath(dir);
+		int shot = 0;
+		for (QAction *a : bar->actions()) {
+			QMenu *m = a->menu();
+			if (!m)
+				continue;
+			const QString name = a->text().remove('&').remove(' ');
+			m->popup(w.mapToGlobal(QPoint(40 + 90 * shot, 60)));
+			spin(400);
+			// **The menu widget, not the screen.** The first version grabbed the
+			// root window, which on a real desktop means capturing whatever else
+			// the person had open -- their terminals, their mail, all of it --
+			// into a file in /tmp, to look at a menu that is four hundred pixels
+			// wide. Grabbing the popup itself is both the correct picture and
+			// the only thing this has any business seeing.
+			const QString f = QString("%1/%2-%3.png")
+			                      .arg(dir).arg(shot, 2, 10, QChar('0')).arg(name);
+			if (m->grab().save(f))
+				std::printf("     shot %s\n", qPrintable(f));
+			else
+				std::printf("     could not write %s\n", qPrintable(f));
+			m->close();
+			spin(120);
+			++shot;
+		}
 	}
 
 	section("the context menu, where Delete sits above Properties");

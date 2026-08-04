@@ -5196,7 +5196,25 @@ Help, Settings last in Tools under a separator; related items in groups of a few
 
 `try_menus` asserts all of it — the bar's order, the three strong tails, that no
 menu exceeds twelve items, that both importers sit together, and that Delete
-precedes Properties in the context menu. 22 checks. The rules are written as
+precedes Properties in the context menu.
+
+**And then looking at it found what none of that could.** The driver now grabs a
+picture of each menu, and two mnemonic collisions were sitting in plain sight:
+Edit had `&Undo Reorganize` beside `D&uplicate`, both claiming Alt+U, and Tools
+had `&Cookie Banners We Missed` beside `Site &Controls`, both claiming Alt+C. Qt
+matches mnemonics case-insensitively and cycles between collisions rather than
+complaining, so nothing looks wrong — the key simply stops doing what the
+underline says it does. They are `Dup&licate` and `S&ite Controls…` now, and the
+check that would have caught them exists: every menu's Alt keys must be distinct.
+Verified by putting one collision back, which fails with `Edit: &Undo Reorganize
+vs D&uplicate (Alt+U)`. 28 checks.
+
+One thing worth writing down about the pictures. The first version grabbed the
+root window, which on a real desktop means capturing whatever else the person
+has open — their terminals, their mail — into a file in `/tmp`, in order to look
+at a menu four hundred pixels wide. It grabs the popup widget itself now. That
+is both the better picture and the only thing a menu test has any business
+seeing. The rules are written as
 assertions rather than as a comment because this is a list that rots by
 appending, and it will stop being anyone's decision again the moment it is not
 checked.

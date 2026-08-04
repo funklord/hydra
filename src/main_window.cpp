@@ -702,7 +702,7 @@ QMenuBar *main_window::build_menu_bar() {
 				QGuiApplication::clipboard()->setText(n->url);
 	});
 	copy_addr->setStatusTip("Copy the selected tab's address");
-	QAction *dup_act = edit_menu->addAction("D&uplicate", this, [this] {
+	QAction *dup_act = edit_menu->addAction("Dup&licate", this, [this] {
 		if (node *n = selected_node())
 			m_model->duplicate_node(n);
 	});
@@ -889,7 +889,7 @@ QMenuBar *main_window::build_menu_bar() {
 	banners->setStatusTip("Teach a rule from a consent banner nothing matched");
 
 	tools_menu->addSeparator();
-	tools_menu->addAction("Site &Controls…", this, &main_window::open_site_controls);
+	tools_menu->addAction("S&ite Controls…", this, &main_window::open_site_controls);
 	QAction *prefs = tools_menu->addAction("&Settings…", QKeySequence::Preferences,
 	                                        this, &main_window::open_settings);
 	prefs->setStatusTip("Player, download folder and BitTorrent options");

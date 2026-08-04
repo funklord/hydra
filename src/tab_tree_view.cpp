@@ -94,7 +94,7 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	QAction *tab_a    = menu.addAction("New &Tab Here");
 	QAction *folder_a = menu.addAction("New &Folder Here");
 	if (n)
-		dup_a = menu.addAction("D&uplicate");
+		dup_a = menu.addAction("Dup&licate");
 
 	QAction *del_a = nullptr, *props_a = nullptr;
 	if (n) {
