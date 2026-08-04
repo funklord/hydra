@@ -90,6 +90,7 @@ protected:
 private slots:
 	void on_tree_activated(const QModelIndex &proxy_index);
 	void on_tree_context_menu(const QPoint &pos);
+	void edit_node_properties(node *n);
 	void on_sort_mode_changed(int combo_index);
 	void on_search_changed(const QString &text);
 	void navigate_to_address();

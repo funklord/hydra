@@ -4,6 +4,8 @@
 #include "tree_outline.h"
 #include "tree_diff.h"
 
+#include <QMimeData>
+#include <functional>
 #include <QApplication>
 #include <QStyle>
 #include <QFont>
@@ -161,4 +163,242 @@ int tab_tree_model::apply_reorganization(const QList<tree_change> &changes) {
 	reindex();
 	endResetModel();
 	return applied;
+}
+
+// --- Moving nodes about ---------------------------------------------------
+
+Qt::ItemFlags tab_tree_model::flags(const QModelIndex &index) const {
+	Qt::ItemFlags f = QAbstractItemModel::flags(index);
+	if (!index.isValid())
+		return f | Qt::ItemIsDropEnabled;   // the root accepts drops
+	f |= Qt::ItemIsDragEnabled;
+	// Only a folder can contain something. Dropping *onto* a tab would have to
+	// mean "beside it", and a gesture that means one thing on one row and
+	// another thing on the next is a gesture people stop trusting.
+	if (node *n = node_for_index(index))
+		if (n->is_folder())
+			f |= Qt::ItemIsDropEnabled;
+	return f;
+}
+
+Qt::DropActions tab_tree_model::supportedDropActions() const {
+	return Qt::MoveAction | Qt::CopyAction;
+}
+
+QStringList tab_tree_model::mimeTypes() const {
+	// Our own type, carrying ids rather than urls. An id is what the state
+	// blob and the outline file are keyed by, so moving by id keeps a tab's
+	// history and suspended state attached to it; moving by url would quietly
+	// produce a new tab that had forgotten where it had been.
+	return { QStringLiteral("application/x-hydra-node-ids"),
+	         QStringLiteral("text/uri-list") };
+}
+
+QMimeData *tab_tree_model::mimeData(const QModelIndexList &indexes) const {
+	QStringList ids, urls;
+	for (const QModelIndex &i : indexes) {
+		if (i.column() != 0)
+			continue;   // one entry per row, not per column
+		if (node *n = node_for_index(i)) {
+			ids << n->id;
+			if (!n->url.isEmpty())
+				urls << n->url;
+		}
+	}
+	if (ids.isEmpty())
+		return nullptr;
+	auto *m = new QMimeData;
+	m->setData("application/x-hydra-node-ids", ids.join('\n').toUtf8());
+	// And as plain urls, so a tab can be dragged to any other application that
+	// takes one. Costs two lines and is the difference between a tree that
+	// talks to the desktop and one that only talks to itself.
+	if (!urls.isEmpty())
+		m->setText(urls.join('\n'));
+	return m;
+}
+
+bool tab_tree_model::is_ancestor_of(const node *maybe_ancestor, const node *n) const {
+	for (const node *p = n; p; p = p->parent)
+		if (p == maybe_ancestor)
+			return true;
+	return false;
+}
+
+QString tab_tree_model::unused_id(const QString &like) const {
+	// Keep the shape of the id it came from -- they are short and opaque, and a
+	// copy of `a1` reading `a1-2` stays readable in the outline file a person
+	// may well open in an editor.
+	for (int n = 2; ; ++n) {
+		const QString candidate = QString("%1-%2").arg(like).arg(n);
+		if (!m_id_index.contains(candidate))
+			return candidate;
+	}
+}
+
+static node *deep_copy(const node *src, tab_tree_model *model,
+                        const std::function<QString(const QString &)> &fresh) {
+	node *c = new node;
+	c->id       = fresh(src->id);
+	c->type     = src->type;
+	c->title    = src->title;
+	c->url      = src->url;
+	c->created  = src->created;
+	c->last_seen = src->last_seen;
+	c->tags     = src->tags;
+	// **Not** a copy of the open/suspended state. A copied tab is a second
+	// bookmark of the same address, not a second live view of it: the state
+	// blob belongs to the id it was written under, and duplicating the id is
+	// exactly what `unused_id` exists to prevent.
+	if (c->type == node_type::open_tab || c->type == node_type::suspended_tab)
+		c->type = node_type::unopened_tab;
+	for (const node *k : src->children) {
+		node *kid = deep_copy(k, model, fresh);
+		kid->parent = c;
+		c->children << kid;
+	}
+	return c;
+}
+
+bool tab_tree_model::dropMimeData(const QMimeData *data, Qt::DropAction action,
+                                   int row, int column, const QModelIndex &parent) {
+	Q_UNUSED(column);
+	if (!data || action == Qt::IgnoreAction)
+		return false;
+	if (!data->hasFormat("application/x-hydra-node-ids"))
+		return false;
+
+	node *target = parent.isValid() ? node_for_index(parent) : m_root;
+	if (!target || !target->is_folder())
+		return false;
+	// Between-rows drops are a position, and a position only means anything in
+	// tree order. Elsewhere the drop is treated as "into this folder".
+	if (!m_reorder_allowed)
+		row = -1;
+
+	const QStringList ids =
+		QString::fromUtf8(data->data("application/x-hydra-node-ids")).split('\n');
+
+	QList<node *> moving;
+	for (const QString &id : ids) {
+		node *n = m_id_index.value(id);
+		if (!n)
+			continue;
+		// A folder cannot be dropped inside itself: the tree would become a
+		// ring, the outline writer would recurse forever, and every node below
+		// the drag would vanish from the file. The reorganizer refuses the same
+		// move for the same reason (§9.4) and this is that rule again, one
+		// gesture closer to the user.
+		if (is_ancestor_of(n, target))
+			return false;
+		if (n == target)
+			return false;
+		moving << n;
+	}
+	if (moving.isEmpty())
+		return false;
+
+	// Reset rather than fine-grained move signals, matching what `load` and
+	// `apply_reorganization` already do here. It costs the view's expansion
+	// state on a drop, which is worth revisiting; it is not worth risking a
+	// begin/endMoveRows index mistake for, since those corrupt the view in ways
+	// that show up much later than they happen.
+	beginResetModel();
+	for (node *n : moving) {
+		if (action == Qt::CopyAction) {
+			node *c = deep_copy(n, this, [this](const QString &like) {
+				return unused_id(like);
+			});
+			c->parent = target;
+			if (row >= 0 && row <= target->children.size())
+				target->children.insert(row++, c);
+			else
+				target->children << c;
+		} else {
+			if (n->parent)
+				n->parent->children.removeOne(n);
+			n->parent = target;
+			if (row >= 0 && row <= target->children.size())
+				target->children.insert(row++, n);
+			else
+				target->children << n;
+		}
+	}
+	// Sibling order is what the outline file records, so it has to agree with
+	// the list we just rearranged or the next save undoes the drag.
+	for (int i = 0; i < target->children.size(); ++i)
+		target->children[i]->order = i;
+	reindex();
+	endResetModel();
+	emit structure_changed();
+	return true;
+}
+
+// --- Operations the context menu offers -----------------------------------
+
+node *tab_tree_model::add_folder(node *parent, const QString &title) {
+	if (!parent)
+		parent = m_root;
+	if (!parent->is_folder())
+		parent = parent->parent ? parent->parent : m_root;
+	beginResetModel();
+	node *f = new node;
+	f->id      = unused_id("f");
+	f->type    = node_type::folder;
+	f->title   = title.isEmpty() ? QStringLiteral("New folder") : title;
+	f->created = QDateTime::currentDateTime();
+	f->last_seen = f->created;
+	f->parent  = parent;
+	f->order   = parent->children.size();
+	parent->children << f;
+	reindex();
+	endResetModel();
+	emit structure_changed();
+	return f;
+}
+
+bool tab_tree_model::remove_node(node *n) {
+	// The root is the tree; removing it would leave the model pointing at
+	// nothing and the outline writer with no document to write.
+	if (!n || n == m_root || !n->parent)
+		return false;
+	beginResetModel();
+	n->parent->children.removeOne(n);
+	// Deletes the whole subtree through node's destructor, which is what the
+	// gesture means -- deleting a folder in a file manager takes what is in it.
+	// The caller is responsible for having asked first.
+	delete n;
+	reindex();
+	endResetModel();
+	emit structure_changed();
+	return true;
+}
+
+void tab_tree_model::update_node(node *n, const QString &title,
+                                  const QString &url, const QStringList &tags) {
+	if (!n)
+		return;
+	n->title = title;
+	n->url   = url;
+	n->tags  = tags;
+	refresh_node(n);
+	// Saved like a move is: what a tab is called is as much a part of the
+	// canonical file as where it sits.
+	emit structure_changed();
+}
+
+node *tab_tree_model::duplicate_node(node *n) {
+	if (!n || !n->parent)
+		return nullptr;
+	beginResetModel();
+	node *c = deep_copy(n, this, [this](const QString &like) {
+		return unused_id(like);
+	});
+	c->parent = n->parent;
+	n->parent->children.insert(n->parent->children.indexOf(n) + 1, c);
+	for (int i = 0; i < n->parent->children.size(); ++i)
+		n->parent->children[i]->order = i;
+	reindex();
+	endResetModel();
+	emit structure_changed();
+	return c;
 }

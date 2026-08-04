@@ -241,7 +241,63 @@ author imagined and blind to the one the model finds in ten tries. When a real
 model is available, running it is a cheaper source of adversarial inputs than
 inventing them.
 
-## The icon
+## Tabs move like files now (§4)
+
+The tree calls itself a side-tree of tabs and, until this, **a tab could not be
+dragged into a folder**. `tab_tree_model` implemented the read-only half of
+`QAbstractItemModel` — `index`, `parent`, `rowCount`, `columnCount`, `data` —
+and nothing else, so the view refused every drag before it started. Nodes moved
+only through `apply_reorganization` (the AI diff) and `restore_snapshot` (undo):
+the machine could rearrange your tabs and you could not.
+
+**Move by default, Ctrl to copy**, which is what a file manager does within one
+tree. A move keeps the id, and that is the whole reason moves are by id and not
+by url: `state/<id>.blob` and the outline file are both keyed by it, so a tab
+carries its history and its suspended state to the new folder. A copy gets a
+**fresh** id — two nodes sharing one would share a state blob, and one tab's
+scroll position and half-filled form would be restored into the other — and is
+demoted to `unopened`, because a copy is a second bookmark of an address rather
+than a second live view of it.
+
+**Reparenting always; reordering only in tree order.** A drop *between* two rows
+means "put it here", and that has no stable meaning sorted by title or by date —
+the row would jump back the instant it re-sorted, which reads as the app
+ignoring you. A drop *onto* a folder is unambiguous in every mode. Firefox and
+Chrome's bookmark managers make the same split. The happy consequence is that
+the sort proxy's index mapping stops being a problem at all: reordering is only
+live in the one mode where the proxy's order and the model's are the same.
+
+**The move that would eat the tree is refused**: a folder dropped inside its own
+child makes a ring, the outline writer recurses forever, and everything below
+the drag disappears from the file. §9.4 refuses the same move for the reorganizer
+and this is that rule one gesture closer to the user.
+
+**And the right-click menu was nearly empty.** It offered Open and Suspend, and
+returned early for folders — so the containers everything lives in could not be
+renamed, emptied or added to, and a right-click on blank space did nothing. It
+now has duplicate, copy address, new folder, delete (which names how many items
+go with a folder, since deleting one takes what is inside it) and a properties
+editor: title, address, tags, with the id shown and **not** editable. Retyping an
+id would orphan a tab's saved state with no warning, which is the exact class of
+silent loss this file keeps recording.
+
+Every one of these saves through one signal, `structure_changed`, so a drag, a
+rename and a new folder all persist the same way rather than three ways.
+
+**33 checks** in `test_model`, covering the drag flags a view asks about before
+it will start a drag at all, that a drag carries ids rather than urls, the
+ring-refusal in both directions, that a copy's id is new and both nodes stay
+findable in the index, that the properties editor cannot change an id, and that
+deleting takes the subtree but refuses the root.
+
+**Found while testing, not fixed:** `tree_outline::load` returns an empty root
+when the file cannot be opened, and `tab_tree_model::load` reports success — so
+a mistyped tree path is indistinguishable from an empty tree. It is probably
+deliberate, since a first run has no file yet, but nothing says so and the two
+cases deserve different words. Left alone rather than changed blind, because
+changing it would change what happens on somebody's first launch.
+
+## The icon## The icon
 
 `icons/` holds the app icon and `icons/build_icons.py` regenerates every size
 from `hydra-master.png`. One drawing, downscaled, with the small sizes

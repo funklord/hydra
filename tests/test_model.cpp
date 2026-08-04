@@ -17,6 +17,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QMimeData>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -192,6 +193,136 @@ int main(int argc, char **argv) {
 		check(seen.contains("Play"), "the folder is shown");
 		check(!seen.contains("Music"),
 		      QString("and its non-matching children are not (%1)").arg(seen.join(", ")));
+	}
+
+	section("dragging a tab about, which the tree could not do at all");
+	{
+		// The model implemented the read-only half of QAbstractItemModel and
+		// nothing else, so the view refused every drag: a tab could be moved
+		// only by the AI reorganizer or by editing the outline file by hand.
+		tab_tree_model m;
+		check(m.load(path), "a tree loads");
+		node *root = m.root();
+		check(root->children.size() >= 1,
+		      QString("with a folder in it (%1 children)").arg(root->children.size()));
+		node *folder = root->children.first();
+		check(folder->is_folder(), "which is a folder");
+		node *tab = folder->children.isEmpty() ? nullptr : folder->children.first();
+		check(tab != nullptr, "holding a tab");
+		if (!tab) return 1;
+
+		// The flags a view asks about before it will start a drag at all.
+		const QModelIndex fi = m.index_for_node(folder);
+		const QModelIndex ti = m.index_for_node(tab);
+		check(m.flags(ti) & Qt::ItemIsDragEnabled, "a tab can be dragged");
+		check(m.flags(fi) & Qt::ItemIsDropEnabled, "a folder accepts a drop");
+		check(!(m.flags(ti) & Qt::ItemIsDropEnabled),
+		      "a tab does not -- dropping onto one would have to mean beside it, "
+		      "and a gesture meaning two things is one people stop trusting");
+		check(m.flags(QModelIndex()) & Qt::ItemIsDropEnabled,
+		      "and the root does, so a tab can be dragged out to the top level");
+
+		// A second folder to move things between.
+		node *other = m.add_folder(root, "Elsewhere");
+		check(other && other->is_folder(), "a folder can be made");
+		check(other->id != folder->id, "with an id of its own");
+
+		const QString moved_id = tab->id;
+		QMimeData *md = m.mimeData({ ti });
+		check(md && md->hasFormat("application/x-hydra-node-ids"),
+		      "a drag carries node ids");
+		// By id, not by url: the id is what state/<id>.blob and the outline file
+		// are keyed by, so moving by url would silently produce a tab that had
+		// forgotten where it had been.
+		check(md && QString::fromUtf8(md->data("application/x-hydra-node-ids"))
+		                .contains(moved_id),
+		      "naming the node that was picked up");
+
+		const int before = folder->children.size();
+		check(m.dropMimeData(md, Qt::MoveAction, -1, 0, m.index_for_node(other)),
+		      "and dropping it on another folder is accepted");
+		check(folder->children.size() == before - 1, "it leaves where it was");
+		check(!other->children.isEmpty() &&
+		          other->children.last()->id == moved_id,
+		      "and arrives where it was dropped, keeping its id");
+		delete md;
+	}
+
+	section("the move that would eat the tree");
+	{
+		tab_tree_model m;
+		m.load(path);
+		node *root = m.root();
+		node *outer = m.add_folder(root, "Outer");
+		node *inner = m.add_folder(outer, "Inner");
+		check(inner->parent == outer, "a folder inside a folder");
+
+		QMimeData *md = m.mimeData({ m.index_for_node(outer) });
+		// A ring: the outline writer would recurse forever and everything below
+		// the drag would vanish from the file. The reorganizer refuses the same
+		// move (§9.4); this is that rule one gesture closer to the user.
+		check(!m.dropMimeData(md, Qt::MoveAction, -1, 0, m.index_for_node(inner)),
+		      "cannot be dropped inside its own child");
+		check(outer->parent == root, "and is left where it was");
+		check(!m.dropMimeData(md, Qt::MoveAction, -1, 0, m.index_for_node(outer)),
+		      "nor onto itself");
+		delete md;
+	}
+
+	section("copying gives the copy an id of its own");
+	{
+		tab_tree_model m;
+		m.load(path);
+		node *root = m.root();
+		node *folder = root->children.first();
+		node *tab = folder->children.first();
+		const QString original = tab->id;
+
+		node *copy = m.duplicate_node(tab);
+		check(copy != nullptr, "a tab duplicates");
+		check(copy->id != original,
+		      QString("with a new id (%1 vs %2)").arg(copy->id, original));
+		check(m.node_by_id(original) == tab && m.node_by_id(copy->id) == copy,
+		      "and both are findable, so nothing was overwritten in the index");
+		check(copy->url == tab->url && copy->title == tab->title,
+		      "carrying the same address and title");
+		// Two nodes sharing an id would share a state blob, so one tab's scroll
+		// position and form contents would be restored into the other.
+		check(copy->type != node_type::open_tab &&
+		          copy->type != node_type::suspended_tab,
+		      "and is not claimed to be open or suspended, since the state blob "
+		      "belongs to the id it was written under");
+	}
+
+	section("what the properties editor is allowed to change");
+	{
+		tab_tree_model m;
+		m.load(path);
+		node *tab = m.root()->children.first()->children.first();
+		const QString id_before = tab->id;
+		m.update_node(tab, "Renamed", "https://example.test/x", { "a", "b" });
+		check(tab->title == "Renamed", "the title changes");
+		check(tab->url == "https://example.test/x", "the address changes");
+		check(tab->tags == QStringList({ "a", "b" }), "the tags change");
+		check(tab->id == id_before,
+		      "and the id does not -- it keys the saved state, and retyping it "
+		      "would orphan a tab's history with no warning");
+		check(m.node_by_id(id_before) == tab, "so the index still finds it");
+	}
+
+	section("deleting takes the subtree, and refuses the root");
+	{
+		tab_tree_model m;
+		m.load(path);
+		node *root = m.root();
+		node *doomed = m.add_folder(root, "Doomed");
+		m.add_folder(doomed, "Child");
+		const int before = root->children.size();
+		check(!m.remove_node(root), "the root cannot be removed");
+		check(m.remove_node(doomed), "a folder can");
+		check(root->children.size() == before - 1, "and is gone from its parent");
+		check(m.node_by_id("Child") == nullptr,
+		      "with what was inside it, rather than leaving orphans in the index");
 	}
 
 	QDir(dir).removeRecursively();
