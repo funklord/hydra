@@ -35,6 +35,7 @@
 #include <QScreen>
 #include <QRegularExpression>
 #include <QTimer>
+#include <QToolBar>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -258,9 +259,35 @@ int main(int argc, char *argv[]) {
 				std::printf("     shot %s\n", qPrintable(f));
 			else
 				std::printf("     could not write %s\n", qPrintable(f));
+			// The submenus too, since they are where the twenty flat Tools items
+			// went and a picture is the only way to see that they read as groups
+			// rather than as somewhere things were put to get them out of sight.
+			for (QAction *sub : m->actions()) {
+				QMenu *sm = sub->menu();
+				if (!sm)
+					continue;
+				sm->popup(w.mapToGlobal(QPoint(300, 120)));
+				spin(300);
+				const QString sf = QString("%1/%2-%3-%4.png")
+				                       .arg(dir).arg(shot, 2, 10, QChar('0'))
+				                       .arg(name, sub->text().remove('&').remove(' '));
+				if (sm->grab().save(sf))
+					std::printf("     shot %s\n", qPrintable(sf));
+				sm->close();
+				spin(100);
+			}
 			m->close();
 			spin(120);
 			++shot;
+		}
+
+		// The toolbar, which is a widget rather than a popup and so grabs plainly.
+		if (QToolBar *tb = w.findChild<QToolBar *>()) {
+			const QString f = dir + "/10-Toolbar.png";
+			if (tb->grab().save(f))
+				std::printf("     shot %s\n", qPrintable(f));
+			else
+				std::printf("     could not write %s\n", qPrintable(f));
 		}
 	}
 
@@ -276,13 +303,19 @@ int main(int argc, char *argv[]) {
 		if (view && model) {
 			QStringList seen;
 			bool opened = false;
-			QTimer::singleShot(400, [&seen, &opened] {
+			const QString shots = qEnvironmentVariableIsSet("HYDRA_SHOTS")
+			                          ? QString::fromLocal8Bit(qgetenv("HYDRA_SHOTS"))
+			                          : QString();
+			QTimer::singleShot(400, [&seen, &opened, shots] {
 				for (QWidget *popup : QApplication::topLevelWidgets()) {
 					auto *m = qobject_cast<QMenu *>(popup);
 					if (!m || !m->isVisible())
 						continue;
 					opened = true;
 					seen = items_of(m);
+					// Photographed while it is up; there is no other moment.
+					if (!shots.isEmpty())
+						m->grab().save(shots + "/20-ContextMenu.png");
 					m->close();
 					return;
 				}
