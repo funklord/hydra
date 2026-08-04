@@ -49,6 +49,28 @@ static bool wait_for(const std::function<bool()> &done, int max_ms = 10000) {
 	return done();
 }
 
+// The dialog is ready to be driven when its Send button is offered.
+//
+// **This is a wait, not a delay, and that distinction cost three days of
+// intermittent failures.** The dialog asks the server what its candidate
+// addresses serve *when it opens*, and keeps Send disabled until those answers
+// are in. The sections below used to `spin(200)` and then assert Send was
+// enabled -- a bet that six DNS lookups for hosts that do not exist would all
+// fail inside a fifth of a second. They usually do. On a loaded machine they do
+// not, and then a whole section fails together with "Send is offered when there
+// is evidence" at the top of it, which reads like a broken dialog rather than a
+// harness that did not wait.
+//
+// It went unexplained twice because the failure only appears on the first
+// `make test` after a rebuild -- which looked like a build problem and is
+// nothing of the sort. That is simply the moment the machine is busiest.
+static bool send_ready(QWidget *dlg) {
+	for (QPushButton *b : dlg->findChildren<QPushButton *>())
+		if (b->text().contains("Send"))
+			return b->isEnabled();
+	return false;
+}
+
 // Judging is finished when the dialog has a verdict to show.
 static bool judged(QWidget *dlg) {
 	auto *v = dlg->findChild<QLabel *>("verdict");
@@ -155,7 +177,7 @@ int main(int argc, char **argv) {
 		             "```";
 		extractor_dialog dlg(&sig, &store, &prov, "site.example", page);
 		dlg.show();
-		spin(200);
+		wait_for([&] { return send_ready(&dlg); });
 
 		QPushButton *send  = button(&dlg, "Send");
 		QPushButton *apply = button(&dlg, "Use This");
@@ -200,7 +222,7 @@ int main(int argc, char **argv) {
 		             "{ url: 'https://elsewhere.example/x.m3u8', kind: 'hls' }; };";
 		extractor_dialog dlg(&sig, &store, &prov, "site.example", page);
 		dlg.show();
-		spin(200);
+		wait_for([&] { return send_ready(&dlg); });
 		button(&dlg, "Send")->click();
 		wait_for([&] { return judged(&dlg); });
 
@@ -481,7 +503,7 @@ int main(int argc, char **argv) {
 		extractor_dialog dlg(&sig, &store, &prov, "site.example", page);
 		dlg.use_helpers(&host);
 		dlg.show();
-		spin(200);
+		wait_for([&] { return send_ready(&dlg); });
 		button(&dlg, "Send")->click();
 		wait_for([&] { return judged(&dlg); });
 

@@ -52,6 +52,13 @@ add_executable(test_extloop test_extloop.cpp
     ${H}/request_filter.cpp ${H}/filter_list.cpp ${H}/policy.cpp ${H}/policy_engine.cpp ${H}/ai_provider.h)
 target_link_libraries(test_extloop PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
 
+# Scores recorded model replies against the current gate, with no model. Needs
+# the corpus in evidence/replies, which is not in git; see evidence/README.md.
+add_executable(test_replay test_replay.cpp
+    ${H}/site_extractor.cpp ${H}/extractor_helpers.cpp ${H}/stream_probe.cpp
+    ${H}/network_fetcher.cpp)
+target_link_libraries(test_replay PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
+
 add_executable(test_fetcher test_fetcher.cpp ${H}/network_fetcher.cpp
     ${H}/extractor_helpers.cpp ${H}/site_extractor.cpp ${H}/stream_probe.cpp
     ${H}/local_proxy.cpp)
@@ -82,7 +89,7 @@ if(TARGET Qt6::DBus)
 endif()
 
 foreach(t test_seam test_pick test_extractor test_extloop test_settings
-         test_streamtype test_helpers test_fetcher)
+         test_streamtype test_helpers test_fetcher test_replay)
     target_include_directories(${t} PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
 endforeach()
 

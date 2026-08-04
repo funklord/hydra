@@ -5034,23 +5034,95 @@ longer a way to ask that function to put a served type in a row, so the arrow
 that four runs in five once matched on cannot reappear. It was also the build's
 only warning, in a project that claims a warning-clean build a few sections up.
 
-### An intermittent suite failure, and the output that was being thrown away
+### The intermittent suite failure, explained on its third appearance
 
-`test_extloop` failed twice today under `make test` and has passed nine runs
-since, six of them standalone. Both failures were on the first run after a
-source change; a deliberate rebuild-then-test probe did not reproduce it.
+`test_extloop` failed three times today under `make test`, always on the first
+run after a source change, never reproducible afterwards. It looked like a build
+problem and was nothing of the sort.
 
-What is worth recording is not the flake but the response. `make test` printed
-the tail line and the first five `FAIL` lines and discarded the rest, which is
-adequate for a suite that fails every time and useless for one that does not --
-an intermittent failure is the case where the whole output matters most, and it
-was the case being thrown away. The first occurrence was invisible for a second
-reason: it was read through a `tail -8`, which cut off the line naming the
-suite, so it was recorded as "an unexplained non-zero exit" when the summary had
-in fact named it.
+The first two occurrences left nothing behind. `make test` printed the tail line
+and five `FAIL` lines and discarded the rest -- adequate for a suite that fails
+every time and useless for one that does not, which is the case where the whole
+output matters most. The first was invisible twice over: it was read through a
+`tail -8` that cut off the line naming the suite, so it was written down as "an
+unexplained non-zero exit" when the summary had in fact named it.
 
-Failing suites now have their full output written to `tests/build/failed/<t>.log`
-with the path printed. The next occurrence is diagnosable; this one is not.
+Failing suites now write their full output to `tests/build/failed/<t>.log`. The
+third occurrence landed there and answered it in one read.
+
+**The dialog probes when it opens** -- it asks the server what its candidate
+addresses serve -- and keeps Send disabled until those answers arrive. Three
+sections opened it, waited a flat `spin(200)`, and asserted Send was offered.
+That is a bet that six DNS lookups for hosts which do not exist will all fail
+inside a fifth of a second. They usually do. When they do not, the section fails
+from the top with "Send is offered when there is evidence", which reads like a
+broken dialog rather than a harness that did not wait.
+
+And the "first run after a rebuild" pattern, which sent one investigation into
+relink behaviour and a `touch`-and-rebuild probe that found nothing, was real but
+backwards. That is simply the moment the machine is busiest.
+
+The three sites now use `wait_for`, the helper this same file already carried,
+under a comment that already said it: *a fixed wait is an instrument that
+invents results.* It was written for `spin(400)`/`spin(600)` after a click, and
+the four waits before one were never revisited. Verified with four load
+generators running: 34 of 34, twice.
+
+### Measuring the loop on a machine that is never idle
+
+The last measurement wanted an idle machine and said so. That was the wrong ask:
+this machine is never idle, and a plan that waits for one is a plan that never
+runs. Three of five runs in that measurement never answered at all, which is a
+result about the load and not about the model.
+
+The way out is that **most of what gets changed is not the model.** The gate's
+rules, the fields handed to the script, the shape of the evidence — deterministic
+code, all of it, and fifteen replies the model has already given were sitting in
+`evidence/`. Scoring those again costs milliseconds. `make replay` does it, and
+only a change to the prompt or the model itself now needs a live run.
+
+**It is validated against verdicts already recorded**, which is the entire
+design: a replay that cannot reproduce what the gate said when a reply was
+produced is not a cheaper measurement, it is a different one. That validation
+earned its keep immediately, twice.
+
+*It caught the corpus being wrong.* The first version compared **rates**, and on
+kisskh it reported 2 of 5 against a recorded 2 of 5 — while disagreeing about
+*which two*. One reply had been scraped out of a log that prints replies through
+`left(1200)`, so it was cut off mid-statement and failed as a syntax error; a
+second was accepted here that the shipping gate had refused. Two errors, one
+cancelling the other, and the rate agreed. It compares **per reply** now, and a
+rate can no longer hide a pair of mistakes.
+
+*It caught what `check()` cannot see.* Two replies disagreed because the dialog
+does something offline checking does not: when the model returns a pick, it
+**fetches that address** and refuses it if nothing streams back. That is how an
+analytics beacon and a service worker were refused, neither caught by any static
+rule. The corpus carries that knowledge as `disproved`, and it is matched by
+*prefix* — the logs print a pick through `left(140)` and the beacon in question
+is 677 characters, so the address copied out of a log matched nothing at all and
+failed silently on the first attempt. Same truncation, third victim.
+
+**Proved by breaking it.** Disabling one gate rule — the one that calls an
+address fetched as an image page furniture — and re-running:
+
+    FAIL  kisskh-2026-08-03.legend-run4.js: accepted now, refused when produced
+    FAIL  kisskh-2026-08-03.legend-run5.js: accepted now, refused when produced
+
+Exactly the two replies that depended on it, named. Restored, and 15 of 15 pass.
+
+For the runs that do need a model, `tests/live/measure.sh` runs them at `nice 19`
+with idle IO and renices the Ollama server too, since that is the process doing
+the work and nicing only the client would move nothing. It records every reply
+whole into the corpus, so the measurement *after* it is free. Runs are
+sequential: two 14B generations at once on CPU is not twice the throughput, it
+is two runs that both time out.
+
+**What this does not do**, said plainly because the temptation is to forget it:
+the corpus is fixed replies, so it cannot measure a prompt change. Today's rule
+about writing two clauses is exactly such a change and remains unmeasured. What
+the corpus does is make sure that when those runs finally happen, they are the
+only ones that ever have to.
 
 ### Report-only drivers are not failures
 

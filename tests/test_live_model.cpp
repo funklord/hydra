@@ -8,6 +8,7 @@
 #include <QApplication>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -187,6 +188,36 @@ int main(int argc, char **argv) {
 	QPlainTextEdit *script = dlg.findChild<QPlainTextEdit *>("proposal");
 	std::printf("\n----- what the model returned -----\n%s\n-----------------------------------\n",
 	             script ? qPrintable(script->toPlainText().left(1200)) : "(none)");
+
+	// **The whole reply, kept, because the log's copy is not the reply.** The
+	// print above elides at 1200 characters, which is fine to read and useless
+	// to re-run: a corpus built by scraping these logs held one script cut off
+	// mid-statement, and `test_replay` scored it as a syntax error while the
+	// verdict it was compared against said accepted. Two errors, one cancelling
+	// the other, and the rate agreed anyway.
+	//
+	// So the reply is written out whole, and the same applies to the pick, which
+	// the diagnostic below prints through `left(140)` while a real analytics
+	// address here runs past six hundred.
+	const QByteArray replies_dir = qgetenv("HYDRA_REPLIES");
+	if (!replies_dir.isEmpty() && script) {
+		const QString name = qEnvironmentVariableIsSet("HYDRA_REPLY_NAME")
+		                         ? QString::fromLocal8Bit(qgetenv("HYDRA_REPLY_NAME"))
+		                         : QStringLiteral("reply");
+		QDir().mkpath(QString::fromLocal8Bit(replies_dir));
+		const QString out =
+		    QString::fromLocal8Bit(replies_dir) + "/" + name + ".js";
+		QFile rf(out);
+		if (rf.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			rf.write(script->toPlainText().toUtf8());
+			rf.close();
+			std::printf("reply recorded whole in %s\n", qPrintable(out));
+		} else {
+			// Said, not skipped: a corpus that silently did not grow looks
+			// exactly like a run that produced nothing worth keeping.
+			std::printf("could not record the reply in %s\n", qPrintable(out));
+		}
+	}
 
 	QPushButton *apply = button(&dlg, "Use This");
 	std::printf("gate: %s\n", apply && apply->isEnabled() ? "ACCEPTED" : "REJECTED");

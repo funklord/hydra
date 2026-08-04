@@ -197,6 +197,35 @@ HYDRA_MODEL_TIMEOUT_MS=900000 QT_QPA_PLATFORM=offscreen \
     ./tests/build/test_live_model qwen2.5-coder:14b /tmp/ev.json
 ```
 
+## Measuring the loop without a model
+
+`test_replay` scores model replies that were **already recorded** against the
+current gate. No model, no network, milliseconds. It is the answer to a machine
+that is never idle: the model's part of the loop is expensive and rarely what
+changed, while the gate's rules, the fields handed to the script and the shape
+of the evidence are all deterministic code.
+
+```sh
+make replay
+```
+
+It needs the corpus in `evidence/replies`, which is not in git — see
+`evidence/README.md`. Each reply is compared against **the verdict it got when
+it was produced**, one by one. Not a rate: the first version compared rates and
+agreed 2 of 5 on a capture while disagreeing about *which* two, a truncated
+reply failing and a wrong pick passing, one error cancelling the other.
+
+**It cannot measure a prompt change**, since the corpus is fixed replies and a
+new prompt would produce different ones. That needs the model, and
+
+```sh
+tests/live/measure.sh evidence/kisskh-2026-08-03.json kisskh-new 5
+```
+
+runs it at `nice 19` with idle IO — renicing the Ollama server too, since that
+is where the work happens — so it takes only what is spare. It records every
+reply whole into the corpus, which is what makes the measurement after it free.
+
 `HYDRA_PROBE_DEBUG=1` prints what each content-type probe concluded, which is
 the fastest way to see whether the budget went to the stream or to the page's
 beacons.

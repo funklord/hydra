@@ -51,6 +51,7 @@
 #   make test-one T=x -- build and run a single suite, e.g. T=test_theme
 #   make drivers      -- build the live drivers (expensive; see JOBS below)
 #   make sweep        -- build them and run them all, with a summary (needs a display)
+#   make replay       -- re-score recorded model replies against the gate (no model)
 #   make android      -- build the Android APK
 #   make install      -- install the binary, desktop entry and icon set
 #   make uninstall    -- remove what install put there
@@ -129,7 +130,7 @@ endif
 # skipped.
 NEEDS_MORE = test_headers test_dlheaders test_helpers_live test_probe \
              test_probe_ui test_torrent test_watch test_live_model \
-             test_ytdlp_live
+             test_ytdlp_live test_replay
 ALL_SUITES = $(basename $(notdir $(wildcard tests/test_*.cpp)))
 SUITES     = $(filter-out $(NEEDS_MORE),$(ALL_SUITES))
 
@@ -147,7 +148,7 @@ TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test
 # after a source change and never reproducible afterwards, with nothing kept.
 FAILED_DIR = $(TESTS_DIR)/failed
 
-.PHONY: all run test test-one drivers sweep android install uninstall clean help style
+.PHONY: all run test test-one drivers sweep replay android install uninstall clean help style
 
 # Always delegates, never compares timestamps itself. The first version made
 # the binary a real target depending on the cache file, and `make` after
@@ -198,6 +199,13 @@ drivers: $(TESTS_DIR)/CMakeCache.txt
 	@$(CMAKE) --build $(TESTS_DIR) -j$(JOBS)
 	@echo "live drivers built. They need a display: DISPLAY=:0 ./$(TESTS_DIR)/try_cookies"
 	@echo "tests/README.md says which need a helper server, KeePassXC or a model."
+
+# Score the recorded model replies against the current gate. No model, no
+# network, milliseconds -- but it needs the corpus in evidence/replies, which is
+# not in git, so it cannot be part of `make test`.
+replay: $(TESTS_DIR)/CMakeCache.txt
+	@$(CMAKE) --build $(TESTS_DIR) -j$(JOBS) --target test_replay >/dev/null
+	@$(TEST_ENV) ./$(TESTS_DIR)/test_replay
 
 # Run them all and summarise. Wants a display, so it is not part of `test`.
 # Pass DRIVERS=... for a subset: make sweep DRIVERS="try_import try_delete".
