@@ -449,6 +449,28 @@ corruption, because the file is being appended to by a running browser.
 `kSaveDelay` to 2500 ms, against a Firefox interval this project could not read
 off disk at all. The harder format is the more current one.
 
+### Driven through the shell, both at once
+
+`try_import` clicks the menu items on a real window against the live profiles:
+**81 tabs from Firefox and 129 from Chromium**, two mirrors side by side above
+the user's own tree, every row carrying a label and an address.
+
+Then it saves, which is what the shell does on any structural change, and reads
+the file back. With 210 of somebody else's tabs on screen the tree file is still
+
+```
+- [f0] folder | Mine
+  - [a1] unopened | Blank | about:blank | created=… | seen=…
+```
+
+That is the invariant worth driving rather than asserting: getting it wrong
+writes two hundred foreign tabs into the canonical record, indistinguishable
+from tabs the user filed, returning on every launch with nothing to remove them.
+
+A detail that fell out rather than being designed: mirrored rows render in the
+muted style the model already gives an unopened tab, so they read as *not yours*
+without any new styling.
+
 ## The icon## The icon## The icon
 
 `icons/` holds the app icon and `icons/build_icons.py` regenerates every size
