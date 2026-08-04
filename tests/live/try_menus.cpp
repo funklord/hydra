@@ -19,6 +19,7 @@
 #include "policy_engine.h"
 #include "qtwebengine_factory.h"
 #include "request_filter.h"
+#include "theme.h"
 #include "tab_tree_model.h"
 #include "tab_tree_view.h"
 
@@ -77,6 +78,17 @@ int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
+	// **What main() does, because otherwise this is not a picture of the app.**
+	// The icon theme is chosen once at startup and lives on QIcon, and a driver
+	// with its own main() does not inherit that. Without this line the toolbar
+	// here renders with Qt's built-in style icons and a text Shield -- which is
+	// exactly what it looked like before the icons were added, so the change
+	// appeared to have done nothing at all.
+	// The palette as well as the icons. A driver that sets neither photographs a
+	// light window with the desktop's dark icons in it, which is a picture of
+	// the harness rather than of the application.
+	theme::apply(theme::choice::system);
+	theme::apply_icon_theme(theme::detect_system());
 
 	const QString out = qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
 	                        ? qgetenv("HYDRA_TEST_OUT") : QString("/tmp/hydra-menus");

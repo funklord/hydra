@@ -67,6 +67,18 @@ int main(int argc, char *argv[]) {
 	// The watcher outlives this scope and keeps following the desktop, so a
 	// system that switches at sunset takes Hydra with it. It only acts while the
 	// choice is "system" -- someone who picked Dark meant Dark.
+	// The icon theme first, and before any icon is built. Qt6 finds one through
+	// a platform-theme plugin, of which it ships Plasma's and GTK's; this
+	// desktop is Trinity and loads neither, so QIcon::themeName() is empty and
+	// every QIcon::fromTheme comes back null. The toolbar then draws nothing and
+	// says nothing about why.
+	if (const QString icons = theme::apply_icon_theme(
+	        theme::resolve(settings_store::appearance()));
+	    !icons.isEmpty())
+		qInfo("icon theme: %s", qPrintable(icons));
+	else
+		qWarning("no icon theme found; toolbar buttons will fall back to text");
+
 	auto *appearance = new theme::watcher(&app);
 	appearance->set_choice(settings_store::appearance());
 	// And the web engine, before anything creates a profile: this one is a

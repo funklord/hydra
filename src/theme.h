@@ -10,6 +10,7 @@
 class QDBusVariant {};
 #endif
 #include <QPalette>
+#include <QStringList>
 #include <Qt>
 
 // Light, dark, or whatever the desktop is set to (architecture doc §6.1).
@@ -49,6 +50,35 @@ Qt::ColorScheme decide(Qt::ColorScheme qt_hint, int portal, const QPalette &curr
 
 // Ask the sources and run `decide` on the answers.
 Qt::ColorScheme detect_system();
+
+// The desktop's icon theme, by name, because Qt does not know it here either.
+//
+// Qt6 ships platform-theme plugins for Plasma and for GTK, and picks an icon
+// theme through whichever one loads. On this desktop -- Trinity, which reports
+// `XDG_CURRENT_DESKTOP=TDE` -- neither loads, `QIcon::themeName()` comes back
+// empty, and every `QIcon::fromTheme` call returns a null icon. A toolbar built
+// on those calls comes up with no icons at all and nothing says why. That is
+// the same shape as the colour-scheme problem above and it has the same answer:
+// read what the desktop wrote down.
+//
+// `sources` are files to consult in order, most authoritative first, so the
+// parsing can be tested without a desktop. The default list is the real one.
+QString icon_theme_from(const QStringList &sources);
+
+// Ask the real sources, and confirm the answer names a theme that is installed
+// -- an icon theme that is configured but absent leaves every lookup null just
+// as surely as no configuration at all.
+QString detect_icon_theme();
+
+// Set it on QIcon, unless Qt already found one that works. Call once, before any
+// icon is built. Returns what it settled on, empty if nothing usable was found.
+//
+// `scheme` is the scheme *the application will paint in*, which is not always
+// the desktop's: someone who chose Light on a dark desktop gets a light window,
+// and `breeze-dark`'s icons are drawn pale to sit on dark chrome, so following
+// the desktop's icon setting there would put pale icons on a pale toolbar. The
+// variant is matched to the window rather than to the desktop.
+QString apply_icon_theme(Qt::ColorScheme scheme);
 
 // What a choice resolves to right now.
 Qt::ColorScheme resolve(choice c);

@@ -9,6 +9,8 @@
 // including the one that machine actually produces. The sources themselves need
 // a desktop; the decision does not.
 #include "theme.h"
+#include <QFile>
+#include <QDir>
 
 #include <QApplication>
 #include <QPalette>
@@ -129,6 +131,61 @@ int main(int argc, char **argv) {
 		check(light.color(QPalette::Window).lightness() >
 		          light.color(QPalette::WindowText).lightness(),
 		      "light gives the opposite");
+	}
+
+	section("reading the desktop's icon theme out of its own files");
+	{
+		// Three separate bugs lived in this parser and every one of them ended
+		// in the same place -- a toolbar with no icons and a startup line that
+		// looked reasonable -- so it gets checked without a desktop.
+		const QString dir = QDir::temp().filePath("hydra-icon-theme-test");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		auto write = [&](const QString &name, const QString &body) {
+			QFile f(dir + "/" + name);
+			if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+				f.write(body.toUtf8());
+			return dir + "/" + name;
+		};
+
+		// **The one that actually bit.** GTK puts everything under [Settings],
+		// and the first parser treated any section header as leaving [Icons] --
+		// so it walked past the answer and reported the fallback.
+		const QString gtk3 = write("settings.ini",
+			"[Settings]\n"
+			"gtk-application-prefer-dark-theme=true\n"
+			"gtk-cursor-theme-name=breeze_cursors\n"
+			"gtk-icon-theme-name=breeze-dark\n");
+		check(theme::icon_theme_from({ gtk3 }) == "breeze-dark",
+		      QString("a GTK settings.ini is read past its [Settings] header (%1)")
+		          .arg(theme::icon_theme_from({ gtk3 })));
+
+		// GTK 2 quotes its values.
+		const QString gtk2 = write("gtkrc-2.0",
+			"gtk-icon-theme-name=\"Adwaita\"\n");
+		check(theme::icon_theme_from({ gtk2 }) == "Adwaita",
+		      "and a quoted GTK 2 value comes back unquoted");
+
+		// A kdeglobals *does* need its sections: a bare Theme= outside [Icons]
+		// is the colour scheme, and reading it names a palette as an icon set.
+		const QString kde = write("kdeglobals",
+			"[General]\n"
+			"Theme=BreezeDarkColourScheme\n"
+			"[Icons]\n"
+			"Theme=oxygen\n");
+		check(theme::icon_theme_from({ kde }) == "oxygen",
+		      QString("a kdeglobals Theme= is taken from [Icons], not [General] (%1)")
+		          .arg(theme::icon_theme_from({ kde })));
+
+		// Order is authority, and a file that names nothing is skipped rather
+		// than treated as an answer.
+		const QString empty = write("empty.ini", "[Settings]\nunrelated=1\n");
+		check(theme::icon_theme_from({ empty, gtk3 }) == "breeze-dark",
+		      "a file naming no theme is passed over for the next one");
+		check(theme::icon_theme_from({ "/nonexistent/nothing.ini" }).isEmpty(),
+		      "and nothing at all gives nothing, not a guess");
+
+		QDir(dir).removeRecursively();
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

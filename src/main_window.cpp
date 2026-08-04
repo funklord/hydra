@@ -61,6 +61,7 @@
 #include <QStackedWidget>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QIcon>
 #include <QToolBar>
 #include <QLineEdit>
 #include <QComboBox>
@@ -90,6 +91,34 @@
 #include <QSet>
 
 #include <memory>
+
+namespace {
+
+// A toolbar icon from the desktop's own icon theme, falling back to the style.
+//
+// **The theme first, for the same reason the colour scheme follows the desktop:**
+// a browser drawn with Breeze arrows on a Breeze desktop looks like it belongs
+// there, and one drawn with its own arrows looks like a port. The freedesktop
+// names are standard, so this is a lookup rather than a guess.
+//
+// `fallback` is a style icon for the cases every Qt style can draw. Where there
+// is no such thing -- a key -- pass `SP_CustomBase` and the caller gets a null
+// icon and keeps its text. That is deliberate: a toolbar with one hand-drawn
+// glyph among borrowed ones looks worse than a toolbar with one word in it, and
+// this is the situation the previous comment here was protecting against.
+QIcon themed_icon(const QStringList &names, QStyle *st,
+                   QStyle::StandardPixmap fallback) {
+	for (const QString &n : names) {
+		const QIcon i = QIcon::fromTheme(n);
+		if (!i.isNull() && !i.availableSizes().isEmpty())
+			return i;
+	}
+	return fallback == QStyle::SP_CustomBase ? QIcon()
+	                                          : st->standardIcon(fallback);
+}
+
+}  // namespace
+
 
 namespace {
 
@@ -424,15 +453,21 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// Only shown in drawer mode; on a wide window the tree is already visible
 	// and a button to reveal it would be a control that does nothing.
 	m_drawer_action = bar->addAction("☰");
-	m_drawer_action->setIcon(style()->standardIcon(QStyle::SP_FileDialogDetailedView));
+	m_drawer_action->setIcon(themed_icon({ "view-list-symbolic", "view-list-details",
+	                                        "format-justify-fill" }, style(),
+	                                      QStyle::SP_FileDialogDetailedView));
 	m_drawer_action->setStatusTip("Show or hide the tab tree");
 	m_drawer_action->setVisible(false);
 	connect(m_drawer_action, &QAction::triggered, this,
 	         [this] { set_drawer_open(!m_drawer_open); });
 
-	back_act->setIcon(style()->standardIcon(QStyle::SP_ArrowBack));
-	fwd_act->setIcon(style()->standardIcon(QStyle::SP_ArrowForward));
-	reload_act->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
+	back_act->setIcon(themed_icon({ "go-previous" }, style(), QStyle::SP_ArrowBack));
+	fwd_act->setIcon(themed_icon({ "go-next" }, style(), QStyle::SP_ArrowForward));
+	reload_act->setIcon(themed_icon({ "view-refresh" }, style(),
+	                                 QStyle::SP_BrowserReload));
+	back_act->setToolTip("Back");
+	fwd_act->setToolTip("Forward");
+	reload_act->setToolTip("Reload");
 	bar->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	connect(back_act,   &QAction::triggered, this, &main_window::go_back);
 	connect(fwd_act,    &QAction::triggered, this, &main_window::go_forward);
@@ -448,17 +483,30 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// until something is detected — detection is progressive, so it fades in a
 	// beat after load rather than being present and empty (§11.3).
 	m_media_action = bar->addAction("Media");
+	m_media_action->setIcon(themed_icon({ "applications-multimedia",
+	                                       "media-playback-start" }, style(),
+	                                     QStyle::SP_MediaPlay));
 	m_media_action->setToolTip("Watch or download media on this page");
 	m_media_action->setVisible(false);
 	connect(m_media_action, &QAction::triggered, this, &main_window::open_media);
 
-	// §13.2 asks for a key icon in the field or the toolbar. It is a *text*
-	// action here, beside Media and Shield, because that is what this toolbar
-	// is made of -- inventing a glyph for one affordance would make it the odd
-	// one out, and the icon set in `icons/` is the app's own mark at seven
-	// sizes, not a symbol library. The behaviour §13.2 wants is the same either
-	// way: it appears when a page has a login form, and it says what happened.
+	// §13.2 asks for a key icon in the field or the toolbar, and now there is
+	// one. This was a *text* action, on the argument that inventing a glyph for
+	// one affordance would make it the odd one out -- true, and answered by not
+	// inventing one: `dialog-password` is a standard freedesktop name that every
+	// icon theme ships, so the key is the desktop's key, drawn to match the
+	// arrows beside it.
+	//
+	// If a theme has neither name the icon comes back null and the action keeps
+	// its word, which is what the whole toolbar did until today. An icon-only
+	// button with nothing behind it would be worse than the text ever was.
 	m_key_action = bar->addAction("Key");
+	m_key_action->setIcon(themed_icon({ "dialog-password", "password" }, style(),
+	                                   QStyle::SP_CustomBase));
+	// An icon needs this in a way a word did not: with the label gone, the
+	// tooltip is the only thing that says what the button is.
+	m_key_action->setToolTip("Fill a saved password from KeePassXC");
+	m_key_action->setStatusTip("Ask KeePassXC for this site's logins");
 	m_key_action->setVisible(false);
 	connect(m_key_action, &QAction::triggered, this, [this] {
 		// Ask again, through the whole gate. Cheaper designs were available --
@@ -470,7 +518,11 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	});
 
 	QAction *shield_act = bar->addAction("Shield");
+	shield_act->setIcon(themed_icon({ "security-high", "security-medium",
+	                                   "channel-secure" }, style(),
+	                                 QStyle::SP_VistaShield));
 	shield_act->setToolTip("Site controls");
+	shield_act->setStatusTip("Permissions and filtering for this site");
 	connect(shield_act, &QAction::triggered, this, &main_window::open_site_controls);
 
 	outer->addWidget(bar);

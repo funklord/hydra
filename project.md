@@ -5219,6 +5219,62 @@ assertions rather than as a comment because this is a list that rots by
 appending, and it will stop being anyone's decision again the moment it is not
 checked.
 
+### Proper toolbar icons, and four layers of nothing-happened
+
+Media, Shield and Key were text on a toolbar of icons, under a comment arguing
+that inventing a glyph for one affordance would make it the odd one out. The
+argument was sound and the conclusion was avoidable: the icons do not have to be
+invented. `dialog-password`, `security-high` and `applications-multimedia` are
+freedesktop names every theme ships, so the key is the *desktop's* key, drawn to
+match the arrows beside it. The navigation icons moved to theme names too, so
+the whole bar is the desktop's rather than half Qt's.
+
+Then it did not work, four times, each failure looking exactly like the last one:
+a toolbar with no icons, and nothing anywhere saying why.
+
+**One: Qt does not know the icon theme here.** It finds one through a
+platform-theme plugin, and ships Plasma's and GTK's. This desktop is Trinity,
+reports `XDG_CURRENT_DESKTOP=TDE`, loads neither, and `QIcon::fromTheme` returns
+null for everything. That is the same shape as the colour-scheme problem two
+sections up and has the same answer: read what the desktop wrote down. It is in
+`~/.config/gtk-3.0/settings.ini`, plainly, as `gtk-icon-theme-name=breeze-dark`.
+
+**Two: the parser walked past it.** A kdeglobals needs its sections tracked --
+a bare `Theme=` outside `[Icons]` is the colour scheme, and reading it names a
+palette as an icon set. GTK's file has no `[Icons]`; it has `[Settings]`, and
+the first parser treated any header as leaving the section it wanted. So it
+skipped the whole file and reported the fallback. Sections are now tracked only
+for the files that have them.
+
+**Three: `hicolor` is not empty.** The guard was "if Qt already found a theme,
+it knows better" -- and Qt reports `hicolor`, the freedesktop fallback, which
+carries almost no application icons. Not empty, so the guard returned happily
+having chosen a theme containing none of the icons about to be asked for. It now
+asks whether the current theme can actually draw one, rather than whether it has
+a name.
+
+**Four: the screenshots were of the harness.** With all of that fixed the app
+logged `icon theme: breeze-dark` and the picture still showed the old toolbar,
+because the icon theme is set once in `main()` and `try_menus` has a `main()` of
+its own. Every screenshot in this project's last two sections was of a window
+that had skipped part of startup. The driver now does what `main` does -- the
+palette as well as the icons -- and a light window full of the desktop's dark
+icons was the tell.
+
+That last one is the general lesson. **A driver is only a picture of the
+application to the extent that it starts the same way**, and every one of these
+drivers builds its own `main_window` by hand.
+
+One thing genuinely needed deciding rather than fixing: `breeze` and
+`breeze-dark` are the same icons drawn for opposite backgrounds, so following
+the desktop's setting is wrong for anyone who chose Light on a dark desktop --
+pale icons on a pale toolbar. The variant is matched to the scheme *the window
+will paint in*, not to the desktop's.
+
+The parsing is covered offline in `test_theme`, all five cases, because three
+separate bugs lived in it and every one ended in the same indistinguishable
+place.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
