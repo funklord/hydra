@@ -4923,6 +4923,135 @@ every palette change.
 
 ---
 
+### The legend helped one site and cost the other 2 of 5
+
+A CPU-free afternoon spent re-reading artifacts rather than producing new ones,
+and it overturned the top item on the next list.
+
+The starting question was small: today's kisskh runs all report `1 addresses
+answered, 5 refused`, so is the payload even carrying the answer? It is.
+Request 44 is the manifest, annotated `application/vnd.apple.mpegurl (HLS)`,
+and the five refusals are Firebase, `firebaseinstallations`, `accounts.google`
+and `firebaseremoteconfig` twice -- Google furniture that was never a stream
+candidate. `candidates()` has not changed since that payload was dumped (the
+three commits since all move the *note*, not the selection), so today's runs saw
+the same thing.
+
+So the round-robin worked exactly as designed: it put a question to
+`hls.cdnvideo11.shop` even though five busier Google hosts were also in the
+draw, and that question came back right. **"Spend more probe budget where the
+evidence is noisy" was on the next list and it is refuted.** The budget found
+the manifest and labelled it. The model then failed to pick it five times out of
+five.
+
+Which raised the better question, because there are two five-run sets on this
+same evidence file and the same model:
+
+| arrangement of the served-type note | dramafren | kisskh |
+|---|---|---|
+| `-> application/vnd.apple.mpegurl (HLS)` after the url | — | **2 of 5** |
+| legend under the table, keyed by request number | **3 of 5** | **0 of 5** |
+
+The legend was adopted on dramafren's evidence. It cost kisskh both its hits.
+
+**And the reason is not that the older format was better.** Both of the old
+accepts wrote a clause matching `url.includes('->')` -- the model reading the
+annotation *marker* as if it were text in the address, which matches nothing.
+Each then wrote a *second* clause, `path.endsWith('.m3u8')`, and that is what
+landed. The 2 of 5 was a naive extension check rescuing a misread note.
+
+That explains the whole table. kisskh's manifest is a plain
+`…/Ep24.v990_index.m3u8`: an extension check finds it and the note is not
+needed. dramafren's is `cf-master.1774687168.txt`: an extension check cannot
+find it and the note is the only route. So the two sites reward opposite
+behaviour, and the arrangement that got the model to *use the note* also got it
+to stop writing the *fallback* -- under the legend, no kisskh run wrote an
+`.m3u8` clause at all. They picked images twice, wrote this visit's tokens
+twice, and picked an analytics beacon once.
+
+These are not in tension. One script can hold both clauses, and one of the old
+runs already did. The next thing to try is asking for both by name -- match the
+annotated address, *and* fall back to a manifest extension -- rather than
+arranging the note a fourth time and measuring one site.
+
+The durable caution is the one this project keeps re-learning: **a change
+measured on one site is a change measured on one site.** The legend is a real
+improvement on dramafren and was committed as one. Nobody re-ran the second
+site, and the regression it caused sat in the notes for a day as "kisskh is 0 of
+5 and that is the open question" -- with the 2 of 5 it used to score recorded
+one directory away.
+
+### Asking for both clauses, and the field the prompt promised but did not deliver
+
+The section above ended with a concrete next step: stop rearranging the note and
+ask the model for *both* a note-driven match and an extension fallback, since
+one script can hold both and one measured run already did. That is now rule 3,
+which used to read "do not decide by extension alone" -- fair warning, and read
+by the model as *do not use the extension*, with rule 4 pointing it at the notes
+straight afterwards. It now asks for two tests in as many words, says to return
+whichever matches with the notes first, and gives the measured reason: a
+disguised manifest is only findable by the note, a plain `.m3u8` is found by the
+extension for free, and a script carrying one test is wrong on half the sites
+this has been measured against.
+
+**Writing that rule found a worse bug than the one it fixed.** The draft told
+the model to fall back to an extension on a request "fetched once", which meant
+checking that the function could actually see that. It could not. The prompt has
+described the evidence as `order | type | seen | url` for some time and tells the
+model a manifest is fetched once -- and `site_extractor::check` was building the
+request objects with `url`, `type` and `order` and nothing else. A script written
+exactly as the prompt instructs reads `undefined`, compares it to a number,
+matches nothing and returns null.
+
+That is indistinguishable from a model ignoring the rule, and it has been sitting
+under every measurement the loop has produced. It is also precisely the trap the
+`kind`/`type` split cost once already, recorded in a comment a dozen lines from
+where this one lived: two vocabularies, one name, and a model reading it the
+obvious way. The rule was described and never wired.
+
+So the runtime object now carries `seen`, counted by the same `shape_of` the
+table and the gate use, and the prompt's signature comment advertises it.
+
+**The check for it is a difference, not a refusal.** Asserting that a
+`seen === 1` segment script is unusable proves nothing -- the gate refuses
+segments by its own rule and would refuse that pick with the field absent,
+wrong, or hard-coded. So the same script runs twice differing only in the `seen`
+clause, and the two must fail *differently*:
+
+    without:  Rejected: that address is one of 40 near-identical requests
+    with:     the script found nothing
+
+Whether any of this moves the rate is unmeasured. It needs ten runs across both
+captures on an idle machine, and the honest expectation is that the `seen` fix
+matters more than the rule, because the rule was competing with a field that
+was not there.
+
+**A dead parameter went with it.** `summarise()` still took the `served` map it
+had stopped using when the note moved to a legend, and a test was comparing the
+annotated and un-annotated forms for equality -- true, and true because the
+argument did nothing. Removing the parameter makes it structural: there is no
+longer a way to ask that function to put a served type in a row, so the arrow
+that four runs in five once matched on cannot reappear. It was also the build's
+only warning, in a project that claims a warning-clean build a few sections up.
+
+### An intermittent suite failure, and the output that was being thrown away
+
+`test_extloop` failed twice today under `make test` and has passed nine runs
+since, six of them standalone. Both failures were on the first run after a
+source change; a deliberate rebuild-then-test probe did not reproduce it.
+
+What is worth recording is not the flake but the response. `make test` printed
+the tail line and the first five `FAIL` lines and discarded the rest, which is
+adequate for a suite that fails every time and useless for one that does not --
+an intermittent failure is the case where the whole output matters most, and it
+was the case being thrown away. The first occurrence was invisible for a second
+reason: it was read through a `tail -8`, which cut off the line naming the
+suite, so it was recorded as "an unexplained non-zero exit" when the summary had
+in fact named it.
+
+Failing suites now have their full output written to `tests/build/failed/<t>.log`
+with the path printed. The next occurrence is diagnosable; this one is not.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
@@ -5014,15 +5143,23 @@ carried along as amendments to a list item.
    the script, two picked an image, one picked an analytics beacon — so there
    are no false accepts to chase, only a hit rate.
 
-   Worth trying, in this order: spend more of the probe budget where the
-   evidence is noisy, since one annotated address out of eighty-nine is a thin
-   thread to pull on; and feed the gate's own refusal back for a single retry,
-   since those messages now name exactly what to change and most failures are
-   one edit from correct.
+   **Corrected by the section above, and the correction matters.** kisskh's
+   payload does carry its manifest, annotated, and the probe budget is not the
+   problem — so "spend more probe budget" is off this list. What is on it: ask
+   the model for *both* a note-driven match and a manifest-extension fallback in
+   the same script. kisskh scored 2 of 5 under the older arrangement purely on
+   an `.m3u8` fallback, and the legend that won dramafren 3 of 5 stopped it
+   writing that clause at all. One script can hold both.
 
-   Site 2 has still never been measured with a payload that reached its media
-   host, and its domain is not recorded anywhere — only its player CDN
-   (`kisscloud.online`). That is a gap in these notes rather than in the code.
+   The retry is measured but not yet answered: of five runs, three never
+   answered inside fifteen minutes on a loaded machine, one retry came back
+   still refused and one timed out. That is a one-run result wearing a five-run
+   coat, and it wants an idle machine.
+
+   Site 2 is kisskh (`kisskh.co`, player CDN `kisscloud.online`), and it *is*
+   recorded — `evidence/README.md` names the site, the episode and the exact
+   stream to be found. The line that used to sit here saying otherwise was
+   stale.
 
 2. **§13 is finished.** `get-logins` runs unattended against a real vault, the
    entry picker decides in C++ so only the chosen password crosses into the

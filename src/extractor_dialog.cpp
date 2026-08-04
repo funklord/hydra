@@ -28,10 +28,13 @@ const char *k_system_prompt =
 	"Assign to `extract`:\n\n"
 	"  extract = function (page, requests) {\n"
 	"    // page:     { url, host }\n"
-	"    // requests: [ { url, type, order }, ... ]\n"
+	"    // requests: [ { url, type, order, seen }, ... ]\n"
 	"    //   type is what the browser fetched it as: 'script', 'image' or\n"
 	"    //   'other'. It is never 'hls' or 'dash' — that is your conclusion,\n"
 	"    //   and it goes in `kind` below.\n"
+	"    //   seen is how many times the page fetched that shape: 1 for a\n"
+	"    //   manifest, many for a segment. It is the same number as the\n"
+	"    //   table's `seen` column, so you may test it in code.\n"
 	"    return { url: one of the request urls, kind: 'hls'|'dash'|'direct',\n"
 	"             headers: { Referer: page.url } };   // or null\n"
 	"  };\n\n"
@@ -40,9 +43,16 @@ const char *k_system_prompt =
 	"guess one: a returned url that was not requested is rejected outright.\n"
 	"2. Match on shape, not on an exact string — the next visit will have "
 	"different ids, tokens and numbers. Prefer a stable path fragment.\n"
-	"3. A manifest may be disguised: master playlists are routinely served with "
-	"innocuous extensions and query strings, so do not decide by extension "
-	"alone.\n"
+	"3. **Write two tests, not one.** First match the address the notes below "
+	"the table identify as a stream. Then, separately, fall back to a manifest "
+	"extension (`.m3u8`, `.mpd`) on a request with `seen === 1`. Return "
+	"whichever matches, notes first.\n"
+	"   Both are needed because sites differ and you cannot tell which kind you "
+	"are looking at: a master playlist is routinely disguised with an innocuous "
+	"extension and a query string, which only the notes will catch — and plenty "
+	"of other sites serve a plain `.m3u8`, which the extension test catches for "
+	"free. A function carrying only one of the two tests is wrong on half the "
+	"sites this has been measured against.\n"
 	"4. The evidence is a table: `order | type | seen | url`. `seen` is how many "
 	"times the page fetched that shape — a high count means segments, and a "
 	"manifest is fetched once. Some rows have a note below the table saying what "
@@ -81,8 +91,7 @@ QString shape_of(const QString &url) {
 }  // namespace
 
 QString extractor_dialog::summarise(const QList<evidence_request> &evidence,
-                                     int *kept,
-                                     const QHash<QString, QString> *served) {
+                                     int *kept) {
 	QStringList lines;
 	QHash<QString, int> seen_shape;
 	QHash<QString, int> repeats;
@@ -343,7 +352,7 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
 
 void extractor_dialog::rebuild_payload() {
 	int kept = 0;
-	const QString folded = summarise(m_evidence, &kept, &m_served);
+	const QString folded = summarise(m_evidence, &kept);
 
 	QString payload = "Page: " + m_page.toString() + "\n";
 	payload += "Host: " + m_site + "\n\n";

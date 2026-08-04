@@ -37,11 +37,16 @@ public:
 	// The evidence, folded down to something a person can read and a model can
 	// use. A player requests hundreds of segments that differ only by a number,
 	// and sending all of them buries the handful of requests that matter.
-	// `served` annotates a line with what that address actually returned, keyed
-	// by url. Optional, because the tier is.
+	// The rows only. **What the server said an address serves is deliberately
+	// not here** -- it is printed as a legend below the table, by the caller.
+	// This used to take a `served` map and annotate the rows with it; when the
+	// note moved out, the parameter stayed and did nothing for a day, and a test
+	// went on comparing the annotated and un-annotated forms for equality.
+	// Removing it makes the property structural: there is no longer a way to ask
+	// this function to put a served type in a row, so no arrow can appear in one
+	// and no model can test a url for it.
 	static QString summarise(const QList<evidence_request> &evidence,
-	                          int *kept = nullptr,
-	                          const QHash<QString, QString> *served = nullptr);
+	                          int *kept = nullptr);
 
 	// Which addresses are worth asking the server about, most promising first.
 	//

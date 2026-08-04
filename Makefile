@@ -139,6 +139,14 @@ SUITES     = $(filter-out $(NEEDS_MORE),$(ALL_SUITES))
 # run rather than risk it.
 TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test
 
+# Where a failing suite's whole output is kept. This target used to print the
+# tail line and the first five FAIL lines and throw the rest away, which is fine
+# for a suite that fails every time and useless for one that does not: an
+# intermittent failure is the case where the output matters most and it was the
+# case being discarded. Seen twice on test_extloop, both times on the first run
+# after a source change and never reproducible afterwards, with nothing kept.
+FAILED_DIR = $(TESTS_DIR)/failed
+
 .PHONY: all run test test-one drivers sweep android install uninstall clean help style
 
 # Always delegates, never compares timestamps itself. The first version made
@@ -170,7 +178,9 @@ test: $(TESTS_DIR)/CMakeCache.txt
 	   out=$$($(TEST_ENV) ./$(TESTS_DIR)/$$t 2>&1); \
 	   if [ $$? -eq 0 ]; then printf '  ok   %-16s %s\n' "$$t" "$$(echo "$$out" | tail -1)"; \
 	   else fail=1; printf '  FAIL %-16s %s\n' "$$t" "$$(echo "$$out" | tail -1)"; \
-	        echo "$$out" | grep FAIL | head -5; fi; \
+	        echo "$$out" | grep FAIL | head -5; \
+	        mkdir -p $(FAILED_DIR); echo "$$out" > $(FAILED_DIR)/$$t.log; \
+	        printf '       full output: %s/%s.log\n' "$(FAILED_DIR)" "$$t"; fi; \
 	 done; \
 	 echo; echo "not run here, each needs something this target does not provide:"; \
 	 echo "  $(NEEDS_MORE)"; \

@@ -263,10 +263,25 @@ extraction run(const QString &source, const QUrl &page,
 	page_obj.setProperty("url", page.toString());
 	page_obj.setProperty("host", page.host());
 
+	// How many times the page fetched each *shape*, so the object handed to the
+	// script carries the same `seen` the table shows the model.
+	//
+	// It did not, and that was a trap of exactly the kind the `kind`/`type`
+	// comment below records. The prompt describes the evidence as
+	// `order | type | seen | url` and tells the model a manifest is fetched once
+	// -- then hands the function objects with no `seen` on them at all, so a
+	// script written from that description reads `undefined`, compares it to a
+	// number, and silently matches nothing. It looks like the model ignoring the
+	// rule rather than the rule describing something that was not there.
+	QHash<QString, int> shape_count;
+	for (const evidence_request &r : evidence)
+		shape_count[shape_of(r.url)]++;
+
 	QJSValue list = engine.newArray(uint(evidence.size()));
 	for (int i = 0; i < evidence.size(); ++i) {
 		QJSValue r = engine.newObject();
 		r.setProperty("url", evidence[i].url.toString());
+		r.setProperty("seen", shape_count.value(shape_of(evidence[i].url), 1));
 		// `type`, not `kind`. What the browser fetched this as ("script",
 		// "image", "other") and what a stream is ("hls", "dash", "direct") are
 		// two vocabularies, and they shared the name `kind` until a model read

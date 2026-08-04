@@ -699,6 +699,72 @@ int main(int argc, char **argv) {
 		      "while a script defining nothing is still refused");
 	}
 
+	section("the script is handed the same `seen` the table shows");
+	{
+		// The prompt describes the evidence as `order | type | seen | url`, tells
+		// the model a manifest is fetched once, and now asks it in as many words
+		// to fall back to a manifest extension on a request with `seen === 1`.
+		// None of that means anything unless the object the function receives
+		// actually carries the field -- and for a while it did not: the runtime
+		// object had `url`, `type` and `order` only, so a script written exactly
+		// as instructed read `undefined`, compared it to a number, matched
+		// nothing, and looked like a model that had ignored the rule.
+		//
+		// This is the same trap the `kind`/`type` split already cost once, which
+		// is why it gets a check rather than a comment.
+		QList<evidence_request> flooded = sample();
+		int n = flooded.size();
+		for (int i = 2; i <= 40; ++i)   // more segments, one shape
+			flooded << evidence_request{
+				QUrl(QString("https://sil5.player.example/v4/db/abc/seg-%1.ts")
+				         .arg(i, 5, 10, QChar('0'))), "other", n++ };
+
+		const QString src =
+			"extract = function (page, requests) {\n"
+			"  var m = requests.find(function (r) {\n"
+			"    return r.type === 'other' && r.seen === 1 &&\n"
+			"           r.url.indexOf('cf-master') !== -1;\n"
+			"  });\n"
+			"  return m ? { url: m.url, kind: 'hls' } : null;\n"
+			"};";
+		const extractor_verdict v = site_extractor::check(src, page, flooded);
+		check(v.usable, QString("a script testing `seen === 1` finds the manifest (%1)")
+		                     .arg(v.message.left(90)));
+		check(v.result.url.toString().contains("cf-master"),
+		      "and it is the manifest it lands on, not a segment");
+
+		// The other half of the field: a flood must not read as 1, or the rule
+		// the prompt states ("many for a segment") is a lie in the other
+		// direction and `seen === 1` would match everything.
+		//
+		// **Asked as a difference, not as a refusal.** Checking only that a
+		// `seen === 1` segment script is unusable proves nothing: the gate has
+		// its own segment rule and would refuse that pick whatever `seen` said,
+		// so the check would pass with the field absent, wrong, or hard-coded to
+		// 1. So the same script is run twice, differing only in the `seen`
+		// clause, and the two must fail *differently* -- one returning nothing
+		// because the filter matched nothing, the other reaching the gate and
+		// being told it picked a segment.
+		auto seg_script = [](const char *extra) {
+			return QString("extract = function (page, requests) {\n"
+			                "  var m = requests.find(function (r) {\n"
+			                "    return r.url.indexOf('seg-') !== -1 %1;\n"
+			                "  });\n"
+			                "  return m ? { url: m.url, kind: 'hls' } : null;\n"
+			                "};").arg(QString::fromUtf8(extra));
+		};
+		const extractor_verdict without_seen =
+			site_extractor::check(seg_script(""), page, flooded);
+		const extractor_verdict with_seen =
+			site_extractor::check(seg_script("&& r.seen === 1"), page, flooded);
+
+		check(!without_seen.usable && !with_seen.usable,
+		      "a segment is refused either way, which is why this is not the check");
+		check(without_seen.message != with_seen.message,
+		      QString("the `seen` clause changes the outcome: \"%1\" vs \"%2\"")
+		          .arg(without_seen.message.left(60), with_seen.message.left(60)));
+	}
+
 	section("a url too long to show is a trap");
 	{
 		// summarise() truncates each url for display. The model can only return
@@ -861,11 +927,8 @@ int main(int argc, char **argv) {
 
 	section("what the server said reaches the payload");
 	{
-		QHash<QString, QString> served;
-		served.insert("https://sil5.player.example/v4/db/abc/cf-master.1774687168.txt?k=UCp&kx=17",
-		               "application/vnd.apple.mpegurl (HLS)");
 		int kept = 0;
-		const QString with = extractor_dialog::summarise(ev, &kept, &served);
+		const QString with = extractor_dialog::summarise(ev, &kept);
 		check(!with.contains("application/vnd.apple.mpegurl"),
 		      "the served type is no longer printed in the rows at all");
 		// **The url is last and nothing follows it.** This is the whole point of
@@ -883,10 +946,11 @@ int main(int argc, char **argv) {
 		}
 		check(!with.contains("->"),
 		      "and no arrow anywhere, so a url cannot be tested for one");
-		const QString without = extractor_dialog::summarise(ev, &kept);
-		check(without == with,
-		      "and the rows are identical whether or not the tier ran, since the "
-		      "note is not in them");
+		// The comparison that used to sit here -- summarise() with and without a
+		// `served` map, asserting the two were identical -- is gone because the
+		// parameter is. The rows cannot carry a served type any more: there is no
+		// argument by which to hand them one. That is the same property enforced
+		// a level down, where a test cannot be forgotten.
 	}
 
 	section("the store");
