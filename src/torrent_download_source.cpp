@@ -60,7 +60,7 @@ bool torrent_download_source::available() { return false; }
 #endif
 
 torrent_download_source::torrent_download_source(QObject *parent)
-	: download_source(parent) {
+  : download_source(parent) {
 	m_d = new impl;
 	m_state_dir = QDir(QStandardPaths::writableLocation(
 	                        QStandardPaths::AppDataLocation))
@@ -140,10 +140,10 @@ source_capabilities torrent_download_source::capabilities() const {
 	c.max_concurrent       = 8;
 	c.streamable           = true;   // sequential + deadlines make it playable
 	c.participation_note   =
-		"A torrent is not a private download. Your IP address is announced to "
-		"the tracker and to every peer in the swarm, and peers can see what you "
-		"are fetching. Hydra does not tunnel this — if you want it hidden, set "
-		"up a VPN or proxy at the system level.";
+	  "A torrent is not a private download. Your IP address is announced to "
+	  "the tracker and to every peer in the swarm, and peers can see what you "
+	  "are fetching. Hydra does not tunnel this — if you want it hidden, set "
+	  "up a VPN or proxy at the system level.";
 	return c;
 }
 
@@ -338,7 +338,7 @@ bool torrent_download_source::add_params(const download_request &req,
 			const QByteArray blob = f.readAll();
 			lt::error_code ec;
 			lt::add_torrent_params resumed =
-				lt::read_resume_data({blob.constData(), blob.size()}, ec);
+			  lt::read_resume_data({blob.constData(), blob.size()}, ec);
 			// Only accept it if it is genuinely the same content. A corrupt or
 			// stale file must not silently redirect the download.
 			if (!ec && hash_string(resumed.info_hashes) == hash) {
@@ -494,7 +494,7 @@ void torrent_download_source::prioritize_streaming(int id, const QString &file,
 	const int piece_len = fs.piece_length();
 	const qint64 lead   = qint64(piece_len) * 24;   // ~a few seconds of video
 	const lt::peer_request last = fs.map_file(
-		idx, qMin<qint64>(lead, qMax<qint64>(0, fs.file_size(idx) - 1)), 1);
+	  idx, qMin<qint64>(lead, qMax<qint64>(0, fs.file_size(idx) - 1)), 1);
 	int deadline = 0;
 	for (lt::piece_index_t p = first.piece; p <= last.piece; ++p)
 		h.set_piece_deadline(p, (deadline += 200));
@@ -575,7 +575,7 @@ download_progress torrent_download_source::final_progress(int job,
 			if (fs.pad_file_at(i))
 				continue;          // alignment padding, not content
 			p.files << download_file{ QString::fromStdString(fs.file_path(i)),
-			                           fs.file_size(i) };
+				                         fs.file_size(i) };
 		}
 	}
 	return p;

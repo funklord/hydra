@@ -265,7 +265,7 @@ const char *k_script = R"JS(
 }  // namespace
 
 consent_blocker::consent_blocker(policy_engine *policy, QObject *parent)
-	: QObject(parent), m_policy(policy) {}
+  : QObject(parent), m_policy(policy) {}
 
 QString consent_blocker::script_source() { return QString::fromUtf8(k_script); }
 

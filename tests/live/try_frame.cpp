@@ -22,13 +22,13 @@ int main(int argc, char *argv[]) {
 
 	QTimer::singleShot(18000, [view] {
 		view->page()->runJavaScript(
-			"(function(){var f=document.querySelector('iframe');"
-			"if(!f) return 'no iframe';"
-			"var st='unknown';"
-			"try { st = f.contentWindow.location.href ? 'same-origin' : 'blank'; }"
-			"catch(e) { st = 'cross-origin (so it loaded)'; }"
-			"return 'src='+f.getAttribute('src')+' state='+st;})()",
-			[](const QVariant &v) { std::printf("PLAIN %s\n", qPrintable(v.toString())); });
+		  "(function(){var f=document.querySelector('iframe');"
+		  "if(!f) return 'no iframe';"
+		  "var st='unknown';"
+		  "try { st = f.contentWindow.location.href ? 'same-origin' : 'blank'; }"
+		  "catch(e) { st = 'cross-origin (so it loaded)'; }"
+		  "return 'src='+f.getAttribute('src')+' state='+st;})()",
+		  [](const QVariant &v) { std::printf("PLAIN %s\n", qPrintable(v.toString())); });
 	});
 	QTimer::singleShot(21000, [] { std::printf("done\n"); qApp->quit(); });
 	return app.exec();

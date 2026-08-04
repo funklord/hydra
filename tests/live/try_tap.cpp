@@ -23,7 +23,7 @@ static QString test_out() {
 }
 
 static const QString OUTDIR =
-	test_out();
+  test_out();
 
 int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -52,10 +52,10 @@ int main(int argc, char *argv[]) {
 		for (QLineEdit *e : w.findChildren<QLineEdit *>())
 			if (e->placeholderText() == "Address") {
 				e->setText(target);
-				QMetaObject::invokeMethod(e, "returnPressed");
-				std::printf("navigated\n");
-				return;
-			}
+			  QMetaObject::invokeMethod(e, "returnPressed");
+			  std::printf("navigated\n");
+			  return;
+		  }
 	});
 	QTimer::singleShot(20000, [&] {
 		const auto vs = w.findChildren<QWebEngineView *>();

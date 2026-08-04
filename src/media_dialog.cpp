@@ -33,8 +33,8 @@ QString kind_label(media_kind k) {
 media_dialog::media_dialog(media_detector *detector, player_launcher *players,
                             download_manager *downloads, local_proxy *proxy,
                             mse_tap *tap, QWidget *parent)
-	: QDialog(parent), m_detector(detector), m_players(players),
-	  m_downloads(downloads), m_proxy(proxy), m_tap(tap) {
+  : QDialog(parent), m_detector(detector), m_players(players),
+    m_downloads(downloads), m_proxy(proxy), m_tap(tap) {
 	setWindowTitle("Media on this page");
 	resize(720, 340);
 
@@ -139,9 +139,9 @@ void media_dialog::assemble_then(const media_item &item, bool play_it) {
 		m_assembler = new hls_assembler(this);
 
 	const QString out = play_it
-		? m_scratch.filePath("stream.ts")
-		: QDir(m_downloads->directory()).filePath(
-		      item.label.section('/', -1).section('.', 0, 0) + ".ts");
+	  ? m_scratch.filePath("stream.ts")
+	  : QDir(m_downloads->directory()).filePath(
+	        item.label.section('/', -1).section('.', 0, 0) + ".ts");
 
 	connect(m_assembler, &hls_assembler::progress, this,
 	         [this, out, play_it, item](qint64 bytes, int done, int total) {
@@ -227,7 +227,7 @@ void media_dialog::save(const media_item &item) {
 	                                      "when it finishes.");
 #else
 	const QString where =
-		QString("Queued download to %1.").arg(m_downloads->directory());
+	  QString("Queued download to %1.").arg(m_downloads->directory());
 #endif
 	m_status->setText(id ? where : "<b>" + error.toHtmlEscaped() + "</b>");
 }

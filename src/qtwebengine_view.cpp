@@ -50,7 +50,7 @@ const char *k_channel_bootstrap = R"JS(
 }  // namespace
 
 qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
-	: web_view_backend(nullptr) {
+  : web_view_backend(nullptr) {
 	m_view = new QWebEngineView(parent);
 	m_page = new QWebEnginePage(profile, m_view);
 	m_view->setPage(m_page);
@@ -140,7 +140,7 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 			default:
 				// Nothing the policy model covers: refuse rather than prompt.
 				m_page->setFeaturePermission(origin, f,
-					QWebEnginePage::PermissionDeniedByUser);
+				  QWebEnginePage::PermissionDeniedByUser);
 				return;
 		}
 		const bool grant = m_decider ? m_decider(origin, pf) : false;
@@ -158,8 +158,8 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 			          policy::feature_name(pf),
 			          grant ? "GRANTED" : "denied");
 		m_page->setFeaturePermission(origin, f,
-			grant ? QWebEnginePage::PermissionGrantedByUser
-			      : QWebEnginePage::PermissionDeniedByUser);
+		  grant ? QWebEnginePage::PermissionGrantedByUser
+		        : QWebEnginePage::PermissionDeniedByUser);
 	});
 #endif
 }

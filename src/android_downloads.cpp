@@ -58,12 +58,12 @@ void android_downloads::poll() {
 QString android_downloads::publish(const QString &path, const QString &mime,
                                     QString *error) {
 	const QJniObject result = QJniObject::callStaticObjectMethod(
-		k_cls, "publish",
-		"(Landroid/app/Activity;Ljava/lang/String;Ljava/lang/String;)"
-		"Ljava/lang/String;",
-		QNativeInterface::QAndroidApplication::context().object(),
-		QJniObject::fromString(path).object<jstring>(),
-		QJniObject::fromString(mime).object<jstring>());
+	  k_cls, "publish",
+	  "(Landroid/app/Activity;Ljava/lang/String;Ljava/lang/String;)"
+	  "Ljava/lang/String;",
+	  QNativeInterface::QAndroidApplication::context().object(),
+	  QJniObject::fromString(path).object<jstring>(),
+	  QJniObject::fromString(mime).object<jstring>());
 
 	if (QJniEnvironment().checkAndClearExceptions()) {
 		if (error)

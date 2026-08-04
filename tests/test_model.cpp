@@ -88,11 +88,11 @@ int main(int argc, char **argv) {
 		g_warnings = 0;
 		{
 			QAbstractItemModelTester tester(
-				&model, QAbstractItemModelTester::FailureReportingMode::Warning);
+			  &model, QAbstractItemModelTester::FailureReportingMode::Warning);
 			tree_sort_proxy proxy;
 			proxy.setSourceModel(&model);
 			QAbstractItemModelTester proxy_tester(
-				&proxy, QAbstractItemModelTester::FailureReportingMode::Warning);
+			  &proxy, QAbstractItemModelTester::FailureReportingMode::Warning);
 			proxy.set_sort_mode(tree_sort_proxy::sort_mode::title_asc);
 			proxy.set_search_text("a");
 			proxy.set_search_text("");

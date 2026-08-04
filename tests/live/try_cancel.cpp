@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
 		for (QLineEdit *e : w.findChildren<QLineEdit *>())
 			if (e->placeholderText() == "Address") {
 				e->setText(target); QMetaObject::invokeMethod(e, "returnPressed"); return;
-			}
+		  }
 	});
 	QTimer::singleShot(13000, [&] {
 		if (QAction *a = action("Capture Playing")) { std::printf("arming\n"); a->trigger(); }
@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
 		for (QPushButton *b : win->findChildren<QPushButton *>())
 			if (b->text().contains("Cancel") && b->isEnabled()) {
 				std::printf("clicking Cancel\n"); b->click(); return;
-			}
+		  }
 		std::printf("NO ENABLED CANCEL\n");
 	});
 	QTimer::singleShot(21000, [&] { report("after-cancel"); });

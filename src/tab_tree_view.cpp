@@ -134,9 +134,9 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 		// question rather than being discovered afterwards.
 		const int kids = n->children.size();
 		const QString what = kids > 0
-			? QString("Delete \"%1\" and the %2 item%3 inside it?")
-			      .arg(n->title).arg(kids).arg(kids == 1 ? "" : "s")
-			: QString("Delete \"%1\"?").arg(n->title);
+		  ? QString("Delete \"%1\" and the %2 item%3 inside it?")
+		        .arg(n->title).arg(kids).arg(kids == 1 ? "" : "s")
+		  : QString("Delete \"%1\"?").arg(n->title);
 		if (QMessageBox::question(this, "Delete", what) == QMessageBox::Yes)
 			m->remove_node(n);
 	}

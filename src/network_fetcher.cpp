@@ -69,8 +69,8 @@ public slots:
 		} else {
 			out.reached = true;
 			out.content_type =
-				reply->header(QNetworkRequest::ContentTypeHeader)
-				    .toString().section(';', 0, 0).trimmed();
+			  reply->header(QNetworkRequest::ContentTypeHeader)
+			      .toString().section(';', 0, 0).trimmed();
 			// A server that ignores Range sends the whole body, so the cap is
 			// applied here as well as asked for.
 			out.body = max_bytes > 0 ? reply->read(max_bytes) : reply->readAll();
@@ -85,7 +85,7 @@ private:
 };
 
 network_fetcher::network_fetcher(stream_context ctx, QObject *parent)
-	: QObject(parent) {
+  : QObject(parent) {
 	qRegisterMetaType<fetch_result>("fetch_result");
 	m_thread = new QThread;
 	m_thread->setObjectName("hydra-helper-fetch");

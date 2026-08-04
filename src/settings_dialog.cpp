@@ -130,14 +130,14 @@ ai_choice ai_mode() {
 void set_ai_mode(ai_choice mode) {
 	QSettings s = open_settings();
 	s.setValue("ai/mode", mode == ai_choice::local_only ? "local_only"
-	                     : mode == ai_choice::external  ? "external"
-	                                                    : "automatic");
+		                   : mode == ai_choice::external  ? "external"
+		                                                  : "automatic");
 	s.sync();
 }
 
 void load_into(player_launcher *players, download_manager *downloads,
-                torrent_download_source *torrents, ollama_provider *local_ai,
-                claude_provider *external_ai) {
+	              torrent_download_source *torrents, ollama_provider *local_ai,
+	              claude_provider *external_ai) {
 	QSettings s = open_settings();
 
 	if (players) {
@@ -169,7 +169,7 @@ void load_into(player_launcher *players, download_manager *downloads,
 
 	if (local_ai) {
 		local_ai->set_endpoint(QUrl(s.value("ai/ollama_endpoint",
-		                                     "http://localhost:11434").toString()));
+			                                   "http://localhost:11434").toString()));
 		local_ai->set_model(s.value("ai/ollama_model", "llama3").toString());
 		local_ai->set_probe_timeout(
 			s.value("ai/probe_timeout_ms", 2500).toInt());
@@ -186,8 +186,8 @@ void load_into(player_launcher *players, download_manager *downloads,
 }
 
 void save_from(player_launcher *players, download_manager *downloads,
-                torrent_download_source *torrents, ollama_provider *local_ai,
-                claude_provider *external_ai) {
+	              torrent_download_source *torrents, ollama_provider *local_ai,
+	              claude_provider *external_ai) {
 	QSettings s = open_settings();
 
 	if (players) {
@@ -198,9 +198,9 @@ void save_from(player_launcher *players, download_manager *downloads,
 		s.setValue("downloads/directory", downloads->directory());
 	if (torrents) {
 		s.setValue("torrent/connections_global",
-		            torrents->connection_limit_global());
+			          torrents->connection_limit_global());
 		s.setValue("torrent/connections_per_torrent",
-		            torrents->connection_limit_per_torrent());
+			          torrents->connection_limit_per_torrent());
 		s.setValue("torrent/seed_ratio", torrents->seed_ratio());
 		s.setValue("torrent/listen_interfaces", torrents->listen_interfaces());
 		s.setValue("torrent/sequential", torrents->sequential());
@@ -261,11 +261,11 @@ settings_dialog::settings_dialog(player_launcher *players,
                                   const QString &filters_path,
                                   consent_blocker *consent,
                                   const QString &rules_path, QWidget *parent)
-	: QDialog(parent), m_policy(policy), m_filters(filters),
-	  m_filters_path(filters_path), m_consent(consent),
-	  m_rules_path(rules_path), m_players(players),
-	  m_downloads(downloads), m_torrents(torrents), m_local_ai(local_ai),
-	  m_external_ai(external_ai) {
+  : QDialog(parent), m_policy(policy), m_filters(filters),
+    m_filters_path(filters_path), m_consent(consent),
+    m_rules_path(rules_path), m_players(players),
+    m_downloads(downloads), m_torrents(torrents), m_local_ai(local_ai),
+    m_external_ai(external_ai) {
 	setWindowTitle("Settings");
 	resize(660, 620);
 
@@ -399,17 +399,17 @@ settings_dialog::settings_dialog(player_launcher *players,
 			for (QWidget *p = w->parentWidget(); p; p = p->parentWidget())
 				if (auto *sa = qobject_cast<QScrollArea *>(p)) {
 					sa->ensureWidgetVisible(w);
-					break;
-				}
+				  break;
+			  }
 		}
 	});
 	connect(m_results, &QListWidget::itemClicked, m_results,
 	         &QListWidget::itemActivated);
 
 	auto *buttons = new QDialogButtonBox(
-		QDialogButtonBox::Ok | QDialogButtonBox::Cancel |
-			QDialogButtonBox::RestoreDefaults,
-		this);
+	  QDialogButtonBox::Ok | QDialogButtonBox::Cancel |
+	    QDialogButtonBox::RestoreDefaults,
+	  this);
 	connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
@@ -490,9 +490,9 @@ void settings_dialog::run_search(const QString &text) {
 			continue;
 		seen.insert(key);
 		auto *it = new QListWidgetItem(
-			QString("%1  —  %2").arg(s.text.left(70),
-			                          m_categories->item(s.page)->text()),
-			m_results);
+		  QString("%1  —  %2").arg(s.text.left(70),
+		                            m_categories->item(s.page)->text()),
+		  m_results);
 		it->setData(Qt::UserRole, s.page);
 		it->setData(Qt::UserRole + 1, QVariant::fromValue(s.widget));
 		if (m_results->count() >= 12)
@@ -574,7 +574,7 @@ QWidget *section_heading(const QString &text, QWidget *parent) {
 // edit squeezed to its size hint shows the *end* of a path and nothing else,
 // which is the half nobody needs.
 QWidget *settings_row(const QString &title, const QString &help,
-                       QWidget *control, QWidget *parent, bool wide = false) {
+	                     QWidget *control, QWidget *parent, bool wide = false) {
 	auto *row = new QWidget(parent);
 	auto *h = new QHBoxLayout(row);
 	h->setContentsMargins(0, 6, 0, 6);
@@ -609,9 +609,9 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	auto *v = new QVBoxLayout(page);
 
 	auto *intro = new QLabel(
-		"What every site is allowed to do unless you have said otherwise for "
-		"that site. The shield in the toolbar sets exceptions per site, and an "
-		"exception always wins over what is chosen here.", page);
+	  "What every site is allowed to do unless you have said otherwise for "
+	  "that site. The shield in the toolbar sets exceptions per site, and an "
+	  "exception always wins over what is chosen here.", page);
 	intro->setWordWrap(true);
 	v->addWidget(intro);
 
@@ -653,11 +653,11 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 		theme::apply(static_cast<theme::choice>(m_appearance->currentData().toInt()));
 	});
 	v->addWidget(settings_row(
-		"Colour scheme",
-		"Following the desktop is the default, and it keeps following: a system "
-		"that switches at sunset takes Hydra with it. Web pages pick this up when "
-		"Hydra next starts — the engine reads it once, at launch.",
-		m_appearance, page));
+	  "Colour scheme",
+	  "Following the desktop is the default, and it keeps following: a system "
+	  "that switches at sunset takes Hydra with it. Web pages pick this up when "
+	  "Hydra next starts — the engine reads it once, at launch.",
+	  m_appearance, page));
 
 	for (const QString &group_name : order) {
 		QList<policy::feature> in_group;
@@ -714,7 +714,7 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	m_exception_drop->setObjectName("drop_exception");
 	m_exception_drop->setEnabled(false);
 	m_exception_drop->setToolTip(
-		"The site falls back to the defaults above. Applied when you press OK.");
+	  "The site falls back to the defaults above. Applied when you press OK.");
 	connect(m_exceptions, &QTreeWidget::itemSelectionChanged, this, [this] {
 		m_exception_drop->setEnabled(!m_exceptions->selectedItems().isEmpty());
 	});
@@ -732,12 +732,12 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	// --- All of it in one file ----------------------------------------------
 	v->addWidget(section_heading("Settings file", page));
 	m_bundle_note = dim_label(
-		"Everything on these pages, plus the site exceptions above and the "
-		"accepted filter rules, in one INI file you can read, edit and carry to "
-		"another machine.\n\nIt does not include your tabs, which have their own "
-		"file, the Claude API key, which is never written to disk, or the "
-		"learned site rules — those are imported on the Filters page, where each "
-		"one is reviewed before it takes effect.", page);
+	  "Everything on these pages, plus the site exceptions above and the "
+	  "accepted filter rules, in one INI file you can read, edit and carry to "
+	  "another machine.\n\nIt does not include your tabs, which have their own "
+	  "file, the Claude API key, which is never written to disk, or the "
+	  "learned site rules — those are imported on the Filters page, where each "
+	  "one is reviewed before it takes effect.", page);
 	v->addWidget(m_bundle_note);
 
 	auto *bundle_row = new QHBoxLayout;
@@ -757,9 +757,9 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	// it. The one thing the row has no space for is the consequence, which is
 	// worth keeping because it surprises people.
 	auto *note = dim_label(
-		"Answering a consent banner allows that site's own cookies: the answer "
-		"is itself stored in a cookie, and would otherwise be forgotten on every "
-		"visit.", page);
+	  "Answering a consent banner allows that site's own cookies: the answer "
+	  "is itself stored in a cookie, and would otherwise be forgotten on every "
+	  "visit.", page);
 	v->addSpacing(10);
 	v->addWidget(note);
 
@@ -793,13 +793,13 @@ void settings_dialog::update_restore_button() {
 	m_restore->setText(resettable ? QString("Restore %1 defaults").arg(label)
 	                               : QStringLiteral("Restore defaults"));
 	m_restore->setToolTip(
-		resettable
-			? QString("Put the %1 page back to a fresh install's settings. "
-			           "Nothing is written until you press OK, so Cancel undoes "
-			           "it.").arg(name)
-			: QStringLiteral("The filters page holds rules learned on this "
-			                  "machine, not preferences — remove them "
-			                  "individually rather than all at once."));
+	  resettable
+	    ? QString("Put the %1 page back to a fresh install's settings. "
+	               "Nothing is written until you press OK, so Cancel undoes "
+	               "it.").arg(name)
+	    : QStringLiteral("The filters page holds rules learned on this "
+	                      "machine, not preferences — remove them "
+	                      "individually rather than all at once."));
 }
 
 void settings_dialog::restore_page_defaults(int page) {
@@ -818,7 +818,7 @@ void settings_dialog::restore_page_defaults(int page) {
 			if (!c)
 				continue;
 			const policy::setting want =
-				fresh.global_default(static_cast<policy::feature>(i));
+			  fresh.global_default(static_cast<policy::feature>(i));
 			c->setCurrentIndex(want == policy::setting::block ? 1 : 0);
 		}
 		// Site exceptions are deliberately left alone. They are decisions about
@@ -831,8 +831,8 @@ void settings_dialog::restore_page_defaults(int page) {
 		for (QRadioButton *b : m_player_buttons)
 			if (b->property("player_id").toString() == fresh.selected()) {
 				b->setChecked(true);
-				break;
-			}
+			  break;
+		  }
 	} else if (name.startsWith("Downloads")) {
 		download_manager fresh;
 		m_dir->setText(fresh.directory());
@@ -877,8 +877,8 @@ void settings_dialog::restore_page_defaults(int page) {
 
 void settings_dialog::export_settings() {
 	const QString path = QFileDialog::getSaveFileName(
-		this, "Export settings", QDir::homePath() + "/hydra-settings.ini",
-		"Settings files (*.ini)");
+	  this, "Export settings", QDir::homePath() + "/hydra-settings.ini",
+	  "Settings files (*.ini)");
 	if (path.isEmpty())
 		return;
 
@@ -888,20 +888,20 @@ void settings_dialog::export_settings() {
 	apply();
 	apply_kiosk();
 	const settings_bundle::summary s =
-		settings_bundle::write(path, m_policy, m_filters);
+	  settings_bundle::write(path, m_policy, m_filters);
 	m_bundle_note->setText(
-		s.ok() ? QString("Wrote %1 to %2.").arg(s.describe(), path)
-		       : QString("<b>%1</b>").arg(s.error.toHtmlEscaped()));
+	  s.ok() ? QString("Wrote %1 to %2.").arg(s.describe(), path)
+	         : QString("<b>%1</b>").arg(s.error.toHtmlEscaped()));
 }
 
 void settings_dialog::import_settings() {
 	const QString path = QFileDialog::getOpenFileName(
-		this, "Import settings", QDir::homePath(), "Settings files (*.ini)");
+	  this, "Import settings", QDir::homePath(), "Settings files (*.ini)");
 	if (path.isEmpty())
 		return;
 
 	const settings_bundle::summary s =
-		settings_bundle::read(path, m_policy, m_filters);
+	  settings_bundle::read(path, m_policy, m_filters);
 	if (!s.ok()) {
 		m_bundle_note->setText(QString("<b>%1</b>").arg(s.error.toHtmlEscaped()));
 		return;
@@ -954,28 +954,28 @@ void settings_dialog::rebuild_exceptions() {
 		m_exceptions->resizeColumnToContents(i);
 
 	m_exception_note->setText(
-		shown == 0
-			? QStringLiteral("No site has an exception yet. The shield in the "
-			                  "toolbar makes one for the site you are on.")
-			: QString("%1 site%2 with settings of their own. Removing one sends "
-			           "that site back to the defaults above.")
-			      .arg(shown)
-			      .arg(shown == 1 ? "" : "s"));
+	  shown == 0
+	    ? QStringLiteral("No site has an exception yet. The shield in the "
+	                      "toolbar makes one for the site you are on.")
+	    : QString("%1 site%2 with settings of their own. Removing one sends "
+	               "that site back to the defaults above.")
+	          .arg(shown)
+	          .arg(shown == 1 ? "" : "s"));
 	if (!m_dropped_patterns.isEmpty())
 		m_exception_note->setText(
-			m_exception_note->text() +
-			QString(" %1 marked for removal when you press OK.")
-			    .arg(m_dropped_patterns.size()));
+		  m_exception_note->text() +
+		  QString(" %1 marked for removal when you press OK.")
+		      .arg(m_dropped_patterns.size()));
 }
 
 void settings_dialog::build_filter_page(QWidget *page) {
 	auto *v = new QVBoxLayout(page);
 	auto *intro = new QLabel(
-		"Rules accepted from the filter-evolution loop (Tools → Evolve Ad "
-		"Filters). Until now a rule could be accepted but never taken back "
-		"except by editing the file by hand — which is a poor answer for a list "
-		"built by accepting proposals one at a time, since the design assumes "
-		"some will turn out wrong.", page);
+	  "Rules accepted from the filter-evolution loop (Tools → Evolve Ad "
+	  "Filters). Until now a rule could be accepted but never taken back "
+	  "except by editing the file by hand — which is a poor answer for a list "
+	  "built by accepting proposals one at a time, since the design assumes "
+	  "some will turn out wrong.", page);
 	intro->setWordWrap(true);
 	v->addWidget(intro);
 
@@ -1028,15 +1028,15 @@ void settings_dialog::build_filter_page(QWidget *page) {
 	rv->setContentsMargins(0, 0, 0, 0);
 	rv->addWidget(section_heading("Learned site rules", rules_box));
 	rv->addWidget(dim_label(
-		"Consent-banner wording and ad-blocker detector names learned on this "
-		"machine. Built-in rules are not listed: they come from the program and "
-		"cannot be edited here.", rules_box));
+	  "Consent-banner wording and ad-blocker detector names learned on this "
+	  "machine. Built-in rules are not listed: they come from the program and "
+	  "cannot be edited here.", rules_box));
 
 	m_rules_view = new QTreeWidget(rules_box);
 	m_rules_view->setObjectName("site_rules");
 	m_rules_view->setColumnCount(5);
 	m_rules_view->setHeaderLabels(
-		{ "Rule", "Kind", "Applies to", "Status", "From" });
+	  { "Rule", "Kind", "Applies to", "Status", "From" });
 	m_rules_view->setRootIsDecorated(false);
 	rv->addWidget(m_rules_view, 1);
 
@@ -1073,9 +1073,9 @@ void settings_dialog::build_filter_page(QWidget *page) {
 			kept.save(m_rules_path);
 		rebuild_site_rules();
 		m_rules_note->setText(gone == 0
-			? QString("Nothing had been imported.")
-			: QString("Forgot %1 imported rule(s). What you learned here is "
-			           "untouched.").arg(gone));
+		  ? QString("Nothing had been imported.")
+		  : QString("Forgot %1 imported rule(s). What you learned here is "
+		             "untouched.").arg(gone));
 	});
 
 	// Sharing, in the only form it takes for now: a file someone sends. The
@@ -1086,7 +1086,7 @@ void settings_dialog::build_filter_page(QWidget *page) {
 		if (!m_consent)
 			return;
 		const QString path = QFileDialog::getSaveFileName(
-			this, "Export learned rules", QString(), "Rule files (*.json)");
+		  this, "Export learned rules", QString(), "Rule files (*.json)");
 		if (path.isEmpty())
 			return;
 		QFile f(path);
@@ -1102,7 +1102,7 @@ void settings_dialog::build_filter_page(QWidget *page) {
 		if (!m_consent)
 			return;
 		const QString path = QFileDialog::getOpenFileName(
-			this, "Import rules", QString(), "Rule files (*.json)");
+		  this, "Import rules", QString(), "Rule files (*.json)");
 		if (path.isEmpty())
 			return;
 		QFile f(path);
@@ -1112,7 +1112,7 @@ void settings_dialog::build_filter_page(QWidget *page) {
 		}
 		const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
 		const site_rules::import_result got =
-			site_rules::judge_import(doc.object(), QFileInfo(path).fileName());
+		  site_rules::judge_import(doc.object(), QFileInfo(path).fileName());
 
 		// Nothing is added by opening a file. What survived the check is shown,
 		// and adding it is a second, deliberate act -- a rule set from elsewhere
@@ -1182,9 +1182,9 @@ void settings_dialog::build_filter_page(QWidget *page) {
 			           .arg(r.kind, QString(r.value).replace('"', "\\\""), r.note);
 		QGuiApplication::clipboard()->setText(out);
 		m_rules_note->setText(out.isEmpty()
-			? QString("Nothing is flagged, so nothing was copied.")
-			: QString("Copied %1 line(s) for site_rules::defaults().")
-			      .arg(out.count('\n')));
+		  ? QString("Nothing is flagged, so nothing was copied.")
+		  : QString("Copied %1 line(s) for site_rules::defaults().")
+		        .arg(out.count('\n')));
 	});
 
 	rebuild_site_rules();
@@ -1213,21 +1213,21 @@ void settings_dialog::rebuild_site_rules() {
 		// Where it came from, because "learned here" and "somebody sent this"
 		// are the difference between a rule you vouched for and one you did not.
 		it->setText(4, r.imported
-			? (r.origin.isEmpty() ? QStringLiteral("imported") : r.origin)
-			: QStringLiteral("learned here"));
+		  ? (r.origin.isEmpty() ? QStringLiteral("imported") : r.origin)
+		  : QStringLiteral("learned here"));
 		if (r.promote)
 			++flagged;
 	}
 	for (int i = 0; i < 5; ++i)
 		m_rules_view->resizeColumnToContents(i);
 	m_rules_note->setText(
-		m_rules_view->topLevelItemCount() == 0
-			? QString("Nothing learned yet. Rules arrive from Tools → Cookie "
-			           "Banners We Missed.")
-			: QString("%1 learned, %2 of them flagged to be shipped as built-ins "
-			           "— a rule that works on every site belongs in the program "
-			           "rather than in one person's file.")
-			      .arg(m_rules_view->topLevelItemCount()).arg(flagged));
+	  m_rules_view->topLevelItemCount() == 0
+	    ? QString("Nothing learned yet. Rules arrive from Tools → Cookie "
+	               "Banners We Missed.")
+	    : QString("%1 learned, %2 of them flagged to be shipped as built-ins "
+	               "— a rule that works on every site belongs in the program "
+	               "rather than in one person's file.")
+	          .arg(m_rules_view->topLevelItemCount()).arg(flagged));
 	m_rules_remove->setEnabled(false);
 }
 
@@ -1255,22 +1255,22 @@ void settings_dialog::rebuild_filter_list() {
 	for (int i = 0; i < 3; ++i)
 		m_filter_view->resizeColumnToContents(i);
 	m_filter_note->setText(
-		m_filters->rules().isEmpty()
-			? QString("No rules yet. They arrive by accepting proposals in Tools → "
-			           "Evolve Ad Filters.")
-			: QString("%1 rule(s), stored in %2")
-			      .arg(m_filters->rules().size())
-			      .arg(m_filters_path.isEmpty() ? QString("memory only")
-			                                     : m_filters_path));
+	  m_filters->rules().isEmpty()
+	    ? QString("No rules yet. They arrive by accepting proposals in Tools → "
+	               "Evolve Ad Filters.")
+	    : QString("%1 rule(s), stored in %2")
+	          .arg(m_filters->rules().size())
+	          .arg(m_filters_path.isEmpty() ? QString("memory only")
+	                                         : m_filters_path));
 	m_filter_remove->setEnabled(false);
 }
 
 void settings_dialog::build_kiosk_page(QWidget *page) {
 	auto *v = new QVBoxLayout(page);
 	auto *intro = new QLabel(
-		"Kiosk mode (View → Kiosk Mode, F11) shows a page fullscreen with no "
-		"browser furniture. These are its defaults; until now they were only "
-		"reachable by editing the source.", page);
+	  "Kiosk mode (View → Kiosk Mode, F11) shows a page fullscreen with no "
+	  "browser furniture. These are its defaults; until now they were only "
+	  "reachable by editing the source.", page);
 	intro->setWordWrap(true);
 	v->addWidget(intro);
 
@@ -1279,19 +1279,19 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 	m_kiosk_home = new QLineEdit(page);
 	m_kiosk_home->setPlaceholderText("blank = whatever tab you were on");
 	v->addWidget(settings_row(
-		"Home page",
-		"Where kiosk mode starts, and where it returns to when left alone.",
-		m_kiosk_home, page, /*wide=*/true));
+	  "Home page",
+	  "Where kiosk mode starts, and where it returns to when left alone.",
+	  m_kiosk_home, page, /*wide=*/true));
 
 	m_kiosk_idle = new QSpinBox(page);
 	m_kiosk_idle->setRange(0, 86400);
 	m_kiosk_idle->setSuffix(" s");
 	m_kiosk_idle->setSpecialValueText("never");
 	v->addWidget(settings_row(
-		"Return home when idle",
-		"How long an abandoned session sits before it walks back to the home "
-		"page. Never means never.",
-		m_kiosk_idle, page));
+	  "Return home when idle",
+	  "How long an abandoned session sits before it walks back to the home "
+	  "page. Never means never.",
+	  m_kiosk_idle, page));
 
 	v->addWidget(section_heading("How it is scaled", page));
 
@@ -1304,12 +1304,12 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 	                        int(scale_mode::geometric));
 	m_kiosk_scale->setObjectName("kiosk_scale");
 	v->addWidget(settings_row(
-		"Scaling",
-		"Reflow re-lays the page out at a zoom factor and is the robust choice. "
-		"Geometric transforms the pixels exactly, and is the one that has "
-		"historically rendered black on some GPUs — try it on the hardware you "
-		"will deploy on.",
-		m_kiosk_scale, page, /*wide=*/true));
+	  "Scaling",
+	  "Reflow re-lays the page out at a zoom factor and is the robust choice. "
+	  "Geometric transforms the pixels exactly, and is the one that has "
+	  "historically rendered black on some GPUs — try it on the hardware you "
+	  "will deploy on.",
+	  m_kiosk_scale, page, /*wide=*/true));
 
 	m_kiosk_fit = new QComboBox(page);
 	m_kiosk_fit->addItem("Contain", int(fit_mode::contain));
@@ -1318,12 +1318,12 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 	m_kiosk_fit->addItem("Actual size", int(fit_mode::actual));
 	m_kiosk_fit->setObjectName("kiosk_fit");
 	v->addWidget(settings_row(
-		"Fit",
-		"How the design size meets the screen — the same words CSS uses. Not "
-		"every pair means something: reflow cannot stretch, because one zoom "
-		"factor cannot scale the axes independently, so it approximates with "
-		"cover rather than pretending.",
-		m_kiosk_fit, page));
+	  "Fit",
+	  "How the design size meets the screen — the same words CSS uses. Not "
+	  "every pair means something: reflow cannot stretch, because one zoom "
+	  "factor cannot scale the axes independently, so it approximates with "
+	  "cover rather than pretending.",
+	  m_kiosk_fit, page));
 
 	m_kiosk_w = new QSpinBox(page);
 	m_kiosk_w->setRange(0, 16384);
@@ -1338,10 +1338,10 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 	sh->addWidget(new QLabel("×", size_pair));
 	sh->addWidget(m_kiosk_h);
 	v->addWidget(settings_row(
-		"Design size",
-		"The size the page was built for. Leave both on \"screen\" to use "
-		"whatever display it ends up on.",
-		size_pair, page));
+	  "Design size",
+	  "The size the page was built for. Leave both on \"screen\" to use "
+	  "whatever display it ends up on.",
+	  size_pair, page));
 
 	v->addWidget(section_heading("Running unattended", page));
 
@@ -1357,12 +1357,12 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 	m_kiosk_escape = new QCheckBox(page);
 	m_kiosk_escape->setObjectName("kiosk_escape");
 	v->addWidget(settings_row(
-		"Esc leaves kiosk mode",
-		"Turning this off locks the screen down: Esc and F11 will not leave, and "
-		"on a machine with no keyboard shortcut left there may be no way out "
-		"except ending the process. It is here because unattended displays need "
-		"it — not because it is a normal thing to switch on.",
-		m_kiosk_escape, page));
+	  "Esc leaves kiosk mode",
+	  "Turning this off locks the screen down: Esc and F11 will not leave, and "
+	  "on a machine with no keyboard shortcut left there may be no way out "
+	  "except ending the process. It is here because unattended displays need "
+	  "it — not because it is a normal thing to switch on.",
+	  m_kiosk_escape, page));
 
 	v->addStretch(1);
 }
@@ -1371,9 +1371,9 @@ void settings_dialog::build_player_page(QWidget *page) {
 	auto *v = new QVBoxLayout(page);
 
 	auto *intro = new QLabel(
-		"Streams can be handed to your own player instead of the built-in "
-		"one. Players that are not installed are listed but disabled, so you "
-		"can see what is supported and what to install.", page);
+	  "Streams can be handed to your own player instead of the built-in "
+	  "one. Players that are not installed are listed but disabled, so you "
+	  "can see what is supported and what to install.", page);
 	intro->setWordWrap(true);
 	v->addWidget(intro);
 
@@ -1402,11 +1402,11 @@ void settings_dialog::build_player_page(QWidget *page) {
 	connect(m_custom_cmd, &QLineEdit::textChanged, this,
 	         &settings_dialog::update_custom_state);
 	v->addWidget(settings_row(
-		"Command",
-		"%U is replaced by the stream URL; leave it out and the URL is "
-		"appended. Arguments are split on spaces — this is not a shell, so "
-		"quoting and pipes will not work.",
-		m_custom_cmd, page, /*wide=*/true));
+	  "Command",
+	  "%U is replaced by the stream URL; leave it out and the URL is "
+	  "appended. Arguments are split on spaces — this is not a shell, so "
+	  "quoting and pipes will not work.",
+	  m_custom_cmd, page, /*wide=*/true));
 
 	m_player_note = new QLabel(page);
 	m_player_note->setWordWrap(true);
@@ -1427,7 +1427,7 @@ void settings_dialog::build_download_page(QWidget *page) {
 	wh->addWidget(browse);
 	connect(browse, &QPushButton::clicked, this, [this] {
 		const QString d = QFileDialog::getExistingDirectory(
-			this, "Download folder", m_dir->text());
+		  this, "Download folder", m_dir->text());
 		if (!d.isEmpty())
 			m_dir->setText(d);
 	});
@@ -1459,15 +1459,15 @@ void settings_dialog::build_download_page(QWidget *page) {
 	// The §11.4 argument, split across the two rows it actually applies to,
 	// rather than as a paragraph underneath both.
 	bv->addWidget(settings_row(
-		"Connections, all torrents",
-		"Swarm speed comes from holding many mostly-slow peers rather than a few "
-		"fast ones, so this is the number that matters. The default is already "
-		"well above a typical desktop client's.",
-		m_conn_global, bt));
+	  "Connections, all torrents",
+	  "Swarm speed comes from holding many mostly-slow peers rather than a few "
+	  "fast ones, so this is the number that matters. The default is already "
+	  "well above a typical desktop client's.",
+	  m_conn_global, bt));
 	bv->addWidget(settings_row(
-		"Connections, per torrent",
-		"Raise it further if your connection and file-descriptor limit allow.",
-		m_conn_torrent, bt));
+	  "Connections, per torrent",
+	  "Raise it further if your connection and file-descriptor limit allow.",
+	  m_conn_torrent, bt));
 
 	m_seed_ratio = new QDoubleSpinBox(bt);
 	m_seed_ratio->setRange(0.0, 100.0);
@@ -1475,16 +1475,16 @@ void settings_dialog::build_download_page(QWidget *page) {
 	m_seed_ratio->setDecimals(2);
 	m_seed_ratio->setSpecialValueText("Do not seed");
 	bv->addWidget(settings_row(
-		"Seed until ratio",
-		"How much to give back before a finished torrent stops uploading.",
-		m_seed_ratio, bt));
+	  "Seed until ratio",
+	  "How much to give back before a finished torrent stops uploading.",
+	  m_seed_ratio, bt));
 
 	m_sequential = new QCheckBox(bt);
 	bv->addWidget(settings_row(
-		"Download in order by default",
-		"Slightly slower overall, and the file is playable from the start. Watch "
-		"turns this on for one torrent regardless.",
-		m_sequential, bt));
+	  "Download in order by default",
+	  "Slightly slower overall, and the file is playable from the start. Watch "
+	  "turns this on for one torrent regardless.",
+	  m_sequential, bt));
 
 	m_interfaces = new QLineEdit(bt);
 	m_interfaces->setPlaceholderText("0.0.0.0:6881  (blank = any interface)");
@@ -1493,11 +1493,11 @@ void settings_dialog::build_download_page(QWidget *page) {
 	// field that makes the user's own system-level choice reliable instead of
 	// competing with it.
 	bv->addWidget(settings_row(
-		"Listen on",
-		"Hydra does not tunnel torrent traffic. If you run a VPN at the system "
-		"level, naming its interface here — tun0:6881, say — keeps torrent "
-		"traffic on it, and announces stop if that interface goes away.",
-		m_interfaces, bt, /*wide=*/true));
+	  "Listen on",
+	  "Hydra does not tunnel torrent traffic. If you run a VPN at the system "
+	  "level, naming its interface here — tun0:6881, say — keeps torrent "
+	  "traffic on it, and announces stop if that interface goes away.",
+	  m_interfaces, bt, /*wide=*/true));
 
 	if (!have_torrents) {
 		// The *controls* are disabled, not the whole section.
@@ -1510,8 +1510,8 @@ void settings_dialog::build_download_page(QWidget *page) {
 		// parent into the disabled colour group, which showed up here as grey
 		// titles above full-contrast descriptions.
 		for (QWidget *w : QList<QWidget *>{ m_conn_global, m_conn_torrent,
-		                                     m_seed_ratio, m_sequential,
-		                                     m_interfaces }) {
+			                                   m_seed_ratio, m_sequential,
+			                                   m_interfaces }) {
 			w->setEnabled(false);
 			w->setToolTip("Built without libtorrent-rasterbar");
 		}
@@ -1588,9 +1588,9 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	auto *v = new QVBoxLayout(page);
 
 	auto *intro = new QLabel(
-		"The tree reorganizer and the ad-filter proposals ask a model. Only "
-		"metadata is ever sent — titles, URLs and structure — and nothing "
-		"leaves until you review it and press Send.", page);
+	  "The tree reorganizer and the ad-filter proposals ask a model. Only "
+	  "metadata is ever sent — titles, URLs and structure — and nothing "
+	  "leaves until you review it and press Send.", page);
 	intro->setWordWrap(true);
 	v->addWidget(intro);
 
@@ -1603,9 +1603,9 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	gv->setContentsMargins(0, 0, 0, 0);
 
 	m_ai_auto = new QRadioButton(
-		"Automatic — use the local model when it is running", group);
+	  "Automatic — use the local model when it is running", group);
 	m_ai_local = new QRadioButton(
-		"Local only — never use an external service", group);
+	  "Local only — never use an external service", group);
 	m_ai_external = new QRadioButton("Claude (external service)", group);
 
 	m_ai_auto->setToolTip("Falls back to Claude only when no local model answers");
@@ -1613,16 +1613,16 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	// something you can hold the app to, not a default that silently lapses
 	// the first time Ollama is not running.
 	m_ai_local->setToolTip(
-		"If the local model is not running, the AI features are simply "
-		"unavailable rather than quietly switching to a service");
+	  "If the local model is not running, the AI features are simply "
+	  "unavailable rather than quietly switching to a service");
 	for (QRadioButton *b : { m_ai_auto, m_ai_local, m_ai_external }) {
 		gv->addWidget(b);
 		connect(b, &QRadioButton::toggled, this, &settings_dialog::update_ai_state);
 	}
 	v->addWidget(group);
 	v->addWidget(dim_label(
-		"Local only means the AI features become unavailable when no local "
-		"model is running, rather than quietly switching to a service.", page));
+	  "Local only means the AI features become unavailable when no local "
+	  "model is running, rather than quietly switching to a service.", page));
 
 	v->addWidget(section_heading("Local model (Ollama)", page));
 	m_ollama_url = new QLineEdit(page);
@@ -1641,13 +1641,13 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	// Why anyone would touch this: the cost is only paid when the endpoint
 	// stops being local, and then it is paid every time.
 	v->addWidget(settings_row(
-		"Reachability timeout",
-		"Rechecked whenever a backend is needed, since Ollama is started and "
-		"stopped like any service. Loopback answers in about a millisecond; a "
-		"remote host that drops packets never answers at all and costs this "
-		"whole timeout each time — so lower it if the endpoint is not on this "
-		"machine.",
-		m_probe_timeout, page));
+	  "Reachability timeout",
+	  "Rechecked whenever a backend is needed, since Ollama is started and "
+	  "stopped like any service. Loopback answers in about a millisecond; a "
+	  "remote host that drops packets never answers at all and costs this "
+	  "whole timeout each time — so lower it if the endpoint is not on this "
+	  "machine.",
+	  m_probe_timeout, page));
 
 	m_check_local = new QPushButton("&Check now", page);
 	m_check_local->setObjectName("check_local");
@@ -1671,11 +1671,11 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	// same reasoning that keeps it out of the tree and policy files applies
 	// here, and writing it anywhere readable would be security theatre.
 	v->addWidget(settings_row(
-		"API key",
-		"Not saved — kept in memory for this session only. Set "
-		"ANTHROPIC_API_KEY in your environment for it to persist; this settings "
-		"file is plain text and a credential does not belong in one.",
-		m_claude_key, page, /*wide=*/true));
+	  "API key",
+	  "Not saved — kept in memory for this session only. Set "
+	  "ANTHROPIC_API_KEY in your environment for it to persist; this settings "
+	  "file is plain text and a credential does not belong in one.",
+	  m_claude_key, page, /*wide=*/true));
 
 	// Created here but *not* added to this layout: the constructor pins it
 	// below the scroll area so it is always visible.
@@ -1783,8 +1783,8 @@ void settings_dialog::update_custom_state() {
 		return;
 	if (chosen.isEmpty()) {
 		m_player_note->setText(
-			"<b>No player selected.</b> Watch will not be offered until one is "
-			"installed or a custom command is set.");
+		  "<b>No player selected.</b> Watch will not be offered until one is "
+		  "installed or a custom command is set.");
 	} else if (custom && m_custom_cmd->text().trimmed().isEmpty()) {
 		m_player_note->setText("<b>Enter a command</b> for the custom player.");
 	} else {
@@ -1836,7 +1836,7 @@ void settings_dialog::accept() {
 void settings_dialog::apply() {
 	if (m_appearance)
 		settings_store::set_appearance(
-			static_cast<theme::choice>(m_appearance->currentData().toInt()));
+		  static_cast<theme::choice>(m_appearance->currentData().toInt()));
 	if (m_policy) {
 		// Exceptions the user removed. Every feature is set back to unset, which
 		// is what "falls through to the defaults" means in the policy model --
@@ -1851,7 +1851,7 @@ void settings_dialog::apply() {
 			if (!c)
 				continue;
 			const auto want =
-				static_cast<policy::setting>(c->currentData().toInt());
+			  static_cast<policy::setting>(c->currentData().toInt());
 			const auto f = static_cast<policy::feature>(i);
 			if (m_policy->global_default(f) != want)
 				m_policy->set_global_default(f, want);

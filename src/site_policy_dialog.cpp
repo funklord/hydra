@@ -34,7 +34,7 @@ setting index_to_setting(int i) {
 }  // namespace
 
 site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
-	: QDialog(parent), m_engine(engine) {
+  : QDialog(parent), m_engine(engine) {
 	setWindowFlags(Qt::Popup);
 	setWindowTitle("Site controls");
 

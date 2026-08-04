@@ -109,14 +109,14 @@ namespace {
 // glyph among borrowed ones looks worse than a toolbar with one word in it, and
 // this is the situation the previous comment here was protecting against.
 QIcon themed_icon(const QStringList &names, QStyle *st,
-                   QStyle::StandardPixmap fallback) {
+	                 QStyle::StandardPixmap fallback) {
 	for (const QString &n : names) {
 		const QIcon i = QIcon::fromTheme(n);
 		if (!i.isNull() && !i.availableSizes().isEmpty())
 			return i;
 	}
 	return fallback == QStyle::SP_CustomBase ? QIcon()
-	                                          : st->standardIcon(fallback);
+		                                        : st->standardIcon(fallback);
 }
 
 }  // namespace
@@ -132,7 +132,7 @@ namespace {
 
 main_window::main_window(web_view_factory *factory, policy_engine *policy,
                           request_filter *filter, QWidget *parent)
-	: QWidget(parent), m_factory(factory), m_policy(policy) {
+  : QWidget(parent), m_factory(factory), m_policy(policy) {
 	// The two interceptor consumers (architecture doc §10): both observe the
 	// same request stream the blocker already rides, rather than adding a
 	// second sensor.
@@ -401,8 +401,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 				return;
 			if (!m_downloads->source_for(url)) {
 				m_status->showMessage(
-					QString("Nothing here can open %1").arg(url.scheme() + ":"),
-					6000);
+				  QString("Nothing here can open %1").arg(url.scheme() + ":"),
+				  6000);
 				return;
 			}
 			start_download(url);
@@ -462,8 +462,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// and a button to reveal it would be a control that does nothing.
 	m_drawer_action = bar->addAction("☰");
 	m_drawer_action->setIcon(themed_icon({ "view-list-symbolic", "view-list-details",
-	                                        "format-justify-fill" }, style(),
-	                                      QStyle::SP_FileDialogDetailedView));
+		                                      "format-justify-fill" }, style(),
+		                                    QStyle::SP_FileDialogDetailedView));
 	m_drawer_action->setStatusTip("Show or hide the tab tree");
 	m_drawer_action->setVisible(false);
 	connect(m_drawer_action, &QAction::triggered, this,
@@ -492,8 +492,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// beat after load rather than being present and empty (§11.3).
 	m_media_action = bar->addAction("Media");
 	m_media_action->setIcon(themed_icon({ "applications-multimedia",
-	                                       "media-playback-start" }, style(),
-	                                     QStyle::SP_MediaPlay));
+		                                     "media-playback-start" }, style(),
+		                                   QStyle::SP_MediaPlay));
 	m_media_action->setToolTip("Watch or download media on this page");
 	m_media_action->setVisible(false);
 	connect(m_media_action, &QAction::triggered, this, &main_window::open_media);
@@ -532,8 +532,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// pressing. See annoyance_log.h.
 	m_annoyed_action = bar->addAction("Annoyed");
 	m_annoyed_action->setIcon(themed_icon({ "face-angry", "face-sad",
-	                                         "emblem-important" }, style(),
-	                                       QStyle::SP_MessageBoxWarning));
+		                                       "emblem-important" }, style(),
+		                                     QStyle::SP_MessageBoxWarning));
 	m_annoyed_action->setToolTip("Something got through here");
 	m_annoyed_action->setStatusTip("Record what this page was doing, and pick a "
 	                                "tool if one fits");
@@ -548,8 +548,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// start. Hidden again the moment it is answered.
 	m_confirm_action = bar->addAction("Still working?");
 	m_confirm_action->setIcon(themed_icon({ "face-smile", "dialog-question",
-	                                         "emblem-default" }, style(),
-	                                       QStyle::SP_MessageBoxQuestion));
+		                                       "emblem-default" }, style(),
+		                                     QStyle::SP_MessageBoxQuestion));
 	m_confirm_action->setToolTip("New rules were applied here — did they break "
 	                              "anything?");
 	m_confirm_action->setVisible(false);
@@ -558,8 +558,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 
 	QAction *shield_act = bar->addAction("Shield");
 	shield_act->setIcon(themed_icon({ "security-high", "security-medium",
-	                                   "channel-secure" }, style(),
-	                                 QStyle::SP_VistaShield));
+		                                 "channel-secure" }, style(),
+		                               QStyle::SP_VistaShield));
 	shield_act->setToolTip("Site controls");
 	shield_act->setStatusTip("Permissions and filtering for this site");
 	connect(shield_act, &QAction::triggered, this, &main_window::open_site_controls);
@@ -832,7 +832,7 @@ QMenuBar *main_window::build_menu_bar() {
 	// The sort actions drive the toolbar combo rather than the proxy directly,
 	// so the two controls cannot drift out of sync.
 	static const char *sort_names[] = { "&Tree Order", "Title &A–Z",
-	                                    "&Newest", "&Recently Seen" };
+		                                  "&Newest", "&Recently Seen" };
 	QActionGroup *sort_group = new QActionGroup(this);
 	for (int i = 0; i < 4; ++i) {
 		QAction *a = sort_menu->addAction(sort_names[i]);
@@ -939,7 +939,7 @@ QMenuBar *main_window::build_menu_bar() {
 			return;
 		}
 		const QString path = session_import::firefox_session_path(
-			session_import::firefox_profile());
+		  session_import::firefox_profile());
 		if (path.isEmpty()) {
 			m_status->showMessage("No Firefox session file to follow.", 8000);
 			return;
@@ -957,7 +957,7 @@ QMenuBar *main_window::build_menu_bar() {
 			return;
 		}
 		const QString path = session_import::chromium_session_path(
-			session_import::chromium_profile());
+		  session_import::chromium_profile());
 		if (path.isEmpty()) {
 			m_status->showMessage("No Chromium session file to follow.", 8000);
 			return;
@@ -1101,9 +1101,9 @@ void main_window::refresh_media_affordance(const QString &site_host) {
 	}
 	m_media_action->setText("Media (playing)");
 	m_media_action->setToolTip(
-		QString("This page is playing video (%1 buffered, %2), but no stream "
-		         "URL was detected — try Tools ▸ Find Media on This Page.")
-		    .arg(QLocale().formattedDataSize(buffered), mime));
+	  QString("This page is playing video (%1 buffered, %2), but no stream "
+	           "URL was detected — try Tools ▸ Find Media on This Page.")
+	      .arg(QLocale().formattedDataSize(buffered), mime));
 }
 
 void main_window::open_media() {
@@ -1192,10 +1192,10 @@ void main_window::report_annoyance() {
 	case annoyed_dialog::action::consent: open_site_rules();        break;
 	case annoyed_dialog::action::recorded:
 		m_status->showMessage(
-		    QString("Recorded. %1 report%2 filed against %3.")
-		        .arg(m_annoyances ? m_annoyances->count_for(host) : 0)
-		        .arg((m_annoyances && m_annoyances->count_for(host) == 1) ? "" : "s")
-		        .arg(host), 6000);
+			  QString("Recorded. %1 report%2 filed against %3.")
+			      .arg(m_annoyances ? m_annoyances->count_for(host) : 0)
+			      .arg((m_annoyances && m_annoyances->count_for(host) == 1) ? "" : "s")
+			      .arg(host), 6000);
 		break;
 	}
 }
@@ -1399,10 +1399,10 @@ void main_window::start_element_picker() {
 
 void main_window::on_about() {
 	QMessageBox::about(this, "About Hydra",
-		"<b>Hydra</b><br>"
-		"A tab-tree browser over an embedded Chromium, with a per-site "
-		"security policy engine.<br><br>"
-		"Licensed GPL-3.0-or-later.");
+	  "<b>Hydra</b><br>"
+	  "A tab-tree browser over an embedded Chromium, with a per-site "
+	  "security policy engine.<br><br>"
+	  "Licensed GPL-3.0-or-later.");
 }
 
 void main_window::update_status() {
@@ -1685,8 +1685,8 @@ void main_window::sync_page_context() {
 		m_key_action->setVisible(false);
 	if (m_autofill) {
 		m_autofill->set_page_origin(
-			u.adjusted(QUrl::RemovePath | QUrl::RemoveQuery |
-			            QUrl::RemoveFragment).toString());
+		  u.adjusted(QUrl::RemovePath | QUrl::RemoveQuery |
+		              QUrl::RemoveFragment).toString());
 	}
 }
 
@@ -1845,7 +1845,7 @@ void main_window::save_tree_soon() {
 // the thing that was clicked.
 node *main_window::selected_node() const {
 	const QModelIndexList sel = m_tree->selectionModel()
-		? m_tree->selectionModel()->selectedIndexes() : QModelIndexList();
+	  ? m_tree->selectionModel()->selectedIndexes() : QModelIndexList();
 	for (const QModelIndex &i : sel) {
 		if (i.column() != 0)
 			continue;
@@ -1857,7 +1857,7 @@ node *main_window::selected_node() const {
 
 node *main_window::selected_parent() const {
 	const QModelIndexList sel = m_tree->selectionModel()
-		? m_tree->selectionModel()->selectedIndexes() : QModelIndexList();
+	  ? m_tree->selectionModel()->selectedIndexes() : QModelIndexList();
 	for (const QModelIndex &i : sel) {
 		if (i.column() != 0)
 			continue;
@@ -1925,7 +1925,7 @@ void main_window::import_firefox_tabs() {
 
 	QString error;
 	const QList<session_import::imported_tab> tabs =
-		session_import::firefox_tabs(path, &error);
+	  session_import::firefox_tabs(path, &error);
 	if (tabs.isEmpty()) {
 		m_status->showMessage(error.isEmpty() ? "No open tabs found." : error, 8000);
 		return;
@@ -1953,7 +1953,7 @@ void main_window::import_chromium_tabs() {
 	}
 	QString error;
 	const QList<session_import::imported_tab> tabs =
-		session_import::chromium_tabs(path, &error);
+	  session_import::chromium_tabs(path, &error);
 	if (tabs.isEmpty()) {
 		m_status->showMessage(error.isEmpty() ? "No open tabs found." : error, 8000);
 		return;
@@ -2003,7 +2003,7 @@ void main_window::show_mirror_tabs(const QString &source, const QString &label,
 void main_window::on_sort_mode_changed(int combo_index) {
 	using SM = tree_sort_proxy::sort_mode;
 	static const SM modes[] = { SM::tree_order, SM::title_asc,
-	                            SM::newest_created, SM::recently_seen };
+		                          SM::newest_created, SM::recently_seen };
 	if (combo_index >= 0 && combo_index < 4)
 		m_proxy->set_sort_mode(modes[combo_index]);
 	m_tree->expandAll();
@@ -2328,13 +2328,13 @@ void main_window::poll_capture() {
 	if (!m_capture_warned && m_capture_clock.elapsed() > 12000) {
 		m_capture_warned = true;
 		m_status->showMessage(
-			got == 0
-			    ? QString("Capturing, but nothing has arrived — press play. If "
-			               "the page is already playing, it may not use Media "
-			               "Source, and nothing here can record it.")
-			    : QString("Capture paused at %1 — the page has stopped feeding "
-			               "its player.").arg(size),
-			15000);
+		  got == 0
+		      ? QString("Capturing, but nothing has arrived — press play. If "
+		                 "the page is already playing, it may not use Media "
+		                 "Source, and nothing here can record it.")
+		      : QString("Capture paused at %1 — the page has stopped feeding "
+		                 "its player.").arg(size),
+		  15000);
 	}
 }
 
@@ -2386,9 +2386,9 @@ void main_window::find_media_with_ytdlp() {
 			++added;
 		}
 		m_status->showMessage(
-			added ? QString("yt-dlp (%1): %2 stream(s) found.")
-			            .arg(m.extractor).arg(added)
-			      : QString("yt-dlp found nothing playable."), 8000);
+		  added ? QString("yt-dlp (%1): %2 stream(s) found.")
+		              .arg(m.extractor).arg(added)
+		        : QString("yt-dlp found nothing playable."), 8000);
 		if (added)
 			open_media();
 	}, Qt::SingleShotConnection);
@@ -2435,8 +2435,8 @@ void main_window::confirm_public_download(const QString &source_id,
 	box.setWindowTitle(name + " is not a private download");
 	box.setText(note);
 	box.setInformativeText(
-		"Continue only if that is acceptable for what you are downloading. "
-		"This choice is remembered for the rest of this session.");
+	  "Continue only if that is acceptable for what you are downloading. "
+	  "This choice is remembered for the rest of this session.");
 	box.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
 	box.setDefaultButton(QMessageBox::No);
 

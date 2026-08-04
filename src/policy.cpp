@@ -11,44 +11,44 @@ struct info { const char *name; const char *label; const char *help; };
 
 const info k_info[] = {
 	{ "javascript", "JavaScript",
-	  "Scripts a site runs. Most of the modern web stops working without it, "
-	  "which is exactly why it is worth turning off for a few sites." },
+		"Scripts a site runs. Most of the modern web stops working without it, "
+		"which is exactly why it is worth turning off for a few sites." },
 	{ "cookies", "Cookies",
-	  "What a site may store to recognise you when you come back." },
+		"What a site may store to recognise you when you come back." },
 	{ "thirdPartyCookies", "Third-party cookies",
-	  "Cookies set by other sites embedded in this one — the ordinary way "
-	  "tracking follows you from one site to the next." },
+		"Cookies set by other sites embedded in this one — the ordinary way "
+		"tracking follows you from one site to the next." },
 	{ "ads", "Ads / trackers",
-	  "Requests to known ad and tracking hosts, plus any filter rules you have "
-	  "accepted. Allowing them here also turns off those rules for the site." },
+		"Requests to known ad and tracking hosts, plus any filter rules you have "
+		"accepted. Allowing them here also turns off those rules for the site." },
 	{ "popups", "Popups",
-	  "Windows a page opens on its own, rather than because you clicked." },
+		"Windows a page opens on its own, rather than because you clicked." },
 	{ "images", "Images",
-	  "Pictures. Blocking them is faster and leaves some pages unreadable." },
+		"Pictures. Blocking them is faster and leaves some pages unreadable." },
 	{ "autoplay", "Autoplay media",
-	  "Video and audio that starts playing without being asked." },
+		"Video and audio that starts playing without being asked." },
 	{ "geolocation", "Location",
-	  "Where you are, when a page asks for it." },
+		"Where you are, when a page asks for it." },
 	{ "camera", "Camera",
-	  "Seeing through the camera, when a page asks." },
+		"Seeing through the camera, when a page asks." },
 	{ "microphone", "Microphone",
-	  "Listening through the microphone, when a page asks." },
+		"Listening through the microphone, when a page asks." },
 	{ "notifications", "Notifications",
-	  "Messages a site can put on your desktop, including after you have left "
-	  "it." },
+		"Messages a site can put on your desktop, including after you have left "
+		"it." },
 	{ "referer", "Referer header",
-	  "Telling a site which page you arrived from." },
+		"Telling a site which page you arrived from." },
 	{ "autofill", "Password autofill",
-	  "Filling saved logins from KeePassXC. Limited to HTTPS pages unless that "
-	  "requirement is turned off, because filling a password over plain HTTP "
-	  "puts it on the wire." },
+		"Filling saved logins from KeePassXC. Limited to HTTPS pages unless that "
+		"requirement is turned off, because filling a password over plain HTTP "
+		"puts it on the wire." },
 	{ "extractorFetch", "Extractor may fetch",
-	  "Lets a learned extractor fetch a manifest the page had already asked "
-	  "for, which is what streams hidden behind one need." },
+		"Lets a learned extractor fetch a manifest the page had already asked "
+		"for, which is what streams hidden behind one need." },
 	{ "cookieNotices", "Cookie consent banners",
-	  "The \"do you want to accept cookies?\" banner itself. Blocking it means "
-	  "Hydra answers it for you, taking the least permissive option the site "
-	  "actually offers." },
+		"The \"do you want to accept cookies?\" banner itself. Blocking it means "
+		"Hydra answers it for you, taking the least permissive option the site "
+		"actually offers." },
 };
 
 }  // namespace

@@ -22,7 +22,7 @@ static QString test_out() {
 }
 
 static const QString OUTDIR =
-	test_out();
+  test_out();
 
 int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);

@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
 
 	auto *tree_view = w.findChild<QTreeView *>();
 	emit tree_view->activated(
-		tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
+	  tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
 	spin(1500);
 
 	QLineEdit *bar = nullptr;
@@ -175,8 +175,8 @@ int main(int argc, char *argv[]) {
 		for (QLineEdit *e : w2.findChildren<QLineEdit *>())
 			if (e->placeholderText() == "Address") {
 				e->setText(QString("http://127.0.0.1:%1/watch").arg(port));
-				QMetaObject::invokeMethod(e, "returnPressed");
-			}
+			  QMetaObject::invokeMethod(e, "returnPressed");
+		  }
 		spin(6000);
 		check(p2.setting_for(host, policy::feature::ads) == policy::setting::block,
 		      "someone who blocked ads here on purpose is not second-guessed by "

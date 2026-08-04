@@ -257,7 +257,7 @@ void local_proxy::serve_file(QTcpSocket *client, const entry &e,
 
 			f.seek(pos);
 			const QByteArray chunk =
-				f.read(qMin<qint64>(qMin<qint64>(left, 64 * 1024), have - pos));
+			  f.read(qMin<qint64>(qMin<qint64>(left, 64 * 1024), have - pos));
 			if (chunk.isEmpty()) {
 				QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents,
 				                                 50);
@@ -442,11 +442,11 @@ void local_proxy::serve(QTcpSocket *client, const QByteArray &head,
 		if (client->state() != QAbstractSocket::ConnectedState)
 			return;
 		const int code =
-			reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+		  reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 		client->write(status_line(code ? code : 200));
 		// Relay the headers that make seeking work, unmodified.
 		for (const char *name : {"Content-Type", "Content-Length",
-		                          "Content-Range", "Accept-Ranges"}) {
+			                        "Content-Range", "Accept-Ranges"}) {
 			const QByteArray v = reply->rawHeader(name);
 			if (!v.isEmpty())
 				client->write(QByteArray(name) + ": " + v + "\r\n");

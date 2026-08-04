@@ -20,7 +20,7 @@ QByteArray increment_nonce(const QByteArray &nonce) {
 }
 
 QJsonObject change_public_keys(const QString &client_id, const QString &public_key_b64,
-                                const QString &nonce_b64) {
+	                              const QString &nonce_b64) {
 	QJsonObject o;
 	o.insert("action", "change-public-keys");
 	o.insert("publicKey", public_key_b64);
@@ -46,7 +46,7 @@ QJsonObject test_associate_request(const QString &assoc_id, const QString &id_ke
 }
 
 QJsonObject get_logins_request(const QString &url, const QString &assoc_id,
-                               const QString &id_key_b64) {
+	                             const QString &id_key_b64) {
 	QJsonObject key;
 	key.insert("id", assoc_id);
 	key.insert("key", id_key_b64);
@@ -67,8 +67,8 @@ QJsonObject get_databasehash_request() {
 }
 
 QJsonObject set_login_request(const QString &url, const QString &login,
-                              const QString &password, const QString &uuid,
-                              const QString &assoc_id, const QString &id_key_b64) {
+	                            const QString &password, const QString &uuid,
+	                            const QString &assoc_id, const QString &id_key_b64) {
 	QJsonObject key;
 	key.insert("id", assoc_id);
 	key.insert("key", id_key_b64);
@@ -95,7 +95,7 @@ QJsonObject generate_password_request() {
 }
 
 QJsonObject envelope(const QString &action, const QString &client_id,
-                     const QString &nonce_b64, const QString &encrypted_b64) {
+	                   const QString &nonce_b64, const QString &encrypted_b64) {
 	QJsonObject o;
 	o.insert("action", action);
 	o.insert("message", encrypted_b64);

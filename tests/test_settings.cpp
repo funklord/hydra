@@ -180,7 +180,7 @@ int main(int argc, char **argv) {
 		      "defaults to automatic — local-first, as the design describes");
 
 		for (auto mode : { ai_choice::local_only, ai_choice::external,
-		                    ai_choice::automatic }) {
+			                  ai_choice::automatic }) {
 			settings_store::set_ai_mode(mode);
 			check(settings_store::ai_mode() == mode, "the mode round-trips");
 		}
@@ -351,13 +351,13 @@ int main(int argc, char **argv) {
 	section("scheme routing: what a web engine renders itself");
 	{
 		const char *pages[] = { "https://example.com/a", "http://example.com",
-		                         "file:///tmp/x.html", "about:blank",
-		                         "data:text/html,<b>hi", "view-source:https://e.com" };
+			                       "file:///tmp/x.html", "about:blank",
+			                       "data:text/html,<b>hi", "view-source:https://e.com" };
 		for (const char *u : pages)
 			check(renders_as_page(QUrl(u)), QString("%1 is a page").arg(u));
 
 		const char *elsewhere[] = { "magnet:?xt=urn:btih:abc", "mailto:a@b.c",
-		                             "tel:+123", "intent://x#Intent;end" };
+			                           "tel:+123", "intent://x#Intent;end" };
 		for (const char *u : elsewhere)
 			check(!renders_as_page(QUrl(u)),
 			      QString("%1 is the shell's problem, not the engine's").arg(u));

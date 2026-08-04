@@ -65,7 +65,7 @@ QString content_type_for(const QString &path) {
 		{"ogg", "audio/ogg"},   {"opus", "audio/opus"}, {"wav", "audio/wav"},
 	};
 	return by_ext.value(QFileInfo(path).suffix().toLower(),
-	                     "application/octet-stream");
+		                   "application/octet-stream");
 }
 
 // Draws a real progress bar in the progress column. A downloads list without
@@ -78,14 +78,14 @@ public:
 	// Rows must be tall enough for the bar's centred text; at the default
 	// height it is clipped top and bottom and reads as a rendering fault.
 	QSize sizeHint(const QStyleOptionViewItem &option,
-	                const QModelIndex &index) const override {
+		              const QModelIndex &index) const override {
 		QSize s = QStyledItemDelegate::sizeHint(option, index);
 		s.setHeight(qMax(s.height(), 22));
 		return s;
 	}
 
 	void paint(QPainter *painter, const QStyleOptionViewItem &option,
-	            const QModelIndex &index) const override {
+		          const QModelIndex &index) const override {
 		const QVariant pct = index.data(role_percent);
 		if (!pct.isValid()) {
 			QStyledItemDelegate::paint(painter, option, index);
@@ -133,7 +133,7 @@ public:
 downloads_dialog::downloads_dialog(download_manager *downloads,
                                     player_launcher *players, local_proxy *proxy,
                                     QWidget *parent)
-	: QDialog(parent), m_downloads(downloads), m_players(players), m_proxy(proxy) {
+  : QDialog(parent), m_downloads(downloads), m_players(players), m_proxy(proxy) {
 	setWindowTitle("Downloads");
 	resize(880, 460);
 	// A downloads window is something you leave open beside the browser.
@@ -318,9 +318,9 @@ void downloads_dialog::refresh() {
 	m_note->setVisible(any_public);
 	if (any_public)
 		m_note->setText(
-			"<b>⇅ public</b> — those transfers announce your IP address to "
-			"other people and are not private. Hydra does not tunnel them; use "
-			"a system-level VPN or proxy if you need that.");
+		  "<b>⇅ public</b> — those transfers announce your IP address to "
+		  "other people and are not private. Hydra does not tunnel them; use "
+		  "a system-level VPN or proxy if you need that.");
 
 	update_buttons();
 }
@@ -534,23 +534,23 @@ void downloads_dialog::try_launch_watch() {
 
 	download_manager *dm = m_downloads;
 	const QUrl local = m_proxy->publish_file(
-		m_watch_path, content_type_for(m_watch_path),
-		[src, job_id, rel] { return src->contiguous_bytes(job_id, rel); },
-		[eventual, dm, job_id, rel]() -> qint64 {
-			if (eventual >= 0)
-				return eventual;
-			// Fall back to whatever the job now knows — a magnet has no sizes
-			// until metadata lands, which can be after Watch was pressed.
-			for (const download_job &j : dm->jobs()) {
-				if (j.id != job_id)
-					continue;
-				for (const download_file &f : j.files)
-					if (f.path == rel)
-						return f.size;
-				return j.files.isEmpty() ? j.total : -1;
-			}
-			return -1;
-		});
+	  m_watch_path, content_type_for(m_watch_path),
+	  [src, job_id, rel] { return src->contiguous_bytes(job_id, rel); },
+	  [eventual, dm, job_id, rel]() -> qint64 {
+		  if (eventual >= 0)
+			  return eventual;
+		  // Fall back to whatever the job now knows — a magnet has no sizes
+		  // until metadata lands, which can be after Watch was pressed.
+		  for (const download_job &j : dm->jobs()) {
+			  if (j.id != job_id)
+				  continue;
+			  for (const download_file &f : j.files)
+				  if (f.path == rel)
+					  return f.size;
+			  return j.files.isEmpty() ? j.total : -1;
+		  }
+		  return -1;
+	  });
 	if (!local.isValid()) {
 		m_action->setVisible(true);
 		m_action->setText("<b>Cannot watch:</b> the local proxy refused to "

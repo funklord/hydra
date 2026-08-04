@@ -65,14 +65,14 @@ public:
 		connect(s, &QTcpSocket::readyRead, this, [s] {
 			s->readAll();
 			const QByteArray body =
-				"<!doctype html><html><body><h1>Sign in</h1>"
-				"<form><input type=text name=user autocomplete=username>"
-				"<input type=password name=pass autocomplete=current-password>"
-				"<button type=submit>Go</button></form></body></html>";
+			  "<!doctype html><html><body><h1>Sign in</h1>"
+			  "<form><input type=text name=user autocomplete=username>"
+			  "<input type=password name=pass autocomplete=current-password>"
+			  "<button type=submit>Go</button></form></body></html>";
 			const QByteArray resp =
-				"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n"
-				"Content-Length: " + QByteArray::number(body.size()) +
-				"\r\nConnection: close\r\n\r\n" + body;
+			  "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n"
+			  "Content-Length: " + QByteArray::number(body.size()) +
+			  "\r\nConnection: close\r\n\r\n" + body;
 			s->write(resp);
 			s->flush();
 			s->disconnectFromHost();
@@ -143,7 +143,7 @@ int main(int argc, char *argv[]) {
 	auto *tree_view = w.findChild<QTreeView *>();
 	if (!tree_view) { std::printf("NO TREE\n"); return 1; }
 	emit tree_view->activated(
-		tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
+	  tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
 	spin(1500);
 
 	section("before any page has a login form");
@@ -187,7 +187,7 @@ int main(int argc, char *argv[]) {
 		key->setToolTip("cleared, so the next tooltip is this run's");
 		key->trigger();
 		const bool answered =
-			wait_for([&] { return key->toolTip().contains("HTTPS"); });
+		  wait_for([&] { return key->toolTip().contains("HTTPS"); });
 		check(answered, "the click produces a fresh answer rather than nothing");
 	}
 

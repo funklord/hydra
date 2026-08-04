@@ -143,14 +143,14 @@ QString extractor_dialog::summarise(const QList<evidence_request> &evidence,
 }
 
 QList<evidence_request> extractor_dialog::candidates(
-		const QList<evidence_request> &evidence, const QUrl &page, int max) {
+    const QList<evidence_request> &evidence, const QUrl &page, int max) {
 	// One per shape, because probing sixty numbered segments learns the same
 	// thing sixty times.
 	QHash<QString, int> repeats;      // shape -> extra sightings
 	QHash<QString, int> host_repeats; // host  -> extra sightings, all shapes
 	QList<evidence_request> firsts;
 	const QString page_norm =
-		page.adjusted(QUrl::RemoveFragment | QUrl::StripTrailingSlash).toString();
+	  page.adjusted(QUrl::RemoveFragment | QUrl::StripTrailingSlash).toString();
 
 	for (const evidence_request &r : evidence) {
 		// Furniture the gate refuses anyway, and the document itself. Spending
@@ -288,7 +288,7 @@ void extractor_dialog::use_helpers(helper_host *helpers) { m_helpers = helpers; 
 
 void extractor_dialog::show_transcript() {
 	const QString text =
-		m_helpers ? transcript_text(m_helpers->transcript()) : QString();
+	  m_helpers ? transcript_text(m_helpers->transcript()) : QString();
 	const bool any = !text.isEmpty();
 	m_transcript->setPlainText(text);
 	m_transcript->setVisible(any);
@@ -296,12 +296,12 @@ void extractor_dialog::show_transcript() {
 	if (!any)
 		return;
 	m_transcript_label->setText(
-		m_helpers->breached()
-			? QString("What it did — and where it was stopped:")
-			: QString("What it did (%1 %2, %3 bytes):")
-			      .arg(m_helpers->calls_used())
-			      .arg(m_helpers->calls_used() == 1 ? "call" : "calls")
-			      .arg(m_helpers->bytes_used()));
+	  m_helpers->breached()
+	    ? QString("What it did — and where it was stopped:")
+	    : QString("What it did (%1 %2, %3 bytes):")
+	          .arg(m_helpers->calls_used())
+	          .arg(m_helpers->calls_used() == 1 ? "call" : "calls")
+	          .arg(m_helpers->bytes_used()));
 }
 
 QString extractor_dialog::strip_fences(const QString &reply) {
@@ -324,8 +324,8 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
                                     extractor_store *store, ai_provider *provider,
                                     const QString &site_host, const QUrl &page_url,
                                     QWidget *parent)
-	: QDialog(parent), m_signals(signals_source), m_store(store),
-	  m_provider(provider), m_site(site_host), m_page(page_url) {
+  : QDialog(parent), m_signals(signals_source), m_store(store),
+    m_provider(provider), m_site(site_host), m_page(page_url) {
 	setWindowTitle("Learn this site");
 	resize(860, 620);
 	build_ui();
@@ -492,13 +492,13 @@ void extractor_dialog::build_ui() {
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
 	m_status->setText(
-		m_provider->is_external()
-			? QString("<b>%1</b> — external provider. This is the list of "
-			           "addresses this page requested; read it before sending, "
-			           "and nothing leaves until you press Send.")
-			      .arg(m_provider->name())
-			: QString("<b>%1</b> — local provider; nothing leaves this machine.")
-			      .arg(m_provider->name()));
+	  m_provider->is_external()
+	    ? QString("<b>%1</b> — external provider. This is the list of "
+	               "addresses this page requested; read it before sending, "
+	               "and nothing leaves until you press Send.")
+	          .arg(m_provider->name())
+	    : QString("<b>%1</b> — local provider; nothing leaves this machine.")
+	          .arg(m_provider->name()));
 	outer->addWidget(m_status);
 
 	m_pages = new QStackedWidget(this);
@@ -590,7 +590,7 @@ void extractor_dialog::on_reply(const QString &text) {
 
 	QThread *t = QThread::create([src, page, ev, hs, manifests, self] {
 		const extractor_verdict v =
-			site_extractor::check(src, page, ev, hs, &manifests);
+		  site_extractor::check(src, page, ev, hs, &manifests);
 		// Back to the UI thread, and only if the dialog is still there. A
 		// closed dialog leaves this to find a null QPointer and stop, rather
 		// than writing into freed widgets.
@@ -641,13 +641,13 @@ void extractor_dialog::on_judged(const extractor_verdict &verdict) {
 	}
 
 	m_result->setText(
-		QString("<b>Accepted.</b> %1<br><br>It picks:<br><tt>%2</tt><br><br>"
-		         "That address is one this page really requested. Using it "
-		         "stores the script for <b>%3</b>, and it will run on this site "
-		         "from now on.")
-		    .arg(m_verdict.message.toHtmlEscaped(),
-		         m_verdict.result.url.toString().left(200).toHtmlEscaped(),
-		         m_site.toHtmlEscaped()));
+	  QString("<b>Accepted.</b> %1<br><br>It picks:<br><tt>%2</tt><br><br>"
+	           "That address is one this page really requested. Using it "
+	           "stores the script for <b>%3</b>, and it will run on this site "
+	           "from now on.")
+	      .arg(m_verdict.message.toHtmlEscaped(),
+	           m_verdict.result.url.toString().left(200).toHtmlEscaped(),
+	           m_site.toHtmlEscaped()));
 	m_status->setText("Reviewed and validated. Nothing is saved until you accept.");
 
 	confirm_by_fetching();
@@ -664,7 +664,7 @@ void extractor_dialog::probe_candidates() {
 		m_probe = new stream_probe(this);
 
 	const QList<evidence_request> picks =
-		candidates(m_evidence, m_page, k_max_probes);
+	  candidates(m_evidence, m_page, k_max_probes);
 	if (picks.isEmpty())
 		return;
 
@@ -688,14 +688,14 @@ void extractor_dialog::probe_candidates() {
 			// is, and writing "unknown" beside it would read as a finding.
 			if (res.reached && !res.kind.isEmpty()) {
 				m_served.insert(url, res.content_type.isEmpty()
-					? res.kind.toUpper()
-					: QString("%1 (%2)").arg(res.content_type, res.kind.toUpper()));
+				  ? res.kind.toUpper()
+				  : QString("%1 (%2)").arg(res.content_type, res.kind.toUpper()));
 				// A playlist is the one answer the gate can act on, so it is kept
 				// separately and normalised the way the gate compares urls.
 				if (res.kind == "hls" || res.kind == "dash")
 					m_manifests.insert(QUrl(url)
-						.adjusted(QUrl::RemoveFragment | QUrl::StripTrailingSlash)
-						.toString());
+					  .adjusted(QUrl::RemoveFragment | QUrl::StripTrailingSlash)
+					  .toString());
 			} else if (res.reached && res.status >= 400) {
 				m_served.insert(url, QString("%1, not established")
 				                          .arg(res.status));
@@ -709,11 +709,11 @@ void extractor_dialog::probe_candidates() {
 			for (const QString &v : std::as_const(m_served))
 				if (!v.contains("not established")) ++found;
 			m_status->setText(found
-				? QString("%1 of those addresses said what they serve, and that "
-				           "is in the list below. Nothing leaves until you press "
-				           "Send.").arg(found)
-				: QString("The server did not say what any of them serve. The "
-				           "list below is the addresses alone."));
+			  ? QString("%1 of those addresses said what they serve, and that "
+			             "is in the list below. Nothing leaves until you press "
+			             "Send.").arg(found)
+			  : QString("The server did not say what any of them serve. The "
+			             "list below is the addresses alone."));
 		});
 	}
 }
@@ -767,8 +767,8 @@ void extractor_dialog::confirm_by_fetching() {
 		}
 		m_result->setText(m_result->text() + "<br><br>" + note);
 		m_status->setText(m_apply->isEnabled()
-			? "Reviewed, validated and checked. Nothing is saved until you accept."
-			: "The address does not serve a stream, so it cannot be accepted.");
+		  ? "Reviewed, validated and checked. Nothing is saved until you accept."
+		  : "The address does not serve a stream, so it cannot be accepted.");
 	});
 }
 

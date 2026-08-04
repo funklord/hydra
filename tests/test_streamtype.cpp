@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
 		// The case this tier exists for. Believing the header here is exactly
 		// the failure it is meant to fix.
 		const probe_result d =
-			stream_probe::classify("text/plain", "#EXTM3U\n#EXT-X-VERSION:3\n");
+		  stream_probe::classify("text/plain", "#EXTM3U\n#EXT-X-VERSION:3\n");
 		check(d.kind == "hls", "a playlist served as text/plain is still HLS");
 		check(d.disagreed, "and the disagreement is reported, not smoothed over");
 		check(d.reason.contains("text/plain"), "the reason names what it claimed");
@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
 		      "and a video/* header alone is enough when the bytes are silent");
 
 		const probe_result html =
-			stream_probe::classify("text/html", "<!doctype html><html>");
+		  stream_probe::classify("text/html", "<!doctype html><html>");
 		check(html.kind.isEmpty(), "a web page is not a stream");
 		check(html.reason.contains("text/html"), "and says so with its type");
 
@@ -132,7 +132,7 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 		const QString base =
-			QString("http://127.0.0.1:%1").arg(origin.serverPort());
+		  QString("http://127.0.0.1:%1").arg(origin.serverPort());
 		stream_probe p;
 
 		const probe_result d = fetch(p, QUrl(base + "/disguised.txt?k=abc"));

@@ -13,7 +13,7 @@
 #include <QColor>
 
 tab_tree_model::tab_tree_model(QObject *parent)
-	: QAbstractItemModel(parent) {
+  : QAbstractItemModel(parent) {
 	m_root = new node;
 	m_root->id   = "root";
 	m_root->type = node_type::folder;
@@ -118,7 +118,7 @@ QVariant tab_tree_model::data(const QModelIndex &index, int role) const {
 		case Qt::DecorationRole: {
 			QStyle *s = QApplication::style();
 			return s->standardIcon(n->is_folder() ? QStyle::SP_DirIcon
-			                                      : QStyle::SP_FileIcon);
+				                                    : QStyle::SP_FileIcon);
 		}
 		case Qt::FontRole: {
 			// Open (live) tabs are bold; suspended are italic.
@@ -191,7 +191,7 @@ QStringList tab_tree_model::mimeTypes() const {
 	// history and suspended state attached to it; moving by url would quietly
 	// produce a new tab that had forgotten where it had been.
 	return { QStringLiteral("application/x-hydra-node-ids"),
-	         QStringLiteral("text/uri-list") };
+		       QStringLiteral("text/uri-list") };
 }
 
 QMimeData *tab_tree_model::mimeData(const QModelIndexList &indexes) const {
@@ -272,7 +272,7 @@ bool tab_tree_model::dropMimeData(const QMimeData *data, Qt::DropAction action,
 		return false;
 
 	const QStringList ids =
-		QString::fromUtf8(data->data("application/x-hydra-node-ids")).split('\n');
+	  QString::fromUtf8(data->data("application/x-hydra-node-ids")).split('\n');
 
 	QList<node *> moving;
 	for (const QString &id : ids) {

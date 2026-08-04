@@ -153,7 +153,7 @@ TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test
 # after a source change and never reproducible afterwards, with nothing kept.
 FAILED_DIR = $(TESTS_DIR)/failed
 
-.PHONY: all run test test-one drivers sweep replay deb deb-check apk android install uninstall clean help style
+.PHONY: all run test test-one drivers sweep replay deb deb-check apk android install uninstall clean help style style-docs style-source
 
 # Always delegates, never compares timestamps itself. The first version made
 # the binary a real target depending on the cache file, and `make` after
@@ -311,7 +311,7 @@ clean:
 #   versions, and four filenames that had been renamed years of commits ago
 #   while the prose beside them stayed true. Nothing compiles a table of
 #   filenames, so nothing else can notice.
-style:
+style-docs:
 	@dup=$$(grep '^###' project.md | sort | uniq -d); \
 	 if [ -n "$$dup" ]; then echo "project.md says these twice:"; echo "$$dup"; exit 1; fi
 	@miss=0; for f in $$(sed -n '/^| Area | Files | Notes |/,/^$$/p' project.md | \
@@ -323,3 +323,10 @@ style:
 help:
 	@sed -n '/^# TARGETS/,/^# BUILD FLAGS/p' $(firstword $(MAKEFILE_LIST)) | \
 	   sed '$$d' | sed 's/^#  \{0,1\}//' | sed '/^#*$$/d'
+
+# `style` is every consistency gate this project has: the shared source gate,
+# and the doc check that keeps project.md honest about the tree it describes.
+style: style-source style-docs
+
+style-source:
+	python3 tools/style_gate.py check

@@ -10,7 +10,7 @@
 
 autofill_controller::autofill_controller(keepass_bridge *bridge, policy_engine *policy,
                                           QObject *parent)
-	: QObject(parent), m_bridge(bridge), m_policy(policy) {
+  : QObject(parent), m_bridge(bridge), m_policy(policy) {
 	if (m_bridge) {
 		connect(m_bridge, &keepass_bridge::logins, this, &autofill_controller::on_logins);
 		connect(m_bridge, &keepass_bridge::login_saved, this,
@@ -165,7 +165,7 @@ void autofill_controller::deliver(const credential &c) {
 	QJsonArray arr;
 	arr.append(o);
 	emit credentials_ready(QString::fromUtf8(
-		QJsonDocument(arr).toJson(QJsonDocument::Compact)));
+	  QJsonDocument(arr).toJson(QJsonDocument::Compact)));
 }
 
 void autofill_controller::on_logins(int tag, const QList<credential> &entries) {

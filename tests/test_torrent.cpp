@@ -169,7 +169,7 @@ static bool pump_until(const std::function<bool()> &done, fixture &fx,
 	while (!done() && t.elapsed() < timeout_ms) {
 		if (fx.seed_handle.is_valid())
 			fx.seed_handle.connect_peer(lt::tcp::endpoint(
-				lt::make_address_v4("127.0.0.1"), std::uint16_t(our_port)));
+			  lt::make_address_v4("127.0.0.1"), std::uint16_t(our_port)));
 		std::vector<lt::alert *> junk;
 		fx.seeder->pop_alerts(&junk);
 		spin(250);
@@ -283,8 +283,8 @@ static void test_multi_file_and_seeding() {
 	spin(2000);
 	// Named by info-hash, not job id -- job ids restart every session.
 	const QString rp = QDir(g_tmp).filePath(
-		"state/" + QString::fromStdString(lt::aux::to_hex(
-			fx.mt.ti->info_hashes().get_best())) + ".resume");
+	  "state/" + QString::fromStdString(lt::aux::to_hex(
+	    fx.mt.ti->info_hashes().get_best())) + ".resume");
 	check(QFileInfo(rp).size() > 0,
 	      QString("resume data was written, keyed by info-hash (%1)").arg(rp));
 

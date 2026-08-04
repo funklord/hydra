@@ -33,8 +33,8 @@ const char *k_system_prompt =
 filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
                               ai_provider *provider, const QString &site_host,
                               const picked_element &picked, QWidget *parent)
-	: QDialog(parent), m_signals(signals_source), m_list(list),
-	  m_provider(provider), m_site(site_host), m_picked(picked) {
+  : QDialog(parent), m_signals(signals_source), m_list(list),
+    m_provider(provider), m_site(site_host), m_picked(picked) {
 	setWindowTitle("Evolve ad filters");
 	resize(820, 560);
 	build_ui();
@@ -76,12 +76,12 @@ void filter_dialog::build_ui() {
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
 	m_status->setText(
-		m_provider->is_external()
-			? QString("<b>%1</b> — external provider. Review exactly what will "
-			          "be sent; nothing leaves until you press Send.")
-			          .arg(m_provider->name())
-			: QString("<b>%1</b> — local provider; nothing leaves this machine.")
-			          .arg(m_provider->name()));
+	  m_provider->is_external()
+	    ? QString("<b>%1</b> — external provider. Review exactly what will "
+	              "be sent; nothing leaves until you press Send.")
+	              .arg(m_provider->name())
+	    : QString("<b>%1</b> — local provider; nothing leaves this machine.")
+	              .arg(m_provider->name()));
 	outer->addWidget(m_status);
 
 	m_pages = new QStackedWidget(this);

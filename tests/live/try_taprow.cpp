@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
 		for (QLineEdit *e : w.findChildren<QLineEdit *>())
 			if (e->placeholderText() == "Address") {
 				e->setText(target); QMetaObject::invokeMethod(e, "returnPressed"); return;
-			}
+		  }
 	});
 	QTimer::singleShot(20000, [&] {
 		const QString host = QUrl(target).host();

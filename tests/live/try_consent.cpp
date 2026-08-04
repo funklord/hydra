@@ -224,7 +224,7 @@ int main(int argc, char *argv[]) {
 
 	auto *tree_view = w.findChild<QTreeView *>();
 	emit tree_view->activated(
-		tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
+	  tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
 	spin(1500);
 
 	QLineEdit *bar = nullptr;
@@ -260,10 +260,10 @@ int main(int argc, char *argv[]) {
 		bool out = false;
 		QEventLoop loop;
 		static const char *js =
-			"(function(){var b=document.getElementById('cc');"
-			"var lock=getComputedStyle(document.documentElement).overflow==='hidden'"
-			"||getComputedStyle(document.body).overflow==='hidden';"
-			"return (!b||getComputedStyle(b).display==='none')&&!lock;})()";
+		  "(function(){var b=document.getElementById('cc');"
+		  "var lock=getComputedStyle(document.documentElement).overflow==='hidden'"
+		  "||getComputedStyle(document.body).overflow==='hidden';"
+		  "return (!b||getComputedStyle(b).display==='none')&&!lock;})()";
 		views.last()->page()->runJavaScript(QString::fromLatin1(js),
 		                                     [&](const QVariant &v) {
 			out = v.toBool();
@@ -315,7 +315,7 @@ int main(int argc, char *argv[]) {
 	load("/reject");
 	const bool first = policy.is_allowed(policy::feature::cookies, "127.0.0.1");
 	const bool third =
-		policy.is_allowed(policy::feature::third_party_cookies, "127.0.0.1");
+	  policy.is_allowed(policy::feature::third_party_cookies, "127.0.0.1");
 	std::printf("  cookies=%d thirdParty=%d\n", int(first), int(third));
 	check(first, "answering the banner allows first-party cookies, so the choice "
 	              "can be recorded and the banner does not return next load");

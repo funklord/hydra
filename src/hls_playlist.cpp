@@ -120,7 +120,7 @@ hls_playlist parse(const QByteArray &text, const QUrl &base) {
 			if (seg.byte_length > 0 && seg.byte_offset < 0 && !out.segments.isEmpty()) {
 				const hls_segment &prev = out.segments.last();
 				if (prev.byte_length > 0 && prev.byte_offset >= 0 &&
-				    prev.url == seg.url)
+					  prev.url == seg.url)
 					seg.byte_offset = prev.byte_offset + prev.byte_length;
 			}
 			out.segments.push_back(seg);

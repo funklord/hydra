@@ -45,8 +45,8 @@ int main(int argc, char **argv) {
 	// A sample clip sorted ahead of the feature — the exact trap.
 	const int a = m.enqueue(QUrl("magnet:?xt=urn:btih:a"), QString(), &e);
 	tor->resolve(a, 4000, { {"Rel/sample.mkv", 42LL * 1024 * 1024},
-	                         {"Rel/feature.mkv", 3LL * 1024 * 1024 * 1024},
-	                         {"Rel/notes.txt", 4096} });
+		                       {"Rel/feature.mkv", 3LL * 1024 * 1024 * 1024},
+		                       {"Rel/notes.txt", 4096} });
 
 	// Nothing playable at all.
 	const int b = m.enqueue(QUrl("magnet:?xt=urn:btih:b"), QString(), &e);

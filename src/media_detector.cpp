@@ -110,7 +110,7 @@ void media_detector::on_request(const request_context &ctx, const request_decisi
 			// useless for choosing between them. Keep the parent directory,
 			// which is what actually distinguishes them (/hd/, /720p/…).
 			const QStringList segs =
-				ctx.url.path().split('/', Qt::SkipEmptyParts);
+			  ctx.url.path().split('/', Qt::SkipEmptyParts);
 			if (segs.size() >= 2)
 				item.label = segs.at(segs.size() - 2) + "/" + segs.last();
 			else if (!segs.isEmpty())

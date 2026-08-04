@@ -84,7 +84,7 @@ public:
 			const int r = head.toLower().indexOf("range: bytes=");
 			if (r >= 0) {
 				const QByteArray spec =
-					head.mid(r + 13, head.indexOf('\r', r) - (r + 13));
+				  head.mid(r + 13, head.indexOf('\r', r) - (r + 13));
 				const int dash = spec.indexOf('-');
 				const qint64 from = spec.left(dash).toLongLong();
 				const QByteArray to_s = spec.mid(dash + 1);
@@ -144,9 +144,9 @@ int main(int argc, char **argv) {
 	section("plain segments, concatenated in order");
 	{
 		server.files["/media.m3u8"] =
-			"#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
-			"#EXTINF:4,\nseg0.ts\n#EXTINF:4,\nseg1.ts\n#EXTINF:4,\nseg2.ts\n"
-			"#EXT-X-ENDLIST\n";
+		  "#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		  "#EXTINF:4,\nseg0.ts\n#EXTINF:4,\nseg1.ts\n#EXTINF:4,\nseg2.ts\n"
+		  "#EXT-X-ENDLIST\n";
 		server.files["/seg0.ts"] = s0;
 		server.files["/seg1.ts"] = s1;
 		server.files["/seg2.ts"] = s2;
@@ -175,11 +175,11 @@ int main(int argc, char **argv) {
 		const QByteArray whole = s0 + s1 + s2;
 		server.files["/all.mp4"] = whole;
 		server.files["/ranges.m3u8"] =
-			"#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
-			"#EXTINF:4,\n#EXT-X-BYTERANGE:4000@0\nall.mp4\n"
-			"#EXTINF:4,\n#EXT-X-BYTERANGE:3000\nall.mp4\n"
-			"#EXTINF:4,\n#EXT-X-BYTERANGE:2000\nall.mp4\n"
-			"#EXT-X-ENDLIST\n";
+		  "#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		  "#EXTINF:4,\n#EXT-X-BYTERANGE:4000@0\nall.mp4\n"
+		  "#EXTINF:4,\n#EXT-X-BYTERANGE:3000\nall.mp4\n"
+		  "#EXTINF:4,\n#EXT-X-BYTERANGE:2000\nall.mp4\n"
+		  "#EXT-X-ENDLIST\n";
 
 		hls_assembler a;
 		const QString out = dir + "/ranges.ts";
@@ -197,13 +197,13 @@ int main(int argc, char **argv) {
 	section("a master playlist picks the widest variant");
 	{
 		server.files["/master.m3u8"] =
-			"#EXTM3U\n"
-			"#EXT-X-STREAM-INF:BANDWIDTH=100000\nlow.m3u8\n"
-			"#EXT-X-STREAM-INF:BANDWIDTH=900000\nhigh.m3u8\n";
+		  "#EXTM3U\n"
+		  "#EXT-X-STREAM-INF:BANDWIDTH=100000\nlow.m3u8\n"
+		  "#EXT-X-STREAM-INF:BANDWIDTH=900000\nhigh.m3u8\n";
 		server.files["/low.m3u8"] =
-			"#EXTM3U\n#EXTINF:4,\nseg2.ts\n#EXT-X-ENDLIST\n";
+		  "#EXTM3U\n#EXTINF:4,\nseg2.ts\n#EXT-X-ENDLIST\n";
 		server.files["/high.m3u8"] =
-			"#EXTM3U\n#EXTINF:4,\nseg0.ts\n#EXTINF:4,\nseg1.ts\n#EXT-X-ENDLIST\n";
+		  "#EXTM3U\n#EXTINF:4,\nseg0.ts\n#EXTINF:4,\nseg1.ts\n#EXT-X-ENDLIST\n";
 
 		server.requested.clear();
 		hls_assembler a;
@@ -221,7 +221,7 @@ int main(int argc, char **argv) {
 	section("a segment that does not exist is a failure, not a short file");
 	{
 		server.files["/broken.m3u8"] =
-			"#EXTM3U\n#EXTINF:4,\nseg0.ts\n#EXTINF:4,\nmissing.ts\n#EXT-X-ENDLIST\n";
+		  "#EXTM3U\n#EXTINF:4,\nseg0.ts\n#EXTINF:4,\nmissing.ts\n#EXT-X-ENDLIST\n";
 
 		hls_assembler a;
 		QSignalSpy bad(&a, &hls_assembler::failed);

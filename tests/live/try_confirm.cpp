@@ -44,9 +44,9 @@ static void answer(bool *saw, QString button_text) {
 			for (QAbstractButton *b : box->buttons())
 				if (b->text().remove('&').startsWith(button_text)) {
 					box->setResult(0);
-					b->click();
-					return;
-				}
+				  b->click();
+				  return;
+			  }
 			box->reject();
 			return;
 		}

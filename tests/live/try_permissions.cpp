@@ -161,7 +161,7 @@ int main(int argc, char *argv[]) {
 
 	auto *tree_view = w.findChild<QTreeView *>();
 	emit tree_view->activated(
-		tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
+	  tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
 	spin(1500);
 
 	QLineEdit *bar = nullptr;

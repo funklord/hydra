@@ -33,12 +33,12 @@ int helper_allowlist::learn_from(const QUrl &base, const QByteArray &body) {
 	// string that was never a real reference is one no script has reason to
 	// name.
 	static const QRegularExpression absolute(
-		R"((https?://[^\s"'<>\\)\]]+))");
+	  R"((https?://[^\s"'<>\\)\]]+))");
 	// A manifest line is bare: `index-f1-v1-a1.txt?k=…` on its own line, or a
 	// quoted URI attribute.
 	static const QRegularExpression relative(
-		R"((?:^|["'\s,=(])([A-Za-z0-9._~!$&*+;@%-][A-Za-z0-9._~!$&*+;@%/-]*\.[A-Za-z0-9]{1,8}(?:\?[^\s"'<>\\)\]]*)?))",
-		QRegularExpression::MultilineOption);
+	  R"((?:^|["'\s,=(])([A-Za-z0-9._~!$&*+;@%-][A-Za-z0-9._~!$&*+;@%/-]*\.[A-Za-z0-9]{1,8}(?:\?[^\s"'<>\\)\]]*)?))",
+	  QRegularExpression::MultilineOption);
 
 	const QString text = QString::fromUtf8(body);
 	int learned = 0;
@@ -72,8 +72,8 @@ int helper_allowlist::learn_from(const QUrl &base, const QByteArray &body) {
 
 helper_host::helper_host(helper_allowlist *allow, helper_fetcher fetch,
                           helper_budget budget, QObject *parent)
-	: QObject(parent), m_allow(allow), m_fetch(std::move(fetch)),
-	  m_budget(budget) {}
+  : QObject(parent), m_allow(allow), m_fetch(std::move(fetch)),
+    m_budget(budget) {}
 
 void helper_host::begin() { m_clock.start(); }
 
@@ -161,10 +161,10 @@ QVariantMap helper_host::head(const QString &url) {
 	out.insert("type", r.content_type);
 	out.insert("kind", r.status >= 400 ? QString() : p.kind);
 	c.outcome = r.status >= 400
-		? QString("%1, so what it is could not be established").arg(r.status)
-		: QString("%1%2").arg(r.content_type,
-		                       p.kind.isEmpty() ? QString()
-		                                        : QString("  (%1)").arg(p.kind.toUpper()));
+	  ? QString("%1, so what it is could not be established").arg(r.status)
+	  : QString("%1%2").arg(r.content_type,
+	                         p.kind.isEmpty() ? QString()
+	                                          : QString("  (%1)").arg(p.kind.toUpper()));
 	finish(c);
 	return out;
 }

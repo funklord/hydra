@@ -10,7 +10,7 @@ namespace {
 void write_node(QString &out, node *n, int depth) {
 	const QString indent(depth * 2, ' ');
 	out += indent + "- [" + n->id + "] " + tree_outline::type_to_string(n->type)
-	     + " | " + n->title;
+		   + " | " + n->title;
 	if (!n->is_folder())
 		out += " | " + n->url;
 	if (!n->tags.isEmpty())

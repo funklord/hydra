@@ -154,7 +154,7 @@ static void test_torrent_lifecycle() {
 	check(j->path.isEmpty(), "and no filename yet");
 
 	tor->resolve(id, 4000, { {"season/e01.mkv", 2000}, {"season/e02.mkv", 1900},
-	                          {"season/readme.txt", 100} });
+		                        {"season/readme.txt", 100} });
 	j = job_by_id(m, id);
 	check(j->status == download_state::running, "metadata moves it to running");
 	check(j->total == 4000, "the size appears late, and is taken");

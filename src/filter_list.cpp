@@ -161,7 +161,7 @@ dry_run filter_list::evaluate(const filter_rule &r, const QStringList &observed,
 	if (r.cosmetic && picked.is_valid()) {
 		out.cosmetic_checked = true;
 		out.cosmetic_hits =
-			cosmetic_matches(r.text.mid(r.text.indexOf("##") + 2).trimmed(), picked);
+		  cosmetic_matches(r.text.mid(r.text.indexOf("##") + 2).trimmed(), picked);
 	}
 	if (!r.cosmetic) {
 		for (const QString &url : observed)

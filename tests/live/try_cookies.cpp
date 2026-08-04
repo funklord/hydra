@@ -148,9 +148,9 @@ static bool make_cert(const QString &dir, QSslCertificate *cert, QSslKey *key) {
 	const QString c = dir + "/test-cert.pem", k = dir + "/test-key.pem";
 	QProcess p;
 	p.start("openssl", { "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-	                      "-keyout", k, "-out", c, "-days", "2",
-	                      "-subj", "/CN=127.0.0.1",
-	                      "-addext", "subjectAltName=IP:127.0.0.1,IP:127.0.0.2" });
+		                    "-keyout", k, "-out", c, "-days", "2",
+		                    "-subj", "/CN=127.0.0.1",
+		                    "-addext", "subjectAltName=IP:127.0.0.1,IP:127.0.0.2" });
 	if (!p.waitForFinished(20000) || p.exitCode() != 0)
 		return false;
 	QFile cf(c), kf(k);
@@ -232,7 +232,7 @@ int main(int argc, char *argv[]) {
 
 	auto *tree_view = w.findChild<QTreeView *>();
 	emit tree_view->activated(
-		tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
+	  tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
 	spin(1500);
 
 	QLineEdit *bar = nullptr;
@@ -293,8 +293,8 @@ int main(int argc, char *argv[]) {
 	      "and comes back on the next same-host request");
 	check(!has(a, "third"), "the third-party image's cookie is not");
 	const bool third_reached =
-		std::any_of(cur->seen.cbegin(), cur->seen.cend(),
-		             [](const QString &s) { return s.startsWith("/pixel"); });
+	  std::any_of(cur->seen.cbegin(), cur->seen.cend(),
+	               [](const QString &s) { return s.startsWith("/pixel"); });
 	check(third_reached, "and the third-party request itself was made, so the "
 	                      "cookie was refused rather than the request blocked");
 
@@ -306,11 +306,11 @@ int main(int argc, char *argv[]) {
 	const QStringList b = run_case(&site, "http: third-party cookies allowed");
 	check(has(b, "first"), "the page's own cookie is still stored");
 	note(has(b, "third")
-		? "the third-party cookie is stored over plain HTTP"
-		: "as expected over plain HTTP the third-party cookie is refused whatever "
-		   "the policy says: SameSite=None needs Secure, and Secure needs TLS. "
-		   "This row measures Chromium. The TLS rows below are the ones that "
-		   "measure us");
+	  ? "the third-party cookie is stored over plain HTTP"
+	  : "as expected over plain HTTP the third-party cookie is refused whatever "
+	     "the policy says: SameSite=None needs Secure, and Secure needs TLS. "
+	     "This row measures Chromium. The TLS rows below are the ones that "
+	     "measure us");
 
 	// 3. Cookies off for the site entirely.
 	policy.set_global_default(policy::feature::third_party_cookies,

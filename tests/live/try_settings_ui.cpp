@@ -264,8 +264,8 @@ int main(int argc, char **argv) {
 		      "the learned rules are listed");
 		check(view && view->topLevelItemCount() ==
 		          [&]{ int n = 0; for (const site_rule &r : blocker.rules().all())
-		                   if (!r.builtin) ++n; return n; }(),
-		      "and the built-ins are not, since they come from the program");
+				               if (!r.builtin) ++n; return n; }(),
+				  "and the built-ins are not, since they come from the program");
 
 		QString flagged_text, host_text;
 		for (int i = 0; i < view->topLevelItemCount(); ++i) {
@@ -389,7 +389,7 @@ int main(int argc, char **argv) {
 					bar->setValue(bar->maximum());
 					spin(150);
 					shot.grab().save(
-						QString("%1/%2-bottom.png").arg(shots, name.toLower()));
+					  QString("%1/%2-bottom.png").arg(shots, name.toLower()));
 					bar->setValue(0);
 				}
 			}
@@ -579,8 +579,8 @@ int main(int argc, char **argv) {
 			if (p.setting_for(gone, static_cast<policy::feature>(i)) !=
 			    policy::setting::unset) {
 				check(false, QString("%1 still has a setting after OK").arg(gone));
-				break;
-			}
+			  break;
+		  }
 		check(p.effective_setting(policy::feature::javascript, gone) ==
 		          p.global_default(policy::feature::javascript),
 		      "and the site falls back to the defaults, which is what removal means");
@@ -625,7 +625,7 @@ int main(int argc, char **argv) {
 		// button needs no confirmation dialog.
 		js->setCurrentIndex(was == 0 ? 1 : 0);
 		const policy::setting before =
-			p.global_default(policy::feature::javascript);
+		  p.global_default(policy::feature::javascript);
 		restore->click();
 		check(p.global_default(policy::feature::javascript) == before,
 		      "restoring writes nothing on its own");
@@ -723,7 +723,7 @@ int main(int argc, char **argv) {
 		      "showing what is stored");
 
 		const int light_window =
-			QApplication::palette().color(QPalette::Window).lightness();
+		  QApplication::palette().color(QPalette::Window).lightness();
 		pick->setCurrentIndex(pick->findData(int(theme::choice::dark)));
 		check(QApplication::palette().color(QPalette::Window).lightness() <
 		          light_window,

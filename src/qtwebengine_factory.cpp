@@ -51,7 +51,7 @@ void qtwebengine_factory::register_url_schemes(const QStringList &schemes) {
 }
 
 qtwebengine_factory::qtwebengine_factory(request_filter *filter)
-	: m_filter(filter) {
+  : m_filter(filter) {
 	// One shared profile for every view (architecture doc §6).
 	m_profile = QWebEngineProfile::defaultProfile();
 
@@ -63,9 +63,9 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 	// specific to this backend.
 	request_filter *f = m_filter;
 	m_profile->cookieStore()->setCookieFilter(
-		[f](const QWebEngineCookieStore::FilterRequest &r) {
-			return f->allow_cookie(r.firstPartyUrl.host(), r.thirdParty);
-		});
+	  [f](const QWebEngineCookieStore::FilterRequest &r) {
+		  return f->allow_cookie(r.firstPartyUrl.host(), r.thirdParty);
+	  });
 
 	// Links that are not pages (§11.4). Installed per scheme main() registered;
 	// with none registered this does nothing and such links behave as before.

@@ -107,13 +107,13 @@ int main(int argc, char **argv) {
 				// it, and it is broken by the time the machine without liblz4
 				// needs it. So it is driven here regardless.
 				const quint8 *h =
-					reinterpret_cast<const quint8 *>(raw.constData()) + 8;
+				  reinterpret_cast<const quint8 *>(raw.constData()) + 8;
 				const int declared = int(quint32(h[0]) | (quint32(h[1]) << 8) |
 				                          (quint32(h[2]) << 16) |
 				                          (quint32(h[3]) << 24));
 				QString berr;
 				const QByteArray built =
-					session_import::lz4_block_builtin(raw.mid(12), declared, &berr);
+				  session_import::lz4_block_builtin(raw.mid(12), declared, &berr);
 				check(built == reference,
 				      QString("and the built-in decoder agrees with it too%1")
 				          .arg(berr.isEmpty() ? "" : " -- " + berr));
@@ -225,10 +225,10 @@ int main(int argc, char **argv) {
 		// app uses rather than a stub of it.
 		auto write_session = [&](const QString &second_url) {
 			const QByteArray json = QString(
-				"{\"windows\":[{\"tabs\":["
-				"{\"index\":1,\"entries\":[{\"url\":\"https://a.test/1\",\"title\":\"One\"}]},"
-				"{\"index\":1,\"entries\":[{\"url\":\"%1\",\"title\":\"Two\"}]}"
-				"]}]}").arg(second_url).toUtf8();
+			  "{\"windows\":[{\"tabs\":["
+			  "{\"index\":1,\"entries\":[{\"url\":\"https://a.test/1\",\"title\":\"One\"}]},"
+			  "{\"index\":1,\"entries\":[{\"url\":\"%1\",\"title\":\"Two\"}]}"
+			  "]}]}").arg(second_url).toUtf8();
 			// Store the payload uncompressed-but-valid: a run of literals is a
 			// legal LZ4 block, which keeps this test independent of any
 			// compressor.

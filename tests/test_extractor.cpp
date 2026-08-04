@@ -99,13 +99,13 @@ int main(int argc, char **argv) {
 		int n = many.size();
 		for (int i = 0; i < 30; ++i)
 			many << evidence_request{
-				QUrl(QString("https://sil5.player.example/v4/db/abc/seg-%1.ts")
-				         .arg(i, 5, 10, QChar('0'))), "other", n++ };
+			  QUrl(QString("https://sil5.player.example/v4/db/abc/seg-%1.ts")
+			           .arg(i, 5, 10, QChar('0'))), "other", n++ };
 
 		const QString src =
-			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
-			"if (r[i].url.indexOf('seg-')!==-1) "
-			"return { url: r[i].url, kind: 'hls' }; return null; };";
+		  "extract = function(p, r){ for (var i=0;i<r.length;i++) "
+		  "if (r[i].url.indexOf('seg-')!==-1) "
+		  "return { url: r[i].url, kind: 'hls' }; return null; };";
 		const extractor_verdict v = site_extractor::check(src, page, many);
 		check(!v.usable, "picking out of a flood of repeats is refused");
 		check(v.is_segment, "and reported as a segment, not as invented");
@@ -113,9 +113,9 @@ int main(int argc, char **argv) {
 
 		// The manifest, fetched once, still passes.
 		const QString ok =
-			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
-			"if (r[i].url.indexOf('cf-master')!==-1) "
-			"return { url: r[i].url, kind: 'hls' }; return null; };";
+		  "extract = function(p, r){ for (var i=0;i<r.length;i++) "
+		  "if (r[i].url.indexOf('cf-master')!==-1) "
+		  "return { url: r[i].url, kind: 'hls' }; return null; };";
 		check(site_extractor::check(ok, page, many).usable,
 		      "while a request the page made once still passes");
 	}
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
 		// there is, so neither the invented rule nor the segment rule catches it,
 		// and the media list would have offered the HTML as though it were video.
 		const QString src =
-			"extract = function(p, r){ return { url: p.url, kind: 'direct' }; };";
+		  "extract = function(p, r){ return { url: p.url, kind: 'direct' }; };";
 		const extractor_verdict v = site_extractor::check(src, page, ev);
 		check(!v.usable, "returning the page's own address is refused");
 		check(v.is_page, "and reported as the page, not as invented");
@@ -139,8 +139,8 @@ int main(int argc, char **argv) {
 		// Same address, dressed differently. A fragment never reaches the server
 		// and a trailing slash is the same resource, so neither is an escape.
 		const QString dressed =
-			"extract = function(p, r){ return { url: p.url + '#top', "
-			"kind: 'direct' }; };";
+		  "extract = function(p, r){ return { url: p.url + '#top', "
+		  "kind: 'direct' }; };";
 		check(site_extractor::check(dressed, page, ev).is_page,
 		      "a fragment on the page url does not get around it");
 
@@ -153,11 +153,11 @@ int main(int argc, char **argv) {
 			QUrl("https://site.example/watch/1/stream"), "other",
 			with_sibling.size() };
 		const QString same_host =
-			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
-			"if (r[i].url.indexOf('/stream')!==-1) "
-			"return { url: r[i].url, kind: 'direct' }; return null; };";
+		  "extract = function(p, r){ for (var i=0;i<r.length;i++) "
+		  "if (r[i].url.indexOf('/stream')!==-1) "
+		  "return { url: r[i].url, kind: 'direct' }; return null; };";
 		const extractor_verdict sh =
-			site_extractor::check(same_host, page, with_sibling);
+		  site_extractor::check(same_host, page, with_sibling);
 		check(sh.usable && !sh.is_page,
 		      "while a different request on the same host still passes");
 	}
@@ -165,17 +165,17 @@ int main(int argc, char **argv) {
 	section("scripts that misbehave");
 	{
 		const extractor_verdict loop = site_extractor::check(
-			"extract = function(){ while (true) {} };", page, ev);
+		  "extract = function(){ while (true) {} };", page, ev);
 		check(!loop.usable && loop.timed_out,
 		      QString("an endless loop is interrupted rather than hanging (%1)")
 		          .arg(loop.message));
 
 		const extractor_verdict thrown = site_extractor::check(
-			"extract = function(){ throw new Error('boom'); };", page, ev);
+		  "extract = function(){ throw new Error('boom'); };", page, ev);
 		check(!thrown.usable && thrown.message.contains("threw"), "a throw is caught");
 
 		const extractor_verdict none = site_extractor::check(
-			"extract = function(){ return null; };", page, ev);
+		  "extract = function(){ return null; };", page, ev);
 		check(!none.usable && none.message.contains("found nothing"),
 		      "returning nothing is a clean failure");
 
@@ -187,8 +187,8 @@ int main(int argc, char **argv) {
 		      "a script defining no extract() says so");
 
 		const extractor_verdict badkind = site_extractor::check(
-			"extract = function(p, r){ return { url: r[3].url, kind: 'magic' }; };",
-			page, ev);
+		  "extract = function(p, r){ return { url: r[3].url, kind: 'magic' }; };",
+		  page, ev);
 		check(!badkind.usable && !badkind.invented,
 		      "an unknown kind is refused, but not called invented");
 	}
@@ -196,11 +196,11 @@ int main(int argc, char **argv) {
 	section("the sandbox has nothing in it");
 	{
 		for (const char *probe : { "typeof XMLHttpRequest", "typeof fetch",
-		                            "typeof document", "typeof window",
-		                            "typeof require", "typeof process" }) {
+			                          "typeof document", "typeof window",
+			                          "typeof require", "typeof process" }) {
 			const QString src = QString(
-				"extract = function(){ return { url: '%1:' + (%2), kind: 'direct' }; };")
-				.arg("x", probe);
+			  "extract = function(){ return { url: '%1:' + (%2), kind: 'direct' }; };")
+			  .arg("x", probe);
 			const extraction r = site_extractor::run(src, page, ev);
 			// It should run and report "undefined" — the point is that the name
 			// resolves to nothing, not that the script fails.
@@ -218,16 +218,16 @@ int main(int argc, char **argv) {
 		// one. The request side is `type` now, and the collision has to be
 		// gone rather than merely discouraged.
 		const QString reads_type =
-			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
-			"if (r[i].type === 'image') "
-			"return { url: r[i].url, kind: 'direct' }; return null; };";
+		  "extract = function(p, r){ for (var i=0;i<r.length;i++) "
+		  "if (r[i].type === 'image') "
+		  "return { url: r[i].url, kind: 'direct' }; return null; };";
 		const extraction got = site_extractor::run(reads_type, page, ev);
 		check(got.ok && got.url.toString().contains("poster.jpg"),
 		      "a request exposes its browser type as `type`");
 
 		const QString reads_kind =
-			"extract = function(p, r){ return { url: String(r[0].kind), "
-			"kind: 'direct' }; };";
+		  "extract = function(p, r){ return { url: String(r[0].kind), "
+		  "kind: 'direct' }; };";
 		const extraction gone = site_extractor::run(reads_kind, page, ev);
 		check(gone.ok && gone.url.toString() == "undefined",
 		      "and no longer carries a `kind` to be confused with the stream's");
@@ -235,11 +235,11 @@ int main(int argc, char **argv) {
 		// The return value keeps `kind`, since that one is the proposal's own
 		// conclusion rather than something observed.
 		const QString returns_kind =
-			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
-			"if (r[i].url.indexOf('cf-master')!==-1) "
-			"return { url: r[i].url, kind: 'hls' }; return null; };";
+		  "extract = function(p, r){ for (var i=0;i<r.length;i++) "
+		  "if (r[i].url.indexOf('cf-master')!==-1) "
+		  "return { url: r[i].url, kind: 'hls' }; return null; };";
 		const extractor_verdict v =
-			site_extractor::check(returns_kind, page, ev);
+		  site_extractor::check(returns_kind, page, ev);
 		check(v.usable && v.result.kind == "hls",
 		      "while the returned object still declares its kind");
 	}
@@ -251,19 +251,19 @@ int main(int argc, char **argv) {
 		// waved it through and the media list would have offered a tracking
 		// pixel as a video. The interceptor knew it was an image all along.
 		const QString pick =
-			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
-			"if (r[i].url.indexOf('%1')!==-1) "
-			"return { url: r[i].url, kind: 'direct' }; return null; };";
+		  "extract = function(p, r){ for (var i=0;i<r.length;i++) "
+		  "if (r[i].url.indexOf('%1')!==-1) "
+		  "return { url: r[i].url, kind: 'direct' }; return null; };";
 
 		const extractor_verdict img =
-			site_extractor::check(pick.arg("poster.jpg"), page, ev);
+		  site_extractor::check(pick.arg("poster.jpg"), page, ev);
 		check(!img.usable && img.is_asset, "an image is refused");
 		check(!img.invented && !img.is_segment,
 		      "and not mistaken for an invention or a segment");
 		check(img.message.contains("image"), "the reason names what it was");
 
 		const extractor_verdict scr =
-			site_extractor::check(pick.arg("app.js"), page, ev);
+		  site_extractor::check(pick.arg("app.js"), page, ev);
 		check(!scr.usable && scr.is_asset, "a script is refused");
 
 		// The manifest is fetched as "other", so the rule leaves it alone.
@@ -274,11 +274,11 @@ int main(int argc, char **argv) {
 		// an image and as something else is not settled by which came first.
 		QList<evidence_request> mixed = sample();
 		mixed << evidence_request{ QUrl("https://site.example/both"), "image",
-		                            mixed.size() };
+			                          mixed.size() };
 		mixed << evidence_request{ QUrl("https://site.example/both"), "other",
-		                            mixed.size() };
+			                          mixed.size() };
 		const extractor_verdict both =
-			site_extractor::check(pick.arg("/both"), page, mixed);
+		  site_extractor::check(pick.arg("/both"), page, mixed);
 		check(both.usable && !both.is_asset,
 		      "an address seen as both an image and something else still passes");
 	}
@@ -292,16 +292,16 @@ int main(int argc, char **argv) {
 		// What settles it is that the server confirmed the playlist beside it.
 		QList<evidence_request> parts = sample();
 		const QString init =
-			"https://sil5.player.example/v4/db/abc/init-f1-v1-a1.woff?k=UCp";
+		  "https://sil5.player.example/v4/db/abc/init-f1-v1-a1.woff?k=UCp";
 		parts << evidence_request{ QUrl(init), "other", parts.size() };
 
 		const QString pick =
-			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
-			"if (r[i].url.indexOf('%1')!==-1) "
-			"return { url: r[i].url, kind: 'direct' }; return null; };";
+		  "extract = function(p, r){ for (var i=0;i<r.length;i++) "
+		  "if (r[i].url.indexOf('%1')!==-1) "
+		  "return { url: r[i].url, kind: 'direct' }; return null; };";
 
 		const QString manifest =
-			"https://sil5.player.example/v4/db/abc/cf-master.1774687168.txt?k=UCp&kx=17";
+		  "https://sil5.player.example/v4/db/abc/cf-master.1774687168.txt?k=UCp&kx=17";
 		QSet<QString> manifests = { manifest };
 
 		// Without the tier's answer nothing can fire, and that is the point of
@@ -310,7 +310,7 @@ int main(int argc, char **argv) {
 		      "with no confirmed playlist the init segment still passes");
 
 		const extractor_verdict v =
-			site_extractor::check(pick.arg("init-"), page, parts, nullptr, &manifests);
+		  site_extractor::check(pick.arg("init-"), page, parts, nullptr, &manifests);
 		check(!v.usable && v.is_piece, "with one, the init segment is refused");
 		check(!v.invented && !v.is_segment && !v.is_asset,
 		      "and not mistaken for any of the other four");
@@ -325,7 +325,7 @@ int main(int argc, char **argv) {
 		// A media playlist listed beside a master is a manifest too. Following it
 		// is the helper tier's job, and returning it is a fine answer.
 		const QString index =
-			"https://sil5.player.example/v4/db/abc/index-f1-v1-a1.txt?k=UCp";
+		  "https://sil5.player.example/v4/db/abc/index-f1-v1-a1.txt?k=UCp";
 		parts << evidence_request{ QUrl(index), "other", parts.size() };
 		manifests.insert(index);
 		check(site_extractor::check(pick.arg("index-"), page, parts, nullptr,
@@ -526,7 +526,7 @@ int main(int argc, char **argv) {
 		QJsonObject vain = doc;
 		vain.insert("origin", "Trusted community rules");
 		const site_rules::import_result labelled =
-			site_rules::judge_import(vain, "from-dave.json");
+		  site_rules::judge_import(vain, "from-dave.json");
 		check(!labelled.accepted.isEmpty() &&
 		          labelled.accepted.first().origin == "from-dave.json",
 		      "an imported rule records where it came from");
@@ -557,20 +557,20 @@ int main(int argc, char **argv) {
 		// stored extractor that fails on the next visit. That is the shape worth
 		// refusing: not a wrong answer, a right-looking one with no future.
 		const QString real =
-			"https://sil5.player.example/v4/db/abc/cf-master.1774687168.txt"
-			"?k=UCp&kx=17";
+		  "https://sil5.player.example/v4/db/abc/cf-master.1774687168.txt"
+		  "?k=UCp&kx=17";
 
 		// 1. The lookup table. A model really wrote this: the five annotated
 		// addresses copied into the script, tokens and all, and searched. It
 		// returns the manifest, which was genuinely requested and genuinely a
 		// manifest, so nothing else in the gate objects.
 		const QString baked =
-			"const rows = [{ url: '" + real + "', serves: 'HLS' }];\n"
-			"extract = function (p, r) {\n"
-			"  for (var i=0;i<r.length;i++)\n"
-			"    if (rows.some(function(x){ return x.url === r[i].url; }))\n"
-			"      return { url: r[i].url, kind: 'hls' };\n"
-			"  return null; };";
+		  "const rows = [{ url: '" + real + "', serves: 'HLS' }];\n"
+		  "extract = function (p, r) {\n"
+		  "  for (var i=0;i<r.length;i++)\n"
+		  "    if (rows.some(function(x){ return x.url === r[i].url; }))\n"
+		  "      return { url: r[i].url, kind: 'hls' };\n"
+		  "  return null; };";
 		const extractor_verdict b = site_extractor::check(baked, page, ev);
 		check(!b.usable, "a script with this visit's token written into it is refused");
 		check(b.hardcoded, "and says that is why");
@@ -583,9 +583,9 @@ int main(int argc, char **argv) {
 		// not find the stream rather than one that did and then asked the wrong
 		// object.
 		const QString runtime_note =
-			"extract = function (p, r) {\n"
-			"  var m = r.find(function (x) { return x.serves === 'HLS'; });\n"
-			"  return m ? { url: m.url, kind: 'hls' } : null; };";
+		  "extract = function (p, r) {\n"
+		  "  var m = r.find(function (x) { return x.serves === 'HLS'; });\n"
+		  "  return m ? { url: m.url, kind: 'hls' } : null; };";
 		const extractor_verdict n = site_extractor::check(runtime_note, page, ev);
 		check(!n.usable, "a script reading `serves` at run time is refused");
 		check(n.reads_note, "and says that is why");
@@ -596,9 +596,9 @@ int main(int argc, char **argv) {
 		// The bracket spelling too, since a model that is told not to write one
 		// thing writes the other.
 		const QString bracketed =
-			"extract = function (p, r) {\n"
-			"  var m = r.find(function (x) { return x['serves'] === 'HLS'; });\n"
-			"  return m ? { url: m.url, kind: 'hls' } : null; };";
+		  "extract = function (p, r) {\n"
+		  "  var m = r.find(function (x) { return x['serves'] === 'HLS'; });\n"
+		  "  return m ? { url: m.url, kind: 'hls' } : null; };";
 		check(site_extractor::check(bracketed, page, ev).reads_note,
 		      "however it is spelled");
 
@@ -608,9 +608,9 @@ int main(int argc, char **argv) {
 		// right about this capture and nothing else. One advert more and the
 		// numbers move.
 		const QString by_order =
-			"extract = function (p, r) {\n"
-			"  var m = r.find(function (x) { return x.order === 3; });\n"
-			"  return m ? { url: m.url, kind: 'hls' } : null; };";
+		  "extract = function (p, r) {\n"
+		  "  var m = r.find(function (x) { return x.order === 3; });\n"
+		  "  return m ? { url: m.url, kind: 'hls' } : null; };";
 		const extractor_verdict o = site_extractor::check(by_order, page, ev);
 		check(!o.usable, "a script matching on `order` is refused");
 		check(o.hardcoded, "as answering for this visit only");
@@ -625,11 +625,11 @@ int main(int argc, char **argv) {
 		// And the refusals must not catch a parser doing exactly the right
 		// thing: matching a stable fragment of the path, with no token in it.
 		const QString good =
-			"extract = function (p, r) {\n"
-			"  for (var i=0;i<r.length;i++)\n"
-			"    if (r[i].url.indexOf('cf-master') !== -1)\n"
-			"      return { url: r[i].url, kind: 'hls' };\n"
-			"  return null; };";
+		  "extract = function (p, r) {\n"
+		  "  for (var i=0;i<r.length;i++)\n"
+		  "    if (r[i].url.indexOf('cf-master') !== -1)\n"
+		  "      return { url: r[i].url, kind: 'hls' };\n"
+		  "  return null; };";
 		const extractor_verdict g = site_extractor::check(good, page, ev);
 		check(g.usable, "while matching a stable path fragment is still accepted");
 		check(!g.hardcoded && !g.reads_note,
@@ -638,11 +638,11 @@ int main(int argc, char **argv) {
 		// A short number is not a token. `k=1` and a loop bound are ordinary
 		// code, and a check that fired on those would refuse every parser.
 		const QString counting =
-			"extract = function (p, r) {\n"
-			"  for (var i=0;i<r.length && i<100;i++)\n"
-			"    if (r[i].url.indexOf('cf-master') !== -1)\n"
-			"      return { url: r[i].url, kind: 'hls' };\n"
-			"  return null; };";
+		  "extract = function (p, r) {\n"
+		  "  for (var i=0;i<r.length && i<100;i++)\n"
+		  "    if (r[i].url.indexOf('cf-master') !== -1)\n"
+		  "      return { url: r[i].url, kind: 'hls' };\n"
+		  "  return null; };";
 		check(site_extractor::check(counting, page, ev).usable,
 		      "and ordinary numbers in ordinary code are not mistaken for tokens");
 	}
@@ -655,8 +655,8 @@ int main(int argc, char **argv) {
 		// script that plainly defined one. A real model wrote exactly this on
 		// its first well-formatted answer against real evidence.
 		const QString body =
-			"{ for (var i=0;i<r.length;i++) if (r[i].url.indexOf('cf-master')!==-1) "
-			"return { url: r[i].url, kind: 'hls' }; return null; }";
+		  "{ for (var i=0;i<r.length;i++) if (r[i].url.indexOf('cf-master')!==-1) "
+		  "return { url: r[i].url, kind: 'hls' }; return null; }";
 
 		const QString decl   = "function extract(p, r) " + body;
 		const QString assign = "extract = function (p, r) " + body;
@@ -694,7 +694,7 @@ int main(int argc, char **argv) {
 
 		// The guard still has to fire when there really is no extract().
 		const extractor_verdict none =
-			site_extractor::check("var other = 1;", page, ev);
+		  site_extractor::check("var other = 1;", page, ev);
 		check(!none.usable && none.message.contains("no extract()"),
 		      "while a script defining nothing is still refused");
 	}
@@ -716,17 +716,17 @@ int main(int argc, char **argv) {
 		int n = flooded.size();
 		for (int i = 2; i <= 40; ++i)   // more segments, one shape
 			flooded << evidence_request{
-				QUrl(QString("https://sil5.player.example/v4/db/abc/seg-%1.ts")
-				         .arg(i, 5, 10, QChar('0'))), "other", n++ };
+			  QUrl(QString("https://sil5.player.example/v4/db/abc/seg-%1.ts")
+			           .arg(i, 5, 10, QChar('0'))), "other", n++ };
 
 		const QString src =
-			"extract = function (page, requests) {\n"
-			"  var m = requests.find(function (r) {\n"
-			"    return r.type === 'other' && r.seen === 1 &&\n"
-			"           r.url.indexOf('cf-master') !== -1;\n"
-			"  });\n"
-			"  return m ? { url: m.url, kind: 'hls' } : null;\n"
-			"};";
+		  "extract = function (page, requests) {\n"
+		  "  var m = requests.find(function (r) {\n"
+		  "    return r.type === 'other' && r.seen === 1 &&\n"
+		  "           r.url.indexOf('cf-master') !== -1;\n"
+		  "  });\n"
+		  "  return m ? { url: m.url, kind: 'hls' } : null;\n"
+		  "};";
 		const extractor_verdict v = site_extractor::check(src, page, flooded);
 		check(v.usable, QString("a script testing `seen === 1` finds the manifest (%1)")
 		                     .arg(v.message.left(90)));
@@ -754,9 +754,9 @@ int main(int argc, char **argv) {
 			                "};").arg(QString::fromUtf8(extra));
 		};
 		const extractor_verdict without_seen =
-			site_extractor::check(seg_script(""), page, flooded);
+		  site_extractor::check(seg_script(""), page, flooded);
 		const extractor_verdict with_seen =
-			site_extractor::check(seg_script("&& r.seen === 1"), page, flooded);
+		  site_extractor::check(seg_script("&& r.seen === 1"), page, flooded);
 
 		check(!without_seen.usable && !with_seen.usable,
 		      "a segment is refused either way, which is why this is not the check");
@@ -786,8 +786,8 @@ int main(int argc, char **argv) {
 		// A model returning precisely what it was shown is judged an inventor.
 		const QString truncated = big.left(300);
 		const QString src =
-			QString("extract = function(p, r){ return { url: '%1', kind: 'hls' }; };")
-				.arg(truncated);
+		  QString("extract = function(p, r){ return { url: '%1', kind: 'hls' }; };")
+		    .arg(truncated);
 		const extractor_verdict v = site_extractor::check(src, page, long_ev);
 		check(!v.usable && v.invented,
 		      "and returning the shown form is refused as invented");
@@ -803,14 +803,14 @@ int main(int argc, char **argv) {
 		int n = 0;
 		for (int i = 1; i <= 9; ++i)
 			real << evidence_request{
-				QUrl(QString("https://cdn.example/v4/ab/seg-%1-f1-v1-a1.woff2"
-				              "?k=tok%1&kx=17855015%1").arg(i)), "other", n++ };
+			  QUrl(QString("https://cdn.example/v4/ab/seg-%1-f1-v1-a1.woff2"
+			                "?k=tok%1&kx=17855015%1").arg(i)), "other", n++ };
 		const QUrl manifest(
-			"https://cdn.example/v4/ab/cf-master.1785377837.txt?k=tokM&kx=178550151");
+		  "https://cdn.example/v4/ab/cf-master.1785377837.txt?k=tokM&kx=178550151");
 		real << evidence_request{ manifest, "other", n++ };
 
 		const QString seg_shape =
-			site_extractor::shape_of(real.first().url);
+		  site_extractor::shape_of(real.first().url);
 		int same = 0;
 		for (const evidence_request &r : real)
 			if (site_extractor::shape_of(r.url) == seg_shape) ++same;
@@ -823,18 +823,18 @@ int main(int argc, char **argv) {
 		// The consequence that matters: this is what the gate's segment rule
 		// runs on, and with the old rule it accepted a segment outright.
 		const QString pick_seg =
-			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
-			"if (r[i].url.indexOf('seg-')!==-1) "
-			"return { url: r[i].url, kind: 'hls' }; return null; };";
+		  "extract = function(p, r){ for (var i=0;i<r.length;i++) "
+		  "if (r[i].url.indexOf('seg-')!==-1) "
+		  "return { url: r[i].url, kind: 'hls' }; return null; };";
 		const extractor_verdict v = site_extractor::check(
-			pick_seg, QUrl("https://site.example/watch/1"), real);
+		  pick_seg, QUrl("https://site.example/watch/1"), real);
 		check(!v.usable && v.is_segment,
 		      QString("so a real segment is refused as one (%1)").arg(v.message));
 
 		const QString pick_manifest =
-			"extract = function(p, r){ for (var i=0;i<r.length;i++) "
-			"if (r[i].url.indexOf('cf-master')!==-1) "
-			"return { url: r[i].url, kind: 'hls' }; return null; };";
+		  "extract = function(p, r){ for (var i=0;i<r.length;i++) "
+		  "if (r[i].url.indexOf('cf-master')!==-1) "
+		  "return { url: r[i].url, kind: 'hls' }; return null; };";
 		check(site_extractor::check(pick_manifest,
 		                             QUrl("https://site.example/watch/1"), real).usable,
 		      "while the manifest, fetched once, still passes");
@@ -865,11 +865,11 @@ int main(int argc, char **argv) {
 		int n = many.size();
 		for (int i = 0; i < 40; ++i)
 			many << evidence_request{
-				QUrl(QString("https://sil5.player.example/v4/db/abc/seg-%1.ts")
-				         .arg(i, 5, 10, QChar('0'))), "other", n++ };
+			  QUrl(QString("https://sil5.player.example/v4/db/abc/seg-%1.ts")
+			           .arg(i, 5, 10, QChar('0'))), "other", n++ };
 
 		const QList<evidence_request> picks =
-			extractor_dialog::candidates(many, page, extractor_dialog::k_max_probes);
+		  extractor_dialog::candidates(many, page, extractor_dialog::k_max_probes);
 
 		check(picks.size() <= extractor_dialog::k_max_probes,
 		      "the budget is respected");
@@ -904,18 +904,18 @@ int main(int argc, char **argv) {
 		int m = 0;
 		for (int i = 0; i < 15; ++i)
 			noisy << evidence_request{
-				QUrl(QString("https://beacon%1.example/collect?v=%1").arg(i)),
-				"other", m++ };
+			  QUrl(QString("https://beacon%1.example/collect?v=%1").arg(i)),
+			  "other", m++ };
 		noisy << evidence_request{
 			QUrl("https://cdn.example/v4/abc/cf-master.999.txt?k=z"), "other", m++ };
 		for (int i = 0; i < 20; ++i)
 			noisy << evidence_request{
-				QUrl(QString("https://cdn.example/v4/abc/seg-%1.woff2").arg(i, 5, 10, QChar('0'))),
-				"other", m++ };
+			  QUrl(QString("https://cdn.example/v4/abc/seg-%1.woff2").arg(i, 5, 10, QChar('0'))),
+			  "other", m++ };
 
 		const QList<evidence_request> picked =
-			extractor_dialog::candidates(noisy, QUrl("https://site.example/p"),
-			                              extractor_dialog::k_max_probes);
+		  extractor_dialog::candidates(noisy, QUrl("https://site.example/p"),
+		                                extractor_dialog::k_max_probes);
 		check(!picked.isEmpty() &&
 		          picked.first().url.toString().contains("cf-master"),
 		      "the one-off on the flooding host is asked about first");
@@ -982,8 +982,8 @@ int main(int argc, char **argv) {
 			QUrl("https://p.example/db/abc/cf-master.1774687168.txt?k=UCp"), "other", n++ };
 		for (int i = 0; i < 250; ++i)
 			many << evidence_request{
-				QUrl(QString("https://p.example/db/abc/seg-%1.ts")
-				         .arg(i, 5, 10, QChar('0'))), "other", n++ };
+			  QUrl(QString("https://p.example/db/abc/seg-%1.ts")
+			           .arg(i, 5, 10, QChar('0'))), "other", n++ };
 
 		int kept = 0;
 		const QString folded = extractor_dialog::summarise(many, &kept);

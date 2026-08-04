@@ -54,7 +54,7 @@ QByteArray kind() {
 	static const QByteArray k = [] {
 		const QByteArray from_env = qgetenv("HYDRA_SECRET_KIND");
 		return from_env.isEmpty() ? QByteArray("keepassxc-association")
-		                          : from_env;
+				                      : from_env;
 	}();
 	return k;
 }
@@ -74,7 +74,7 @@ bool decode_pair(const QString &blob, QString *id, QString *key_b64) {
 	if (split <= 0 || split + 1 >= blob.size())
 		return false;
 	const QByteArray raw_id =
-	    QByteArray::fromBase64(blob.left(split).toLatin1());
+		  QByteArray::fromBase64(blob.left(split).toLatin1());
 	const QString key = blob.mid(split + 1);
 	// A blob that decodes to an empty half is not half a pairing, it is a
 	// corrupt one, and saying so beats handing back an id nobody can use.
@@ -96,18 +96,18 @@ QString unavailable_reason() {
 	static const QString reason = [] {
 		GError *err = nullptr;
 		SecretService *service =
-		    secret_service_get_sync(SECRET_SERVICE_NONE, nullptr, &err);
+			  secret_service_get_sync(SECRET_SERVICE_NONE, nullptr, &err);
 		if (!service) {
 			const QString why = err && err->message
-			                        ? QString::fromUtf8(err->message)
-			                        : QStringLiteral("no Secret Service answered");
+				                      ? QString::fromUtf8(err->message)
+				                      : QStringLiteral("no Secret Service answered");
 			if (err)
 				g_error_free(err);
 			return QStringLiteral(
-			           "No Secret Service is running, so the KeePassXC pairing "
-			           "cannot be stored encrypted and will not survive a "
-			           "restart (") +
-			       why + ")";
+				         "No Secret Service is running, so the KeePassXC pairing "
+				         "cannot be stored encrypted and will not survive a "
+				         "restart (") +
+				     why + ")";
 		}
 		g_object_unref(service);
 		return QString();
@@ -123,9 +123,9 @@ bool save(const QString &id, const QString &key_b64) {
 		return false;
 	GError *err = nullptr;
 	const gboolean ok = secret_password_store_sync(
-	    schema(), SECRET_COLLECTION_DEFAULT,
-	    "Hydra — KeePassXC association", blob.toUtf8().constData(), nullptr,
-	    &err, "application", kApplication, "kind", kind().constData(), nullptr);
+		  schema(), SECRET_COLLECTION_DEFAULT,
+		  "Hydra — KeePassXC association", blob.toUtf8().constData(), nullptr,
+		  &err, "application", kApplication, "kind", kind().constData(), nullptr);
 	if (err)
 		g_error_free(err);
 	return ok == TRUE;
@@ -136,8 +136,8 @@ bool load(QString *id, QString *key_b64) {
 		return false;
 	GError *err = nullptr;
 	gchar *value = secret_password_lookup_sync(
-	    schema(), nullptr, &err, "application", kApplication, "kind", kind().constData(),
-	    nullptr);
+		  schema(), nullptr, &err, "application", kApplication, "kind", kind().constData(),
+		  nullptr);
 	if (err)
 		g_error_free(err);
 	if (!value)
@@ -152,8 +152,8 @@ bool clear() {
 		return false;
 	GError *err = nullptr;
 	const gboolean ok = secret_password_clear_sync(
-	    schema(), nullptr, &err, "application", kApplication, "kind", kind().constData(),
-	    nullptr);
+		  schema(), nullptr, &err, "application", kApplication, "kind", kind().constData(),
+		  nullptr);
 	if (err)
 		g_error_free(err);
 	return ok == TRUE;
@@ -168,8 +168,8 @@ bool has_pairing() {
 
 QString unavailable_reason() {
 	return QStringLiteral(
-	    "Built without libsecret — the KeePassXC pairing is kept in memory "
-	    "only and has to be confirmed again after a restart.");
+		  "Built without libsecret — the KeePassXC pairing is kept in memory "
+		  "only and has to be confirmed again after a restart.");
 }
 
 bool available() { return false; }

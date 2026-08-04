@@ -6,7 +6,7 @@
 #include <QDateTime>
 
 tree_sort_proxy::tree_sort_proxy(QObject *parent)
-	: QSortFilterProxyModel(parent) {
+  : QSortFilterProxyModel(parent) {
 	setDynamicSortFilter(true);
 	set_sort_mode(sort_mode::tree_order);
 }

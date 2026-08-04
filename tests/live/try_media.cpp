@@ -38,8 +38,8 @@ public:
 			m_interesting << QString("[%1] %2").arg(int(k)).arg(u.left(150));
 		// Anything that smells like video, whether or not we classify it.
 		static const QStringList hints = { ".m3u8", ".mpd", ".m4s", ".mp4",
-		                                    ".webm", ".mkv", "/hls/", "/dash/",
-		                                    "playlist.", "master." };
+			                                  ".webm", ".mkv", "/hls/", "/dash/",
+			                                  "playlist.", "master." };
 		for (const QString &h : hints) {
 			if (u.contains(h, Qt::CaseInsensitive)) {
 				m_smells << u.left(170);
@@ -150,16 +150,16 @@ int main(int argc, char *argv[]) {
 		const auto views = w.findChildren<QWebEngineView *>();
 		if (views.isEmpty()) { std::printf("PROBE no view\n"); return; }
 		views.last()->page()->runJavaScript(
-			"(function(){var f=document.querySelectorAll('iframe');"
-			"var out='URL='+location.href+' BODY='+document.body.innerHTML.length"
-			"+' IFRAMES='+f.length;"
-			"for(var i=0;i<f.length&&i<4;i++)out+=' ['+(f[i].getAttribute('src')||f[i].src||'(none)')"
-			"+' vis='+(f[i].offsetParent!==null)+']';"
-			"var v=document.querySelectorAll('video');out+=' VIDEOS='+v.length;"
-			"return out;})()",
-			[](const QVariant &v) {
-				std::printf("PROBE %s\n", qPrintable(v.toString().left(400)));
-			});
+		  "(function(){var f=document.querySelectorAll('iframe');"
+		  "var out='URL='+location.href+' BODY='+document.body.innerHTML.length"
+		  "+' IFRAMES='+f.length;"
+		  "for(var i=0;i<f.length&&i<4;i++)out+=' ['+(f[i].getAttribute('src')||f[i].src||'(none)')"
+		  "+' vis='+(f[i].offsetParent!==null)+']';"
+		  "var v=document.querySelectorAll('video');out+=' VIDEOS='+v.length;"
+		  "return out;})()",
+		  [](const QVariant &v) {
+			  std::printf("PROBE %s\n", qPrintable(v.toString().left(400)));
+		  });
 	});
 
 	// Force the frame to load and see whether a request appears at all. If
@@ -170,11 +170,11 @@ int main(int argc, char *argv[]) {
 		const auto views = w.findChildren<QWebEngineView *>();
 		if (views.isEmpty()) return;
 		views.last()->page()->runJavaScript(
-			"(function(){var f=document.querySelector('iframe');"
-			"if(!f) return 'no iframe';"
-			"var s=f.getAttribute('src'); f.removeAttribute('src'); f.src=s;"
-			"return 'forced '+s;})()",
-			[](const QVariant &v) { std::printf("FORCE %s\n", qPrintable(v.toString())); });
+		  "(function(){var f=document.querySelector('iframe');"
+		  "if(!f) return 'no iframe';"
+		  "var s=f.getAttribute('src'); f.removeAttribute('src'); f.src=s;"
+		  "return 'forced '+s;})()",
+		  [](const QVariant &v) { std::printf("FORCE %s\n", qPrintable(v.toString())); });
 	});
 
 	// Press play. Streams are usually not requested until the player is told

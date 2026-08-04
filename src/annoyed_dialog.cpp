@@ -12,7 +12,7 @@
 #include <QVBoxLayout>
 
 QList<annoyed_dialog::group> annoyed_dialog::collapse_by_shape(
-		const QStringList &urls) {
+    const QStringList &urls) {
 	QList<group> out;
 	QHash<QString, int> at;   // shape -> index into `out`
 	for (const QString &u : urls) {

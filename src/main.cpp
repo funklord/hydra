@@ -156,7 +156,7 @@ int main(int argc, char *argv[]) {
 	// `make run` work on a checkout.
 	if (!QFileInfo::exists(tree_path)) {
 		const QString dir =
-			QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+		  QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 		QDir().mkpath(dir);
 		tree_path = QDir(dir).filePath("tree.txt");
 		if (!QFileInfo::exists(tree_path)) {
@@ -181,7 +181,7 @@ int main(int argc, char *argv[]) {
 	// for any of it to be.
 	{
 		const QString dir =
-			QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+		  QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 		QDir().mkpath(dir);
 		tree_path = QDir(dir).filePath("tree.txt");
 		// First run gets the sample, so the app opens with something in it

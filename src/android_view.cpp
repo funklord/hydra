@@ -167,7 +167,7 @@ Java_org_qtproject_example_hydra_HydraWebView_bridgeCall(JNIEnv *env, jclass, jl
 	const QString n = from_java(env, name), m = from_java(env, method),
 	              a = from_java(env, args);
 	const QString r =
-		on_qt_thread([id, n, m, a] { return android_view::call_bridge(id, n, m, a); });
+	  on_qt_thread([id, n, m, a] { return android_view::call_bridge(id, n, m, a); });
 	return env->NewStringUTF(r.toUtf8().constData());
 }
 
@@ -183,8 +183,8 @@ Java_org_qtproject_example_hydra_HydraWebView_chooseFile(JNIEnv *env, jclass, jl
 	const QString a = from_java(env, accept);
 	const bool many = multiple == JNI_TRUE;
 	QMetaObject::invokeMethod(
-		qApp, [id, many, a] { android_view::choose_file(id, many, a); },
-		Qt::QueuedConnection);
+	  qApp, [id, many, a] { android_view::choose_file(id, many, a); },
+	  Qt::QueuedConnection);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
@@ -251,8 +251,8 @@ void android_view::choose_file(qint64 id, bool multiple, const QString &accept) 
 	// no-op: the WebView keeps it, and every later file input on every later page
 	// silently does nothing.
 	QJniObject::callStaticMethod<void>(
-		k_cls, "deliverFiles", "(JLjava/lang/String;)V", jlong(id),
-		QJniObject::fromString(picked.join('\n')).object<jstring>());
+	  k_cls, "deliverFiles", "(JLjava/lang/String;)V", jlong(id),
+	  QJniObject::fromString(picked.join('\n')).object<jstring>());
 }
 
 QString android_view::describe_bridge(qint64 id, const QString &name) {
@@ -360,8 +360,8 @@ android_view::android_view(request_filter *filter, QWidget *parent)
 	m_id = next_id();
 	s_views.insert(m_id, this);
 	QJniObject::callStaticMethod<void>(
-		k_cls, "create", "(Landroid/app/Activity;J)V",
-		QNativeInterface::QAndroidApplication::context().object(), jlong(m_id));
+	  k_cls, "create", "(Landroid/app/Activity;J)V",
+	  QNativeInterface::QAndroidApplication::context().object(), jlong(m_id));
 	// A missing class throws rather than returning anything, so the exception
 	// state is the answer to "is there a WebView".
 	m_native = !QJniEnvironment().checkAndClearExceptions();
@@ -444,8 +444,8 @@ void android_view::sync_geometry() {
 	// Never visible while a dialog is up, whatever the widget thinks: the widget
 	// is perfectly visible, it is just underneath something.
 	QJniObject::callStaticMethod<void>(
-		k_cls, "setVisible", "(JZ)V", jlong(m_id),
-		jboolean(m_widget->isVisible() && !m_blocked));
+	  k_cls, "setVisible", "(JZ)V", jlong(m_id),
+	  jboolean(m_widget->isVisible() && !m_blocked));
 }
 
 QWidget *android_view::widget() {
@@ -454,20 +454,20 @@ QWidget *android_view::widget() {
 
 void android_view::refresh() {
 	m_widget->setText(
-		QStringLiteral(
-			"<h2>The web view is turned off</h2>"
-			"<p>Everything else in Hydra is running: the tree, the policy "
-			"engine, the download queue and the request filter are the same "
-			"code as the desktop build.</p>"
-			"<p>Hydra normally uses the System WebView here, behind "
-			"<tt>web_view_backend</tt>. It is off because "
-			"<tt>HYDRA_ANDROID_WEBVIEW=0</tt> was set, or because this APK was "
-			"built without the <tt>android/</tt> package source directory and "
-			"so has no <tt>HydraWebView</tt> class to talk to.</p>%1")
-			.arg(m_url.isEmpty()
-			         ? QString()
-			         : QStringLiteral("<p>It was asked to open:<br><tt>%1</tt></p>")
-			               .arg(m_url.toString().toHtmlEscaped())));
+	  QStringLiteral(
+	    "<h2>The web view is turned off</h2>"
+	    "<p>Everything else in Hydra is running: the tree, the policy "
+	    "engine, the download queue and the request filter are the same "
+	    "code as the desktop build.</p>"
+	    "<p>Hydra normally uses the System WebView here, behind "
+	    "<tt>web_view_backend</tt>. It is off because "
+	    "<tt>HYDRA_ANDROID_WEBVIEW=0</tt> was set, or because this APK was "
+	    "built without the <tt>android/</tt> package source directory and "
+	    "so has no <tt>HydraWebView</tt> class to talk to.</p>%1")
+	    .arg(m_url.isEmpty()
+	             ? QString()
+	             : QStringLiteral("<p>It was asked to open:<br><tt>%1</tt></p>")
+	                   .arg(m_url.toString().toHtmlEscaped())));
 }
 
 void android_view::load(const QUrl &url) {
@@ -480,8 +480,8 @@ void android_view::load(const QUrl &url) {
 	}
 	sync_geometry();
 	QJniObject::callStaticMethod<void>(
-		k_cls, "load", "(JLjava/lang/String;)V", jlong(m_id),
-		QJniObject::fromString(url.toString()).object<jstring>());
+	  k_cls, "load", "(JLjava/lang/String;)V", jlong(m_id),
+	  QJniObject::fromString(url.toString()).object<jstring>());
 	emit url_changed(url);
 }
 

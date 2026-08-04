@@ -37,7 +37,7 @@ const char *k_system_prompt =
 
 reorganize_dialog::reorganize_dialog(tab_tree_model *model, ai_provider *provider,
                                       QWidget *parent)
-	: QDialog(parent), m_model(model), m_provider(provider) {
+  : QDialog(parent), m_model(model), m_provider(provider) {
 	setWindowTitle("Reorganize tree");
 	resize(760, 560);
 	build_ui();
@@ -60,13 +60,13 @@ void reorganize_dialog::build_ui() {
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
 	m_status->setText(
-		m_provider->is_external()
-			? QString("<b>%1</b> — this is an external provider. Review exactly "
-			          "what will be sent below; only ids, titles, URLs, types and "
-			          "tags travel. Nothing is sent until you press Send.")
-			          .arg(m_provider->name())
-			: QString("<b>%1</b> — local provider; nothing leaves this machine.")
-			          .arg(m_provider->name()));
+	  m_provider->is_external()
+	    ? QString("<b>%1</b> — this is an external provider. Review exactly "
+	              "what will be sent below; only ids, titles, URLs, types and "
+	              "tags travel. Nothing is sent until you press Send.")
+	              .arg(m_provider->name())
+	    : QString("<b>%1</b> — local provider; nothing leaves this machine.")
+	              .arg(m_provider->name()));
 	outer->addWidget(m_status);
 
 	m_pages = new QStackedWidget(this);

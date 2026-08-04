@@ -34,13 +34,13 @@ QByteArray increment_nonce(const QByteArray &nonce);
 
 // The one message sent in the clear — it is what establishes the shared key.
 QJsonObject change_public_keys(const QString &client_id, const QString &public_key_b64,
-                                const QString &nonce_b64);
+	                              const QString &nonce_b64);
 
 // Inner messages, encrypted before sending.
 QJsonObject associate_request(const QString &our_key_b64, const QString &id_key_b64);
 QJsonObject test_associate_request(const QString &assoc_id, const QString &id_key_b64);
 QJsonObject get_logins_request(const QString &url, const QString &assoc_id,
-                               const QString &id_key_b64);
+	                             const QString &id_key_b64);
 QJsonObject get_databasehash_request();
 
 // Create or update an entry. `uuid` empty means create; non-empty updates that
@@ -55,8 +55,8 @@ QJsonObject get_databasehash_request();
 // url the save happened on. `group`/`groupUuid` are omitted -- there is no
 // group picker here, and the protocol treats both as optional.
 QJsonObject set_login_request(const QString &url, const QString &login,
-                              const QString &password, const QString &uuid,
-                              const QString &assoc_id, const QString &id_key_b64);
+	                            const QString &password, const QString &uuid,
+	                            const QString &assoc_id, const QString &id_key_b64);
 
 // generate-password takes no arguments -- KeePassXC generates per its own
 // configured policy, which is the point (§13.1): we ask, we do not configure.
@@ -72,7 +72,7 @@ QJsonObject generate_password_request();
 
 // The outer envelope every encrypted message travels in.
 QJsonObject envelope(const QString &action, const QString &client_id,
-                     const QString &nonce_b64, const QString &encrypted_b64);
+	                   const QString &nonce_b64, const QString &encrypted_b64);
 
 // --- Replies -------------------------------------------------------------
 // KeePassXC reports failures inside the message rather than by transport

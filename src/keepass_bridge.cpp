@@ -40,8 +40,8 @@ QString keepass_bridge::unavailable_reason() {
 	// WebView forms without this browser implementing anything -- §13.2's shell
 	// bridge is the desktop mechanism, not the only one that may fill a form.
 	return QStringLiteral(
-		"KeePassXC's browser integration is a desktop socket. On Android the "
-		"system autofill service fills forms instead.");
+	  "KeePassXC's browser integration is a desktop socket. On Android the "
+	  "system autofill service fills forms instead.");
 #else
 	if (!box_crypto::available())
 		return QStringLiteral("Built without libsodium — the KeePassXC protocol "

@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
 	lt::bencode(std::back_inserter(buf), ct.generate());
 	const QString tpath = QDir(tmp).filePath("show.torrent");
 	{ std::ofstream o(tpath.toStdString(), std::ios::binary);
-	  o.write(buf.data(), std::streamsize(buf.size())); }
+		o.write(buf.data(), std::streamsize(buf.size())); }
 	auto ti = std::make_shared<lt::torrent_info>(buf, lt::from_span);
 
 	// --- throttled seeder, so the transfer stays in flight --------------
@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
 		while (t.elapsed() < ms) {
 			if (seed.is_valid())
 				seed.connect_peer(lt::tcp::endpoint(
-					lt::make_address_v4("127.0.0.1"), 6911));
+				  lt::make_address_v4("127.0.0.1"), 6911));
 			std::vector<lt::alert *> junk; seeder.pop_alerts(&junk);
 			spin(200);
 		}
@@ -181,9 +181,9 @@ int main(int argc, char **argv) {
 	// that the proxy can only promise what has arrived, and there is nothing to
 	// hold for.
 	const QUrl held = proxy.publish_file(
-		local_file, "video/x-matroska",
-		[&] { return tor->contiguous_bytes(id, rel); },
-		[&]() -> qint64 { return payload; });
+	  local_file, "video/x-matroska",
+	  [&] { return tor->contiguous_bytes(id, rel); },
+	  [&]() -> qint64 { return payload; });
 
 	QNetworkAccessManager net;
 
@@ -243,7 +243,7 @@ int main(int argc, char **argv) {
 			QObject::connect(&drive, &QTimer::timeout, [&] {
 				if (seed.is_valid())
 					seed.connect_peer(lt::tcp::endpoint(
-						lt::make_address_v4("127.0.0.1"), 6911));
+					  lt::make_address_v4("127.0.0.1"), 6911));
 				std::vector<lt::alert *> junk;
 				seeder.pop_alerts(&junk);
 			});

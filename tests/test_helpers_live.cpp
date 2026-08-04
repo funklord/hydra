@@ -42,8 +42,8 @@ int main(int argc, char **argv) {
 	for (const QJsonValue &v : root.value("requests").toArray()) {
 		const QJsonObject o = v.toObject();
 		ev << evidence_request{ QUrl(o.value("url").toString()),
-		                         o.value("kind").toString(),
-		                         o.value("order").toInt() };
+			                       o.value("kind").toString(),
+			                       o.value("order").toInt() };
 	}
 	std::printf("page: %s\nevidence: %lld requests\n\n",
 	             qPrintable(page.toString()), qint64(ev.size()));
@@ -130,9 +130,9 @@ int main(int argc, char **argv) {
 			was_observed = true;
 	if (v.usable)
 		std::printf("\n%s\n", was_observed
-			? "the answer was already in the request log (the pure tier would "
-			  "have found this too)"
-			: "the answer was NOT in the request log — it was reached by "
-			  "following, which is what this tier is for");
+		  ? "the answer was already in the request log (the pure tier would "
+		    "have found this too)"
+		  : "the answer was NOT in the request log — it was reached by "
+		    "following, which is what this tier is for");
 	return v.usable ? 0 : 1;
 }

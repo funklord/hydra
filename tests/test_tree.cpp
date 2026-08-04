@@ -146,11 +146,11 @@ int main(int argc, char **argv) {
 	section("nesting and order");
 	{
 		const QByteArray text =
-			"- [f0] folder | A\n"
-			"  - [f1] folder | B\n"
-			"    - [a1] unopened | deep | https://x.example/1\n"
-			"  - [a2] unopened | shallow again | https://x.example/2\n"
-			"- [f2] folder | C\n";
+		  "- [f0] folder | A\n"
+		  "  - [f1] folder | B\n"
+		  "    - [a1] unopened | deep | https://x.example/1\n"
+		  "  - [a2] unopened | shallow again | https://x.example/2\n"
+		  "- [f2] folder | C\n";
 		QFile f(path);
 		f.open(QIODevice::WriteOnly | QIODevice::Truncate);
 		f.write(text);
@@ -199,12 +199,12 @@ int main(int argc, char **argv) {
 	section("a proposal wrapped in prose, as a model actually answers");
 	{
 		const QString reply =
-			"Sure! Here is the reorganised tree:\n"
-			"```\n"
-			"- [f0] folder | Reading\n"
-			"  - [a1] unopened | A page | https://x.example/\n"
-			"```\n"
-			"Let me know if you would like it different.\n";
+		  "Sure! Here is the reorganised tree:\n"
+		  "```\n"
+		  "- [f0] folder | Reading\n"
+		  "  - [a1] unopened | A page | https://x.example/\n"
+		  "```\n"
+		  "Let me know if you would like it different.\n";
 		node *back = tree_serializer::parse_proposal(reply);
 		check(back && back->children.size() == 1,
 		      "the outline is taken and the prose ignored");

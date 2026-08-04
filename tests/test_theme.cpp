@@ -152,27 +152,27 @@ int main(int argc, char **argv) {
 		// and the first parser treated any section header as leaving [Icons] --
 		// so it walked past the answer and reported the fallback.
 		const QString gtk3 = write("settings.ini",
-			"[Settings]\n"
-			"gtk-application-prefer-dark-theme=true\n"
-			"gtk-cursor-theme-name=breeze_cursors\n"
-			"gtk-icon-theme-name=breeze-dark\n");
+		  "[Settings]\n"
+		  "gtk-application-prefer-dark-theme=true\n"
+		  "gtk-cursor-theme-name=breeze_cursors\n"
+		  "gtk-icon-theme-name=breeze-dark\n");
 		check(theme::icon_theme_from({ gtk3 }) == "breeze-dark",
 		      QString("a GTK settings.ini is read past its [Settings] header (%1)")
 		          .arg(theme::icon_theme_from({ gtk3 })));
 
 		// GTK 2 quotes its values.
 		const QString gtk2 = write("gtkrc-2.0",
-			"gtk-icon-theme-name=\"Adwaita\"\n");
+		  "gtk-icon-theme-name=\"Adwaita\"\n");
 		check(theme::icon_theme_from({ gtk2 }) == "Adwaita",
 		      "and a quoted GTK 2 value comes back unquoted");
 
 		// A kdeglobals *does* need its sections: a bare Theme= outside [Icons]
 		// is the colour scheme, and reading it names a palette as an icon set.
 		const QString kde = write("kdeglobals",
-			"[General]\n"
-			"Theme=BreezeDarkColourScheme\n"
-			"[Icons]\n"
-			"Theme=oxygen\n");
+		  "[General]\n"
+		  "Theme=BreezeDarkColourScheme\n"
+		  "[Icons]\n"
+		  "Theme=oxygen\n");
 		check(theme::icon_theme_from({ kde }) == "oxygen",
 		      QString("a kdeglobals Theme= is taken from [Icons], not [General] (%1)")
 		          .arg(theme::icon_theme_from({ kde })));

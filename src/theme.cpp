@@ -66,14 +66,14 @@ QPalette dark_palette() {
 // 1 = prefer dark, 2 = prefer light, 0 = no preference, -1 = did not answer.
 int portal_scheme() {
 	QDBusInterface iface(QStringLiteral("org.freedesktop.portal.Desktop"),
-	                      QStringLiteral("/org/freedesktop/portal/desktop"),
-	                      QStringLiteral("org.freedesktop.portal.Settings"),
-	                      QDBusConnection::sessionBus());
+			                  QStringLiteral("/org/freedesktop/portal/desktop"),
+			                  QStringLiteral("org.freedesktop.portal.Settings"),
+			                  QDBusConnection::sessionBus());
 	if (!iface.isValid())
 		return -1;
 	const QDBusReply<QDBusVariant> reply =
 		iface.call(QStringLiteral("Read"), QStringLiteral("org.freedesktop.appearance"),
-		            QStringLiteral("color-scheme"));
+			          QStringLiteral("color-scheme"));
 	if (!reply.isValid())
 		return -1;
 	// The portal wraps the value twice: a variant holding a variant.
@@ -110,8 +110,8 @@ Qt::ColorScheme decide(Qt::ColorScheme qt_hint, int portal, const QPalette &curr
 
 Qt::ColorScheme detect_system() {
 	const Qt::ColorScheme hint = QGuiApplication::styleHints()
-	                                 ? QGuiApplication::styleHints()->colorScheme()
-	                                 : Qt::ColorScheme::Unknown;
+		                               ? QGuiApplication::styleHints()->colorScheme()
+		                               : Qt::ColorScheme::Unknown;
 	return decide(hint, portal_scheme(), QGuiApplication::palette());
 }
 
@@ -181,7 +181,7 @@ watcher::watcher(QObject *parent) : QObject(parent) {
 	// Qt's own signal, for the platforms where Qt does the detecting.
 	if (QStyleHints *h = QGuiApplication::styleHints())
 		connect(h, &QStyleHints::colorSchemeChanged, this,
-		         [this](Qt::ColorScheme) { reapply(); });
+			       [this](Qt::ColorScheme) { reapply(); });
 
 #ifdef HYDRA_HAVE_DBUS
 	// And the portal's, for the desktop where Qt says Unknown -- which is the
@@ -197,11 +197,11 @@ watcher::watcher(QObject *parent) : QObject(parent) {
 }
 
 void watcher::portal_changed(const QString &space, const QString &key,
-                              const QDBusVariant &value) {
+	                            const QDBusVariant &value) {
 	Q_UNUSED(value)
 	// Only the one setting; the portal reports every change on this desktop.
 	if (space == QLatin1String("org.freedesktop.appearance") &&
-	    key == QLatin1String("color-scheme"))
+		  key == QLatin1String("color-scheme"))
 		reapply();
 }
 

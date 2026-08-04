@@ -12,7 +12,7 @@
 
 consent_dialog::consent_dialog(consent_blocker *blocker, const QString &rules_path,
                                 QWidget *parent)
-	: QDialog(parent), m_blocker(blocker), m_path(rules_path) {
+  : QDialog(parent), m_blocker(blocker), m_path(rules_path) {
 	setWindowTitle("Cookie banners we could not answer");
 	setObjectName("consent_dialog");
 	resize(720, 420);
@@ -20,13 +20,13 @@ consent_dialog::consent_dialog(consent_blocker *blocker, const QString &rules_pa
 	auto *outer = new QVBoxLayout(this);
 
 	m_intro = new QLabel(
-		"These pages showed a cookie banner that none of the current rules "
-		"matched, so it was left alone. Pick the button that <b>refuses</b> or "
-		"<b>accepts</b>, and that becomes a rule.<br><br>"
-		"A button label describes a shape banners take rather than one site, so "
-		"the rule applies everywhere and is flagged to be shipped as a built-in "
-		"— you are not fixing one page, you are proposing something everyone "
-		"would carry.");
+	  "These pages showed a cookie banner that none of the current rules "
+	  "matched, so it was left alone. Pick the button that <b>refuses</b> or "
+	  "<b>accepts</b>, and that becomes a rule.<br><br>"
+	  "A button label describes a shape banners take rather than one site, so "
+	  "the rule applies everywhere and is flagged to be shipped as a built-in "
+	  "— you are not fixing one page, you are proposing something everyone "
+	  "would carry.");
 	m_intro->setWordWrap(true);
 	m_intro->setObjectName("intro");
 	outer->addWidget(m_intro);
@@ -118,9 +118,9 @@ void consent_dialog::on_accept_selected() {
 	const QString unsafe = site_rules::why_unsafe(r);
 	if (!unsafe.isEmpty()) {
 		m_status->setText(
-			QString("<b>Not learned:</b> a rule for \"%1\" %2. It would apply to "
-			         "every site, not just this one.")
-			    .arg(label.toHtmlEscaped(), unsafe.toHtmlEscaped()));
+		  QString("<b>Not learned:</b> a rule for \"%1\" %2. It would apply to "
+		           "every site, not just this one.")
+		      .arg(label.toHtmlEscaped(), unsafe.toHtmlEscaped()));
 		return;
 	}
 	site_rules rules = m_blocker->rules();
@@ -129,9 +129,9 @@ void consent_dialog::on_accept_selected() {
 
 	const bool saved = m_path.isEmpty() ? false : rules.save(m_path);
 	m_status->setText(
-		QString("Learned: <b>%1</b> means %2. It applies from the next page load, "
-		         "and it is flagged to be folded into the built-in rules.%3")
-		    .arg(label.toHtmlEscaped(), as,
-		         saved ? QString() : QString(" <b>It could not be saved</b>, so "
-		                                      "it will be gone when Hydra closes.")));
+	  QString("Learned: <b>%1</b> means %2. It applies from the next page load, "
+	           "and it is flagged to be folded into the built-in rules.%3")
+	      .arg(label.toHtmlEscaped(), as,
+	           saved ? QString() : QString(" <b>It could not be saved</b>, so "
+	                                        "it will be gone when Hydra closes.")));
 }

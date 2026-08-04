@@ -190,10 +190,10 @@ What would change the answer: an `AlignAfterOpenBracket` mode that offsets
 from the paren rather than aligning to it, together with tab indentation
 that survives a missing config.
 
-Unlike the sibling trees, this project has **no mechanical indent gate** --
-no `tools/tabify.py`, no `check-indent.sh`. Indentation is therefore a
-review item here. Adopting the siblings' tooling would be a harmonizing
-change: worth raising, not worth doing in passing.
+This project runs the shared gate: `make style`, which is
+`tools/style_gate.py`, copied verbatim from `~/.claude/tools/style_gate.py`.
+`.style-gate.toml` says which files here it applies to, and the floor it
+carries makes it fail rather than pass when that file list collapses.
 
 ## 4. GUI toolkit
 

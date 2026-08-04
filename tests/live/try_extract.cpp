@@ -61,14 +61,14 @@ static void centre_player(main_window &w, std::function<void(QPoint)> then) {
 	const auto vs = w.findChildren<QWebEngineView *>();
 	if (vs.isEmpty()) { then(QPoint()); return; }
 	static const char *js =
-		"(function(){"
-		"  var f = document.querySelector('iframe');"
-		"  if (!f) return '';"
-		"  f.scrollIntoView({block:'center'});"
-		"  var r = f.getBoundingClientRect();"
-		"  return Math.round(r.left + r.width/2) + ',' +"
-		"         Math.round(r.top + r.height/2);"
-		"})()";
+	  "(function(){"
+	  "  var f = document.querySelector('iframe');"
+	  "  if (!f) return '';"
+	  "  f.scrollIntoView({block:'center'});"
+	  "  var r = f.getBoundingClientRect();"
+	  "  return Math.round(r.left + r.width/2) + ',' +"
+	  "         Math.round(r.top + r.height/2);"
+	  "})()";
 	vs.last()->page()->runJavaScript(QString::fromLatin1(js),
 	                                  [then](const QVariant &v) {
 		const QStringList parts = v.toString().split(',');
@@ -90,7 +90,7 @@ int main(int argc, char *argv[]) {
 	const QString target = argv[1];
 	const int watch_s = argc > 2 ? QString(argv[2]).toInt() : 40;
 	const QString out_path =
-		argc > 3 ? QString(argv[3]) : QString("/tmp/hydra-test/evidence.json");
+	  argc > 3 ? QString(argv[3]) : QString("/tmp/hydra-test/evidence.json");
 	const QString pre_click = argc > 4 ? QString(argv[4]) : QString();
 	const QString host = QUrl(target).host();
 	const QString shot_dir = QFileInfo(out_path).absolutePath();
@@ -162,10 +162,10 @@ int main(int argc, char *argv[]) {
 		for (QLineEdit *e : w.findChildren<QLineEdit *>())
 			if (e->placeholderText() == "Address") {
 				e->setText(target);
-				QMetaObject::invokeMethod(e, "returnPressed");
-				std::printf("navigated\n");
-				return;
-			}
+			  QMetaObject::invokeMethod(e, "returnPressed");
+			  std::printf("navigated\n");
+			  return;
+		  }
 		std::printf("NO ADDRESS BAR\n");
 	});
 
@@ -174,19 +174,19 @@ int main(int argc, char *argv[]) {
 	// what supplies the referer the vendor checks — and it is what a user does.
 	if (!pre_click.isEmpty())
 		QTimer::singleShot(13000, [&] {
-			const auto vs = w.findChildren<QWebEngineView *>();
-			if (vs.isEmpty()) return;
-			const QString js =
-				QString("(function(){var e=document.querySelector(%1);"
-				         "if(!e) return 'no match'; e.scrollIntoView({block:'center'});"
-				         "e.click(); return e.textContent.trim().slice(0,40); })()")
-				    .arg(QString(QJsonDocument(QJsonArray{ pre_click })
-				                     .toJson(QJsonDocument::Compact))
-				             .mid(1).chopped(1));
-			vs.last()->page()->runJavaScript(js, [](const QVariant &v) {
-				std::printf("pre-click: %s\n", qPrintable(v.toString()));
-			});
-		});
+		  const auto vs = w.findChildren<QWebEngineView *>();
+		  if (vs.isEmpty()) return;
+		  const QString js =
+		    QString("(function(){var e=document.querySelector(%1);"
+		             "if(!e) return 'no match'; e.scrollIntoView({block:'center'});"
+		             "e.click(); return e.textContent.trim().slice(0,40); })()")
+		        .arg(QString(QJsonDocument(QJsonArray{ pre_click })
+		                         .toJson(QJsonDocument::Compact))
+		                 .mid(1).chopped(1));
+		  vs.last()->page()->runJavaScript(js, [](const QVariant &v) {
+			  std::printf("pre-click: %s\n", qPrintable(v.toString()));
+		  });
+	  });
 
 	// Most of these players fetch nothing until someone presses play, and the
 	// first click often lands on a consent banner, an ad vignette or a
@@ -206,11 +206,11 @@ int main(int argc, char *argv[]) {
 	// that.
 	if (qEnvironmentVariableIntValue("HYDRA_ALLOW_POPUPS") == 1)
 		QTimer::singleShot(15000, [&] {
-			for (QWebEngineView *v : w.findChildren<QWebEngineView *>())
-				v->page()->settings()->setAttribute(
-					QWebEngineSettings::JavascriptCanOpenWindows, true);
-			std::printf("popups: allowed for this capture\n");
-		});
+		  for (QWebEngineView *v : w.findChildren<QWebEngineView *>())
+			  v->page()->settings()->setAttribute(
+			    QWebEngineSettings::JavascriptCanOpenWindows, true);
+		  std::printf("popups: allowed for this capture\n");
+	  });
 
 	// How many, because three is not always enough. On the second mirror every
 	// click was answered by the ad network rather than by the player — a
@@ -221,16 +221,16 @@ int main(int argc, char *argv[]) {
 	                       ? qEnvironmentVariableIntValue("HYDRA_CLICKS") : 3;
 	for (int i = 0; i < clicks; ++i)
 		QTimer::singleShot(16000 + i * 7000, [&, i] {
-			centre_player(w, [&, i](QPoint at) {
-				w.grab().save(QString("%1/shot-%2-before.png").arg(shot_dir).arg(i));
-				click_at(w, at);
-				std::printf("clicked %d at (%d,%d) — %d requests so far\n", i,
-				             at.x(), at.y(), sig->count_for(host));
-				QTimer::singleShot(3000, [&, i] {
-					w.grab().save(QString("%1/shot-%2-after.png").arg(shot_dir).arg(i));
-				});
-			});
-		});
+		  centre_player(w, [&, i](QPoint at) {
+			  w.grab().save(QString("%1/shot-%2-before.png").arg(shot_dir).arg(i));
+			  click_at(w, at);
+			  std::printf("clicked %d at (%d,%d) — %d requests so far\n", i,
+			               at.x(), at.y(), sig->count_for(host));
+			  QTimer::singleShot(3000, [&, i] {
+				  w.grab().save(QString("%1/shot-%2-after.png").arg(shot_dir).arg(i));
+			  });
+		  });
+	  });
 
 	QTimer::singleShot(16000 + watch_s * 1000, [&] {
 		const QList<evidence_request> ev = sig->evidence_for(host);

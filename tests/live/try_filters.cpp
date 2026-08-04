@@ -165,7 +165,7 @@ int main(int argc, char *argv[]) {
 
 	auto *tree_view = w.findChild<QTreeView *>();
 	emit tree_view->activated(
-		tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
+	  tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
 	spin(1000);
 
 	QLineEdit *bar = nullptr;
@@ -244,13 +244,13 @@ int main(int argc, char *argv[]) {
 		bool answered = false;
 		if (page_view) {
 			page_view->page()->runJavaScript(
-				"[getComputedStyle(document.querySelector('.ad-banner')).display,"
-				" getComputedStyle(document.querySelector('#keep')).display].join('|')",
-				[&](const QVariant &v) {
-					const QStringList parts = v.toString().split('|');
-					if (parts.size() == 2) { hidden = parts[0]; kept = parts[1]; }
-					answered = true;
-				});
+			  "[getComputedStyle(document.querySelector('.ad-banner')).display,"
+			  " getComputedStyle(document.querySelector('#keep')).display].join('|')",
+			  [&](const QVariant &v) {
+				  const QStringList parts = v.toString().split('|');
+				  if (parts.size() == 2) { hidden = parts[0]; kept = parts[1]; }
+				  answered = true;
+			  });
 			for (int i = 0; i < 40 && !answered; ++i)
 				spin(100);
 		}

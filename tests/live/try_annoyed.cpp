@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
 		// Open the tab so there is a page and a host to file against.
 		auto *tree_view = w.findChild<QTreeView *>();
 		emit tree_view->activated(
-			tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
+		  tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
 		// Long enough for third-party traffic to arrive: ad-shaped requests are
 		// mostly late, after the document and its own scripts.
 		spin(qEnvironmentVariableIsSet("HYDRA_SETTLE")

@@ -93,9 +93,9 @@ proposal_report check_and_repair(node *original, node *proposal) {
 	if (!rep.invented_ids.isEmpty()) {
 		rep.usable = false;
 		rep.message = QString("Rejected: the proposal contains %1 tab id(s) that "
-		                      "do not exist in the tree (%2).")
-		                  .arg(rep.invented_ids.size())
-		                  .arg(rep.invented_ids.join(", "));
+			                    "do not exist in the tree (%2).")
+			                .arg(rep.invented_ids.size())
+			                .arg(rep.invented_ids.join(", "));
 		return rep;
 	}
 
@@ -162,7 +162,7 @@ QList<tree_change> compute(node *original, node *proposal) {
 
 	for (node *n : all_nodes(proposal)) {
 		const QString parent_id = (n->parent && n->parent != proposal)
-		                              ? n->parent->id : QString("root");
+			                            ? n->parent->id : QString("root");
 		node *orig = orig_by_id.value(n->id, nullptr);
 
 		if (!orig) {
@@ -178,7 +178,7 @@ QList<tree_change> compute(node *original, node *proposal) {
 		}
 
 		const QString orig_parent_id = (orig->parent && orig->parent != original)
-		                                   ? orig->parent->id : QString("root");
+			                                 ? orig->parent->id : QString("root");
 		if (orig_parent_id != parent_id) {
 			tree_change c;
 			c.kind          = change_kind::reparented;
@@ -186,8 +186,8 @@ QList<tree_change> compute(node *original, node *proposal) {
 			c.new_parent_id = parent_id;
 			c.new_order     = n->order;
 			c.summary = QString("Move \"%1\": %2 → %3")
-			                .arg(orig->title.isEmpty() ? orig->id : orig->title,
-			                     orig_parent_id, parent_id);
+				              .arg(orig->title.isEmpty() ? orig->id : orig->title,
+				                   orig_parent_id, parent_id);
 			changes << c;
 		} else if (orig->order != n->order) {
 			tree_change c;
@@ -196,9 +196,9 @@ QList<tree_change> compute(node *original, node *proposal) {
 			c.new_parent_id = parent_id;
 			c.new_order     = n->order;
 			c.summary = QString("Reorder \"%1\" in %2: %3 → %4")
-			                .arg(orig->title.isEmpty() ? orig->id : orig->title,
-			                     parent_id)
-			                .arg(orig->order).arg(n->order);
+				              .arg(orig->title.isEmpty() ? orig->id : orig->title,
+				                   parent_id)
+				              .arg(orig->order).arg(n->order);
 			changes << c;
 		}
 
@@ -208,7 +208,7 @@ QList<tree_change> compute(node *original, node *proposal) {
 			c.node_id   = n->id;
 			c.new_title = n->title;
 			c.summary   = QString("Rename folder \"%1\" → \"%2\"")
-			                  .arg(orig->title, n->title);
+				                .arg(orig->title, n->title);
 			changes << c;
 		}
 	}
@@ -224,7 +224,7 @@ QList<tree_change> compute(node *original, node *proposal) {
 			c.node_id  = n->id;
 			c.accepted = false;   // never pre-selected; merging is destructive
 			c.summary  = QString("Duplicate URL: \"%1\" also at %2")
-			                 .arg(n->url, first_by_url.value(n->url));
+				               .arg(n->url, first_by_url.value(n->url));
 			changes << c;
 		} else {
 			first_by_url.insert(n->url, n->id);
@@ -313,7 +313,7 @@ tree_snapshot snapshot(node *root) {
 		tree_snapshot_entry e;
 		e.id        = n->id;
 		e.parent_id = (n->parent && n->parent != root) ? n->parent->id
-		                                              : QString("root");
+			                                            : QString("root");
 		e.title     = n->title;
 		e.order     = n->order;
 		e.folder    = n->is_folder();
@@ -343,7 +343,7 @@ int restore(node *root, const tree_snapshot &snap) {
 		if (!n)
 			continue;   // vanished since the snapshot; nothing to put back
 		node *parent = (e.parent_id == "root") ? root
-		                                       : by_id.value(e.parent_id, root);
+			                                     : by_id.value(e.parent_id, root);
 		if (!parent)
 			parent = root;
 		n->parent = parent;

@@ -4,7 +4,7 @@
 #include <QUrl>
 
 antiadblock_watch::antiadblock_watch(QObject *parent)
-	: QObject(parent), m_detectors(site_rules::defaults().detectors()) {}
+  : QObject(parent), m_detectors(site_rules::defaults().detectors()) {}
 
 void antiadblock_watch::set_rules(const site_rules &r) {
 	QMutexLocker lock(&m_lock);

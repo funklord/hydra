@@ -146,7 +146,7 @@ int main(int argc, char **argv) {
 		filter_list fl;
 
 		const settings_bundle::summary missing =
-			settings_bundle::read(dir + "/not-here.ini", &p, &fl);
+		  settings_bundle::read(dir + "/not-here.ini", &p, &fl);
 		check(!missing.ok() && missing.error.contains("No such file"),
 		      "a file that is not there");
 

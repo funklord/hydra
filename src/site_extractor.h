@@ -101,8 +101,8 @@ namespace site_extractor {
 QString shape_of(const QUrl &u);
 
 extraction run(const QString &source, const QUrl &page,
-                const QList<evidence_request> &evidence, int timeout_ms = 2000,
-                helper_host *helpers = nullptr);
+	              const QList<evidence_request> &evidence, int timeout_ms = 2000,
+	              helper_host *helpers = nullptr);
 
 // Runs it and then judges it. Nothing reaches the user without passing here.
 //
@@ -113,9 +113,9 @@ extraction run(const QString &source, const QUrl &page,
 // A *positive* identification is the only thing it is ever used for, so a tier
 // that could not answer never costs a proposal its accept.
 extractor_verdict check(const QString &source, const QUrl &page,
-                         const QList<evidence_request> &evidence,
-                         helper_host *helpers = nullptr,
-                         const QSet<QString> *manifests = nullptr);
+	                       const QList<evidence_request> &evidence,
+	                       helper_host *helpers = nullptr,
+	                       const QSet<QString> *manifests = nullptr);
 
 }  // namespace site_extractor
 

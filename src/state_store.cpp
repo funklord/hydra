@@ -13,8 +13,8 @@ namespace {
 QString digest(const QString &id) {
 	return QString::fromLatin1(
 		QCryptographicHash::hash(id.toUtf8(), QCryptographicHash::Sha1)
-			.toHex()
-			.left(8));
+		  .toHex()
+		  .left(8));
 }
 
 }  // namespace

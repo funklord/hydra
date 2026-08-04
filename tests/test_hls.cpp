@@ -27,13 +27,13 @@ int main(int argc, char **argv) {
 	section("a master playlist: the quality variants");
 	{
 		const QByteArray text =
-			"#EXTM3U\n"
-			"#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,CODECS=\"avc1.4d401e,mp4a.40.2\"\n"
-			"low/index.m3u8\n"
-			"#EXT-X-STREAM-INF:BANDWIDTH=2400000,RESOLUTION=1280x720\n"
-			"mid/index.m3u8\n"
-			"#EXT-X-STREAM-INF:BANDWIDTH=5200000,RESOLUTION=1920x1080\n"
-			"https://other.example/high/index.m3u8\n";
+		  "#EXTM3U\n"
+		  "#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,CODECS=\"avc1.4d401e,mp4a.40.2\"\n"
+		  "low/index.m3u8\n"
+		  "#EXT-X-STREAM-INF:BANDWIDTH=2400000,RESOLUTION=1280x720\n"
+		  "mid/index.m3u8\n"
+		  "#EXT-X-STREAM-INF:BANDWIDTH=5200000,RESOLUTION=1920x1080\n"
+		  "https://other.example/high/index.m3u8\n";
 		const hls_playlist p = hls::parse(text, base);
 
 		check(p.is_master, "it is recognised as a master");
@@ -64,14 +64,14 @@ int main(int argc, char **argv) {
 	section("a media playlist: the segments");
 	{
 		const QByteArray text =
-			"#EXTM3U\r\n"                       // CRLF, as served by many CDNs
-			"#EXT-X-TARGETDURATION:10\r\n"
-			"#EXT-X-MEDIA-SEQUENCE:42\r\n"
-			"#EXTINF:9.009,\r\n"
-			"seg0.ts\r\n"
-			"#EXTINF:8.5,a title with, a comma\r\n"
-			"seg1.ts\r\n"
-			"#EXT-X-ENDLIST\r\n";
+		  "#EXTM3U\r\n"                       // CRLF, as served by many CDNs
+		  "#EXT-X-TARGETDURATION:10\r\n"
+		  "#EXT-X-MEDIA-SEQUENCE:42\r\n"
+		  "#EXTINF:9.009,\r\n"
+		  "seg0.ts\r\n"
+		  "#EXTINF:8.5,a title with, a comma\r\n"
+		  "seg1.ts\r\n"
+		  "#EXT-X-ENDLIST\r\n";
 		const hls_playlist p = hls::parse(text, base);
 
 		check(!p.is_master, "not a master");
@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
 	section("live versus complete");
 	{
 		const QByteArray live =
-			"#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nseg0.ts\n";
+		  "#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nseg0.ts\n";
 		check(hls::parse(live, base).is_live,
 		      "no ENDLIST means the list is still growing");
 	}
@@ -106,18 +106,18 @@ int main(int argc, char **argv) {
 		// sub-range — not zero. Treating it as zero fetches the first slice over
 		// and over and assembles a file that is wrong without being empty.
 		const QByteArray text =
-			"#EXTM3U\n"
-			"#EXT-X-TARGETDURATION:4\n"
-			"#EXTINF:4,\n"
-			"#EXT-X-BYTERANGE:1000@0\n"
-			"all.mp4\n"
-			"#EXTINF:4,\n"
-			"#EXT-X-BYTERANGE:2000\n"
-			"all.mp4\n"
-			"#EXTINF:4,\n"
-			"#EXT-X-BYTERANGE:1500\n"
-			"all.mp4\n"
-			"#EXT-X-ENDLIST\n";
+		  "#EXTM3U\n"
+		  "#EXT-X-TARGETDURATION:4\n"
+		  "#EXTINF:4,\n"
+		  "#EXT-X-BYTERANGE:1000@0\n"
+		  "all.mp4\n"
+		  "#EXTINF:4,\n"
+		  "#EXT-X-BYTERANGE:2000\n"
+		  "all.mp4\n"
+		  "#EXTINF:4,\n"
+		  "#EXT-X-BYTERANGE:1500\n"
+		  "all.mp4\n"
+		  "#EXT-X-ENDLIST\n";
 		const hls_playlist p = hls::parse(text, base);
 
 		check(p.segments.size() == 3, "three sub-ranges");
@@ -136,12 +136,12 @@ int main(int argc, char **argv) {
 	section("byte ranges: a range does not leak onto a later segment");
 	{
 		const QByteArray text =
-			"#EXTM3U\n"
-			"#EXTINF:4,\n"
-			"#EXT-X-BYTERANGE:1000@0\n"
-			"part.mp4\n"
-			"#EXTINF:4,\n"
-			"whole.ts\n";
+		  "#EXTM3U\n"
+		  "#EXTINF:4,\n"
+		  "#EXT-X-BYTERANGE:1000@0\n"
+		  "part.mp4\n"
+		  "#EXTINF:4,\n"
+		  "whole.ts\n";
 		const hls_playlist p = hls::parse(text, base);
 		check(p.segments.size() == 2, "two segments");
 		check(p.segments[1].byte_length == -1 && p.segments[1].byte_offset == -1,
@@ -162,10 +162,10 @@ int main(int argc, char **argv) {
 		// carries its URI as an attribute and has no following line; treating it
 		// like #EXT-X-STREAM-INF would invent a variant.
 		const QByteArray with_media =
-			"#EXTM3U\n"
-			"#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"en\",URI=\"audio/en.m3u8\"\n"
-			"#EXT-X-STREAM-INF:BANDWIDTH=1000,AUDIO=\"a\"\n"
-			"v/index.m3u8\n";
+		  "#EXTM3U\n"
+		  "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"en\",URI=\"audio/en.m3u8\"\n"
+		  "#EXT-X-STREAM-INF:BANDWIDTH=1000,AUDIO=\"a\"\n"
+		  "v/index.m3u8\n";
 		const hls_playlist m = hls::parse(with_media, base);
 		check(m.variants.size() == 1,
 		      QString("#EXT-X-MEDIA is not counted as a variant (%1)")
@@ -175,10 +175,10 @@ int main(int argc, char **argv) {
 
 		// An I-FRAME variant also carries URI= inline and has no following line.
 		const QByteArray iframe =
-			"#EXTM3U\n"
-			"#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=90000,URI=\"iframe.m3u8\"\n"
-			"#EXT-X-STREAM-INF:BANDWIDTH=1000\n"
-			"v/index.m3u8\n";
+		  "#EXTM3U\n"
+		  "#EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=90000,URI=\"iframe.m3u8\"\n"
+		  "#EXT-X-STREAM-INF:BANDWIDTH=1000\n"
+		  "v/index.m3u8\n";
 		const hls_playlist f = hls::parse(iframe, base);
 		check(f.variants.size() == 1,
 		      QString("an I-frame variant does not steal the next URI (%1)")

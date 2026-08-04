@@ -29,7 +29,7 @@ QByteArray trim_front(const QByteArray &b) {
 }  // namespace
 
 stream_probe::stream_probe(QObject *parent)
-	: QObject(parent), m_net(new QNetworkAccessManager(this)) {}
+  : QObject(parent), m_net(new QNetworkAccessManager(this)) {}
 
 probe_result stream_probe::classify(const QString &content_type,
                                      const QByteArray &head) {
@@ -69,9 +69,9 @@ probe_result stream_probe::classify(const QString &content_type,
 
 	if (r.kind.isEmpty()) {
 		r.reason = content_type.isEmpty()
-			? QString("nothing in the opening bytes identifies this as a stream")
-			: QString("served as %1, and the opening bytes do not identify a "
-			           "stream either").arg(content_type);
+		  ? QString("nothing in the opening bytes identifies this as a stream")
+		  : QString("served as %1, and the opening bytes do not identify a "
+		             "stream either").arg(content_type);
 	} else if (r.disagreed) {
 		r.reason = QString("the body is %1, though it is served as %2")
 		               .arg(r.kind.toUpper(), content_type);
@@ -129,11 +129,11 @@ void stream_probe::probe(const QUrl &url, const stream_context &ctx,
 		if (reached) {
 			const QByteArray head = reply->read(k_sniff_bytes);
 			const QString ct =
-				reply->header(QNetworkRequest::ContentTypeHeader).toString();
+			  reply->header(QNetworkRequest::ContentTypeHeader).toString();
 			r = classify(ct.section(';', 0, 0).trimmed(), head);
 			r.reached = true;
 			r.status =
-				reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+			  reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 			// A 403 is the CDN refusing the context, not a statement about the
 			// content, and must not read as "this is not a stream".
 			if (r.status >= 400) {

@@ -5,7 +5,7 @@
 #include <QWebEngineUrlRequestInfo>
 
 qtwebengine_interceptor::qtwebengine_interceptor(request_filter *filter, QObject *parent)
-	: QWebEngineUrlRequestInterceptor(parent), m_filter(filter) {
+  : QWebEngineUrlRequestInterceptor(parent), m_filter(filter) {
 }
 
 void qtwebengine_interceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {

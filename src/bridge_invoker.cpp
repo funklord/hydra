@@ -34,8 +34,8 @@ bool reachable(const QMetaObject *mo, int index) {
 		return false;
 	const QMetaMethod m = mo->method(index);
 	return m.access() == QMetaMethod::Public &&
-	       (m.methodType() == QMetaMethod::Slot ||
-	        m.methodType() == QMetaMethod::Method);
+		     (m.methodType() == QMetaMethod::Slot ||
+		      m.methodType() == QMetaMethod::Method);
 }
 
 // The types a bridge argument may have. Refusing by name beats coercing: a
@@ -185,7 +185,7 @@ QString bridge_invoker::invoke(const QString &name, const QString &method,
 	}
 
 	const QGenericReturnArgument rr =
-		slot ? QGenericReturnArgument(ret.name(), slot) : QGenericReturnArgument();
+	  slot ? QGenericReturnArgument(ret.name(), slot) : QGenericReturnArgument();
 	if (!found.invoke(obj, Qt::DirectConnection, rr, generic[0], generic[1],
 	                  generic[2], generic[3], generic[4], generic[5]))
 		return fail(QStringLiteral("invoke failed"));

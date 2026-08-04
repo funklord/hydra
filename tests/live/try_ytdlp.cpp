@@ -21,14 +21,14 @@ static QString test_out() {
 }
 
 static const QString OUTDIR =
-	test_out();
+  test_out();
 
 static void grab(const QString &title, const QString &n) {
 	for (QWidget *w : QApplication::topLevelWidgets())
 		if (w->isVisible() && w->windowTitle().contains(title)) {
 			w->grab().save(OUTDIR + n);
-			return;
-		}
+		  return;
+	  }
 	std::printf("NO WINDOW '%s'\n", qPrintable(title));
 }
 
@@ -56,18 +56,18 @@ int main(int argc, char *argv[]) {
 		for (QLineEdit *e : w.findChildren<QLineEdit *>())
 			if (e->placeholderText() == "Address") {
 				e->setText(target);
-				QMetaObject::invokeMethod(e, "returnPressed");
-				std::printf("navigated to %s\n", qPrintable(target));
-				return;
-			}
+			  QMetaObject::invokeMethod(e, "returnPressed");
+			  std::printf("navigated to %s\n", qPrintable(target));
+			  return;
+		  }
 	});
 	QTimer::singleShot(16000, [&] {
 		for (QAction *a : w.findChildren<QAction *>())
 			if (a->text().contains("Find Media")) {
 				std::printf("triggering: %s\n", qPrintable(a->text()));
-				a->trigger();
-				return;
-			}
+			  a->trigger();
+			  return;
+		  }
 		std::printf("NO ACTION\n");
 	});
 	QTimer::singleShot(40000, [&] {

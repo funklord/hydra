@@ -21,7 +21,7 @@
 namespace session_import {
 
 QByteArray lz4_block_builtin(const QByteArray &in, int expected_size,
-                              QString *error) {
+	                            QString *error) {
 	auto fail = [&](const char *why) {
 		if (error)
 			*error = QString::fromLatin1(why);
@@ -118,7 +118,7 @@ bool using_system_lz4() {
 }
 
 QByteArray lz4_block_decompress(const QByteArray &in, int expected_size,
-                                 QString *error) {
+	                               QString *error) {
 #ifdef HYDRA_HAVE_LZ4
 	// The audited one where it exists. Same contract as the built-in: the
 	// expected size bounds the output, and anything that does not fill it
@@ -131,7 +131,7 @@ QByteArray lz4_block_decompress(const QByteArray &in, int expected_size,
 	QByteArray out;
 	out.resize(expected_size);
 	const int n = LZ4_decompress_safe(in.constData(), out.data(), in.size(),
-	                                   expected_size);
+		                                 expected_size);
 	if (n < 0 || n != expected_size) {
 		if (error)
 			*error = "corrupt LZ4 block";
@@ -152,7 +152,7 @@ QByteArray mozlz4_decompress(const QByteArray &file, QString *error) {
 	}
 	const quint8 *h = reinterpret_cast<const quint8 *>(file.constData()) + 8;
 	const quint32 size = quint32(h[0]) | (quint32(h[1]) << 8) |
-	                      (quint32(h[2]) << 16) | (quint32(h[3]) << 24);
+		                    (quint32(h[2]) << 16) | (quint32(h[3]) << 24);
 	return lz4_block_decompress(file.mid(12), int(size), error);
 }
 
@@ -371,7 +371,7 @@ QList<imported_tab> replay_snss(const QByteArray &file, QString *error) {
 	// stops working.
 	if (version != k_version_plain && version != k_version_marker)
 		return fail(QString("unsupported Chromium session version %1 "
-		                     "(encrypted, or newer than this reader)").arg(version));
+			                   "(encrypted, or newer than this reader)").arg(version));
 
 	QHash<qint32, replay_tab> tabs;
 	QSet<qint32> closed_windows;
@@ -488,7 +488,7 @@ QList<imported_tab> replay_snss(const QByteArray &file, QString *error) {
 			t.index_in_window >= 0 ? t.index_in_window : t.first_seen), tab);
 	}
 	std::sort(ordered.begin(), ordered.end(),
-	          [](const auto &a, const auto &b) { return a.first < b.first; });
+		        [](const auto &a, const auto &b) { return a.first < b.first; });
 
 	QList<imported_tab> out;
 	for (const auto &o : ordered)
@@ -503,7 +503,7 @@ QString chromium_profile(const QString &root_in) {
 	// machine may have either, both, or neither.
 	const QStringList roots = root_in.isEmpty()
 		? QStringList{ QDir::homePath() + "/.config/chromium",
-		                QDir::homePath() + "/.config/google-chrome" }
+			              QDir::homePath() + "/.config/google-chrome" }
 		: QStringList{ root_in };
 	for (const QString &root : roots) {
 		const QString def = root + "/Default";

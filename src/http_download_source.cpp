@@ -10,7 +10,7 @@
 #include <QNetworkRequest>
 
 http_download_source::http_download_source(QObject *parent)
-	: download_source(parent) {
+  : download_source(parent) {
 	m_net = new QNetworkAccessManager(this);
 }
 
@@ -142,7 +142,7 @@ void http_download_source::wire(transfer *t) {
 			return;
 		t->range_checked = true;
 		const int code =
-			reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+		  reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 		if (code == 206)
 			return;
 		t->file->seek(0);
