@@ -90,8 +90,9 @@ protected:
 
 private slots:
 	void on_tree_activated(const QModelIndex &proxy_index);
-	void on_tree_context_menu(const QPoint &pos);
-	void edit_node_properties(node *n);
+	void new_tab();
+	void new_folder();
+	node *selected_parent() const;
 	void import_firefox_tabs();
 	void import_chromium_tabs();
 	void show_mirror_tabs(const QString &source, const QString &label,

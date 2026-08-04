@@ -3,7 +3,9 @@
 
 #include <QTreeView>
 
+class tab_tree_model;
 class tree_sort_proxy;
+struct node;
 
 // The tree, with the drag-and-drop policy that only it can enforce.
 //
@@ -26,6 +28,14 @@ class tab_tree_view : public QTreeView {
 public:
 	explicit tab_tree_view(QWidget *parent = nullptr);
 
+signals:
+	// The two things the menu offers that this view cannot do itself: opening a
+	// tab needs an engine and a stacked widget, suspending it needs the state
+	// store. Everything else on the menu -- duplicate, new folder, delete,
+	// properties -- is the model's own business and is done here.
+	void open_requested(node *n);
+	void suspend_requested(node *n);
+
 protected:
 	// Where the file-manager gestures are actually decided.
 	void dragMoveEvent(QDragMoveEvent *event) override;
@@ -33,4 +43,9 @@ protected:
 private:
 	// Whether a drop *between* rows would mean anything right now.
 	bool reordering_is_meaningful() const;
+
+	tab_tree_model *source_model() const;
+	node *node_at(const QPoint &pos) const;
+	void show_menu(const QPoint &pos);
+	void edit_properties(node *n);
 };

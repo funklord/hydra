@@ -18,6 +18,8 @@
 #include <QDir>
 #include <QFile>
 #include <QMimeData>
+#include <QSet>
+#include <functional>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -479,6 +481,58 @@ int main(int argc, char **argv) {
 		check(!proxy.in_tree_order(),
 		      "a sort changed by any route at all is reflected immediately, "
 		      "because nothing is storing a copy of it");
+	}
+
+	section("making a tab, which nothing could do");
+	{
+		// Until this existed a tab could arrive only from the tree file, a
+		// duplicate, a browser mirror or the AI reorganizer. A browser that
+		// cannot open a new tab is a gap worth a check of its own.
+		tab_tree_model m;
+		m.load(path);
+		node *folder = m.root()->children.first();
+		const int before = folder->children.size();
+
+		node *t = m.add_tab(folder, QString(), QString());
+		check(t != nullptr, "a tab can be made");
+		check(t && t->parent == folder && folder->children.size() == before + 1,
+		      "inside the folder it was asked for");
+		check(t && !t->is_folder() && t->type == node_type::unopened_tab,
+		      "as an unopened tab");
+		check(t && !t->title.isEmpty(),
+		      QString("with a label rather than a blank row (%1)").arg(t->title));
+		check(t && m.node_by_id(t->id) == t, "and an id the index knows");
+
+		// Asked for beside a *tab* it goes next to it, not inside: a tab holds
+		// no children, so "in here" has no meaning.
+		node *sibling = m.add_tab(t, QString(), "https://x.test/");
+		check(sibling && sibling->parent == folder,
+		      "a tab asked for beside a tab lands next to it, not within it");
+		check(sibling && sibling->url == "https://x.test/", "keeping its address");
+
+		// Ids do not collide with anything, including a second new tab.
+		check(t && sibling && t->id != sibling->id, "two new tabs differ");
+		QSet<QString> ids;
+		std::function<void(node *)> walk = [&](node *n) {
+			for (node *c : n->children) { ids.insert(c->id); walk(c); }
+		};
+		walk(m.root());
+		int count = 0;
+		std::function<void(node *)> tally = [&](node *n) {
+			for (node *c : n->children) { ++count; tally(c); }
+		};
+		tally(m.root());
+		check(ids.size() == count,
+		      QString("and every id in the tree is still unique (%1 of %2)")
+		          .arg(ids.size()).arg(count));
+
+		// It survives a save, unlike a mirror.
+		const QString saved = dir + "/with-new-tab.txt";
+		check(m.save(saved), "the tree saves");
+		tab_tree_model again;
+		again.load(saved);
+		check(again.node_by_id(t->id) != nullptr,
+		      "and the new tab is in it -- this one is the user's, so it keeps");
 	}
 
 	QDir(dir).removeRecursively();

@@ -21,6 +21,7 @@
 #include <QMenuBar>
 #include <QTimer>
 #include <QTreeView>
+#include "tree_sort_proxy.h"
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -149,6 +150,50 @@ int main(int argc, char *argv[]) {
 		for (const QString &line : text.split('\n'))
 			if (!line.trimmed().isEmpty())
 				note("  " + line.left(72));
+	}
+
+	section("the context menu, opened rather than assumed");
+	{
+		// QMenu::exec blocks, so the only way to see what it offers is to look
+		// while it is up. A menu that is correct and never opened is this
+		// project's most common defect, and this one moved between classes --
+		// exactly when a signal quietly stops being connected.
+		auto *view = w.findChild<QTreeView *>();
+		check(view != nullptr, "the tree view is reachable");
+
+		QStringList seen;
+		bool popped = false;
+		QTimer::singleShot(600, [&] {
+			if (QWidget *popup = QApplication::activePopupWidget()) {
+				popped = true;
+				for (QAction *a : popup->actions())
+					if (!a->isSeparator())
+						seen << a->text();
+				popup->close();
+			}
+		});
+		// On a tab, where the menu is at its fullest.
+		node *mine = nullptr;
+		for (node *c : model->root()->children)
+			if (c->mirror.isEmpty() && c->is_folder() && !c->children.isEmpty())
+				mine = c->children.first();
+		check(mine != nullptr, "there is a tab of the user's own to right-click");
+		if (mine && view) {
+			const QModelIndex src = model->index_for_node(mine);
+			auto *proxy = w.findChild<tree_sort_proxy *>();
+			const QModelIndex at = proxy ? proxy->mapFromSource(src) : src;
+			view->scrollTo(at);
+			const QRect r = view->visualRect(at);
+			emit view->customContextMenuRequested(r.center());
+		}
+		spin(400);
+
+		check(popped, "a menu actually appears on a right-click");
+		check(seen.contains("&Open") && seen.contains("&Suspend"),
+		      "offering the two things the shell has to carry out");
+		check(seen.contains("&Duplicate") && seen.contains("New &Folder Here") &&
+		          seen.contains("&Delete") && seen.contains("&Properties…"),
+		      QString("and the ones the view does itself (%1)").arg(seen.join(", ")));
 	}
 
 	// Left on screen briefly so a screenshot of it means something.

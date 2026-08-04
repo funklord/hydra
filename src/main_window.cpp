@@ -482,7 +482,11 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	});
 	m_tree->setHeaderHidden(true);
 	m_tree->setUniformRowHeights(true);
-	m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
+	// The menu lives in the view; these are the only two entries it cannot
+	// carry out itself -- opening needs an engine and the stacked widget,
+	// suspending needs the state store.
+	connect(m_tree, &tab_tree_view::open_requested, this, &main_window::open_node);
+	connect(m_tree, &tab_tree_view::suspend_requested, this, &main_window::suspend_node);
 	m_tree->expandAll();
 	connect(m_tree, &QTreeView::activated, this, &main_window::on_tree_activated);
 #ifdef Q_OS_ANDROID
@@ -496,8 +500,6 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(m_tree, &QTreeView::clicked, this, &main_window::on_tree_activated);
 #endif
 	connect(m_tree, &QTreeView::clicked,   this, &main_window::on_tree_activated);
-	connect(m_tree, &QTreeView::customContextMenuRequested,
-	         this, &main_window::on_tree_context_menu);
 
 	m_stack = new QStackedWidget(this);
 	QLabel *placeholder = new QLabel("Select a tab from the tree", this);
@@ -1342,73 +1344,52 @@ void main_window::on_tree_activated(const QModelIndex &proxy_index) {
 	open_node(n);
 }
 
-void main_window::on_tree_context_menu(const QPoint &pos) {
-	const QModelIndex proxy_index = m_tree->indexAt(pos);
-	// A right-click on empty space is still a place to make a folder. The first
-	// version returned here, and it also returned for folders -- so the only
-	// rows with a menu at all were tabs, and the container everything lives in
-	// could not be renamed, emptied or added to.
-	node *n = proxy_index.isValid()
-	              ? m_model->node_for_index(m_proxy->mapToSource(proxy_index))
-	              : nullptr;
-
-	QMenu menu(this);
-	QAction *open_a = nullptr, *sus_a = nullptr;
-	if (n && !n->is_folder()) {
-		open_a = menu.addAction("&Open");
-		sus_a  = menu.addAction("&Suspend");
-		sus_a->setEnabled(m_views_by_id.contains(n->id));
-		menu.addSeparator();
+// Where a new node goes: beside whatever is selected, or at the top level when
+// nothing is. Dropping it at the root regardless would be simpler and wrong --
+// a new tab made while working inside a folder belongs in that folder.
+node *main_window::selected_parent() const {
+	const QModelIndexList sel = m_tree->selectionModel()
+		? m_tree->selectionModel()->selectedIndexes() : QModelIndexList();
+	for (const QModelIndex &i : sel) {
+		if (i.column() != 0)
+			continue;
+		if (node *n = m_model->node_for_index(m_proxy->mapToSource(i)))
+			return n->is_folder() ? n : n->parent;
 	}
+	return nullptr;
+}
 
-	QAction *copy_url_a = nullptr, *dup_a = nullptr;
-	if (n && !n->url.isEmpty())
-		copy_url_a = menu.addAction("&Copy Address");
-	if (n)
-		dup_a = menu.addAction("&Duplicate");
-
-	QAction *folder_a = menu.addAction("New &Folder Here");
-	menu.addSeparator();
-	QAction *props_a = n ? menu.addAction("&Properties…") : nullptr;
-	QAction *del_a   = n ? menu.addAction("&Delete") : nullptr;
-
-	QAction *chosen = menu.exec(m_tree->viewport()->mapToGlobal(pos));
-	if (!chosen)
+void main_window::new_tab() {
+	node *t = m_model->add_tab(selected_parent(), QString(), QString());
+	if (!t)
 		return;
-	if (chosen == open_a)             open_node(n);
-	else if (chosen == sus_a)         suspend_node(n);
-	else if (chosen == copy_url_a)    QGuiApplication::clipboard()->setText(n->url);
-	else if (chosen == dup_a)         m_model->duplicate_node(n);
-	else if (chosen == folder_a) {
-		// Into the folder that was clicked, or beside a tab -- which is what a
-		// file manager does, and saves a drag immediately afterwards.
-		node *parent = !n ? nullptr : (n->is_folder() ? n : n->parent);
-		if (node *f = m_model->add_folder(parent, QString()))
-			m_tree->expandAll(), edit_node_properties(f);
-	} else if (chosen == props_a)     edit_node_properties(n);
-	else if (chosen == del_a) {
-		// Deleting a folder takes what is in it, so the count goes in the
-		// question rather than being discovered afterwards.
-		const int kids = n->children.size();
-		const QString what = kids > 0
-			? QString("Delete \"%1\" and the %2 item%3 inside it?")
-			      .arg(n->title).arg(kids).arg(kids == 1 ? "" : "s")
-			: QString("Delete \"%1\"?").arg(n->title);
-		if (QMessageBox::question(this, "Delete", what) == QMessageBox::Yes)
-			m_model->remove_node(n);
+	m_tree->expandAll();
+	open_node(t);
+	// The address bar, because an empty tab is a question about where to go.
+	if (m_address) {
+		m_address->setFocus();
+		m_address->selectAll();
 	}
 }
 
-// The properties editor §4 never had: what a node *is*, as opposed to where it
-// sits. The id is shown and not editable -- it keys `state/<id>.blob` and the
-// outline file, so retyping it would orphan a tab's history with no warning,
-// which is exactly the kind of silent loss this project keeps finding.
-// Another browser's open tabs, in a folder of their own.
-//
-// One-shot: this reads what Firefox last wrote and shows it. It does not attach
-// to a running browser, needs no extension, and cannot disturb what it reads --
-// the cost being that it sees the world as of that browser's last flush, which
-// the status line says rather than leaving to be discovered.
+void main_window::new_folder() {
+	if (node *f = m_model->add_folder(selected_parent(), QString())) {
+		m_tree->expandAll();
+		// Named on the spot: a folder called "New folder" is one somebody has
+		// to come back and rename, and they will not.
+		const QModelIndex at = m_proxy->mapFromSource(m_model->index_for_node(f));
+		if (at.isValid()) {
+			m_tree->setCurrentIndex(at);
+			m_tree->scrollTo(at);
+		}
+		bool ok = false;
+		const QString name = QInputDialog::getText(
+		    this, "New folder", "Name:", QLineEdit::Normal, f->title, &ok);
+		if (ok && !name.trimmed().isEmpty())
+			m_model->update_node(f, name.trimmed(), f->url, f->tags);
+	}
+}
+
 void main_window::import_firefox_tabs() {
 	const QString profile = session_import::firefox_profile();
 	const QString path    = session_import::firefox_session_path(profile);
@@ -1496,47 +1477,6 @@ void main_window::show_mirror_tabs(const QString &source, const QString &label,
 		    QString("%1 now has %2 tabs open.").arg(label).arg(nodes.size()), 4000);
 }
 
-void main_window::edit_node_properties(node *n) {
-	if (!n)
-		return;
-	QDialog dlg(this);
-	dlg.setWindowTitle(n->is_folder() ? "Folder properties" : "Tab properties");
-	auto *form = new QFormLayout(&dlg);
-
-	auto *title = new QLineEdit(n->title, &dlg);
-	auto *url   = new QLineEdit(n->url, &dlg);
-	auto *tags  = new QLineEdit(n->tags.join(", "), &dlg);
-	url->setPlaceholderText("about:blank");
-	tags->setPlaceholderText("comma separated");
-
-	auto *id = new QLabel(n->id, &dlg);
-	id->setTextInteractionFlags(Qt::TextSelectableByMouse);
-	id->setToolTip("Not editable: this is what the tab's saved state and the "
-	                "tree file are keyed by.");
-
-	form->addRow("Title", title);
-	if (!n->is_folder())
-		form->addRow("Address", url);
-	form->addRow("Tags", tags);
-	form->addRow("Id", id);
-	form->addRow("Added", new QLabel(n->created.toString(Qt::ISODate), &dlg));
-	form->addRow("Last seen", new QLabel(n->last_seen.toString(Qt::ISODate), &dlg));
-
-	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok |
-	                                      QDialogButtonBox::Cancel, &dlg);
-	connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
-	connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
-	form->addRow(buttons);
-
-	if (dlg.exec() != QDialog::Accepted)
-		return;
-	QStringList tag_list;
-	for (const QString &t : tags->text().split(',', Qt::SkipEmptyParts))
-		if (!t.trimmed().isEmpty())
-			tag_list << t.trimmed();
-	m_model->update_node(n, title->text(),
-	                      n->is_folder() ? n->url : url->text(), tag_list);
-}
 
 void main_window::on_sort_mode_changed(int combo_index) {
 	using SM = tree_sort_proxy::sort_mode;

@@ -86,6 +86,11 @@ public:
 	// Each mutates the tree and emits `structure_changed`, so the shell saves
 	// once, in one place, however the change was made.
 	node *add_folder(node *parent, const QString &title);
+	// A new, empty tab. Until this existed a tab could only arrive from the
+	// tree file, a duplicate, a browser mirror or the AI reorganizer -- so the
+	// one thing every browser does, opening a new tab, was the one thing this
+	// one could not do.
+	node *add_tab(node *parent, const QString &title, const QString &url);
 
 	// Create or replace the mirror folder for `source`, holding `tabs`.
 	//

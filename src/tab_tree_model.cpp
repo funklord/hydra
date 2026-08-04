@@ -352,6 +352,32 @@ node *tab_tree_model::add_folder(node *parent, const QString &title) {
 	return f;
 }
 
+node *tab_tree_model::add_tab(node *parent, const QString &title,
+                               const QString &url) {
+	if (!parent)
+		parent = m_root;
+	// Dropped beside a tab rather than inside it, the way a folder is: a tab
+	// holds no children, so "in here" has no meaning and the nearest sensible
+	// reading is "next to this".
+	if (!parent->is_folder())
+		parent = parent->parent ? parent->parent : m_root;
+	beginResetModel();
+	node *t = new node;
+	t->id        = unused_id("t");
+	t->type      = node_type::unopened_tab;
+	t->title     = title.isEmpty() ? QStringLiteral("New tab") : title;
+	t->url       = url;
+	t->created   = QDateTime::currentDateTime();
+	t->last_seen = t->created;
+	t->parent    = parent;
+	t->order     = parent->children.size();
+	parent->children << t;
+	reindex();
+	endResetModel();
+	emit structure_changed();
+	return t;
+}
+
 bool tab_tree_model::remove_node(node *n) {
 	// The root is the tree; removing it would leave the model pointing at
 	// nothing and the outline writer with no document to write.

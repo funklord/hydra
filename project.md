@@ -306,6 +306,28 @@ child makes a ring, the outline writer recurses forever, and everything below
 the drag disappears from the file. §9.4 refuses the same move for the reorganizer
 and this is that rule one gesture closer to the user.
 
+### You could not make a tab
+
+Asked how to create one, the honest answer was that you could not. A tab could
+arrive from the tree file, from a duplicate, from a browser mirror or from the
+AI reorganizer — and that was the whole list. The File menu offered Save Tree,
+Quit, Back, Forward and Reload. **A browser with no New Tab**, which had gone
+unnoticed because every test and every driver started from a tree that already
+had tabs in it.
+
+`New Tab` (Ctrl+T) and `New Folder` (Ctrl+Shift+N) are in the File menu now, and
+both are on the context menu as *New Tab Here* / *New Folder Here*. A new node
+goes **beside whatever is selected**, or at the top level when nothing is:
+dropping it at the root regardless is simpler and wrong, because a tab made
+while working inside a folder belongs in that folder. Asked for beside a *tab*
+it lands next to it rather than within — a tab holds no children, so "in here"
+has no meaning.
+
+A new tab is opened immediately and the address bar takes focus, because an
+empty tab is a question about where to go; a new folder asks for its name on the
+spot, because a folder called "New folder" is one somebody has to come back and
+rename, and they will not.
+
 **And the right-click menu was nearly empty.** It offered Open and Suspend, and
 returned early for folders — so the containers everything lives in could not be
 renamed, emptied or added to, and a right-click on blank space did nothing. It
@@ -317,6 +339,18 @@ silent loss this file keeps recording.
 
 Every one of these saves through one signal, `structure_changed`, so a drag, a
 rename and a new folder all persist the same way rather than three ways.
+
+**The menu lives in the view**, with two signals out for the only entries it
+cannot carry out itself: opening needs an engine and the stacked widget,
+suspending needs the state store. That moved 113 lines out of `main_window` and
+removed a second source of truth on the way — the menu used to ask the shell's
+map of live views whether a tab was open, which is a fact the node already
+carries, since `open_node` sets its type and `suspend_node` clears it. Two
+records of one fact is one of them being wrong later.
+
+It is opened rather than assumed: `try_import` posts a context-menu request and
+inspects the popup while `exec` is blocking, because a menu that moved between
+classes is exactly when a connection quietly stops being made.
 
 **33 checks** in `test_model`, covering the drag flags a view asks about before
 it will start a drag at all, that a drag carries ids rather than urls, the
