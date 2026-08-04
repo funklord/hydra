@@ -10,6 +10,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDragMoveEvent>
+#include <QKeyEvent>
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -124,6 +125,25 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 		if (QMessageBox::question(this, "Delete", what) == QMessageBox::Yes)
 			m->remove_node(n);
 	}
+}
+
+void tab_tree_view::keyPressEvent(QKeyEvent *event) {
+	// F2 is what a hand reaches for to rename something in a tree, and it cost
+	// nothing to answer. Delete is deliberately *not* bound here: a stray key
+	// should not remove a folder and everything in it, and the menu entry asks
+	// first.
+	if (event->key() == Qt::Key_F2) {
+		if (tab_tree_model *m = source_model()) {
+			QModelIndex at = currentIndex();
+			if (auto *proxy = qobject_cast<tree_sort_proxy *>(model()))
+				at = proxy->mapToSource(at);
+			if (node *n = m->node_for_index(at)) {
+				edit_properties(n);
+				return;
+			}
+		}
+	}
+	QTreeView::keyPressEvent(event);
 }
 
 // What a node *is*, as opposed to where it sits. The id is shown and not

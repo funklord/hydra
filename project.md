@@ -348,6 +348,22 @@ already had rather than adding one beside it; the first attempt built a second
 timer and the compiler caught the duplicate member, which is the same "two
 records of one thing" as the reorder flag and the live-view map.
 
+**Driven through the dialog**, since that is the only route by which a tab is
+deliberately named: `try_rename` fills the real modal from a timer while `exec`
+is blocking — the typed name reaches the tree and is marked chosen, the page
+cannot take it back afterwards, Cancel changes nothing, emptying the field hands
+the tab back, and the file carries no marker for a tab that follows its page.
+F2 opens it too, because that is what a hand reaches for; Delete is deliberately
+not bound, since a stray key should not take a folder and everything in it.
+
+**The driver crashed first, and it was the same defect as `try_keepass`.** Its
+dialog-filling helper captured the title and the accept flag *by reference* in a
+timer lambda, and the helper returns before the dialog exists — so 500 ms later
+those parameters were dead stack and it segfaulted inside `findChildren`.
+Knowing the shape did not prevent writing it again, which argues for the rule
+rather than against it: this one was immediate and obvious, where the earlier
+one corrupted a heap and surfaced three checks later.
+
 ### You could not make a tab
 
 Asked how to create one, the honest answer was that you could not. A tab could

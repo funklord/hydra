@@ -28,6 +28,12 @@ class tab_tree_view : public QTreeView {
 public:
 	explicit tab_tree_view(QWidget *parent = nullptr);
 
+	// Rename, in the sense a file manager means it: the properties of one node.
+	// Public because it has more than one way in -- the context menu, and F2,
+	// which is what a hand reaches for. A shell wanting it on a toolbar would
+	// use the same entry.
+	void edit_properties(node *n);
+
 signals:
 	// The two things the menu offers that this view cannot do itself: opening a
 	// tab needs an engine and a stacked widget, suspending it needs the state
@@ -47,5 +53,7 @@ private:
 	tab_tree_model *source_model() const;
 	node *node_at(const QPoint &pos) const;
 	void show_menu(const QPoint &pos);
-	void edit_properties(node *n);
+
+protected:
+	void keyPressEvent(QKeyEvent *event) override;
 };
