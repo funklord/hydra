@@ -143,6 +143,12 @@ signals:
 	// only until the next launch would be worse than one that was refused.
 	void structure_changed();
 
+	// About to delete this node and everything under it, while the pointers are
+	// still valid. The shell needs this: it may be holding a live view for one
+	// of them, and the model has no idea that views exist. Emitted *before* the
+	// delete, because afterwards there is nothing left to identify.
+	void about_to_remove(node *n);
+
 private:
 	void reindex();  // rebuild m_id_index from the current tree
 	// An id nothing in the tree is using. Copies need one: two nodes sharing an

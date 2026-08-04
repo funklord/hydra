@@ -14,6 +14,10 @@ public:
 	bool       has_state(const QString &id) const;
 	QByteArray load(const QString &id) const;
 	bool       save(const QString &id, const QByteArray &blob);
+	// Forget a node's saved state. Called when the node itself is deleted:
+	// otherwise `state/<id>.blob` outlives the tab for ever, and an id that is
+	// later reused -- `unused_id` only avoids collisions with what is *in the
+	// tree* -- would inherit somebody else's scroll position and form contents.
 	bool       remove(const QString &id);
 
 private:

@@ -50,6 +50,7 @@
 #                        or a model are listed but not run (see tests/README.md)
 #   make test-one T=x -- build and run a single suite, e.g. T=test_theme
 #   make drivers      -- build the live drivers (expensive; see JOBS below)
+#   make sweep        -- build them and run them all, with a summary (needs a display)
 #   make android      -- build the Android APK
 #   make install      -- install the binary, desktop entry and icon set
 #   make uninstall    -- remove what install put there
@@ -138,7 +139,7 @@ SUITES     = $(filter-out $(NEEDS_MORE),$(ALL_SUITES))
 # run rather than risk it.
 TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test
 
-.PHONY: all run test test-one drivers android install uninstall clean help style
+.PHONY: all run test test-one drivers sweep android install uninstall clean help style
 
 # Always delegates, never compares timestamps itself. The first version made
 # the binary a real target depending on the cache file, and `make` after
@@ -187,6 +188,11 @@ drivers: $(TESTS_DIR)/CMakeCache.txt
 	@$(CMAKE) --build $(TESTS_DIR) -j$(JOBS)
 	@echo "live drivers built. They need a display: DISPLAY=:0 ./$(TESTS_DIR)/try_cookies"
 	@echo "tests/README.md says which need a helper server, KeePassXC or a model."
+
+# Run them all and summarise. Wants a display, so it is not part of `test`.
+# Pass DRIVERS=... for a subset: make sweep DRIVERS="try_import try_delete".
+sweep: drivers
+	@tests/live/sweep.sh $(DRIVERS)
 
 android:
 	@test -x "$(QT_ANDROID_ROOT)/bin/qt-cmake" || \

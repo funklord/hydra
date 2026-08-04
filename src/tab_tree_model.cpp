@@ -383,6 +383,12 @@ bool tab_tree_model::remove_node(node *n) {
 	// nothing and the outline writer with no document to write.
 	if (!n || n == m_root || !n->parent)
 		return false;
+	// Announced first, while `n` and its children are still there to be found.
+	// Deleting a node with a live view used to leave that view in the shell's
+	// map under an id nothing could resolve any more -- which leaked the view
+	// and, worse, stopped the live-view cap being enforced at all, because the
+	// cap gives up when it cannot resolve its chosen victim.
+	emit about_to_remove(n);
 	beginResetModel();
 	n->parent->children.removeOne(n);
 	// Deletes the whole subtree through node's destructor, which is what the
@@ -474,6 +480,9 @@ node *tab_tree_model::replace_mirror(const QString &source, const QString &title
 	for (int i = m_root->children.size() - 1; i >= 0; --i) {
 		node *c = m_root->children.at(i);
 		if (c->mirror == source) {
+			// A mirrored tab can be opened like any other, so a refresh that
+			// replaces the folder has to say so first for the same reason.
+			emit about_to_remove(c);
 			beginRemoveRows(QModelIndex(), i, i);
 			m_root->children.removeAt(i);
 			delete c;

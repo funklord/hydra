@@ -482,6 +482,14 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// survived only until the next launch would be worse than a refusal.
 	connect(m_model, &tab_tree_model::structure_changed, this,
 	        &main_window::save_tree_soon);
+	// A node about to be deleted may have a live view, and the model knows
+	// nothing about views. Without this the view survived its node: it stayed in
+	// the stack showing a page for a tab that no longer existed, stayed in the
+	// map under an id nothing could resolve, and -- the part that made it more
+	// than a leak -- stopped the live-view cap working, since the cap gives up
+	// when it cannot resolve the victim it picked.
+	connect(m_model, &tab_tree_model::about_to_remove, this,
+	        &main_window::forget_subtree);
 	m_tree->setHeaderHidden(true);
 	m_tree->setUniformRowHeights(true);
 	// The menu lives in the view; these are the only two entries it cannot
@@ -555,6 +563,9 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// --- Status bar ------------------------------------------------------
 	m_status = new QStatusBar(this);
 	m_tab_counts = new QLabel(this);
+	// Named so a driver can read the live-view count without scanning every
+	// label for one whose text happens to match a pattern.
+	m_tab_counts->setObjectName("tab_counts");
 	m_status->addPermanentWidget(m_tab_counts);
 	m_status->showMessage("Ready");
 	outer->addWidget(m_status);
@@ -1350,10 +1361,18 @@ void main_window::enforce_live_cap(const QString &keep_id) {
 		}
 		if (victim.isEmpty())
 			break;
-		if (node *n = m_model->node_by_id(victim))
+		if (node *n = m_model->node_by_id(victim)) {
 			suspend_node(n);
-		else
-			break;
+			continue;
+		}
+		// A victim the tree no longer knows. This used to `break`, which meant
+		// one unresolvable entry stopped the cap being enforced *at all* for the
+		// rest of the session -- silently, and the symptom would have been
+		// memory rather than anything pointing here. Drop the entry and carry
+		// on; `forget_subtree` should have removed it already, so reaching this
+		// is a belt-and-braces path rather than the expected one.
+		m_lru.removeAll(victim);
+		m_views_by_id.remove(victim);
 	}
 }
 
@@ -1414,6 +1433,31 @@ void main_window::open_url_externally(const QUrl &url) {
 	else
 		m_status->showMessage("Opened in this system's default application.", 4000);
 #endif
+}
+
+// Everything under `n`, because deleting a folder takes what is inside it and
+// each of those may have a view and a state blob of its own.
+void main_window::forget_subtree(node *n) {
+	if (!n)
+		return;
+	for (node *c : n->children)
+		forget_subtree(c);
+
+	if (web_view_backend *view = m_views_by_id.value(n->id, nullptr)) {
+		if (view == current_view())
+			m_stack->setCurrentIndex(0);   // back to the placeholder
+		QWidget *w = view->widget();
+		m_stack->removeWidget(w);
+		w->deleteLater();
+	}
+	m_views_by_id.remove(n->id);
+	m_lru.removeAll(n->id);
+	// The saved state goes with it. A blob for a node that no longer exists is
+	// unreachable by anything except an id collision, which is the one way it
+	// could ever be read again -- into the wrong tab.
+	if (m_state)
+		m_state->remove(n->id);
+	update_status();
 }
 
 void main_window::save_tree_soon() {

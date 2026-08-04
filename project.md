@@ -4180,7 +4180,7 @@ the engine is asked to keep a renderer alive for audio. That is three separate
 commitments, and the handoff above buys the whole use case for one menu entry —
 which is why it comes first rather than last.
 
-### Handing a stream to a player, on a phone### Handing a stream to a player, on a phone
+### Handing a stream to a player, on a phone
 
 The desktop names a player and starts a process. Android has neither, so §19's
 answer is an intent: `ACTION_VIEW` with the url and a media type, and whichever
@@ -4922,6 +4922,74 @@ the bug reintroduced, 120 with it fixed. The fix itself is one line —
 every palette change.
 
 ---
+
+### Report-only drivers are not failures
+
+Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
+had failed. Both capture screenshots and timings for a person to read; neither
+prints a `N passed, M failed` line, and the sweep judged them on one. Two lines
+of noise in every summary is how you learn to skip the summary, and the day one
+of them breaks for real it will look exactly as it does now.
+
+The sweep moved out of a scratch directory into `tests/live/sweep.sh` (and
+`make sweep`), globbing whatever drivers were built rather than naming them, and
+it now distinguishes three outcomes rather than two: a result line that says
+zero failures, no result line but a clean run to `done`, and anything else.
+
+The same conflation had already cost a wrong answer once today in the retry
+harness, which reported `no retry needed` for run 3 -- a retry that had fired
+and then timed out. Reading the five logs directly rather than the summary they
+produced is what turned a 5-run measurement back into a 1-run one.
+
+### Deleting a tab, and the cap that quietly stopped counting
+
+The tree learned to delete this session, and deletion was the one operation
+that had nothing on the other side of it. `suspend_node` was the only place
+that ever cleaned up `m_views_by_id`, the LRU and the stack -- and nothing at
+all ran when a node was removed. A deleted tab's view stayed in the stack, its
+id stayed in the map, and `state/<id>.blob` outlived it for good.
+
+The leak is the boring half. `enforce_live_cap` picks a victim from the LRU and
+then resolves it against the tree:
+
+    if (node *n = m_model->node_by_id(victim))
+        suspend_node(n);
+    else
+        break;
+
+So the *first* deleted-but-still-live tab the cap tried to evict ended the loop
+-- and not just that once. The entry stayed in both structures, so every later
+call found it again and gave up again. **One deletion switched the four-view
+cap off for the rest of the session.** The symptom is memory, hours later, with
+nothing pointing anywhere near a delete.
+
+Two changes: `about_to_remove(node *)` on the model, connected to a
+`forget_subtree` in the shell that walks the node *and its descendants* --
+deleting a folder takes live views with it -- closing each view, dropping it
+from the map and the LRU, and removing its state blob. And the cap now drops an
+unresolvable victim and continues instead of breaking. That path should now be
+unreachable; it is belt and braces, and it is the half that was dangerous.
+
+The blob removal is not tidiness. `unused_id` only avoids collisions with what
+is *in the tree*, so an orphaned blob is unreachable by everything except a
+reused id -- which is precisely the one way it could ever be read again, into
+somebody else's tab.
+
+`state_store` already had `remove()`. I did not find it because I grepped for
+`bool remove` and the header is column-aligned: `bool       remove`. The
+compiler caught the duplicate immediately, but the same miss in a read-only
+pass would have been a confident "there is no way to delete a blob".
+
+**The driver was made to fail before it was believed.** `try_delete` passed
+11/11 first time, which is worth nothing on its own -- vacuous checks have gone
+green in this project twice already. Backing both changes out and rebuilding:
+
+      FAIL  its saved state goes with it
+      FAIL  the whole subtree's views are closed (4 live)
+      FAIL  six more opened after the deletions, still four live (10)
+
+Ten live views against a cap of four. That third line is the whole reason the
+section exists, and it is the one no offline test could have produced.
 
 ## What is next (in order)
 
