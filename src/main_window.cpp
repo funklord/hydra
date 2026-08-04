@@ -125,6 +125,17 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	});
 
 	m_keepass  = new keepass_bridge(this);
+	// Following Firefox, when asked to. The mirror only reports when the *tabs*
+	// differ, so this connection does not fire every time Firefox saves a
+	// scroll position.
+	m_fx_mirror = new session_mirror(this);
+	connect(m_fx_mirror, &session_mirror::tabs_changed, this,
+	        [this](const QList<session_import::imported_tab> &tabs) {
+		show_firefox_tabs(tabs, /*from_poll=*/true);
+	});
+	connect(m_fx_mirror, &session_mirror::failed, this,
+	        [this](const QString &why) { m_status->showMessage(why, 8000); });
+
 	m_autofill = new autofill_controller(m_keepass, m_policy, this);
 	// More than one login for a site is a question only the user can answer, and
 	// it is asked here rather than in the page: the controller holds the
@@ -676,6 +687,27 @@ QMenuBar *main_window::build_menu_bar() {
 	                                      [this] { import_firefox_tabs(); });
 	imp->setStatusTip("Read the tabs Firefox has open and show them in a folder "
 	                   "of their own");
+	// Off unless asked for. Reading another program's files on a schedule is
+	// not something to start doing because the feature exists, and the label
+	// says what it costs rather than only what it gives.
+	QAction *sync = tools_menu->addAction("&Keep Firefox Tabs in Sync");
+	sync->setCheckable(true);
+	sync->setStatusTip("Re-read Firefox's session every 15 seconds while it is "
+	                    "running");
+	connect(sync, &QAction::toggled, this, [this](bool on) {
+		if (!on) {
+			m_fx_mirror->stop();
+			m_status->showMessage("No longer following Firefox.", 5000);
+			return;
+		}
+		const QString path = session_import::firefox_session_path(
+			session_import::firefox_profile());
+		if (path.isEmpty()) {
+			m_status->showMessage("No Firefox session file to follow.", 8000);
+			return;
+		}
+		m_fx_mirror->start(path);
+	});
 
 	QAction *kpg = tools_menu->addAction("&Generate Password", this, [this] {
 		if (m_autofill)
@@ -1374,6 +1406,18 @@ void main_window::import_firefox_tabs() {
 		return;
 	}
 
+	show_firefox_tabs(tabs, /*from_poll=*/false);
+	m_status->showMessage(
+	    QString("Read %1 tabs from Firefox, as of %2. Drag one into your tree to "
+	             "keep it.")
+	        .arg(tabs.size())
+	        .arg(QFileInfo(path).lastModified().toString("HH:mm")), 12000);
+}
+
+// The mirror folder, from either route. Shared so a poll and a menu click
+// cannot drift into building the tree two different ways.
+void main_window::show_firefox_tabs(const QList<session_import::imported_tab> &tabs,
+                                     bool from_poll) {
 	QList<node *> nodes;
 	for (const session_import::imported_tab &t : tabs) {
 		node *n = new node;
@@ -1390,14 +1434,17 @@ void main_window::import_firefox_tabs() {
 		n->last_seen = n->created;
 		nodes << n;
 	}
-	m_model->replace_mirror("firefox", QString("Firefox (%1 tabs)").arg(nodes.size()),
-	                         nodes);
-	m_tree->expandAll();
-	m_status->showMessage(
-	    QString("Read %1 tabs from Firefox, as of %2. Drag one into your tree to "
-	             "keep it.")
-	        .arg(nodes.size())
-	        .arg(QFileInfo(path).lastModified().toString("HH:mm")), 12000);
+	m_model->replace_mirror("firefox",
+	                         QString("Firefox (%1 tabs)").arg(nodes.size()), nodes);
+	// Expanding the whole tree is right for a menu click and wrong for a
+	// background refresh: it would fold the user's folders open again every
+	// time Firefox opened a tab. The row signals already leave everything else
+	// alone, so a poll touches nothing but the mirror.
+	if (!from_poll)
+		m_tree->expandAll();
+	else
+		m_status->showMessage(
+		    QString("Firefox now has %1 tabs open.").arg(nodes.size()), 4000);
 }
 
 void main_window::edit_node_properties(node *n) {

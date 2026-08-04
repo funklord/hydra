@@ -7,12 +7,14 @@
 // file from this machine's Firefox profile is decompressed both ways and the
 // bytes are compared, and the suite says plainly when it could not do that.
 #include "session_import.h"
+#include "session_mirror.h"
 
 #include <QCoreApplication>
 #include <QFile>
 #include <QProcess>
 #include <QFileInfo>
 #include <QTemporaryDir>
+#include <QThread>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -162,6 +164,132 @@ int main(int argc, char **argv) {
 
 		check(session_import::firefox_profile(tmp.path() + "/nope").isEmpty(),
 		      "a root with no profiles.ini yields nothing rather than a guess");
+	}
+
+	section("a file change is not a tab change");
+	{
+		// The property that decides whether polling is usable at all. Firefox
+		// rewrites its session file constantly -- scroll offsets, form state,
+		// which tab has focus -- so a poller that refreshed on every write
+		// would rebuild the mirror every few seconds while the set of tabs sat
+		// perfectly still, folding the tree about under the user's hands.
+		auto tab = [](const char *title, const char *url, int window) {
+			session_import::imported_tab t;
+			t.title = title; t.url = url; t.window = window;
+			return t;
+		};
+		QList<session_import::imported_tab> a{
+			tab("Docs", "https://a.test/1", 0),
+			tab("Mail", "https://b.test/2", 0) };
+
+		QList<session_import::imported_tab> same = a;
+		check(session_mirror::fingerprint(a) == session_mirror::fingerprint(same),
+		      "the same tabs fingerprint the same");
+
+		// A tab dragged between two Firefox windows is the same tab; rebuilding
+		// the mirror for it would be churn with nothing to show.
+		QList<session_import::imported_tab> moved{
+			tab("Docs", "https://a.test/1", 1),
+			tab("Mail", "https://b.test/2", 1) };
+		check(session_mirror::fingerprint(a) == session_mirror::fingerprint(moved),
+		      "and so do the same tabs in a different window");
+
+		QList<session_import::imported_tab> renamed{
+			tab("Docs — edited", "https://a.test/1", 0),
+			tab("Mail", "https://b.test/2", 0) };
+		check(session_mirror::fingerprint(a) != session_mirror::fingerprint(renamed),
+		      "a retitled tab is a change, since that is what the row shows");
+
+		// The case a count would miss entirely.
+		QList<session_import::imported_tab> swapped{
+			tab("Docs", "https://a.test/1", 0),
+			tab("News", "https://c.test/3", 0) };
+		check(session_mirror::fingerprint(a) != session_mirror::fingerprint(swapped),
+		      "and closing one tab while opening another is too, which a count "
+		      "of tabs would have called identical");
+
+		check(session_mirror::fingerprint({}) !=
+		          session_mirror::fingerprint(a),
+		      "no tabs is distinguishable from some tabs");
+	}
+
+	section("the poller against a file that really changes");
+	{
+		// Driven rather than reasoned about: a real file, rewritten underneath
+		// a real poller, with the emissions counted.
+		QTemporaryDir tmp;
+		const QString path = tmp.path() + "/recovery.jsonlz4";
+
+		// Build genuine mozlz4 files, so this exercises the same read path the
+		// app uses rather than a stub of it.
+		auto write_session = [&](const QString &second_url) {
+			const QByteArray json = QString(
+				"{\"windows\":[{\"tabs\":["
+				"{\"index\":1,\"entries\":[{\"url\":\"https://a.test/1\",\"title\":\"One\"}]},"
+				"{\"index\":1,\"entries\":[{\"url\":\"%1\",\"title\":\"Two\"}]}"
+				"]}]}").arg(second_url).toUtf8();
+			// Store the payload uncompressed-but-valid: a run of literals is a
+			// legal LZ4 block, which keeps this test independent of any
+			// compressor.
+			QByteArray block;
+			int off = 0;
+			while (off < json.size()) {
+				const int run = qMin(json.size() - off, 200);
+				if (run < 15) {
+					block.append(char(run << 4));
+				} else {
+					block.append(char(15 << 4));
+					int rest = run - 15;
+					while (rest >= 255) { block.append(char(255)); rest -= 255; }
+					block.append(char(rest));
+				}
+				block.append(json.mid(off, run));
+				off += run;
+			}
+			QByteArray file("mozLz40\0", 8);
+			const quint32 n = quint32(json.size());
+			file.append(char(n & 0xff)); file.append(char((n >> 8) & 0xff));
+			file.append(char((n >> 16) & 0xff)); file.append(char((n >> 24) & 0xff));
+			file.append(block);
+			QFile f(path);
+			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			f.write(file);
+			f.close();
+		};
+
+		write_session("https://b.test/2");
+		// The fixture has to be readable by the real reader, or everything
+		// below measures the fixture.
+		QString ferr;
+		const auto sanity = session_import::firefox_tabs(path, &ferr);
+		check(sanity.size() == 2,
+		      QString("the fixture is a real mozlz4 file the reader accepts (%1%2)")
+		          .arg(sanity.size()).arg(ferr.isEmpty() ? "" : ", " + ferr));
+
+		session_mirror mirror;
+		int changes = 0;
+		QObject::connect(&mirror, &session_mirror::tabs_changed,
+		                 [&](const QList<session_import::imported_tab> &) { ++changes; });
+		mirror.start(path, 60000);   // long interval; polls are driven by hand
+		check(changes == 1, "starting it reports once, so turning it on does something");
+
+		check(!mirror.poll_once(),
+		      "polling an untouched file reports nothing");
+		check(changes == 1, "and emits nothing");
+
+		// Rewritten with the same tabs, which is what Firefox does all day.
+		QThread::msleep(1100);   // mtime granularity is a second on some systems
+		write_session("https://b.test/2");
+		check(!mirror.poll_once(),
+		      "a rewritten file holding the same tabs reports nothing");
+		check(changes == 1,
+		      "and still emits nothing -- this is the whole reason for the "
+		      "fingerprint");
+
+		QThread::msleep(1100);
+		write_session("https://c.test/3");
+		check(mirror.poll_once(), "a genuinely different tab set does report");
+		check(changes == 2, "and emits exactly once for it");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

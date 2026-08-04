@@ -365,10 +365,48 @@ set and an id of its own, so it becomes an ordinary tab in your tree, saved like
 any other. That fell out of the drag-and-drop work rather than needing anything
 of its own.
 
-**Not done:** polling, and Chromium. Chromium's sessions are an SNSS command log
-that has to be *replayed* to reconstruct state, its format is versioned internal
-API, and the flush interval is ~2.5 s from its own source — fresher than
-Firefox's and considerably more work to read.
+### Following it, which needed two problems solved first
+
+**Tools ▸ Keep Firefox Tabs in Sync**, off unless asked for: reading another
+program's files on a schedule is not something to start doing because the
+feature exists.
+
+**Polled, not watched.** `QFileSystemWatcher` is the obvious tool and the wrong
+one. Firefox writes its session by creating a temporary file and renaming it
+over the old one, so the inode the watcher holds stops being the file: the watch
+fires once and then never again. Watching the *directory* trades that for every
+unrelated write in the profile waking us. A timer that stats one path is duller
+and does not stop working.
+
+**A file change is not a tab change, and that is the whole design.** Firefox
+rewrites that file constantly — scroll offsets, form state, which tab has focus
+— so refreshing on every write would rebuild the mirror every few seconds while
+the set of tabs sat perfectly still. The parsed result is reduced to a
+fingerprint over each tab's address and title, and nothing moves unless *that*
+changes. Cheap check first (size and mtime), the expensive read only when it
+fires, and the answer thrown away when it turns out to say the same thing.
+
+The fingerprint deliberately ignores which window a tab is in — dragging a tab
+between two Firefox windows is not a change worth rebuilding for — and
+deliberately is not a count, because closing one tab while opening another is a
+change a count would call identical. Both are checked.
+
+**And the refresh had to stop being destructive.** `replace_mirror` used
+`beginResetModel`, which collapses every folder in the tree. Fine for a menu
+click; on a timer it would fold up the user's own work every time Firefox
+happened to save. It uses row signals now — one row out, one row in, at the root
+— so a poll touches nothing but the mirror. The menu click still expands the
+tree afterwards and a poll does not, for the same reason.
+
+**28 checks** in `test_session`, including a real poller driven against a real
+mozlz4 file rewritten underneath it: an untouched file reports nothing, a
+rewritten file holding the *same* tabs reports nothing, and a genuinely
+different tab set reports exactly once.
+
+**Not done: Chromium.** Its sessions are an SNSS command log that has to be
+*replayed* to reconstruct state, the format is versioned internal API, and the
+flush interval is ~2.5 s from its own source — fresher than Firefox's and
+considerably more work to read.
 
 ## The icon## The icon## The icon
 

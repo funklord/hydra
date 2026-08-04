@@ -4,6 +4,7 @@
 #include "tree_diff.h"   // for the §9.4 undo snapshot
 #include "site_extractor.h"
 #include "site_rules.h"
+#include "session_mirror.h"   // for the mirror and imported_tab
 
 #include <QWidget>
 #include <QHash>
@@ -92,6 +93,8 @@ private slots:
 	void on_tree_context_menu(const QPoint &pos);
 	void edit_node_properties(node *n);
 	void import_firefox_tabs();
+	void show_firefox_tabs(const QList<session_import::imported_tab> &tabs,
+	                        bool from_poll);
 	void on_sort_mode_changed(int combo_index);
 	void on_search_changed(const QString &text);
 	void navigate_to_address();
@@ -224,6 +227,7 @@ private:
 	QString              m_site_rules_path;
 	QAction            *m_media_action  = nullptr;
 	QAction            *m_key_action    = nullptr;
+	session_mirror     *m_fx_mirror     = nullptr;
 	QString             m_filters_path;
 	QAction            *m_kiosk_action  = nullptr;
 	QAction            *m_undo_action   = nullptr;

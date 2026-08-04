@@ -257,6 +257,8 @@ qt_add_executable(hydra
     src/credential_store.cpp
     src/session_import.cpp
     src/session_import.h
+    src/session_mirror.cpp
+    src/session_mirror.h
     src/credential_store.h
     src/keepass_protocol.cpp
     src/keepass_protocol.h

@@ -417,16 +417,19 @@ node *tab_tree_model::replace_mirror(const QString &source, const QString &title
                                       const QList<node *> &tabs) {
 	if (source.isEmpty())
 		return nullptr;
-	beginResetModel();
 
-	// Drop the previous mirror for this source wholesale. Only one folder can
-	// be the mirror of a given browser, so finding it by source rather than by
-	// title means renaming the folder does not orphan it.
+	// Row signals rather than a full reset, and that matters once this is on a
+	// timer: a reset collapses every folder in the tree, so a background
+	// refresh would fold up the user's own work every time the other browser
+	// happened to write its file. Only the root's own children change here, so
+	// the fine-grained calls are tractable -- one row out, one row in.
 	for (int i = m_root->children.size() - 1; i >= 0; --i) {
 		node *c = m_root->children.at(i);
 		if (c->mirror == source) {
+			beginRemoveRows(QModelIndex(), i, i);
 			m_root->children.removeAt(i);
 			delete c;
+			endRemoveRows();
 		}
 	}
 
@@ -442,15 +445,17 @@ node *tab_tree_model::replace_mirror(const QString &source, const QString &title
 		t->order  = folder->children.size();
 		folder->children << t;
 	}
+	mark_mirror(folder, source);
+
 	// Mirrors sit at the top, where a thing that is not yours is easiest to
 	// tell apart from the tree you built.
+	beginInsertRows(QModelIndex(), 0, 0);
 	m_root->children.prepend(folder);
 	for (int i = 0; i < m_root->children.size(); ++i)
 		m_root->children[i]->order = i;
-	mark_mirror(folder, source);
-
 	reindex();
-	endResetModel();
+	endInsertRows();
+
 	// **Not** `structure_changed`: that signal means "save the tree", and a
 	// mirror is the one thing that must not be saved. The shell shows it and
 	// forgets it, which is what makes it safe to replace on every refresh.

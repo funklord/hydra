@@ -143,7 +143,8 @@ endif()
 if(PkgConfig_FOUND)
     pkg_check_modules(LZ4_T QUIET liblz4)
 endif()
-add_executable(test_session test_session.cpp ${H}/session_import.cpp)
+add_executable(test_session test_session.cpp ${H}/session_import.cpp
+    ${H}/session_mirror.cpp)
 target_link_libraries(test_session PRIVATE Qt6::Core Qt6::Test ${LZ4_T_LIBRARIES})
 target_include_directories(test_session PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR}
     ${LZ4_T_INCLUDE_DIRS})
