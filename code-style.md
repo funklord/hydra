@@ -236,6 +236,19 @@ must match is every rule and every exception, in substance.
 from what was loaded at the start of a session -- a copy reconciled against
 a stale source is drift being written rather than fixed.
 
+## ASCII in source
+
+Source and comments are ASCII. Write `--` where prose would use an em dash,
+and "section" for a section sign.
+
+This governs the text the repository writes about itself, not the data the
+software handles. Documentation may use typographic punctuation; so may
+user-facing text in UI software, and anything that genuinely requires
+Unicode.
+
+**This project is excepted** and does not enable the check: it is a browser,
+and its user-facing strings are not repository prose.
+
 ## See also
 
 - **`~/.claude/guidelines/code-style.md`** -- the source this file copies.

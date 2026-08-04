@@ -153,7 +153,7 @@ TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test
 # after a source change and never reproducible afterwards, with nothing kept.
 FAILED_DIR = $(TESTS_DIR)/failed
 
-.PHONY: all run test test-one drivers sweep replay deb deb-check apk android install uninstall clean help style style-docs style-source
+.PHONY: all run test test-one drivers sweep replay deb deb-check apk android install uninstall clean help style style-docs style-source check
 
 # Always delegates, never compares timestamps itself. The first version made
 # the binary a real target depending on the cache file, and `make` after
@@ -318,7 +318,7 @@ style-docs:
 	       grep -oE '`[a-z_]+\.\{h,cpp\}`' | tr -d '`' | sed 's/\.{h,cpp}/.h/' | sort -u); do \
 	   [ -f "src/$$f" ] || { echo "project.md names a file that does not exist: src/$$f"; miss=1; }; \
 	 done; exit $$miss
-	@echo "style: project.md says nothing twice and names no missing files"
+	python3 tools/style_gate.py docs
 
 help:
 	@sed -n '/^# TARGETS/,/^# BUILD FLAGS/p' $(firstword $(MAKEFILE_LIST)) | \
@@ -330,3 +330,22 @@ style: style-source style-docs
 
 style-source:
 	python3 tools/style_gate.py check
+
+# `check` is everything that must pass before committing; `test` is the suite
+# alone. GNU's meaning of check, and what most of these projects already did.
+check: style test
+
+# The clean ladder, matching the sibling projects: `clean` removes build
+# products, `veryclean` adds the build directories themselves, `distclean`
+# adds editor and tool droppings.
+veryclean: clean
+	@for d in $(BUILD_DIR) $(ANDROID_BUILD_DIR) $(TESTS_DIR); do \
+	   case "$$d" in \
+	     "" | /* | . | ./ ) echo "veryclean: refusing to remove '$$d'" ;; \
+	     * ) rm -rf "$$d" && echo "veryclean: removed $$d" ;; \
+	   esac; \
+	 done
+
+distclean: veryclean
+	find . -name '*~' -o -name '*.swp' -o -name '*.orig' | xargs -r rm -f
+	find . -name __pycache__ -type d -prune -exec rm -rf {} +
