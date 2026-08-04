@@ -5275,6 +5275,67 @@ The parsing is covered offline in `test_theme`, all five cases, because three
 separate bugs lived in it and every one ended in the same indistinguishable
 place.
 
+### Packaging: a .deb and an .apk that actually install
+
+Both exist now and both were checked by installing rather than by building.
+
+**`make deb`.** Stages through the same `install-icons.sh` that `make install`
+uses, so a package and a local install cannot disagree about where things go,
+and hands the result to `dpkg-deb`.
+
+The dependency list is *computed*. `dpkg-shlibdeps` reads the binary, resolves
+each library it links to the Debian package owning it, and returns a versioned
+`Depends:` — nineteen entries here, from `libqt6webenginecore6` down to
+`libtorrent-rasterbar2.0t64`. A hand-written list would be wrong the first time
+an optional dependency was switched on, since libsecret, libsodium, liblz4 and
+libtorrent are all found at configure time or not at all. The right list is a
+property of the binary in front of us.
+
+Three things went wrong, and the first is the one worth keeping:
+
+- **The dependency list came back empty**, and said so. `dpkg-shlibdeps` has to
+  run from a directory holding a `debian/control`, so it is invoked after a
+  `cd` — at which point the *relative* staging path it was given stopped
+  resolving. The result would have been a package that installs cleanly and
+  then does not start, which is the worst available outcome. It only surfaced
+  because the script warns rather than shrugging; paths are absolute now.
+- **Every directory in the package was mode 775.** `--root-owner-group` sets
+  ownership and not modes, so the build host's umask decided, and a package
+  shipping group-writable system directories widens permissions on the machine
+  that installs it.
+- The icon cache and desktop database are deliberately *not* refreshed while
+  staging. That would touch the build host; on the installing machine dpkg's
+  own triggers do both after unpacking, which is the only correct moment.
+
+Verified by extracting the package, confirming every declared dependency is
+satisfied, and running the stripped binary out of the extracted tree. It starts.
+
+**`make apk`.** The Android build already worked; what it produced was not a
+package anyone could ship. `aapt2 dump badging` reported `versionCode=''` and
+`versionName=''`, because the manifest carried neither attribute and
+androiddeployqt only fills placeholders it can find. **An apk with no
+versionCode is one that no later build can ever be an upgrade of** — Android
+compares that integer and reads absent as zero. Both now come from
+`project(VERSION)` through `QT_ANDROID_VERSION_NAME`/`_CODE`, and the manifest
+keeps the literal placeholders rather than hand-written values that would drift.
+`ANDROID_VERSION_CODE` is a separate cache variable because a dotted version
+cannot be compared as an integer, so it cannot be derived.
+
+The apk is also copied out of `android-build/android-build/build/outputs/apk/debug/`
+under a name that says what it is.
+
+Verified with `aapt2` (`versionCode='1' versionName='0.1'`, `native-code:
+'arm64-v8a'`, label Hydra) and `apksigner` (debug key, signature valid).
+
+**One thing left, and it is a decision rather than a defect.** The application
+id is still `org.qtproject.example.hydra` — Qt's example namespace, carried from
+the template. It installs and runs, so it does not block evaluation, but it is
+not an identity to publish under: it collides with every other Qt example app,
+and an application id cannot be changed later without every installation
+becoming a separate app that cannot upgrade the first. Changing it means
+renaming the Java package directories under `android/src/` as well. It is the
+owner's namespace to choose, so it is recorded here rather than guessed at.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

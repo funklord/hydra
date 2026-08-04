@@ -319,6 +319,21 @@ endif()
 if(ANDROID)
     set_property(TARGET hydra PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
                  ${CMAKE_CURRENT_SOURCE_DIR}/android)
+
+    # The package had no version at all: `aapt2 dump badging` reported
+    # versionCode='' and versionName='', because the manifest carried neither
+    # attribute and androiddeployqt only fills in placeholders it can find. An
+    # apk with no versionCode installs, and then nothing can ever be an upgrade
+    # of it -- Android compares that integer and treats absent as zero.
+    #
+    # Both come from project(VERSION) so there is one place to change them.
+    # ANDROID_VERSION_CODE is separate and must rise by one on every release
+    # that is meant to replace an earlier one; a dotted version cannot be
+    # compared as an integer, so it cannot be derived.
+    set(ANDROID_VERSION_CODE "1" CACHE STRING
+        "Android versionCode; must increase for each published build")
+    set_property(TARGET hydra PROPERTY QT_ANDROID_VERSION_NAME ${PROJECT_VERSION})
+    set_property(TARGET hydra PROPERTY QT_ANDROID_VERSION_CODE ${ANDROID_VERSION_CODE})
 endif()
 
 target_link_libraries(hydra PRIVATE

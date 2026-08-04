@@ -21,6 +21,14 @@ done
 mkdir -p "$share/applications"
 cp "$here/packaging/hydra.desktop" "$share/applications/hydra.desktop"
 
+# Skipped when staging into a package. Refreshing a cache while building a .deb
+# would touch the *build* host, and on the installing machine dpkg's own
+# triggers do both of these after unpacking, which is the only correct moment.
+if [ -n "${HYDRA_SKIP_CACHE_UPDATE:-}" ]; then
+	echo "installed into $share (caches left for the package manager)"
+	exit 0
+fi
+
 # Harmless if absent; without it a running desktop may not notice the new icon.
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 	gtk-update-icon-cache -q -t -f "$share/icons/hicolor" 2>/dev/null || true

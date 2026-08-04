@@ -52,7 +52,10 @@
 #   make drivers      -- build the live drivers (expensive; see JOBS below)
 #   make sweep        -- build them and run them all, with a summary (needs a display)
 #   make replay       -- re-score recorded model replies against the gate (no model)
-#   make android      -- build the Android APK
+#   make deb          -- build a .deb into build/deb (dependencies computed)
+#   make deb-check    -- build it and print what it declares and contains
+#   make apk          -- build a signed-for-debug Android .apk
+#   make android      -- same as `apk`, kept because it was the older name
 #   make install      -- install the binary, desktop entry and icon set
 #   make uninstall    -- remove what install put there
 #   make clean        -- remove build output, leaving the source tree alone
@@ -106,6 +109,8 @@ SHARE  ?= $(PREFIX)/share
 
 # Android. Kept together so the "you are missing one" message can name them.
 QT_ANDROID_ROOT   ?= $(HOME)/Qt/6.11.1/android_arm64_v8a
+# Only used to name the copied apk; the kit above decides the real ABI.
+ANDROID_ABI       ?= arm64-v8a
 QT_HOST_PATH      ?= $(HOME)/Qt/6.11.1/gcc_64
 ANDROID_NDK_ROOT  ?= $(HOME)/android-ndk-r29
 ANDROID_SDK_ROOT  ?= $(HOME)/Android/Sdk
@@ -148,7 +153,7 @@ TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test
 # after a source change and never reproducible afterwards, with nothing kept.
 FAILED_DIR = $(TESTS_DIR)/failed
 
-.PHONY: all run test test-one drivers sweep replay android install uninstall clean help style
+.PHONY: all run test test-one drivers sweep replay deb deb-check apk android install uninstall clean help style
 
 # Always delegates, never compares timestamps itself. The first version made
 # the binary a real target depending on the cache file, and `make` after
@@ -211,6 +216,41 @@ replay: $(TESTS_DIR)/CMakeCache.txt
 # Pass DRIVERS=... for a subset: make sweep DRIVERS="try_import try_delete".
 sweep: drivers
 	@tests/live/sweep.sh $(DRIVERS)
+
+# --- Packaging -------------------------------------------------------------
+#
+# The version is read from CMakeLists so there is one place to change it, with
+# a Debian revision appended. Override either: make deb DEB_VERSION=0.2-1
+# `project.Hydra` rather than `project(Hydra`: make counts parentheses inside
+# $(shell ...) and an unmatched one in the sed script ends the call early.
+VERSION     := $(shell sed -n 's/^project.Hydra VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+DEB_VERSION ?= $(VERSION)-1
+DEB_DIR      = $(BUILD_DIR)/deb
+
+deb: all
+	@packaging/make-deb.sh $(BUILD_DIR)/$(TARGET) \
+	    $(DEB_DIR)/stage $(DEB_DIR) $(DEB_VERSION)
+
+# What the package says about itself and what is in it, without installing.
+deb-check: deb
+	@deb=$$(ls -t $(DEB_DIR)/*.deb | head -1); \
+	 dpkg-deb --info "$$deb"; \
+	 echo "--- contents ---"; \
+	 dpkg-deb --contents "$$deb"
+
+# The apk androiddeployqt produces is called `android-build-debug.apk` and sits
+# five directories down inside the build tree. Copied out under a name that says
+# what it is, because "which of these is the one I just built" is a question a
+# packaging target should not leave anyone asking.
+apk: android
+	@src=$$(find $(ANDROID_BUILD_DIR) -name '*.apk' -newer $(ANDROID_BUILD_DIR) \
+	         -print 2>/dev/null | head -1); \
+	 test -n "$$src" || src=$$(find $(ANDROID_BUILD_DIR) -name '*.apk' | head -1); \
+	 test -n "$$src" || { echo "no apk produced"; exit 1; }; \
+	 out=$(ANDROID_BUILD_DIR)/hydra-$(VERSION)-$(ANDROID_ABI)-debug.apk; \
+	 cp "$$src" "$$out"; \
+	 echo "$$out"; \
+	 echo "install it with: adb install -r $$out"
 
 android:
 	@test -x "$(QT_ANDROID_ROOT)/bin/qt-cmake" || \
