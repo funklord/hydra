@@ -78,6 +78,7 @@
 #include <QFormLayout>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QActionGroup>
 #include <QAction>
 #include <QTimer>
@@ -538,6 +539,22 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	                                "tool if one fits");
 	connect(m_annoyed_action, &QAction::triggered, this,
 	         &main_window::report_annoyance);
+
+	// **Only when there is something to confirm.** A satisfaction button that
+	// is always there measures who likes pressing buttons; this one appears
+	// after rules are applied and asks the one question nothing else can
+	// answer -- did they break the page? Over-blocking is silent: no error, no
+	// console message, nothing in the request log, just a player that does not
+	// start. Hidden again the moment it is answered.
+	m_confirm_action = bar->addAction("Still working?");
+	m_confirm_action->setIcon(themed_icon({ "face-smile", "dialog-question",
+	                                         "emblem-default" }, style(),
+	                                       QStyle::SP_MessageBoxQuestion));
+	m_confirm_action->setToolTip("New rules were applied here — did they break "
+	                              "anything?");
+	m_confirm_action->setVisible(false);
+	connect(m_confirm_action, &QAction::triggered, this,
+	         &main_window::confirm_rules);
 
 	QAction *shield_act = bar->addAction("Shield");
 	shield_act->setIcon(themed_icon({ "security-high", "security-medium",
@@ -1197,10 +1214,105 @@ void main_window::open_filter_evolution() {
 		return;
 	}
 
+	// What the list held before, so what the proposal added can be named
+	// afterwards. The dialog does not report it and does not need to: a rule is
+	// its text, and the difference of two sets of texts is exactly the set that
+	// would have to be removed to undo this.
+	QSet<QString> before;
+	if (m_filters)
+		for (const filter_rule &r : m_filters->rules())
+			before.insert(r.text);
+
 	filter_dialog dlg(m_signals, m_filters, chosen, v->url().host(),
 	                   m_picker->last(), this);
-	if (dlg.exec() == QDialog::Accepted && !m_filters_path.isEmpty())
+	if (dlg.exec() != QDialog::Accepted)
+		return;
+	if (!m_filters_path.isEmpty())
 		m_filters->save(m_filters_path);
+
+	QStringList added;
+	if (m_filters)
+		for (const filter_rule &r : m_filters->rules())
+			if (!before.contains(r.text))
+				added << r.text;
+	offer_confirmation(added, v->url().host());
+}
+
+// Put the question only when there is one to put. Nothing added means nothing
+// to have broken, and an "is it still working?" after a no-op is the kind of
+// prompt that teaches people to ignore prompts.
+void main_window::offer_confirmation(const QStringList &added,
+                                      const QString &host) {
+	if (added.isEmpty() || host.isEmpty())
+		return;
+	m_unconfirmed_rules = added;
+	m_unconfirmed_host  = host;
+	if (m_confirm_action)
+		m_confirm_action->setVisible(true);
+	m_status->showMessage(
+	    QString("%1 rule%2 applied to %3. If the page stops working, the "
+	             "toolbar can undo them.")
+	        .arg(added.size()).arg(added.size() == 1 ? "" : "s").arg(host),
+	    9000);
+}
+
+void main_window::confirm_rules() {
+	if (m_unconfirmed_rules.isEmpty()) {
+		if (m_confirm_action)
+			m_confirm_action->setVisible(false);
+		return;
+	}
+	QMessageBox box(this);
+	box.setWindowTitle("Did those rules break anything?");
+	box.setObjectName("confirm_rules");
+	box.setText(QString("%1 rule%2 %3 applied to <b>%4</b>.")
+	                .arg(m_unconfirmed_rules.size())
+	                .arg(m_unconfirmed_rules.size() == 1 ? "" : "s")
+	                .arg(m_unconfirmed_rules.size() == 1 ? "was" : "were")
+	                .arg(m_unconfirmed_host.toHtmlEscaped()));
+	// The rules themselves, because "undo the thing you cannot see" is not a
+	// question anybody can answer well.
+	box.setDetailedText(m_unconfirmed_rules.join('\n'));
+	box.setInformativeText(
+	    "Over-blocking is silent — a rule that kills a player or a login form "
+	    "produces no error at all. If something here stopped working, this is "
+	    "the moment to say so.");
+	QPushButton *keep = box.addButton("Still &Works", QMessageBox::AcceptRole);
+	QPushButton *undo = box.addButton("It &Broke — Undo Them",
+	                                   QMessageBox::DestructiveRole);
+	box.setDefaultButton(keep);
+	box.exec();
+
+	QAbstractButton *answer = box.clickedButton();
+	if (answer == undo) {
+		int removed = 0;
+		for (const QString &text : std::as_const(m_unconfirmed_rules))
+			if (m_filters && m_filters->remove(text))
+				++removed;
+		if (m_filters && !m_filters_path.isEmpty())
+			m_filters->save(m_filters_path);
+		m_status->showMessage(
+		    QString("Removed %1 rule%2. Reloading %3.")
+		        .arg(removed).arg(removed == 1 ? "" : "s").arg(m_unconfirmed_host),
+		    8000);
+		// Reloaded, because a cosmetic rule is applied at page load and the
+		// page in front of somebody who just said it is broken is still broken
+		// until it is fetched again.
+		if (web_view_backend *v = current_view())
+			v->reload();
+	} else if (answer == keep) {
+		m_status->showMessage(
+		    QString("Kept %1 rule%2 for %3.")
+		        .arg(m_unconfirmed_rules.size())
+		        .arg(m_unconfirmed_rules.size() == 1 ? "" : "s")
+		        .arg(m_unconfirmed_host), 6000);
+	}
+	// Answered either way -- including dismissed, which is an answer of "do not
+	// ask me again about this" rather than a reason to keep nagging.
+	m_unconfirmed_rules.clear();
+	m_unconfirmed_host.clear();
+	if (m_confirm_action)
+		m_confirm_action->setVisible(false);
 }
 
 void main_window::toggle_password_manager() {

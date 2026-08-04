@@ -153,6 +153,10 @@ private slots:
 	// One click, at the moment something got through. See annoyance_log.h for
 	// why this is worth a toolbar slot of its own rather than a menu item.
 	void report_annoyance();
+	// The other half: did the rules just applied break this page? Reachable
+	// only while there is something to confirm. See main_window.cpp.
+	void confirm_rules();
+	void offer_confirmation(const QStringList &added, const QString &host);
 	void undo_reorganize();
 	void on_media_found(const QString &site_host, int count);
 
@@ -236,6 +240,12 @@ private:
 	annoyance_log      *m_annoyances    = nullptr;
 	QString             m_annoyances_path;
 	QAction            *m_annoyed_action = nullptr;
+	QAction            *m_confirm_action = nullptr;
+	// Rule texts added by the last accepted proposal, and where. Held until
+	// somebody says whether the page still works, because that is the only
+	// window in which "undo" means anything specific.
+	QStringList         m_unconfirmed_rules;
+	QString             m_unconfirmed_host;
 	filter_list        *m_filters       = nullptr;
 	// Kept so the accepted rules can be handed to it once the list is loaded,
 	// which happens after construction.

@@ -5722,12 +5722,36 @@ analytics addresses contain commas — `tag_exp=1~2~3&list=a,b,c` — so a joine
 string cannot be split back. The offline suite files a report with two such
 addresses and checks they survive the round trip.
 
-**The happy half is deliberately not built.** As a satisfaction signal it is
-sparse and skewed: people do not click when things work. There is one version
-worth having later — a confirmation that a *newly applied filter rule did not
-break the page*, since over-blocking is silent and nothing here would otherwise
-find out — and that is a different feature with a different trigger, offered
-only when there is something to confirm.
+**The happy half, built as the thing it is actually good for.** Not a smiley:
+as a satisfaction signal it would be sparse and skewed, since people do not
+click when things work. What it is worth having for is **confirming that a
+newly applied rule did not break the page**, because over-blocking is *silent* —
+a rule that kills a player or a login form produces no error, no console
+message, and nothing in the request log. A page that is subtly broken looks
+exactly like a page.
+
+So it appears only when there is something to confirm. `open_filter_evolution`
+records what the list held before the dialog and diffs it after, which names the
+rules that would have to be removed to undo the change — the dialog does not
+have to report anything, because a rule is its text and the difference of two
+sets of texts is exactly the undo set. An empty diff raises no question at all:
+an "is it still working?" after a no-op is the kind of prompt that teaches
+people to ignore prompts.
+
+**Answering "it broke" removes them and reloads**, which is the only reason the
+question is worth asking. `try_confirm` holds that rather than the dialog: it
+seeds three rules on disk, says two of them broke the page, and checks those two
+are gone from the file the browser actually filters with while the third is
+untouched. Proved by breaking it — with the removal disabled, the two file
+checks fail and nothing else does.
+
+The reload is not decoration either: a cosmetic rule applies at page load, so
+the page in front of somebody who has just said it is broken stays broken until
+it is fetched again.
+
+Dismissing the box counts as answered. It means "stop asking about this", not
+"ask me again" — the alternative is a prompt that follows somebody around, which
+is the behaviour that makes people stop reading prompts in the first place.
 
 ### Collapsing the suspect list, and the first answer that collapsed nothing
 
