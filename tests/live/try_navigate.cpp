@@ -14,6 +14,7 @@
 #include "node.h"
 #include "policy_engine.h"
 #include "qtwebengine_factory.h"
+#include "qtwebengine_view.h"
 #include "request_filter.h"
 #include "tab_tree_model.h"
 
@@ -237,6 +238,49 @@ int main(int argc, char *argv[]) {
 				spin(300);
 				check(!bar->isVisible(), "closing it puts it away again");
 			}
+		}
+	}
+
+	section("zooming the page");
+	{
+		// Through the actions, and read back through the seam rather than from
+		// anything this window remembers -- a level the window believes and the
+		// page does not have is exactly the bug worth catching.
+		QAction *zin = nullptr, *zout = nullptr, *zoff = nullptr;
+		for (QAction *a : w.findChildren<QAction *>()) {
+			if (a->text().contains("Zoom &In"))   zin  = a;
+			if (a->text().contains("Zoom &Out"))  zout = a;
+			if (a->text().contains("Actual Size")) zoff = a;
+		}
+		check(zin && zout && zoff, "the three zoom actions exist");
+
+		auto *view = w.findChild<qtwebengine_view *>();
+		check(view, "and the page can be asked what it is at");
+		if (zin && zout && zoff && view) {
+			check(qFuzzyCompare(view->zoom_factor(), 1.0), "a page starts at 100%");
+
+			zin->trigger();
+			spin(200);
+			check(view->zoom_factor() > 1.0,
+			      QString("zooming in enlarges it (%1)").arg(view->zoom_factor()));
+
+			// The ladder, not a multiplier: two steps up and two down is
+			// exactly where it started, whatever route it took.
+			zin->trigger();
+			spin(150);
+			zout->trigger();
+			zout->trigger();
+			spin(200);
+			check(qFuzzyCompare(view->zoom_factor(), 1.0),
+			      QString("and stepping back lands on 100% exactly (%1)")
+			          .arg(view->zoom_factor()));
+
+			zin->trigger();
+			spin(150);
+			zoff->trigger();
+			spin(200);
+			check(qFuzzyCompare(view->zoom_factor(), 1.0),
+			      "Actual Size is an absolute, not an undo");
 		}
 	}
 

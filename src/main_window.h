@@ -176,6 +176,12 @@ private:
 	// Show or hide the loading bar, and say so when a page does not arrive.
 	void open_find();
 
+	// Page zoom: step through a fixed ladder, and remember it per tab.
+	void step_zoom(int direction);          // -1, 0 to reset, +1
+	void apply_zoom(web_view_backend *view, const QString &node_id);
+
+	QHash<QString, double> m_zoom;          // node id -> factor, 1.0 omitted
+
 	void on_load_progress(int percent);
 	void on_load_finished(bool ok);
 

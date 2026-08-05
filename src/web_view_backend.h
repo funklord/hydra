@@ -55,6 +55,12 @@ public:
 	// reliable scaling path (architecture doc §8.1); every engine has this.
 	virtual void set_zoom_factor(double factor) = 0;
 
+	// What it is now. **Not pure, and it answers 1.0** for a backend that
+	// cannot scale: a caller stepping up from "whatever it is" then starts
+	// from the same place it would have anyway, and the shell can report a
+	// level without keeping a second copy of it to fall out of step.
+	virtual double zoom_factor() const { return 1.0; }
+
 	// Run `source` in every page this view loads, in an isolated world so the
 	// page cannot see or tamper with it (architecture doc §13.2). Android's
 	// System WebView has its own injection mechanism, which is why this sits on

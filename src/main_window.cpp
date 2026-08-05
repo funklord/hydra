@@ -909,6 +909,22 @@ QMenuBar *main_window::build_menu_bar() {
 	view_menu->addSeparator();
 	// Full screen last in View, which is where it has been since this menu had
 	// a Toolbars submenu above it.
+	// Page zoom. **A ladder rather than a multiplier**, because repeated
+	// multiplication lands on levels nobody chose -- 1.331 -- and the way back
+	// to 100% then depends on how you got there. These are the steps every
+	// browser uses, and Actual Size is an absolute rather than an undo.
+	view_menu->addSeparator();
+	QAction *zin  = view_menu->addAction("Zoom &In", QKeySequence::ZoomIn, this,
+	                                      [this] { step_zoom(+1); });
+	QAction *zout = view_menu->addAction("Zoom &Out", QKeySequence::ZoomOut, this,
+	                                      [this] { step_zoom(-1); });
+	QAction *zoff = view_menu->addAction("&Actual Size", QKeySequence("Ctrl+0"),
+	                                      this, [this] { step_zoom(0); });
+	zin->setStatusTip("Make this page larger");
+	zout->setStatusTip("Make this page smaller");
+	zoff->setStatusTip("Back to 100%");
+	view_menu->addSeparator();
+
 	m_kiosk_action = view_menu->addAction("&Kiosk Mode", QKeySequence(Qt::Key_F11),
 	                                       this, &main_window::toggle_kiosk);
 	m_kiosk_action->setCheckable(true);
@@ -1748,6 +1764,7 @@ void main_window::open_node(node *n) {
 
 	n->type = node_type::open_tab;
 	m_model->refresh_node(n);
+	apply_zoom(view, n->id);
 	m_stack->setCurrentWidget(view->widget());
 	// The bar belongs to the page in front of you. Left showing, it would
 	// report the last tab's load against this one for as long as that took.
@@ -1821,6 +1838,63 @@ void main_window::update_navigation() {
 // **Nothing to search is a message, not a silent no-op.** The bar would
 // otherwise open over an empty window and report no matches, which reads as a
 // broken search rather than as an absent page.
+namespace {
+
+// The ladder, in the order a person steps through it. Chromium's own set, so
+// that a page zoomed here looks like the same page zoomed anywhere else.
+constexpr double k_zoom_steps[] = {
+		0.25, 0.33, 0.50, 0.67, 0.75, 0.90, 1.00,
+		1.10, 1.25, 1.50, 1.75, 2.00, 2.50, 3.00, 4.00, 5.00,
+};
+constexpr int k_zoom_count = int(sizeof(k_zoom_steps) / sizeof(k_zoom_steps[0]));
+
+// The nearest rung to where the page actually is. Asked of the view rather
+// than remembered, because something else may have set it -- kiosk mode does,
+// and a remembered index would then step from a level that is no longer true.
+int nearest_step(double factor) {
+	int best = 0;
+	for (int i = 1; i < k_zoom_count; ++i)
+		if (qAbs(k_zoom_steps[i] - factor) < qAbs(k_zoom_steps[best] - factor))
+			best = i;
+	return best;
+}
+
+}  // namespace
+
+// Zoom is **per tab and remembered**, which is the behaviour that makes it
+// worth having: one site wants 125% permanently and the rest do not, and a
+// zoom that resets on every navigation has to be redone constantly.
+void main_window::step_zoom(int direction) {
+	web_view_backend *v = current_view();
+	if (!v) {
+		m_status->showMessage("Open a page first \u2014 there is nothing to "
+		                       "zoom.", 5000);
+		return;
+	}
+	double factor = 1.0;
+	if (direction != 0) {
+		int at = nearest_step(v->zoom_factor()) + direction;
+		factor = k_zoom_steps[qBound(0, at, k_zoom_count - 1)];
+	}
+	v->set_zoom_factor(factor);
+
+	const QString id = m_views_by_id.key(v);
+	if (!id.isEmpty()) {
+		// 100% is the absence of a setting, not a setting: keeping it would
+		// grow an entry for every tab ever looked at.
+		if (qFuzzyCompare(factor, 1.0))
+			m_zoom.remove(id);
+		else
+			m_zoom.insert(id, factor);
+	}
+	m_status->showMessage(QString("Zoom %1%").arg(qRound(factor * 100)), 3000);
+}
+
+void main_window::apply_zoom(web_view_backend *view, const QString &node_id) {
+	if (view)
+		view->set_zoom_factor(m_zoom.value(node_id, 1.0));
+}
+
 void main_window::open_find() {
 	if (!current_view()) {
 		m_status->showMessage("Open a page first \u2014 there is nothing to "

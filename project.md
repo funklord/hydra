@@ -6464,6 +6464,34 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### No way to make a page bigger
+
+`set_zoom_factor` had been in the seam since kiosk mode needed it, and nothing
+a person could reach ever called it. So the browser could scale a page and
+offered no way to ask.
+
+**A ladder, not a multiplier.** Repeated multiplication lands on levels nobody
+chose -- 1.1 three times is 1.331 -- and the way back to 100% then depends on
+the route taken rather than on where you are. The steps are Chromium's own set,
+so a page zoomed here looks like the same page zoomed anywhere else, and
+*Actual Size* is an absolute rather than an undo.
+
+**The current rung is asked of the page, not remembered.** Kiosk mode sets the
+factor directly, so an index held in the window would step from a level that is
+no longer true. `zoom_factor()` joins the seam for this, defaulting to 1.0 for a
+backend that cannot scale -- which leaves a caller stepping up from "whatever it
+is" starting exactly where it would have anyway.
+
+**Per tab, and remembered across suspension.** That is the behaviour that makes
+zoom worth having: one site wants 125% permanently and the rest do not, and a
+zoom that resets on every navigation gets redone forever. 100% is stored as the
+*absence* of an entry rather than as an entry, or the map grows a row for every
+tab ever looked at.
+
+The driver reads the level back through the seam rather than from anything the
+window believes, because a window that thinks a page is at 125% when it is not
+is precisely the bug worth catching.
+
 ### No way to search the page
 
 A browser with no find-in-page is missing the affordance people reach for
