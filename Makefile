@@ -50,7 +50,8 @@
 #                        or a model are listed but not run (see tests/README.md)
 #   make test-one T=x -- build and run a single suite, e.g. T=test_theme
 #   make drivers      -- build the live drivers (expensive; see JOBS below)
-#   make sweep        -- build them and run them all, with a summary (needs a display)
+#   make sweep        -- build them and run them all, with a summary (offscreen;
+#                        SWEEP_ONSCREEN=1 uses the real display)
 #   make replay       -- re-score recorded model replies against the gate (no model)
 #   make deb          -- build a .deb into build/deb (dependencies computed)
 #   make deb-check    -- build it and print what it declares and contains
@@ -59,7 +60,12 @@
 #   make install      -- install the binary, desktop entry and icon set
 #   make uninstall    -- remove what install put there
 #   make clean        -- remove build output, leaving the source tree alone
-#   make style        -- the repo's own checks on project.md (see DOC CHECKS)
+#   make style        -- the shared source gate plus this repo's project.md
+#                        heading checks (see DOC CHECKS)
+#   make check        -- style and test together, the one to run before a commit
+#   make hooks        -- install the git hooks from tools/hooks/
+#   make veryclean    -- clean, plus the generated artefacts it leaves
+#   make distclean    -- veryclean, plus anything a release build produced
 #   make help         -- this list
 #
 # BUILD FLAGS
