@@ -6387,6 +6387,64 @@ because nothing asked again until a page opened. It is called once more at the
 end of the constructor, which is the only point where everything it reads
 exists.
 
+### Three build systems for the same tree, measured
+
+hydra was the only private project that needed CMake, and the accounting for
+what dropping it would cost was written from CMakeLists.txt rather than from a
+trial. Two thirds of it was wrong. So the app was converted to qmake, the test
+tree to plain Make, and both were measured against fmake on a copy.
+
+**What each one had to be told.**
+
+| | app sources | Q_OBJECT headers | Android sources | optional features | test programs |
+|---|---|---|---|---|---|
+| CMake | listed, 119 lines | AUTOMOC | `if(ANDROID)` | 4 x `pkg_check_modules` | 38 source lists |
+| qmake | `$$files()` minus platform | `HEADERS` must be complete | one `else` branch | 4 x `packagesExist` | -- |
+| Make | `$(wildcard)` minus platform | `grep -l Q_OBJECT` | `filter-out` | 4 x `pkg-config --exists` | globbed |
+| fmake | nothing | nothing | nothing | 5 one-line comments | found them itself |
+
+**What it costs to compile.** The same 70 test binaries, plus the app:
+
+    CMake   434 objects   (68 app + 366 tests)
+    Make    287 objects   (109 app + 178 tests)
+    fmake   181 objects   (one tree, every TU compiled once)
+
+CMake's test tree compiles `local_proxy.cpp` twelve times and `policy.cpp`
+eleven, because each suite names its own sources and each target compiles them
+again. The Make conversion builds one `libhydra_app.a` and lets the linker
+choose members, which deletes both the duplication and the thirty-eight source
+lists -- a static archive contributes only what resolves something, so a suite
+still links only what it reaches. fmake reaches the same answer from symbol
+tables with no archive at all.
+
+**The binaries agree.** Stripped: CMake 2,045,928 bytes at `-O3`, qmake
+1,828,728 and fmake 1,783,544 at `-O2`. All three link the same four optional
+libraries and the same seventeen Qt modules. Every offline suite built by Make
+produces the same result as the CMake-built one, including the six that fail
+for want of a local helper -- identical counts, suite by suite.
+
+**Two traps, one per system, and both are the same trap.**
+
+`annoyed_dialog.h` and `cosmetic_filters.h` carry `Q_OBJECT` and are *absent*
+from the CMakeLists source list. AUTOMOC finds them anyway, through the
+same-named `.cpp`. A hand-written `HEADERS` transcribed from that list would
+have inherited the omission and failed at link with an undefined vtable, which
+is a confusing error a long way from its cause. Globbing the directory is what
+makes the difference stop mattering -- in both qmake and Make.
+
+fmake's directives are Doxygen comments, so `//` is not enough: `//!` is. The
+first five annotations did nothing, and the only reason that was visible in
+seconds rather than at link time is that fmake kept printing the diagnostic
+naming the remedy. A build system that reports what it cannot see is worth more
+than one that guesses.
+
+**What is still CMake's alone: the APK.** `qt-cmake` drives androiddeployqt,
+and neither the Make conversion nor fmake packages an Android app. The `.pro`
+carries the Android block -- package source directory, version name and code --
+but it has not been run against a kit, so it is written and unverified. beerssh
+already ships a Qt 6 app and an APK from qmake, so the path exists; it has not
+been walked here.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

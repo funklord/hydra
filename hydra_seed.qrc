@@ -1,0 +1,8 @@
+<!-- The sample tree, compiled in. On desktop it is read from the source
+     directory or the command line; on Android there is no such directory, so
+     the first run has to seed app storage from something the package carries. -->
+<RCC>
+	<qresource prefix="/">
+		<file>sample-tree.txt</file>
+	</qresource>
+</RCC>
