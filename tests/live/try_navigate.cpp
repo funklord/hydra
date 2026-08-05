@@ -241,6 +241,36 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	section("where a link would take you");
+	{
+		// Driven through the window's own method rather than by hovering: what
+		// is worth checking is the eliding and the clearing, and synthesising a
+		// mouse move over an offscreen page tests Qt rather than this.
+		QStatusBar *sb = w.findChild<QStatusBar *>();
+		check(sb, "the status bar is reachable");
+		if (sb) {
+			w.show_link_target(QUrl("https://example.test/a/page"));
+			check(sb->currentMessage() == "https://example.test/a/page",
+			      QString("a short target is shown whole (%1)")
+			          .arg(sb->currentMessage()));
+
+			// **The host has to survive.** A url elided from the right keeps
+			// the scheme and loses the only part that answers "where does this
+			// go", which is the entire question being asked.
+			const QString host = "https://example.test/";
+			w.show_link_target(QUrl(host + QString("x").repeated(400)));
+			const QString shown = sb->currentMessage();
+			check(shown.size() < 140,
+			      QString("a long one is cut down (%1 chars)").arg(shown.size()));
+			check(shown.startsWith("https://example.test/"),
+			      QString("and keeps the host (%1)").arg(shown.left(40)));
+
+			w.show_link_target(QUrl());
+			check(sb->currentMessage().isEmpty(),
+			      "leaving the link clears it rather than leaving a stale claim");
+		}
+	}
+
 	section("the Reload button becomes Stop while a page is arriving");
 	{
 		// **Watched rather than sampled.** Even a local file goes through

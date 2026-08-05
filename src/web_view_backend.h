@@ -157,6 +157,12 @@ signals:
 	void load_progress(int percent);
 	void load_finished(bool ok);
 
+	// Where the link under the pointer would take you. An empty url means the
+	// pointer left one. **This is the browser's oldest security affordance**:
+	// the only way to see where a link goes before committing to it, and the
+	// only check on link text that says one thing and points at another.
+	void link_hovered(const QUrl &url);
+
 	// The engine's render process died. Kiosk mode's watchdog reloads on this
 	// so an unattended screen self-heals (architecture doc §8.3).
 	void render_process_gone();

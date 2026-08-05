@@ -69,6 +69,10 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	         [this](const QUrl &) { emit history_changed(); });
 	connect(m_view, &QWebEngineView::loadFinished, this,
 	         [this](bool) { emit history_changed(); });
+	// One line, because the page already knows: Qt reports the link under the
+	// pointer and an empty string when the pointer leaves it.
+	connect(m_page, &QWebEnginePage::linkHovered, this,
+	         [this](const QString &url) { emit link_hovered(QUrl(url)); });
 	connect(m_view, &QWebEngineView::loadStarted, this,
 	         [this] { emit load_progress(0); });
 	connect(m_view, &QWebEngineView::loadProgress, this,

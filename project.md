@@ -6464,6 +6464,31 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### No way to see where a link goes
+
+A browser whose whole argument is that you can see what a page is doing had no
+link target on hover. That is the oldest security affordance the medium has: the
+only check on link text that says one thing and points somewhere else, and the
+only way to find out before committing to the click.
+
+**The status bar, not a tooltip.** A tooltip follows the pointer and covers the
+thing being pointed at. The status bar is where browsers have put this since
+before tooltips existed, and it is out of the way of the page.
+
+**Elided in the middle, and that is the whole point.** A long url truncated from
+the right keeps its scheme and loses its host -- the only part that answers the
+question being asked. Cutting the middle keeps both ends, so the host and the
+final path segment both survive.
+
+**An empty url clears rather than expires.** The pointer has left the link, and
+a target still on screen after that is a claim about where the pointer is now.
+
+The presentation is a method the driver can call directly, because what is worth
+checking is the eliding and the clearing; synthesising a mouse move over an
+offscreen page would test Qt rather than this. The engine connection is one
+line -- Qt already reports the link and reports an empty string when the pointer
+leaves.
+
 ### A page that would not stop loading
 
 The progress bar said a page was arriving and there was no way to tell it not

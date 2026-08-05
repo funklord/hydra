@@ -182,6 +182,13 @@ private:
 
 	QHash<QString, double> m_zoom;          // node id -> factor, 1.0 omitted
 
+	// Show where a hovered link would go, or clear it when the pointer leaves.
+	// Public so a test can drive the presentation without an engine: what is
+	// worth checking is the eliding and the clearing, not Qt's own signal.
+public:
+	void show_link_target(const QUrl &url);
+
+private:
 	// While a load runs, the Reload button is a Stop button.
 	void set_loading(bool loading);
 	bool m_loading = false;

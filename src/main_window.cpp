@@ -1730,6 +1730,11 @@ void main_window::open_node(node *n) {
 			if (view == current_view())
 				update_navigation();
 		});
+		connect(view, &web_view_backend::link_hovered, this,
+		         [this, view](const QUrl &u) {
+			if (view == current_view())
+				show_link_target(u);
+		});
 		connect(view, &web_view_backend::find_result, this,
 		         [this, view](int matches, int active) {
 			if (view == current_view())
@@ -1915,6 +1920,29 @@ void main_window::open_find() {
 // entry that would be wrong half the time. Only offered while a load is
 // actually running, because `stop()` does nothing on a backend that cannot
 // abandon one, and a button that does nothing is the worst kind.
+// **The status bar, not a tooltip.** A tooltip follows the pointer and covers
+// the thing being pointed at; the status bar is where a browser has put this
+// since before tooltips existed, and it is out of the way of the page.
+//
+// Elided in the *middle*, which is the whole point: a long url that keeps its
+// scheme and host but loses its query still answers "where does this go", while
+// one truncated from the right loses the host -- the only part that matters for
+// deciding whether to click.
+void main_window::show_link_target(const QUrl &url) {
+	if (url.isEmpty()) {
+		// Not a timed message: the pointer left the link, and a target left on
+		// screen after that is a claim about where the pointer is now.
+		m_status->clearMessage();
+		return;
+	}
+	const QString text = url.toString();
+	const int room = 110;
+	m_status->showMessage(text.size() <= room
+	                          ? text
+	                          : text.left(room / 2) + QChar(0x2026) +
+	                                text.right(room / 2 - 1));
+}
+
 void main_window::set_loading(bool loading) {
 	if (m_loading == loading || !m_reload_action)
 		return;
