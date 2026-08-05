@@ -5927,6 +5927,29 @@ depth in the tree counts the root as level 0, so a line indented `d` lands at
 depth `d + 1` and clamping the indentation to the limit produced a tree one
 level past it. Written by hand, checked by nothing, and caught on the first run.
 
+### Running the browser dirtied the repository
+
+`make run` pointed the app at `sample-tree.txt`, which is tracked. The app
+saves its tree on exit, so simply starting the browser rewrote a file in git: a
+page title where `about:blank` had been, a type changed from `suspended` to
+`open`, and a fresh `seen=` timestamp every time.
+
+It was reverted three times in one session, and at least twice the run that
+caused it was somebody else's -- which is the tell that this is not a
+discipline problem. A tracked file that changes when you run the program is
+going to keep changing, and everyone who notices will spend the same minute
+working out whether the diff means anything.
+
+`make run` now copies the sample to `$(BUILD_DIR)/run-tree.txt` and runs
+against that. The copy is refreshed only when missing, so state survives
+between runs -- which is the point of running against a tree at all -- and it
+sits under the build directory, which is already ignored. `make run TREE=...`
+still overrides it for anyone who means a particular file.
+
+Worth noting for what it says about the shape of the problem rather than the
+fix: nothing here was wrong except *which file the convenience target pointed
+at*, and the cost was paid by people who had not run the target.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

@@ -44,7 +44,8 @@
 #
 # TARGETS
 #   make              -- build the desktop app
-#   make run          -- build and run it on the sample tree
+#   make run          -- build and run it on a copy of the sample tree, so
+#                        running the browser never dirties a tracked file
 #   make test         -- build and run every suite that needs nothing but a
 #                        build; the ones needing a helper, a torrent library
 #                        or a model are listed but not run (see tests/README.md)
@@ -176,8 +177,21 @@ all: | $(BUILD_DIR)/CMakeCache.txt
 $(BUILD_DIR)/CMakeCache.txt:
 	@$(CMAKE) -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) $(CMAKE_FLAGS)
 
+# **Run against a copy, not the tracked sample.** The app saves its tree on
+# exit, so pointing it at `sample-tree.txt` means merely starting the browser
+# rewrites a file in git -- a page title here, a type changed from suspended to
+# open there, a fresh `seen=` timestamp on every run. It has been reverted three
+# times in one session, twice by somebody who did not run it.
+#
+# The copy lives beside the build output and is refreshed only when it is
+# missing, so state survives between runs, which is the point of running against
+# a tree at all. `make run TREE=...` still overrides it for anyone who means to
+# use a particular file.
+RUN_TREE = $(BUILD_DIR)/run-tree.txt
+
 run: all
-	@./$(BUILD_DIR)/$(TARGET) $(TREE)
+	@test -f "$(RUN_TREE)" || cp $(TREE) "$(RUN_TREE)"
+	@./$(BUILD_DIR)/$(TARGET) "$(RUN_TREE)"
 
 $(TESTS_DIR)/CMakeCache.txt:
 	@$(CMAKE) -S tests -B $(TESTS_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) $(CMAKE_FLAGS)
