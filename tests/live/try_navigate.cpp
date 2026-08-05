@@ -372,6 +372,37 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	section("a certificate that could not be trusted");
+	{
+		// The refusal itself is not the change -- Qt rejects an unhandled
+		// certificate error already, which is correct. What was missing is any
+		// account of it: the page just failed, and "could not be loaded" is
+		// what a site being down says too. Those want different responses.
+		QStatusBar *sb = w.findChild<QStatusBar *>();
+		if (sb) {
+			w.report_certificate_rejected(QUrl("https://expired.example.test/x"),
+			                               "The certificate has expired");
+			const QString msg = sb->currentMessage();
+			check(msg.contains("expired.example.test"),
+			      QString("it names the site (%1)").arg(msg.left(40)));
+			check(msg.contains("certificate"),
+			      "and says the certificate was the problem");
+			check(msg.contains("expired"), "including what was wrong with it");
+
+			// **The flag must not stick.** A later ordinary failure has to
+			// report itself, or one bad certificate silences every failure
+			// after it for the life of the window.
+			address->setText(QUrl::fromLocalFile(out + "/still-not-there.html")
+			                     .toString());
+			emit address->returnPressed();
+			for (int i = 0; i < 40 && !sb->currentMessage().contains("could not"); ++i)
+				spin(200);
+			check(sb->currentMessage().contains("could not be loaded"),
+			      QString("an ordinary failure after it still speaks (%1)")
+			          .arg(sb->currentMessage()));
+		}
+	}
+
 	section("a page asking for another window");
 	{
 		// **Unhandled is not the same as refused.** With nothing implementing

@@ -1729,6 +1729,11 @@ void main_window::open_node(node *n) {
 			if (view == current_view())
 				update_navigation();
 		});
+		connect(view, &web_view_backend::certificate_rejected, this,
+		         [this, view](const QUrl &u, const QString &why) {
+			if (view == current_view())
+				report_certificate_rejected(u, why);
+		});
 		connect(view, &web_view_backend::new_window_requested, this,
 		         [this, view](const QUrl &u, bool user) {
 			if (view == current_view())
@@ -1959,6 +1964,25 @@ void main_window::open_find() {
 // while a script-initiated one is checked against the policy for the page that
 // asked -- and refused *out loud*, because a blocked popup that says nothing is
 // indistinguishable from the broken silence this whole change is fixing.
+// **What failed, not just that it failed.** Before the load-failure message
+// existed this was silent; with it, a certificate problem read as "could not be
+// loaded", which is what a site being down reads as too. Those want different
+// responses from a person -- try later, versus do not type anything into this
+// -- so they must not share a sentence.
+//
+// No timeout, for the reason the crash notice has none: it describes why the
+// window is showing what it is showing, and that stays true until something
+// else loads.
+void main_window::report_certificate_rejected(const QUrl &url,
+                                               const QString &reason) {
+	const QString host = url.host();
+	m_cert_reported = true;
+	m_status->showMessage(
+	  QString("%1 was not loaded: its certificate could not be trusted (%2).")
+	      .arg(host.isEmpty() ? QStringLiteral("That site") : host,
+	            reason.isEmpty() ? QStringLiteral("no reason given") : reason));
+}
+
 node *main_window::open_new_window(const QUrl &url, bool user_initiated) {
 	if (!url.isValid() || url.isEmpty())
 		return nullptr;
@@ -2072,8 +2096,10 @@ void main_window::set_loading(bool loading) {
 void main_window::on_load_progress(int percent) {
 	// Something is loading, so whatever the status bar was saying about the
 	// last page -- a crash notice, in particular -- has been acted on.
-	if (!m_loading)
+	if (!m_loading) {
 		m_status->clearMessage();
+		m_cert_reported = false;
+	}
 	set_loading(true);
 	m_progress->setValue(percent);
 	if (!m_progress->isVisible())
@@ -2092,6 +2118,14 @@ void main_window::on_load_finished(bool ok) {
 	m_progress->setValue(0);
 	if (ok)
 		return;
+	// **The specific answer wins.** A refused certificate fails the load, so
+	// this arrives immediately afterwards; replacing "its certificate could not
+	// be trusted" with "could not be loaded" would lose the only part that told
+	// somebody what to do differently.
+	if (m_cert_reported) {
+		m_cert_reported = false;
+		return;
+	}
 	web_view_backend *v = current_view();
 	const QString host = v ? v->url().host() : QString();
 	m_status->showMessage(host.isEmpty()

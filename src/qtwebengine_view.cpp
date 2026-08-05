@@ -8,6 +8,7 @@
 #include <QWebEnginePermission>
 #include <QWebEngineProfile>
 #include <QWebEngineFindTextResult>
+#include <QWebEngineCertificateError>
 #include <QWebEngineHistory>
 #include <QWebEngineNewWindowRequest>
 #include <QWebEngineSettings>
@@ -70,6 +71,18 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	         [this](const QUrl &) { emit history_changed(); });
 	connect(m_view, &QWebEngineView::loadFinished, this,
 	         [this](bool) { emit history_changed(); });
+	// **Rejected, and said out loud.** Qt's default for an unhandled signal is
+	// to reject, which is the right answer -- so this changes nothing about
+	// what loads, only about what the person is told. Deliberately no
+	// click-through: letting somebody past a certificate error is a security
+	// decision this browser has not made, and adding one in passing would be
+	// making it.
+	connect(m_page, &QWebEnginePage::certificateError, this,
+	         [this](QWebEngineCertificateError error) {
+		error.rejectCertificate();
+		emit certificate_rejected(error.url(), error.description());
+	});
+
 	// The request is answered by the shell rather than here: it becomes a tab
 	// in the tree, which is this browser's whole answer to "another window".
 	// `openIn` is deliberately not called -- taking the url and opening it

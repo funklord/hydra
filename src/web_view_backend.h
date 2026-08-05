@@ -157,6 +157,13 @@ signals:
 	void load_progress(int percent);
 	void load_finished(bool ok);
 
+	// A TLS certificate was refused, and why. **The refusal is not the news** --
+	// rejecting a bad certificate is correct and is what happened before this
+	// existed. The news is that it happened at all: unreported, the page simply
+	// failed, and "could not be loaded" is indistinguishable from a site being
+	// down when the real answer is that its identity could not be established.
+	void certificate_rejected(const QUrl &url, const QString &reason);
+
 	// A page asked for a new window: a target="_blank" link, or window.open.
 	// **Nothing handled this at all**, and an unhandled request in Qt is not a
 	// refusal -- it is a click that silently does nothing, which is the worst

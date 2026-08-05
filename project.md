@@ -6474,6 +6474,38 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### A certificate failure that looked like a site being down
+
+Four page-level prompts had no handler at all: certificate errors,
+authentication, proxy authentication and client-certificate selection. The
+first is the one that matters most here, and it is fixed; the other three are
+recorded below as known gaps rather than quietly left.
+
+**The refusal was never the problem.** Qt rejects an unhandled certificate
+error, which is the right answer and is what happened before. What was missing
+was any account of it. Unreported, the page simply failed -- and once the load
+failure message existed, it failed as *"could not be loaded"*, which is exactly
+what a site being down says. Those two want opposite responses from a person:
+try again later, versus do not type anything into this.
+
+So the message names the host and quotes Qt's own description of what was
+wrong. **No click-through.** Letting somebody past a certificate error is a
+security decision this browser has not made, and adding one while fixing a
+wording problem would be making it in passing.
+
+**The specific message has to win.** A refused certificate fails the load too,
+so the generic failure arrives immediately afterwards and would replace "its
+certificate could not be trusted" with something vaguer -- losing the only part
+that told anybody what to do differently. It is suppressed for exactly that one
+load, and the flag is cleared when the next load starts. The driver checks both
+halves: that the specific message is shown, and that an ordinary failure after
+it still speaks, because a flag that sticks would silence every failure for the
+life of the window.
+
+Still unhandled, and each is a silent dead end rather than a wrong answer:
+`authenticationRequired` (a site wanting HTTP authentication cannot be used at
+all), `proxyAuthenticationRequired`, and `selectClientCertificate`.
+
 ### A link that opened nothing
 
 Nothing implemented `newWindowRequested`, and in Qt an unhandled request is not

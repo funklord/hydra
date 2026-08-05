@@ -192,6 +192,10 @@ public:
 	// the wiring is one line and the part worth checking is what gets said.
 	void report_render_crash(const QString &host);
 
+	// A certificate was refused. Public for the reason the others are: the
+	// wiring is one line and the wording is the part that matters.
+	void report_certificate_rejected(const QUrl &url, const QString &reason);
+
 	// A page asked for another window. Returns the node it made, or nullptr if
 	// the request was refused -- public so a driver can ask for one without an
 	// engine, since the decision is the part worth checking.
@@ -206,6 +210,9 @@ private:
 	// One call, so the sixth is right by construction.
 	void page_changed();
 	bool m_link_shown = false;
+	// A certificate refusal fails the load too, so the generic failure message
+	// arrives second and would replace the specific one with a vaguer one.
+	bool m_cert_reported = false;
 	// While a load runs, the Reload button is a Stop button.
 	void set_loading(bool loading);
 	bool m_loading = false;
