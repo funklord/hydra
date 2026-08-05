@@ -280,6 +280,8 @@ qt_add_executable(hydra
     src/antiadblock_watch.cpp
     src/antiadblock_watch.h
     src/autofill_script.h
+    src/find_bar.cpp
+    src/find_bar.h
     src/element_picker.cpp
     src/element_picker.h
     src/picker_script.h

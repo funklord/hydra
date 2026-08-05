@@ -7,6 +7,7 @@
 #include <QWebEnginePage>
 #include <QWebEnginePermission>
 #include <QWebEngineProfile>
+#include <QWebEngineFindTextResult>
 #include <QWebEngineHistory>
 #include <QWebEngineSettings>
 #include <QWebEngineScript>
@@ -301,4 +302,19 @@ bool qtwebengine_view::can_go_back() const {
 
 bool qtwebengine_view::can_go_forward() const {
 	return m_view && m_view->history()->canGoForward();
+}
+
+// `fresh` is not passed to Qt, and does not need to be: `findText` restarts
+// when the term differs from the last one and advances when it matches, which
+// is the same distinction arrived at from the other side.
+void qtwebengine_view::find_text(const QString &text, bool forward, bool fresh) {
+	Q_UNUSED(fresh)
+	if (!m_view)
+		return;
+	QWebEnginePage::FindFlags flags;
+	if (!forward)
+		flags |= QWebEnginePage::FindBackward;
+	m_view->findText(text, flags, [this](const QWebEngineFindTextResult &r) {
+		emit find_result(r.numberOfMatches(), r.activeMatch());
+	});
 }

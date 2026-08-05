@@ -22,6 +22,7 @@ class QLineEdit;
 class QComboBox;
 class QLabel;
 class QProgressBar;
+class find_bar;
 class QMenuBar;
 class QStatusBar;
 class QAction;
@@ -173,6 +174,8 @@ private:
 	void update_window_title();
 
 	// Show or hide the loading bar, and say so when a page does not arrive.
+	void open_find();
+
 	void on_load_progress(int percent);
 	void on_load_finished(bool ok);
 
@@ -223,6 +226,7 @@ private:
 	QStatusBar      *m_status     = nullptr;
 	QLabel          *m_tab_counts = nullptr;   // permanent widget, right side
 	QProgressBar    *m_progress   = nullptr;   // beside it, only while loading
+	find_bar        *m_find       = nullptr;   // above the status bar, hidden
 
 	web_view_factory   *m_factory       = nullptr;   // injected, not owned
 	state_store        *m_state         = nullptr;

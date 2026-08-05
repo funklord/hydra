@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "main_window.h"
+
+#include "find_bar.h"
 #include "tab_tree_model.h"
 #include "tab_tree_view.h"
 #include "tree_sort_proxy.h"
@@ -680,6 +682,24 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_status->addPermanentWidget(m_progress);
 	m_status->addPermanentWidget(m_tab_counts);
 	m_status->showMessage("Ready");
+	m_find = new find_bar(this);
+	outer->addWidget(m_find);
+	connect(m_find, &find_bar::search, this,
+	         [this](const QString &t, bool forward, bool fresh) {
+		if (web_view_backend *v = current_view())
+			v->find_text(t, forward, fresh);
+	});
+	connect(m_find, &find_bar::dismissed, this, [this] {
+		// Clearing the term is what drops the engine's highlight. Hiding the
+		// bar alone would leave the page marked up with a search nothing on
+		// screen still refers to.
+		if (web_view_backend *v = current_view())
+			v->find_text(QString(), true, true);
+		m_find->hide();
+		if (web_view_backend *v = current_view())
+			v->widget()->setFocus();
+	});
+
 	outer->addWidget(m_status);
 
 	setWindowTitle("Hydra");
@@ -838,6 +858,20 @@ QMenuBar *main_window::build_menu_bar() {
 			m_model->remove_node(n);
 	});
 	del_act->setStatusTip("Remove the selection and everything inside it");
+	edit_menu->addSeparator();
+	// **Ctrl+Shift+F, not Ctrl+F, and that is not where it belongs.** Ctrl+F
+	// already filters the *tree*, and in every browser it searches the page --
+	// so one of the two is surprising and it is not this one. Two actions
+	// sharing a QKeySequence is an ambiguous overload that fires neither
+	// reliably, which is what the first version of this did. Left as the
+	// non-standard half until somebody decides which way round they go, rather
+	// than taking a binding away from whoever is using it.
+	//
+	// The mnemonic is on Page for the same reason: Find in Tree already has F.
+	QAction *page_find_act = edit_menu->addAction("Find on &Page",
+	                                               QKeySequence("Ctrl+Shift+F"),
+	                                               this, &main_window::open_find);
+	page_find_act->setStatusTip("Search the page in front of you");
 	edit_menu->addSeparator();
 
 	QAction *all_act = edit_menu->addAction("Select &All", QKeySequence::SelectAll,
@@ -1678,6 +1712,11 @@ void main_window::open_node(node *n) {
 			if (view == current_view())
 				update_navigation();
 		});
+		connect(view, &web_view_backend::find_result, this,
+		         [this, view](int matches, int active) {
+			if (view == current_view())
+				m_find->set_result(matches, active);
+		});
 		connect(view, &web_view_backend::load_progress, this, [this, view](int p) {
 			if (view == current_view())
 				on_load_progress(p);
@@ -1777,6 +1816,18 @@ void main_window::update_navigation() {
 // document: some pages carry a paragraph in theirs, and a window manager given
 // one either elides it in the middle or lets it push everything else out of
 // the switcher.
+// **Nothing to search is a message, not a silent no-op.** The bar would
+// otherwise open over an empty window and report no matches, which reads as a
+// broken search rather than as an absent page.
+void main_window::open_find() {
+	if (!current_view()) {
+		m_status->showMessage("Open a page first \u2014 there is nothing to "
+		                       "search yet.", 5000);
+		return;
+	}
+	m_find->begin();
+}
+
 void main_window::on_load_progress(int percent) {
 	m_progress->setValue(percent);
 	if (!m_progress->isVisible())

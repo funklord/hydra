@@ -6464,6 +6464,43 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### No way to search the page
+
+A browser with no find-in-page is missing the affordance people reach for
+first, and this one had none: `findText` appeared nowhere in the tree.
+
+The bar is its own widget (`find_bar`) rather than more bulk in `main_window`,
+and it **knows nothing about the engine**. It emits what was typed and which
+direction was asked for, and it is told how many matches there were; the one
+engine-specific part, `findText` and its result, stays behind the WebViewBackend
+seam. `find_text` is virtual with a default that reports no matches, so a
+backend without search shows an honest empty result rather than needing a
+special case.
+
+Details that are each a decision:
+
+- **It searches as you type**, which is what makes it feel like a search rather
+  than a form. Every keystroke is a *fresh* search -- the term changed, so the
+  engine restarts instead of advancing -- and only the bar knows which of those
+  two just happened, which is why `fresh` is a parameter.
+- **"No matches" is said out loud.** A blank label beside a term somebody just
+  typed reads as the search not having run.
+- **Closing it clears the term**, because that is what drops the engine's
+  highlight. Hiding the bar alone leaves the page marked up for a search
+  nothing on screen still refers to.
+- **Icons from the style, not characters.** The toolbar already learned this:
+  a phone font had no glyph for the reload character and the button drew an
+  empty box.
+
+**And it found a shortcut clash.** `Ctrl+F` was already bound to *Find in Tree*,
+the sidebar filter. Two actions sharing a `QKeySequence` is an ambiguous
+overload and Qt then fires neither reliably, so the first version of this broke
+the tree filter as well as its own. Page search sits on `Ctrl+Shift+F` for now,
+which is the wrong way round -- every browser puts page search on `Ctrl+F` --
+but swapping them takes a binding away from whoever is using it, so it is a
+question rather than a change made in passing. The driver now counts the
+actions claiming `Ctrl+F` and fails if two ever do.
+
 ### Nothing said a page was loading
 
 The seam had no notion of loading at all. On a slow site nothing in the window

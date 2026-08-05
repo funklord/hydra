@@ -17,11 +17,13 @@
 #include "request_filter.h"
 #include "tab_tree_model.h"
 
+#include <QAbstractButton>
 #include <QAction>
 #include <QApplication>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
+#include <QLabel>
 #include <QLineEdit>
 #include <QProgressBar>
 #include <QStatusBar>
@@ -173,6 +175,58 @@ int main(int argc, char *argv[]) {
 		settle(fwd, true);
 		check(fwd->isEnabled(),   "Forward comes alive");
 		check(!back->isEnabled(), "and Back goes grey at the start of history");
+	}
+
+	section("finding text on the page");
+	{
+		// Through the menu action, the way somebody reaches it, rather than by
+		// calling the slot: the action is the part that can go missing.
+		QAction *find_act = nullptr;
+		for (QAction *a : w.findChildren<QAction *>())
+			if (a->text().contains("Find on &Page"))
+				find_act = a;
+		check(find_act, "there is a Find on Page action");
+		// The tree filter owns Ctrl+F. Two actions on one sequence is an
+		// ambiguous overload, and Qt then fires neither of them reliably.
+		int on_ctrl_f = 0;
+		for (QAction *a : w.findChildren<QAction *>())
+			if (a->shortcut() == QKeySequence("Ctrl+F"))
+				++on_ctrl_f;
+		check(on_ctrl_f <= 1,
+		      QString("no two actions share Ctrl+F (%1 claim it)").arg(on_ctrl_f));
+
+		QWidget *bar = w.findChild<QWidget *>("find_bar");
+		check(bar && !bar->isVisible(), "and the bar stays out of the way until asked");
+
+		if (find_act && bar) {
+			find_act->trigger();
+			spin(300);
+			check(bar->isVisible(), "the bar appears");
+
+			auto *input = w.findChild<QLineEdit *>("find_input");
+			auto *count = w.findChild<QLabel *>("find_count");
+			check(input && count, "with somewhere to type and somewhere to report");
+			if (input && count) {
+				input->setText("one");
+				for (int i = 0; i < 30 && count->text().isEmpty(); ++i)
+					spin(200);
+				check(count->text().contains("1"),
+				      QString("a word on the page is found (%1)").arg(count->text()));
+
+				input->setText("zzzznotonthispage");
+				for (int i = 0; i < 30 && !count->text().contains("No"); ++i)
+					spin(200);
+				check(count->text() == "No matches",
+				      QString("and one that is not says so (%1)").arg(count->text()));
+			}
+
+			auto *closer = w.findChild<QWidget *>("find_close");
+			if (auto *b = qobject_cast<QAbstractButton *>(closer)) {
+				b->click();
+				spin(300);
+				check(!bar->isVisible(), "closing it puts it away again");
+			}
+		}
 	}
 
 	section("a page that does not arrive says so");

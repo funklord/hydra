@@ -105,6 +105,15 @@ public:
 	// default is yes**: a backend that does not track history should keep the
 	// buttons it has always had rather than have them switched off on a guess.
 	// A backend that does know says so, and the shell greys them accordingly.
+	// Find text on the page. **Not pure**: a backend with no search does
+	// nothing and reports no matches, which is exactly what the bar then
+	// shows. `fresh` says the term changed, so the engine restarts rather than
+	// advancing to the next match.
+	virtual void find_text(const QString &text, bool forward, bool fresh) {
+		Q_UNUSED(text) Q_UNUSED(forward) Q_UNUSED(fresh)
+		emit find_result(0, 0);
+	}
+
 	virtual bool can_go_back() const { return true; }
 	virtual bool can_go_forward() const { return true; }
 
@@ -129,6 +138,10 @@ signals:
 	// slow site was working rather than broken, and a load that failed outright
 	// said nothing whatsoever. A backend that cannot report progress simply
 	// never emits these, and the shell shows no bar.
+	// How many matches the page holds and which one is showing, 1-based. Zero
+	// matches and zero active is "nothing found", which the bar says out loud.
+	void find_result(int matches, int active);
+
 	void load_progress(int percent);
 	void load_finished(bool ok);
 
