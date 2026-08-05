@@ -271,6 +271,54 @@ int main(int argc, char **argv) {
 		holds(m, "dragging a tab about, which the tree c");
 	}
 
+	section("Ctrl-drag copies, which is a different branch of the same drop");
+	{
+		// **The path Ctrl actually takes.** `supportedDropActions` offers
+		// Move|Copy and the view leaves `startDrag` alone, so Qt hands both to
+		// the drag and the platform draws the plus badge while Ctrl is held.
+		// That badge is a *promise*, and what makes it true is `dropMimeData`
+		// branching on CopyAction -- which was covered only indirectly, through
+		// a test of `duplicate_node`, the function that branch happens to call.
+		// A drop that ignored the action would still have passed it.
+		tab_tree_model m;
+		check(m.load(path), "a tree loads");
+		check(m.supportedDropActions() & Qt::CopyAction,
+		      "the model offers a copy action, which is what puts the plus on "
+		      "the cursor");
+		node *root   = m.root();
+		node *folder = root->children.first();
+		node *tab    = folder->children.first();
+		node *other  = m.add_folder(root, "Elsewhere");
+
+		const QString source_id = tab->id;
+		const QString source_url = tab->url;
+		const int before = folder->children.size();
+
+		QMimeData *md = m.mimeData({ m.index_for_node(tab) });
+		check(m.dropMimeData(md, Qt::CopyAction, -1, 0, m.index_for_node(other)),
+		      "a copy drop is accepted");
+		check(folder->children.size() == before,
+		      "the original stays where it was -- which is the whole difference "
+		      "from a move");
+		check(m.node_by_id(source_id) == tab, "and is still itself");
+		check(!other->children.isEmpty(), "something arrived");
+		if (!other->children.isEmpty()) {
+			node *copy = other->children.last();
+			check(copy->id != source_id,
+			      QString("the arrival has an id of its own (%1 vs %2)")
+			          .arg(copy->id, source_id));
+			check(copy->url == source_url, "carrying the same address");
+			// Two nodes sharing an id would each claim the same state blob and
+			// the same line of the tree file, which the invariant check below
+			// would also catch -- stated here because it is the specific thing
+			// a copy must not do.
+			check(m.node_by_id(copy->id) == copy,
+			      "and both are findable, so the index holds two distinct nodes");
+		}
+		delete md;
+		holds(m, "Ctrl-drag copies");
+	}
+
 	section("the move that would eat the tree");
 	{
 		tab_tree_model m;

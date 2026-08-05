@@ -6183,6 +6183,23 @@ existing. 600 ms now, the interval this gesture has had in file managers for
 twenty years. `setAutoScroll` was already Qt's default and is now explicit, with
 a margin, so it survives somebody tuning the view.
 
+**Ctrl-drag copies, and the plus badge on the cursor is real.** It comes for
+free once `supportedDropActions` offers `Move|Copy` and the view leaves
+`startDrag` alone: Qt hands both actions to the drag, the platform draws the
+badge while Ctrl is held, and `dropMimeData` branches on `CopyAction`.
+
+But that badge is a *promise*, and what makes it true was covered only
+indirectly -- through a test of `duplicate_node`, the function the copy branch
+happens to call. `CopyAction` appeared nowhere in `test_model`, so a drop that
+ignored the action entirely and moved would have passed everything. Now the
+copy branch is driven directly: the original stays put, the arrival carries a
+fresh id and the same address, and both are findable in the index.
+
+Proved by breaking it -- with the branch disabled, the drop moves and the test
+reports the original gone and `a1 vs a1` for the ids. Two failures, and nothing
+else in the suite noticed, which is the argument for testing the branch rather
+than the function under it.
+
 **The guard is on the properties, not the behaviour, and that is deliberate.**
 What a drag *feels* like is Qt's, and driving a synthetic `QDrag` would prove
 little about it. What goes wrong in practice is somebody adjusting the view and
