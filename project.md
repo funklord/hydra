@@ -6464,6 +6464,31 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### A tab that died and did not say so
+
+`render_process_gone` had exactly one listener: kiosk mode, which reloads on it
+so an unattended screen self-heals. Interactively, nothing listened at all -- the
+page went blank, with no explanation and no hint that anything could be done
+about it. That is the state every other browser fills with a message, and for
+good reason: a blank area is indistinguishable from a page that simply has
+nothing on it.
+
+**Not reloaded automatically, and that is the difference from kiosk.** A page
+that crashes on load crashes again on reload, so an automatic retry turns one
+blank page into a loop that also eats the machine. Reload is offered instead,
+and it genuinely recovers -- Qt starts a new render process for it -- so the
+advice is real rather than a formula.
+
+**The message has no timeout**, unlike almost every other thing this window
+says. It describes a state the window is *still in*; one that expires after five
+seconds leaves somebody in front of a blank page wondering what they missed. It
+is cleared by the thing that makes it untrue: a load starting.
+
+Driven directly by the driver, because a render process cannot be killed from
+inside the test on purpose, and the wiring is one line. What is worth checking
+is what gets said, that it names the site, that it survives a moment, and that
+loading something clears it.
+
 ### Five pieces of chrome, four places to hook them, and two lies
 
 The window title, the navigation buttons, the loading bar, the find count and

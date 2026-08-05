@@ -188,6 +188,10 @@ private:
 public:
 	void show_link_target(const QUrl &url);
 
+	// A page whose renderer died. Public for the same reason as the one above:
+	// the wiring is one line and the part worth checking is what gets said.
+	void report_render_crash(const QString &host);
+
 private:
 	// **Everything the chrome says about the page in front of you.** Five
 	// separate pieces of state -- the title, the navigation buttons, the

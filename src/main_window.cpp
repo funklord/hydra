@@ -1729,6 +1729,11 @@ void main_window::open_node(node *n) {
 			if (view == current_view())
 				update_navigation();
 		});
+		connect(view, &web_view_backend::render_process_gone, this,
+		         [this, view] {
+			if (view == current_view())
+				report_render_crash(view->url().host());
+		});
 		connect(view, &web_view_backend::link_hovered, this,
 		         [this, view](const QUrl &u) {
 			if (view == current_view())
@@ -1925,6 +1930,30 @@ void main_window::open_find() {
 // scheme and host but loses its query still answers "where does this go", while
 // one truncated from the right loses the host -- the only part that matters for
 // deciding whether to click.
+// **A tab whose renderer dies goes blank and used to say nothing.** Only kiosk
+// mode listened for this, because kiosk needs to self-heal on an unattended
+// screen; interactively the page simply vanished, with no explanation and no
+// hint that anything could be done about it.
+//
+// Not reloaded automatically, which is the difference from kiosk. A page that
+// crashes on load crashes again on reload, and an automatic retry turns one
+// blank page into a loop that also eats the machine. Reload is offered instead,
+// and it genuinely recovers: Qt starts a new render process for it.
+//
+// The message has no timeout. It describes a state the window is still in, and
+// a state that expires after five seconds leaves somebody looking at a blank
+// page wondering what they missed.
+void main_window::report_render_crash(const QString &host) {
+	set_loading(false);
+	if (m_progress)
+		m_progress->hide();
+	m_status->showMessage(host.isEmpty()
+	                          ? QStringLiteral("This page stopped responding. "
+	                                            "Reload to try again.")
+	                          : QString("%1 stopped responding. Reload to try "
+	                                     "again.").arg(host));
+}
+
 void main_window::show_link_target(const QUrl &url) {
 	m_link_shown = !url.isEmpty();
 	if (url.isEmpty()) {
@@ -1983,6 +2012,10 @@ void main_window::set_loading(bool loading) {
 }
 
 void main_window::on_load_progress(int percent) {
+	// Something is loading, so whatever the status bar was saying about the
+	// last page -- a crash notice, in particular -- has been acted on.
+	if (!m_loading)
+		m_status->clearMessage();
 	set_loading(true);
 	m_progress->setValue(percent);
 	if (!m_progress->isVisible())

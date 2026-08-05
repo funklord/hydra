@@ -371,6 +371,36 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	section("a page whose renderer dies says so");
+	{
+		// Driven directly, because a render process cannot be killed from here
+		// on purpose and the wiring is one line. What is worth checking is what
+		// gets said, that it names the site, and that it does not expire.
+		QStatusBar *sb = w.findChild<QStatusBar *>();
+		if (sb) {
+			w.report_render_crash("example.test");
+			check(sb->currentMessage().contains("example.test"),
+			      QString("it names the site (%1)").arg(sb->currentMessage()));
+			check(sb->currentMessage().contains("Reload"),
+			      "and says what to do about it");
+
+			// **No timeout.** This describes a state the window is still in;
+			// one that expires leaves somebody in front of a blank page
+			// wondering what they missed.
+			spin(1200);
+			check(!sb->currentMessage().isEmpty(),
+			      "and it is still there a moment later");
+
+			// Loading something is what makes it untrue.
+			address->setText(QUrl::fromLocalFile(one).toString());
+			emit address->returnPressed();
+			check(wait_for(address, "one.html"), "loading a page again");
+			spin(500);
+			check(!sb->currentMessage().contains("stopped responding"),
+			      QString("clears it (%1)").arg(sb->currentMessage()));
+		}
+	}
+
 	section("switching tabs drops what belonged to the old page");
 	{
 		// Two live bugs, both of the same shape: a piece of chrome that was
