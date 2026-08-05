@@ -1,0 +1,23 @@
+Source: hydra
+Section: web
+Priority: optional
+Maintainer: Nabeel Sowan <nabeel@vibes.se>
+Build-Depends: debhelper-compat (= 13), qt6-base-dev, qt6-base-dev-tools,
+               qt6-webengine-dev, libsecret-1-dev, libsodium-dev,
+               libtorrent-rasterbar-dev, pkgconf
+Rules-Requires-Root: no
+
+Package: hydra
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: ca-certificates
+Suggests: keepassxc, yt-dlp, gnome-keyring | kwalletmanager
+Description: Tab-tree browser with a per-site policy engine
+ Hydra keeps its tabs in a tree that is saved as a plain text file rather
+ than a session blob, so the set of things you have open is something you
+ can read, edit and keep. Tabs can be imported from Firefox and Chromium.
+ .
+ Filtering, script and permission decisions are made per site by a policy
+ engine rather than per browser, and every choice is visible and revocable.
+ Passwords are filled from KeePassXC over its browser protocol; nothing is
+ stored by Hydra itself.

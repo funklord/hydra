@@ -1,0 +1,11 @@
+hydra (0.1) unstable; urgency=medium
+
+  * Package with debhelper rather than packaging/make-deb.sh. The version
+    comes from the VERSION file at the root; `make version-check` fails the
+    build when this changelog disagrees with it.
+
+  * The version loses its Debian revision: these are native packages, built
+    from this tree and not from an upstream tarball, so 0.1 rather than
+    0.1-1 is the correct spelling.
+
+ -- Nabeel Sowan <nabeel@vibes.se>  Wed, 05 Aug 2026 18:00:00 +0000

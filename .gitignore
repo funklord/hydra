@@ -33,3 +33,12 @@ policy.json
 *.user
 .DS_Store
 *.swp
+
+# debhelper's working state; debian/ holds packaging sources only.
+debian/.debhelper/
+debian/files
+debian/tmp/
+debian/hydra/
+debian/*.substvars
+debian/*.debhelper.log
+debian/debhelper-build-stamp

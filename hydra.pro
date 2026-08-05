@@ -14,7 +14,9 @@
 
 TEMPLATE = app
 TARGET   = hydra
-VERSION  = 0.1
+# Read rather than restated: the Makefile, debian/changelog and this file
+# would otherwise be three places to change one number.
+VERSION  = $$cat(VERSION, singleline)
 
 QT     += widgets network webchannel qml
 CONFIG += c++17 link_pkgconfig

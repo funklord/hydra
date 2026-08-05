@@ -251,19 +251,43 @@ sweep: drivers
 
 # --- Packaging -------------------------------------------------------------
 #
-# The version is read from CMakeLists so there is one place to change it, with
-# a Debian revision appended. Override either: make deb DEB_VERSION=0.2-1
-# `project.Hydra` rather than `project(Hydra`: make counts parentheses inside
-# $(shell ...) and an unmatched one in the sed script ends the call early.
-VERSION     := $(shell sed -n 's/^project.Hydra VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
-DEB_VERSION ?= $(VERSION)-1
+# The one place the version is stated. It used to be parsed out of
+# CMakeLists.txt, which is a source that disappears with the build system;
+# hydra.pro reads the same file, and `make version-check` holds
+# debian/changelog to it as well.
+VERSION     := $(shell cat VERSION)
 DEB_DIR      = $(BUILD_DIR)/deb
 
-deb: all
-	@packaging/make-deb.sh $(BUILD_DIR)/$(TARGET) \
-	    $(DEB_DIR)/stage $(DEB_DIR) $(DEB_VERSION)
+# Native Debian packaging: debian/ holds the metadata, debhelper does the
+# work. packaging/make-deb.sh assembled it by hand and is gone.
+deb: version-check
+	@test -n "$(BUILD_DIR)" || { echo "deb: BUILD_DIR is empty, refusing" >&2; exit 1; }
+	dpkg-buildpackage -b -us -uc
+	@mkdir -p $(BUILD_DIR)/deb
+	@for f in ../hydra_$(VERSION)_*.deb ../hydra-dbgsym_$(VERSION)_*.deb \
+	          ../hydra_$(VERSION)_*.buildinfo ../hydra_$(VERSION)_*.changes; do \
+		[ -e "$$f" ] && mv -f "$$f" $(BUILD_DIR)/deb/ || true; \
+	done
+	@ls -1 $(BUILD_DIR)/deb/*.deb
 
-# What the package says about itself and what is in it, without installing.
+# The VERSION file is the source; debian/changelog is checked against it.
+version-check:
+	@file=$$(cat VERSION); \
+	changelog=$$(dpkg-parsechangelog -SVersion 2>/dev/null); \
+	if [ -z "$$changelog" ]; then \
+		echo "version-check: skipped (dpkg-parsechangelog unavailable)"; \
+	elif [ "$$file" != "$$changelog" ]; then \
+		echo "version-check: VERSION says $$file but"; \
+		echo "               debian/changelog says $$changelog"; \
+		exit 1; \
+	elif ! grep -q 'VERSION *= *\$$\$$cat(VERSION' hydra.pro; then \
+		echo "version-check: hydra.pro states a version instead of reading"; \
+		echo "               VERSION; the two will drift"; \
+		exit 1; \
+	else \
+		echo "version-check: $$file, in step"; \
+	fi
+
 deb-check: deb
 	@deb=$$(ls -t $(DEB_DIR)/*.deb | head -1); \
 	 dpkg-deb --info "$$deb"; \
@@ -297,9 +321,16 @@ android:
 	    -DANDROID_SDK_ROOT=$(ANDROID_SDK_ROOT)
 	JAVA_HOME=$(JAVA_HOME) $(CMAKE) --build $(ANDROID_BUILD_DIR) -j$(JOBS) --target apk
 
+# A staged install -- DESTDIR set -- never refreshes a cache: it would touch
+# the build host, and the caches it writes end up inside the package, where
+# lintian rejects the mimeinfo one outright. dpkg's triggers do both on the
+# installing machine, which is the only correct moment. Setting this here
+# rather than in each packaging caller means a new caller cannot forget it,
+# which is how it was forgotten.
 install: all
 	@install -Dm755 $(BUILD_DIR)/$(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
-	@sh packaging/install-icons.sh $(DESTDIR)$(SHARE)
+	@HYDRA_SKIP_CACHE_UPDATE=$${DESTDIR:+1} \
+	 sh packaging/install-icons.sh $(DESTDIR)$(SHARE)
 	@echo "installed $(TARGET) to $(DESTDIR)$(PREFIX)/bin, icons and desktop entry to $(DESTDIR)$(SHARE)"
 
 uninstall:

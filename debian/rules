@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+#
+# The packaging drives the top-level Makefile and nothing below it. Which
+# build system that Makefile uses is hydra's business and is changing;
+# `make` and `make install DESTDIR=` are the interface, and they do not.
+#
+# The version comes from the VERSION file at the root; `make version-check`
+# gates debian/changelog against it.
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	$(MAKE)
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/hydra PREFIX=/usr
+
+override_dh_auto_test:
+	# `make test` wants a display and a build tree the packaging keeps no
+	# part of.
+
+override_dh_auto_clean:
+	$(MAKE) clean
