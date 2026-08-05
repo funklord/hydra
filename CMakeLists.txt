@@ -271,6 +271,7 @@ qt_add_executable(hydra
     src/consent_blocker.cpp
     src/consent_blocker.h
     src/annoyance_log.cpp
+    src/tree_invariants.cpp
     src/annoyed_dialog.cpp
     src/site_rules.cpp
     src/site_rules.h

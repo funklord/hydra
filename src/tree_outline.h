@@ -19,7 +19,13 @@ namespace tree_outline {
 
 // Returns a synthetic root node (owns the whole tree; delete it to free).
 // On failure or empty file, returns an empty root.
-node *load(const QString &path);
+//
+// Anything nested deeper than `tree_limits::max_depth` is **flattened to that
+// depth** rather than refused: refusing a file loses tabs, flattening loses
+// only nesting. `flattened` receives how many nodes were moved up, so the
+// caller can say so -- a tree that quietly changed shape on load is the kind
+// of thing somebody discovers much later and cannot explain.
+node *load(const QString &path, int *flattened = nullptr);
 
 bool  save(const QString &path, node *root);
 

@@ -59,3 +59,26 @@ struct node {
 		return parent ? parent->children.indexOf(const_cast<node *>(this)) : 0;
 	}
 };
+
+// How deep the tree may nest.
+//
+// **A bound on a quadratic, not a taste in filing.** The tree file expresses
+// nesting as two spaces of indent per level, so a chain of `d` folders writes
+// `2 + 4 + ... + 2d` spaces: the file is O(d^2) in bytes for O(d) tabs.
+// Measured, on this format:
+//
+//     16,000 folders nested   ->  245 MB file, 526 MB resident
+//     50,000 tabs flat        ->  a small file, 28 MB resident
+//
+// So the shape that hurts is depth, and it is reachable by dragging a folder
+// into a folder repeatedly. 64 is far past any filing anyone does by hand --
+// deeper than most filesystems are used to -- and it bounds the quadratic term
+// at nothing.
+//
+// Exceeding it is not an error: a tree that is too deep is **flattened** at the
+// depth limit rather than refused, because refusing a file loses tabs and
+// flattening loses only nesting. Whatever flattens says so rather than doing it
+// quietly.
+namespace tree_limits {
+constexpr int max_depth = 64;
+}

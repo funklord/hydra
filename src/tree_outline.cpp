@@ -39,7 +39,9 @@ int leading_spaces(const QString &line) {
 
 namespace tree_outline {
 
-node *load(const QString &path) {
+node *load(const QString &path, int *flattened) {
+	if (flattened)
+		*flattened = 0;
 	node *root = new node;
 	root->id   = "root";
 	root->type = node_type::folder;
@@ -60,7 +62,19 @@ node *load(const QString &path) {
 		if (raw.trimmed().isEmpty())
 			continue;
 
-		const int depth = leading_spaces(raw) / 2;
+		// Clamped, not rejected. A node deeper than the limit becomes a sibling
+		// at the limit, so its tabs survive and only its nesting is lost.
+		//
+		// `max_depth - 1`, and the off-by-one is worth naming: indentation in
+		// the file is 0-based and counts *below* the synthetic root, while
+		// depth in the tree counts the root as level 0. So a line indented `d`
+		// lands at tree depth `d + 1`, and clamping the indentation to the
+		// limit produces a tree one level past it. Caught by the invariant
+		// checker on its first run, which is the argument for having one.
+		const int raw_depth = leading_spaces(raw) / 2;
+		const int depth     = qMin(raw_depth, tree_limits::max_depth - 1);
+		if (raw_depth > depth && flattened)
+			++*flattened;
 		QString line = raw.trimmed();
 		if (!line.startsWith("- ["))
 			continue;

@@ -38,6 +38,12 @@ public:
 
 	// Load/save the canonical outline file. Replaces the current tree.
 	bool load(const QString &path);
+
+	// How many nodes the last `load` had to move up because the file nested
+	// them deeper than `tree_limits::max_depth`. Zero for any tree anyone
+	// filed by hand; non-zero means the tree on screen is not the shape the
+	// file described, which is a thing the shell has to say out loud.
+	int last_flattened() const { return m_last_flattened; }
 	bool save(const QString &path) const;
 
 	node *node_for_index(const QModelIndex &index) const;
@@ -160,4 +166,5 @@ private:
 	QString               m_path;
 	node                 *m_root = nullptr;
 	QHash<QString, node *> m_id_index;
+	int m_last_flattened = 0;
 };

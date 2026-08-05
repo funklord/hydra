@@ -5843,6 +5843,63 @@ mirror *empty* -- the shape a refresh takes when the other browser has closed
 everything, and the harshest case for a view living inside the folder being
 replaced -- and confirm the view is closed rather than leaked.
 
+### The tab tree at scale: what actually hurts, and the check that outlives features
+
+The tree is the part of this program everything else hangs off, so it was
+measured rather than reasoned about. Two shapes, one probe:
+
+    50,000 tabs, flat        small file,   28 MB resident,  781 ms to load
+    16,000 folders, nested   245 MB file, 526 MB resident, 1147 ms to load
+
+**Flat scale is fine and depth is quadratic**, and the cause is the file format
+rather than any algorithm. Nesting is expressed as two spaces of indent per
+level, so a chain of `d` folders writes `2 + 4 + ... + 2d` spaces: O(d^2) bytes
+for O(d) tabs. Sixteen thousand nodes producing a quarter of a gigabyte, while
+fifty thousand nodes flat produce almost nothing. It is reachable by dragging a
+folder into a folder, repeatedly.
+
+**So depth is bounded at 64 and the excess is flattened, not refused.**
+Refusing a file loses tabs; flattening loses only nesting, which is the
+cheaper of the two, and `load` reports how many it moved so the shell can say
+so -- a tree that quietly changed shape on load is discovered weeks later with
+nothing to explain it. Sixty-four is far past any filing anyone does by hand
+and bounds the quadratic term at nothing.
+
+**The durable half is `tree_invariants::check`.** Not more cases: one statement
+of what must be true, called at the end of every section of `test_model`. Ids
+unique, `parent` agreeing with `children` both ways, no cycles, depth within
+the limit, a mirror's children all marked as mirrored, and no tab holding
+children -- a shape the file format cannot express and would silently reorder
+on save.
+
+The reason it is written this way is that the tree is restructured by things
+that cannot enumerate their own failure modes: drag and drop, an AI
+reorganisation, a mirror refresh replacing a folder while a view inside it is
+live. Each arrived with tests for its own behaviour. None could notice leaving
+the tree subtly wrong in a way that surfaces in a different feature later.
+
+**Demonstrated rather than asserted.** With `duplicate_node` altered to skip
+setting the copy's parent pointer, `test_model` reports:
+
+    FAIL  copying gives the copy an id of its own: the tree is still well
+          formed (1 violation: 'a1-2' is listed under 'f1' but its parent
+          points elsewhere)
+    134 passed, 1 failed
+
+Every assertion that section wrote for itself still passed. The invariant was
+the only thing that noticed, which is the whole argument for having one.
+
+The checker walks iteratively rather than recursively, deliberately: it is the
+function that has to survive a tree somebody else built badly, and a recursive
+walker blows the stack on exactly the input it exists to reject. A crash is a
+worse diagnosis than a report.
+
+**And it found its first defect immediately.** The depth clamp was off by one:
+indentation in the file is 0-based and counts below the synthetic root, while
+depth in the tree counts the root as level 0, so a line indented `d` lands at
+depth `d + 1` and clamping the indentation to the limit produced a tree one
+level past it. Written by hand, checked by nothing, and caught on the first run.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

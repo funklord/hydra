@@ -10,6 +10,7 @@
 // Then the rest is behaviour: sorting, and a search that has to keep the
 // ancestors of a hit or the hit is invisible inside a collapsed folder.
 #include "tab_tree_model.h"
+#include "tree_invariants.h"
 #include "tree_sort_proxy.h"
 #include "node.h"
 
@@ -28,6 +29,19 @@ static void check(bool ok, const QString &w) {
 	else    { ++g_fail; std::printf("  FAIL  %s\n", qPrintable(w)); }
 }
 static void section(const char *n) { std::printf("\n== %s ==\n", n); }
+
+// **Called at the end of every section below, whatever that section was
+// testing.** The point is not to check the operation just performed -- each
+// section already does that -- but to catch an operation leaving the tree
+// wrong in a way its own assertions were never going to look at. A future
+// mutation added to this file inherits the check by being written here, and a
+// future mutation added *elsewhere* fails in these tests without anybody
+// having anticipated it.
+static void holds(tab_tree_model &m, const char *where) {
+	const auto r = tree_invariants::check(m.root());
+	check(r.ok, QString("%1: the tree is still well formed (%2)")
+	                .arg(where, r.summary().left(60)));
+}
 
 // The tester reports through the Qt message handler in Warning mode; anything
 // it says is a contract violation, so they are counted rather than watched.
@@ -103,6 +117,7 @@ int main(int argc, char **argv) {
 		      QString("the model and proxy satisfy QAbstractItemModelTester "
 		               "through sorting and filtering (%1 complaint(s))")
 		          .arg(g_warnings));
+		holds(model, "Qt's own model contract");
 	}
 
 	section("shape");
@@ -123,6 +138,7 @@ int main(int argc, char **argv) {
 		check(model.node_for_index(idx) == n, "which maps back to the same node");
 		check(!model.index_for_node(nullptr).isValid(),
 		      "a null node has no index, rather than the root's");
+		holds(model, "shape");
 	}
 
 	section("sorting keeps the nesting and groups folders first");
@@ -142,6 +158,7 @@ int main(int argc, char **argv) {
 		check(seen.contains("Music") && seen.size() == 6,
 		      QString("every node is still present — sorting is not filtering (%1)")
 		          .arg(seen.join(", ")));
+		holds(model, "sorting keeps the nesting and groups f");
 	}
 
 	section("search keeps a hit's ancestors, or the hit is invisible");
@@ -159,6 +176,7 @@ int main(int argc, char **argv) {
 		          .arg(seen.join(", ")));
 		check(!seen.contains("Apple docs"),
 		      "and a sibling that does not match is not carried along");
+		holds(model, "search keeps a hit's ancestors, or the");
 	}
 
 	section("search looks at the url too, and ignores case");
@@ -180,6 +198,7 @@ int main(int argc, char **argv) {
 
 		proxy.set_search_text("");
 		check(visible(&proxy).size() == 6, "and clearing it brings the tree back");
+		holds(model, "search looks at the url too, and ignor");
 	}
 
 	section("a folder that matches by name");
@@ -195,6 +214,7 @@ int main(int argc, char **argv) {
 		check(seen.contains("Play"), "the folder is shown");
 		check(!seen.contains("Music"),
 		      QString("and its non-matching children are not (%1)").arg(seen.join(", ")));
+		holds(model, "a folder that matches by name");
 	}
 
 	section("dragging a tab about, which the tree could not do at all");
@@ -248,6 +268,7 @@ int main(int argc, char **argv) {
 		          other->children.last()->id == moved_id,
 		      "and arrives where it was dropped, keeping its id");
 		delete md;
+		holds(m, "dragging a tab about, which the tree c");
 	}
 
 	section("the move that would eat the tree");
@@ -269,6 +290,7 @@ int main(int argc, char **argv) {
 		check(!m.dropMimeData(md, Qt::MoveAction, -1, 0, m.index_for_node(outer)),
 		      "nor onto itself");
 		delete md;
+		holds(m, "the move that would eat the tree");
 	}
 
 	section("copying gives the copy an id of its own");
@@ -294,6 +316,7 @@ int main(int argc, char **argv) {
 		          copy->type != node_type::suspended_tab,
 		      "and is not claimed to be open or suspended, since the state blob "
 		      "belongs to the id it was written under");
+		holds(m, "copying gives the copy an id of its ow");
 	}
 
 	section("what the properties editor is allowed to change");
@@ -310,6 +333,7 @@ int main(int argc, char **argv) {
 		      "and the id does not -- it keys the saved state, and retyping it "
 		      "would orphan a tab's history with no warning");
 		check(m.node_by_id(id_before) == tab, "so the index still finds it");
+		holds(m, "what the properties editor is allowed ");
 	}
 
 	section("deleting takes the subtree, and refuses the root");
@@ -325,6 +349,7 @@ int main(int argc, char **argv) {
 		check(root->children.size() == before - 1, "and is gone from its parent");
 		check(m.node_by_id("Child") == nullptr,
 		      "with what was inside it, rather than leaving orphans in the index");
+		holds(m, "deleting takes the subtree, and refuse");
 	}
 
 	section("a mirror is shown and never written");
@@ -382,6 +407,7 @@ int main(int argc, char **argv) {
 		      "a second import does not add a second folder");
 		check(m.root()->children.first()->children.size() == 1,
 		      "and holds what the source has now, not the union of both reads");
+		holds(m, "a mirror is shown and never written");
 	}
 
 	section("dropping while the tree is filtered");
@@ -452,6 +478,7 @@ int main(int argc, char **argv) {
 			}
 		}
 		proxy.set_search_text("");
+		holds(m, "dropping while the tree is filtered");
 	}
 
 	section("who decides whether a between-rows drop means anything");
@@ -481,6 +508,7 @@ int main(int argc, char **argv) {
 		check(!proxy.in_tree_order(),
 		      "a sort changed by any route at all is reflected immediately, "
 		      "because nothing is storing a copy of it");
+		holds(m, "who decides whether a between-rows dro");
 	}
 
 	section("making a tab, which nothing could do");
@@ -533,6 +561,7 @@ int main(int argc, char **argv) {
 		again.load(saved);
 		check(again.node_by_id(t->id) != nullptr,
 		      "and the new tab is in it -- this one is the user's, so it keeps");
+		holds(m, "making a tab, which nothing could do");
 	}
 
 	section("a tab's name follows the page, unless somebody chose it");
@@ -581,6 +610,7 @@ int main(int argc, char **argv) {
 		check(m.set_page_title(t, "Bank plc — log in"),
 		      "and the page may name it again");
 		check(t->title == "Bank plc — log in", "which it does");
+		holds(m, "a tab's name follows the page, unless ");
 	}
 
 	section("being named survives a save, or it was not worth recording");
@@ -627,6 +657,7 @@ int main(int argc, char **argv) {
 		check(z && z->last_seen.isValid(),
 		      "and its dates still parsed, which a new trailing key could have "
 		      "broken by stopping the reader early");
+		holds(m, "being named survives a save, or it was");
 	}
 
 	QDir(dir).removeRecursively();
