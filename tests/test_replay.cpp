@@ -96,8 +96,15 @@ int main(int argc, char **argv) {
 		const QString prefix = ini.value("replies").toString();
 		const QString note   = ini.value("note").toString();
 
+		// **`toStringList`, not `toString().split(',')`.** QSettings parses a
+		// comma-separated INI value as a list, and `toString()` on a list
+		// variant yields the single element when there is one and an *empty
+		// string* when there are several. Every entry here carried one url
+		// until one carried two, at which point the whole field silently
+		// vanished and three replies scored as accepted that the gate had
+		// refused. The one-element case had been working by luck.
 		QSet<QString> manifests;
-		for (const QString &m : ini.value("manifests").toString().split(','))
+		for (const QString &m : ini.value("manifests").toStringList())
 			if (!m.trimmed().isEmpty())
 				manifests.insert(norm(m.trimmed()));
 		// Addresses the dialog fetched at accept time and found were not
@@ -112,11 +119,11 @@ int main(int argc, char **argv) {
 		// the endpoint is both recoverable and the true statement: it is that
 		// endpoint that was fetched and found not to be a stream.
 		QSet<QString> disproved;
-		for (const QString &d : ini.value("disproved").toString().split(','))
+		for (const QString &d : ini.value("disproved").toStringList())
 			if (!d.trimmed().isEmpty())
 				disproved.insert(d.trimmed());
 		QSet<QString> truncated;
-		for (const QString &t : ini.value("truncated").toString().split(','))
+		for (const QString &t : ini.value("truncated").toStringList())
 			if (!t.trimmed().isEmpty())
 				truncated.insert(t.trimmed());
 		QHash<QString, QString> expect_for;

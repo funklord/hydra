@@ -6081,6 +6081,45 @@ proved nothing: the file was already dirty when that test started, so
 baseline, the example's hash is identical after a run and the personal tree
 appears in app data seeded from it.
 
+### kisskh's first real accept, and what the page-row fix cost
+
+Five runs against kisskh with the corrected prompt -- `seen === 1` no longer
+points at row 0, which is the page itself. Against 0 of 5 before:
+
+    run1  no answer (7 min)
+    run2  analytics beacon      refused by fetching the pick
+    run3  analytics beacon      refused by fetching the pick
+    run4  analytics beacon      refused by fetching the pick
+    run5  hls.cdnvideo11.shop/hls07/10826/Ep24.v990_index.m3u8   ACCEPTED
+
+**1 of 5, and it is the real manifest** -- the first genuine accept this site
+has produced. Worth stating precisely, because the previous "accept" here was
+an analytics beacon that only `check()` liked and the shipping gate refused.
+
+**The regression is gone.** Four of nine replies picked the page's own address
+before the fix; none of five did after. That was the whole point of the change
+and it is the clearest result in the set.
+
+**The dominant failure moved rather than disappeared**: three of five now pick a
+Google analytics endpoint, caught by the tier that fetches the pick before
+offering it. Which is the failure mode this site had before the `seen` rule
+existed, so the loop is back where it was, one accept better.
+
+**And the correction over-corrected.** No reply used `seen` at all, where five
+of nine did before. Telling the model that `seen === 1` is true of the page too
+appears to have taken the field out of use entirely rather than qualifying it.
+That is not obviously harmful -- `seen` was never load-bearing -- but a field
+was wired, described, used, and is now ignored, which is worth knowing before
+anybody wires another.
+
+**A harness bug surfaced with the new data.** `QSettings` parses a
+comma-separated INI value as a *list*, and `toString()` on a list variant
+returns the single element when there is one and an empty string when there are
+several. Every corpus field had carried one url until `disproved` carried two,
+at which point the field silently vanished and three replies scored as accepted
+that the gate had refused. The one-element case had been working by luck for
+the whole life of the file. Read as lists now; 28 of 28 reproduce.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
@@ -6164,8 +6203,9 @@ carried along as amendments to a list item.
    from the rows*, and prose never moved the number in three attempts while
    layout moved it twice.
 
-   **kisskh is 0 of 5 and that is the open question.** Its manifest is in the
-   payload and annotated, so the runs measure the model. The difference from
+   **kisskh is 1 of 5 now, and the accept is the real manifest** -- see the
+   section above. Its manifest is in the payload and annotated, so the runs
+   measure the model. The difference from
    dramafren is noise: one useful note among eighty-nine requests of Google and
    Firebase furniture, against three in a row on a clean media host. Every
    failure was refused by a different layer — two wrote this visit's tokens into
