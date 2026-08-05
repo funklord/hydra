@@ -197,6 +197,28 @@ HYDRA_MODEL_TIMEOUT_MS=900000 QT_QPA_PLATFORM=offscreen \
     ./tests/build/test_live_model qwen2.5-coder:14b /tmp/ev.json
 ```
 
+## The tab tree at scale
+
+`test_tree_scale` builds deliberately large and awkward trees from one
+generator (`tree_gen.h`), parameterised on node count, folder width and nesting
+depth. Modest sizes run as part of `make test`; the rest are opt-in:
+
+```sh
+HYDRA_SCALE_EXTREME=1 ./tests/build/test_tree_scale
+```
+
+It **caps its own address space** at 2 GB with `setrlimit`, so a shape that
+wants more fails inside the test rather than pushing the machine into the OOM
+killer, and each case deletes its file as it goes. Both precautions were earned:
+the probes behind these numbers filled a 16 GB tmpfs, because the tree file
+format is O(depth^2) in bytes.
+
+`tree_invariants::check` is called after every mutation in `test_model` as
+well. It states what must be true of the tree -- unique ids, parent pointers
+agreeing both ways, no cycles, depth within `tree_limits::max_depth`, a
+mirror's children all marked, no tab holding children -- so an operation that
+corrupts the tree fails in tests written before it existed.
+
 ## Measuring the loop without a model
 
 `test_replay` scores model replies that were **already recorded** against the

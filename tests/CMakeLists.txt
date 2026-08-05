@@ -59,6 +59,12 @@ add_executable(test_replay test_replay.cpp
     ${H}/network_fetcher.cpp)
 target_link_libraries(test_replay PRIVATE Qt6::Widgets Qt6::Qml Qt6::Network Qt6::Test)
 
+add_executable(test_tree_scale test_tree_scale.cpp
+    ${H}/tree_invariants.cpp ${H}/tree_outline.cpp ${H}/tab_tree_model.cpp
+    ${H}/tree_diff.cpp)
+target_link_libraries(test_tree_scale PRIVATE Qt6::Widgets Qt6::Test)
+target_include_directories(test_tree_scale PRIVATE ${H} ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_executable(test_invariants test_invariants.cpp
     ${H}/tree_invariants.cpp ${H}/tree_outline.cpp)
 target_link_libraries(test_invariants PRIVATE Qt6::Core Qt6::Test)

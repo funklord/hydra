@@ -5894,6 +5894,33 @@ function that has to survive a tree somebody else built badly, and a recursive
 walker blows the stack on exactly the input it exists to reject. A crash is a
 worse diagnosis than a report.
 
+**The scale suite is `test_tree_scale`**, driven by one generator
+(`tests/tree_gen.h`) parameterised on the three numbers that matter: how many
+nodes, how wide a folder gets, how deep the nesting goes. Modest sizes run in
+`make test`; `HYDRA_SCALE_EXTREME=1` enables the rest.
+
+    5,000 tabs flat        save 2 ms, load 19 ms, 421 KB
+    a tree at depth 64     6 KB -- what the bounded quadratic actually costs
+    4,000-deep file        15.7 MB, loaded in 82 ms, 3,936 nodes flattened
+    20,006 nodes           model load 76 ms
+    5,001-node subtree     deleted in 4 ms
+
+**One superlinearity, found and bounded rather than fixed.** Duplicating the
+same node repeatedly costs 27 ms for 400 copies and 6,849 ms for 4,000 -- ten
+times the count for roughly two hundred and fifty times the time. `unused_id`
+counts upward from 2 looking for a free id, so the k-th copy of one node costs
+O(k) lookups. Nobody duplicates one tab four thousand times, so this is not
+worth fixing; it is worth *measuring*, so that a change making it worse shows
+up as a number rather than as somebody's impression.
+
+**The suite caps its own memory** with `setrlimit(RLIMIT_AS)` at 2 GB. A stress
+test that can take the machine down is worse than no stress test, and this one
+deliberately builds expensive shapes: a runaway allocation now fails as a
+`bad_alloc` inside the test, which is a result rather than an incident. Each
+case also deletes its file as it goes, through a scratch object that cleans up
+even when a case fails -- learned by filling a 16 GB tmpfs with the O(depth^2)
+probe files that produced the measurements above.
+
 **And it found its first defect immediately.** The depth clamp was off by one:
 indentation in the file is 0-based and counts below the synthetic root, while
 depth in the tree counts the root as level 0, so a line indented `d` lands at
@@ -6009,21 +6036,12 @@ carried along as amendments to a list item.
    stream to be found. The line that used to sit here saying otherwise was
    stale.
 
-2. **The helper tier's DOM half stays designed, and its permission is gone**
-   (arch §11.5.1). The decision was put with evidence rather than made by
-   default: on both measured captures the stream was *in the request log*, so
-   the DOM half would have added nothing; and the other use the design names —
-   following a master playlist to a variant — is already done in C++, where
-   `hls_assembler` owns `hls_playlist` and parses `EXT-X-STREAM-INF` itself.
-
-   What was wrong regardless of the decision: `extractorDom` was a live per-site
-   control that **no code read**, described to the user as granting access to
-   "whatever you are logged in to". Denying it gave false assurance; granting it
-   did nothing. It is removed. The design stays, so the day a site demands it is
-   still short, and the permission comes back with the capability.
-
-   Still open: nothing has needed the DOM half *yet*, and that is still evidence
-   rather than proof. Two captures is two.
+2. **Nothing has needed the helper tier's DOM half, and two captures is two.**
+   The decision is made and recorded -- the permission is gone and the design
+   stays, in arch §11.5.1 and in the section above. What keeps this on the list
+   is that "nothing has needed it" rests on two measured sites, both of which
+   had the stream in the request log. A third site that computes its address in
+   page JS would reopen it, and there is no way to know without meeting one.
 
 3. **Android's remaining gap is the platform's autofill, and it is unverified.**
    §19's list is otherwise done — System WebView, drawer, request filter, script
@@ -6033,21 +6051,7 @@ carried along as amendments to a list item.
    exist there. What is *not* established is that filling works: the emulator has
    no autofill service configured, so that claim needs a device that does.
 
-4. **The tab tree is done, and its two open questions are closed.** Tabs move
-   like files, are made from a menu, rename with the distinction between a name
-   a person chose and a name the page supplied, and another browser's open tabs
-   appear in a mirror folder that is never written to the tree file.
-
-   The poll interval is settled — measured at 1.3 ms per read of a real 2.2 MB
-   session file, so Chromium follows at 5 s rather than 15 s. See the section
-   above for the numbers and for why not 2.5 s.
-
-   **A mirrored tab opens in place**, and this entry used to say the opposite.
-   See the section below: the restriction was real when it was written and the
-   thing that justified it has since been fixed, so what remained was a note
-   describing a limitation the code did not have.
-
-5. **What is left untested now needs a window or a network.** The sweep through
+4. **What is left untested now needs a window or a network.** The sweep through
    never-tested files is finished — see the sections above; four of nine were
    wrong. The remainder are dialogs (`media_dialog`, `filter_dialog`,
    `reorganize_dialog`, `site_policy_dialog`), thin adapters (`capture_source`,
