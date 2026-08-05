@@ -249,6 +249,12 @@ Unicode.
 **This project is excepted** and does not enable the check: it is a browser,
 and its user-facing strings are not repository prose.
 
+
+The commit-msg hook is `tools/hooks/commit-msg`, installed with `make hooks`.
+It rejects generator attribution and a subject over 75 columns. It lives in
+the tree rather than only in `.git/hooks` so that it is reviewable and
+survives a clone; the copy that runs is installed from it.
+
 ## See also
 
 - **`~/.claude/guidelines/code-style.md`** -- the source this file copies.

@@ -153,7 +153,7 @@ TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test
 # after a source change and never reproducible afterwards, with nothing kept.
 FAILED_DIR = $(TESTS_DIR)/failed
 
-.PHONY: all run test test-one drivers sweep replay deb deb-check apk android install uninstall clean help style style-docs style-source check
+.PHONY: all run test test-one drivers sweep replay deb deb-check apk android install uninstall clean help style style-docs style-source check hooks
 
 # Always delegates, never compares timestamps itself. The first version made
 # the binary a real target depending on the cache file, and `make` after
@@ -349,3 +349,12 @@ veryclean: clean
 distclean: veryclean
 	find . -name '*~' -o -name '*.swp' -o -name '*.orig' | xargs -r rm -f
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
+
+# The commit-msg hook lives in the tree so it is reviewable, survives a
+# clone, and can be kept in sync. .git/hooks is untracked, so a hook that
+# exists only there enforces a rule nobody can see and vanishes silently on
+# a fresh clone.
+hooks:
+	@test -d .git || { echo "hooks: not a git repository" >&2; exit 1; }
+	@install -m 0755 tools/hooks/commit-msg .git/hooks/commit-msg
+	@echo "hooks: commit-msg installed from tools/hooks/"
