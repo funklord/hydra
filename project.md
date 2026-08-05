@@ -6266,6 +6266,50 @@ stacked dialog on whichever page is showing when it is captured, so settings is
 checked on Privacy only. Auditing the rest means driving the page list, which is
 worth doing when a dialog gains buttons rather than now.
 
+### Every drop folded the tree up
+
+Found by handing the running browser over and being told, after one gesture,
+that it was too annoying to test anything else with. That is the most useful
+kind of report: it stopped the session at the first thing that mattered rather
+than working around it.
+
+**A drop resets the model.** `beginResetModel` tells the view that everything it
+knew is void, so it collapses every folder -- and after moving one tab between
+folders the whole tree closed. One drag was possible; the second needed the tree
+re-opened by hand first.
+
+The project already knew this. The comment beside `replace_mirror` says a reset
+"collapses every folder in the tree" and uses fine-grained row signals for
+exactly that reason. `dropMimeData` never got the same treatment, and there are
+six reset sites in the model.
+
+**Fixed in the view rather than at the six call sites.** Which folders are open
+is the *view's* state, not the model's, so it records them before a reset and
+reopens them after -- by id, so it works whether the reset moved the existing
+nodes or replaced them all. That covers every reset site, including ones not
+written yet, and does not require teaching six operations to emit correct
+`beginMoveRows` sequences, which is the kind of change that is subtly wrong for
+months.
+
+Two details that would each have made it look half-fixed:
+
+- **The current item was being lost too**, jumping to the top of the list on
+  every drop. Same mechanism, same fix, noticed only because the code to
+  restore folders was already walking for ids.
+- **Reopening runs until nothing more opens.** Expanding a child of a
+  still-collapsed parent silently does nothing, so a single pass would have
+  restored the top level and left every nested folder shut -- which looks like
+  a fix that works on the simple case and fails on real trees.
+
+Guarded by a driver check: expand a folder, perform a real drop through
+`dropMimeData`, confirm it is still open. Proved by disabling the restore, at
+which point it reports the folders closed.
+
+**And the verification caught me out first.** The source was restored and the
+*app* rebuilt, but the sweep then ran a `try_import` binary still built from the
+broken version and reported a failure that no longer existed. That is the stale
+binary the build guidelines name in as many words, met in the wild.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

@@ -155,6 +155,43 @@ int main(int argc, char *argv[]) {
 				note("  " + line.left(72));
 	}
 
+	section("a drop does not fold the tree up");
+	{
+		// **The complaint that made drag and drop unusable.** Several model
+		// operations rebuild wholesale, and a reset tells the view everything
+		// it knew is void -- so after moving one tab between folders, every
+		// folder closed. One gesture was possible; the second needed the tree
+		// re-opened by hand first.
+		auto *v = w.findChild<tab_tree_view *>();
+		auto *tv = w.findChild<QTreeView *>();
+		if (v && tv && model->root()->children.size() >= 2) {
+			node *first  = model->root()->children.first();
+			node *second = model->root()->children.at(1);
+			tv->expandAll();
+			spin(200);
+
+			const QModelIndex fi = tv->model()->index(0, 0);
+			check(tv->isExpanded(fi), "a folder starts open");
+
+			// A real drop, through the model, which is what resets it.
+			node *victim = nullptr;
+			for (node *c : first->children)
+				if (!c->is_folder()) { victim = c; break; }
+			if (victim && second->is_folder()) {
+				QMimeData *md = model->mimeData({ model->index_for_node(victim) });
+				const bool ok = model->dropMimeData(
+				    md, Qt::MoveAction, -1, 0, model->index_for_node(second));
+				delete md;
+				check(ok, "a tab moves to another folder");
+				spin(300);
+				check(tv->isExpanded(tv->model()->index(0, 0)),
+				      "and the folders it was dragged from are still open");
+			} else {
+				note("no movable tab and folder pair here; skipped.");
+			}
+		}
+	}
+
 	section("the drag gesture set, which is kept in one place so it cannot drift");
 	{
 		// Properties rather than behaviour, and the difference is worth being

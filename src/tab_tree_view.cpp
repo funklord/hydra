@@ -52,6 +52,103 @@ tab_tree_view::tab_tree_view(QWidget *parent) : QTreeView(parent) {
 	        this, &tab_tree_view::show_menu);
 }
 
+void tab_tree_view::setModel(QAbstractItemModel *m) {
+	if (tab_tree_model *old = source_model())
+		old->disconnect(this);
+	QTreeView::setModel(m);
+	if (tab_tree_model *src = source_model()) {
+		connect(src, &QAbstractItemModel::modelAboutToBeReset,
+		        this, &tab_tree_view::remember_open_folders);
+		connect(src, &QAbstractItemModel::modelReset,
+		        this, &tab_tree_view::reopen_folders);
+	}
+}
+
+// Walks the source tree and records the id of every folder the view has open,
+// plus whatever was current, so the selection does not jump to the top either.
+void tab_tree_view::remember_open_folders() {
+	m_open_ids.clear();
+	m_current_id.clear();
+	tab_tree_model *src = source_model();
+	if (!src)
+		return;
+
+	if (node *cur = node_at_index(currentIndex()))
+		m_current_id = cur->id;
+
+	QList<node *> stack;
+	for (node *c : src->root()->children)
+		stack << c;
+	while (!stack.isEmpty()) {
+		node *n = stack.takeLast();
+		if (!n)
+			continue;
+		if (n->is_folder() && isExpanded(view_index(n)))
+			m_open_ids << n->id;
+		for (node *c : n->children)
+			stack << c;
+	}
+}
+
+void tab_tree_view::reopen_folders() {
+	tab_tree_model *src = source_model();
+	if (!src)
+		return;
+	// Parents before children, which the id list does not guarantee -- so this
+	// runs until nothing more can be opened. Expanding a child of a collapsed
+	// parent silently does nothing, and one pass would leave the deeper folders
+	// shut.
+	bool progress = true;
+	QSet<QString> done;
+	while (progress) {
+		progress = false;
+		for (const QString &id : std::as_const(m_open_ids)) {
+			if (done.contains(id))
+				continue;
+			node *n = src->node_by_id(id);
+			if (!n)
+				continue;
+			const QModelIndex idx = view_index(n);
+			if (!idx.isValid())
+				continue;
+			setExpanded(idx, true);
+			if (isExpanded(idx)) {
+				done << id;
+				progress = true;
+			}
+		}
+	}
+	if (!m_current_id.isEmpty()) {
+		if (node *cur = src->node_by_id(m_current_id)) {
+			const QModelIndex idx = view_index(cur);
+			if (idx.isValid()) {
+				setCurrentIndex(idx);
+				scrollTo(idx, QAbstractItemView::EnsureVisible);
+			}
+		}
+	}
+}
+
+// The view's index for a node, through the proxy when there is one.
+QModelIndex tab_tree_view::view_index(node *n) const {
+	tab_tree_model *src = source_model();
+	if (!src || !n)
+		return QModelIndex();
+	const QModelIndex s = src->index_for_node(n);
+	if (auto *proxy = qobject_cast<tree_sort_proxy *>(model()))
+		return proxy->mapFromSource(s);
+	return s;
+}
+
+node *tab_tree_view::node_at_index(const QModelIndex &idx) const {
+	tab_tree_model *src = source_model();
+	if (!src || !idx.isValid())
+		return nullptr;
+	if (auto *proxy = qobject_cast<tree_sort_proxy *>(model()))
+		return src->node_for_index(proxy->mapToSource(idx));
+	return src->node_for_index(idx);
+}
+
 tab_tree_model *tab_tree_view::source_model() const {
 	if (auto *proxy = qobject_cast<tree_sort_proxy *>(model()))
 		return qobject_cast<tab_tree_model *>(proxy->sourceModel());

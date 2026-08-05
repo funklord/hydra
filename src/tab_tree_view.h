@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <QStringList>
 #include <QTreeView>
 
 class tab_tree_model;
@@ -34,6 +35,19 @@ public:
 	// use the same entry.
 	void edit_properties(node *n);
 
+	// **Keeps folders open across a model reset.** Several operations rebuild
+	// the model wholesale -- a drop, a load, a mirror swap -- and a reset tells
+	// the view that everything it knew is void, so it collapses the lot. After
+	// moving one tab between folders the whole tree folded up, which made drag
+	// and drop unusable for anything past the first gesture.
+	//
+	// Done here rather than by teaching six call sites to emit fine-grained row
+	// signals: which folders are open is the *view's* state, not the model's,
+	// and a fix in the view covers resets that have not been written yet.
+	// Nodes are remembered by id, so it works whether a reset moved the
+	// existing nodes or replaced them all.
+	void setModel(QAbstractItemModel *m) override;
+
 signals:
 	// The two things the menu offers that this view cannot do itself: opening a
 	// tab needs an engine and a stacked widget, suspending it needs the state
@@ -51,6 +65,14 @@ protected:
 	void dragMoveEvent(QDragMoveEvent *event) override;
 
 private:
+	void remember_open_folders();
+	void reopen_folders();
+	QModelIndex view_index(node *n) const;
+	node *node_at_index(const QModelIndex &idx) const;
+
+	QStringList m_open_ids;
+	QString     m_current_id;
+
 	// Whether a drop *between* rows would mean anything right now.
 	bool reordering_is_meaningful() const;
 
