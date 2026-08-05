@@ -225,6 +225,6 @@ void filter_dialog::on_accept() {
 			}
 		}
 	}
-	m_status->setText(QString("Accepted %1 rule(s).").arg(added));
+	m_status->setText(QString("Accepted %1 rule%2.").arg(added).arg(added == 1 ? "" : "s"));
 	accept();
 }

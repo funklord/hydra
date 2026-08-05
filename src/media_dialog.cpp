@@ -119,8 +119,14 @@ void media_dialog::repopulate() {
 	m_list->resizeColumnToContents(3);
 
 	if (!items.isEmpty()) {
-		m_status->setText(QString("%1 item(s). The first row is the stream this "
-		                          "page looks to be playing.").arg(items.size()));
+		// **Counts the rows, not `items`.** `playing` adds rows of its own
+		// below these, so counting `items` announced "1 item" over a list of
+		// three -- a number that disagrees with what is on screen is worse
+		// than no number, because the reader has to work out which is lying.
+		const int rows = m_list->topLevelItemCount();
+		m_status->setText(QString("%1 item%2. The first row is the stream this "
+		                          "page looks to be playing.")
+		                      .arg(rows).arg(rows == 1 ? "" : "s"));
 	} else if (!playing.isEmpty()) {
 		// The badge said this page is playing; the list must not then look
 		// empty, which is how it read before these rows existed.

@@ -154,6 +154,6 @@ void reorganize_dialog::on_accept() {
 		m_change_list[i].accepted = (m_changes->item(i)->checkState() == Qt::Checked);
 
 	const int applied = m_model->apply_reorganization(m_change_list);
-	m_status->setText(QString("Applied %1 change(s).").arg(applied));
+	m_status->setText(QString("Applied %1 change%2.").arg(applied).arg(applied == 1 ? "" : "s"));
 	accept();
 }

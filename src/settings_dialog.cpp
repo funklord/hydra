@@ -1074,8 +1074,8 @@ void settings_dialog::build_filter_page(QWidget *page) {
 		rebuild_site_rules();
 		m_rules_note->setText(gone == 0
 		  ? QString("Nothing had been imported.")
-		  : QString("Forgot %1 imported rule(s). What you learned here is "
-		             "untouched.").arg(gone));
+		  : QString("Forgot %1 imported rule%2. What you learned here is "
+		             "untouched.").arg(gone).arg(gone == 1 ? "" : "s"));
 	});
 
 	// Sharing, in the only form it takes for now: a file someone sends. The

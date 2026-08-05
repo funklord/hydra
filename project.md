@@ -6008,6 +6008,26 @@ That lands in all three dialogs and any future one, because every use of
 It only says so once the server has answered; before a probe the list is empty,
 and calling that "not installed" would be a guess dressed as a fact.
 
+**With a page loaded, the media dialog counted something other than what it
+showed.** Three rows on screen -- an HLS stream and two `Playing` rows with
+their buffered sizes -- above a status line reading "1 item(s)". It counted
+`items`, the detected streams, while `playing` adds rows of its own beneath
+them. A number that disagrees with what is on screen is worse than no number,
+because the reader has to work out which of the two is lying. It counts the
+rows now.
+
+That also caught a habit rather than a bug: `rule(s)`, `change(s)`, `item(s)`
+and `imported rule(s)` in four dialogs, in a codebase that spells the plural
+properly everywhere else -- `%1 request%2` with an empty string or an `s`. All
+four now match.
+
+**The extractor dialog was photographed mid-probe and needed nothing.** Both
+actions correctly disabled until the probes answer, a header saying exactly
+what it is waiting for, and a horizontal scrollbar that is right rather than
+lazy: the payload's columns are aligned, and wrapping would break the alignment
+that makes it readable. Worth recording that a surface was looked at and left
+alone, since otherwise the only evidence of the pass is the things it changed.
+
 **And the empty-state label took three attempts**, all the same mistake in
 different clothes: geometry set from `refresh()` (which runs before the first
 layout), then from the dialog's `resizeEvent` (which fires before the list's

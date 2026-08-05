@@ -17,9 +17,11 @@
 #include "policy_engine.h"
 #include "qtwebengine_factory.h"
 #include "request_filter.h"
+#include "tab_tree_model.h"
 
 #include <QApplication>
 #include <QDialog>
+#include <QTreeView>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
@@ -120,6 +122,37 @@ int main(int argc, char *argv[]) {
 	};
 	for (const auto &m : modals)
 		shoot_modal(&w, m.slot, m.name);
+
+	// **The surfaces that need a page**, which is why they were blank or absent
+	// in the first pass: the media dialog lists what a page is playing, and the
+	// extractor works from the requests a page actually made. Both are empty by
+	// construction on an empty tab, so photographing them there says nothing
+	// about how they look in use.
+	const QString target = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString();
+	if (target.isEmpty()) {
+		std::printf("\n(no url given; the media and extractor dialogs need a "
+		             "loaded page -- pass one to include them)\n");
+	} else {
+		std::printf("\n== with %s loaded ==\n", qPrintable(target));
+		node *tab = w.findChild<tab_tree_model *>()->add_tab(nullptr, "Live",
+		                                                      target);
+		if (tab) {
+			auto *tv = w.findChild<QTreeView *>();
+			tv->expandAll();
+			// The tab was appended at the root, so it is the last top-level row.
+			const int last = tv->model()->rowCount() - 1;
+			emit tv->activated(tv->model()->index(last, 0));
+			spin(qEnvironmentVariableIsSet("HYDRA_SETTLE")
+			         ? qEnvironmentVariableIntValue("HYDRA_SETTLE") : 15000);
+			save(&w, "window-page-loaded");
+			shoot_modal(&w, "open_media", "media-loaded");
+			// The extractor probes its candidates when it opens, so it wants
+			// longer on screen than a dialog that merely draws itself.
+			shoot_modal(&w, "learn_this_site", "extractor-loaded");
+		} else {
+			std::printf("  could not add a tab for %s\n", qPrintable(target));
+		}
+	}
 
 	std::printf("\n%d image(s) in %s\n", g_shots, qPrintable(g_out));
 	return 0;
