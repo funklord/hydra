@@ -23,6 +23,8 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QLineEdit>
+#include <QProgressBar>
+#include <QStatusBar>
 #include <QTimer>
 #include <QTreeView>
 #include <cstdio>
@@ -171,6 +173,29 @@ int main(int argc, char *argv[]) {
 		settle(fwd, true);
 		check(fwd->isEnabled(),   "Forward comes alive");
 		check(!back->isEnabled(), "and Back goes grey at the start of history");
+	}
+
+	section("a page that does not arrive says so");
+	{
+		// The bar is only ever on screen while something is loading, and a
+		// failure used to be entirely silent: the bar would have sat at
+		// whatever it reached and nothing would have said why.
+		QProgressBar *bar = w.findChild<QProgressBar *>("load_progress");
+		QStatusBar   *sb  = w.findChild<QStatusBar *>();
+		check(bar && sb, "the loading bar and the status bar are reachable");
+		if (bar && sb) {
+			check(!bar->isVisible(), "no bar once the page has arrived");
+
+			const QString missing =
+			    QUrl::fromLocalFile(out + "/there-is-no-such-page.html").toString();
+			address->setText(missing);
+			emit address->returnPressed();
+			for (int i = 0; i < 40 && !sb->currentMessage().contains("could not"); ++i)
+				spin(200);
+			check(sb->currentMessage().contains("could not be loaded"),
+			      QString("a failed load is reported (%1)").arg(sb->currentMessage()));
+			check(!bar->isVisible(), "and the bar goes away rather than sticking");
+		}
 	}
 
 	section("and when the page goes away again");

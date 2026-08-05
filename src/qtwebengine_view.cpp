@@ -68,6 +68,12 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	         [this](const QUrl &) { emit history_changed(); });
 	connect(m_view, &QWebEngineView::loadFinished, this,
 	         [this](bool) { emit history_changed(); });
+	connect(m_view, &QWebEngineView::loadStarted, this,
+	         [this] { emit load_progress(0); });
+	connect(m_view, &QWebEngineView::loadProgress, this,
+	         [this](int p) { emit load_progress(p); });
+	connect(m_view, &QWebEngineView::loadFinished, this,
+	         [this](bool ok) { emit load_finished(ok); });
 	// Qt gives the page's own title, and falls back to the url when a document
 	// has none -- which is the right label either way, so it is passed on as it
 	// comes rather than second-guessed here.

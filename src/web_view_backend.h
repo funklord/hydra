@@ -124,6 +124,14 @@ signals:
 	// one without the other.
 	void history_changed();
 
+	// How far a page has got, 0 to 100, and whether it arrived. **The seam had
+	// no notion of loading at all**, so nothing in the window could say that a
+	// slow site was working rather than broken, and a load that failed outright
+	// said nothing whatsoever. A backend that cannot report progress simply
+	// never emits these, and the shell shows no bar.
+	void load_progress(int percent);
+	void load_finished(bool ok);
+
 	// The engine's render process died. Kiosk mode's watchdog reloads on this
 	// so an unattended screen self-heals (architecture doc §8.3).
 	void render_process_gone();

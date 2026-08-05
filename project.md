@@ -6464,6 +6464,34 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### Nothing said a page was loading
+
+The seam had no notion of loading at all. On a slow site nothing in the window
+moved, so the browser looked frozen rather than busy, and a load that failed
+outright said nothing whatsoever -- for the cases Chromium handles without
+drawing its own error document, the window simply kept showing the previous
+page.
+
+`load_progress` and `load_finished` join the seam beside `history_changed`, and
+a backend with no notion of either just never emits them. The bar lives in the
+status bar and is **only on screen while something is loading**: a bar that is
+always present and empty is a permanent claim that something is happening,
+while one that appears is the only thing on that bar that moves, which is what
+makes it readable out of the corner of an eye.
+
+Three details that are each a bug avoided:
+
+- **Only the current view's progress counts.** Every view emits, and a
+  background tab finishing its load would otherwise drive the bar for the page
+  in front of you.
+- **Switching tabs hides it.** Left showing, it would report the previous tab's
+  load against the new one for as long as that took.
+- **The failure names the host, not the url.** What failed is a site, and a url
+  long enough to be interesting is long enough to push everything else off the
+  status bar. A `file://` url has no host, so the message falls back to "That
+  page could not be loaded" -- which is what the driver observes, since it fails
+  a local file deliberately.
+
 ### A window that would not say what it was showing
 
 Every window was called "Hydra" and nothing else, whatever page it held. Two of

@@ -21,6 +21,7 @@ class QStackedWidget;
 class QLineEdit;
 class QComboBox;
 class QLabel;
+class QProgressBar;
 class QMenuBar;
 class QStatusBar;
 class QAction;
@@ -171,6 +172,10 @@ private:
 	// Put the page in the window title, so a task switcher says which one.
 	void update_window_title();
 
+	// Show or hide the loading bar, and say so when a page does not arrive.
+	void on_load_progress(int percent);
+	void on_load_finished(bool ok);
+
 	void sync_page_context();          // refresh the status bar's permanent counts
 	web_view_backend *current_view() const;
 	void open_node(node *n);            // create/restore a live view and show it
@@ -217,6 +222,7 @@ private:
 
 	QStatusBar      *m_status     = nullptr;
 	QLabel          *m_tab_counts = nullptr;   // permanent widget, right side
+	QProgressBar    *m_progress   = nullptr;   // beside it, only while loading
 
 	web_view_factory   *m_factory       = nullptr;   // injected, not owned
 	state_store        *m_state         = nullptr;

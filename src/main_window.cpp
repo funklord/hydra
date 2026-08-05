@@ -67,6 +67,7 @@
 #include <QLineEdit>
 #include <QComboBox>
 #include <QLabel>
+#include <QProgressBar>
 #include <QMenu>
 #include <QMenuBar>
 #include <QStatusBar>
@@ -664,6 +665,19 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// Named so a driver can read the live-view count without scanning every
 	// label for one whose text happens to match a pattern.
 	m_tab_counts->setObjectName("tab_counts");
+
+	// **Only on screen while something is loading.** A progress bar that is
+	// always there, empty, is a permanent claim that something is happening;
+	// one that appears is the only thing on the status bar that moves, which
+	// is what makes it readable out of the corner of an eye.
+	m_progress = new QProgressBar(this);
+	m_progress->setObjectName("load_progress");
+	m_progress->setRange(0, 100);
+	m_progress->setTextVisible(false);
+	m_progress->setMaximumWidth(120);
+	m_progress->setMaximumHeight(12);
+	m_progress->hide();
+	m_status->addPermanentWidget(m_progress);
 	m_status->addPermanentWidget(m_tab_counts);
 	m_status->showMessage("Ready");
 	outer->addWidget(m_status);
@@ -1664,6 +1678,14 @@ void main_window::open_node(node *n) {
 			if (view == current_view())
 				update_navigation();
 		});
+		connect(view, &web_view_backend::load_progress, this, [this, view](int p) {
+			if (view == current_view())
+				on_load_progress(p);
+		});
+		connect(view, &web_view_backend::load_finished, this, [this, view](bool ok) {
+			if (view == current_view())
+				on_load_finished(ok);
+		});
 
 		// Feature permissions (geo/cam/mic/notifications) answered from policy.
 		// The backend maps its engine's own feature enum onto policy::feature,
@@ -1686,6 +1708,10 @@ void main_window::open_node(node *n) {
 	n->type = node_type::open_tab;
 	m_model->refresh_node(n);
 	m_stack->setCurrentWidget(view->widget());
+	// The bar belongs to the page in front of you. Left showing, it would
+	// report the last tab's load against this one for as long as that took.
+	m_progress->hide();
+	m_progress->setValue(0);
 	sync_page_context();
 	update_address(view->url().toString());
 	update_window_title();
@@ -1751,6 +1777,31 @@ void main_window::update_navigation() {
 // document: some pages carry a paragraph in theirs, and a window manager given
 // one either elides it in the middle or lets it push everything else out of
 // the switcher.
+void main_window::on_load_progress(int percent) {
+	m_progress->setValue(percent);
+	if (!m_progress->isVisible())
+		m_progress->show();
+}
+
+// **A page that does not arrive has to say so.** Chromium draws its own error
+// document for a network failure, but nothing was drawn for the cases it
+// handles silently, and the bar would simply have sat at whatever it reached.
+// The host rather than the whole url: what failed is a site, and a url long
+// enough to be interesting is long enough to push the rest of the status bar
+// off the end.
+void main_window::on_load_finished(bool ok) {
+	m_progress->hide();
+	m_progress->setValue(0);
+	if (ok)
+		return;
+	web_view_backend *v = current_view();
+	const QString host = v ? v->url().host() : QString();
+	m_status->showMessage(host.isEmpty()
+	                          ? QStringLiteral("That page could not be loaded.")
+	                          : QString("%1 could not be loaded.").arg(host),
+	                       6000);
+}
+
 void main_window::update_window_title() {
 	web_view_backend *v = current_view();
 	QString page = v ? v->page_title().trimmed() : QString();
