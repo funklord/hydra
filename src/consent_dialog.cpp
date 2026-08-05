@@ -33,8 +33,13 @@ consent_dialog::consent_dialog(consent_blocker *blocker, const QString &rules_pa
 
 	m_list = new QTreeWidget;
 	m_list->setObjectName("banners");
-	m_list->setColumnCount(2);
-	m_list->setHeaderLabels({ "Site / button", "" });
+	// One column, because the second was never filled. It carried an empty
+	// header and took most of the dialog's width, so every row of real content
+	// was squeezed into the left third of a window that looked half broken.
+	// Nothing wrote to it: only column 0 is ever set, for both the site rows
+	// and the button rows beneath them.
+	m_list->setColumnCount(1);
+	m_list->setHeaderLabels({ "Site / button" });
 	m_list->header()->setStretchLastSection(true);
 	outer->addWidget(m_list, 1);
 

@@ -5988,6 +5988,26 @@ outside, which is correct and idiomatic. And the download action buttons looked
 enabled with nothing selected, which was the offscreen rendering rather than
 the state: they are disabled, at two separate places in the code.
 
+**The consent dialog had a column that was never filled.** Two columns, the
+second with an empty header and `setStretchLastSection`, so it took most of the
+width and squeezed every row of real content into the left third of a window
+that looked half broken. Nothing ever wrote to it -- both the site rows and the
+button rows beneath them set only column 0.
+
+**And the reorganizer announced a model that was not there.** The banner read
+"Local model (Ollama, llama3)" on a machine holding only qwen: `llama3` is the
+hardcoded default in three places, and the first anyone learned otherwise was a
+failed request after pressing Send.
+
+The fix is smaller than it looks, because the information was already being
+fetched and thrown away. `probe()` requests `/api/tags` -- which *is* the list
+of installed models -- and kept one boolean out of it. It now keeps the list,
+and `name()` says "llama3 -- not installed" when the configured model is absent.
+That lands in all three dialogs and any future one, because every use of
+`name()` is a label somebody reads: three banners and an "Asking %1..." status.
+It only says so once the server has answered; before a probe the list is empty,
+and calling that "not installed" would be a guess dressed as a fact.
+
 **And the empty-state label took three attempts**, all the same mistake in
 different clothes: geometry set from `refresh()` (which runs before the first
 layout), then from the dialog's `resizeEvent` (which fires before the list's

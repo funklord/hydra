@@ -4,6 +4,7 @@
 #include "ai_provider.h"
 
 #include <QPointer>
+#include <QStringList>
 #include <QUrl>
 
 class QNetworkAccessManager;
@@ -26,6 +27,18 @@ public:
 	void set_model(const QString &model) { m_model = model; }
 	QUrl    endpoint() const { return m_endpoint; }
 	QString model() const { return m_model; }
+
+	// What the server said it has, from the same `/api/tags` reply the probe
+	// already makes. It was being fetched and thrown away: the probe kept one
+	// boolean out of a document listing every installed model, so a dialog
+	// could announce "Ollama, llama3" while the machine had only qwen -- and
+	// the first anyone knew of it was a failed request after pressing Send.
+	//
+	// Empty until a probe has answered. `has_model` is false in that case too,
+	// so a caller must ask `available()` first to tell "not installed" from
+	// "not asked yet".
+	QStringList models() const { return m_models; }
+	bool has_model(const QString &name) const { return m_models.contains(name); }
 
 	// Probes the local server and remembers the answer for available().
 	// Asynchronous: probe_finished() follows, and available() is stale until
@@ -63,6 +76,7 @@ private:
 	QPointer<QNetworkReply> m_reply;
 	QUrl    m_endpoint = QUrl("http://localhost:11434");
 	QString m_model    = "llama3";
+	QStringList m_models;
 	bool    m_reachable = false;
 	int     m_probe_timeout = 2500;   // milliseconds
 };

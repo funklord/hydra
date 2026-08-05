@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "ollama_provider.h"
+#include <QJsonArray>
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -14,6 +15,18 @@ ollama_provider::ollama_provider(QObject *parent) : ai_provider(parent) {
 }
 
 QString ollama_provider::name() const {
+	// **Says when the configured model is not there.** Every use of this is a
+	// label a person reads -- three dialog banners and an "Asking %1..."
+	// status -- so the state belongs in it rather than in three copies of a
+	// check. Without this the reorganizer announced "Local model (Ollama,
+	// llama3)" on a machine holding only qwen, and the first anyone knew was a
+	// failed request after pressing Send.
+	//
+	// Only when the server has actually answered: `m_models` is empty before a
+	// probe, and calling that "not installed" would be a guess dressed as a
+	// fact.
+	if (m_reachable && !m_models.isEmpty() && !m_models.contains(m_model))
+		return QString("Local model (Ollama, %1 \u2014 not installed)").arg(m_model);
 	return QString("Local model (Ollama, %1)").arg(m_model);
 }
 
@@ -26,6 +39,14 @@ void ollama_provider::probe() {
 	QNetworkReply *reply = m_net->get(req);
 	connect(reply, &QNetworkReply::finished, this, [this, reply] {
 		m_reachable = (reply->error() == QNetworkReply::NoError);
+		m_models.clear();
+		if (m_reachable) {
+			// The same reply, read rather than discarded.
+			const QJsonObject root =
+			    QJsonDocument::fromJson(reply->readAll()).object();
+			for (const QJsonValue &v : root.value("models").toArray())
+				m_models << v.toObject().value("name").toString();
+		}
 		reply->deleteLater();
 		emit probe_finished(m_reachable);
 	});
