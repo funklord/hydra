@@ -6229,6 +6229,43 @@ Worth stating as a rule rather than an incident: **a display that summarises is
 right when somebody is choosing what to do, and wrong when somebody is checking
 what will happen.** The two are easy to confuse because they show the same data.
 
+### A systematic pass that found nothing, and fixed the tool instead
+
+With every surface photographed, looking harder at the same pictures was going
+to run out. So `try_look` gained two checks it can run on each dialog as it
+captures it -- every Alt key claimed once, and a window title present, since a
+dialog without one shows in the task switcher as a blank entry.
+
+The menus had two mnemonic clashes when they were examined; nobody had ever
+looked at the dialogs. The first run reported four in settings:
+
+    Alt+C   "Check now"        vs "Copy the flagged ones"
+    Alt+R   "Remove selected"  vs "Rescan for players"
+    Alt+R   "Remove selected"  vs "Remove selected"
+    Alt+X   "Export..."        vs "Export all settings..."
+
+**Three of those were between different pages of a stack.** "Remove selected"
+lives on Privacy, "Rescan for players" on Media; they cannot be on screen
+together, and Qt skips hidden widgets when matching a mnemonic, so it would
+never confuse them. The audit was comparing every button in the dialog rather
+than every button a person can see.
+
+Restricted to visible buttons, **nothing survives**. The dialogs are clean and
+every one has a title. The defect was in the checker, and an audit that cries
+wolf about pages is an audit somebody turns off -- which would have cost more
+than the four false reports.
+
+Worth recording precisely because it found nothing: a systematic check that
+comes back empty is a result, and the alternative -- reporting four "fixes" to
+collisions that could not happen -- would have been worse than doing nothing at
+all. It is the same shape as the three deliberate decisions this pass left
+alone after reading the code.
+
+**One limitation, stated rather than discovered later**: the audit sees a
+stacked dialog on whichever page is showing when it is captured, so settings is
+checked on Privacy only. Auditing the rest means driving the page list, which is
+worth doing when a dialog gains buttons rather than now.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

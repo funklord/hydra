@@ -20,6 +20,8 @@
 #include "tab_tree_model.h"
 #include "tab_tree_view.h"
 
+#include <QAbstractButton>
+#include <QHash>
 #include <QApplication>
 #include <QDialog>
 #include <QTreeView>
@@ -34,11 +36,54 @@ static void spin(int ms) { QEventLoop l; QTimer::singleShot(ms, &l, &QEventLoop:
 static QString g_out;
 static int     g_shots = 0;
 
+// Two cheap, systematic checks run on every dialog as it is photographed.
+//
+// **Alt keys, because the menus had two collisions and nobody had looked at the
+// dialogs at all.** Qt matches mnemonics case-insensitively and cycles between
+// duplicates rather than complaining, so a clash is invisible until somebody
+// presses the key and gets the wrong button. And a **window title**, because a
+// dialog without one appears in the task switcher as an empty entry.
+static int g_problems = 0;
+static void audit(QWidget *w, const QString &name) {
+	if (!w)
+		return;
+	if (w->windowTitle().trimmed().isEmpty()) {
+		std::printf("    ! %s has no window title\n", qPrintable(name));
+		++g_problems;
+	}
+	// **Only buttons that are on screen together.** The first version of this
+	// compared every button in the dialog and reported four clashes in
+	// settings, three of which were between *different pages* of a stack --
+	// "Remove selected" on Privacy against "Rescan for players" on Media, which
+	// cannot both be visible and which Qt would never confuse, since it skips
+	// hidden widgets when matching a mnemonic. An audit that cries wolf about
+	// pages is an audit somebody turns off.
+	QHash<QChar, QString> claimed;
+	for (QAbstractButton *b : w->findChildren<QAbstractButton *>()) {
+		if (!b->isVisible())
+			continue;
+		const QString t = b->text();
+		const int amp = t.indexOf('&');
+		if (amp < 0 || amp + 1 >= t.size())
+			continue;
+		const QChar key = t.at(amp + 1).toLower();
+		if (claimed.contains(key)) {
+			std::printf("    ! %s: Alt+%s is claimed by both \"%s\" and \"%s\"\n",
+			             qPrintable(name), qPrintable(QString(key.toUpper())),
+			             qPrintable(claimed.value(key)), qPrintable(t));
+			++g_problems;
+		} else {
+			claimed.insert(key, t);
+		}
+	}
+}
+
 static void save(QWidget *w, const QString &name) {
 	if (!w)
 		return;
 	const QString path = QString("%1/%2-%3.png")
 	                         .arg(g_out).arg(g_shots, 2, 10, QChar('0')).arg(name);
+	audit(w, name);
 	if (w->grab().save(path)) {
 		std::printf("  %-28s %4dx%-4d %s\n", qPrintable(name),
 		             w->width(), w->height(), qPrintable(path));
@@ -189,5 +234,6 @@ int main(int argc, char *argv[]) {
 	}
 
 	std::printf("\n%d image(s) in %s\n", g_shots, qPrintable(g_out));
+	std::printf("%d problem(s) found by the audit\n", g_problems);
 	return 0;
 }
