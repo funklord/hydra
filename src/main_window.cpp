@@ -1108,8 +1108,15 @@ void main_window::refresh_media_affordance(const QString &site_host) {
 
 void main_window::open_media() {
 	web_view_backend *v = current_view();
-	if (!v)
+	if (!v) {
+		// The odd one out: every other action needing a page says so, and this
+		// returned in silence. Hard to reach, since the Media button is hidden
+		// until something is detected -- but "the button did nothing" is the
+		// worst thing a button can do, and the difference is one line.
+		m_status->showMessage("Open a page first — there is no media without "
+		                       "one.", 5000);
 		return;
+	}
 	QString node_id;
 	for (auto it = m_views_by_id.cbegin(); it != m_views_by_id.cend(); ++it)
 		if (it.value() == v) { node_id = it.key(); break; }

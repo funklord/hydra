@@ -5950,6 +5950,52 @@ Worth noting for what it says about the shape of the problem rather than the
 fix: nothing here was wrong except *which file the convenience target pointed
 at*, and the cost was paid by people who had not run the target.
 
+### Looking at the browser, which found three things reading it had not
+
+A capture pass over every surface -- the window wide and narrow, and each
+dialog -- grabbed in-process with `QWidget::grab()`, offscreen. The driver is
+`try_look`, and it asserts nothing: the other drivers check that a menu is
+ordered correctly and a dialog opens, and none of them can see that a panel is
+empty, a label is clipped, or that a dialog offers settings for a site that
+does not exist. That is found by looking.
+
+**Site controls with no page open were editable, and the rule went nowhere.**
+The popup showed `(no page)`, sixteen rows of "Default", and a scope of "This
+host" -- and `current_pattern()` returns the host, so touching any control
+called `set_setting("")`. That stores a rule keyed on nothing: it matches
+nothing, is invisible in the interface, and can only be found by reading
+`policy.ini`. The two site scopes are now disabled without a site, the scope
+falls back to Global default, and the header says so. The popup stays useful,
+because the global defaults are still worth editing from there, and it now
+shows what the browser *actually does* rather than sixteen rows of a word that
+means "ask somebody else".
+
+**`open_media` returned in silence.** Every other action needing a page says so
+-- `learn_this_site`, `toggle_capture`, `find_media_with_ytdlp`,
+`start_element_picker` all do -- and this one was the outlier. Hard to reach,
+since the Media button is hidden until something is detected, but "the button
+did nothing" is the worst thing a button can do and the fix is one line.
+
+**Downloads had no empty state**: column headings above four hundred pixels of
+nothing, which reads as broken rather than idle. The comment beside the action
+buttons already made exactly that complaint about *them* and dealt with it;
+the list was left. It now says what will appear there and why.
+
+Two things checked rather than assumed, both of which would have been wrong
+"fixes". The site-controls popup has no close button, which looked like an
+omission until the window flags said `Qt::Popup` -- it closes on a click
+outside, which is correct and idiomatic. And the download action buttons looked
+enabled with nothing selected, which was the offscreen rendering rather than
+the state: they are disabled, at two separate places in the code.
+
+**And the empty-state label took three attempts**, all the same mistake in
+different clothes: geometry set from `refresh()` (which runs before the first
+layout), then from the dialog's `resizeEvent` (which fires before the list's
+viewport settles), and finally from an event filter on the viewport itself,
+which is the only thing that knows when it is the size it will be drawn at.
+The first two put a centred two-line message clipped into the top-left corner,
+and each looked plausible until it was photographed.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

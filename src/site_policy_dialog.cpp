@@ -6,6 +6,7 @@
 #include <QVBoxLayout>
 #include <QGridLayout>
 #include <QComboBox>
+#include <QStandardItemModel>
 #include <QLabel>
 #include <QFrame>
 #include <QFont>
@@ -82,8 +83,32 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 
 void site_policy_dialog::set_host(const QString &host) {
 	m_host = host;
-	m_host_label->setText(host.isEmpty() ? QStringLiteral("(no page)") : host);
-	m_scope->setItemText(1, "This domain (*." + policy_engine::etld_plus_one(host) + ")");
+
+	// **With no page there is no site to have a rule about**, and the two site
+	// scopes then resolve to an empty pattern -- which `set_setting` will
+	// happily store, leaving a rule keyed on nothing that matches nothing and
+	// can only be found by reading policy.ini. So they are disabled and the
+	// scope falls back to the global defaults, which are still meaningful and
+	// still worth being able to edit from here.
+	const bool have_site = !host.isEmpty();
+	m_host_label->setText(have_site
+	                          ? host
+	                          : QStringLiteral("No page open \u2014 global defaults"));
+	for (int i = 0; i < 2; ++i) {
+		// Disabled through the model, which is how a QComboBox greys one entry
+		// rather than removing it: the choice stays visible, so it is clear
+		// that per-site rules exist and simply have nothing to apply to.
+		if (auto *m = qobject_cast<QStandardItemModel *>(m_scope->model()))
+			if (QStandardItem *it = m->item(i))
+				it->setEnabled(have_site);
+	}
+	if (!have_site)
+		m_scope->setCurrentIndex(2);
+
+	m_scope->setItemText(1, have_site
+	                            ? "This domain (*." +
+	                                  policy_engine::etld_plus_one(host) + ")"
+	                            : QStringLiteral("This domain"));
 	repopulate();
 }
 
@@ -122,7 +147,13 @@ void site_policy_dialog::on_feature_changed(int feature_index) {
 		// Global default: unset is not meaningful, treat it as allow.
 		m_engine->set_global_default(f, s == setting::unset ? setting::allow : s);
 	} else {
-		m_engine->set_setting(current_pattern(), f, s);
+		// Belt and braces against the case above: a site rule with no site is
+		// not a rule, and storing one is worse than refusing it because it
+		// persists and matches nothing.
+		const QString pattern = current_pattern();
+		if (pattern.isEmpty())
+			return;
+		m_engine->set_setting(pattern, f, s);
 	}
 	emit policy_changed();
 }

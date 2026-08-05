@@ -66,7 +66,24 @@ private:
 	player_launcher  *m_players   = nullptr;
 	local_proxy      *m_proxy     = nullptr;
 
+	// Keeps the empty-state label over the list as the window changes size.
+	// Setting its geometry once, from `refresh`, put it at the top-left and
+	// clipped it: `refresh` runs before the first layout, so the viewport it
+	// measured was not the one that ended up on screen.
+	// **Filtered on the viewport, not on the dialog.** A `resizeEvent` override
+	// here fires before the list's viewport has settled, so the geometry it
+	// measured was a few pixels tall and the message came out clipped against
+	// the header. The viewport tells us when it is actually the size it will
+	// be drawn at.
+	bool eventFilter(QObject *o, QEvent *e) override;
+	void place_empty_state();
+
 	QTreeWidget *m_list   = nullptr;
+	// Shown over the empty list. A window of column headings above four
+	// hundred pixels of nothing reads as broken rather than as idle, which is
+	// the same complaint the comment beside the action buttons already makes
+	// about them.
+	QLabel      *m_nothing = nullptr;
 	QLabel      *m_note   = nullptr;   // standing "public transfer" explanation
 	QLabel      *m_action = nullptr;   // transient feedback from a button press
 	QPushButton *m_pause  = nullptr;
