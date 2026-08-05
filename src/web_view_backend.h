@@ -101,6 +101,13 @@ public:
 	// they do before a page has loaded.
 	virtual QString page_title() const { return QString(); }
 
+	// Whether the page's history has anywhere to go. **Not pure, and the
+	// default is yes**: a backend that does not track history should keep the
+	// buttons it has always had rather than have them switched off on a guess.
+	// A backend that does know says so, and the shell greys them accordingly.
+	virtual bool can_go_back() const { return true; }
+	virtual bool can_go_forward() const { return true; }
+
 signals:
 	void url_changed(const QUrl &url);
 
@@ -109,6 +116,13 @@ signals:
 	// browsing to another page left the old name in place. A backend that has
 	// no notion of a title simply never emits this.
 	void title_changed(const QString &title);
+
+	// History moved: something was pushed onto it, or the position within it
+	// changed. Separate from `url_changed` because the two do not coincide --
+	// going back changes the url *and* what is now reachable, while a fragment
+	// jump changes the url and nothing else -- and because a backend can know
+	// one without the other.
+	void history_changed();
 
 	// The engine's render process died. Kiosk mode's watchdog reloads on this
 	// so an unattended screen self-heals (architecture doc §8.3).

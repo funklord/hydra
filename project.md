@@ -6351,6 +6351,42 @@ geometry comes from an event filter on the *viewport*: the widget's own resize
 fires before the viewport settles, which is exactly how the first version of the
 downloads message came out clipped into a corner.
 
+### Three buttons that could not do anything, and did not say so
+
+Back, Forward and Reload were enabled from the moment the window opened,
+including on an empty tab where none of them did anything at all. That is the
+same defect the Media button had, and the browser had already answered it there
+with a status message. A navigation button has a better answer available: it can
+look unavailable, which is what every other browser does and what somebody is
+already reading the toolbar for.
+
+The state is asked of the view each time rather than cached. Mirroring two
+booleans that Chromium changes underneath us is exactly the kind of state that
+drifts -- redirects, in-page navigations and restored sessions all move history
+without anybody pressing anything. Qt WebEngine has no history-changed signal
+(`QWebEngineHistory` emits nothing), so the seam grows one, derived from the two
+moments history can move: a navigation committing and a load ending.
+
+`can_go_back()` is virtual with a default of **yes**, not pure. A backend that
+does not track history should keep the buttons it has always had rather than
+have them switched off on a guess.
+
+**Finding this turned up a duplicate.** The toolbar and the Go menu held three
+*separate* actions apiece, wired to the same three slots -- so greying the
+toolbar's Back would have left the menu's Back on, offering a route to the same
+nothing. They are one action each now, created in the menu bar (which is built
+first) and lent to the toolbar. The test driver found the duplicate before a
+person could: it looked up "Back" by tooltip and got the menu's copy, which
+never greys, so every check that expected a greyed button failed.
+
+Two ordering bugs, both crashes, both worth the entry. `update_navigation()`
+reads the stacked widget, and called from the toolbar builder it ran before the
+stack existed -- a segfault in every window construction, caught by the driver
+on its first run. Guarding it then made the initial state silently wrong instead,
+because nothing asked again until a page opened. It is called once more at the
+end of the constructor, which is the only point where everything it reads
+exists.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

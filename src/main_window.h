@@ -165,6 +165,9 @@ private:
 	void update_status();
 	// Tell the page-scoped bridges which site is on screen. Called whenever that
 	// can change: a navigation in the current view, and a switch to another one.
+	// Grey the navigation buttons to match what the page can actually do.
+	void update_navigation();
+
 	void sync_page_context();          // refresh the status bar's permanent counts
 	web_view_backend *current_view() const;
 	void open_node(node *n);            // create/restore a live view and show it
@@ -263,6 +266,9 @@ private:
 	QSet<QString>        m_antiadblock_fixed;
 	QString              m_site_rules_path;
 	QAction            *m_media_action  = nullptr;
+	QAction            *m_back_action   = nullptr;
+	QAction            *m_fwd_action    = nullptr;
+	QAction            *m_reload_action = nullptr;
 	QAction            *m_key_action    = nullptr;
 	session_mirror     *m_fx_mirror     = nullptr;
 	session_mirror     *m_cr_mirror     = nullptr;

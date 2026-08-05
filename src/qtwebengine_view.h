@@ -29,6 +29,8 @@ public:
 	                    bool subframes = false) override;
 	void inject_main_world_script(const QString &name, const QString &source) override;
 	QString page_title() const override;
+	bool can_go_back() const override;
+	bool can_go_forward() const override;
 	void set_script_bridge(QObject *object, const QString &name) override;
 	QByteArray save_state() const override;
 	bool       restore_state(const QByteArray &blob) override;

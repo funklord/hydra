@@ -455,9 +455,16 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// and the reload button rendered as an empty box, while back and forward
 	// happened to survive. Asking the style for the icon is both prettier and
 	// not a bet on what fonts a platform ships.
-	QAction *back_act   = bar->addAction("◀");
-	QAction *fwd_act    = bar->addAction("▶");
-	QAction *reload_act = bar->addAction("↻");
+	// The Go menu's own actions, added to the toolbar as well: one command, one
+	// action, one enabled state. The toolbar is icon-only, so the menu text is
+	// never drawn here -- and if a platform ships no icon for one of them, what
+	// appears is the word rather than the box a missing glyph used to leave.
+	QAction *back_act   = m_back_action;
+	QAction *fwd_act    = m_fwd_action;
+	QAction *reload_act = m_reload_action;
+	bar->addAction(back_act);
+	bar->addAction(fwd_act);
+	bar->addAction(reload_act);
 	// Only shown in drawer mode; on a wide window the tree is already visible
 	// and a button to reveal it would be a control that does nothing.
 	m_drawer_action = bar->addAction("☰");
@@ -477,9 +484,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	fwd_act->setToolTip("Forward");
 	reload_act->setToolTip("Reload");
 	bar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	connect(back_act,   &QAction::triggered, this, &main_window::go_back);
-	connect(fwd_act,    &QAction::triggered, this, &main_window::go_forward);
-	connect(reload_act, &QAction::triggered, this, &main_window::reload_page);
+	update_navigation();
 
 	m_address = new QLineEdit(this);
 	m_address->setPlaceholderText("Address");
@@ -700,6 +705,11 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	}
 
 	update_status();
+	// Last, because it reads the stacked widget: called from the toolbar
+	// builder it would find no stack and give up, and nothing else would ask
+	// again until a page opened -- which left the three buttons enabled over an
+	// empty window, the exact state this exists to prevent.
+	update_navigation();
 }
 
 QMenuBar *main_window::build_menu_bar() {
@@ -855,10 +865,18 @@ QMenuBar *main_window::build_menu_bar() {
 
 	// ---- Go -----------------------------------------------------------------
 	QMenu *go_menu = menu->addMenu("&Go");
-	go_menu->addAction("&Back", QKeySequence::Back, this, &main_window::go_back);
-	go_menu->addAction("&Forward", QKeySequence::Forward, this, &main_window::go_forward);
+	// **Created here and lent to the toolbar, rather than made twice.** These
+	// were three separate QActions wired to the same three slots, which meant
+	// two enabled states per command: greying the toolbar's Back would have
+	// left the menu's Back on, offering a route to the same nothing. The menu
+	// bar is built before the toolbar, so this is where they come from.
+	m_back_action = go_menu->addAction("&Back", QKeySequence::Back, this,
+	                                    &main_window::go_back);
+	m_fwd_action  = go_menu->addAction("&Forward", QKeySequence::Forward, this,
+	                                    &main_window::go_forward);
 	go_menu->addSeparator();
-	go_menu->addAction("&Reload", QKeySequence::Refresh, this, &main_window::reload_page);
+	m_reload_action = go_menu->addAction("&Reload", QKeySequence::Refresh, this,
+	                                      &main_window::reload_page);
 
 	// ---- Tools: grouped, with Settings last ---------------------------------
 	//
@@ -1011,6 +1029,7 @@ void main_window::toggle_kiosk() {
 			if (web_view_backend *v = current_view())
 				m_stack->setCurrentWidget(v->widget());
 			sync_page_context();
+	update_navigation();
 			update_status();
 		});
 	}
@@ -1634,8 +1653,13 @@ void main_window::open_node(node *n) {
 			apply_policy(view, u.host());
 			if (view == current_view()) {
 				sync_page_context();
+				update_navigation();
 				update_address(u.toString());
 			}
+		});
+		connect(view, &web_view_backend::history_changed, this, [this, view] {
+			if (view == current_view())
+				update_navigation();
 		});
 
 		// Feature permissions (geo/cam/mic/notifications) answered from policy.
@@ -1688,6 +1712,29 @@ void main_window::open_node(node *n) {
 // filtering silently did nothing there while every unit test passed. Reading it
 // from whatever is current, after the switch, does not depend on which way a
 // backend emits.
+// **A button that does nothing is the worst kind of button**, and Back, Forward
+// and Reload were all three of them on an empty tab: always enabled, silently
+// no-ops. The same argument that put a status message behind the Media button
+// applies here, except that a navigation button has a better answer than a
+// message -- it can simply look unavailable, which is what every other browser
+// does and what somebody is already reading the toolbar for.
+//
+// Asked of the view each time rather than cached. The alternative is mirroring
+// two booleans that Chromium changes underneath us, and history is exactly the
+// kind of state that moves without asking (redirects, in-page navigations,
+// restored sessions).
+void main_window::update_navigation() {
+	// Both, and the stack is the one that matters: this is called from the
+	// toolbar builder to set the initial state, which runs *before* the stacked
+	// widget exists. Guarding only on the actions segfaulted every window.
+	if (!m_back_action || !m_stack)
+		return;
+	web_view_backend *v = current_view();
+	m_back_action->setEnabled(v && v->can_go_back());
+	m_fwd_action->setEnabled(v && v->can_go_forward());
+	m_reload_action->setEnabled(v != nullptr);
+}
+
 void main_window::sync_page_context() {
 	web_view_backend *v = current_view();
 	if (!v)
@@ -1726,6 +1773,7 @@ void main_window::suspend_node(node *n) {
 
 	if (view == current_view())
 		m_stack->setCurrentIndex(0);  // back to placeholder
+		update_navigation();
 	QWidget *w = view->widget();
 	m_stack->removeWidget(w);
 	m_views_by_id.remove(n->id);
@@ -1839,6 +1887,7 @@ void main_window::forget_subtree(node *n) {
 	if (web_view_backend *view = m_views_by_id.value(n->id, nullptr)) {
 		if (view == current_view())
 			m_stack->setCurrentIndex(0);   // back to the placeholder
+			update_navigation();
 		QWidget *w = view->widget();
 		m_stack->removeWidget(w);
 		w->deleteLater();

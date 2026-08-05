@@ -60,6 +60,14 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	setParent(m_view);
 
 	connect(m_view, &QWebEngineView::urlChanged, this, &qtwebengine_view::url_changed);
+	// Qt WebEngine has no history-changed signal of its own -- QWebEngineHistory
+	// emits nothing -- so it is derived from the two moments history can move:
+	// a navigation committing, and a load ending. Answering from the history
+	// object each time means no state is mirrored here to fall out of date.
+	connect(m_view, &QWebEngineView::urlChanged, this,
+	         [this](const QUrl &) { emit history_changed(); });
+	connect(m_view, &QWebEngineView::loadFinished, this,
+	         [this](bool) { emit history_changed(); });
 	// Qt gives the page's own title, and falls back to the url when a document
 	// has none -- which is the right label either way, so it is passed on as it
 	// comes rather than second-guessed here.
@@ -279,4 +287,12 @@ void qtwebengine_view::set_script_bridge(QObject *object, const QString &name) {
 			m_channel_api_injected = true;
 		}
 	}
+}
+
+bool qtwebengine_view::can_go_back() const {
+	return m_view && m_view->history()->canGoBack();
+}
+
+bool qtwebengine_view::can_go_forward() const {
+	return m_view && m_view->history()->canGoForward();
 }

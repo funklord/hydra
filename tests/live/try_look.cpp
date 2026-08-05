@@ -255,5 +255,11 @@ int main(int argc, char *argv[]) {
 
 	std::printf("\n%d image(s) in %s\n", g_shots, qPrintable(g_out));
 	std::printf("%d problem(s) found by the audit\n", g_problems);
-	return 0;
+	// **The word the sweep looks for, and an exit code that means something.**
+	// This printed neither, so a driver whose pictures all came out was
+	// reported as "did not finish" in every sweep -- and had the audit found a
+	// clash, the run would still have exited 0 and said nothing that a script
+	// could see. The pictures remain for a person; the audit is a test.
+	std::printf("done\n");
+	return g_problems ? 1 : 0;
 }
