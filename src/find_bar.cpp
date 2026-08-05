@@ -99,6 +99,8 @@ void find_bar::set_result(int matches, int active) {
 	                     : QString("%1 of %2").arg(active).arg(matches));
 }
 
+void find_bar::clear_result() { m_count->clear(); }
+
 void find_bar::keyPressEvent(QKeyEvent *event) {
 	if (event->key() == Qt::Key_Escape) {
 		emit dismissed();

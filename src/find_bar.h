@@ -27,6 +27,10 @@ public:
 	// worth saying, the second is not.
 	void set_result(int matches, int active);
 
+	// Say nothing rather than something stale. A count belongs to the page it
+	// was counted on, and survives a switch to another one as a lie.
+	void clear_result();
+
 	QString text() const;
 
 signals:

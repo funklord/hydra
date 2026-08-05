@@ -6464,6 +6464,43 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### Five pieces of chrome, four places to hook them, and two lies
+
+The window title, the navigation buttons, the loading bar, the find count and
+the link target each say something about the page in front of you, and each was
+wired into the same four moments -- opening a tab, switching to another,
+suspending one, deleting one -- one addition at a time.
+
+That went wrong twice, and the second time it was already recorded here as a
+risk before anything was looked for:
+
+- **The find count outlived its page.** Search for a word, get "3 of 12", switch
+  tabs: the bar went on claiming twelve matches for a page it had never
+  searched.
+- **The link target outlived the pointer.** Hover a link so the status bar shows
+  where it goes, switch tabs: the url stayed, now describing somewhere the
+  pointer is not.
+
+Neither had anything clearing it, because nothing asked what *else* becomes
+untrue when the page changes. `page_changed()` is that question asked once:
+fourteen scattered refresh calls become seven, and the seven that remain are
+per-signal handlers, which are event-driven rather than page-driven and belong
+where they are.
+
+Two details it needed:
+
+- **The status bar is only cleared if this window put a link there.** Clearing
+  unconditionally would wipe whatever else it was saying -- "Ready" at startup,
+  or the result of the action that caused the change.
+- **`clear_result()` rather than `set_result(0, 0)`**, because zero matches is
+  a thing worth saying and the absence of a search is not.
+
+**The driver's own assumption broke, which is the useful part.** Adding a second
+tab so a switch could be made at all left the final section deleting one tab
+while the other was still open -- so it was asserting that the chrome forgets a
+page which is still there. The premise had been invisible while the tree held
+exactly one tab.
+
 ### No way to see where a link goes
 
 A browser whose whole argument is that you can see what a page is doing had no

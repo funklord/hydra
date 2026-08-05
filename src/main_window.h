@@ -189,6 +189,14 @@ public:
 	void show_link_target(const QUrl &url);
 
 private:
+	// **Everything the chrome says about the page in front of you.** Five
+	// separate pieces of state -- the title, the navigation buttons, the
+	// loading bar, the find count and the link target -- each needed hooking
+	// into the same four places, and the window title was already added to
+	// three of the four, going stale on every tab switch until that was found.
+	// One call, so the sixth is right by construction.
+	void page_changed();
+	bool m_link_shown = false;
 	// While a load runs, the Reload button is a Stop button.
 	void set_loading(bool loading);
 	bool m_loading = false;

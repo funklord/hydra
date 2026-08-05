@@ -99,8 +99,10 @@ int main(int argc, char *argv[]) {
 		if (!tf.open(QIODevice::WriteOnly | QIODevice::Truncate))
 			return 1;
 		tf.write(QString("- [f0] folder | Work\n"
-		                  "  - [a1] unopened | One | %1\n")
-		             .arg(QUrl::fromLocalFile(one).toString()).toUtf8());
+		                  "  - [a1] unopened | One | %1\n"
+		                  "  - [a2] unopened | Two | %2\n")
+		             .arg(QUrl::fromLocalFile(one).toString(),
+		                   QUrl::fromLocalFile(two).toString()).toUtf8());
 	}
 
 	policy_engine       policy;
@@ -369,14 +371,58 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	section("switching tabs drops what belonged to the old page");
+	{
+		// Two live bugs, both of the same shape: a piece of chrome that was
+		// true about the page it was set from and is a lie about the next one.
+		// Neither had anything clearing it, because each was hooked into the
+		// four places that matter one addition at a time.
+		auto *count = w.findChild<QLabel *>("find_count");
+		QAction *find_act = nullptr;
+		for (QAction *a : w.findChildren<QAction *>())
+			if (a->text().contains("Find on &Page"))
+				find_act = a;
+		QStatusBar *sb = w.findChild<QStatusBar *>();
+
+		if (count && find_act && sb && tv->model()->rowCount(tv->model()->index(0, 0)) > 1) {
+			find_act->trigger();
+			auto *input = w.findChild<QLineEdit *>("find_input");
+			input->setText("one");
+			for (int i = 0; i < 30 && count->text().isEmpty(); ++i)
+				spin(200);
+			check(!count->text().isEmpty(),
+			      QString("a count is showing before the switch (%1)").arg(count->text()));
+
+			w.show_link_target(QUrl("https://example.test/somewhere"));
+			check(!sb->currentMessage().isEmpty(), "and a link target with it");
+
+			// The second tab.
+			emit tv->activated(tv->model()->index(1, 0, tv->model()->index(0, 0)));
+			check(wait_for(address, "two.html"), "the other tab opens");
+			spin(400);
+
+			check(count->text().isEmpty(),
+			      QString("the match count does not follow (%1)").arg(count->text()));
+			check(!sb->currentMessage().contains("example.test"),
+			      QString("nor does the link target (%1)").arg(sb->currentMessage()));
+			check(w.windowTitle().contains("two") || w.windowTitle().contains("Two"),
+			      QString("and the title is the new page's (%1)").arg(w.windowTitle()));
+		}
+	}
+
 	section("and when the page goes away again");
 	{
 		// Deleting the open tab takes its view out of the stack and leaves the
 		// window on its placeholder -- the state it started in, so the buttons
 		// have to go back with it rather than keep the last page's answers.
+		// **Every tab, not just one.** The tree holds two now, and deleting one
+		// while the other is still open leaves a page in the window -- so the
+		// checks below would be asserting that the chrome forgets a page which
+		// is still there, which is the opposite of what they mean.
 		auto *model = w.findChild<tab_tree_model *>();
-		node *tab   = model->root()->children.first()->children.first();
-		model->remove_node(tab);
+		node *folder = model->root()->children.first();
+		while (!folder->children.isEmpty())
+			model->remove_node(folder->children.first());
 		spin(900);
 		check(!back->isEnabled() && !fwd->isEnabled() && !reload->isEnabled(),
 		      "all three go grey again once the page is gone");

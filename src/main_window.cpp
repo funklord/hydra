@@ -739,12 +739,11 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	}
 
 	update_status();
-	update_window_title();
 	// Last, because it reads the stacked widget: called from the toolbar
 	// builder it would find no stack and give up, and nothing else would ask
 	// again until a page opened -- which left the three buttons enabled over an
 	// empty window, the exact state this exists to prevent.
-	update_navigation();
+	page_changed();
 }
 
 QMenuBar *main_window::build_menu_bar() {
@@ -1771,15 +1770,13 @@ void main_window::open_node(node *n) {
 	m_model->refresh_node(n);
 	apply_zoom(view, n->id);
 	m_stack->setCurrentWidget(view->widget());
-	// The bar belongs to the page in front of you. Left showing, it would
-	// report the last tab's load against this one for as long as that took --
-	// and the button would offer to stop a load that is not this tab's.
-	set_loading(false);
-	m_progress->hide();
-	m_progress->setValue(0);
+	// Everything the chrome asserts belongs to the page in front of you: the
+	// bar would otherwise report the last tab's load against this one, the
+	// button would offer to stop a load that is not this tab's, and the find
+	// count would claim matches from a page this is not.
 	sync_page_context();
 	update_address(view->url().toString());
-	update_window_title();
+	page_changed();
 	touch_lru(n->id);
 	enforce_live_cap(n->id);
 	mark_dirty();
@@ -1929,6 +1926,7 @@ void main_window::open_find() {
 // one truncated from the right loses the host -- the only part that matters for
 // deciding whether to click.
 void main_window::show_link_target(const QUrl &url) {
+	m_link_shown = !url.isEmpty();
 	if (url.isEmpty()) {
 		// Not a timed message: the pointer left the link, and a target left on
 		// screen after that is a claim about where the pointer is now.
@@ -1941,6 +1939,30 @@ void main_window::show_link_target(const QUrl &url) {
 	                          ? text
 	                          : text.left(room / 2) + QChar(0x2026) +
 	                                text.right(room / 2 - 1));
+}
+
+// The page in front of you changed, whether by opening a tab, switching to
+// another, or losing the one that was there. Everything the chrome asserts
+// about a page is re-derived here rather than at each of the four callers.
+void main_window::page_changed() {
+	if (!m_stack)
+		return;              // still being built; nothing to say yet
+	set_loading(false);
+	if (m_progress) {
+		m_progress->hide();
+		m_progress->setValue(0);
+	}
+	if (m_find)
+		m_find->clear_result();
+	// Only what this window put there. Clearing unconditionally would wipe
+	// whatever else the status bar was saying -- "Ready" at startup, or the
+	// result of the action that caused this.
+	if (m_link_shown) {
+		m_status->clearMessage();
+		m_link_shown = false;
+	}
+	update_navigation();
+	update_window_title();
 }
 
 void main_window::set_loading(bool loading) {
@@ -2046,8 +2068,7 @@ void main_window::suspend_node(node *n) {
 	m_model->refresh_node(n);
 	mark_dirty();
 	update_status();
-	update_navigation();
-	update_window_title();
+	page_changed();
 }
 
 void main_window::touch_lru(const QString &id) {
@@ -2163,8 +2184,7 @@ void main_window::forget_subtree(node *n) {
 	if (m_state)
 		m_state->remove(n->id);
 	update_status();
-	update_navigation();
-	update_window_title();
+	page_changed();
 }
 
 void main_window::save_tree_soon() {
