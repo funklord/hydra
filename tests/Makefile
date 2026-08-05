@@ -54,7 +54,10 @@ OPT_DEFS   := $(if $(filter libsodium,$(OPT_PKGS)),-DHYDRA_HAVE_SODIUM) \
                $(if $(filter libtorrent-rasterbar,$(OPT_PKGS)),-DHYDRA_HAVE_LIBTORRENT) \
                -DHYDRA_HAVE_DBUS
 
-# -Os, and `?=` so a debug build can replace it from the command line.
+# -Os, and `?=` so a debug build can replace it *from the environment*:
+# `CXXFLAGS='-Og -g' make ...`. Not as a command-line argument, which overrides
+# the whole variable including every -I appended below, leaving compiles that
+# fail instantly -- measured, and it read as a suspiciously fast rebuild.
 CXXFLAGS ?= -Os -g
 CXXFLAGS += -std=gnu++17 -fPIC -Wall -Wextra -I$(SRC) -I. -I$(BUILD_DIR) \
              $(QT_CFLAGS) $(OPT_CFLAGS) $(OPT_DEFS)

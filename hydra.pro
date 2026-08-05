@@ -32,6 +32,11 @@ QMAKE_CXXFLAGS += -Wall -Wextra
 QMAKE_CXXFLAGS_RELEASE -= -O2
 QMAKE_CXXFLAGS_RELEASE += -Os
 
+# And -Og rather than qmake's -O0 for a debug build, for the same reason: it
+# stays followable in a debugger without giving up everything.
+QMAKE_CXXFLAGS_DEBUG -= -O0
+QMAKE_CXXFLAGS_DEBUG += -Og
+
 SOURCES = $$files(src/*.cpp)
 HEADERS = $$files(src/*.h)
 

@@ -74,7 +74,7 @@
 #   every check is `ifdef`, so a `?= 0` default would make them permanently
 #   set and impossible to turn off.
 #
-#     make DEBUG=1        unoptimized, symbol-rich
+#     make DEBUG=1        -Og and symbol-rich, for a debugger
 #
 #   Optimization is -Os everywhere else. Debug is the only exception, and it
 #   is an exception because a debugger needs the code to match the source.
@@ -135,6 +135,11 @@ BUILD_TYPE ?= MinSizeRel
 CMAKE_FLAGS =
 ifdef DEBUG
 BUILD_TYPE = Debug
+# **-Og, not -O0.** CMake's Debug means -O0, and the guidelines ask for -Og:
+# it keeps the code close enough to the source for a debugger to follow while
+# leaving the obviously wasteful gone. -O0 is for the case where a debugger
+# cannot cope, which is a decision made at the time and not a default.
+CMAKE_FLAGS += -DCMAKE_CXX_FLAGS_DEBUG="-Og -g"
 endif
 ifdef SANITIZE
 CMAKE_FLAGS += -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
