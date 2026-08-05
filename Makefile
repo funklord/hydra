@@ -342,13 +342,16 @@ clean:
 #   while the prose beside them stayed true. Nothing compiles a table of
 #   filenames, so nothing else can notice.
 style-docs:
-	@dup=$$(grep '^###' project.md | sort | uniq -d); \
-	 if [ -n "$$dup" ]; then echo "project.md says these twice:"; echo "$$dup"; exit 1; fi
+	python3 tools/style_gate.py docs
+	@# The shared gate checks backticked paths in table rows, which covers
+	@# most of what this target used to do by hand, and checks repeated
+	@# headings at every level rather than just `###`. What it cannot read is
+	@# this document's `foo.{h,cpp}` shorthand, used 31 times in the layout
+	@# table and nowhere in any sibling project, so that stays here.
 	@miss=0; for f in $$(sed -n '/^| Area | Files | Notes |/,/^$$/p' project.md | \
 	       grep -oE '`[a-z_]+\.\{h,cpp\}`' | tr -d '`' | sed 's/\.{h,cpp}/.h/' | sort -u); do \
 	   [ -f "src/$$f" ] || { echo "project.md names a file that does not exist: src/$$f"; miss=1; }; \
 	 done; exit $$miss
-	python3 tools/style_gate.py docs
 
 help:
 	@sed -n '/^# TARGETS/,/^# BUILD FLAGS/p' $(firstword $(MAKEFILE_LIST)) | \

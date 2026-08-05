@@ -6387,6 +6387,40 @@ because nothing asked again until a page opened. It is called once more at the
 end of the constructor, which is the only point where everything it reads
 exists.
 
+#### One file changed, everything that depends on it rebuilt
+
+The clean build happens once; the edit-rebuild loop happens all day. Same three
+systems, warm, `-Os`, `-j2`, a real content change to one file:
+
+    leaf   src/tree_diff.cpp   3 dependents    cmake 24s   make 19s   fmake  8s
+    mid    src/policy.cpp      8 dependents    cmake 24s   make 19s   fmake  6s
+    hub    src/node.h         24 dependents    cmake 55s   make 40s   fmake 28s
+
+**fmake wins every case, by two to three times**, and its clean-build deficit
+(374s against 293s) is repaid by the second edit. It compiles each translation
+unit once, so a hub header costs it one recompile per affected file rather than
+one per affected file *per target*, and it relinks only the binaries whose
+closure contains the object.
+
+**The archive's signature is the flat column.** Make costs the same 19s whether
+the change reaches three files or eight, because the cost is not the change: it
+is `ar` rewriting `libhydra_app.a`, after which all seventy binaries relink,
+including the ones that never referenced the changed code. That is the case
+against a static archive in one number, and it is the same property that made
+the clean build look good.
+
+Two measurement bugs were caught before these numbers were believed, both of
+which had produced a *flattering* result for the tool being measured:
+
+- **`CXXFLAGS='-Os'` as a command-line argument to Make overrides the whole
+  variable**, including every `-I` and `-std` the makefile appends -- so every
+  compile failed instantly and the rebuild "took 0s". A command-line assignment
+  beats `+=`; the environment does not, which is where the flag belongs.
+- **`touch` is not a change.** fmake keys its object cache on content, so
+  touching a file correctly rebuilt nothing and reported a flat 6s -- which is
+  its analysis pass, and also its floor. Measuring an incremental build against
+  a tool that hashes content requires editing the file.
+
 #### End to end, on an idle machine
 
 The same deliverable each way -- the app plus all 70 test binaries, `-Os`,
