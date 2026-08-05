@@ -25,10 +25,20 @@ JOBS      ?= 2
 # The same flags the app is built with. Qt's pkg-config files are the whole
 # discovery mechanism here: `find_package` has no equivalent, and everything
 # CMake knew about Qt comes back through these.
-QT_MODULES  = Qt6Widgets Qt6Network Qt6Qml Qt6WebChannel Qt6WebEngineWidgets \
-               Qt6Test Qt6DBus
-QT_CFLAGS  := $(shell pkg-config --cflags $(QT_MODULES))
+# **Two link sets, because Qt WebEngine is not like the other modules.** Not one
+# of the thirty-eight offline suites references the engine, and linking it into
+# all of them anyway is most of what made this slower than the CMake build it
+# replaces: WebEngineCore is the largest library on the machine and every link
+# paid to scan it. Thirty of thirty-two live drivers do need it, and say so by
+# building the real shell.
+#
+# Compile flags stay uniform. An unused `-I` costs nothing; an unused `-l`
+# costs a scan of every symbol in the library.
+QT_MODULES  = Qt6Widgets Qt6Network Qt6Qml Qt6WebChannel Qt6Test Qt6DBus
+QT_ENGINE   = Qt6WebEngineWidgets
+QT_CFLAGS  := $(shell pkg-config --cflags $(QT_MODULES) $(QT_ENGINE))
 QT_LIBS    := $(shell pkg-config --libs $(QT_MODULES))
+ENGINE_LIBS := $(shell pkg-config --libs $(QT_ENGINE))
 
 # Optional dependencies, each costing one feature and no more. Asked with
 # `--exists` so a missing one is a smaller build rather than a failure -- and
@@ -48,6 +58,7 @@ OPT_DEFS   := $(if $(filter libsodium,$(OPT_PKGS)),-DHYDRA_HAVE_SODIUM) \
 CXXFLAGS ?= -Os -g
 CXXFLAGS += -std=gnu++17 -fPIC -Wall -Wextra -I$(SRC) -I. -I$(BUILD_DIR) \
              $(QT_CFLAGS) $(OPT_CFLAGS) $(OPT_DEFS)
+LDFLAGS  += -Wl,--as-needed
 LDLIBS   += $(QT_LIBS) $(OPT_LIBS)
 
 # --- the app, compiled once ------------------------------------------------
@@ -64,7 +75,19 @@ APP_OBJS  := $(patsubst $(SRC)/%.cpp,$(BUILD_DIR)/app/%.o,$(APP_SRCS))
 MOC       := $(shell pkg-config --variable=libexecdir Qt6Core)/moc
 MOC_HDRS  := $(shell grep -l Q_OBJECT $(SRC)/*.h | grep -v '$(SRC)/android_')
 MOC_SRCS  := $(patsubst $(SRC)/%.h,$(BUILD_DIR)/moc/moc_%.cpp,$(MOC_HDRS))
-MOC_OBJS  := $(patsubst $(BUILD_DIR)/moc/%.cpp,$(BUILD_DIR)/moc/%.o,$(MOC_SRCS))
+
+# **One object per header, not one for all of them.** A unity translation unit
+# the way AUTOMOC builds it was tried and measured, and it is the wrong trade
+# *here*: it compiles the test tree about 20% faster and makes every test binary
+# seven times larger -- 1.25 MB against 172 KB stripped, 2.5 GB against 1.7 GB
+# across seventy -- because one object holding forty-six mocs is pulled whole by
+# any suite needing one of them, and it drags most of the app in behind it.
+#
+# CMake gets both, and not by being cleverer: each of its targets has its own
+# mocs_compilation.cpp of its own headers, which it can only do because each
+# target also has its own hand-written source list. With one archive serving
+# seventy binaries, granularity is what makes the archive work at all.
+MOC_OBJS  := $(patsubst %.cpp,%.o,$(MOC_SRCS))
 
 # A Q_OBJECT inside a .cpp is included by the file itself as `<name>.moc`, so
 # it is generated but never compiled separately. src/network_fetcher.cpp is the
@@ -90,6 +113,20 @@ OFFLINE_SRCS := $(wildcard test_*.cpp)
 LIVE_SRCS    := $(wildcard live/try_*.cpp)
 OFFLINE      := $(patsubst %.cpp,$(BUILD_DIR)/%,$(OFFLINE_SRCS))
 LIVE         := $(patsubst live/%.cpp,$(BUILD_DIR)/%,$(LIVE_SRCS))
+
+# Which of them reach the engine. **Structural for the drivers, grepped for the
+# suites**, and the first version had it the other way round: a grep over the
+# driver sources missed the two that reach the engine through the shell rather
+# than by naming it, and they failed at link on `QWebEngineProfile`. Every live
+# driver builds the real window, so every live driver gets the engine; that is a
+# property of what a driver *is*, not of what its text happens to mention.
+#
+# The suites are still grepped, because they are the ones where the answer
+# varies -- and today not one of the thirty-eight reaches it.
+NEEDS_ENGINE := $(shell grep -lE 'main_window\.h|qtwebengine|QWebEngine|web_view_factory' \
+                  $(OFFLINE_SRCS) 2>/dev/null)
+ENGINE_BINS  := $(LIVE) $(patsubst %.cpp,$(BUILD_DIR)/%,$(NEEDS_ENGINE))
+$(ENGINE_BINS): LDLIBS += $(ENGINE_LIBS)
 
 .PHONY: all offline live clean help
 all: offline live
@@ -129,7 +166,7 @@ $(BUILD_DIR)/%.o: live/%.cpp $(TMOC_INC) | $(BUILD_DIR)
 
 # A test's own moc, for the fakes that carry Q_OBJECT in their headers.
 $(BUILD_DIR)/%: $(BUILD_DIR)/%.o $(TMOC_OBJS) $(ARCHIVE)
-	$(CXX) $< $(TMOC_OBJS) $(ARCHIVE) $(LDLIBS) -o $@
+	$(CXX) $(LDFLAGS) $< $(TMOC_OBJS) $(ARCHIVE) $(LDLIBS) -o $@
 
 $(BUILD_DIR) $(BUILD_DIR)/app $(BUILD_DIR)/moc $(BUILD_DIR)/tmoc:
 	@mkdir -p $@

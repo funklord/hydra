@@ -6387,6 +6387,36 @@ because nothing asked again until a page opened. It is called once more at the
 end of the constructor, which is the only point where everything it reads
 exists.
 
+#### End to end, on an idle machine
+
+The same deliverable each way -- the app plus all 70 test binaries, `-Os`,
+`-j2`, clean, sequential:
+
+    qmake + Make    app  82s    app+tests 293s    287 objects
+    cmake           app  56s    app+tests 328s    432 objects
+    fmake           app 157s    app+tests 374s    181 objects  (app included)
+
+**Fewest compiles does not mean fastest.** fmake does 181 to CMake's 432 and
+takes 14% longer, because its compiles are not all it does: it reads the symbol
+table of every object to compute each binary's closure, and it links 71
+binaries from a large candidate set. What it buys is the smallest binary of the
+three -- 1,214,488 bytes stripped against 1,329,416 -- because nothing unreached
+is linked at all.
+
+Two corrections to the first attempt at this measurement, both worth keeping
+because both were confidently wrong:
+
+- **A 4.5x gap that was the machine, not the build.** The qmake app build
+  measured 142s standalone, 347s during a busy run, and 73-82s idle. The first
+  reading was attributed to AUTOMOC's unity translation unit; on an idle machine
+  the same comparison is 82s against 56s. Load was most of it. Any timing taken
+  on this machine while anything else runs is worth about as much as no timing.
+- **The test tree's 840s was two faults, and the larger was ours.** Not one of
+  the 38 offline suites references Qt WebEngine, and the Makefile was linking
+  `Qt6WebEngineWidgets` into all of them -- the largest library on the machine,
+  scanned 38 times for nothing. Giving the engine only to what reaches it is
+  most of the 840s -> 293s.
+
 ### -Os everywhere except under a debugger
 
 The three build systems disagreed about optimization by default and nobody had
