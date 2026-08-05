@@ -6120,6 +6120,41 @@ at which point the field silently vanished and three replies scored as accepted
 that the gate had refused. The one-element case had been working by luck for
 the whole life of the file. Read as lists now; 28 of 28 reproduce.
 
+### A batch that was two experiments, reported as one score
+
+Five dramafren runs all timed out, which was uninformative -- and the logs
+underneath them were not:
+
+    run1  3 addresses answered      run2  0 answered      run3  3 answered
+    run4  0 answered                run5  3 answered
+
+Alternating, and not load: every earlier dramafren batch answered 3 on all
+five. A run with no annotations is asking the model a **different question** --
+the same addresses with none of the content-type notes -- so a batch that mixes
+them reports one number for two experiments.
+
+**The mechanism, from the code rather than a guess.** Send is enabled only when
+every probe has replied, so this is not the dialog giving up: `m_served` gains
+an entry when the host answers, and another when it answers 400 or worse.
+Neither branch runs when a probe never *reaches* the host. `0 answered, 0
+refused` therefore means every candidate failed to connect, which is a third
+state the counts had no way to distinguish from "the tier did not run".
+
+**What was not established**: why it alternates. That would mean probing a third
+party's server repeatedly to characterise its rate limiting, which is somebody
+else's machine and not obviously worth it. The cause is unknown and recorded as
+unknown.
+
+**What was fixed is the reporting.** `measure.sh` now prints the probe result
+beside each verdict, so a mixed batch is visible instead of pooled. The harness
+already printed the counts; nothing was reading them, which is the same defect
+as a log nobody opens.
+
+Two things this does *not* invalidate, checked rather than assumed: every
+earlier dramafren batch -- the legend runs and the two-clause runs -- answered
+3 on all five, so those scores were measuring one thing. Only the batch that
+produced no answers was mixed.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

@@ -55,8 +55,20 @@ for i in $(seq 1 "$RUNS"); do
 	# about it.
 	gate=$(grep -m1 -oE '^gate: [A-Z]+' "$LOGS/$name.log")
 	[ -z "$gate" ] && gate="no answer (timed out)"
-	printf '  %-16s %s\n' "$name" "$gate"
+
+	# **The probe result belongs beside the verdict, not buried in a log.**
+	# A run whose probes all failed to reach the host is asking the model a
+	# *different question* -- the same addresses with none of the content-type
+	# notes -- and pooling it with annotated runs reports one number for two
+	# experiments. Measured: five dramafren runs alternated 3, 0, 3, 0, 3
+	# annotations, and the batch would have read as a single score.
+	probes=$(grep -m1 -oE '[0-9]+ addresses answered, [0-9]+ refused' \
+	          "$LOGS/$name.log")
+	printf '  %-16s %-26s %s\n' "$name" "$gate" "${probes:-no payload recorded}"
 done
 echo
+echo
+echo "Check the probe column before pooling these: runs with no annotations"
+echo "asked a different question and do not belong in the same score."
 echo "recorded in $REPLIES. Add them to $REPLIES/corpus.ini with the verdict"
 echo "each one got, then 'make replay' scores them for free from now on."
