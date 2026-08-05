@@ -48,6 +48,12 @@ public:
 	virtual void forward() = 0;
 	virtual void reload() = 0;
 
+	// Abandon whatever is loading. **Not pure**: a backend that cannot stop a
+	// load does nothing, and the shell's Stop button is then a button that
+	// does nothing -- which is why the shell only offers one while a load is
+	// actually running.
+	virtual void stop() {}
+
 	virtual void apply_settings(const view_settings &s) = 0;
 	virtual void set_permission_decider(permission_decider fn) = 0;
 

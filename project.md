@@ -6464,6 +6464,35 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### A page that would not stop loading
+
+The progress bar said a page was arriving and there was no way to tell it not
+to. A slow site could only be waited out, which is precisely the moment
+somebody reaches for the toolbar.
+
+**The Reload button becomes Stop while a load runs**, which is what every
+browser does with that slot, and it works because the two are never wanted at
+the same moment. One action rather than two, so the Go menu gains it as well
+without a second entry that would be wrong half the time -- and `reload_page`
+dispatches on which of the two the button currently is, since that is a
+property of the moment rather than of the button.
+
+`stop()` joins the seam as a virtual that does nothing by default. A backend
+that cannot abandon a load then has a Stop button that would do nothing -- which
+is answered by only offering one while a load is actually running, rather than
+by a special case.
+
+Switching tabs takes it back to Reload along with the bar: left as Stop, it
+would offer to abandon a load belonging to a tab that is no longer in front of
+you.
+
+**The driver watches rather than samples.** Even a local file goes through
+`loadStarted` and `loadFinished`, so the button is Stop for an interval far too
+short to catch by looking at it afterwards. Recording every change to the action
+and asserting that Stop appeared at some point catches the transition however
+fast the page arrives -- and the recorded sequence is in the failure message, so
+a break says what it saw instead of only that it did not see what it wanted.
+
 ### No way to make a page bigger
 
 `set_zoom_factor` had been in the seam since kiosk mode needed it, and nothing

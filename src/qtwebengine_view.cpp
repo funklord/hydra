@@ -322,3 +322,8 @@ void qtwebengine_view::find_text(const QString &text, bool forward, bool fresh) 
 double qtwebengine_view::zoom_factor() const {
 	return m_view ? m_view->zoomFactor() : 1.0;
 }
+
+void qtwebengine_view::stop() {
+	if (m_view)
+		m_view->stop();
+}

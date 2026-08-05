@@ -22,6 +22,7 @@ public:
 	void back() override;
 	void forward() override;
 	void reload() override;
+	void stop() override;
 	void apply_settings(const view_settings &s) override;
 	void set_permission_decider(permission_decider fn) override;
 	void set_zoom_factor(double factor) override;

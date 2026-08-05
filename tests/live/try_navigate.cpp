@@ -241,6 +241,38 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	section("the Reload button becomes Stop while a page is arriving");
+	{
+		// **Watched rather than sampled.** Even a local file goes through
+		// loadStarted and loadFinished, so the button is Stop for a moment
+		// too short to catch by looking; recording every change to the action
+		// catches it however fast the page arrives.
+		check(reload->text().contains("Reload"),
+		      QString("it is Reload while nothing is loading (%1)").arg(reload->text()));
+
+		QStringList seen;
+		auto conn = QObject::connect(reload, &QAction::changed, reload,
+		                              [&seen, reload] { seen << reload->text(); });
+		address->setText(QUrl::fromLocalFile(two).toString());
+		emit address->returnPressed();
+		check(wait_for(address, "two.html"), "a page loads");
+		spin(600);
+		QObject::disconnect(conn);
+
+		check(seen.filter("Stop").size() > 0,
+		      QString("it offered Stop while the page was on its way (%1)")
+		          .arg(seen.join(", ").left(48)));
+		check(reload->text().contains("Reload"),
+		      QString("and it is Reload again once the page arrived (%1)")
+		          .arg(reload->text()));
+
+		// Back to the first page, so the sections after this one still find
+		// what they expect.
+		back->trigger();
+		wait_for(address, "one.html");
+		spin(300);
+	}
+
 	section("zooming the page");
 	{
 		// Through the actions, and read back through the seam rather than from

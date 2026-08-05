@@ -182,6 +182,10 @@ private:
 
 	QHash<QString, double> m_zoom;          // node id -> factor, 1.0 omitted
 
+	// While a load runs, the Reload button is a Stop button.
+	void set_loading(bool loading);
+	bool m_loading = false;
+
 	void on_load_progress(int percent);
 	void on_load_finished(bool ok);
 

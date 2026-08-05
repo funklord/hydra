@@ -1767,7 +1767,9 @@ void main_window::open_node(node *n) {
 	apply_zoom(view, n->id);
 	m_stack->setCurrentWidget(view->widget());
 	// The bar belongs to the page in front of you. Left showing, it would
-	// report the last tab's load against this one for as long as that took.
+	// report the last tab's load against this one for as long as that took --
+	// and the button would offer to stop a load that is not this tab's.
+	set_loading(false);
 	m_progress->hide();
 	m_progress->setValue(0);
 	sync_page_context();
@@ -1904,7 +1906,34 @@ void main_window::open_find() {
 	m_find->begin();
 }
 
+// **The Reload button becomes Stop while a page is arriving**, which is what
+// every browser does with that slot and the reason it works: the two are never
+// wanted at the same moment, and a page that will not finish loading is exactly
+// when somebody reaches for the toolbar.
+//
+// One action rather than two, so the Go menu gets it as well without a second
+// entry that would be wrong half the time. Only offered while a load is
+// actually running, because `stop()` does nothing on a backend that cannot
+// abandon one, and a button that does nothing is the worst kind.
+void main_window::set_loading(bool loading) {
+	if (m_loading == loading || !m_reload_action)
+		return;
+	m_loading = loading;
+	if (loading) {
+		m_reload_action->setText("&Stop");
+		m_reload_action->setToolTip("Stop loading");
+		m_reload_action->setIcon(themed_icon({ "process-stop" }, style(),
+		                                      QStyle::SP_BrowserStop));
+	} else {
+		m_reload_action->setText("&Reload");
+		m_reload_action->setToolTip("Reload");
+		m_reload_action->setIcon(themed_icon({ "view-refresh" }, style(),
+		                                      QStyle::SP_BrowserReload));
+	}
+}
+
 void main_window::on_load_progress(int percent) {
+	set_loading(true);
 	m_progress->setValue(percent);
 	if (!m_progress->isVisible())
 		m_progress->show();
@@ -1917,6 +1946,7 @@ void main_window::on_load_progress(int percent) {
 // enough to be interesting is long enough to push the rest of the status bar
 // off the end.
 void main_window::on_load_finished(bool ok) {
+	set_loading(false);
 	m_progress->hide();
 	m_progress->setValue(0);
 	if (ok)
@@ -2734,6 +2764,16 @@ void main_window::go_forward() {
 }
 
 void main_window::reload_page() {
+	// The same action, so the same slot: which of the two it means is a
+	// property of the moment rather than of the button.
+	if (m_loading) {
+		if (web_view_backend *v = current_view())
+			v->stop();
+		set_loading(false);
+		m_progress->hide();
+		m_status->showMessage("Stopped.", 3000);
+		return;
+	}
 	if (web_view_backend *v = current_view())
 		v->reload();
 }
