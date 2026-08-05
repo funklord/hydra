@@ -177,6 +177,12 @@ int main(int argc, char *argv[]) {
 			// The extractor probes its candidates when it opens, so it wants
 			// longer on screen than a dialog that merely draws itself.
 			shoot_modal(&w, "learn_this_site", "extractor-loaded");
+			// The report a person files in one click, with the evidence a real
+			// page produced -- the only state in which its list means anything.
+			shoot_modal(&w, "report_annoyance", "annoyed-loaded");
+			// Filter evolution before anything is sent: the review-first half,
+			// which is what somebody sees for as long as they are deciding.
+			shoot_modal(&w, "open_filter_evolution", "filters-loaded");
 		} else {
 			std::printf("  could not add a tab for %s\n", qPrintable(target));
 		}

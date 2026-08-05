@@ -75,9 +75,14 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 	m_suspects = new QListWidget(this);
 	m_suspects->setObjectName("suspects");
 	for (const group &g : collapse_by_shape(report.suspects)) {
+		// **The count goes first.** Appended after the address it was never
+		// seen: these are ninety-character analytics urls in a list that
+		// scrolls sideways, so `x3` sat off the right edge and the row looked
+		// like a single request. The one piece of information the collapsing
+		// adds was the one piece placed where nobody would find it.
 		auto *row = new QListWidgetItem(
-		    g.count > 1 ? QString("%1        \u00d7%2").arg(g.url).arg(g.count)
-		                : g.url,
+		    g.count > 1 ? QString("\u00d7%1  %2").arg(g.count).arg(g.url)
+		                : QString("    %1").arg(g.url),
 		    m_suspects);
 		// The collapsing is for reading; the addresses are still the evidence,
 		// so the row says how many it stands for and does not pretend the rest

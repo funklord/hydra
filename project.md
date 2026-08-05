@@ -6207,6 +6207,28 @@ quietly dropping a setting -- after which drag-and-drop still "works" and is
 worse in a way nobody can point at. Seven checks in `try_import` pin the whole
 gesture set, which is exactly why the comment says it lives in one place.
 
+### The collapse count nobody could see, and a pane that must not collapse
+
+Two dialogs show the same suspect list, and looking at both with real evidence
+made it clear they want opposite treatment.
+
+**The annoyed report collapses, and its marker was invisible.** Five ad-shaped
+addresses read as three rows, which works -- but the `x3` was appended *after*
+the address, and these are ninety-character analytics urls in a list that
+scrolls sideways. The one piece of information collapsing adds sat off the right
+edge, so the row looked like a single request and the feature looked like it had
+not run. The count leads now, with single rows indented to match.
+
+**The filter-evolution pane shows the same five uncollapsed, and that is
+correct.** It is the literal payload being sent to the model, under a dialog
+whose promise is *review exactly what will be sent*. Collapsing it would make
+the review a lie. Same evidence, opposite rule, because one list is for acting
+on and the other is for checking.
+
+Worth stating as a rule rather than an incident: **a display that summarises is
+right when somebody is choosing what to do, and wrong when somebody is checking
+what will happen.** The two are easy to confuse because they show the same data.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
