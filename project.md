@@ -5787,6 +5787,30 @@ one. Had the test been written with plausible-looking URLs instead of the ones
 the site actually sent, the first implementation would have passed it — the
 three analytics calls look identical until you count their query keys.
 
+### The capture command that froze the desktop
+
+Symptom: the whole session unresponsive -- no window manager, no keyboard --
+with a crosshair pointer that still moved, and every command this project was
+running against `:0` failing to reach the server.
+
+Cause: **ImageMagick's `import` grabs the X pointer.** It was used once, from a
+one-off command, to capture a Hydra window by id. It refused that id, fell back
+to interactive window selection, and *held the grab* while waiting for a click
+that was never going to come. An X pointer grab blocks every other client, so
+the desktop stops and so does anything that might have cleared it.
+
+The repository never had this problem and still does not: `tests/live/shoot.sh`
+uses `xwd -id`, which reads a window's contents and grabs nothing, and
+`try_menus` uses `QWidget::grab()`, which renders in-process and never touches
+the server. The hazard was entirely in an ad-hoc command typed outside the
+tree, which is exactly the kind that leaves no trace to learn from -- hence
+this note, and the warning now at the top of `shoot.sh` where somebody
+reaching for a capture tool will see it.
+
+The general rule, worth more than the specific one: **a tool that can grab the
+pointer has no business running against a display somebody is using.** Offscreen
+rendering is the first choice, `xwd` the second, and `import` not at all.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
