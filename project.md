@@ -5811,6 +5811,38 @@ The general rule, worth more than the specific one: **a tool that can grab the
 pointer has no business running against a display somebody is using.** Offscreen
 rendering is the first choice, `xwd` the second, and `import` not at all.
 
+### A restriction that had already been lifted, and nobody told the list
+
+`project.md` said a mirrored tab "cannot be *opened* in place; it has to be
+dragged into the tree first, which is defensible and has never been put to
+anyone". The code says otherwise, and had for a while: `on_tree_activated`
+calls `open_node` for whatever was activated, and `open_node` refuses only a
+node with no address. There is no mirror guard anywhere in that path, and the
+comment beside `replace_mirror` states plainly that a mirrored tab can be
+opened like any other.
+
+**Flagged rather than resolved**, because a document that outranks the code and
+disagrees with it has two readings and only one of them is "the note is stale".
+The other is that the restriction was intended and the guard was never written,
+which would make this a missing check rather than an obsolete sentence. Asked,
+and answered: the note is stale.
+
+What makes it stale is a fix from earlier in the same session. The reason to
+forbid opening a mirrored tab was that a poll replaces the entire mirror folder,
+so a live view could be left pointing at a node that had been deleted -- which
+was not hypothetical, since that was the leak where deleting a node with a live
+view also stopped the four-view cap working for the rest of the session. Once
+`replace_mirror` began announcing each folder it was about to drop, and the
+shell began closing the views inside it, the ground the restriction stood on
+was gone. The comment in the model was updated at the time. The next-list entry
+was not.
+
+`try_import` holds it now, and holds the dangerous half rather than the easy
+one: open a mirrored tab, confirm it gives a live view, then rebuild that same
+mirror *empty* -- the shape a refresh takes when the other browser has closed
+everything, and the harshest case for a view living inside the folder being
+replaced -- and confirm the view is closed rather than leaked.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
@@ -5944,16 +5976,19 @@ carried along as amendments to a list item.
    exist there. What is *not* established is that filling works: the emulator has
    no autofill service configured, so that claim needs a device that does.
 
-4. **The tab tree grew hands, and two things are open behind it.** Tabs move
+4. **The tab tree is done, and its two open questions are closed.** Tabs move
    like files, are made from a menu, rename with the distinction between a name
    a person chose and a name the page supplied, and another browser's open tabs
-   appear in a mirror folder that is never written to the tree file. What is not
-   done: a mirrored tab cannot be *opened* in place; it has to be dragged into
-   the tree first, which is defensible and has never been put to anyone.
+   appear in a mirror folder that is never written to the tree file.
 
    The poll interval is settled — measured at 1.3 ms per read of a real 2.2 MB
    session file, so Chromium follows at 5 s rather than 15 s. See the section
    above for the numbers and for why not 2.5 s.
+
+   **A mirrored tab opens in place**, and this entry used to say the opposite.
+   See the section below: the restriction was real when it was written and the
+   thing that justified it has since been fixed, so what remained was a note
+   describing a limitation the code did not have.
 
 5. **What is left untested now needs a window or a network.** The sweep through
    never-tested files is finished — see the sections above; four of nine were

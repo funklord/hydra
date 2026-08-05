@@ -20,6 +20,8 @@
 #include <QFile>
 #include <QMenuBar>
 #include <QTimer>
+#include <QLabel>
+#include <QRegularExpression>
 #include <QTreeView>
 #include "tree_sort_proxy.h"
 #include <cstdio>
@@ -150,6 +152,67 @@ int main(int argc, char *argv[]) {
 		for (const QString &line : text.split('\n'))
 			if (!line.trimmed().isEmpty())
 				note("  " + line.left(72));
+	}
+
+	section("a mirrored tab opens, and survives the refresh under it");
+	{
+		// **project.md used to say this was impossible**, and the reason it
+		// gave was real at the time: a poll replaces the whole mirror folder,
+		// so a live view could be left pointing at a node that had been
+		// deleted. That is handled now -- `replace_mirror` announces each
+		// folder it is about to drop and the shell closes any view inside it
+		// first -- so the restriction went, and this is what holds the ground
+		// it was standing on.
+		auto *tree_view = w.findChild<QTreeView *>();
+		auto *proxy     = w.findChild<tree_sort_proxy *>();
+		// The live-view count as the status bar reports it: the shell's map is
+		// private, and this is the same number a person sees.
+		auto live_count = [&w]() -> int {
+			QLabel *l = w.findChild<QLabel *>("tab_counts");
+			if (!l)
+				return -1;
+			const QRegularExpressionMatch mm =
+			    QRegularExpression("^(\\d+)\\s*/").match(l->text());
+			return mm.hasMatch() ? mm.captured(1).toInt() : -1;
+		};
+
+		node *m = mirror_folder(model, "firefox");
+		if (!m)
+			m = mirror_folder(model, "chromium");
+		if (!m || m->children.isEmpty()) {
+			note("no mirrored tab on this machine to open; skipped.");
+		} else {
+			node *tab = m->children.first();
+			const QString source = m->mirror;
+			check(!tab->url.isEmpty(), "a mirrored tab carries an address");
+
+			const QModelIndex src = model->index_for_node(tab);
+			const QModelIndex via = proxy ? proxy->mapFromSource(src) : src;
+			check(via.isValid(), "and is reachable through the view");
+			if (via.isValid()) {
+				emit tree_view->activated(via);
+				spin(2500);
+				check(live_count() >= 1,
+				      QString("opening it gives a live view (%1)")
+				          .arg(live_count()));
+			}
+
+			// The dangerous moment: the folder holding the open tab is thrown
+			// away and rebuilt while its view is alive. Before the shell
+			// learned to close views on removal this leaked the view and, worse,
+			// stopped the live-view cap working for the rest of the session.
+			// Rebuilt empty, which is the shape a refresh takes when the other
+			// browser has closed everything -- and the harshest case for a view
+			// that is open inside the folder being replaced.
+			model->replace_mirror(source, source + " (0 tabs)", QList<node *>());
+			spin(800);
+			// No `check(true, "did not crash")` here: reaching the next line at
+			// all is what proves that, and a check that cannot fail only
+			// inflates the count.
+			check(live_count() == 0,
+			      QString("and the view it held is closed, not leaked (%1 live)")
+			          .arg(live_count()));
+		}
 	}
 
 	section("the context menu, opened rather than assumed");
