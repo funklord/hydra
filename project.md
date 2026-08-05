@@ -6155,6 +6155,41 @@ earlier dramafren batch -- the legend runs and the two-clause runs -- answered
 3 on all five, so those scores were measuring one thing. Only the batch that
 produced no answers was mixed.
 
+### Drag and drop: what was already right, and the one thing missing
+
+Asked directly whether the tree's drag and drop is smooth, shows where an item
+will land, and is stable. Three questions, three different kinds of answer.
+
+**Where it lands was already right.** `setDropIndicatorShown(true)`, and
+`DragDrop` rather than `InternalMove` -- deliberately, since the model publishes
+urls too, so a tab can be dragged out to another application and `InternalMove`
+would refuse to hand anything over. Move by default with Ctrl to copy, and
+`ExtendedSelection` so several tabs travel together.
+
+**Stability was already covered**, and by the two cases that actually break tree
+drag-and-drop rather than by a general "it works": *the move that would eat the
+tree* -- a folder dropped inside its own descendant -- and *dropping while the
+tree is filtered*, where the view's indexes belong to the proxy and the model's
+do not. Since `tree_invariants::check` runs at the end of every section, a drop
+that leaves a dangling parent or a cycle now fails even when the section's own
+assertions pass.
+
+**Smoothness had a real gap: `setAutoExpandDelay` was never set.** Hovering a
+collapsed folder mid-drag did nothing, so a closed folder could not be dropped
+into at all -- the drag had nowhere to land, and somebody had to abandon it,
+expand the folder by hand, and start again. In a tree whose whole point is
+folders that is the difference between drag-and-drop working and merely
+existing. 600 ms now, the interval this gesture has had in file managers for
+twenty years. `setAutoScroll` was already Qt's default and is now explicit, with
+a margin, so it survives somebody tuning the view.
+
+**The guard is on the properties, not the behaviour, and that is deliberate.**
+What a drag *feels* like is Qt's, and driving a synthetic `QDrag` would prove
+little about it. What goes wrong in practice is somebody adjusting the view and
+quietly dropping a setting -- after which drag-and-drop still "works" and is
+worse in a way nobody can point at. Seven checks in `try_import` pin the whole
+gesture set, which is exactly why the comment says it lives in one place.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither

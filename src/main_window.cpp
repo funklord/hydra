@@ -606,9 +606,10 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(m_tree, &QTreeView::clicked,   this, &main_window::on_tree_activated);
 
 	m_stack = new QStackedWidget(this);
-	QLabel *placeholder = new QLabel("Select a tab from the tree", this);
-	placeholder->setAlignment(Qt::AlignCenter);
-	m_stack->addWidget(placeholder);
+	m_placeholder = new QLabel("Select a tab from the tree", this);
+	m_placeholder->setObjectName("placeholder");
+	m_placeholder->setAlignment(Qt::AlignCenter);
+	m_stack->addWidget(m_placeholder);
 
 	// Sort and Search filter the *tree*, so they belong above the tree rather
 	// than in the toolbar beside Back/Forward/Address — those act on the page.
@@ -1516,6 +1517,17 @@ void main_window::update_layout_mode() {
 		return;
 	m_drawer_mode = narrow;
 	m_drawer_action->setVisible(narrow);
+
+	// **The empty page told people to use something that was not on screen.**
+	// At this width the tree is an overlay behind the drawer button, so "select
+	// a tab from the tree" names a thing the window is not showing -- and the
+	// button that reveals it had just appeared, unexplained, in a toolbar the
+	// person had been using without it.
+	if (m_placeholder)
+		m_placeholder->setText(narrow
+		    ? "No tab open.\n\nThe list of tabs is behind the button left of "
+		       "the address bar."
+		    : "Select a tab from the tree");
 
 	if (narrow) {
 		// Out of the splitter and on top of the window. The stack then takes

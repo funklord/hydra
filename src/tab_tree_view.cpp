@@ -30,6 +30,23 @@ tab_tree_view::tab_tree_view(QWidget *parent) : QTreeView(parent) {
 	setDefaultDropAction(Qt::MoveAction);
 	setSelectionMode(QAbstractItemView::ExtendedSelection);
 
+	// **Hovering a closed folder opens it.** Without this a collapsed folder
+	// cannot be dropped into at all: the drag has nowhere to land, so somebody
+	// has to abandon it, expand the folder by hand, and start again. In a tree
+	// whose whole point is folders that is the difference between drag-and-drop
+	// working and merely existing.
+	//
+	// 600 ms is the interval this gesture has had in file managers for twenty
+	// years -- long enough that passing over a folder on the way somewhere else
+	// does not disturb it, short enough not to feel stuck.
+	setAutoExpandDelay(600);
+
+	// Dragging towards an edge scrolls rather than stopping at it, which is
+	// what makes a tree taller than the window reachable at all. Qt defaults
+	// this on; set it explicitly so it survives somebody tuning the view.
+	setAutoScroll(true);
+	setAutoScrollMargin(24);
+
 	setContextMenuPolicy(Qt::CustomContextMenu);
 	connect(this, &QWidget::customContextMenuRequested,
 	        this, &tab_tree_view::show_menu);
@@ -170,6 +187,14 @@ void tab_tree_view::edit_properties(node *n) {
 		return;
 	QDialog dlg(this);
 	dlg.setWindowTitle(n->is_folder() ? "Folder properties" : "Tab properties");
+	dlg.setObjectName("properties_dialog");
+	// **Wide enough for the field that matters.** With no minimum this sizes to
+	// whatever the current values happen to be, and a short title produced a
+	// 200-pixel dialog whose Address box was about 120 wide -- for the one
+	// field somebody is most likely to be editing, and the one that grows. The
+	// values a form starts with are a poor guide to the values it is about to
+	// hold.
+	dlg.setMinimumWidth(460);
 	auto *form = new QFormLayout(&dlg);
 
 	auto *title = new QLineEdit(n->title, &dlg);

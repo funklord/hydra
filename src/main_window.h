@@ -199,6 +199,9 @@ private:
 	QAction         *m_drawer_action = nullptr;
 	class QPropertyAnimation *m_drawer_anim = nullptr;
 	bool             m_drawer_mode = false;    // narrow: sidebar is an overlay
+	// The empty-content message. It has to change with the layout: in drawer
+	// mode the tree it points at is not on screen.
+	QLabel          *m_placeholder = nullptr;
 	bool             m_drawer_open = false;
 	QStackedWidget  *m_stack = nullptr;
 

@@ -11,6 +11,7 @@
 #include "qtwebengine_factory.h"
 #include "session_import.h"
 #include "tab_tree_model.h"
+#include "tab_tree_view.h"
 #include "node.h"
 
 #include <QAction>
@@ -152,6 +153,35 @@ int main(int argc, char *argv[]) {
 		for (const QString &line : text.split('\n'))
 			if (!line.trimmed().isEmpty())
 				note("  " + line.left(72));
+	}
+
+	section("the drag gesture set, which is kept in one place so it cannot drift");
+	{
+		// Properties rather than behaviour, and the difference is worth being
+		// honest about: what a drag *feels* like is Qt's, and driving a real
+		// QDrag from a test proves little about it. What these catch is the
+		// thing that actually goes wrong -- somebody tuning the view and
+		// quietly removing a setting, after which drag-and-drop still "works"
+		// and is worse in a way nobody can point at.
+		auto *v = w.findChild<tab_tree_view *>();
+		check(v && v->dragEnabled() && v->acceptDrops(),
+		      "tabs can be dragged and dropped");
+		check(v && v->showDropIndicator(),
+		      "and the drop indicator says where one will land");
+		check(v && v->dragDropMode() == QAbstractItemView::DragDrop,
+		      "DragDrop rather than InternalMove, so a tab can leave for "
+		      "another application");
+		check(v && v->defaultDropAction() == Qt::MoveAction,
+		      "a plain drag moves; Ctrl is what copies");
+		check(v && v->selectionMode() == QAbstractItemView::ExtendedSelection,
+		      "and several tabs can travel together");
+		// The one that was missing: without it a collapsed folder cannot be
+		// dropped into at all.
+		check(v && v->autoExpandDelay() > 0,
+		      QString("hovering a closed folder opens it (%1 ms)")
+		          .arg(v ? v->autoExpandDelay() : -1));
+		check(v && v->hasAutoScroll(),
+		      "and dragging towards an edge scrolls rather than stopping");
 	}
 
 	section("a mirrored tab opens, and survives the refresh under it");

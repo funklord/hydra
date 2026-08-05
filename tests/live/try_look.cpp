@@ -18,6 +18,7 @@
 #include "qtwebengine_factory.h"
 #include "request_filter.h"
 #include "tab_tree_model.h"
+#include "tab_tree_view.h"
 
 #include <QApplication>
 #include <QDialog>
@@ -110,6 +111,33 @@ int main(int argc, char *argv[]) {
 	save(&w, "window-narrow");
 	w.resize(1100, 720);
 	spin(500);
+
+	// The properties editor is reached from the tree rather than a menu, so it
+	// needs its own opening: `edit_properties` is public on the view and blocks
+	// like any other modal.
+	std::printf("\n== the tab properties editor ==\n");
+	{
+		auto *tv    = w.findChild<tab_tree_view *>();
+		auto *model = w.findChild<tab_tree_model *>();
+		if (tv && model && !model->root()->children.isEmpty()) {
+			node *folder = model->root()->children.first();
+			node *tab = folder->children.isEmpty() ? folder
+			                                        : folder->children.first();
+			QTimer::singleShot(900, [] {
+				for (QWidget *x : QApplication::topLevelWidgets()) {
+					auto *d = qobject_cast<QDialog *>(x);
+					if (!d || !d->isVisible())
+						continue;
+					save(d, "properties");
+					d->reject();
+					return;
+				}
+				std::printf("  %-28s no dialog appeared\n", "properties");
+			});
+			tv->edit_properties(tab);
+			spin(1400);
+		}
+	}
 
 	std::printf("\n== the dialogs ==\n");
 	struct { const char *slot; const char *name; } modals[] = {
