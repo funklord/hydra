@@ -157,6 +157,13 @@ signals:
 	void load_progress(int percent);
 	void load_finished(bool ok);
 
+	// A page asked for a new window: a target="_blank" link, or window.open.
+	// **Nothing handled this at all**, and an unhandled request in Qt is not a
+	// refusal -- it is a click that silently does nothing, which is the worst
+	// outcome of the three available. `user_initiated` separates a click from
+	// a script, because those deserve different answers.
+	void new_window_requested(const QUrl &url, bool user_initiated);
+
 	// Where the link under the pointer would take you. An empty url means the
 	// pointer left one. **This is the browser's oldest security affordance**:
 	// the only way to see where a link goes before committing to it, and the

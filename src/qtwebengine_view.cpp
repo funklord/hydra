@@ -9,6 +9,7 @@
 #include <QWebEngineProfile>
 #include <QWebEngineFindTextResult>
 #include <QWebEngineHistory>
+#include <QWebEngineNewWindowRequest>
 #include <QWebEngineSettings>
 #include <QWebEngineScript>
 #include <QWebEngineScriptCollection>
@@ -69,6 +70,16 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	         [this](const QUrl &) { emit history_changed(); });
 	connect(m_view, &QWebEngineView::loadFinished, this,
 	         [this](bool) { emit history_changed(); });
+	// The request is answered by the shell rather than here: it becomes a tab
+	// in the tree, which is this browser's whole answer to "another window".
+	// `openIn` is deliberately not called -- taking the url and opening it
+	// ourselves drops the opener relationship, which a page can otherwise use
+	// to reach back into the window that spawned it.
+	connect(m_page, &QWebEnginePage::newWindowRequested, this,
+	         [this](QWebEngineNewWindowRequest &request) {
+		emit new_window_requested(request.requestedUrl(), request.isUserInitiated());
+	});
+
 	// One line, because the page already knows: Qt reports the link under the
 	// pointer and an empty string when the pointer leaves it.
 	connect(m_page, &QWebEnginePage::linkHovered, this,

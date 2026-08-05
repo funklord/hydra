@@ -1729,6 +1729,11 @@ void main_window::open_node(node *n) {
 			if (view == current_view())
 				update_navigation();
 		});
+		connect(view, &web_view_backend::new_window_requested, this,
+		         [this, view](const QUrl &u, bool user) {
+			if (view == current_view())
+				open_new_window(u, user);
+		});
 		connect(view, &web_view_backend::render_process_gone, this,
 		         [this, view] {
 			if (view == current_view())
@@ -1943,6 +1948,59 @@ void main_window::open_find() {
 // The message has no timeout. It describes a state the window is still in, and
 // a state that expires after five seconds leaves somebody looking at a blank
 // page wondering what they missed.
+// **Another window is a child tab**, which is this browser's whole answer to
+// the question: the tree already shows what came from what, and a link that
+// spawns a window is exactly that relationship. A separate top-level window
+// would throw the relationship away and leave two trees to reconcile.
+//
+// **A click is not a popup.** Chromium's own rule, and the right one: the popup
+// setting exists to stop pages opening windows nobody asked for, not to break
+// target="_blank" links. So a user-initiated request opens and is switched to,
+// while a script-initiated one is checked against the policy for the page that
+// asked -- and refused *out loud*, because a blocked popup that says nothing is
+// indistinguishable from the broken silence this whole change is fixing.
+node *main_window::open_new_window(const QUrl &url, bool user_initiated) {
+	if (!url.isValid() || url.isEmpty())
+		return nullptr;
+
+	web_view_backend *from = current_view();
+	const QString asker = from ? from->url().host() : QString();
+	if (!user_initiated &&
+	     !m_policy->is_allowed(policy::feature::popups, asker)) {
+		m_status->showMessage(
+		  QString("Blocked a window %1 tried to open. Allow popups for this "
+		           "site to let it through.")
+		      .arg(asker.isEmpty() ? QStringLiteral("this page") : asker), 8000);
+		return nullptr;
+	}
+
+	// Under the tab that asked, where the tree shows the relationship; at the
+	// root if the asking tab cannot be found, which beats dropping it.
+	node *parent = nullptr;
+	if (from) {
+		const QString id = m_views_by_id.key(from);
+		if (node *n = id.isEmpty() ? nullptr : m_model->node_by_id(id))
+			parent = n->is_folder() ? n : n->parent;
+	}
+	node *made = m_model->add_tab(parent, url.host().isEmpty() ? url.toString()
+	                                                            : url.host(),
+	                               url.toString());
+	if (!made)
+		return nullptr;
+	save_tree_soon();
+
+	if (user_initiated) {
+		open_node(made);
+	} else {
+		// Allowed, but not given the foreground: a page that opens a window
+		// while you are reading is not entitled to take the page away from you.
+		m_status->showMessage(QString("%1 opened a window; it is a new tab.")
+		                          .arg(asker.isEmpty() ? QStringLiteral("This page")
+		                                                : asker), 6000);
+	}
+	return made;
+}
+
 void main_window::report_render_crash(const QString &host) {
 	set_loading(false);
 	if (m_progress)

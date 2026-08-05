@@ -3052,6 +3052,16 @@ honest second site available: different vendor, different player, same page.
 clicks and nearly three minutes of watching, the player spins and never contacts
 a stream host at all — 75 requests, none of them media.
 
+  **The "popups allowed" half of that was not a real arm, and the finding
+  should be read without it.** Nothing implemented `newWindowRequested` at the
+  time, so a `target="_blank"` link did nothing whether popups were permitted
+  or not -- allowing them changed a setting that had no path to the behaviour.
+  The blocked case was genuine (`JavascriptCanOpenWindows` does follow the
+  policy), which is exactly why the gap survived: a refused popup and an
+  unhandled one look identical from the page. What the run establishes is that
+  the player does not stream *with ads allowed*; whether a window it wanted to
+  open would have changed that is untested, and is now testable.
+
 **The tap says it is stalled, not peer-to-peer.** `try_extract` reports what the
 §11.6 tap holds beside what the request log saw, because those answer different
 questions: a page feeding a MediaSource while fetching no media is delivering
@@ -6463,6 +6473,35 @@ Expressed as the *build type* on the CMake side (`MinSizeRel`) rather than as
 on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
+
+### A link that opened nothing
+
+Nothing implemented `newWindowRequested`, and in Qt an unhandled request is not
+a refusal -- it is a click that silently does nothing. So every `target="_blank"`
+link and every `window.open` was a dead end, which is the failure this project
+calls the worst kind, sitting underneath a Popups setting that appeared to work.
+
+The setting was half-real, and that is what hid it. `JavascriptCanOpenWindows`
+does follow the policy, so script-opened windows were genuinely blocked; a
+blocked popup and an unhandled one are indistinguishable from the page, so the
+half that did nothing was invisible beside the half that worked.
+
+**Another window is a child tab.** The tree already exists to show what came
+from what, and a link that spawns a window is exactly that relationship; a
+second top-level window would throw it away and leave two trees to reconcile.
+
+**A click is not a popup**, which is Chromium's rule and the right one: the
+setting exists to stop pages opening windows nobody asked for, not to break
+links. A user-initiated request opens and is switched to, whatever the policy
+says. A script-initiated one is checked against the policy for the page that
+asked, and refused *out loud* -- a blocked popup that says nothing is the same
+silence this change exists to remove. Allowed script windows open in the
+background, because a page that opens a window while you are reading is not
+entitled to take the page away from you.
+
+`openIn` is deliberately not called. Taking the url and opening it ourselves
+drops the opener relationship, which a page can otherwise use to reach back into
+the window that spawned it.
 
 ### A tab that died and did not say so
 

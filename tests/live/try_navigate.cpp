@@ -12,6 +12,7 @@
 // and they build exactly the history a person builds by following a link.
 #include "main_window.h"
 #include "node.h"
+#include "policy.h"
 #include "policy_engine.h"
 #include "qtwebengine_factory.h"
 #include "qtwebengine_view.h"
@@ -369,6 +370,51 @@ int main(int argc, char *argv[]) {
 			      QString("a failed load is reported (%1)").arg(sb->currentMessage()));
 			check(!bar->isVisible(), "and the bar goes away rather than sticking");
 		}
+	}
+
+	section("a page asking for another window");
+	{
+		// **Unhandled is not the same as refused.** With nothing implementing
+		// this, a target="_blank" link did nothing whatsoever -- and a blocked
+		// popup looked exactly the same, which is how the gap survived beside
+		// a popup setting that appeared to work.
+		//
+		// Driven directly: what is worth checking is the decision and where
+		// the tab lands, and Qt's own signal is one line of wiring.
+		auto *model = w.findChild<tab_tree_model *>();
+		node *folder = model->root()->children.first();
+		const int before = folder->children.size();
+
+		// A click. Chromium's rule and the right one: the popup setting exists
+		// to stop pages opening windows nobody asked for, not to break links.
+		node *made = w.open_new_window(QUrl("https://example.test/clicked"), true);
+		spin(400);
+		check(made != nullptr, "a clicked link opens even with popups blocked");
+		check(folder->children.size() == before + 1,
+		      QString("as a tab in the tree (%1 -> %2)")
+		          .arg(before).arg(folder->children.size()));
+		if (made)
+			check(made->parent == folder,
+			      "under the tab that asked, where the tree shows the relation");
+
+		// A script, with the default policy, which blocks popups.
+		const int after_click = folder->children.size();
+		QStatusBar *sb = w.findChild<QStatusBar *>();
+		node *blocked = w.open_new_window(QUrl("https://example.test/popup"), false);
+		spin(300);
+		check(blocked == nullptr, "a script-opened window is refused");
+		check(folder->children.size() == after_click,
+		      "and leaves no tab behind");
+		check(sb && sb->currentMessage().contains("Blocked"),
+		      QString("out loud, not silently (%1)")
+		          .arg(sb ? sb->currentMessage() : QString()));
+
+		// The same request once the site is allowed popups.
+		policy.set_setting("*", policy::feature::popups, policy::setting::allow);
+		node *allowed = w.open_new_window(QUrl("https://example.test/allowed"), false);
+		spin(300);
+		check(allowed != nullptr, "allowing popups lets one through");
+		policy.set_setting("*", policy::feature::popups, policy::setting::block);
 	}
 
 	section("a page whose renderer dies says so");

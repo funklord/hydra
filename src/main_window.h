@@ -192,6 +192,11 @@ public:
 	// the wiring is one line and the part worth checking is what gets said.
 	void report_render_crash(const QString &host);
 
+	// A page asked for another window. Returns the node it made, or nullptr if
+	// the request was refused -- public so a driver can ask for one without an
+	// engine, since the decision is the part worth checking.
+	node *open_new_window(const QUrl &url, bool user_initiated);
+
 private:
 	// **Everything the chrome says about the page in front of you.** Five
 	// separate pieces of state -- the title, the navigation buttons, the
