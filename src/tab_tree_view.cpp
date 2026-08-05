@@ -36,10 +36,17 @@ tab_tree_view::tab_tree_view(QWidget *parent) : QTreeView(parent) {
 	// whose whole point is folders that is the difference between drag-and-drop
 	// working and merely existing.
 	//
-	// 600 ms is the interval this gesture has had in file managers for twenty
-	// years -- long enough that passing over a folder on the way somewhere else
-	// does not disturb it, short enough not to feel stuck.
-	setAutoExpandDelay(600);
+	// 400 ms, chosen by dragging rather than by precedent. The first value here
+	// was 600, picked because that is roughly what file managers have used for
+	// twenty years -- a defensible argument and the wrong kind of evidence for
+	// something whose only real measure is whether it feels stuck. Tried by
+	// hand, 600 does.
+	//
+	// The tension is real in both directions: too eager and a folder opens
+	// while a drag is merely passing over it on the way somewhere else, too
+	// slow and the gesture stalls. 400 is on the near side of that and was
+	// picked with a hand on the mouse.
+	setAutoExpandDelay(400);
 
 	// Dragging towards an edge scrolls rather than stopping at it, which is
 	// what makes a tree taller than the window reachable at all. Qt defaults

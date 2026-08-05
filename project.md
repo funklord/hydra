@@ -6174,6 +6174,19 @@ do not. Since `tree_invariants::check` runs at the end of every section, a drop
 that leaves a dangling parent or a cycle now fails even when the section's own
 assertions pass.
 
+**Confirmed by hand, which is the only way some of this could be.** With the
+browser running on a real desktop: Ctrl-drag copies and the plus badge appears
+on the cursor, several tabs move and copy together, and the drop indicator
+reads correctly everywhere it was tried. Those were configured and tested at the
+model level and had never been *seen*; an offscreen capture cannot answer any of
+them.
+
+The hover delay was the one thing that changed as a result. 600 ms had been
+picked because that is roughly what file managers have used for twenty years --
+a defensible argument and the wrong kind of evidence for something whose only
+real measure is whether it feels stuck. Dragged by hand, 600 does. It is 400
+now, chosen with a hand on the mouse.
+
 **Smoothness had a real gap: `setAutoExpandDelay` was never set.** Hovering a
 collapsed folder mid-drag did nothing, so a closed folder could not be dropped
 into at all -- the drag had nowhere to land, and somebody had to abandon it,
