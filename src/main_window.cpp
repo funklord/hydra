@@ -1773,7 +1773,6 @@ void main_window::suspend_node(node *n) {
 
 	if (view == current_view())
 		m_stack->setCurrentIndex(0);  // back to placeholder
-		update_navigation();
 	QWidget *w = view->widget();
 	m_stack->removeWidget(w);
 	m_views_by_id.remove(n->id);
@@ -1784,6 +1783,7 @@ void main_window::suspend_node(node *n) {
 	m_model->refresh_node(n);
 	mark_dirty();
 	update_status();
+	update_navigation();
 }
 
 void main_window::touch_lru(const QString &id) {
@@ -1887,7 +1887,6 @@ void main_window::forget_subtree(node *n) {
 	if (web_view_backend *view = m_views_by_id.value(n->id, nullptr)) {
 		if (view == current_view())
 			m_stack->setCurrentIndex(0);   // back to the placeholder
-			update_navigation();
 		QWidget *w = view->widget();
 		m_stack->removeWidget(w);
 		w->deleteLater();
@@ -1900,6 +1899,7 @@ void main_window::forget_subtree(node *n) {
 	if (m_state)
 		m_state->remove(n->id);
 	update_status();
+	update_navigation();
 }
 
 void main_window::save_tree_soon() {
