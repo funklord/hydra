@@ -6464,6 +6464,28 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### A window that would not say what it was showing
+
+Every window was called "Hydra" and nothing else, whatever page it held. Two of
+them side by side are then indistinguishable in a task switcher, and a tab
+opened five minutes ago cannot be found again from a window list -- which is
+what a window list is for.
+
+The page's own title where it has one, the host where it does not: a document
+with no `<title>` is usually one where the address is the only thing
+identifying it. Truncated at 70 characters, because a title is a label rather
+than a document -- some pages carry a paragraph in theirs, and a window manager
+handed one either elides it in the middle or pushes everything else out of the
+switcher.
+
+Driven from the same four places the navigation state is, plus `title_changed`
+itself, and the tab-open path had to be added separately: it sets the current
+widget and syncs the page context without going through either teardown
+function, so a change made to those alone left the title stale on every tab
+switch. That is the third time this session that a piece of window state needed
+hooking in exactly these places, which is an argument for one function that
+does all of them rather than four call sites that must each remember.
+
 ### Three build systems for the same tree, measured
 
 hydra was the only private project that needed CMake, and the accounting for

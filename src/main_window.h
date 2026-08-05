@@ -168,6 +168,9 @@ private:
 	// Grey the navigation buttons to match what the page can actually do.
 	void update_navigation();
 
+	// Put the page in the window title, so a task switcher says which one.
+	void update_window_title();
+
 	void sync_page_context();          // refresh the status bar's permanent counts
 	web_view_backend *current_view() const;
 	void open_node(node *n);            // create/restore a live view and show it

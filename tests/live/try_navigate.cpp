@@ -136,6 +136,16 @@ int main(int argc, char *argv[]) {
 	emit tv->activated(tv->model()->index(0, 0, tv->model()->index(0, 0)));
 	check(wait_for(address, "one.html"), "the first page loads");
 
+	section("the window says which page it is showing");
+	{
+		// A window called "Hydra" and nothing else is indistinguishable from
+		// every other one in a task switcher.
+		check(w.windowTitle().contains("one") || w.windowTitle().contains("One"),
+		      QString("the title names the page (%1)").arg(w.windowTitle()));
+		check(w.windowTitle().endsWith("Hydra"),
+		      "and still says which browser it is");
+	}
+
 	section("on the first page of a tab");
 	{
 		settle(reload, true);
@@ -174,6 +184,9 @@ int main(int argc, char *argv[]) {
 		spin(900);
 		check(!back->isEnabled() && !fwd->isEnabled() && !reload->isEnabled(),
 		      "all three go grey again once the page is gone");
+		check(w.windowTitle() == "Hydra",
+		      QString("and the window drops the page's name (%1)")
+		          .arg(w.windowTitle()));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

@@ -705,6 +705,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	}
 
 	update_status();
+	update_window_title();
 	// Last, because it reads the stacked widget: called from the toolbar
 	// builder it would find no stack and give up, and nothing else would ask
 	// again until a page opened -- which left the three buttons enabled over an
@@ -1644,6 +1645,8 @@ void main_window::open_node(node *n) {
 		// be connected unconditionally.
 		connect(view, &web_view_backend::title_changed, this,
 		        [this, view](const QString &t) {
+			if (view == current_view())
+				update_window_title();
 			const QString id = m_views_by_id.key(view);
 			if (node *n = id.isEmpty() ? nullptr : m_model->node_by_id(id))
 				if (m_model->set_page_title(n, t))
@@ -1685,6 +1688,7 @@ void main_window::open_node(node *n) {
 	m_stack->setCurrentWidget(view->widget());
 	sync_page_context();
 	update_address(view->url().toString());
+	update_window_title();
 	touch_lru(n->id);
 	enforce_live_cap(n->id);
 	mark_dirty();
@@ -1733,6 +1737,29 @@ void main_window::update_navigation() {
 	m_back_action->setEnabled(v && v->can_go_back());
 	m_fwd_action->setEnabled(v && v->can_go_forward());
 	m_reload_action->setEnabled(v != nullptr);
+}
+
+// **A window called "Hydra" tells the task switcher nothing.** Every window
+// carried the same name whatever it was showing, so two of them side by side
+// were indistinguishable, and a tab opened five minutes ago could not be found
+// again from a window list. Every browser puts the page in the title for this
+// reason.
+//
+// The page's own title where it has one, the host where it does not -- a
+// document with no <title> is usually one where the address is the only thing
+// that identifies it. Truncated, because a title is a label rather than a
+// document: some pages carry a paragraph in theirs, and a window manager given
+// one either elides it in the middle or lets it push everything else out of
+// the switcher.
+void main_window::update_window_title() {
+	web_view_backend *v = current_view();
+	QString page = v ? v->page_title().trimmed() : QString();
+	if (page.isEmpty() && v)
+		page = v->url().host();
+	if (page.size() > 70)
+		page = page.left(69) + QChar(0x2026);
+	setWindowTitle(page.isEmpty() ? QStringLiteral("Hydra")
+	                               : page + QStringLiteral(" \u2014 Hydra"));
 }
 
 void main_window::sync_page_context() {
@@ -1784,6 +1811,7 @@ void main_window::suspend_node(node *n) {
 	mark_dirty();
 	update_status();
 	update_navigation();
+	update_window_title();
 }
 
 void main_window::touch_lru(const QString &id) {
@@ -1900,6 +1928,7 @@ void main_window::forget_subtree(node *n) {
 		m_state->remove(n->id);
 	update_status();
 	update_navigation();
+	update_window_title();
 }
 
 void main_window::save_tree_soon() {
