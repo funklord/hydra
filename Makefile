@@ -75,6 +75,9 @@
 #   set and impossible to turn off.
 #
 #     make DEBUG=1        unoptimized, symbol-rich
+#
+#   Optimization is -Os everywhere else. Debug is the only exception, and it
+#   is an exception because a debugger needs the code to match the source.
 #     make SANITIZE=1     ASan + UBSan, independent of DEBUG
 #
 #   Everything else is `?=`, so the command line and the environment win:
@@ -124,7 +127,11 @@ ANDROID_SDK_ROOT  ?= $(HOME)/Android/Sdk
 JAVA_HOME         ?= $(HOME)/android-studio/jbr
 ANDROID_BUILD_DIR ?= build-android
 
-BUILD_TYPE ?= Release
+# **-Os, not -O2 and never -O3.** CMake's `Release` means -O3 and its
+# `MinSizeRel` means -Os; the size build is what this project wants everywhere
+# except under a debugger, so the build type says so rather than the flags
+# being patched on top of a type that disagrees with them.
+BUILD_TYPE ?= MinSizeRel
 CMAKE_FLAGS =
 ifdef DEBUG
 BUILD_TYPE = Debug

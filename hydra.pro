@@ -24,6 +24,12 @@ CONFIG += c++17 link_pkgconfig
 # them building.
 QMAKE_CXXFLAGS += -Wall -Wextra
 
+# **-Os, not qmake's -O2 release default.** Replaced rather than appended: two
+# -O flags on one command line leave the last one winning, which makes the
+# setting depend on where in the line qmake happened to put it.
+QMAKE_CXXFLAGS_RELEASE -= -O2
+QMAKE_CXXFLAGS_RELEASE += -Os
+
 SOURCES = $$files(src/*.cpp)
 HEADERS = $$files(src/*.h)
 

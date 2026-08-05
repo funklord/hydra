@@ -6387,6 +6387,19 @@ because nothing asked again until a page opened. It is called once more at the
 end of the constructor, which is the only point where everything it reads
 exists.
 
+### -Os everywhere except under a debugger
+
+The three build systems disagreed about optimization by default and nobody had
+said which was right: CMake's `Release` is `-O3`, qmake's release default is
+`-O2`, and fmake's is `-O2 -g`. All three now build `-Os`, and `DEBUG=1` is the
+only exception, because a debugger needs the code to match the source.
+
+Expressed as the *build type* on the CMake side (`MinSizeRel`) rather than as
+`-Os` patched on top of `Release`, and as a replacement rather than an addition
+on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
+`-O` flags on one command line leave the last one winning, which makes the
+setting depend on where in the line the generator happened to put it.
+
 ### Three build systems for the same tree, measured
 
 hydra was the only private project that needed CMake, and the accounting for

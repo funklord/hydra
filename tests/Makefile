@@ -44,7 +44,8 @@ OPT_DEFS   := $(if $(filter libsodium,$(OPT_PKGS)),-DHYDRA_HAVE_SODIUM) \
                $(if $(filter libtorrent-rasterbar,$(OPT_PKGS)),-DHYDRA_HAVE_LIBTORRENT) \
                -DHYDRA_HAVE_DBUS
 
-CXXFLAGS ?= -O2 -g
+# -Os, and `?=` so a debug build can replace it from the command line.
+CXXFLAGS ?= -Os -g
 CXXFLAGS += -std=gnu++17 -fPIC -Wall -Wextra -I$(SRC) -I. -I$(BUILD_DIR) \
              $(QT_CFLAGS) $(OPT_CFLAGS) $(OPT_DEFS)
 LDLIBS   += $(QT_LIBS) $(OPT_LIBS)
