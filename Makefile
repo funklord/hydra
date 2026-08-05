@@ -150,7 +150,10 @@ SUITES     = $(filter-out $(NEEDS_MORE),$(ALL_SUITES))
 # own because `test_credstore` writes and deletes one: under the real name that
 # item is the KeePassXC pairing the user actually uses, and the suite refuses to
 # run rather than risk it.
-TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test
+# `--mute-audio` because a suite that loads a page should not play it at
+# whoever is sitting at the machine. Chromium's own flag; WebEngine honours it.
+TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test \
+           QTWEBENGINE_CHROMIUM_FLAGS=--mute-audio
 
 # Where a failing suite's whole output is kept. This target used to print the
 # tail line and the first five FAIL lines and throw the rest away, which is fine

@@ -197,6 +197,27 @@ HYDRA_MODEL_TIMEOUT_MS=900000 QT_QPA_PLATFORM=offscreen \
     ./tests/build/test_live_model qwen2.5-coder:14b /tmp/ev.json
 ```
 
+## Drivers are silent and offscreen
+
+Both are defaults rather than options, and both were earned.
+
+`QT_QPA_PLATFORM=offscreen` keeps twenty-seven windows off the screen of
+whoever is using the machine, and every driver passes under it -- `try_menus`
+scores *better* offscreen, because it stops competing with whatever else is
+mapped. `SWEEP_ONSCREEN=1` uses the real display, which is only wanted when
+appearance rather than behaviour is the question.
+
+`QTWEBENGINE_CHROMIUM_FLAGS=--mute-audio` keeps them quiet. These drivers load
+real pages, and a capture run against a video site plays it -- through the
+speakers of the person sitting at the machine, for as long as the run takes.
+Chromium's own flag, appended rather than assigned so a flag set for other
+reasons survives.
+
+The general rule behind both: **a test that takes over the machine it runs on
+is a worse test**, whatever it proves. The same reasoning is why the scale
+suite caps its own memory and why nothing here uses a capture tool that can
+grab the X pointer.
+
 ## The tab tree at scale
 
 `test_tree_scale` builds deliberately large and awkward trees from one

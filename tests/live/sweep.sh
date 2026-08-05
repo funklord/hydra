@@ -31,6 +31,15 @@
 # only if it also did not reach the end. "done" or a non-zero exit is the test.
 set -u
 cd "$(dirname "$0")/../.." || exit 1
+
+# **Silent, because these drivers load real pages.** A capture run against a
+# video site plays it -- through whatever speakers the person at the machine is
+# sitting in front of, for as long as the driver takes. `--mute-audio` is
+# Chromium's own flag and WebEngine honours it.
+#
+# Appended rather than assigned, so a flag somebody set for their own reasons
+# survives; the app does the same thing in theme.cpp for the colour scheme.
+export QTWEBENGINE_CHROMIUM_FLAGS="${QTWEBENGINE_CHROMIUM_FLAGS:+$QTWEBENGINE_CHROMIUM_FLAGS }--mute-audio"
 BIN=tests/build
 OUT=${HYDRA_SWEEP_OUT:-/tmp/hydra-sweep}
 mkdir -p "$OUT"

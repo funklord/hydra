@@ -128,74 +128,62 @@ int main(int argc, char *argv[]) {
 			open_arg = candidate.toString();
 	}
 
-	// Tree file: first CLI arg, else ./sample-tree.txt next to the binary or cwd.
-	QString tree_path = (argc > 1 && open_arg.isEmpty())
-	                        ? QString::fromLocal8Bit(argv[1])
-	                        : QStringLiteral("sample-tree.txt");
-	if (!QFileInfo::exists(tree_path)) {
-		const QString beside = QDir(QCoreApplication::applicationDirPath())
-		                           .filePath("sample-tree.txt");
-		if (QFileInfo::exists(beside))
-			tree_path = beside;
-	}
-#ifndef Q_OS_ANDROID
-	// **An installed copy has nowhere in the build tree to fall back to**, and
-	// until this was here it fell back to a *relative* path -- so `hydra` run
-	// from a package wrote its tree, its policy, its filters and its state
-	// directory into whatever directory it happened to be launched from. From a
-	// desktop entry that is the user's home; from a file manager it is whatever
-	// folder was open. Found by running the packaged binary: two tabs appeared
-	// in the repository's own `sample-tree.txt`, which is a tracked file.
+	// Where the tree lives.
 	//
-	// So the same answer Android already needed, for the same reason and with
-	// the same seed: everything this program keeps lives beside the tree file,
-	// so putting the tree in app data moves the whole set at once.
+	// **The example is a seed, never the working file.** `sample-tree.txt` in
+	// the repository is a committed example: it should change when the example
+	// changes and at no other time. The tree an actual person uses is a
+	// personal file that changes constantly, by design -- every title a page
+	// supplies, every `seen=`, every tab opened or closed.
 	//
-	// Only when nothing was found. Running from a build or source directory
-	// still picks up the `sample-tree.txt` next to it, which is what makes
-	// `make run` work on a checkout.
-	if (!QFileInfo::exists(tree_path)) {
+	// Those are two different files and this used to conflate them. With no
+	// argument the search was cwd, then beside the binary, then app data -- so
+	// running the browser from a checkout picked up the tracked example *as the
+	// working file* and wrote to it. It was reverted from git five times in one
+	// day, mostly by people who had not knowingly run anything against it.
+	//
+	// So: an explicit argument means exactly that file, because somebody asked
+	// for it. Otherwise the tree is the personal one in app data, seeded on
+	// first run from whichever example can be found. The seed is only ever
+	// read.
+	//
+	// This is also what Android needed, for its own reason -- there is no
+	// working directory worth the name there, it is `/` and nothing in it is
+	// writable -- and it was solved separately for that platform. One path now,
+	// because two answers to one question is how they drift.
+	QString tree_path;
+	if (argc > 1 && open_arg.isEmpty())
+		tree_path = QString::fromLocal8Bit(argv[1]);
+
+	if (tree_path.isEmpty()) {
 		const QString dir =
 		  QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 		QDir().mkpath(dir);
 		tree_path = QDir(dir).filePath("tree.txt");
+
+		// First run gets the example, so the app opens with something in it
+		// rather than an empty pane that looks like a failure. Preference
+		// order: a checkout being worked in, then the copy CMake puts beside
+		// the binary, then the one compiled into the executable -- which is
+		// the only one an installed or packaged copy has.
 		if (!QFileInfo::exists(tree_path)) {
-			QFile seed(":/sample-tree.txt");
-			if (seed.open(QIODevice::ReadOnly)) {
+			QStringList seeds;
+			seeds << QStringLiteral("sample-tree.txt")
+			      << QDir(QCoreApplication::applicationDirPath())
+			             .filePath("sample-tree.txt")
+			      << QStringLiteral(":/sample-tree.txt");
+			for (const QString &from : std::as_const(seeds)) {
+				QFile seed(from);
+				if (!seed.open(QIODevice::ReadOnly))
+					continue;
 				QFile out(tree_path);
 				if (out.open(QIODevice::WriteOnly))
 					out.write(seed.readAll());
+				break;
 			}
 		}
 	}
-#endif
-#ifdef Q_OS_ANDROID
-	// There is no working directory worth the name on Android -- it is `/`, and
-	// nothing is writable there. Everything this program keeps lives beside the
-	// tree file (policy.json, state/, filters, site rules), so pointing the tree
-	// at app storage moves the whole set at once.
-	//
-	// Measured before it was fixed: the first run on a phone came up with an
-	// empty tree and no error, because it had looked for `./sample-tree.txt`
-	// and there was no such thing. Nothing was broken; there was simply nowhere
-	// for any of it to be.
-	{
-		const QString dir =
-		  QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-		QDir().mkpath(dir);
-		tree_path = QDir(dir).filePath("tree.txt");
-		// First run gets the sample, so the app opens with something in it
-		// rather than an empty pane that looks like a failure.
-		if (!QFileInfo::exists(tree_path)) {
-			QFile seed(":/sample-tree.txt");
-			if (seed.open(QIODevice::ReadOnly)) {
-				QFile out(tree_path);
-				if (out.open(QIODevice::WriteOnly))
-					out.write(seed.readAll());
-			}
-		}
-	}
-#endif
+
 	w.load_tree(tree_path);
 	// After the tree, so the tab lands in a loaded tree rather than being
 	// dropped when the file replaces the model underneath it.

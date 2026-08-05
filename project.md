@@ -6045,6 +6045,42 @@ which is the only thing that knows when it is the size it will be drawn at.
 The first two put a centred two-line message clipped into the top-left corner,
 and each looked plausible until it was photographed.
 
+### The committed example was being used as somebody's live tree
+
+`sample-tree.txt` was reverted from git five times in one day, mostly by people
+who had not knowingly run anything against it, and the reflex fix -- have the
+app refuse to save into a git working tree -- was the wrong shape. A tree *is*
+a dynamic personal file: it changes on every title a page supplies, every
+`seen=`, every tab opened. Refusing to write it would be refusing to do its
+job.
+
+The mistake was that one file was serving as two things. `sample-tree.txt` in
+the repository is a **committed example**, which should change when the example
+changes and at no other time. The tree a person uses is a **personal file**
+that changes constantly. Conflating them made every run of the browser a diff.
+
+And the conflation was in the app, not in how people invoked it. With no
+argument the search was cwd, then beside the binary, then app data -- so
+starting the browser from a checkout picked up the tracked example *as the
+working file*.
+
+Now: an explicit argument means exactly that file, because somebody asked for
+it. Otherwise the tree is the personal one in app data, seeded on first run
+from whichever example can be found -- the checkout's, the copy CMake puts
+beside the binary, or the one compiled into the executable, which is the only
+one a packaged copy has. The example is only ever read.
+
+That also collapsed an `#ifdef`. Android needed exactly this and for its own
+reason -- there is no working directory worth the name there, it is `/` and
+nothing in it is writable -- and had been given a separate answer. Two answers
+to one question is how they drift; there is one path now.
+
+Verified against a hash rather than an impression, after a first attempt that
+proved nothing: the file was already dirty when that test started, so
+"unchanged afterwards" said only that it had not got worse. From a clean
+baseline, the example's hash is identical after a run and the personal tree
+appears in app data seeded from it.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
