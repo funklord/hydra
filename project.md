@@ -6495,11 +6495,15 @@ Details that are each a decision:
 **And it found a shortcut clash.** `Ctrl+F` was already bound to *Find in Tree*,
 the sidebar filter. Two actions sharing a `QKeySequence` is an ambiguous
 overload and Qt then fires neither reliably, so the first version of this broke
-the tree filter as well as its own. Page search sits on `Ctrl+Shift+F` for now,
-which is the wrong way round -- every browser puts page search on `Ctrl+F` --
-but swapping them takes a binding away from whoever is using it, so it is a
-question rather than a change made in passing. The driver now counts the
-actions claiming `Ctrl+F` and fails if two ever do.
+the tree filter as well as its own.
+
+`Ctrl+F` now searches the page, which is what it does in every browser and
+therefore what somebody arrives already expecting; the tree filter moved to
+`Ctrl+Shift+F`. That was asked rather than assumed, because it takes a binding
+away from somebody using it daily -- the kind of change that is cheap to make
+and expensive to discover. The driver checks that exactly one action holds
+`Ctrl+F`, that it is the page one, and that the tree filter still has a
+shortcut of its own.
 
 ### Nothing said a page was loading
 

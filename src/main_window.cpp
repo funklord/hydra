@@ -859,17 +859,18 @@ QMenuBar *main_window::build_menu_bar() {
 	});
 	del_act->setStatusTip("Remove the selection and everything inside it");
 	edit_menu->addSeparator();
-	// **Ctrl+Shift+F, not Ctrl+F, and that is not where it belongs.** Ctrl+F
-	// already filters the *tree*, and in every browser it searches the page --
-	// so one of the two is surprising and it is not this one. Two actions
-	// sharing a QKeySequence is an ambiguous overload that fires neither
-	// reliably, which is what the first version of this did. Left as the
-	// non-standard half until somebody decides which way round they go, rather
-	// than taking a binding away from whoever is using it.
+	// **Ctrl+F searches the page**, which is what it does in every browser and
+	// therefore what somebody arrives already expecting. The tree filter had it
+	// and moves to Ctrl+Shift+F; that was a decision to ask about rather than
+	// take, because it is a binding somebody was using daily.
 	//
-	// The mnemonic is on Page for the same reason: Find in Tree already has F.
+	// Only one action may hold a QKeySequence. Two is an ambiguous overload,
+	// and Qt then fires neither of them reliably -- so this was briefly broken
+	// for the tree filter as well as for itself.
+	//
+	// The mnemonic is on Page, because Find in Tree already has the F.
 	QAction *page_find_act = edit_menu->addAction("Find on &Page",
-	                                               QKeySequence("Ctrl+Shift+F"),
+	                                               QKeySequence::Find,
 	                                               this, &main_window::open_find);
 	page_find_act->setStatusTip("Search the page in front of you");
 	edit_menu->addSeparator();
@@ -878,7 +879,8 @@ QMenuBar *main_window::build_menu_bar() {
 	                                         this, [this] { m_tree->selectAll(); });
 	all_act->setStatusTip("Select every visible row");
 	QAction *find_act = edit_menu->addAction("&Find in Tree…",
-	                                          QKeySequence::Find, this, [this] {
+	                                          QKeySequence("Ctrl+Shift+F"), this,
+	                                          [this] {
 		if (m_search) {
 			m_search->setFocus(Qt::ShortcutFocusReason);
 			m_search->selectAll();

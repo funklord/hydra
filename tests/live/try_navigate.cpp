@@ -186,14 +186,25 @@ int main(int argc, char *argv[]) {
 			if (a->text().contains("Find on &Page"))
 				find_act = a;
 		check(find_act, "there is a Find on Page action");
-		// The tree filter owns Ctrl+F. Two actions on one sequence is an
-		// ambiguous overload, and Qt then fires neither of them reliably.
+		// Page search owns Ctrl+F, the way it does in every browser, and the
+		// tree filter moved to Ctrl+Shift+F. Only one action may hold a
+		// sequence: two is an ambiguous overload and Qt fires neither
+		// reliably, which briefly broke both of these.
 		int on_ctrl_f = 0;
 		for (QAction *a : w.findChildren<QAction *>())
 			if (a->shortcut() == QKeySequence("Ctrl+F"))
 				++on_ctrl_f;
-		check(on_ctrl_f <= 1,
-		      QString("no two actions share Ctrl+F (%1 claim it)").arg(on_ctrl_f));
+		check(on_ctrl_f == 1,
+		      QString("exactly one action holds Ctrl+F (%1)").arg(on_ctrl_f));
+		check(find_act && find_act->shortcut() == QKeySequence("Ctrl+F"),
+		      "and it is the one that searches the page");
+
+		QAction *tree_find = nullptr;
+		for (QAction *a : w.findChildren<QAction *>())
+			if (a->text().contains("Find in Tree"))
+				tree_find = a;
+		check(tree_find && tree_find->shortcut() == QKeySequence("Ctrl+Shift+F"),
+		      "the tree filter still has a shortcut of its own");
 
 		QWidget *bar = w.findChild<QWidget *>("find_bar");
 		check(bar && !bar->isVisible(), "and the bar stays out of the way until asked");
