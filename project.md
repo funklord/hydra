@@ -6016,6 +6016,15 @@ them. A number that disagrees with what is on screen is worse than no number,
 because the reader has to work out which of the two is lying. It counts the
 rows now.
 
+**And Host was the one column nobody sized.** Type and the button cell were
+resized to their contents after populating, Name was the stretch column, and
+Host was left with a default width -- so it elided `hls.cdnvideo11.shop` while
+Name had several hundred pixels spare. That is the column carrying the point of
+the dialog: a media host is *not* the page's host, and `hls.cdnvideo11.shop`
+against `kisskh.co` is most of why somebody opens this window. Truncating it hid
+exactly what it exists to show. Sized to contents rather than stretched, because
+a host is bounded in a way a name is not.
+
 That also caught a habit rather than a bug: `rule(s)`, `change(s)`, `item(s)`
 and `imported rule(s)` in four dialogs, in a codebase that spells the plural
 properly everywhere else -- `%1 request%2` with an empty string or an `s`. All

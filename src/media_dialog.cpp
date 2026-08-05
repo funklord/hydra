@@ -115,7 +115,20 @@ void media_dialog::repopulate() {
 		m_list->setItemWidget(row, 3, cell);
 	}
 
+	// Type, host and the button cell take the width they need; Name is the
+	// stretch column and absorbs whatever is left.
+	//
+	// **Host was the one column nobody sized**, so it kept a default width and
+	// elided `hls.cdnvideo11...` while Name had several hundred pixels to
+	// spare. Which host served a stream is exactly the thing somebody is
+	// looking at this dialog to find out -- a media host is not the page's
+	// host, and that difference is the whole point of the column.
+	//
+	// Sized to contents rather than stretched, because a host is bounded in a
+	// way a name is not: it is a domain, and the longest one here is shorter
+	// than most of the names beside it.
 	m_list->resizeColumnToContents(0);
+	m_list->resizeColumnToContents(2);
 	m_list->resizeColumnToContents(3);
 
 	if (!items.isEmpty()) {
