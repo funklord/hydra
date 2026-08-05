@@ -22,6 +22,7 @@
 #include <QMenuBar>
 #include <QTimer>
 #include <QLabel>
+#include <QLineEdit>
 #include <QRegularExpression>
 #include <QTreeView>
 #include "tree_sort_proxy.h"
@@ -153,6 +154,31 @@ int main(int argc, char *argv[]) {
 		for (const QString &line : text.split('\n'))
 			if (!line.trimmed().isEmpty())
 				note("  " + line.left(72));
+	}
+
+	section("an empty tree says which kind of empty it is");
+	{
+		// Filtering everything away and having nothing to begin with look
+		// identical and mean opposite things. Only one of them is somebody's
+		// own doing, and only one has an obvious way out.
+		QLineEdit *search = nullptr;
+		for (QLineEdit *e : w.findChildren<QLineEdit *>())
+			if (e->placeholderText().contains("Search"))
+				search = e;
+		QLabel *empty = w.findChild<QLabel *>("tree_empty");
+		check(search && empty, "the search box and the empty-state label exist");
+		if (search && empty) {
+			check(!empty->isVisible(), "nothing is said while rows are showing");
+			search->setText("zzzznothingmatchesthis");
+			spin(400);
+			check(empty->isVisible(), "filtering everything away says so");
+			check(empty->text().contains("matches"),
+			      QString("and says it was the search (%1)")
+			          .arg(empty->text().split('\n').first()));
+			search->clear();
+			spin(400);
+			check(!empty->isVisible(), "and it goes when the search is cleared");
+		}
 	}
 
 	section("a drop does not fold the tree up");

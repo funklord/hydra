@@ -4,6 +4,8 @@
 #include <QStringList>
 #include <QTreeView>
 
+class QLabel;
+
 class tab_tree_model;
 class tree_sort_proxy;
 struct node;
@@ -48,6 +50,11 @@ public:
 	// existing nodes or replaced them all.
 	void setModel(QAbstractItemModel *m) override;
 
+protected:
+	bool eventFilter(QObject *o, QEvent *e) override;
+
+public:
+
 signals:
 	// The two things the menu offers that this view cannot do itself: opening a
 	// tab needs an engine and a stacked widget, suspending it needs the state
@@ -65,11 +72,15 @@ protected:
 	void dragMoveEvent(QDragMoveEvent *event) override;
 
 private:
+	// Says why the tree is empty, which is not always the same reason.
+	void update_empty_state();
+
 	void remember_open_folders();
 	void reopen_folders();
 	QModelIndex view_index(node *n) const;
 	node *node_at_index(const QModelIndex &idx) const;
 
+	QLabel     *m_empty = nullptr;
 	QStringList m_open_ids;
 	QString     m_current_id;
 

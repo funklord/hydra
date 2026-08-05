@@ -27,6 +27,7 @@
 #include <QTreeView>
 #include <QDir>
 #include <QEventLoop>
+#include <QLineEdit>
 #include <QFile>
 #include <QTimer>
 #include <cstdio>
@@ -160,6 +161,25 @@ int main(int argc, char *argv[]) {
 	// The properties editor is reached from the tree rather than a menu, so it
 	// needs its own opening: `edit_properties` is public on the view and blocks
 	// like any other modal.
+	// The two ways the tree can be empty, which look identical and mean
+	// opposite things.
+	std::printf("\n== an empty tree, for both reasons ==\n");
+	{
+		QLineEdit *search = nullptr;
+		for (QLineEdit *e : w.findChildren<QLineEdit *>())
+			if (e->placeholderText().contains("Search"))
+				search = e;
+		if (search) {
+			search->setText("zzzznothingmatchesthis");
+			spin(500);
+			save(&w, "tree-no-match");
+			search->clear();
+			spin(400);
+		} else {
+			std::printf("  no search box found\n");
+		}
+	}
+
 	std::printf("\n== the tab properties editor ==\n");
 	{
 		auto *tv    = w.findChild<tab_tree_view *>();

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "tab_tree_view.h"
+#include <QEvent>
 #include "tree_sort_proxy.h"
 
 #include "node.h"
@@ -54,6 +55,20 @@ tab_tree_view::tab_tree_view(QWidget *parent) : QTreeView(parent) {
 	setAutoScroll(true);
 	setAutoScrollMargin(24);
 
+	// **Why the tree is empty, which is two different questions.** Typing a
+	// search that matches nothing emptied the pane with no explanation -- and
+	// that reads identically to a tree with no tabs in it, or to the filter
+	// being broken. The one thing it does not read as is "your search matched
+	// nothing", which is what happened.
+	m_empty = new QLabel(viewport());
+	m_empty->setObjectName("tree_empty");
+	m_empty->setAlignment(Qt::AlignCenter);
+	m_empty->setWordWrap(true);
+	m_empty->setAttribute(Qt::WA_TransparentForMouseEvents);
+	m_empty->setEnabled(false);   // the style's dimmed text rather than a picked grey
+	m_empty->hide();
+	viewport()->installEventFilter(this);
+
 	setContextMenuPolicy(Qt::CustomContextMenu);
 	connect(this, &QWidget::customContextMenuRequested,
 	        this, &tab_tree_view::show_menu);
@@ -62,13 +77,63 @@ tab_tree_view::tab_tree_view(QWidget *parent) : QTreeView(parent) {
 void tab_tree_view::setModel(QAbstractItemModel *m) {
 	if (tab_tree_model *old = source_model())
 		old->disconnect(this);
+	if (QAbstractItemModel *prev = model())
+		prev->disconnect(this);
 	QTreeView::setModel(m);
+	if (m) {
+		// Every way the visible row count can change. `layoutChanged` is the
+		// one a filter emits, and the one that would have been missed by
+		// watching insertions and removals alone.
+		connect(m, &QAbstractItemModel::layoutChanged,
+		        this, &tab_tree_view::update_empty_state);
+		connect(m, &QAbstractItemModel::modelReset,
+		        this, &tab_tree_view::update_empty_state);
+		connect(m, &QAbstractItemModel::rowsInserted,
+		        this, &tab_tree_view::update_empty_state);
+		connect(m, &QAbstractItemModel::rowsRemoved,
+		        this, &tab_tree_view::update_empty_state);
+	}
+	update_empty_state();
 	if (tab_tree_model *src = source_model()) {
 		connect(src, &QAbstractItemModel::modelAboutToBeReset,
 		        this, &tab_tree_view::remember_open_folders);
 		connect(src, &QAbstractItemModel::modelReset,
 		        this, &tab_tree_view::reopen_folders);
 	}
+}
+
+bool tab_tree_view::eventFilter(QObject *o, QEvent *e) {
+	// The viewport knows when it is the size it will be drawn at; the widget's
+	// own resizeEvent fires before that, which is how the same message came out
+	// clipped into a corner in the downloads dialog.
+	if (o == viewport() && e->type() == QEvent::Resize && m_empty &&
+	    m_empty->isVisible())
+		m_empty->setGeometry(viewport()->rect());
+	return QTreeView::eventFilter(o, e);
+}
+
+void tab_tree_view::update_empty_state() {
+	if (!m_empty)
+		return;
+	const bool nothing_shown = !model() || model()->rowCount() == 0;
+	if (!nothing_shown) {
+		m_empty->hide();
+		return;
+	}
+	// The distinction worth drawing: a tree with nothing in it, and a tree
+	// whose contents are all filtered away, look identical and mean opposite
+	// things. Only the second is somebody's own doing, and only the second has
+	// an obvious way out.
+	tab_tree_model *src = source_model();
+	const bool has_tabs = src && src->root() && !src->root()->children.isEmpty();
+	m_empty->setText(has_tabs
+	                     ? "Nothing matches that search.\n\nClear the box above "
+	                        "to see the whole tree again."
+	                     : "No tabs yet.\n\nFile > New Tab, or drag one in from "
+	                        "another browser.");
+	m_empty->setGeometry(viewport()->rect());
+	m_empty->show();
+	m_empty->raise();
 }
 
 // Walks the source tree and records the id of every folder the view has open,

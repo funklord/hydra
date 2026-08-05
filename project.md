@@ -6323,6 +6323,34 @@ which point it reports the folders closed.
 broken version and reported a failure that no longer existed. That is the stale
 binary the build guidelines name in as many words, met in the wild.
 
+### An empty tree that would not say which kind of empty it was
+
+Typing a search that matches nothing emptied the tab pane and said nothing
+about it. That reads identically to a tree with no tabs in it, and to the
+filter being broken -- the one thing it does not read as is "your search
+matched nothing", which is what happened. It is the same defect as the
+downloads list, in the surface people use most.
+
+The two cases are worth separating rather than covering with one message:
+
+    filtered away   somebody's own doing, and there is an obvious way out
+    genuinely empty  nothing has been filed yet, and the way out is different
+
+So the view says which: *Nothing matches that search -- clear the box above*,
+or *No tabs yet -- File > New Tab, or drag one in from another browser*. It
+knows both, because it can see its own row count and the source model's.
+
+**In the view, consistent with the folder-expansion fix.** Which folders are
+open and why a pane looks empty are both presentation, and putting them in the
+model would mean the model knowing about searches it does not run.
+
+Two things carried over from the downloads label rather than rediscovered.
+`layoutChanged` is the signal a filter emits, so watching insertions and
+removals alone would have missed the only case this exists for. And the
+geometry comes from an event filter on the *viewport*: the widget's own resize
+fires before the viewport settles, which is exactly how the first version of the
+downloads message came out clipped into a corner.
+
 ### Report-only drivers are not failures
 
 Every sweep this session ended `failed=2 try_flicker try_settings`, and neither
