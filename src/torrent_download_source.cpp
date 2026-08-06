@@ -13,6 +13,13 @@
 #include <QTimer>
 #include <QUrl>
 
+/// @pkg_optional libtorrent-rasterbar defines HYDRA_HAVE_LIBTORRENT
+//
+// **The qualified name, never the bare `libtorrent`.** Two unrelated
+// projects install a .pc by that name and the bare one resolves to
+// rakshasa's, which has a different API -- a trap the top-level Makefile
+// records as one a build system has to get right. Written beside the
+// include, it is right for whichever build system reads it.
 #ifdef HYDRA_HAVE_LIBTORRENT
 
 #include <libtorrent/add_torrent_params.hpp>

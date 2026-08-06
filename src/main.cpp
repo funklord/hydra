@@ -1,4 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/*! @file
+ * @target hydra
+ *
+ * Without this the program is called `src`: fmake names a program after the
+ * file that defines main(), or after the containing directory when that file
+ * is main.cpp. Naming it here rather than in a build file keeps the fact where
+ * the entry point is.
+ */
 #include "main_window.h"
 #include "settings_dialog.h"   // settings_store
 #include "theme.h"

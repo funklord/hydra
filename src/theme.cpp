@@ -10,6 +10,7 @@
 #include <QStyle>
 #include <QStyleHints>
 
+/// @pkg_optional Qt6DBus defines HYDRA_HAVE_DBUS
 #ifdef HYDRA_HAVE_DBUS
 #include <QDBusConnection>
 #include <QDBusInterface>

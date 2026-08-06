@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "session_import.h"
 
+/// @pkg_optional liblz4 defines HYDRA_HAVE_LZ4
 #ifdef HYDRA_HAVE_LZ4
 #include <lz4.h>
 #endif
