@@ -28,40 +28,68 @@ tab_tree_model::~tab_tree_model() {
 
 // A padlock in the corner of whatever icon the row already had.
 //
-// **Drawn rather than fetched**, and that is the point: QStyle has no lock
-// among its standard icons, and the two alternatives both fail somewhere this
-// has to work. A character in the row's text (U+1F512) needs a font that has
-// it, and renders as a box on a machine with no emoji font -- which is exactly
-// the minimal desktop this browser is likely to be run on. A bundled image
-// needs a second one for every scale factor. Shapes cost neither.
+// **The desktop's own lock, where there is one.** The first version drew the
+// shape by hand, on the reasoning that QStyle has no lock among its standard
+// icons and a bundled image would need one per scale factor. Photographing it
+// settled that: at the 16px a tree row actually gets, the shackle had about two
+// pixels to exist in and vanished, the white outline disappeared against a
+// light background, and what reached the screen was a dark blob. An emblem
+// theme designers drew *for* 16px reads at 16px, which is the whole difference.
+//
+// The hand-drawn shape stays as the fallback for a machine with no icon theme,
+// with the colours the right way round this time -- dark stroke on light fill,
+// because the tree's background is light and a white outline on white is not an
+// outline.
 //
 // The base icon is kept underneath instead of replaced, so a locked folder
 // still reads as a folder and a locked tab as a tab. Locking is a property of
 // a row, not a kind of row.
+// What a desktop icon theme is likely to call a lock, most specific first.
+// `emblem-*` is the freedesktop namespace for exactly this -- a mark placed on
+// another icon -- and the rest are the fallbacks a theme without one tends to
+// have. A theme with none of them gets the drawn shape below.
+static const char *const k_lock_icon_names[] = {
+	"emblem-locked", "object-locked", "system-lock-screen", "lock",
+	"changes-prevent",
+};
+
 static QIcon with_padlock(const QIcon &base) {
 	const int side = 16;
 	QPixmap pm = base.pixmap(side, side);
 	if (pm.isNull())
 		return base;
 
+	// Bottom-right, at 60% of the tile: big enough to be a shape rather than a
+	// speck, small enough that the icon underneath is still identifiable.
+	const int mark = qMax(9, pm.height() * 3 / 5);
+	const QRect corner(pm.width() - mark, pm.height() - mark, mark, mark);
+
+	QIcon lock;
+	for (const char *name : k_lock_icon_names) {
+		if (QIcon::hasThemeIcon(name)) {
+			lock = QIcon::fromTheme(name);
+			break;
+		}
+	}
+
 	QPainter p(&pm);
 	p.setRenderHint(QPainter::Antialiasing, true);
+	p.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
-	// Bottom-right corner, at half the icon's height, with a light outline so
-	// the mark stays legible against a dark icon and a dark theme both.
-	const qreal h = pm.height() / 2.0;
-	const qreal w = h * 0.8;
-	const QRectF body(pm.width() - w, pm.height() - h * 0.62, w, h * 0.62);
-	const qreal shackle = body.width() * 0.30;
-
-	p.setPen(QPen(Qt::white, 1.4));
-	p.setBrush(Qt::NoBrush);
-	p.drawArc(QRectF(body.center().x() - shackle,
-	                  body.top() - shackle * 1.15,
-	                  shackle * 2, shackle * 2), 0, 180 * 16);
-	p.setPen(QPen(Qt::white, 1.0));
-	p.setBrush(QColor(30, 30, 30));
-	p.drawRoundedRect(body, 1.5, 1.5);
+	if (!lock.isNull()) {
+		p.drawPixmap(corner, lock.pixmap(mark, mark));
+	} else {
+		const qreal w = mark * 0.72;
+		const QRectF body(pm.width() - w - 0.5, pm.height() - mark * 0.55 - 0.5,
+		                   w, mark * 0.55);
+		const qreal shackle = body.width() * 0.32;
+		p.setPen(QPen(QColor(20, 20, 20), 1.0));
+		p.setBrush(Qt::NoBrush);
+		p.drawArc(QRectF(body.center().x() - shackle, body.top() - shackle,
+		                  shackle * 2, shackle * 2), 0, 180 * 16);
+		p.setBrush(QColor(250, 250, 250));
+		p.drawRoundedRect(body, 1.0, 1.0);
+	}
 	p.end();
 
 	return QIcon(pm);
