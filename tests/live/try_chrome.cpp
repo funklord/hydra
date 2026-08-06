@@ -11,6 +11,7 @@
 // three subjects: a failure named the driver and meant any of them.
 #include "shell_fixture.h"
 
+#include "auth_dialog.h"
 #include "node.h"
 #include "tab_tree_model.h"
 #include <QAbstractButton>
@@ -141,6 +142,38 @@ int main(int argc, char *argv[]) {
 			check(sb->currentMessage().contains("could not be loaded"),
 			      QString("an ordinary failure after it still speaks (%1)")
 			          .arg(sb->currentMessage()));
+		}
+	}
+
+	section("a site asking for a username and password");
+	{
+		// Built directly and never exec'd: a modal would block the driver, and
+		// what is worth checking is what it says before anybody types. Until
+		// this existed the challenge was unanswered, so the page failed with
+		// nothing on screen to say a password had been asked for.
+		{
+			auth_dialog secure("bank.example", "Accounts", true, &w);
+			auto *site = secure.findChild<QLabel *>("auth_site");
+			check(site && site->text().contains("bank.example"),
+			      "it names the site being signed in to");
+			check(secure.findChild<QLabel *>("auth_realm") != nullptr,
+			      "and shows the realm when the site gave one");
+			check(secure.findChild<QLabel *>("auth_insecure") == nullptr,
+			      "no warning on an encrypted connection");
+			auto *pw = secure.findChild<QLineEdit *>("auth_password");
+			check(pw && pw->echoMode() == QLineEdit::Password,
+			      "the password field does not show what is typed");
+		}
+		{
+			// **The case worth interrupting for.** Basic authentication over a
+			// plain connection puts the password on the wire in a form
+			// anything in between can read, and only the person typing it can
+			// decide whether that is acceptable.
+			auth_dialog plain("intranet.example", "", false, &w);
+			check(plain.findChild<QLabel *>("auth_insecure") != nullptr,
+			      "an unencrypted connection is called out");
+			check(plain.findChild<QLabel *>("auth_realm") == nullptr,
+			      "and an empty realm is left out rather than shown blank");
 		}
 	}
 

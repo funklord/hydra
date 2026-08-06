@@ -8,6 +8,7 @@
 #include <QWebEnginePermission>
 #include <QWebEngineProfile>
 #include <QWebEngineFindTextResult>
+#include <QAuthenticator>
 #include <QWebEngineCertificateError>
 #include <QWebEngineHistory>
 #include <QWebEngineNewWindowRequest>
@@ -71,6 +72,19 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	         [this](const QUrl &) { emit history_changed(); });
 	connect(m_view, &QWebEngineView::loadFinished, this,
 	         [this](bool) { emit history_changed(); });
+	// Left empty when nobody answers, which is what Qt treats as a refusal --
+	// the same outcome as before this existed, reached deliberately.
+	connect(m_page, &QWebEnginePage::authenticationRequired, this,
+	         [this](const QUrl &url, QAuthenticator *auth) {
+		if (!m_authenticator || !auth)
+			return;
+		QString user, password;
+		if (m_authenticator(url, auth->realm(), &user, &password)) {
+			auth->setUser(user);
+			auth->setPassword(password);
+		}
+	});
+
 	// **Rejected, and said out loud.** Qt's default for an unhandled signal is
 	// to reject, which is the right answer -- so this changes nothing about
 	// what loads, only about what the person is told. Deliberately no
@@ -354,4 +368,8 @@ double qtwebengine_view::zoom_factor() const {
 void qtwebengine_view::stop() {
 	if (m_view)
 		m_view->stop();
+}
+
+void qtwebengine_view::set_authenticator(authenticator fn) {
+	m_authenticator = std::move(fn);
 }

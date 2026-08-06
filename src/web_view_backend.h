@@ -57,6 +57,16 @@ public:
 	virtual void apply_settings(const view_settings &s) = 0;
 	virtual void set_permission_decider(permission_decider fn) = 0;
 
+	// A site asking for a username and password. **Answered while the callback
+	// runs**, which is why this is a decider rather than a signal: Qt hands
+	// over an authenticator to fill in, and a request answered later has
+	// already been abandoned. Returning false declines, which is what happens
+	// today by default -- the difference is that declining becomes a choice
+	// somebody made rather than the only thing the browser could do.
+	using authenticator = std::function<bool(const QUrl &url, const QString &realm,
+	                                          QString *user, QString *password)>;
+	virtual void set_authenticator(authenticator fn) { Q_UNUSED(fn) }
+
 	// Reflow zoom — the page re-lays out at the new scale. Kiosk mode's
 	// reliable scaling path (architecture doc §8.1); every engine has this.
 	virtual void set_zoom_factor(double factor) = 0;

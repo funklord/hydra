@@ -6526,6 +6526,40 @@ visible, because the edits kept landing in the first of two identical loops.
 The lesson is the cheap one: wait for the exact sentence, not a fragment that
 another message also contains.
 
+### A site asking for a password, and nobody answering
+
+`authenticationRequired` had no handler, so a site wanting HTTP authentication
+could not be used at all: Qt reports the challenge through a callback that must
+be answered *while it runs*, nothing answered it, and the request was abandoned.
+The page then failed with nothing on screen to say a password had been asked
+for.
+
+**A decider, not a signal**, following `set_permission_decider`. An answer that
+arrives after the callback returns is an answer to a request that has already
+been dropped. Declining is still the outcome when somebody cancels -- the
+difference is that it becomes a choice a person made rather than the only thing
+the browser could do.
+
+The dialog names the site, which is the one thing that has to be checked before
+typing a password anywhere. The realm is the site's own label for what it is
+protecting; it is often empty or machine-generated, so it is shown when it says
+something and dropped when it does not, rather than printing an empty pair of
+quotes.
+
+**And it says when the connection is not encrypted.** HTTP authentication over
+a plain connection puts the password on the wire in a form anything in between
+can read, and only the person typing it can decide whether that is acceptable.
+Said in the dialog rather than afterwards, because afterwards the password has
+already gone.
+
+Guarded by building the dialog directly and never running it: a modal blocks the
+driver, and what is worth checking is what it says before anybody types --
+including that the password field is masked, which is the kind of thing that is
+correct until somebody refactors it.
+
+`proxyAuthenticationRequired` and `selectClientCertificate` remain unhandled,
+and are the same shape of silent dead end.
+
 ### A certificate failure that looked like a site being down
 
 Four page-level prompts had no handler at all: certificate errors,

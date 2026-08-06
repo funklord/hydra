@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "main_window.h"
 
+#include "auth_dialog.h"
 #include "find_bar.h"
 #include "tab_tree_model.h"
 #include "tab_tree_view.h"
@@ -1769,6 +1770,20 @@ void main_window::open_node(node *n) {
 		policy_engine *pe = m_policy;
 		view->set_permission_decider([pe](const QUrl &origin, policy::feature f) {
 			return pe->is_allowed(f, origin.host());
+		});
+
+		// **Asked, rather than declined on the person's behalf.** Nothing
+		// answered this, so a site wanting HTTP authentication simply failed
+		// to load and said nothing about why. The dialog runs inside the
+		// callback because that is when Qt can still use the answer.
+		view->set_authenticator([this](const QUrl &url, const QString &realm,
+		                                QString *user, QString *password) {
+			auth_dialog dlg(url.host(), realm, url.scheme() == "https", this);
+			if (dlg.exec() != QDialog::Accepted)
+				return false;
+			*user     = dlg.user();
+			*password = dlg.password();
+			return true;
 		});
 
 

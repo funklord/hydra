@@ -25,6 +25,7 @@ public:
 	void stop() override;
 	void apply_settings(const view_settings &s) override;
 	void set_permission_decider(permission_decider fn) override;
+	void set_authenticator(authenticator fn) override;
 	void set_zoom_factor(double factor) override;
 	double zoom_factor() const override;
 	void inject_script(const QString &name, const QString &source,
@@ -39,6 +40,7 @@ public:
 	bool       restore_state(const QByteArray &blob) override;
 
 private:
+	authenticator m_authenticator;
 	QWebEngineView *m_view = nullptr;
 	QWebEnginePage *m_page = nullptr;
 	permission_decider m_decider;
