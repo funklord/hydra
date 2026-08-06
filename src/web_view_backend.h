@@ -6,6 +6,8 @@
 #include <QObject>
 #include <QUrl>
 #include <QByteArray>
+#include <QList>
+#include <QString>
 
 #include <functional>
 
@@ -66,6 +68,48 @@ public:
 	using authenticator = std::function<bool(const QUrl &url, const QString &realm,
 	                                          QString *user, QString *password)>;
 	virtual void set_authenticator(authenticator fn) { Q_UNUSED(fn) }
+
+	// The *proxy* asking for a username and password, which is a different
+	// question from the site asking and must not be asked in the same words.
+	//
+	// **Separate from `authenticator` on purpose.** The two prompts look
+	// identical and the credentials are not interchangeable: one is the
+	// password for a site, the other for the network you are reaching it
+	// through. A prompt that does not say which is asking invites typing the
+	// site's password into the proxy's box, which hands it to a party that was
+	// never entitled to it. So the shell gets a different callback, and can
+	// therefore say a different thing.
+	using proxy_authenticator = std::function<bool(const QString &proxy_host,
+	                                                const QString &realm,
+	                                                QString *user,
+	                                                QString *password)>;
+	virtual void set_proxy_authenticator(proxy_authenticator fn) { Q_UNUSED(fn) }
+
+	// One certificate a site is willing to accept, described in plain strings.
+	//
+	// Strings rather than the engine's certificate type because this header is
+	// the line the shell must not see an engine through (§19.2): a chooser that
+	// took a QSslCertificate would put Qt Networking's spelling of a
+	// certificate into every backend that ever implements this.
+	struct certificate_offer {
+		QString subject;      // who it identifies
+		QString issuer;       // who vouches for it
+		QString valid_until;  // when that stops being true
+		QString serial;
+	};
+
+	// Which certificate to send, or **-1 to send none** -- and none is the
+	// answer that must be reachable, because sending one identifies you to the
+	// site by name. Qt aborts the selection when nothing is connected, so
+	// before this existed the answer was always none; the difference is that
+	// none becomes a decision rather than the only outcome available.
+	//
+	// Answered while the callback runs, like the two above: the engine is
+	// waiting on the selection object and a choice made later arrives after it
+	// has been abandoned.
+	using certificate_chooser =
+	  std::function<int(const QUrl &url, const QList<certificate_offer> &offered)>;
+	virtual void set_certificate_chooser(certificate_chooser fn) { Q_UNUSED(fn) }
 
 	// Whether this view may go somewhere. **A decider and not a signal**, for
 	// the reason the two above are: the engine asks while it is deciding, and

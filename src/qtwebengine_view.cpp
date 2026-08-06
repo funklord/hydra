@@ -10,6 +10,8 @@
 #include <QWebEngineFindTextResult>
 #include <QAuthenticator>
 #include <QWebEngineCertificateError>
+#include <QWebEngineClientCertificateSelection>
+#include <QSslCertificate>
 #include <QWebEngineHistory>
 #include <QWebEngineNewWindowRequest>
 #include <QWebEngineSettings>
@@ -119,6 +121,54 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 			auth->setUser(user);
 			auth->setPassword(password);
 		}
+	});
+
+	// The proxy asking, which is a different question and gets a different
+	// callback -- see the seam's note on why the two must not share one.
+	connect(m_page, &QWebEnginePage::proxyAuthenticationRequired, this,
+	         [this](const QUrl &, QAuthenticator *auth, const QString &host) {
+		if (!m_proxy_authenticator || !auth)
+			return;
+		QString user, password;
+		if (m_proxy_authenticator(host, auth->realm(), &user, &password)) {
+			auth->setUser(user);
+			auth->setPassword(password);
+		}
+	});
+
+	// A site asking who you are, by certificate.
+	//
+	// **Answered while the signal runs.** Qt hands over a selection object that
+	// the engine is waiting on; storing it and answering later answers a
+	// request that has already been abandoned. Unconnected, Qt selects none --
+	// so the outcome without a chooser was already "send nothing", and this
+	// makes that a decision instead of the only thing available.
+	//
+	// The certificates are flattened to plain strings before they cross the
+	// seam, because the shell must not learn what kind of engine produced
+	// them (§19.2).
+	connect(m_page, &QWebEnginePage::selectClientCertificate, this,
+	         [this](QWebEngineClientCertificateSelection selection) {
+		const QList<QSslCertificate> certs = selection.certificates();
+		if (!m_certificate_chooser || certs.isEmpty()) {
+			selection.selectNone();
+			return;
+		}
+		QList<certificate_offer> offered;
+		offered.reserve(certs.size());
+		for (const QSslCertificate &c : certs) {
+			certificate_offer o;
+			o.subject     = c.subjectDisplayName();
+			o.issuer      = c.issuerDisplayName();
+			o.valid_until = c.expiryDate().toString(Qt::ISODate);
+			o.serial      = QString::fromLatin1(c.serialNumber());
+			offered << o;
+		}
+		const int pick = m_certificate_chooser(m_view->url(), offered);
+		if (pick >= 0 && pick < certs.size())
+			selection.select(certs.at(pick));
+		else
+			selection.selectNone();
 	});
 
 	// **Rejected, and said out loud.** Qt's default for an unhandled signal is
@@ -413,4 +463,12 @@ void qtwebengine_view::set_authenticator(authenticator fn) {
 void qtwebengine_view::set_navigation_decider(navigation_decider fn) {
 	if (m_nav_page)
 		m_nav_page->decider = std::move(fn);
+}
+
+void qtwebengine_view::set_proxy_authenticator(proxy_authenticator fn) {
+	m_proxy_authenticator = std::move(fn);
+}
+
+void qtwebengine_view::set_certificate_chooser(certificate_chooser fn) {
+	m_certificate_chooser = std::move(fn);
 }

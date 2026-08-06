@@ -8,18 +8,44 @@
 #include <QVBoxLayout>
 
 auth_dialog::auth_dialog(const QString &host, const QString &realm,
-                          bool encrypted, QWidget *parent)
+                          bool encrypted, QWidget *parent, asker who)
     : QDialog(parent) {
-	setWindowTitle("Sign in");
+	const bool proxy = who == asker::proxy;
+	setWindowTitle(proxy ? "Sign in to the proxy" : "Sign in");
 	setObjectName("auth_dialog");
 	auto *column = new QVBoxLayout(this);
 
 	auto *asking = new QLabel(this);
 	asking->setObjectName("auth_site");
 	asking->setWordWrap(true);
-	asking->setText(QString("<b>%1</b> is asking for a username and password.")
-	                    .arg(host.isEmpty() ? QStringLiteral("This site") : host));
+	// Held in locals rather than nested in the call: the sentence differs by
+	// asker and the name differs by whether there was one, and the two
+	// conditions read as two questions when they are not folded together.
+	const QString sentence =
+	  proxy ? QStringLiteral("The proxy <b>%1</b> is asking for a username "
+	                          "and password.")
+	         : QStringLiteral("<b>%1</b> is asking for a username and "
+	                           "password.");
+	const QString named =
+	  !host.isEmpty() ? host
+	  : proxy         ? QStringLiteral("this network uses")
+	                  : QStringLiteral("This site");
+	asking->setText(sentence.arg(named));
 	column->addWidget(asking);
+
+	// **Which password is being asked for.** The prompt is otherwise identical
+	// to the site's, and the two are answered from different places: this one
+	// belongs to the network being reached through, not to the page on screen.
+	// Said plainly, because the cost of confusing them is handing a site's
+	// password to whoever runs the proxy.
+	if (proxy) {
+		auto *whose = new QLabel(this);
+		whose->setObjectName("auth_proxy_note");
+		whose->setWordWrap(true);
+		whose->setText("This is the network you are connecting through, not the "
+		                "site you are visiting. Do not use the site's password.");
+		column->addWidget(whose);
+	}
 
 	// The realm is the site's own name for what it is protecting. Often empty,
 	// and often a machine-generated string that means nothing to anybody, so it
@@ -40,9 +66,13 @@ auth_dialog::auth_dialog(const QString &host, const QString &realm,
 		auto *warning = new QLabel(this);
 		warning->setObjectName("auth_insecure");
 		warning->setWordWrap(true);
-		warning->setText("<b>This connection is not encrypted.</b> A password "
-		                  "sent to it can be read by anything between you and "
-		                  "the site.");
+		warning->setText(proxy
+		                     ? "<b>This connection is not encrypted.</b> A "
+		                       "password sent to the proxy can be read by "
+		                       "anything on the way to it."
+		                     : "<b>This connection is not encrypted.</b> A "
+		                       "password sent to it can be read by anything "
+		                       "between you and the site.");
 		column->addWidget(warning);
 	}
 

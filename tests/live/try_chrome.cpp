@@ -12,12 +12,15 @@
 #include "shell_fixture.h"
 
 #include "auth_dialog.h"
+#include "cert_dialog.h"
 #include "node.h"
 #include "tab_tree_model.h"
 #include <QAbstractButton>
 #include <QApplication>
 #include <QLabel>
+#include <QListWidget>
 #include <QProgressBar>
+#include <QPushButton>
 #include <QStatusBar>
 
 int main(int argc, char *argv[]) {
@@ -175,6 +178,87 @@ int main(int argc, char *argv[]) {
 			check(plain.findChild<QLabel *>("auth_realm") == nullptr,
 			      "and an empty realm is left out rather than shown blank");
 		}
+	}
+
+	section("the proxy asking is not the site asking");
+	{
+		// **The two prompts are the same box.** A person who cannot tell which
+		// one is in front of them can hand a site's password to whoever runs
+		// the network, and that is a mistake with no undo -- so what is checked
+		// here is the wording, which is the only thing that distinguishes them.
+		auth_dialog proxy("proxy.corp.example", "Staff", false, &w,
+		                   auth_dialog::asker::proxy);
+		auto *site = proxy.findChild<QLabel *>("auth_site");
+		check(site && site->text().contains("proxy.corp.example"),
+		      "the proxy prompt names the proxy");
+		check(site && site->text().contains("proxy"),
+		      "and calls it a proxy rather than presenting it as the site");
+		auto *note = proxy.findChild<QLabel *>("auth_proxy_note");
+		check(note && note->text().contains("not the site"),
+		      "with a line saying which password is being asked for");
+		check(proxy.windowTitle().contains("proxy"),
+		      "and a title that says so before the window is read");
+
+		auth_dialog ordinary("bank.example", "", true, &w);
+		check(ordinary.findChild<QLabel *>("auth_proxy_note") == nullptr,
+		      "while the site prompt carries no such line, or it would mean "
+		      "nothing on the one that does");
+
+		// Photographed as well as asserted. A padlock that passed every check
+		// while rendering as an unreadable smudge is why: an assertion reads
+		// the widget tree, and whether the words on it distinguish two prompts
+		// is a question only looking can answer.
+		proxy.adjustSize();
+		proxy.grab().save(f.out + "/auth-proxy.png");
+	}
+
+	section("a site asking who you are, by certificate");
+	{
+		QList<web_view_backend::certificate_offer> offered;
+		web_view_backend::certificate_offer a;
+		a.subject = "Ada Lovelace";  a.issuer = "Example CA";
+		a.valid_until = "2027-01-01";
+		web_view_backend::certificate_offer b;
+		b.subject = "Ada (work)";    b.issuer = "Corp CA";
+		b.valid_until = "2026-09-01";
+		offered << a << b;
+
+		cert_dialog dlg("id.example", offered, &w);
+		auto *site = dlg.findChild<QLabel *>("cert_site");
+		check(site && site->text().contains("id.example"),
+		      "it names the site asking to identify you");
+
+		auto *list = dlg.findChild<QListWidget *>("cert_list");
+		check(list && list->count() == 2, "both certificates are offered");
+		check(list && list->item(0)->text().contains("Ada Lovelace") &&
+		          list->item(0)->text().contains("Example CA"),
+		      "each named by holder and issuer, since an unexpected issuer is "
+		      "the case worth noticing");
+
+		// **Nothing selected, and Send unavailable.** A pre-selected row plus
+		// an enabled button is one keystroke from identifying somebody who was
+		// still reading the question.
+		check(list && list->currentRow() < 0, "nothing is selected to begin with");
+		QPushButton *send = nullptr, *none = nullptr;
+		for (QPushButton *b2 : dlg.findChildren<QPushButton *>()) {
+			if (b2->text().contains("Send"))  send = b2;
+			if (b2->text().contains("Don't")) none = b2;
+		}
+		check(send && !send->isEnabled(),
+		      "so Send is unavailable until there is something to send");
+		check(none && none->isDefault(),
+		      "and declining is the default button");
+		check(dlg.chosen() == -1,
+		      "an unanswered dialog sends nothing, which is what Qt did before "
+		      "a chooser existed -- now as a decision rather than the only "
+		      "outcome available");
+
+		if (list && send) {
+			list->setCurrentRow(1);
+			check(send->isEnabled(), "selecting one makes Send available");
+		}
+		dlg.adjustSize();
+		dlg.grab().save(f.out + "/cert-choose.png");
 	}
 
 	section("a page whose renderer dies says so");

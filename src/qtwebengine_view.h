@@ -30,6 +30,8 @@ public:
 	void set_permission_decider(permission_decider fn) override;
 	void set_authenticator(authenticator fn) override;
 	void set_navigation_decider(navigation_decider fn) override;
+	void set_proxy_authenticator(proxy_authenticator fn) override;
+	void set_certificate_chooser(certificate_chooser fn) override;
 	void set_zoom_factor(double factor) override;
 	double zoom_factor() const override;
 	void inject_script(const QString &name, const QString &source,
@@ -45,6 +47,8 @@ public:
 
 private:
 	authenticator m_authenticator;
+	proxy_authenticator m_proxy_authenticator;
+	certificate_chooser m_certificate_chooser;
 	QWebEngineView *m_view = nullptr;
 	QWebEnginePage *m_page = nullptr;
 	// The same object as m_page, typed so the decider can be handed over

@@ -2,6 +2,7 @@
 #include "main_window.h"
 
 #include "auth_dialog.h"
+#include "cert_dialog.h"
 #include "find_bar.h"
 #include "tab_tree_model.h"
 #include "tab_tree_view.h"
@@ -1791,6 +1792,34 @@ void main_window::open_node(node *n) {
 			*user     = dlg.user();
 			*password = dlg.password();
 			return true;
+		});
+
+		// The proxy asking, in words that say it is the proxy. Same dialog,
+		// different framing -- see auth_dialog::asker for why the distinction
+		// is the whole point rather than a nicety.
+		view->set_proxy_authenticator([this](const QString &proxy_host,
+		                                      const QString &realm,
+		                                      QString *user, QString *password) {
+			// Encryption is unknown here and assumed absent, which is the safe
+			// direction: proxy credentials on a plain CONNECT are readable, and
+			// a warning shown when it was not needed costs a sentence, while
+			// one withheld when it was needed costs the password.
+			auth_dialog dlg(proxy_host, realm, false, this,
+			                 auth_dialog::asker::proxy);
+			if (dlg.exec() != QDialog::Accepted)
+				return false;
+			*user     = dlg.user();
+			*password = dlg.password();
+			return true;
+		});
+
+		// Which certificate identifies you to this site, if any.
+		view->set_certificate_chooser(
+		  [this](const QUrl &url,
+		          const QList<web_view_backend::certificate_offer> &offered) {
+			cert_dialog dlg(url.host(), offered, this);
+			dlg.exec();
+			return dlg.chosen();
 		});
 
 		// A locked tab keeps its page: the navigation opens a sub-tab below it

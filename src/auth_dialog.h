@@ -20,11 +20,19 @@ class QLineEdit;
 class auth_dialog : public QDialog {
 	Q_OBJECT
 public:
-	// `realm` is the site's own label for what is being protected, and is
+	// Who is asking. **The two are not interchangeable and the dialog must not
+	// let them look it.** A proxy prompt and a site prompt are the same box
+	// with the same fields, and the credentials belong to different parties:
+	// typing the site's password into the proxy's prompt hands it to the
+	// network operator, who was never entitled to it. Naming the asker is the
+	// only thing standing between those two.
+	enum class asker { site, proxy };
+
+	// `realm` is the asker's own label for what is being protected, and is
 	// often empty or machine-generated. Shown when it says something, dropped
 	// when it does not, rather than printing an empty pair of quotes.
 	auth_dialog(const QString &host, const QString &realm, bool encrypted,
-	             QWidget *parent = nullptr);
+	             QWidget *parent = nullptr, asker who = asker::site);
 
 	QString user() const;
 	QString password() const;

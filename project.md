@@ -6613,8 +6613,12 @@ one chosen.
   three times. What CMake still holds alone is the APK, through `qt-cmake` and
   androiddeployqt. `hydra.pro` carries an Android block that has never been run
   against a kit and says so.
-- **`proxyAuthenticationRequired` and `selectClientCertificate`** are unhandled,
-  the same silent dead end HTTP authentication was.
+- **The `src/` source list is duplicated, and only one copy globs.** `hydra.pro`
+  takes `$$files(src/*.cpp)`; `CMakeLists.txt` names every file. Adding
+  `cert_dialog.cpp` therefore built under qmake and failed to link under CMake,
+  on an undefined vtable -- which is at least loud, but it is a trap the next
+  new file walks into as well. The tests' CMake globs, so only the app's list
+  is hand-written.
 - **dramafren has not been measured** since the page-row prompt fix; every one
   of five runs timed out at the seven-minute budget, and it wants about 75
   minutes at the fifteen-minute budget on a quiet machine.
@@ -6748,9 +6752,47 @@ halves: that the specific message is shown, and that an ordinary failure after
 it still speaks, because a flag that sticks would silence every failure for the
 life of the window.
 
-Still unhandled, and each is a silent dead end rather than a wrong answer:
-`authenticationRequired` (a site wanting HTTP authentication cannot be used at
-all), `proxyAuthenticationRequired`, and `selectClientCertificate`.
+**All four are handled now**, each in its own commit and each recorded in the
+sections above. The line that used to sit here listing `authenticationRequired`,
+`proxyAuthenticationRequired` and `selectClientCertificate` as open outlived the
+first of those by a commit and the other two by a session -- the same staleness
+this file warns about at the top, in the file that warns about it.
+
+### The proxy asking, and a site asking who you are (done)
+
+The last two page-level prompts. Both were silent dead ends of the same shape as
+HTTP authentication, and each turned out to be a different *kind* of question
+underneath, which is why neither could reuse the existing handler as it stood.
+
+**A proxy prompt is not a site prompt, and the box is identical.** Same title,
+same two fields, same shape -- and the credentials belong to different parties.
+Answering the proxy's prompt with the site's password hands that password to
+whoever runs the network, and nothing in the dialog said which was asking. So
+the seam grew a *separate* `proxy_authenticator` rather than reusing
+`authenticator`: one callback cannot say two things, and the distinction is the
+entire safety property. The dialog names the proxy, says in a line of its own
+that this is the network rather than the site, and its title says so before the
+window is read.
+
+**A client certificate is an act of identification**, which makes the safe
+answer the one that has to be reachable. Sending one tells the site who you are,
+by name, before anything has been typed -- so nothing is selected when the
+dialog opens, `Send` is disabled until something is, and `Don't send` is the
+default button and the escape key's answer. That also matches what happened
+before: Qt aborts a selection nothing is connected to, so "none" was already the
+outcome. The change is that none is now a decision somebody made.
+
+The certificates are flattened to plain strings (`certificate_offer`) before
+they cross the seam. A chooser taking a `QSslCertificate` would put Qt
+Networking's spelling of a certificate into every backend that ever implements
+this, which is exactly what §19.2 exists to prevent.
+
+**Photographing them found what the assertions could not**, for the second time
+this session. Thirteen checks passed against a certificate list whose issuer and
+expiry ran off the right edge behind a horizontal scrollbar -- hiding the two
+facts the row exists to show, on the dialog where the whole question is whether
+those facts are acceptable. The list wraps now. The assertion suite reads the
+widget tree and cannot see a clipped word.
 
 ### A link that opened nothing
 
