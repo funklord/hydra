@@ -9,6 +9,10 @@
 .fmake/
 *.o
 *.obj
+# Core dumps land beside whatever crashed, and a driver that segfaults leaves
+# one in tests/. They are build wreckage, not evidence worth keeping.
+core
+core.*
 *.moc
 moc_*.cpp
 qrc_*.cpp

@@ -6474,6 +6474,55 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### Where this stands, and what is deliberately unfinished
+
+Written down because the reasoning is expensive to rebuild and cheap to record.
+
+**The GUI pass** closed, in order: two empty states that could not say which
+kind of empty they were, navigation buttons that offered what they could not do,
+a window title that never named the page, no sign that a page was loading, no
+way to stop one, no find-in-page, no zoom, no link target on hover, a tab whose
+renderer died in silence, a link that opened nothing, a certificate failure that
+read as a site being down, and a site asking for a password that nobody
+answered. Each is a section above with what it cost and why the answer is the
+one chosen.
+
+**Open, in rough order of how much they matter:**
+
+- **`tests/Makefile` still builds a static archive**, which is now against a
+  written rule in `build-and-commit.md` -- one shared `libhydra_app.a` means any
+  source change relinks all seventy binaries, measured at a flat 19s whether the
+  change reaches three files or eight. The replacement is per-binary object sets
+  derived from the include graph the `.d` files already record. The archive does
+  at least carry its symbol index (`ar rcs`).
+- **The build system is measured but not decided.** Three ways to build the same
+  70 binaries, timed on an idle machine, all at `-Os`: qmake+Make 293s, CMake
+  328s, fmake 374s -- with fmake compiling 181 objects to CMake's 432 and
+  producing the smallest binary, and winning every incremental case by two to
+  three times. What CMake still holds alone is the APK, through `qt-cmake` and
+  androiddeployqt. `hydra.pro` carries an Android block that has never been run
+  against a kit and says so.
+- **`proxyAuthenticationRequired` and `selectClientCertificate`** are unhandled,
+  the same silent dead end HTTP authentication was.
+- **dramafren has not been measured** since the page-row prompt fix; every one
+  of five runs timed out at the seven-minute budget, and it wants about 75
+  minutes at the fifteen-minute budget on a quiet machine.
+- **`try_evolve_confirm`'s real trigger** -- accepting an AI proposal -- is still
+  unexercised, because the model returned no proposals within 150s.
+
+**Two things that trip up every session here** and are worth reading before
+touching either:
+
+- The style gate counts brace depth, so a continuation line inside an
+  initialiser or an argument list needs its **structural tabs first, then
+  alignment spaces**. Space-only alignment reads correctly and fails the gate.
+  Run `make style` *before* `git commit`, not in the same command, where a red
+  result scrolls past.
+- Timings taken on this machine are worth nothing unless it is idle. The same
+  qmake build measured 142s standalone, 347s under load and 82s idle, and a
+  four-fold difference was briefly attributed to a build-system property it had
+  nothing to do with.
+
 ### One driver that had become three, and the bug that fell out
 
 `try_navigate` started at fifteen checks about the toolbar and reached
