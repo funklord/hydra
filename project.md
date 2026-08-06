@@ -6474,6 +6474,58 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### One driver that had become three, and the bug that fell out
+
+`try_navigate` started at fifteen checks about the toolbar and reached
+sixty-nine across three subjects. A failure named the driver and meant any of
+moving between pages, what the window says about the page, or the tools that
+act on one. Split by what each is *about*:
+
+    try_navigate    the toolbar and history, Stop, new-window requests
+    try_chrome      what the window asserts: title, failures, link target,
+                    what survives a tab switch, what is left when a page goes
+    try_pagetools   find and zoom -- tools acting on the page in front of you
+
+`shell_fixture.h` holds what all three need: two local pages, a tree holding
+both, the window around them, and the widgets a driver reaches for -- all found
+the way a person finds them, by placeholder, tooltip or object name. Splitting
+cost a preamble rather than three copies of the setup.
+
+**The split immediately found a real defect.** `update_address` echoed the url
+into the *status bar* on every navigation. That put the same string on screen
+twice a few pixels apart, and worse, made every navigation wipe whatever the
+status bar was saying -- the load failure, the refused certificate, the blocked
+popup and the dead-renderer notice are all said there, and any of them could be
+erased by the next `url_changed`. It had been that way long before those
+messages existed, which is why nobody had noticed: there was nothing to erase.
+The address bar says where you are; the status bar says what is happening.
+
+**And two of my own mistakes, both worth keeping.**
+
+The certificate suppression was a boolean flag cleared when the next load
+reported progress. A load that fails outright can reach `loadFinished` without
+ever reporting any, so the flag survived to silence the *next* failure instead
+of its own. It is keyed on the url now rather than held as a flag: an unrelated
+failure has a different host and speaks for itself, and nothing needs clearing.
+Worth recording that the failing test which prompted this had its own bug --
+see below -- so the fragility was found by reasoning rather than by the failure
+that was blamed on it. The design is still better for needing no lifetime.
+
+`open_tab` returned as soon as the address bar updated, which is `url_changed`
+-- when a navigation *commits*, not when it finishes. Sections then ran against
+a load still in flight: the progress bar was up, so "no bar once the page has
+arrived" failed, and a second navigation started on top of the first swallowed
+its own failure message. It waits for the bar to go now, which is what a person
+waits for.
+
+**A predicate that matched the thing it was waiting to replace.** The wait for
+"could not" was satisfied by the certificate message -- *could not be trusted* --
+so the loop fell straight through and reported the application broken when the
+test was. Two runs of instrumentation printed nothing at all before that was
+visible, because the edits kept landing in the first of two identical loops.
+The lesson is the cheap one: wait for the exact sentence, not a fragment that
+another message also contains.
+
 ### A certificate failure that looked like a site being down
 
 Four page-level prompts had no handler at all: certificate errors,

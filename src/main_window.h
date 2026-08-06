@@ -210,9 +210,12 @@ private:
 	// One call, so the sixth is right by construction.
 	void page_changed();
 	bool m_link_shown = false;
-	// A certificate refusal fails the load too, so the generic failure message
-	// arrives second and would replace the specific one with a vaguer one.
-	bool m_cert_reported = false;
+	// Which url a certificate was refused for, so the generic failure message
+	// that follows can be suppressed *for that url only*. Held as identity
+	// rather than as a flag: a flag needs clearing, every event available to
+	// clear it can fail to fire on a failing load, and it then silences the
+	// next failure instead of its own.
+	QUrl m_cert_url;
 	// While a load runs, the Reload button is a Stop button.
 	void set_loading(bool loading);
 	bool m_loading = false;

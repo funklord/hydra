@@ -1976,7 +1976,7 @@ void main_window::open_find() {
 void main_window::report_certificate_rejected(const QUrl &url,
                                                const QString &reason) {
 	const QString host = url.host();
-	m_cert_reported = true;
+	m_cert_url = url;
 	m_status->showMessage(
 	  QString("%1 was not loaded: its certificate could not be trusted (%2).")
 	      .arg(host.isEmpty() ? QStringLiteral("That site") : host,
@@ -2096,10 +2096,8 @@ void main_window::set_loading(bool loading) {
 void main_window::on_load_progress(int percent) {
 	// Something is loading, so whatever the status bar was saying about the
 	// last page -- a crash notice, in particular -- has been acted on.
-	if (!m_loading) {
+	if (!m_loading)
 		m_status->clearMessage();
-		m_cert_reported = false;
-	}
 	set_loading(true);
 	m_progress->setValue(percent);
 	if (!m_progress->isVisible())
@@ -2116,14 +2114,20 @@ void main_window::on_load_finished(bool ok) {
 	set_loading(false);
 	m_progress->hide();
 	m_progress->setValue(0);
-	if (ok)
+	if (ok) {
+		m_cert_url.clear();
 		return;
-	// **The specific answer wins.** A refused certificate fails the load, so
-	// this arrives immediately afterwards; replacing "its certificate could not
-	// be trusted" with "could not be loaded" would lose the only part that told
-	// somebody what to do differently.
-	if (m_cert_reported) {
-		m_cert_reported = false;
+	}
+	// **The specific answer wins, for the page it was about.** A refused
+	// certificate fails the load, so this arrives immediately afterwards, and
+	// replacing "its certificate could not be trusted" with "could not be
+	// loaded" would lose the only part that said what to do differently.
+	// Matched on the host rather than remembered as a flag: an unrelated
+	// failure later has a different host and speaks for itself.
+	web_view_backend *failed = current_view();
+	if (!m_cert_url.isEmpty() && failed &&
+	     failed->url().host() == m_cert_url.host()) {
+		m_cert_url.clear();
 		return;
 	}
 	web_view_backend *v = current_view();
@@ -2960,10 +2964,15 @@ void main_window::flush_tree() {
 		m_model->save(m_tree_path);
 }
 
+// **The address bar shows the address; the status bar does not repeat it.**
+// This echoed the url into the status bar on every navigation, which put the
+// same string on screen twice a few pixels apart -- and, worse, made every
+// navigation wipe whatever the status bar was saying. A load failure, a
+// refused certificate, a blocked popup and a dead renderer all say their piece
+// there, and all of them could be erased by the next url_changed. The status
+// bar is for what is *happening*; the address bar is for where you are.
 void main_window::update_address(const QString &url) {
 	m_address->setText(url);
-	if (m_status)
-		m_status->showMessage(url.isEmpty() ? QStringLiteral("Ready") : url);
 }
 
 void main_window::apply_policy(web_view_backend *view, const QString &host) {
