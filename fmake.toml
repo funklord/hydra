@@ -1,0 +1,24 @@
+# What fmake cannot work out about this tree.
+#
+# Everything else it does: every Q_OBJECT header, the moc runs, the four
+# android_* sources excluded by name, and a link set closed over symbols. The
+# six facts it has to be told are annotations in the sources themselves --
+# `@target` in main.cpp and one `@pkg_optional` beside each optional
+# dependency's include. This file holds the one fact that belongs to no single
+# source file.
+#
+# **Build directories contain generated C++.** `build/` and `build-android/`
+# hold the moc and qrc output qmake wrote, `tests/build-make/` the test tree's.
+# Left alone, fmake reads them as sources: it started compiling
+# `build-android/moc_main_window.cpp` -- generated for arm64 -- as an x86-64
+# translation unit, 196 of them against the 116 that are real, and every symbol
+# in them a second definition of something already compiled from `src/`.
+#
+# The same directories are in `.gitignore`, which is where a human would look
+# to learn they are not source; fmake does not read it, so the list is said
+# twice. That is a small duplication and the alternative is worse.
+#
+# `third_party/` is the vendored yt-dlp, which is Python.
+[project]
+exclude = ["build/**", "build-android/**", "build-qmake/**",
+            "tests/build-make/**", "third_party/**", "attic/**"]

@@ -11,12 +11,21 @@
 # each live driver links Qt WebEngine -- that has taken this machine's desktop
 # session down twice.
 #
-# **One archive, not one source list per suite.** The CMakeLists names the
-# sources each suite needs, thirty-eight times, and compiles them again for
-# every target that mentions them. This builds the app's sources once into
-# `libhydra_app.a` and lets the linker decide: a static archive contributes only
-# the members that resolve something, so a suite still links only what it
-# reaches. The bookkeeping disappears and so do the duplicate compiles.
+# **Per-binary link sets, and no archive.** This used to build the app's
+# sources into one `libhydra_app.a` and link all seventy-odd binaries against
+# it, on the reasoning that an archive contributes only the members that
+# resolve something -- true, and it still meant rebuilding the archive whenever
+# any input changed and relinking everything that used it, a flat 19s whether
+# the change reached three files or eight. `build-and-commit.md` has a rule
+# against exactly that.
+#
+# The archive was standing in for a computation: which objects does this binary
+# actually need. `tools/objsets.py` asks fmake to perform it -- compile, read
+# the symbol tables, close transitively over undefined symbols, which is what
+# the linker does when picking archive members -- and writes the answer to
+# `objsets.mk`. Each binary now links its own closure and relinks only when
+# something in it changed. It also stops linking the test-side moc into all of
+# them: two programs need it.
 
 BUILD_DIR ?= build-make
 SRC        = ../src
@@ -110,7 +119,32 @@ TMOC_HDRS := $(shell grep -l Q_OBJECT *.h live/*.h 2>/dev/null)
 TMOC_SRCS := $(patsubst %.h,$(BUILD_DIR)/tmoc/moc_%.cpp,$(notdir $(TMOC_HDRS)))
 TMOC_OBJS := $(patsubst %.cpp,%.o,$(TMOC_SRCS))
 
-ARCHIVE = $(BUILD_DIR)/libhydra_app.a
+# --- the link sets ---------------------------------------------------------
+#
+# Generated, and committed, so an ordinary build needs `make` and nothing else.
+# fmake is needed only to regenerate them, which is `make -C tests objsets`.
+include objsets.mk
+
+# **The guard, and it is the point of the file carrying its own source list.**
+# A generated link set that describes a tree which has moved on does not fail
+# where the mistake is: it fails as an undefined symbol while linking a binary
+# nobody touched, or -- worse -- links successfully against a stale set and
+# leaves a suite testing code that is no longer reached. So the comparison is
+# made on every build, against the same glob the rules below use, and a
+# mismatch stops the build with the command that fixes it.
+#
+# Sorted on both sides: the file is written in sorted order and `$(wildcard)`
+# is not guaranteed to be, so comparing them raw reports a difference that is
+# only an ordering.
+OBJSETS_FOUND := $(sort $(wildcard test_*.cpp) $(patsubst %,live/%,$(notdir $(wildcard live/try_*.cpp))))
+OBJSETS_HAVE  := $(sort $(patsubst tests/%,%,$(OBJSETS_SOURCES)))
+
+ifneq ($(OBJSETS_FOUND),$(OBJSETS_HAVE))
+$(warning objsets.mk was generated from a different set of sources)
+$(warning   only in the tree: $(filter-out $(OBJSETS_HAVE),$(OBJSETS_FOUND)))
+$(warning   only in the file:  $(filter-out $(OBJSETS_FOUND),$(OBJSETS_HAVE)))
+$(error run `make -C tests objsets` to regenerate it)
+endif
 
 # --- the suites ------------------------------------------------------------
 OFFLINE_SRCS := $(wildcard test_*.cpp)
@@ -132,7 +166,7 @@ NEEDS_ENGINE := $(shell grep -lE 'main_window\.h|qtwebengine|QWebEngine|web_view
 ENGINE_BINS  := $(LIVE) $(patsubst %.cpp,$(BUILD_DIR)/%,$(NEEDS_ENGINE))
 $(ENGINE_BINS): LDLIBS += $(ENGINE_LIBS)
 
-.PHONY: all offline live clean help
+.PHONY: all offline live clean help objsets
 all: offline live
 offline: $(OFFLINE)
 live: $(LIVE)
@@ -159,18 +193,18 @@ $(BUILD_DIR)/moc/%.o: $(BUILD_DIR)/moc/%.cpp
 $(BUILD_DIR)/app/%.o: $(SRC)/%.cpp $(MOC_CPP_SRCS) | $(BUILD_DIR)/app
 	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
-$(ARCHIVE): $(APP_OBJS) $(MOC_OBJS)
-	@$(AR) rcs $@ $^
-
 $(BUILD_DIR)/%.o: %.cpp $(TMOC_INC) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 $(BUILD_DIR)/%.o: live/%.cpp $(TMOC_INC) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
-# A test's own moc, for the fakes that carry Q_OBJECT in their headers.
-$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $(TMOC_OBJS) $(ARCHIVE)
-	$(CXX) $(LDFLAGS) $< $(TMOC_OBJS) $(ARCHIVE) $(LDLIBS) -o $@
+# **Secondary expansion**, because the object set depends on which program is
+# being linked and `$*` is not available in a prerequisite list on the first
+# pass. `$$(OBJS_$$*)` is evaluated on the second, by which point it is.
+.SECONDEXPANSION:
+$(BUILD_DIR)/%: $(BUILD_DIR)/%.o $$(OBJS_$$*)
+	$(CXX) $(LDFLAGS) $< $(OBJS_$*) $(LDLIBS) -o $@
 
 $(BUILD_DIR) $(BUILD_DIR)/app $(BUILD_DIR)/moc $(BUILD_DIR)/tmoc:
 	@mkdir -p $@
@@ -193,13 +227,17 @@ $(BUILD_DIR) $(BUILD_DIR)/app $(BUILD_DIR)/moc $(BUILD_DIR)/tmoc:
 # Named targets only: no wildcard sweep, no `rm -rf` of a directory. A clean
 # target is the one thing everybody runs without reading.
 clean:
-	@rm -f $(APP_OBJS) $(MOC_OBJS) $(MOC_SRCS) $(MOC_CPP_SRCS) $(ARCHIVE) \
+	@rm -f $(APP_OBJS) $(MOC_OBJS) $(MOC_SRCS) $(MOC_CPP_SRCS) \
 	       $(TMOC_INC) $(TMOC_SRCS) $(TMOC_OBJS) \
 	       $(OFFLINE) $(LIVE) \
 	       $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(OFFLINE_SRCS)) \
 	       $(patsubst live/%.cpp,$(BUILD_DIR)/%.o,$(LIVE_SRCS))
 	@find $(BUILD_DIR) -name '*.d' -delete 2>/dev/null || true
-	@echo "removed the test objects, the archive and $(words $(OFFLINE) $(LIVE)) binaries"
+	@echo "removed the test objects and $(words $(OFFLINE) $(LIVE)) binaries"
+
+# Recompute the link sets. Needs fmake; nothing else here does.
+objsets:
+	@python3 ../tools/objsets.py
 
 help:
 	@echo "make -C tests [offline|live|all|clean] -j2"

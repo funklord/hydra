@@ -6585,6 +6585,61 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### The test tree's archive, replaced by fmake's symbol closure
+
+`tests/Makefile` built one `libhydra_app.a` and linked all seventy-odd binaries
+against it. The reasoning was sound as far as it went -- an archive contributes
+only the members that resolve something, so each suite still linked only what
+it reached, and thirty-eight source lists never had to be written. What it cost
+is what `build-and-commit.md` says an archive costs: the archive is rebuilt when
+any input changes, and everything using it relinks, a flat 19s whether the
+change reached three files or eight.
+
+**The archive was standing in for a computation**, and fmake performs exactly
+that one: compile, read the symbol tables with `nm`, close transitively over
+undefined symbols. That is the same thing the linker does when deciding which
+archive members to pull, so the answer is exact rather than an approximation
+from the include graph -- which is what the earlier plan recorded here was
+going to use, and would have been wrong wherever a header is implemented in a
+file it does not name.
+
+`tools/objsets.py` asks fmake once, rewrites the answer into the object names
+`tests/Makefile` uses, and writes `tests/objsets.mk`: 73 programs, 3655
+objects, 50 apiece. It is committed, so an ordinary build needs `make` and
+nothing else; fmake is needed only to regenerate it.
+
+**Measured, from an up-to-date tree each time**, counting offline suites that
+relink after touching one file:
+
+| touched | relinks | was |
+|---|---|---|
+| `src/tree_diff.cpp` | 3 of 38 | 38 |
+| `src/policy.cpp` | 5 of 38 | 38 |
+| `src/main_window.cpp` | **0 of 38** | 38 |
+
+The zero is the one worth reading twice: no offline suite links the shell at
+all -- only the live drivers build a real window -- and the archive was
+relinking all thirty-eight of them for it anyway. The first attempt at this
+measurement reported 7 and 7, because the second `make -n` was still counting
+the first touch's pending relinks; a measurement taken without returning the
+tree to a known state measures the previous measurement.
+
+**It also stopped linking the test-side moc into everything.** The old rule put
+`$(TMOC_OBJS)` on every link line; the closure says two programs need it.
+
+**The generated file carries the source list it was generated from**, and the
+Makefile compares that against the same glob its rules use, refusing to build
+on a mismatch and naming the command that fixes it. A stale link set is not a
+loud failure by nature: it either fails as an undefined symbol while linking a
+binary nobody touched, or links against a set that no longer describes the
+tree.
+
+**The archive was also confusing the other build system.** fmake at the repo
+root refused to decide anything, reporting `main_window::open_url` as defined
+by both `src/main_window.cpp` and `tests/build-make/libhydra_app.a` -- a build
+artifact of one system read as source by another. That went away with the
+archive.
+
 ### The build system, decided: qmake and fmake, no CMake
 
 Three ways to build the same tree had been measured and none chosen. The
@@ -6647,12 +6702,6 @@ one chosen.
 
 **Open, in rough order of how much they matter:**
 
-- **`tests/Makefile` still builds a static archive**, which is now against a
-  written rule in `build-and-commit.md` -- one shared `libhydra_app.a` means any
-  source change relinks all seventy binaries, measured at a flat 19s whether the
-  change reaches three files or eight. The replacement is per-binary object sets
-  derived from the include graph the `.d` files already record. The archive does
-  at least carry its symbol index (`ar rcs`).
 - **The `src/` source list is no longer duplicated** -- the hand-written half
   went with CMake. Both remaining builds glob.
 - **dramafren has not been measured** since the page-row prompt fix; every one
