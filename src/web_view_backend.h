@@ -67,6 +67,29 @@ public:
 	                                          QString *user, QString *password)>;
 	virtual void set_authenticator(authenticator fn) { Q_UNUSED(fn) }
 
+	// Whether this view may go somewhere. **A decider and not a signal**, for
+	// the reason the two above are: the engine asks while it is deciding, and
+	// an answer that arrives afterwards answers a navigation that has already
+	// been committed or dropped.
+	//
+	// Returning false leaves the view where it is. That is what a locked tab
+	// needs (§5.5) -- the shell opens a sub-tab for the refused url and the
+	// pinned page never moves -- but the seam does not know about locking, and
+	// should not: it asks, the shell decides.
+	//
+	// `user_initiated` separates a click or a typed address from a redirect or
+	// a script, because those deserve different answers, exactly as they do for
+	// a window request. `in_main_frame` is false for an iframe navigating
+	// itself, which is not the page going anywhere.
+	//
+	// A backend that cannot ask this simply never calls it and navigates as it
+	// always did; the default here is no decider at all. Android's WebView has
+	// the hook (`shouldOverrideUrlLoading`) and is not wired to it yet.
+	using navigation_decider = std::function<bool(const QUrl &url,
+	                                               bool in_main_frame,
+	                                               bool user_initiated)>;
+	virtual void set_navigation_decider(navigation_decider fn) { Q_UNUSED(fn) }
+
 	// Reflow zoom — the page re-lays out at the new scale. Kiosk mode's
 	// reliable scaling path (architecture doc §8.1); every engine has this.
 	virtual void set_zoom_factor(double factor) = 0;

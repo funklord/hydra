@@ -270,6 +270,15 @@ int apply(node *original, const QList<tree_change> &changes) {
 		switch (c.kind) {
 			case change_kind::reparented:
 			case change_kind::reordered: {
+				// A locked node does not move, and the model is not the only
+				// thing that has to know it (§5.5). The reorganizer proposes
+				// from a serialized tree, so a lock has to be enforced where
+				// the move is *applied* rather than trusted to survive a round
+				// trip through a model's answer -- this is the same shape as
+				// the subtree check below, which is also a refusal rather than
+				// an instruction not to ask.
+				if (n->locked)
+					break;
 				node *parent = by_id.value(c.new_parent_id, original);
 				if (!parent || parent == n)
 					break;

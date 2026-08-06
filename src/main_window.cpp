@@ -583,6 +583,12 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// survived only until the next launch would be worse than a refusal.
 	connect(m_model, &tab_tree_model::structure_changed, this,
 	        &main_window::save_tree_soon);
+	// Locking the tab that is showing changes what Back and Forward may do, and
+	// the toolbar has no other reason to look again. Cheap enough to run for
+	// every structural change rather than adding a signal that means "a lock
+	// moved": it reads two booleans off the current view.
+	connect(m_model, &tab_tree_model::structure_changed, this,
+	        &main_window::update_navigation);
 	// A node about to be deleted may have a live view, and the model knows
 	// nothing about views. Without this the view survived its node: it stayed in
 	// the stack showing a page for a tab that no longer existed, stayed in the
@@ -598,6 +604,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// suspending needs the state store.
 	connect(m_tree, &tab_tree_view::open_requested, this, &main_window::open_node);
 	connect(m_tree, &tab_tree_view::suspend_requested, this, &main_window::suspend_node);
+	connect(m_tree, &tab_tree_view::lock_requested, this, &main_window::toggle_lock);
 	connect(m_tree, &tab_tree_view::open_externally_requested, this,
 	        [this](node *n) { if (n) open_url_externally(QUrl(n->url)); });
 	m_tree->expandAll();
@@ -1786,6 +1793,15 @@ void main_window::open_node(node *n) {
 			return true;
 		});
 
+		// A locked tab keeps its page: the navigation opens a sub-tab below it
+		// instead (§5.5). Answered here rather than in the backend because the
+		// lock is a property of the *node*, and the seam deliberately knows
+		// nothing about the tree.
+		view->set_navigation_decider([this, view](const QUrl &u, bool main_frame,
+		                                           bool user_initiated) {
+			return allow_navigation(view, u, main_frame, user_initiated);
+		});
+
 
 		if (n->type == node_type::suspended_tab && m_state && m_state->has_state(n->id)) {
 			// Restore the session blob this node was suspended into.
@@ -1852,8 +1868,21 @@ void main_window::update_navigation() {
 	if (!m_back_action || !m_stack)
 		return;
 	web_view_backend *v = current_view();
-	m_back_action->setEnabled(v && v->can_go_back());
-	m_fwd_action->setEnabled(v && v->can_go_forward());
+
+	// A locked tab does not walk out of its page backwards either (§5.5).
+	// Greying the buttons is the honest way to say so: the alternative is a
+	// button that looks available and refuses, which is the shape this window
+	// spent a whole pass removing. Reload stays on -- reloading a pinned page
+	// is still the same page.
+	bool pinned = false;
+	if (v) {
+		const QString id = m_views_by_id.key(v);
+		if (node *n = id.isEmpty() ? nullptr : m_model->node_by_id(id))
+			pinned = n->locked;
+	}
+
+	m_back_action->setEnabled(v && !pinned && v->can_go_back());
+	m_fwd_action->setEnabled(v && !pinned && v->can_go_forward());
 	m_reload_action->setEnabled(v != nullptr);
 }
 
@@ -1998,6 +2027,122 @@ void main_window::report_certificate_rejected(const QUrl &url,
 	            reason.isEmpty() ? QStringLiteral("no reason given") : reason));
 }
 
+// Whether `view` may go to `url`, and what happens instead when it may not.
+//
+// **Only a locked tab ever says no**, so the ordinary path through here is one
+// hash lookup and a false. The engine calls this while it is deciding, so it
+// has to be cheap and it has to answer synchronously.
+//
+// What counts as leaving the page, and why each case is what it is:
+//
+// - **A subframe** navigating is not the page going anywhere. An ad slot or an
+//   embedded player changing its own url would otherwise spawn a sub-tab for
+//   something the user never clicked.
+// - **The same document** -- a fragment jump, or the same address again -- is
+//   where the tab already is. Pinning would make an in-page anchor unusable and
+//   a reload spawn a duplicate.
+// - **A person** clicking, typing or submitting gets a sub-tab, which is the
+//   feature.
+// - **A page** redirecting itself or navigating by script gets refused and
+//   said so. It is not the user browsing, and a page that could spawn tabs by
+//   scripting its own location would turn one pinned tab into a stream of
+//   them. This is the same line the popup rule already draws.
+//
+// Back and forward never arrive here for a locked tab: `update_navigation`
+// greys them, because a pinned tab that could still be walked backwards out of
+// its page is not pinned.
+bool main_window::allow_navigation(web_view_backend *view, const QUrl &url,
+                                    bool in_main_frame, bool user_initiated) {
+	if (!view || !in_main_frame || !url.isValid())
+		return true;
+
+	const QString id = m_views_by_id.key(view);
+	node *n = id.isEmpty() ? nullptr : m_model->node_by_id(id);
+	if (!n || !n->locked)
+		return true;
+
+	// **Compared against the node's url, not the view's.** The node's url is
+	// the pin -- written when the lock was applied -- and the view's is
+	// unreliable exactly when it matters: opening a locked tab loads its page
+	// through this same check, and at that moment the view is still empty, so
+	// comparing against it would make a locked tab spawn a sub-tab of itself
+	// instead of loading.
+	//
+	// The fragment is dropped from both: an anchor within the pinned document
+	// is not leaving it, and pinning those would make an in-page link unusable.
+	QUrl pinned(n->url);
+	QUrl there = url;
+	pinned.setFragment(QString());
+	there.setFragment(QString());
+	if (pinned == there)
+		return true;
+
+	if (!user_initiated) {
+		m_status->showMessage(
+		  QString("%1 is locked, so the page could not send it to %2.")
+		      .arg(n->title.isEmpty() ? QStringLiteral("This tab") : n->title,
+		            url.host().isEmpty() ? url.toString() : url.host()), 6000);
+		return false;
+	}
+
+	// The sub-tab, and then the browsing continues in it -- but **not from
+	// inside this call**. This runs while the engine is deciding a navigation,
+	// and building a second view underneath it there means creating a page,
+	// wiring a profile and starting a load re-entrantly. The answer the engine
+	// needs is `false`, now; the tab can be a moment later.
+	//
+	// The parent is carried by **id rather than by pointer** for the reason
+	// everything else in this window is: a node can be deleted between the
+	// queueing and the running, and an id that no longer resolves is a lookup
+	// that fails instead of a pointer that crashes.
+	const QString parent_id = n->id;
+	const QUrl target = url;
+	QMetaObject::invokeMethod(this, [this, parent_id, target] {
+		if (node *p = m_model->node_by_id(parent_id))
+			open_child_tab(p, target);
+	}, Qt::QueuedConnection);
+
+	m_status->showMessage(
+	  QString("%1 is locked, so %2 opens below it.")
+	      .arg(n->title.isEmpty() ? QStringLiteral("That tab") : n->title,
+	            url.host().isEmpty() ? url.toString() : url.host()), 6000);
+	return false;
+}
+
+// Pin or unpin a node, with the address it is pinned to.
+//
+// The shell does this rather than the tree because **a node's url does not
+// follow the page**: only the title does, so a tab opened at one address and
+// browsed to another still records the first, and the live view is the only
+// thing that knows where it actually is. Locking means "keep this page", so
+// the page showing is what gets written.
+void main_window::toggle_lock(node *n) {
+	if (!n)
+		return;
+	QString pin;
+	if (web_view_backend *v = m_views_by_id.value(n->id, nullptr))
+		if (!v->url().isEmpty())
+			pin = v->url().toString();
+	if (m_model->set_locked(n, !n->locked, pin))
+		update_navigation();
+}
+
+// A child tab under `parent`, opened and switched to. The shared half of "a
+// new tab came from this one", which a locked tab's navigation and a page's
+// window request both mean.
+node *main_window::open_child_tab(node *parent, const QUrl &url) {
+	if (!parent || !url.isValid())
+		return nullptr;
+	node *made = m_model->add_tab(parent,
+	                               url.host().isEmpty() ? url.toString() : url.host(),
+	                               url.toString());
+	if (!made)
+		return nullptr;
+	save_tree_soon();
+	open_node(made);
+	return made;
+}
+
 node *main_window::open_new_window(const QUrl &url, bool user_initiated) {
 	if (!url.isValid() || url.isEmpty())
 		return nullptr;
@@ -2015,11 +2160,18 @@ node *main_window::open_new_window(const QUrl &url, bool user_initiated) {
 
 	// Under the tab that asked, where the tree shows the relationship; at the
 	// root if the asking tab cannot be found, which beats dropping it.
+	//
+	// **This comment described the design and the code did something else** for
+	// as long as a tab could hold no children: the node went to `n->parent`, so
+	// a window opened from a link became a *sibling* of the page that opened it
+	// and the relationship the tree was supposed to show was not recorded
+	// anywhere. Sub-tabs (§5.5) lifted that restriction, and this is the line
+	// that had been waiting for it.
 	node *parent = nullptr;
 	if (from) {
 		const QString id = m_views_by_id.key(from);
 		if (node *n = id.isEmpty() ? nullptr : m_model->node_by_id(id))
-			parent = n->is_folder() ? n : n->parent;
+			parent = n;
 	}
 	node *made = m_model->add_tab(parent, url.host().isEmpty() ? url.toString()
 	                                                            : url.host(),

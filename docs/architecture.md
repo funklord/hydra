@@ -93,6 +93,7 @@ Node {
     created:   timestamp
     lastSeen:  timestamp     // last visited / focused
     tags:      [string]
+    locked:    bool          // pinned to its URL; navigating spawns a sub-tab (§5.5)
     policy:    PolicyOverrides?   // optional per-node rule overrides
     stateRef:  StateBlobId?       // present only for SuspendedTab
 }
@@ -161,6 +162,39 @@ The same proxy layer carries filtering, since `QSortFilterProxyModel` does both:
 ### 5.4 Session lifecycle
 
 Nodes move between types as a lifecycle: an UnopenedTab becomes an OpenTab when selected (a `QWebEngineView` is instantiated and attached), an OpenTab becomes a SuspendedTab under memory pressure or an idle timer (its state serialized to a blob, the view destroyed), and a SuspendedTab restores to OpenTab on demand (state blob rehydrated into a fresh view). The tree can therefore hold thousands of nodes while only a handful are live views at any moment. Persistence writes the canonical file on change (debounced) and the state blobs on suspend.
+
+### 5.5 Locked tabs and sub-tabs
+
+A tab can be **locked**, drawn with a lock in the tree. A locked tab keeps the page it is on: navigating away from it does not change that tab's URL. The navigation instead opens a **sub-tab** — a child node directly below the locked tab — and browsing continues there.
+
+The child is an ordinary tab. It is unlocked unless somebody locks it, so it changes URL freely and every further navigation stays inside it. **Locking does not inherit**: a locked parent produces children, not a chain of locked descendants. Locking a child in turn is allowed and does the same thing one level down, so depth is something the user builds deliberately rather than something the feature generates.
+
+**A lock also pins the node in the tree.** A locked node keeps its parent and its place among its siblings: it cannot be dragged elsewhere, cannot be reordered, and the AI reorganizer cannot move it either. This is the same idea as the URL half rather than a second feature — an anchor that drifts is not an anchor, and a tab pinned to its page while its row wanders the tree would only be half kept. The two halves are enforced in different places and both are needed: the model refuses the drag and the drop, and `tree_diff::apply` refuses the move, because a proposal is built from a serialized tree and cannot be trusted to have carried the flag.
+
+What the pin does *not* claim is a fixed row number. Inserting a sibling above a locked node still shifts it down, because refusing that would mean refusing other people's drops to protect one row's index. The guarantee is that the locked node is never the thing that moves.
+
+The point is to make an anchor cheap. A search-results page, a forum index, a documentation page being worked from — these are the pages that get lost by being navigated away from, and keeping one today means remembering to middle-click every link. The lock moves that decision from every click to once per tab, and does it without a second window: the tree already shows what came from what.
+
+This reuses the path that already exists for `newWindowRequested` (§6), which turns a page's own window request into a child tab. A locked tab makes ordinary navigation take that same path.
+
+**What it costs is an invariant.** The model currently refuses to parent a tab to a tab — `add_tab` re-parents to the nearest folder, on the stated grounds that "a tab holds no children", so "in here" has no meaning for a leaf. `struct node` has always carried a `children` list, so the shape is representable; what has to change is the rule, and with it the drop logic, the folder-only tests, and the depth bound (§4). Sub-tabs are the first feature that needs a leaf to be a parent, and lifting the invariant for them lifts it for everything.
+
+The flag is node metadata, so it travels the way every other field does: written to the canonical outline file (§4.4), keyed by id rather than by URL, and therefore unaffected by suspend and restore or by the AI reorganizer moving the node (§4.2).
+
+**Where the question is asked.** Navigation is refused *before* it happens, through a `navigation_decider` on the WebView seam — the same shape as the permission and authentication deciders, and for the same reason: the engine asks while it is deciding and an answer arriving later answers a navigation already committed. On the Qt backend that costs a `QWebEnginePage` subclass, since `acceptNavigationRequest` is a virtual rather than a signal. The alternative — watching `urlChanged` and sending the view back afterwards — loads the unwanted page, shows it, then bounces, and leaves a history entry for somewhere the tab was never meant to go. The seam knows nothing about locking: it asks, and the shell answers from the node.
+
+**What counts as leaving the page**, decided during implementation:
+
+- **A subframe navigating does not.** An ad slot or an embedded player changing its own URL is not the page going anywhere, and would otherwise spawn sub-tabs nobody clicked.
+- **The same document does not** — a fragment jump, or the same address again. Pinning those would make an in-page anchor unusable and a reload spawn a duplicate.
+- **A person does**: a clicked link, a typed address, a submitted form. Each one opens its own sub-tab, so several links off one anchor accumulate under it — which is the value of an anchor.
+- **A page does not get to.** A redirect or a script navigation is refused and said so in the status bar, rather than spawning. This is the line the popup rule already draws (§6), and it matters more here: a page that could spawn tabs by scripting its own location would turn one pinned tab into a stream of them.
+- **Back and forward are refused**, and the buttons are greyed while the current tab is locked. A pinned tab that could still be walked backwards out of its page is not pinned, and a button that looks available and refuses is the failure this window spent a pass removing.
+
+**Still open:**
+
+- **What happens when the reorganizer moves a *child* out from under its locked parent.** The lock is on the parent, so nothing refuses this. The tree then no longer records where the child came from, which is the property the feature exists to produce. Locking the child pins it, but that is the user noticing rather than the design answering.
+- **Android does not implement the decider.** Its WebView has the hook — `shouldOverrideUrlLoading`, already used to send non-page links elsewhere — so the port is small, but it is not done and a locked tab there navigates as it always did.
 
 ---
 

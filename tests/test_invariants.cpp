@@ -110,8 +110,16 @@ int main(int argc, char **argv) {
 		node *tab = root->children.first()->children.first();
 		make("under_a_tab", node_type::unopened_tab, tab);
 		const auto r = tree_invariants::check(root);
-		check(!r.ok && r.summary().contains("cannot express"),
-		      "a tab with children is caught, since the file cannot hold it");
+		// **This assertion was the opposite one**, and it was wrong on its own
+		// terms: it required a tab with children to be reported, "since the
+		// file cannot hold it". The file always could -- `write_node` recurses
+		// into any node's children and the reader nests by indentation without
+		// consulting the type -- so the rule was enforcing a model restriction
+		// while citing a format limit that did not exist. Sub-tabs (§5.5)
+		// removed the restriction, and a tab with a child below it is now the
+		// shape the feature produces rather than a violation.
+		check(r.ok,
+		      "a tab with children is well formed: that is what a sub-tab is");
 		delete root;
 	}
 	{

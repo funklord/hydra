@@ -31,6 +31,7 @@ public:
 		last_seen_role,
 		tree_order_role,
 		node_type_role,
+		locked_role,
 	};
 
 	explicit tab_tree_model(QObject *parent = nullptr);
@@ -129,6 +130,21 @@ public:
 	bool  set_page_title(node *n, const QString &title);
 	// A duplicate under the same parent, with an id of its own.
 	node *duplicate_node(node *n);
+
+	// Pin or unpin a node (architecture doc §5.5). Returns whether anything
+	// changed, for the same reason `set_page_title` does: the caller saves the
+	// tree on a change and should not write the file for a no-op.
+	//
+	// The lock is not copied by `duplicate_node` or by a Ctrl-drag. A copy is a
+	// new row the user just made, and starting it pinned would mean the gesture
+	// produced something they then have to unpin before it will move.
+	//
+	// `pin_url`, when locking and non-empty, is written to the node as the
+	// address it is pinned to. It has to be passed in because **a node's url
+	// does not follow the page** -- only its title does -- so a tab opened at
+	// one address and browsed to another still records the first, and pinning
+	// to that would pin to a page nobody is looking at.
+	bool set_locked(node *n, bool locked, const QString &pin_url = QString());
 
 	Qt::ItemFlags   flags(const QModelIndex &index) const override;
 	Qt::DropActions supportedDropActions() const override;

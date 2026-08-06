@@ -66,6 +66,11 @@ signals:
 	// default handler, and neither is a tree's business.
 	void open_externally_requested(node *n);
 	void suspend_requested(node *n);
+	// Pin or unpin, and it goes to the shell for one reason: a node's url does
+	// not follow the page -- only its title does -- so a tab opened at one
+	// address and browsed to another still records the first. Locking means
+	// "keep *this* page", and only the shell can see which page that is.
+	void lock_requested(node *n);
 
 protected:
 	// Where the file-manager gestures are actually decided.

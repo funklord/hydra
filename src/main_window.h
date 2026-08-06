@@ -200,6 +200,10 @@ public:
 	// the request was refused -- public so a driver can ask for one without an
 	// engine, since the decision is the part worth checking.
 	node *open_new_window(const QUrl &url, bool user_initiated);
+	node *open_child_tab(node *parent, const QUrl &url);
+	void  toggle_lock(node *n);
+	bool  allow_navigation(web_view_backend *view, const QUrl &url,
+	                        bool in_main_frame, bool user_initiated);
 
 private:
 	// **Everything the chrome says about the page in front of you.** Five

@@ -11,6 +11,9 @@
 #include <QFont>
 #include <QBrush>
 #include <QColor>
+#include <QIcon>
+#include <QPainter>
+#include <QPixmap>
 
 tab_tree_model::tab_tree_model(QObject *parent)
   : QAbstractItemModel(parent) {
@@ -21,6 +24,47 @@ tab_tree_model::tab_tree_model(QObject *parent)
 
 tab_tree_model::~tab_tree_model() {
 	delete m_root;  // deletes the whole tree recursively (node dtor)
+}
+
+// A padlock in the corner of whatever icon the row already had.
+//
+// **Drawn rather than fetched**, and that is the point: QStyle has no lock
+// among its standard icons, and the two alternatives both fail somewhere this
+// has to work. A character in the row's text (U+1F512) needs a font that has
+// it, and renders as a box on a machine with no emoji font -- which is exactly
+// the minimal desktop this browser is likely to be run on. A bundled image
+// needs a second one for every scale factor. Shapes cost neither.
+//
+// The base icon is kept underneath instead of replaced, so a locked folder
+// still reads as a folder and a locked tab as a tab. Locking is a property of
+// a row, not a kind of row.
+static QIcon with_padlock(const QIcon &base) {
+	const int side = 16;
+	QPixmap pm = base.pixmap(side, side);
+	if (pm.isNull())
+		return base;
+
+	QPainter p(&pm);
+	p.setRenderHint(QPainter::Antialiasing, true);
+
+	// Bottom-right corner, at half the icon's height, with a light outline so
+	// the mark stays legible against a dark icon and a dark theme both.
+	const qreal h = pm.height() / 2.0;
+	const qreal w = h * 0.8;
+	const QRectF body(pm.width() - w, pm.height() - h * 0.62, w, h * 0.62);
+	const qreal shackle = body.width() * 0.30;
+
+	p.setPen(QPen(Qt::white, 1.4));
+	p.setBrush(Qt::NoBrush);
+	p.drawArc(QRectF(body.center().x() - shackle,
+	                  body.top() - shackle * 1.15,
+	                  shackle * 2, shackle * 2), 0, 180 * 16);
+	p.setPen(QPen(Qt::white, 1.0));
+	p.setBrush(QColor(30, 30, 30));
+	p.drawRoundedRect(body, 1.5, 1.5);
+	p.end();
+
+	return QIcon(pm);
 }
 
 static void index_subtree(node *n, QHash<QString, node *> &map) {
@@ -117,8 +161,9 @@ QVariant tab_tree_model::data(const QModelIndex &index, int role) const {
 			return n->url;
 		case Qt::DecorationRole: {
 			QStyle *s = QApplication::style();
-			return s->standardIcon(n->is_folder() ? QStyle::SP_DirIcon
-				                                    : QStyle::SP_FileIcon);
+			const QIcon base = s->standardIcon(n->is_folder() ? QStyle::SP_DirIcon
+				                                                 : QStyle::SP_FileIcon);
+			return n->locked ? with_padlock(base) : base;
 		}
 		case Qt::FontRole: {
 			// Open (live) tabs are bold; suspended are italic.
@@ -138,6 +183,7 @@ QVariant tab_tree_model::data(const QModelIndex &index, int role) const {
 		case last_seen_role:  return n->last_seen;
 		case tree_order_role: return n->order;
 		case node_type_role:  return static_cast<int>(n->type);
+		case locked_role:     return n->locked;
 		default:              return {};
 	}
 }
@@ -171,13 +217,25 @@ Qt::ItemFlags tab_tree_model::flags(const QModelIndex &index) const {
 	Qt::ItemFlags f = QAbstractItemModel::flags(index);
 	if (!index.isValid())
 		return f | Qt::ItemIsDropEnabled;   // the root accepts drops
+	node *n = node_for_index(index);
 	f |= Qt::ItemIsDragEnabled;
-	// Only a folder can contain something. Dropping *onto* a tab would have to
-	// mean "beside it", and a gesture that means one thing on one row and
-	// another thing on the next is a gesture people stop trusting.
-	if (node *n = node_for_index(index))
-		if (n->is_folder())
-			f |= Qt::ItemIsDropEnabled;
+
+	// **A tab can contain something now**, which reverses the rule this used to
+	// state. The old one said only a folder may be a drop target, on the
+	// grounds that dropping onto a tab would have to mean "beside it" and a
+	// gesture meaning one thing on one row and another on the next is one
+	// people stop trusting. That reasoning was right and its premise is gone:
+	// sub-tabs (§5.5) make "inside a tab" a real place, so the gesture is the
+	// same everywhere -- onto a row puts it under that row.
+	f |= Qt::ItemIsDropEnabled;
+
+	// A locked node does not move (§5.5). Refusing the drag here is what makes
+	// that visible rather than surprising: the row simply does not lift, so
+	// nobody carries it across the tree and discovers at the drop that it was
+	// pinned. `dropMimeData` refuses it as well, since a drag is not the only
+	// way a move can be asked for.
+	if (n && n->locked)
+		f &= ~Qt::ItemIsDragEnabled;
 	return f;
 }
 
@@ -251,6 +309,10 @@ static node *deep_copy(const node *src, tab_tree_model *model,
 	// exactly what `unused_id` exists to prevent.
 	if (c->type == node_type::open_tab || c->type == node_type::suspended_tab)
 		c->type = node_type::unopened_tab;
+	// Nor a copy of `locked` or `renamed`, for a related reason: both say
+	// something a person decided about *that* row. A copy nobody has pinned yet
+	// starts unpinned, or the gesture hands back something that has to be
+	// unlocked before it will move (§5.5).
 	for (const node *k : src->children) {
 		node *kid = deep_copy(k, model, fresh);
 		kid->parent = c;
@@ -268,7 +330,7 @@ bool tab_tree_model::dropMimeData(const QMimeData *data, Qt::DropAction action,
 		return false;
 
 	node *target = parent.isValid() ? node_for_index(parent) : m_root;
-	if (!target || !target->is_folder())
+	if (!target)
 		return false;
 
 	const QStringList ids =
@@ -288,6 +350,12 @@ bool tab_tree_model::dropMimeData(const QMimeData *data, Qt::DropAction action,
 			return false;
 		if (n == target)
 			return false;
+		// Pinned nodes do not move, and a *copy* of one is a new row rather
+		// than a move, so only the move branch is refused. Refusing the whole
+		// drop would mean one locked node in a multi-node selection cancelled
+		// everything, which punishes the wrong rows.
+		if (n->locked && action != Qt::CopyAction)
+			continue;
 		moving << n;
 	}
 	if (moving.isEmpty())
@@ -334,8 +402,6 @@ bool tab_tree_model::dropMimeData(const QMimeData *data, Qt::DropAction action,
 node *tab_tree_model::add_folder(node *parent, const QString &title) {
 	if (!parent)
 		parent = m_root;
-	if (!parent->is_folder())
-		parent = parent->parent ? parent->parent : m_root;
 	beginResetModel();
 	node *f = new node;
 	f->id      = unused_id("f");
@@ -356,11 +422,11 @@ node *tab_tree_model::add_tab(node *parent, const QString &title,
                                const QString &url) {
 	if (!parent)
 		parent = m_root;
-	// Dropped beside a tab rather than inside it, the way a folder is: a tab
-	// holds no children, so "in here" has no meaning and the nearest sensible
-	// reading is "next to this".
-	if (!parent->is_folder())
-		parent = parent->parent ? parent->parent : m_root;
+	// **A tab is a legal parent now.** This used to redirect to the nearest
+	// folder, because a tab held no children and "in here" had no meaning for
+	// one. Sub-tabs (§5.5) give it a meaning, and the redirect would now
+	// silently put a sub-tab somewhere other than under the tab that spawned
+	// it -- which is the whole relationship the feature exists to record.
 	beginResetModel();
 	node *t = new node;
 	t->id        = unused_id("t");
@@ -430,6 +496,28 @@ void tab_tree_model::update_node(node *n, const QString &title,
 	// Saved like a move is: what a tab is called is as much a part of the
 	// canonical file as where it sits.
 	emit structure_changed();
+}
+
+bool tab_tree_model::set_locked(node *n, bool locked, const QString &pin_url) {
+	// The root is the tree rather than a row in it: there is nothing to pin it
+	// beside and no view to pin to a url.
+	if (!n || n == m_root || n->locked == locked)
+		return false;
+	n->locked = locked;
+	// Recorded on the node, so the pin survives a suspend, a restart, and the
+	// tab being reopened from the outline file -- all of which throw away the
+	// live view that knew which page was showing.
+	if (locked && !pin_url.isEmpty())
+		n->url = pin_url;
+	// `refresh_node` is a dataChanged, which repaints the row and is what puts
+	// the padlock there. It is not enough on its own: `flags()` now answers
+	// differently for this row, and a view that has already decided the row is
+	// draggable keeps that answer until something tells it otherwise. A
+	// dataChanged does tell it -- the view re-reads flags for a changed row --
+	// which is why this needs no separate reset.
+	refresh_node(n);
+	emit structure_changed();
+	return true;
 }
 
 bool tab_tree_model::set_page_title(node *n, const QString &title) {

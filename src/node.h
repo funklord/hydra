@@ -48,6 +48,21 @@ struct node {
 	// choose this" is not recoverable from the string afterwards.
 	bool      renamed = false;
 
+	// Pinned: this node keeps its page and its place (architecture doc §5.5).
+	//
+	// Two effects, and they are one idea rather than two features bolted
+	// together -- "this row stays as it is". Navigating a locked tab does not
+	// change its url; the navigation opens a **sub-tab** below it and browsing
+	// continues there. And the node cannot be moved: not dragged to another
+	// parent, not reordered among its siblings, not moved by the reorganizer.
+	//
+	// A locked tab is an anchor -- a search result page, a forum index, a
+	// reference being worked from -- and an anchor that can drift is not one.
+	// The flag lives on the node rather than on the view because a suspended
+	// tab is still locked, and because it has to survive being written to the
+	// outline file and read back.
+	bool      locked = false;
+
 	node        *parent = nullptr;
 	QList<node *> children;
 

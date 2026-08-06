@@ -60,10 +60,14 @@ void walk(node *root, report &r) {
 						"of %3")
 						.arg(n->id).arg(f.depth).arg(tree_limits::max_depth);
 
-			if (!n->is_folder() && !n->children.isEmpty())
-				r.problems << QString("'%1' is a tab with %2 child(ren); the "
-						"tree file cannot express that")
-						.arg(n->id).arg(n->children.size());
+			// **A tab with children was a violation here** and is not one now:
+			// that is what a sub-tab is (architecture doc §5.5). The rule gave
+			// its reason as "the tree file cannot express that", and the file
+			// always could -- `write_node` recurses into any node's children
+			// and the reader nests by indentation without consulting the type.
+			// The rule was enforcing a model restriction while citing a format
+			// limit that did not exist, which is why removing the restriction
+			// left nothing here to keep.
 		}
 
 		for (node *c : n->children) {

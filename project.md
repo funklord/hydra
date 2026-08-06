@@ -109,6 +109,65 @@ some with tokens in them, and publishing one is a separate decision from keeping
 one. `evidence/README.md` says what each capture is and how to replay it. Put a
 capture there at the time if its numbers are going to be argued with later.
 
+### The log was rewritten, and every hash before f6e28a6 changed
+
+The 252 commits this project had were reformatted to the convention in
+`build-and-commit.md` and became 221. Anyone holding a clone taken before that
+has a history that no longer exists upstream and must reset to it rather than
+merge, or git will present the two as parallel work and offer to combine them.
+
+What changed, and what did not:
+
+- **Subjects.** The 202 commits written before the convention arrived — it
+  starts at `tools: track the commit-msg hook` — gained a prefix from the set
+  the tree already used, plus `android:` for the port. The log filters by it now:
+  62 `feature`, 38 `fix`, 35 `ui`, 34 `test`, 18 `build`, 15 `android`, 6 `tree`,
+  6 `tools`, 5 `rework`, 2 `packaging`.
+- **Bodies.** 163 were wrapped at 78–82 columns and are at 75 now. No word
+  changed: the rewrapper refused to write unless the words came back identical,
+  and a separate check confirmed all 66,538 body words survive in order.
+- **31 documentation-only commits are gone as commits**, folded into the code
+  commit each describes — backward where it recorded what had just happened,
+  forward where it decided what came next. None of their prose was dropped; each
+  one's subject survives as a sentence in the message it joined. There are zero
+  documentation-only commits in the history now.
+- **No file content moved.** Each commit reuses a tree object git already had
+  rather than reapplying a diff, so the trees could be compared one by one, and
+  `git diff` between the old tip and the new one is empty.
+
+The old history is at the tag **`pre-msg-rewrite`**, and the branch
+`worktree-agent-a32c3fa286a892379` still points into it.
+
+**Two things the rewrite left behind**, both worth knowing before touching the
+log again:
+
+- **One message cites a sha that is no longer in the history.** `test: repair
+  the build, which had been passing on stale binaries` (now `1be8c16`) refers to
+  "a mass edit in af66464". That resolves today only because the backup tag keeps
+  the old commit reachable; delete the tag and it dangles. Its replacement is
+  `25a0db6`. Fixing it means rewriting from that point again, which changes every
+  hash after it.
+- **One squashed commit contradicts itself.** `build: pin the Qt floor at 6.4`
+  ends by saying nothing has yet driven a real navigation through the
+  interceptor, and the write-up folded into it immediately reports that
+  verification. Both were true when written. Resolving it means editing prose
+  rather than reformatting it, so it was left alone.
+
+### Five commits fail this project's own commit-msg hook
+
+007, 026, 027, 140 and 141 in the old numbering — the ones that name the Claude
+API, `claude_provider` and `ANTHROPIC_API_KEY`. All predate the hook, and all
+are correct: the global rule bans *attribution*, not the subject, and a browser
+with an AI provider has to be able to name the provider it implements.
+
+The hook cannot tell the two apart. It spares exactly two literal names,
+`.claude` and `CLAUDE.md`, which is enough to write about the tooling tree and
+not enough to write about the feature. This is the same false-positive class its
+own comments already record, one step further out. Nothing was changed on either
+side: the messages are accurate, and widening a gate copied from
+`~/.claude/tools/commit-msg` is a convention change to raise rather than make in
+passing. It will refuse the commit if one of those five is ever amended.
+
 ### ⚠️ Do not build with unbounded `-j`
 
 The live drivers under `tests/live/` each compile ~40 app sources and link Qt
@@ -431,6 +490,58 @@ a mistyped tree path is indistinguishable from an empty tree. It is probably
 deliberate, since a first run has no file yet, but nothing says so and the two
 cases deserve different words. Left alone rather than changed blind, because
 changing it would change what happens on somebody's first launch.
+
+## Locked tabs and sub-tabs (§5.5, done)
+
+A tab can be pinned from the tree's context menu (**Loc&k** — `k`, because
+Dup&licate already holds `l`). A locked tab keeps its page and its place:
+navigating it opens a **sub-tab** below it and browsing continues there, and the
+node cannot be dragged, reordered, or moved by the AI reorganizer.
+
+**The feature was mostly a restriction being lifted.** Four places said a tab
+could hold no children — `add_tab` and `add_folder` redirected to the nearest
+folder, `flags()` refused the drop, and `tree_invariants` counted it a
+violation. `struct node` had carried a `children` list all along, so nothing in
+the data model or the file format objected: `write_node` already recursed into
+any node's children and the reader nests by indentation without consulting the
+type. The invariant's stated reason — "the tree file cannot express that" — was
+never true, and it was enforcing a model rule while citing a format limit.
+
+**And it settled the contradiction this file recorded.**
+`main_window::open_new_window` was commented "Under the tab that asked, where
+the tree shows the relationship" and parented the new node at `n->parent`,
+making a sibling. The comment described the design and the code described the
+restriction. With the restriction gone the comment is now true, so a window
+opened from a link records where it came from.
+
+**Three things the implementation had to get right, none of them obvious:**
+
+- **A node's url does not follow the page.** Only the title does
+  (`set_page_title`); nothing writes a browsed address back to the node. So
+  pinning to `n->url` would pin to wherever the tab was *created*, not what is
+  on screen. The lock is applied through the shell, which reads the live view's
+  url and writes it as the pin — which is also why the tree emits
+  `lock_requested` rather than calling the model itself.
+- **The pin cannot be compared against the view's url.** Opening a locked tab
+  loads its page through the same navigation check, and at that moment the view
+  is empty — comparing against it made a locked tab spawn a sub-tab of itself
+  instead of loading. It compares against the node's pinned url.
+- **The sub-tab is created a turn of the event loop later.** The check runs
+  inside the engine's navigation decision, and building a second view there
+  means creating a page, wiring a profile and starting a load re-entrantly. The
+  engine gets its `false` immediately; the tab is queued, and carries its parent
+  by id rather than by pointer.
+
+**What the tests caught, which is the argument for having written them:** the
+first version deleted `ItemIsDragEnabled` while rearranging `flags()`, so
+*nothing* in the tree could be dragged — and `test_model`'s `holds()` harness,
+which re-checks the invariants after every section rather than testing the
+operation just performed, is what reported the tab-with-children violation in a
+section that was not looking for it.
+
+**Unfinished:** Android does not implement the navigation decider. Its WebView
+has the hook (`shouldOverrideUrlLoading`, already used for non-page links), so
+the port is small, but a locked tab there navigates as it always did.
 
 ## Another browser's tabs, in a folder of their own (§4)
 
@@ -907,7 +1018,7 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Canonical file | `tree_outline.{h,cpp}`, `sample-tree.txt` | id-tagged indented outline parser/serializer |
 | Sorting / search | `tree_sort_proxy.{h,cpp}` | tree-order / title / created / last-seen + live search |
 | Lifecycle | `main_window.cpp`, `state_store.{h,cpp}` | open⇄suspended, history blobs, LRU live cap (4) |
-| Policy model | `policy.{h,cpp}`, `policy_engine.{h,cpp}` | packed 2-bit tri-states, precedence, JSON |
+| Policy model | `policy.{h,cpp}`, `policy_engine.{h,cpp}` | packed 2-bit tri-states, precedence, INI (`load_json` is private and reads a legacy file once) |
 | Enforcement | `request_filter.{h,cpp}`, `qtwebengine_interceptor.{h,cpp}` | ad/script/image blocking, referer strip, cookie filter |
 | Site editor | `site_policy_dialog.{h,cpp}` | shield popup, scope this-host/domain/global |
 | WebView seam | `web_view_backend.h`, `web_view_factory.h`, `request_filter.{h,cpp}` | platform-neutral interfaces + shared block/cookie decisions |

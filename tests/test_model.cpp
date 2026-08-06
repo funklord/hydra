@@ -12,6 +12,7 @@
 #include "tab_tree_model.h"
 #include "tree_invariants.h"
 #include "tree_sort_proxy.h"
+#include "tree_diff.h"
 #include "node.h"
 
 #include <QAbstractItemModelTester>
@@ -238,9 +239,13 @@ int main(int argc, char **argv) {
 		const QModelIndex ti = m.index_for_node(tab);
 		check(m.flags(ti) & Qt::ItemIsDragEnabled, "a tab can be dragged");
 		check(m.flags(fi) & Qt::ItemIsDropEnabled, "a folder accepts a drop");
-		check(!(m.flags(ti) & Qt::ItemIsDropEnabled),
-		      "a tab does not -- dropping onto one would have to mean beside it, "
-		      "and a gesture meaning two things is one people stop trusting");
+		// **This assertion used to be the opposite one**, and the reason it
+		// changed is worth keeping: a tab refused drops because "inside a tab"
+		// named nothing, so the gesture would have meant "beside it" on one row
+		// and "inside it" on the next. Sub-tabs (§5.5) give it a place to mean,
+		// so the gesture is uniform -- onto a row puts it under that row.
+		check(m.flags(ti) & Qt::ItemIsDropEnabled,
+		      "and so does a tab, now that a tab can hold sub-tabs");
 		check(m.flags(QModelIndex()) & Qt::ItemIsDropEnabled,
 		      "and the root does, so a tab can be dragged out to the top level");
 
@@ -579,15 +584,19 @@ int main(int argc, char **argv) {
 		      QString("with a label rather than a blank row (%1)").arg(t->title));
 		check(t && m.node_by_id(t->id) == t, "and an id the index knows");
 
-		// Asked for beside a *tab* it goes next to it, not inside: a tab holds
-		// no children, so "in here" has no meaning.
-		node *sibling = m.add_tab(t, QString(), "https://x.test/");
-		check(sibling && sibling->parent == folder,
-		      "a tab asked for beside a tab lands next to it, not within it");
-		check(sibling && sibling->url == "https://x.test/", "keeping its address");
+		// **Reversed, deliberately.** Asked for on a tab it now goes *inside*
+		// it, because a tab can hold sub-tabs (§5.5). This used to land the new
+		// node beside its target, on the grounds that "in here" named nothing
+		// for a leaf -- and that redirect would now put a sub-tab somewhere
+		// other than under the tab it came from, which is the one relationship
+		// the feature exists to record.
+		node *child = m.add_tab(t, QString(), "https://x.test/");
+		check(child && child->parent == t,
+		      "a tab asked for on a tab lands inside it, as a sub-tab");
+		check(child && child->url == "https://x.test/", "keeping its address");
 
 		// Ids do not collide with anything, including a second new tab.
-		check(t && sibling && t->id != sibling->id, "two new tabs differ");
+		check(t && child && t->id != child->id, "two new tabs differ");
 		QSet<QString> ids;
 		std::function<void(node *)> walk = [&](node *n) {
 			for (node *c : n->children) { ids.insert(c->id); walk(c); }
@@ -706,6 +715,90 @@ int main(int argc, char **argv) {
 		      "and its dates still parsed, which a new trailing key could have "
 		      "broken by stopping the reader early");
 		holds(m, "being named survives a save, or it was");
+	}
+
+	section("a locked node keeps its place, and a tab can hold sub-tabs");
+	{
+		tab_tree_model m;
+		m.load(path);
+		node *folder = m.root()->children.first();
+		node *tab    = folder->children.first();
+
+		// The half this feature exists for: a tab is a legal parent. The model
+		// used to redirect this to the nearest folder, which would have put a
+		// sub-tab beside its parent instead of under it.
+		node *sub = m.add_tab(tab, "Sub", "https://sub.test/");
+		check(sub && sub->parent == tab,
+		      "a tab can be given a child, which is what a sub-tab is");
+		check(tab->children.contains(sub), "and holds it");
+
+		check(m.set_locked(tab, true), "a node can be locked");
+		check(tab->locked, "and says so");
+		check(!m.set_locked(tab, true), "locking a locked node changes nothing");
+
+		const QModelIndex ti = m.index_for_node(tab);
+		check(!(m.flags(ti) & Qt::ItemIsDragEnabled),
+		      "a locked node will not lift: the drag is refused at the flags, so "
+		      "nobody carries it across the tree to find out at the drop");
+		check(m.flags(ti) & Qt::ItemIsDropEnabled,
+		      "but still accepts children -- being pinned is not being closed");
+
+		// And the refusal is not only in the flags. A view is not the only
+		// thing that can call dropMimeData, so the move branch refuses too.
+		node *elsewhere = m.add_folder(m.root(), "Elsewhere");
+		QMimeData *md = m.mimeData({ ti });
+		const int was = folder->children.size();
+		m.dropMimeData(md, Qt::MoveAction, -1, 0, m.index_for_node(elsewhere));
+		check(folder->children.size() == was && tab->parent == folder,
+		      "and a move asked for directly is refused as well");
+		delete md;
+
+		// A copy is a new row rather than a move, so it is allowed -- and it
+		// arrives unlocked, or the gesture hands back something that has to be
+		// unpinned before it will go anywhere.
+		QMimeData *cd = m.mimeData({ ti });
+		check(m.dropMimeData(cd, Qt::CopyAction, -1, 0, m.index_for_node(elsewhere)),
+		      "a Ctrl-drag copy of a locked node is still allowed");
+		check(!elsewhere->children.isEmpty() && !elsewhere->children.last()->locked,
+		      "and the copy is not locked");
+		delete cd;
+
+		// The reorganizer proposes from a serialized tree, so the lock has to
+		// be enforced where the move is applied rather than trusted to survive
+		// the round trip.
+		QList<tree_change> moves;
+		tree_change mv;
+		mv.kind          = change_kind::reparented;
+		mv.node_id       = tab->id;
+		mv.new_parent_id = elsewhere->id;
+		mv.new_order     = 0;
+		mv.accepted      = true;
+		moves << mv;
+		m.apply_reorganization(moves);
+		check(tab->parent == folder,
+		      "and the AI reorganizer cannot move it either");
+
+		const QString saved = dir + "/locked.txt";
+		check(m.save(saved), "the tree saves");
+		tab_tree_model r;
+		check(r.load(saved), "and loads");
+		node *rt = r.node_by_id(tab->id);
+		check(rt && rt->locked, "the lock survives the round trip");
+		node *rs = r.node_by_id(sub->id);
+		check(rs && rs->parent && rs->parent->id == tab->id,
+		      "and so does the sub-tab's parent, which is the relationship");
+
+		QFile f(saved);
+		f.open(QIODevice::ReadOnly);
+		const QString text = QString::fromUtf8(f.readAll());
+		f.close();
+		check(!text.contains("locked=0"),
+		      "with no marker on the nodes that are not locked");
+
+		check(m.set_locked(tab, false), "and it can be unlocked again");
+		check(m.flags(m.index_for_node(tab)) & Qt::ItemIsDragEnabled,
+		      "which lets it move again");
+		holds(m, "a locked node keeps its place, and a t");
 	}
 
 	QDir(dir).removeRecursively();

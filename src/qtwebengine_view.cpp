@@ -53,10 +53,46 @@ const char *k_channel_bootstrap = R"JS(
 
 }  // namespace
 
+// The one place a navigation can be refused before it happens.
+//
+// `acceptNavigationRequest` is a virtual on the page rather than a signal, so
+// asking the question at all costs a subclass. It is worth one: the alternative
+// is watching `urlChanged` and sending the view back afterwards, which loads
+// the page you did not want, shows it, and then bounces -- visible, slower, and
+// it puts an entry in the history for somewhere the tab was never meant to go.
+class navigating_page : public QWebEnginePage {
+public:
+	navigating_page(QWebEngineProfile *profile, QObject *parent)
+	  : QWebEnginePage(profile, parent) {}
+
+	web_view_backend::navigation_decider decider;
+
+protected:
+	bool acceptNavigationRequest(const QUrl &url, NavigationType type,
+	                              bool is_main_frame) override {
+		if (decider) {
+			// What counts as the user going somewhere. A typed address, a
+			// clicked link and a submitted form are a person; a redirect and
+			// whatever Qt calls Other are the page. Back and forward are a
+			// person too, but of a navigation that already happened -- the
+			// shell refuses those for a locked tab rather than spawning, and
+			// greys the buttons so it does not come up.
+			const bool user = type == NavigationTypeLinkClicked
+			               || type == NavigationTypeTyped
+			               || type == NavigationTypeFormSubmitted;
+			if (!decider(url, is_main_frame, user))
+				return false;
+		}
+		return QWebEnginePage::acceptNavigationRequest(url, type, is_main_frame);
+	}
+};
+
 qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
   : web_view_backend(nullptr) {
 	m_view = new QWebEngineView(parent);
-	m_page = new QWebEnginePage(profile, m_view);
+	navigating_page *page = new navigating_page(profile, m_view);
+	m_nav_page = page;
+	m_page = page;
 	m_view->setPage(m_page);
 
 	// The backend is owned by the widget, not the other way round: the shell
@@ -372,4 +408,9 @@ void qtwebengine_view::stop() {
 
 void qtwebengine_view::set_authenticator(authenticator fn) {
 	m_authenticator = std::move(fn);
+}
+
+void qtwebengine_view::set_navigation_decider(navigation_decider fn) {
+	if (m_nav_page)
+		m_nav_page->decider = std::move(fn);
 }

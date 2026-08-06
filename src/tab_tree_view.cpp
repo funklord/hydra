@@ -277,6 +277,15 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 		menu.addSeparator();
 	}
 
+	// **`k`, not `l`.** "Loc&k" rather than "&Lock", because Dup&licate already
+	// holds l and a mnemonic that matches two items picks neither -- which is
+	// what the Alt-key audit exists to catch.
+	QAction *lock_a = nullptr;
+	if (n) {
+		lock_a = menu.addAction(n->locked ? "Un&lock" : "Loc&k");
+		menu.addSeparator();
+	}
+
 	QAction *tab_a    = menu.addAction("New &Tab Here");
 	QAction *folder_a = menu.addAction("New &Folder Here");
 	if (n)
@@ -298,6 +307,7 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	else if (chosen == copy_url_a)  QGuiApplication::clipboard()->setText(n->url);
 	else if (chosen == external_a)  emit open_externally_requested(n);
 	else if (chosen == dup_a)       m->duplicate_node(n);
+	else if (chosen == lock_a)      emit lock_requested(n);
 	else if (chosen == folder_a) {
 		// Into the folder that was clicked, or beside a tab -- which is what a
 		// file manager does, and saves a drag immediately afterwards.

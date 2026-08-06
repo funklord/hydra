@@ -115,6 +115,8 @@ node *load(const QString &path, int *flattened) {
 				n->last_seen = QDateTime::fromString(t.mid(5), Qt::ISODate);
 			else if (t.startsWith("named="))
 				n->renamed = t.mid(6) == "1";
+			else if (t.startsWith("locked="))
+				n->locked = t.mid(7) == "1";
 			else
 				break;
 			rest_fields.removeLast();
@@ -153,7 +155,14 @@ static void write_node(QTextStream &out, node *n, int depth) {
 		return;
 	const QString indent(depth * 2, ' ');
 	if (n->is_folder()) {
-		out << indent << "- [" << n->id << "] folder | " << n->title << "\n";
+		out << indent << "- [" << n->id << "] folder | " << n->title;
+		// A folder can be locked too. The url half of a lock means nothing to
+		// one, but the half that pins it beside its siblings means exactly what
+		// it means for a tab, and a folder that would not stay where it was put
+		// is the same complaint.
+		if (n->locked)
+			out << " | locked=1";
+		out << "\n";
 	} else {
 		out << indent << "- [" << n->id << "] " << type_to_string(n->type)
 			   << " | " << n->title
@@ -165,6 +174,8 @@ static void write_node(QTextStream &out, node *n, int depth) {
 		// every file written before this existed says.
 		if (n->renamed)
 			out << " | named=1";
+		if (n->locked)
+			out << " | locked=1";
 		out << "\n";
 	}
 	for (node *c : n->children)

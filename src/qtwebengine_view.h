@@ -7,6 +7,9 @@ class QWebEngineView;
 class QWebEnginePage;
 class QWebEngineProfile;
 class QWebChannel;
+// The page subclass, defined in the .cpp: the only reason it exists is to
+// override acceptNavigationRequest, which is a virtual and not a signal.
+class navigating_page;
 
 // The desktop web_view_backend: a QWebEngineView plus its page, wrapped so the
 // shell never names either (architecture doc §19.2). Everything
@@ -26,6 +29,7 @@ public:
 	void apply_settings(const view_settings &s) override;
 	void set_permission_decider(permission_decider fn) override;
 	void set_authenticator(authenticator fn) override;
+	void set_navigation_decider(navigation_decider fn) override;
 	void set_zoom_factor(double factor) override;
 	double zoom_factor() const override;
 	void inject_script(const QString &name, const QString &source,
@@ -43,6 +47,9 @@ private:
 	authenticator m_authenticator;
 	QWebEngineView *m_view = nullptr;
 	QWebEnginePage *m_page = nullptr;
+	// The same object as m_page, typed so the decider can be handed over
+	// without a downcast. Owned by the view, like m_page.
+	navigating_page *m_nav_page = nullptr;
 	permission_decider m_decider;
 	QWebChannel *m_channel = nullptr;
 	bool m_channel_api_injected = false;
