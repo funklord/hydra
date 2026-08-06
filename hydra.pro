@@ -2,9 +2,10 @@
 #
 # The desktop and Android app, for qmake.
 #
-# Written to be compared against the CMakeLists.txt beside it rather than to
-# replace it silently. What each of them knows that the other has to be told is
-# the whole question, and the answer is in project.md.
+# **This is the build now.** It was written to be compared against a
+# CMakeLists.txt beside it, and that comparison is what settled the question:
+# the CMake build is gone and the two kept are this one and fmake. What each of
+# them has to be told, and what it works out, is in project.md.
 #
 # **Sources are globbed and then filtered by platform**, which is not laziness:
 # the tree gains files often, and a list that has to be edited is a list that

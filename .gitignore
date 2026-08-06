@@ -7,6 +7,9 @@
 # fmake's object cache. It grew to 146 MB under src/ from a trial nobody
 # cleaned up, and an ignored directory is one nothing reminds you about.
 .fmake/
+# fmake puts a binary beside the source it built, so `fmake -C src` leaves one
+# here. The Makefile's builds go to build/ and never produce this.
+/src/hydra
 *.o
 *.obj
 # Core dumps land beside whatever crashed, and a driver that segfaults leaves

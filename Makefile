@@ -5,42 +5,43 @@
 #   The single entry point for the whole tree, and the reason it exists is
 #   consistency rather than capability: beerssh and fuzzypickles' gui/ subtree
 #   both present `make`, `make test`, `make android`, `make install` with
-#   DEBUG=1 / SANITIZE=1, and hydra presented two different cmake invocations
+#   DEBUG=1 / SANITIZE=1, and hydra presented two different build invocations
 #   and a per-binary test run you had to know to prefix with
 #   QT_QPA_PLATFORM=offscreen. This file makes the three look like one
-#   interface -- the same wrapper split beerssh describes, with CMake
-#   underneath instead of qmake.
+#   interface.
 #
-#   **CMake stays underneath for now, and the migration is deliberately left
-#   open.** The wrapper is the cheap half of the consistency win, and it is
-#   worth being honest that it is the half that does not settle the argument:
-#   a Makefile is easier to read than CMakeLists.txt, and the strongest thing
-#   CMake brings here is dependency discovery.
+#   **Two build systems are maintained, and CMake is not one of them.** The
+#   migration this header used to describe as deliberately open is closed:
 #
-#   What a later migration would have to solve, so it is written down while it
-#   is fresh rather than rediscovered:
+#     * **qmake, driven from here** (`hydra.pro`) builds the app and the APK.
+#     * **plain Make** (`tests/Makefile`) builds the test tree.
+#     * **fmake** builds the same sources from no build file at all, as a
+#       cross-check and a second opinion. What it has to be told is six
+#       annotations in the sources -- `@target` and five `@pkg_optional` --
+#       and nothing else.
 #
-#     * **54 executables.** 33 offline suites and 21 live drivers, and the
-#       drivers are globbed -- `file(GLOB CONFIGURE_DEPENDS live/try_*.cpp)` --
-#       so adding one is zero build-system work today. That property is worth
-#       preserving; in qmake it wants a generated SUBDIRS tree rather than 54
-#       hand-written project files.
+#   The four problems a migration had to solve, and what solved them:
+#
+#     * **72 executables**, globbed rather than listed, so adding a suite or a
+#       driver is no build-system work. `tests/Makefile` globs `test_*.cpp`
+#       and `live/try_*.cpp` and needs no configure step to notice a new one.
 #     * **The library that is two libraries.** rasterbar's and rakshasa's
 #       unrelated torrent libraries both install a pkg-config file called
 #       `libtorrent`, and the bare name resolves to rakshasa's, which has a
-#       different API. `find_package(LibtorrentRasterbar)` is unambiguous and
-#       pkg-config alone is not, so a qmake build has to reach the qualified
-#       `libtorrent-rasterbar` name and never the bare one.
+#       different API. `find_package(LibtorrentRasterbar)` used to be what
+#       disambiguated it; `hydra.pro` asks for `libtorrent-rasterbar` by name
+#       and the source carries the same qualified name in an `@pkg_optional`
+#       beside the include, so both remaining builds ask for the right one.
 #     * **pkg-config lying about the target.** On an Android cross build the
-#       *host* pkg-config answers cheerfully -- it reported libsodium found and
-#       handed back `-L/usr/lib/x86_64-linux-gnu`, so the configure announced
-#       the feature enabled and the link failed much later looking like a
-#       toolchain fault. Whatever replaces `pkg_check_modules` has to be asked
-#       in the right architecture.
-#
-#   Qt 6 also treats CMake as its primary build system and qmake as maintained
-#   rather than developed, which is worth knowing but is not decisive: beerssh
-#   ships a Qt 6 app and an APK from qmake today.
+#       *host* pkg-config answers cheerfully about the host. `hydra.pro` asks
+#       for none of the optional packages under `android {}`, which is why the
+#       APK is built from the same file without the feature detection running
+#       in the wrong architecture.
+#     * **The APK.** This was the one CMake held alone, through `qt-cmake` and
+#       androiddeployqt. The kit ships `qmake` too, and `make android` now
+#       drives it; the artifact was checked rather than trusted -- correct ABI,
+#       `se.vibes.hydra` in the manifest, our three Java classes in the dex
+#       (in `classes4.dex`, since the package is multidex), and debug-signed.
 #
 # TARGETS
 #   make              -- build the desktop app
@@ -84,8 +85,8 @@
 #     make CXX=clang++ JOBS=4
 #
 # ⚠️ JOBS
-#   **Defaults to 2, and that is not timidity.** Each live driver compiles ~61
-#   app sources and links Qt WebEngine, and there are 21 of them. `make -j`
+#   **Defaults to 2, and that is not timidity.** Each live driver compiles the
+#   app's sources and links Qt WebEngine, and there are 34 of them. `make -j`
 #   with no number is *unlimited* under this generator, and it has taken this
 #   machine's desktop session down twice -- the kernel OOM killer took dbus,
 #   pipewire, both xdg-desktop-portals and the running browsers with it, with
@@ -104,14 +105,17 @@
 # =============================================================================
 
 CXX   ?= g++
-CMAKE ?= cmake
+# qmake's name varies by distribution: Debian ships `qmake6`, a Qt installer
+# kit ships `qmake`. Asked for in that order rather than assumed, so neither
+# kind of machine has to be told.
+QMAKE ?= $(shell command -v qmake6 2>/dev/null || command -v qmake 2>/dev/null || echo qmake6)
 
 # See the JOBS warning above before raising this.
 JOBS ?= 2
 
 TARGET     = hydra
 BUILD_DIR  ?= build
-TESTS_DIR  ?= tests/build
+TESTS_DIR  ?= tests/build-make
 TREE       ?= sample-tree.txt
 
 PREFIX ?= $(HOME)/.local
@@ -121,29 +125,25 @@ SHARE  ?= $(PREFIX)/share
 QT_ANDROID_ROOT   ?= $(HOME)/Qt/6.11.1/android_arm64_v8a
 # Only used to name the copied apk; the kit above decides the real ABI.
 ANDROID_ABI       ?= arm64-v8a
-QT_HOST_PATH      ?= $(HOME)/Qt/6.11.1/gcc_64
 ANDROID_NDK_ROOT  ?= $(HOME)/android-ndk-r29
 ANDROID_SDK_ROOT  ?= $(HOME)/Android/Sdk
 JAVA_HOME         ?= $(HOME)/android-studio/jbr
 ANDROID_BUILD_DIR ?= build-android
 
-# **-Os, not -O2 and never -O3.** CMake's `Release` means -O3 and its
-# `MinSizeRel` means -Os; the size build is what this project wants everywhere
-# except under a debugger, so the build type says so rather than the flags
-# being patched on top of a type that disagrees with them.
-BUILD_TYPE ?= MinSizeRel
-CMAKE_FLAGS =
+# **-Os, and -Og under DEBUG.** Both live in `hydra.pro`, which subtracts
+# qmake's own -O2 and -O0 before adding them: two -O flags on one command line
+# leave the last one winning, so appending is not enough. Nothing is passed
+# from here except which of the two configurations to build, because a flag
+# set in two places is a flag that disagrees with itself eventually.
+QMAKE_CONFIG ?= release
 ifdef DEBUG
-BUILD_TYPE = Debug
-# **-Og, not -O0.** CMake's Debug means -O0, and the guidelines ask for -Og:
-# it keeps the code close enough to the source for a debugger to follow while
-# leaving the obviously wasteful gone. -O0 is for the case where a debugger
-# cannot cope, which is a decision made at the time and not a default.
-CMAKE_FLAGS += -DCMAKE_CXX_FLAGS_DEBUG="-Og -g"
+QMAKE_CONFIG = debug
 endif
 ifdef SANITIZE
-CMAKE_FLAGS += -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
-CMAKE_FLAGS += -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+# qmake's own sanitizer support, rather than hand-written flags: it puts them
+# on the compile *and* the link line, which is the half that is easy to forget
+# and fails as an undefined `__asan_init` a long way from the cause.
+QMAKE_CONFIG += sanitizer sanitize_address sanitize_undefined
 endif
 
 # Suites that need nothing but a build. Written as an exclusion rather than a
@@ -178,19 +178,22 @@ FAILED_DIR = $(TESTS_DIR)/failed
 .PHONY: all run test test-one drivers sweep replay deb deb-check apk android install uninstall clean help style style-docs style-source check hooks
 
 # Always delegates, never compares timestamps itself. The first version made
-# the binary a real target depending on the cache file, and `make` after
+# the binary a real target depending on the configure output, and `make` after
 # editing a source said "Nothing to be done for 'all'" -- make was answering a
-# question about two files while CMake is the thing that knows about the other
-# sixty. A wrapper that second-guesses the tool it wraps is worse than no
-# wrapper, because it is wrong silently.
+# question about two files while the generated build is the thing that knows
+# about the other sixty. A wrapper that second-guesses the tool it wraps is
+# worse than no wrapper, because it is wrong silently.
 #
-# The cache is an order-only prerequisite (`|`), so configure runs once and a
-# newer cache does not force a rebuild.
-all: | $(BUILD_DIR)/CMakeCache.txt
-	@$(CMAKE) --build $(BUILD_DIR) -j$(JOBS)
-
-$(BUILD_DIR)/CMakeCache.txt:
-	@$(CMAKE) -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) $(CMAKE_FLAGS)
+# **qmake runs every time, deliberately.** `hydra.pro` globs `src/*.cpp`, and
+# qmake resolves a glob once when it generates the Makefile -- unlike CMake's
+# `file(GLOB CONFIGURE_DEPENDS)`, which re-checks. A new source would otherwise
+# be invisible until somebody happened to re-run configure, which is the kind
+# of failure that looks like a linker problem. Re-running costs about a second
+# and is what makes globbing safe here.
+all:
+	@mkdir -p $(BUILD_DIR)
+	@cd $(BUILD_DIR) && $(QMAKE) $(CURDIR)/hydra.pro CONFIG+="$(QMAKE_CONFIG)"
+	@$(MAKE) --no-print-directory -C $(BUILD_DIR) -j$(JOBS)
 
 # **Run against a copy, not the tracked sample.** The app saves its tree on
 # exit, so pointing it at `sample-tree.txt` means merely starting the browser
@@ -208,13 +211,16 @@ run: all
 	@test -f "$(RUN_TREE)" || cp $(TREE) "$(RUN_TREE)"
 	@./$(BUILD_DIR)/$(TARGET) "$(RUN_TREE)"
 
-$(TESTS_DIR)/CMakeCache.txt:
-	@$(CMAKE) -S tests -B $(TESTS_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) $(CMAKE_FLAGS)
-
 # Built one target at a time on purpose: naming them individually keeps the
 # live drivers out of it. `make drivers` is where that cost is opted into.
-test: $(TESTS_DIR)/CMakeCache.txt
-	@for t in $(SUITES); do $(CMAKE) --build $(TESTS_DIR) -j$(JOBS) --target $$t >/dev/null || exit 1; done
+#
+# `tests/Makefile` is the test tree's own build and needs no configure step,
+# so there is nothing here standing in for a cache file. Its BUILD_DIR is
+# `build-make` relative to `tests/`, which is why the target named below is
+# spelled without the `tests/` that TESTS_DIR carries.
+test:
+	@for t in $(SUITES); do $(MAKE) --no-print-directory -C tests -j$(JOBS) \
+	   build-make/$$t >/dev/null || exit 1; done
 	@fail=0; for t in $(SUITES); do \
 	   out=$$($(TEST_ENV) ./$(TESTS_DIR)/$$t 2>&1); \
 	   if [ $$? -eq 0 ]; then printf '  ok   %-16s %s\n' "$$t" "$$(echo "$$out" | tail -1)"; \
@@ -228,23 +234,23 @@ test: $(TESTS_DIR)/CMakeCache.txt
 	 echo "  see tests/README.md for what each one wants"; \
 	 exit $$fail
 
-test-one: $(TESTS_DIR)/CMakeCache.txt
+test-one:
 	@test -n "$(T)" || { echo "usage: make test-one T=test_theme"; exit 2; }
-	@$(CMAKE) --build $(TESTS_DIR) -j$(JOBS) --target $(T)
+	@$(MAKE) --no-print-directory -C tests -j$(JOBS) build-make/$(T)
 	@$(TEST_ENV) ./$(TESTS_DIR)/$(T)
 
 # Separate from `test` because it is a different order of cost: each driver
 # compiles the whole app and links WebEngine, and they want a real display.
-drivers: $(TESTS_DIR)/CMakeCache.txt
-	@$(CMAKE) --build $(TESTS_DIR) -j$(JOBS)
+drivers:
+	@$(MAKE) --no-print-directory -C tests -j$(JOBS) all
 	@echo "live drivers built. Run them offscreen: QT_QPA_PLATFORM=offscreen ./$(TESTS_DIR)/try_cookies"
 	@echo "tests/README.md says which need a helper server, KeePassXC or a model."
 
 # Score the recorded model replies against the current gate. No model, no
 # network, milliseconds -- but it needs the corpus in evidence/replies, which is
 # not in git, so it cannot be part of `make test`.
-replay: $(TESTS_DIR)/CMakeCache.txt
-	@$(CMAKE) --build $(TESTS_DIR) -j$(JOBS) --target test_replay >/dev/null
+replay:
+	@$(MAKE) --no-print-directory -C tests -j$(JOBS) build-make/test_replay >/dev/null
 	@$(TEST_ENV) ./$(TESTS_DIR)/test_replay
 
 # Run them all and summarise. Offscreen by default, so it does not take over a
@@ -313,18 +319,31 @@ apk: android
 	 echo "$$out"; \
 	 echo "install it with: adb install -r $$out"
 
+# **The kit's own qmake, not the host's.** `~/Qt/<ver>/android_<abi>/bin/qmake`
+# is configured for that ABI and knows where the kit's Qt libraries are; the
+# system qmake6 would produce an x86-64 build with Android in its name.
+#
+# The SDK, NDK and JDK go in the environment rather than on the command line
+# because that is where Qt's android mkspec reads them from, and androiddeployqt
+# reads the same variables again in the second step.
 android:
-	@test -x "$(QT_ANDROID_ROOT)/bin/qt-cmake" || \
+	@test -x "$(QT_ANDROID_ROOT)/bin/qmake" || \
 	  { echo "no Qt-for-Android kit at $(QT_ANDROID_ROOT)"; \
 	    echo "set QT_ANDROID_ROOT to the kit for your ABI"; exit 2; }
 	@test -d "$(ANDROID_NDK_ROOT)" || { echo "no NDK at $(ANDROID_NDK_ROOT)"; exit 2; }
 	@test -d "$(ANDROID_SDK_ROOT)" || { echo "no SDK at $(ANDROID_SDK_ROOT)"; exit 2; }
 	@test -d "$(JAVA_HOME)" || { echo "no JDK at $(JAVA_HOME) -- Gradle will not run on a JRE"; exit 2; }
-	$(QT_ANDROID_ROOT)/bin/qt-cmake -S . -B $(ANDROID_BUILD_DIR) \
-	    -DQT_HOST_PATH=$(QT_HOST_PATH) \
-	    -DANDROID_NDK_ROOT=$(ANDROID_NDK_ROOT) \
-	    -DANDROID_SDK_ROOT=$(ANDROID_SDK_ROOT)
-	JAVA_HOME=$(JAVA_HOME) $(CMAKE) --build $(ANDROID_BUILD_DIR) -j$(JOBS) --target apk
+	@mkdir -p $(ANDROID_BUILD_DIR)
+	cd $(ANDROID_BUILD_DIR) && \
+	  ANDROID_SDK_ROOT=$(ANDROID_SDK_ROOT) ANDROID_NDK_ROOT=$(ANDROID_NDK_ROOT) \
+	  JAVA_HOME=$(JAVA_HOME) \
+	  $(QT_ANDROID_ROOT)/bin/qmake $(CURDIR)/hydra.pro CONFIG+="$(QMAKE_CONFIG)"
+	ANDROID_SDK_ROOT=$(ANDROID_SDK_ROOT) ANDROID_NDK_ROOT=$(ANDROID_NDK_ROOT) \
+	  JAVA_HOME=$(JAVA_HOME) \
+	  $(MAKE) --no-print-directory -C $(ANDROID_BUILD_DIR) -j$(JOBS)
+	ANDROID_SDK_ROOT=$(ANDROID_SDK_ROOT) ANDROID_NDK_ROOT=$(ANDROID_NDK_ROOT) \
+	  JAVA_HOME=$(JAVA_HOME) \
+	  $(MAKE) --no-print-directory -C $(ANDROID_BUILD_DIR) apk
 
 # A staged install -- DESTDIR set -- never refreshes a cache: it would touch
 # the build host, and the caches it writes end up inside the package, where

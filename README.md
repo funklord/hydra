@@ -1,7 +1,7 @@
 # Hydra — a tree-shaped browser
 
-Working name (rename freely — it's one `project()` line in `CMakeLists.txt` plus
-the `hydra` target). A Linux/X11 desktop browser on **Qt 6 Widgets** (no QML)
+Working name (rename freely — it's `TARGET` in `hydra.pro` and `@target` in
+`src/main.cpp`). A Linux/X11 desktop browser on **Qt 6 Widgets** (no QML)
 and **Qt WebEngine**: a side-tree of tabs and links over its own embedded
 Chromium, with a per-site security policy engine, kiosk mode, an AI tree
 reorganizer and ad-filter loop, a media detector with external-player handoff,
@@ -79,7 +79,7 @@ what is merely assumed — and `docs/architecture.md` for the full design;
   qt6-webengine-dev qt6-declarative-dev`; Arch: `qt6-base qt6-webengine
   qt6-declarative`). `Qml` is needed only for `QJSEngine`, the extractor
   sandbox — there is no QML in the UI.
-- CMake ≥ 3.19 and a C++17 compiler.
+- `make`, `qmake` (Debian: `qmake6`) and a C++17 compiler.
 - **Optional, each buying one feature and nothing else**: `libsodium`
   (KeePassXC bridge), `libsecret-1` (pairing that survives a restart), `liblz4`,
   `libtorrent-rasterbar` (BitTorrent), Qt DBus. A missing one is a smaller
@@ -103,21 +103,25 @@ make help                     # the rest: android, install, deb, clean, DEBUG=1 
 `./build/hydra my-tree.txt` points it at your own outline file. Builds are
 `-Os`; `DEBUG=1` switches to `-Og -g`.
 
-**Do not run `make -j` or `cmake --build -j` with no number.** Each of the 34
+**Do not run `make -j` or `fmake` without a job count.** Each of the 34
 live drivers links Qt WebEngine, and unlimited parallelism has taken this
 machine's desktop session down twice — the OOM killer takes the whole user
 session, not just the build. The Makefile defaults to `-j2` and takes `JOBS=`.
 
-**The build system is mid-migration and all three work.** The Makefile is the
-interface; underneath, `CMakeLists.txt` and `hydra.pro` both describe the app
-and `tests/Makefile` describes the test tree. CMake is the only one that
-produces the APK. `project.md` carries the measurements and says why the choice
-is still open.
+**Two build systems are maintained, and the Makefile is the interface to
+both.** Underneath it, `hydra.pro` (qmake) builds the app and the APK, and
+`tests/Makefile` builds the test tree. The second is **fmake**, which builds the
+same sources from no build file at all:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j2       # name a number: bare -j is unlimited under Make
+fmake -C src -j2              # name a number; see the JOBS warning above
 ```
+
+It works the whole build out by itself -- every `Q_OBJECT`, the moc runs, the
+platform-specific sources, and a link set closed over symbols rather than
+guessed. The six things it cannot know are annotations in the sources: `@target`
+in `main.cpp`, and one `@pkg_optional` beside each optional dependency's
+include. `project.md` carries the measurements and the reasoning.
 
 ## Android
 

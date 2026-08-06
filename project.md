@@ -6585,6 +6585,53 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### The build system, decided: qmake and fmake, no CMake
+
+Three ways to build the same tree had been measured and none chosen. The
+decision is two: **Makefile + qmake** as the one people run, and **fmake** as
+the second opinion. CMakeLists.txt and tests/CMakeLists.txt are gone.
+
+**What each does now.** `make` runs qmake against `hydra.pro` and builds into
+`build/`; `make test` drives `tests/Makefile`; `make android` runs the Android
+kit's own qmake and then androiddeployqt. `fmake -C src` builds the same
+sources from no build file.
+
+**qmake is re-run on every `make`, deliberately.** `hydra.pro` globs
+`src/*.cpp` and qmake resolves a glob once, when it generates the Makefile --
+unlike CMake's `file(GLOB CONFIGURE_DEPENDS)`, which re-checks. A new source
+would otherwise stay invisible until somebody happened to re-configure, which
+surfaces as a link error naming a file nobody touched. Re-running costs about a
+second and is what makes globbing safe.
+
+**The APK was the one thing CMake held alone, and it was the risk in this
+change.** The kit ships `qmake` beside `qt-cmake`, so `make android` drives
+that instead. It built, and the artifact was *checked rather than trusted* --
+which is the failure `harmonization.md` records from beerssh, where signing
+flags passed to Qt's generated Makefile were silently dropped and a debug-signed
+APK came out under a message announcing a release build. What was verified:
+`lib/arm64-v8a/libhydra_arm64-v8a.so` present and the only ABI, `se.vibes.hydra`
+in the binary manifest, all three of our Java classes in the dex, and an
+Android Debug signing certificate from `apksigner`.
+
+**The Java check nearly passed vacuously.** Grepping `classes.dex` for
+`HydraWebView` found nothing, which reads exactly like a build that dropped
+`ANDROID_PACKAGE_SOURCE_DIR`. The package is multidex: the classes are in
+`classes4.dex`. A control -- grepping for a Qt class that must be present --
+is what separated "not there" from "not looking in the right file", and is
+worth keeping in any check of a package's contents.
+
+**What was lost with CMake**, so it is not rediscovered as a regression: the
+`-DCMAKE_CXX_FLAGS` route for SANITIZE, replaced by qmake's own `CONFIG +=
+sanitizer sanitize_address sanitize_undefined`, which has the advantage of
+putting the flags on the link line too. And `QT_HOST_PATH`, which was a
+`qt-cmake` argument the kit's qmake does not need.
+
+**Binary sizes are not comparable across the three without saying what was
+measured.** qmake's release build is 1.8 MB, fmake's is 44 MB, and CMake's
+MinSizeRel was 35 MB -- the difference is debug information, not code. fmake
+defaults to `-Os -g`. All three link the same five optional libraries, checked
+with `ldd`.
+
 ### Where this stands, and what is deliberately unfinished
 
 Written down because the reasoning is expensive to rebuild and cheap to record.
@@ -6606,19 +6653,8 @@ one chosen.
   change reaches three files or eight. The replacement is per-binary object sets
   derived from the include graph the `.d` files already record. The archive does
   at least carry its symbol index (`ar rcs`).
-- **The build system is measured but not decided.** Three ways to build the same
-  70 binaries, timed on an idle machine, all at `-Os`: qmake+Make 293s, CMake
-  328s, fmake 374s -- with fmake compiling 181 objects to CMake's 432 and
-  producing the smallest binary, and winning every incremental case by two to
-  three times. What CMake still holds alone is the APK, through `qt-cmake` and
-  androiddeployqt. `hydra.pro` carries an Android block that has never been run
-  against a kit and says so.
-- **The `src/` source list is duplicated, and only one copy globs.** `hydra.pro`
-  takes `$$files(src/*.cpp)`; `CMakeLists.txt` names every file. Adding
-  `cert_dialog.cpp` therefore built under qmake and failed to link under CMake,
-  on an undefined vtable -- which is at least loud, but it is a trap the next
-  new file walks into as well. The tests' CMake globs, so only the app's list
-  is hand-written.
+- **The `src/` source list is no longer duplicated** -- the hand-written half
+  went with CMake. Both remaining builds glob.
 - **dramafren has not been measured** since the page-row prompt fix; every one
   of five runs timed out at the seven-minute budget, and it wants about 75
   minutes at the fifteen-minute budget on a quiet machine.

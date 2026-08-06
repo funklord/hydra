@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The test tree, for plain Make. Written to be compared against the
-# CMakeLists.txt beside it; see project.md for what the comparison found.
+# The test tree, for plain Make. Written to be compared against a
+# CMakeLists.txt beside it, and now the only build it has: `make test` at the
+# top level drives this file. See project.md for what the comparison found.
 #
 #   make -C tests -j2          # everything
 #   make -C tests offline -j2  # just the suites that need nothing but a build

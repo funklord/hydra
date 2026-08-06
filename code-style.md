@@ -16,7 +16,7 @@ decided in passing -- and when a conflict actually comes up, stop and ask
 instead of picking a winner.
 
 `third_party/` keeps its upstream style and is exempt. So do generated
-sources: the `hydra_seed.qrc` and `sample-tree.txt` copy that CMake writes
+sources: the `hydra_seed.qrc` and `sample-tree.txt` copy the build writes
 into the build directory, and anything `moc` or `androiddeployqt` produces.
 
 ## The three rules
