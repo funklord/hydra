@@ -539,9 +539,21 @@ which re-checks the invariants after every section rather than testing the
 operation just performed, is what reported the tab-with-children violation in a
 section that was not looking for it.
 
-**Unfinished:** Android does not implement the navigation decider. Its WebView
-has the hook (`shouldOverrideUrlLoading`, already used for non-page links), so
-the port is small, but a locked tab there navigates as it always did.
+**Android implements the decider now.** `shouldOverrideUrlLoading` asks the
+shell through a new JNI entry point, and returning true there means "handled,
+do not load" -- so a refusal is the negation of permission, which is the one
+place this reads backwards from the desktop. The Java asks only about main
+frames and only after the external-url question, so the three rules match the
+desktop's without the C++ having to repeat them.
+
+Allowed is the answer when nothing is listening: a view that has gone away
+between the question and the lookup, or one whose shell never set a decider.
+Refusing either would turn a missing answer into a browser that will not browse.
+
+**Verified as far as it can be without a device**: the APK builds, and the
+library exports `Java_se_vibes_hydra_HydraWebView_allowNavigation` -- checked
+against the Java's own declaration, eight wanted and eight exported. That the
+lock actually holds on a phone needs a phone.
 
 ## Another browser's tabs, in a folder of their own (§4)
 

@@ -194,7 +194,7 @@ The flag is node metadata, so it travels the way every other field does: written
 **Still open:**
 
 - **What happens when the reorganizer moves a *child* out from under its locked parent.** The lock is on the parent, so nothing refuses this. The tree then no longer records where the child came from, which is the property the feature exists to produce. Locking the child pins it, but that is the user noticing rather than the design answering.
-- **Android does not implement the decider.** Its WebView has the hook — `shouldOverrideUrlLoading`, already used to send non-page links elsewhere — so the port is small, but it is not done and a locked tab there navigates as it always did.
+- **Android implements the decider now**, through `shouldOverrideUrlLoading`. Returning true there means "handled, do not load", so a refusal is the negation of permission, and the same three rules apply: subframes are not asked about, external URLs are taken first, and a gesture separates a tap from a script. What is unverified is that it *works* — the symbol is exported and the APK builds, and neither is evidence about a device.
 
 ---
 

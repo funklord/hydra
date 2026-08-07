@@ -70,6 +70,21 @@ public class HydraWebView {
     /** True when the shell took a navigation instead -- magnet: and the like. */
     public static native boolean takeExternalUrl(String url);
 
+    /**
+     * Whether this view may go to `url`, asked of the shell.
+     *
+     * A locked tab keeps the page it is on: the shell opens a sub-tab below it
+     * and browsing continues there, so the navigation must not happen in this
+     * WebView. False means exactly that -- do not load it -- and the tab that
+     * was asked stays where it is.
+     *
+     * `userGesture` separates a tap from a redirect or a script, which get
+     * different answers: a page that could spawn tabs by scripting its own
+     * location would turn one pinned tab into a stream of them.
+     */
+    public static native boolean allowNavigation(long id, String url,
+                                                 boolean userGesture);
+
     /** A page's file input was used. The answer arrives later, via deliverFiles. */
     public static native void chooseFile(long id, boolean multiple, String accept);
 
@@ -213,7 +228,17 @@ public class HydraWebView {
                     public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
                         if (req == null || req.getUrl() == null)
                             return false;
-                        return takeExternalUrl(req.getUrl().toString());
+                        final String url = req.getUrl().toString();
+                        if (takeExternalUrl(url))
+                            return true;
+                        // A subframe navigating itself is not the page going
+                        // anywhere, and a locked tab is about the page. Asking
+                        // about one would spawn a sub-tab for an ad slot.
+                        if (!req.isForMainFrame())
+                            return false;
+                        // True here means "handled, do not load", so a refusal
+                        // is the negation of permission.
+                        return !allowNavigation(id, url, req.hasGesture());
                     }
 
                     // Every subresource passes through here, on a network

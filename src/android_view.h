@@ -114,6 +114,16 @@ public:
 	// told the handler once, after the views exist on the desktop and before them
 	// here, and threading it through every view would make the order matter.
 	static bool take_external_url(const QString &url);
+
+	// Whether the view behind `id` may navigate to `url` (architecture doc
+	// §5.5). Static for the same reason the others are: JNI has nowhere to put
+	// a `this`, so the id is the handle back.
+	//
+	// **True when nothing is listening**, which is what a view without a
+	// decider did before this existed and has to keep doing: a refusal that
+	// nobody asked for would be a browser that will not browse.
+	static bool allow_navigation(qint64 id, const QString &url,
+	                              bool user_initiated);
 	static void set_external_handler(std::function<void(const QUrl &)> fn);
 
 	// A page asked for a file. Runs on the Qt thread, shows Qt's file dialog —
@@ -134,6 +144,9 @@ public:
 
 	void apply_settings(const view_settings &s) override { Q_UNUSED(s) }
 	void set_permission_decider(permission_decider fn) override { m_decider = std::move(fn); }
+	void set_navigation_decider(navigation_decider fn) override {
+		m_navigation_decider = std::move(fn);
+	}
 	void set_zoom_factor(double factor) override { Q_UNUSED(factor) }
 
 	void inject_script(const QString &name, const QString &source,
@@ -165,6 +178,7 @@ private:
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;
 	permission_decider m_decider;
+	navigation_decider m_navigation_decider;
 	bridge_invoker m_bridges;
 	QStringList    m_script_names;   // named, so a test can see what was asked for
 	QStringList    m_script_sources; // in registration order, which is load order

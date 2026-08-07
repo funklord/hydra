@@ -201,6 +201,24 @@ Java_se_vibes_hydra_HydraWebView_takeExternalUrl(JNIEnv *env, jclass,
 	           : JNI_TRUE;
 }
 
+// Asked on Android's UI thread, once per main-frame navigation. The answer has
+// to come from the Qt thread because the decider reads the tab tree and may
+// queue a sub-tab, so it goes through `on_qt_thread` like the external-url
+// question above it.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_se_vibes_hydra_HydraWebView_allowNavigation(JNIEnv *env, jclass, jlong id,
+                                                  jstring url, jboolean gesture) {
+	const QString u = from_java(env, url);
+	const bool user = gesture == JNI_TRUE;
+	return on_qt_thread([id, u, user] {
+		       return android_view::allow_navigation(id, u, user)
+		                  ? QStringLiteral("1")
+		                  : QString();
+	       }).isEmpty()
+	           ? JNI_FALSE
+	           : JNI_TRUE;
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_se_vibes_hydra_HydraWebView_injectedScripts(JNIEnv *env, jclass,
                                                                jlong id) {
@@ -222,6 +240,20 @@ bool android_view::take_external_url(const QString &url) {
 		return false;   // nothing to hand it to; let the WebView fail visibly
 	s_external(u);
 	return true;
+}
+
+bool android_view::allow_navigation(qint64 id, const QString &url,
+                                     bool user_initiated) {
+	android_view *v = s_views.value(id, nullptr);
+	// **Allowed when nobody is listening**, in both senses: a view that has
+	// gone away between the question being asked and reaching here, and a view
+	// whose shell never set a decider. Refusing either would turn a missing
+	// answer into a browser that will not browse.
+	if (!v || !v->m_navigation_decider)
+		return true;
+	// Always the main frame: the Java side asks about nothing else, because a
+	// subframe navigating itself is not the page going anywhere.
+	return v->m_navigation_decider(QUrl(url), true, user_initiated);
 }
 
 void android_view::choose_file(qint64 id, bool multiple, const QString &accept) {
