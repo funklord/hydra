@@ -45,6 +45,8 @@
 #include <QDir>
 #include <QLayout>
 #include <QAction>
+#include <QSet>
+#include <QTest>
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
@@ -200,6 +202,69 @@ static void measure(QWidget *dlg, const QString &name) {
 	         first ? QString("%1: opens with something focused").arg(name)
 	               : QString("%1: nothing has focus, so there is no keyboard "
 	                          "way in").arg(name));
+
+	// **And can Tab reach all of it?** Something having focus is the first half;
+	// the second is whether the rest can be got to. A control that no number of
+	// Tab presses reaches is operable by pointer only, which on a desktop is a
+	// nuisance and on a device with a hardware keyboard is a wall.
+	//
+	// Walked rather than reasoned about: Qt's default order is construction
+	// order, but a stacked page, a popup or a disabled-then-enabled control can
+	// all change what that means, and only pressing the key answers it.
+	if (first) {
+		// **Disabled controls are not in the chain, and saying so matters.** A
+		// dialog whose actions start greyed -- downloads, and the three that
+		// ask a model -- offers two focusable widgets rather than eight, so
+		// "reaches all 2" is a true statement about a small question. Counted
+		// and printed either way, so the number is read for what it is.
+		QSet<QWidget *> want, seen;
+		int asleep = 0;
+		for (QWidget *c : dlg->findChildren<QWidget *>()) {
+			if (!c->isVisible() || !(c->focusPolicy() & Qt::TabFocus))
+				continue;
+			if (c->isEnabled())
+				want.insert(c);
+			else
+				++asleep;
+		}
+		// A real Tab key rather than `focusNextChild()`, which is protected --
+		// and which would be the wrong thing anyway. Pressing the key is what
+		// somebody does, and it goes through the same focus machinery a widget
+		// can intercept, which is precisely where a control gets stranded.
+		//
+		// Three times round is generous: the chain is a cycle, so one pass
+		// suffices, and the slack absorbs a widget that eats a Tab of its own
+		// before passing it on.
+		const int steps = want.size() * 3 + 8;
+		for (int i = 0; i < steps; ++i) {
+			QWidget *f = dlg->focusWidget();
+			if (!f)
+				break;
+			seen.insert(f);
+			QTest::keyClick(f, Qt::Key_Tab);
+		}
+		QStringList stranded;
+		for (QWidget *c : want) {
+			if (seen.contains(c))
+				continue;
+			if (stranded.size() < 4)
+				stranded << QString("%1 (%2)")
+				              .arg(c->objectName().isEmpty() ? "unnamed"
+				                                              : c->objectName(),
+				                    c->metaObject()->className());
+		}
+		verdict(stranded.isEmpty(),
+		         stranded.isEmpty()
+		             ? QString("%1: Tab reaches all %2 focusable control(s)%3")
+		                   .arg(name).arg(want.size())
+		                   .arg(asleep ? QString(", %1 disabled and so not in "
+		                                          "the chain").arg(asleep)
+		                                : QString())
+		             : QString("%1: Tab never reaches %2 -- %3")
+		                   .arg(name).arg(stranded.size()).arg(stranded.join("; ")));
+		if (first)
+			first->setFocus();
+	}
 
 	int off = 0, squeezed = 0;
 	QStringList lost, cut;

@@ -6904,7 +6904,22 @@ what everything below it applies to -- reading it first is the order the panel i
 meant to be used in.
 
 Now a check rather than a printout, and confirmed by taking the line out again
-and watching it fail. The mnemonic audit in `try_look` covers the neighbouring
+and watching it fail.
+
+**And then whether Tab reaches the rest**, which is the same question one step
+further in: a control no number of Tab presses arrives at is operable by pointer
+only. Walked with a real `Qt::Key_Tab` rather than `focusNextChild()` -- which is
+protected, and which would have been the wrong instrument anyway, since pressing
+the key goes through the focus machinery a widget can intercept and that is
+exactly where a control gets stranded. Nothing is stranded: 24 controls in
+settings, 16 in the site controls, and every other window complete.
+
+**The small numbers are the honest part.** Downloads reports two focusable
+controls, not eight, because its five action buttons start disabled and a
+disabled control is not in the chain -- so "reaches all 2" is a true statement
+about a small question. The count of sleeping controls is printed beside it so
+the number is read for what it is. Confirmed by capping the walk at two steps
+and watching it name what it had not got to. The mnemonic audit in `try_look` covers the neighbouring
 question and reports nothing, so this was the gap rather than the pattern.
 
 **The floor counts dialogs, not pictures.** It counted shots first, and the
