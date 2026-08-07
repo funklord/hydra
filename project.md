@@ -6633,6 +6633,37 @@ the names the Java declares. Seven wanted, seven exported, matched exactly.
 is fixed at the level the defect existed; whether the port works on a device is
 a separate question needing a device, and this is not evidence about it.
 
+### CI is green, and what it took to get there
+
+Four runs. Each failure was a real defect rather than a CI problem, which is
+the argument for having it: none of the three would have been found by building
+on this machine, because this machine is the one they were all invisible on.
+
+| run | failed at | what it actually was |
+|---|---|---|
+| 1 | Build the app | the declared Qt floor had been wrong for months |
+| 2 | Run the offline suites | a suite asserting a fact about *this* machine |
+| 3 | -- | green |
+
+The third finding came between runs rather than from one: going to wire the
+Android navigation decider turned up seven JNI symbols naming a package that
+was renamed away, which had left the whole Android port dead. That one CI could
+not have caught either, and now `make style` does.
+
+**What the green run establishes**, taken from its own log rather than from the
+tick: 237 files conform to the indentation gate, project.md says nothing twice
+and names no missing file, 7 native methods resolve, Qt is the version
+`hydra.pro` demands, all four optional packages are present *and* linked into
+the binary, 38 suite sources produced 28 binaries, and 28 suites passed. Those
+counts are asserted, not printed -- an empty file list or a collapsed suite list
+fails the run.
+
+**What it does not establish.** The live drivers are not built or run: they need
+a display and thirty-four WebEngine links, and none of that belongs in a job
+that has to finish. The APK is not built either. Both are still things this
+machine does, and the gap is worth naming rather than reading a green tick as
+"everything is checked".
+
 ### CI, and the first thing it found was a lie in the documentation
 
 The first run went green on the gates in eight seconds and failed the build in

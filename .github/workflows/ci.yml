@@ -35,7 +35,7 @@ jobs:
     name: style and document gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: false
 
@@ -96,7 +96,7 @@ jobs:
       # which the README warns about, so it is worth covering; the other branch
       # runs on every developer machine. `submodules: true` here would cover
       # both, at the cost of cloning yt-dlp on every run.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: false
 
