@@ -6887,6 +6887,26 @@ photographed before -- takes 82% of the screen and leaves a strip of page to tap
 back on. Nothing to fix, which is worth recording as a result rather than as
 silence.
 
+### The site controls had no keyboard way in
+
+Nothing in this tree sets a tab order and nothing tested one, so what Qt does by
+default -- construction order -- had never been looked at. Asking each dialog
+what holds focus when it opens answered well for twelve of thirteen: the two
+password prompts land on the username field, settings on its search box, the
+lists on their lists.
+
+The exception was the site controls, where **nothing had focus at all**. The
+cause is one line: it sets `Qt::Popup`, and a popup does not hand focus to a
+child the way a dialog does. So a panel of fifteen per-site controls opened with
+no focus ring anywhere and no entry point for anybody not using a pointer. It
+lands on the scope selector now, which is the right place because it decides
+what everything below it applies to -- reading it first is the order the panel is
+meant to be used in.
+
+Now a check rather than a printout, and confirmed by taking the line out again
+and watching it fail. The mnemonic audit in `try_look` covers the neighbouring
+question and reports nothing, so this was the gap rather than the pattern.
+
 **The floor counts dialogs, not pictures.** It counted shots first, and the
 settings walk takes one per page, so a run that measured a single window seven
 times would have cleared a floor of twelve. It is exact rather than comfortable

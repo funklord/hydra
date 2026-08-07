@@ -186,6 +186,21 @@ static void measure(QWidget *dlg, const QString &name) {
 	// "pen Folde", because Qt had squeezed six buttons into a row built for
 	// none of them. A button narrower than its own `sizeHint` has lost some of
 	// its label, and a control whose label is cut is not one somebody can use.
+	// **Can it be answered without a mouse?** Nothing in this tree sets a tab
+	// order and nothing tested one, so what Qt does by default -- construction
+	// order -- has never been looked at. The case that matters is a password
+	// prompt: if focus starts on a button, the first thing typed goes nowhere.
+	QWidget *first = dlg->focusWidget();
+	if (first)
+		std::printf("        focus:  %s (%s)\n",
+		             first->objectName().isEmpty() ? "(unnamed)"
+		                                            : qPrintable(first->objectName()),
+		             first->metaObject()->className());
+	verdict(first != nullptr,
+	         first ? QString("%1: opens with something focused").arg(name)
+	               : QString("%1: nothing has focus, so there is no keyboard "
+	                          "way in").arg(name));
+
 	int off = 0, squeezed = 0;
 	QStringList lost, cut;
 	for (QPushButton *b : dlg->findChildren<QPushButton *>()) {

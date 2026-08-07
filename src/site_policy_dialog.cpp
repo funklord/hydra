@@ -50,6 +50,7 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 	outer->addWidget(m_host_label);
 
 	m_scope = new QComboBox(this);
+	m_scope->setObjectName("scope");
 	m_scope->addItem("This host");
 	m_scope->addItem("This domain");
 	m_scope->addItem("Global default");
@@ -110,6 +111,14 @@ void site_policy_dialog::set_host(const QString &host) {
 	                                  policy_engine::etld_plus_one(host) + ")"
 	                            : QStringLiteral("This domain"));
 	repopulate();
+
+	// **A popup does not hand focus to a child, and a dialog does.** With
+	// `Qt::Popup` set, nothing in here had it -- so this panel of fifteen
+	// controls opened with no focus ring anywhere and no entry point for
+	// anybody not using a pointer. The scope selector is the right place to
+	// land: it decides what everything below it applies to, so reading it
+	// first is the order the panel is meant to be used in.
+	m_scope->setFocus(Qt::PopupFocusReason);
 }
 
 QString site_policy_dialog::current_pattern() const {
