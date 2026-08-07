@@ -44,9 +44,11 @@
 #include <QDialog>
 #include <QDir>
 #include <QLayout>
+#include <QAction>
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
+#include <QToolButton>
 #include <QTimer>
 #include <algorithm>
 #include <cstdio>
@@ -59,6 +61,10 @@ static const QSize k_phone(360, 640);
 // `check`, `section` and `report` come from the fixture, which every other
 // driver here uses; only the shot counter is local.
 static int g_shots = 0;
+// Dialogs actually measured. Counted separately from shots, because the
+// settings walk takes one picture per page and would otherwise make the floor
+// below pass on a run that measured one window seven times.
+static int g_measured = 0;
 static QString g_out;
 
 static void save(QWidget *w, const QString &name) {
@@ -75,7 +81,7 @@ static void save(QWidget *w, const QString &name) {
 // Written out rather than called, because that code is compiled only for
 // Android -- so this is a copy, and it is a copy on purpose. If the two drift
 // this driver measures the wrong thing, which is worth knowing.
-static void as_android_would(QDialog *dlg) {
+static void as_android_would(QWidget *dlg) {
 	dlg->setMinimumSize(0, 0);
 	dlg->setGeometry(QRect(QPoint(0, 0), k_phone));
 }
@@ -100,7 +106,8 @@ static QString known_gap(const QString &name) {
 
 // Every button must land inside the dialog. This is the exact failure the
 // Android filter was written for, stated as arithmetic rather than as a feel.
-static void measure(QDialog *dlg, const QString &name) {
+static void measure(QWidget *dlg, const QString &name) {
+	++g_measured;
 	const QString gap = known_gap(name);
 	// A local `check` that downgrades a verdict to a note for a named gap, and
 	// is the ordinary one otherwise.
@@ -359,6 +366,50 @@ int main(int argc, char *argv[]) {
 	// does not care whether the provider behind it can answer. Built directly
 	// with one that cannot, the same way `try_send_gate` reaches the filter
 	// dialog.
+	// **The window itself, which is the surface anybody actually uses.** Every
+	// measurement above is of something that appears in front of it. The
+	// toolbar carries back, forward, reload, the drawer button, an address bar,
+	// a shield and sometimes a media button, and that is a row -- the shape
+	// that has failed twice already in this pass.
+	std::printf("\n== the browser window ==\n");
+	measure(&f.window, "window");
+
+	// **And with the drawer out**, which is the only way to reach a tab on a
+	// phone and had never been photographed. The tree is an overlay at this
+	// width rather than a pane, so what matters is whether it covers enough to
+	// be usable without covering so much that there is no way back -- it takes
+	// 82% of the width, leaving a strip of page to tap on.
+	if (QAction *drawer = f.window.findChild<QAction *>("drawer")) {
+		drawer->trigger();
+	} else {
+		// The action carries no object name, so reach it the way a person does:
+		// the toolbar button whose text is the drawer glyph.
+		for (QToolButton *b : f.window.findChildren<QToolButton *>())
+			if (b->isVisible() && b->text().contains(QChar(0x2630)))
+				b->click();
+	}
+	spin(600);
+	save(&f.window, "window-drawer");
+
+	// Back to a size the rest of the run expects to build dialogs against.
+	f.window.resize(1100, 720);
+	QApplication::processEvents();
+
+	// **The media dialog, which needs a page rather than a provider.** It is
+	// the last one unmeasured, and building it directly would mean standing up
+	// five collaborators -- a detector, a player launcher, a download manager,
+	// a proxy and an MSE tap. Opening a tab is cheaper and is also the path a
+	// person takes, so `open_media` finds a current view and does the rest.
+	if (f.open_tab(0, "one.html")) {
+		visit(&f.window, "open_media", "media");
+	} else {
+		// Not a skip to pass over quietly: this is the one dialog nothing else
+		// here reaches, so a run that could not open a page has measured seven
+		// of eight and should say which one it missed.
+		std::printf("  skip  media          no page would load, so no view to "
+		             "ask for media\n");
+	}
+
 	std::printf("\n== and the three that ask a model ==\n");
 	ollama_provider offline;
 	offline.set_endpoint(QUrl("http://127.0.0.1:9"));   // nothing listening
@@ -391,12 +442,16 @@ int main(int argc, char *argv[]) {
 	// dialog above can decline to open -- three of the shell's do, for want of
 	// a page or a model -- and a driver that measured none of them would
 	// otherwise print a clean sweep of an empty list.
-	// The four opened by a slot, plus the three built directly above; the
-	// settings walk adds one shot per page on top of that.
-	const int expected = int(sizeof(dialogs) / sizeof(dialogs[0])) + 7;
-	if (g_shots < expected) {
+	// Four opened by a slot, plus nine reached other ways: the window itself,
+	// the two the network raises, the certificate chooser, the annoyance
+	// report, the three that ask a model, and the media dialog behind a tab.
+	// Exact rather than comfortable -- a floor one below the real count lets a
+	// dialog go missing without anything saying so, which is the failure this
+	// guard exists to prevent rather than a smaller version of it.
+	const int expected = int(sizeof(dialogs) / sizeof(dialogs[0])) + 9;
+	if (g_measured < expected) {
 		std::printf("\nonly %d of %d dialogs were measured; that is not a "
-		             "check of anything\n", g_shots, expected);
+		             "check of anything\n", g_measured, expected);
 		return 1;
 	}
 

@@ -6874,8 +6874,25 @@ dialog. All three fit: filter 291, extractor 304, reorganizer 284. The
 reorganizer's picture also shows the Send gate working in a dialog it had not
 been checked in, greyed with its reason on it.
 
-Every dialog this browser has is now measured against a phone screen except the
-media one, which needs five collaborators to build.
+**Every dialog this browser has is measured against a phone screen now, and so
+is the window.** The media dialog was the last, and it wanted a page rather than
+a provider -- building it directly would have meant standing up a detector, a
+player launcher, a download manager, a proxy and an MSE tap, where opening a tab
+is both cheaper and the path a person takes. It comes out at 102.
+
+The window itself is the surface anybody actually uses and everything above
+appears in front of it, so leaving it unmeasured was the odd gap. It fits at
+321, and its drawer -- the only way to reach a tab at that width, and never
+photographed before -- takes 82% of the screen and leaves a strip of page to tap
+back on. Nothing to fix, which is worth recording as a result rather than as
+silence.
+
+**The floor counts dialogs, not pictures.** It counted shots first, and the
+settings walk takes one per page, so a run that measured a single window seven
+times would have cleared a floor of twelve. It is exact rather than comfortable
+now: one below the real count lets a dialog go missing without anything saying
+so, which is the failure the guard exists to prevent rather than a smaller
+version of it. Checked by raising it out of reach and watching the run exit 1.
 The sweep reads the "N failed" line, and this tree's own rule is that a summary
 which is always wrong trains people to skip the summary; a named gap is visible
 without being noise. The pages carry object names now, because the first run of
