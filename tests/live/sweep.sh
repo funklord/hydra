@@ -40,7 +40,14 @@ cd "$(dirname "$0")/../.." || exit 1
 # Appended rather than assigned, so a flag somebody set for their own reasons
 # survives; the app does the same thing in theme.cpp for the colour scheme.
 export QTWEBENGINE_CHROMIUM_FLAGS="${QTWEBENGINE_CHROMIUM_FLAGS:+$QTWEBENGINE_CHROMIUM_FLAGS }--mute-audio"
-BIN=tests/build
+# **Where the drivers are, which moved with the build system.** This said
+# `tests/build` -- CMake's directory, and CMake is gone. The directory it named
+# survived on disk with two binaries in it from before the migration, so the
+# sweep did not fail: it found drivers, ran them, and reported a clean sweep of
+# two out of thirty-five, every one built before a session's worth of changes.
+#
+# Overridable, because a second build tree is a real thing to want.
+BIN=${HYDRA_SWEEP_BIN:-tests/build-make}
 OUT=${HYDRA_SWEEP_OUT:-/tmp/hydra-sweep}
 mkdir -p "$OUT"
 
@@ -62,6 +69,25 @@ if [ -z "$drivers" ]; then
 fi
 [ -z "$drivers" ] && { echo "no drivers built -- run: make drivers"; exit 1; }
 
+# **A floor, not just a zero check.** Finding *no* drivers was already refused;
+# finding a handful was not, and that is the shape this script was in --
+# reporting a clean sweep over two stale binaries in a directory the build
+# system had stopped using. A count well under what the tree holds means the
+# sweep is looking in the wrong place or at an old build, and either way its
+# summary is about something other than this tree.
+#
+# Compared against the sources, so it needs no number maintained here.
+if [ -z "${*:-}" ]; then
+	have=$(printf '%s
+' $drivers | grep -c .)
+	want=$(ls tests/live/try_*.cpp 2>/dev/null | grep -c .)
+	if [ "$want" -gt 0 ] && [ "$have" -lt $((want / 2)) ]; then
+		echo "only $have driver(s) built in $BIN, against $want source(s)."
+		echo "That is not a sweep -- build them with: make drivers"
+		exit 1
+	fi
+fi
+
 pass=0 fail=0 report=0 failed=""
 # Drivers that are tools rather than tests: they take arguments, or they need a
 # network the sweep has no business assuming. Named with the reason, because
@@ -71,6 +97,23 @@ skip_reason() {
 	case "$1" in
 		try_extract) echo "a capture tool; takes a url argument" ;;
 		try_watch)   echo "needs a live network" ;;
+		# **Cannot pass offscreen, and that is the platform rather than the
+		# driver.** It hands a url to another application through
+		# QDesktopServices::openUrl, and the offscreen platform plugin has no
+		# desktop services to hand it to -- so the request never leaves and the
+		# driver correctly reports that nothing fetched it. On the real display
+		# it passes five of five. It was reported as a failure in every
+		# offscreen sweep, which is the noise this script's own header warns
+		# about: two lines of summary that are always wrong train you to skip
+		# the summary.
+		try_handoff)
+			[ -n "${SWEEP_ONSCREEN:-}" ] || \
+				echo "hands a url to another application; offscreen has no desktop services"
+			;;
+		# Waits on a local model to return a proposal. With none running it
+		# reaches the timeout and is killed, which costs the sweep five minutes
+		# and reports a failure about the machine rather than the code.
+		try_evolve_confirm) echo "needs a local model; start ollama and use SWEEP_ALL" ;;
 		*)           echo "" ;;
 	esac
 }

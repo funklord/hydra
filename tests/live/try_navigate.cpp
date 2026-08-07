@@ -130,27 +130,43 @@ int main(int argc, char *argv[]) {
 		// the tab lands, and Qt's own signal is one line of wiring.
 		auto *model = w.findChild<tab_tree_model *>();
 		node *folder = model->root()->children.first();
+		// The tab the driver opened at the start, which is the one that will
+		// be asking: `open_new_window` parents onto whatever view is current.
+		node *asking = folder->children.first();
 		const int before = folder->children.size();
+		const int under_asking = asking->children.size();
 
 		// A click. Chromium's rule and the right one: the popup setting exists
 		// to stop pages opening windows nobody asked for, not to break links.
 		node *made = w.open_new_window(QUrl("https://example.test/clicked"), true);
 		spin(400);
 		check(made != nullptr, "a clicked link opens even with popups blocked");
-		check(folder->children.size() == before + 1,
-		      QString("as a tab in the tree (%1 -> %2)")
+		// **This used to assert the opposite, and its own message said so.**
+		// It checked that the new tab arrived beside the asking one, under the
+		// folder, while the message read "under the tab that asked, where the
+		// tree shows the relationship" -- the same contradiction the shell
+		// carried, where the comment described the design and the code
+		// described a restriction. A tab can hold children now (§5.5), so the
+		// relationship is recorded where both always said it should be.
+		check(folder->children.size() == before,
+		      QString("not beside the tab that asked (%1 -> %2)")
 		          .arg(before).arg(folder->children.size()));
+		check(asking->children.size() == under_asking + 1,
+		      QString("but under it, as a sub-tab (%1 -> %2)")
+		          .arg(under_asking).arg(asking->children.size()));
 		if (made)
-			check(made->parent == folder,
+			check(made->parent == asking,
 			      "under the tab that asked, where the tree shows the relation");
 
 		// A script, with the default policy, which blocks popups.
-		const int after_click = folder->children.size();
+		// Counted where the tabs now land, which is under the asking tab
+		// rather than beside it.
+		const int after_click = asking->children.size();
 		QStatusBar *sb = w.findChild<QStatusBar *>();
 		node *blocked = w.open_new_window(QUrl("https://example.test/popup"), false);
 		spin(300);
 		check(blocked == nullptr, "a script-opened window is refused");
-		check(folder->children.size() == after_click,
+		check(asking->children.size() == after_click,
 		      "and leaves no tab behind");
 		check(sb && sb->currentMessage().contains("Blocked"),
 		      QString("out loud, not silently (%1)")

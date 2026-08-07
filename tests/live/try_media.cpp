@@ -6,6 +6,7 @@
 #include "torrent_download_source.h"
 #include "media_detector.h"
 #include "web_view_backend.h"
+#include "sample_tree.h"
 
 #include <QApplication>
 #include <QDir>
@@ -78,7 +79,7 @@ int main(int argc, char *argv[]) {
 	qtwebengine_factory factory(&filter);
 
 	main_window w(&factory, &policy, &filter);
-	w.load_tree("/home/nabbe/src/hydra/sample-tree.txt");
+	w.load_tree(shell::sample_tree_copy());
 	w.resize(1280, 860);
 	w.show();
 

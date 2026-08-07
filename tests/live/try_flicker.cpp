@@ -4,6 +4,7 @@
 #include "request_filter.h"
 #include "qtwebengine_factory.h"
 #include "torrent_download_source.h"
+#include "sample_tree.h"
 
 #include <QApplication>
 #include <QPlatformSurfaceEvent>
@@ -52,7 +53,7 @@ int main(int argc, char *argv[]) {
 		}
 	};
 	w.installEventFilter(new watcher);
-	w.load_tree("/home/nabbe/src/hydra/sample-tree.txt");
+	w.load_tree(shell::sample_tree_copy());
 	w.resize(1100, 780);
 	w.show();
 

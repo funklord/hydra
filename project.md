@@ -6645,6 +6645,79 @@ the names the Java declares. Seven wanted, seven exported, matched exactly.
 is fixed at the level the defect existed; whether the port works on a device is
 a separate question needing a device, and this is not evidence about it.
 
+### The live drivers, which nothing had run since the build system changed
+
+CI does not run them and neither had anything else this session. Running all
+thirty-five found three failures, and every one was a different kind of thing.
+
+**The sweep was pointed at a directory that no longer exists.** `sweep.sh` had
+`BIN=tests/build`, which was CMake's, and CMake is gone. The directory survived
+on disk with two binaries in it from before the migration -- so the sweep did
+not fail. It found drivers, ran them, and would have reported a clean sweep of
+two out of thirty-five, every one built before a session's worth of changes.
+That is the vacuous pass in its purest form: the check ran, said nothing was
+wrong, and had looked at almost nothing.
+
+It has a floor now, compared against the source count rather than a number
+maintained by hand, so "far fewer drivers than sources" stops the sweep instead
+of summarising it. The zero case was already refused; the handful case was not,
+which is the same lesson `.style-gate.toml` records and the CI guards repeat.
+
+**`try_navigate` was a real regression, and mine.** Making a page's new window a
+child of the tab that asked (§5.5) changed where the node lands, and the driver
+asserted the old placement -- while its own message said "under the tab that
+asked, where the tree shows the relationship". It had inherited the shell's
+contradiction word for word. The offline suites were updated when that changed;
+this one was missed because nothing runs it. It asserts the intended behaviour
+now, on both counts: the folder does not grow, the asking tab does.
+
+**`try_handoff` cannot pass offscreen**, and that is the platform rather than
+the driver. It hands a url to another application through
+`QDesktopServices::openUrl`, and the offscreen plugin has no desktop services to
+hand it to. Checked rather than assumed: `xdg-open` on this machine fetches a
+local url fine, and the driver passes five of five on the real display. It had
+been reported as a failure in every offscreen sweep -- and `sweep.sh`'s own
+header claims every driver passes offscreen, which was simply not true.
+
+**`try_evolve_confirm` waits on a model that is not running** and is killed at
+the five-minute timeout. project.md already recorded that its real trigger is
+unexercised for exactly this reason; what it did not say is that it costs every
+sweep five minutes and a failure line about the machine.
+
+Both are named skips now, with their reasons, the way `try_watch` and
+`try_extract` already were. `SWEEP_ALL` still runs them. The summary reads 19
+passed, 12 report-only, 0 failed -- and a failure line in it now means
+something.
+
+### A sweep wrote somebody's ad-tracking into the committed example
+
+Found by `git status` after the sweep rather than by any check. Two
+`fedoq.com/clicks/...` urls had been written into `sample-tree.txt` -- the
+tracked example -- carrying screen size, timezone, browser version and the
+referring page, as **sub-tabs** under the first entry.
+
+Three things combined, and none of them was new on its own:
+
+- Eleven drivers loaded the tracked `sample-tree.txt` directly, several through
+  a hardcoded `/home/nabbe/src/hydra/...` that is one machine's path.
+- The shell saves the tree whenever it changes -- a title arriving, a `seen=`
+  stamp, a tab opening. `make run` was given a copy for exactly this after the
+  example was reverted from git five times in one day; the drivers never were.
+- A page's new window is a sub-tab now (§5.5), so a driver pointed at a real
+  site saves what that site opened, nested under the tab it came from. What was
+  a stale timestamp became a third party's tracking parameters.
+
+`tests/live/sample_tree.h` gives each driver a private copy under its own
+scratch directory, and finds the example rather than being told where it is, so
+the hardcoded paths are gone with it. A full sweep now leaves `git status`
+empty.
+
+**Worth noticing about the shape of it.** The example being dirtied was a known
+problem with a known fix, applied in one place. Nothing was watching the other
+eleven, and the change that made it serious -- sub-tabs -- had nothing to do
+with either. A fix applied where a problem was noticed is not a fix applied
+where the problem is.
+
 ### CI is green, and what it took to get there
 
 Four runs. Each failure was a real defect rather than a CI problem, which is

@@ -6,6 +6,7 @@
 #include "request_filter.h"
 #include "qtwebengine_factory.h"
 #include "torrent_download_source.h"
+#include "sample_tree.h"
 
 #include <QAction>
 #include <QApplication>
@@ -60,7 +61,7 @@ int main(int argc, char *argv[]) {
 	request_filter      filter(&policy);
 	qtwebengine_factory factory(&filter);
 	main_window w(&factory, &policy, &filter);
-	w.load_tree(QDir("/home/nabbe/src/hydra").filePath("sample-tree.txt"));
+	w.load_tree(shell::sample_tree_copy());
 	w.show();
 
 	int step = 0;

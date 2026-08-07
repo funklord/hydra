@@ -5,6 +5,7 @@
 #include "torrent_download_source.h"
 #include "media_detector.h"
 #include "mse_tap.h"
+#include "sample_tree.h"
 
 #include <QAction>
 #include <QApplication>
@@ -36,7 +37,7 @@ int main(int argc, char *argv[]) {
 	request_filter      filter(&policy);
 	qtwebengine_factory factory(&filter);
 	main_window w(&factory, &policy, &filter);
-	w.load_tree("/home/nabbe/src/hydra/sample-tree.txt");
+	w.load_tree(shell::sample_tree_copy());
 	w.resize(1200, 820);
 	w.show();
 

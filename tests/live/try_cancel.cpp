@@ -5,6 +5,7 @@
 #include "qtwebengine_factory.h"
 #include "torrent_download_source.h"
 #include "download_manager.h"
+#include "sample_tree.h"
 
 #include <QAction>
 #include <QApplication>
@@ -26,7 +27,7 @@ int main(int argc, char *argv[]) {
 	policy_engine policy; request_filter filter(&policy);
 	qtwebengine_factory factory(&filter);
 	main_window w(&factory, &policy, &filter);
-	w.load_tree("/home/nabbe/src/hydra/sample-tree.txt");
+	w.load_tree(shell::sample_tree_copy());
 	w.resize(1100, 760); w.show();
 	QDir().mkpath(outdir);
 	auto *dm = w.findChild<download_manager *>();
