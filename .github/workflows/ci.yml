@@ -85,9 +85,20 @@ jobs:
             libsodium-dev libsecret-1-dev liblz4-dev \
             libtorrent-rasterbar-dev
 
+      # `third_party/yt-dlp` is a runtime tool rather than a build input, so it
+      # is not fetched and the build does not need it. What that costs is one
+      # assertion: `test_ytdlp` checks that the resolver finds a vendored copy
+      # when one exists, and here none does, so it takes its other branch --
+      # that the resolver reports unavailable rather than claiming a program it
+      # has not got. The log says `skipped:` with the reason when it does.
+      #
+      # That is the branch a fresh clone without `--recurse-submodules` hits,
+      # which the README warns about, so it is worth covering; the other branch
+      # runs on every developer machine. `submodules: true` here would cover
+      # both, at the cost of cloning yt-dlp on every run.
       - uses: actions/checkout@v4
         with:
-          submodules: false   # third_party/yt-dlp is a runtime tool, not a build input
+          submodules: false
 
       # The floor is 6.8 and hydra.pro refuses anything older by name, so this
       # is a statement of what was built rather than a gate. Printed because a

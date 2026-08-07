@@ -4,6 +4,9 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFileInfo>
+#include <QStandardPaths>
+#include <QStringList>
 #include <QEventLoop>
 #include <QSignalSpy>
 #include <QTimer>
@@ -14,6 +17,7 @@ static void check(bool ok, const QString &w) {
 	if (ok) { ++g_pass; std::printf("  ok    %s\n", qPrintable(w)); }
 	else    { ++g_fail; std::printf("  FAIL  %s\n", qPrintable(w)); }
 }
+static void note(const QString &w) { std::printf("  --    %s\n", qPrintable(w)); }
 static void section(const char *n) { std::printf("\n== %s ==\n", n); }
 
 // Shaped like real --dump-single-json output: several renditions, some
@@ -123,9 +127,51 @@ int main(int argc, char **argv) {
 	{
 		ytdlp_resolver r;
 		std::printf("  ..    %s\n", qPrintable(r.description()));
-		// The vendored submodule is present in this tree, so with python3
-		// available something must be found.
-		check(r.available(), "a runnable yt-dlp was located");
+
+		// **The premise, stated and checked rather than assumed.** This used
+		// to assert outright that something was found, on the grounds that the
+		// vendored submodule is present in this tree -- true here, and false
+		// on any clone made without `--recurse-submodules`, which the README
+		// warns about because it is easy to do. CI found it the same way: it
+		// checks out without submodules, and a suite about parsing yt-dlp's
+		// output failed for the absence of yt-dlp.
+		//
+		// So the environment fact is separated from the claim about our code.
+		// Where a copy exists the resolver must find it, which is the thing
+		// worth asserting; where none does, reporting unavailable is the
+		// correct answer and not a defect.
+		// Looked for the way the resolver does -- a checkout is the file
+		// `yt_dlp/__main__.py` -- but from here rather than through the
+		// resolver, so the premise is established independently of the thing
+		// being tested. A couple of levels up, since a suite may be run from
+		// the repository root or from `tests/`.
+		// Both roots the resolver searches from -- the binary's directory and
+		// the working directory -- because checking only one would call a copy
+		// absent that the resolver goes on to find, and then assert it was not
+		// found.
+		QStringList roots;
+		roots << QCoreApplication::applicationDirPath() << QDir::currentPath();
+		QStringList rels;
+		rels << "third_party/yt-dlp" << "../third_party/yt-dlp"
+		      << "../../third_party/yt-dlp";
+		bool vendored = false;
+		for (const QString &root : roots)
+			for (const QString &rel : rels)
+				if (QFileInfo::exists(QDir(QDir(root).absoluteFilePath(rel))
+				                          .filePath("yt_dlp/__main__.py")))
+					vendored = true;
+		const bool on_path = !QStandardPaths::findExecutable("yt-dlp").isEmpty();
+		if (vendored || on_path) {
+			check(r.available(),
+			      QString("a runnable yt-dlp was located (%1)")
+			          .arg(vendored ? "vendored copy present"
+			                         : "one on PATH"));
+		} else {
+			note("skipped: no yt-dlp vendored and none on PATH, so there is "
+			      "nothing for the resolver to find");
+			check(!r.available(),
+			      "and the resolver says so rather than claiming one");
+		}
 		check(!r.busy(), "and it starts idle");
 	}
 
