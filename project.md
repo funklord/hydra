@@ -6689,6 +6689,38 @@ Both are named skips now, with their reasons, the way `try_watch` and
 passed, 12 report-only, 0 failed -- and a failure line in it now means
 something.
 
+### The media dialog's empty state, finally photographed
+
+The capture pass has always skipped four dialogs with a line saying they need a
+loaded page -- the media dialog lists what a page is playing, and the extractor
+works from the requests a page made, so both are empty by construction on an
+empty tab. Nobody passed a url, because the only url to hand was a real site.
+
+The local media fixture removed that reason. Passing it to `try_look` produced
+the first pictures of the media dialog and the annoyed report ever taken, and
+the media dialog was the odd one out of three treatments of "nothing here":
+
+- the tab tree and the downloads dialog centre the message in the empty area
+- the annoyed report makes it the first row of its list
+- the media dialog left a dialog-sized black table with the explanation
+  stranded underneath it
+
+The first is right and was already a deliberate fix -- the GUI pass began with
+"two empty states that could not say which kind of empty they were". The media
+dialog missed it for one reason: it could not be looked at.
+
+It has an overlay in the viewport now, the same pattern as downloads, and the
+status line stays empty in that state rather than repeating the sentence two
+inches lower. `m_status` could not simply be moved: it is the dialog's status
+line and also reports assembling, progress and errors.
+
+**Still unphotographed:** the extractor dialog and the filter-evolution dialog
+report "no dialog appeared" against the fixture. Both want evidence the fixture
+does not produce -- the extractor probes candidates it has none of, and filter
+evolution wants signals from a page with something to block. That is a fixture
+problem rather than a dialog problem, and it is the next thing to fix if those
+two are ever to be seen.
+
 ### The dependency list, written down and therefore found to be wrong
 
 Three places name what this needs to build -- `README.md`, `debian/control`'s

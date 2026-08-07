@@ -11,6 +11,7 @@
 #include <QDialogButtonBox>
 #include <QHeaderView>
 #include <QLocale>
+#include <QEvent>
 #include <QLabel>
 #include <QPushButton>
 #include <QTreeWidget>
@@ -47,6 +48,24 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 	m_list->header()->setStretchLastSection(false);
 	m_list->header()->setSectionResizeMode(1, QHeaderView::Stretch);
 	outer->addWidget(m_list, 1);
+
+	// **The empty state goes over the rows area, not under it.** It used to be
+	// one of `m_status`'s texts, which left a dialog-sized black table with the
+	// explanation stranded beneath it -- the tab tree and the downloads dialog
+	// both centre theirs in the space that is empty, and this was the odd one
+	// out. Nobody had seen it because the media dialog needs a loaded page to
+	// photograph, so the capture pass had always skipped it.
+	//
+	// Parented to the viewport and transparent to the mouse, so it cannot
+	// swallow a click meant for the list the moment a row arrives.
+	m_nothing = new QLabel(m_list->viewport());
+	m_nothing->setObjectName("nothing_detected");
+	m_nothing->setAlignment(Qt::AlignCenter);
+	m_nothing->setWordWrap(true);
+	m_nothing->setAttribute(Qt::WA_TransparentForMouseEvents);
+	m_nothing->setEnabled(false);   // the style's dimmed text, not a picked grey
+	m_nothing->hide();
+	m_list->viewport()->installEventFilter(this);
 
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
@@ -147,10 +166,34 @@ void media_dialog::repopulate() {
 		                  "be found — the address is hidden, or the bytes never "
 		                  "travel as one. Capture records it as it plays.");
 	} else {
-		m_status->setText("Nothing detected yet. Many sites only request the "
-		                  "manifest when their player starts, so try pressing "
-		                  "play first.");
+		// Said once, in the space it is about. The status line stays empty
+		// here rather than repeating it two inches lower.
+		m_nothing->setText("Nothing detected yet.\n\nMany sites only request "
+		                    "the manifest when their player starts, so try "
+		                    "pressing play first.");
+		m_status->clear();
 	}
+	place_empty_state();
+}
+
+bool media_dialog::eventFilter(QObject *o, QEvent *e) {
+	// The viewport knows the size it will be drawn at; the dialog's own resize
+	// fires before that, which is how the same message came out clipped into a
+	// corner elsewhere in this tree.
+	if (m_list && o == m_list->viewport() && e->type() == QEvent::Resize)
+		place_empty_state();
+	return QDialog::eventFilter(o, e);
+}
+
+// Centred over the viewport rather than laid out beside the list, so the list
+// keeps its full size and the message occupies none of it.
+void media_dialog::place_empty_state() {
+	if (!m_nothing || !m_list)
+		return;
+	m_nothing->setVisible(m_list->topLevelItemCount() == 0
+	                       && !m_nothing->text().isEmpty());
+	m_nothing->setGeometry(m_list->viewport()->rect());
+	m_nothing->raise();
 }
 
 void media_dialog::assemble_then(const media_item &item, bool play_it) {
