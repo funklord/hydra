@@ -6864,6 +6864,18 @@ reading on anything narrower. The three tools are a `flow_layout` now and "Just
 Record It" keeps its place last, in a box of its own -- which is the bottom row
 rather than the right of one, and the reading the ordering was chosen for
 survives a narrow screen, which the row did not. 479 to 149.
+
+**And the three that ask a model, which no capture pass had ever photographed.**
+In the shell they open only when `choose_ai()` returns a provider, so they were
+absent from every run. The question here is about layout, and a layout does not
+care whether the provider behind it can answer -- built directly with one
+pointed at a closed port, the same way `try_send_gate` reaches the filter
+dialog. All three fit: filter 291, extractor 304, reorganizer 284. The
+reorganizer's picture also shows the Send gate working in a dialog it had not
+been checked in, greyed with its reason on it.
+
+Every dialog this browser has is now measured against a phone screen except the
+media one, which needs five collaborators to build.
 The sweep reads the "N failed" line, and this tree's own rule is that a summary
 which is always wrong trains people to skip the summary; a named gap is visible
 without being noise. The pages carry object names now, because the first run of

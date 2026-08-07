@@ -27,6 +27,15 @@
 #include "annoyance_log.h"
 #include "annoyed_dialog.h"
 #include "auth_dialog.h"
+#include "extractor_dialog.h"
+#include "extractor_signals.h"
+#include "filter_dialog.h"
+#include "filter_list.h"
+#include "filter_signals.h"
+#include "ollama_provider.h"
+#include "reorganize_dialog.h"
+#include "site_extractor.h"
+#include "tab_tree_model.h"
 #include "cert_dialog.h"
 #include "main_window.h"
 #include "web_view_backend.h"
@@ -344,13 +353,47 @@ int main(int argc, char *argv[]) {
 		measure(&dlg, "annoyance");
 	}
 
+	// **The three that ask a model.** In the shell these open only when
+	// `choose_ai()` returns a provider, which is why no capture pass has ever
+	// photographed them -- but the question here is about layout, and a layout
+	// does not care whether the provider behind it can answer. Built directly
+	// with one that cannot, the same way `try_send_gate` reaches the filter
+	// dialog.
+	std::printf("\n== and the three that ask a model ==\n");
+	ollama_provider offline;
+	offline.set_endpoint(QUrl("http://127.0.0.1:9"));   // nothing listening
+	{
+		filter_signals signals_source;
+		filter_list    rules;
+		filter_dialog dlg(&signals_source, &rules, &offline, "example.invalid");
+		dlg.show();
+		QApplication::processEvents();
+		measure(&dlg, "filter");
+	}
+	{
+		extractor_signals signals_source;
+		extractor_store   store;
+		extractor_dialog dlg(&signals_source, &store, &offline,
+		                      "example.invalid",
+		                      QUrl("http://example.invalid/watch"));
+		dlg.show();
+		QApplication::processEvents();
+		measure(&dlg, "extractor");
+	}
+	{
+		reorganize_dialog dlg(f.window.findChild<tab_tree_model *>(), &offline);
+		dlg.show();
+		QApplication::processEvents();
+		measure(&dlg, "reorganizer");
+	}
+
 	// **A floor, so a run that opened nothing cannot report success.** Every
 	// dialog above can decline to open -- three of the shell's do, for want of
 	// a page or a model -- and a driver that measured none of them would
 	// otherwise print a clean sweep of an empty list.
 	// The four opened by a slot, plus the three built directly above; the
 	// settings walk adds one shot per page on top of that.
-	const int expected = int(sizeof(dialogs) / sizeof(dialogs[0])) + 4;
+	const int expected = int(sizeof(dialogs) / sizeof(dialogs[0])) + 7;
 	if (g_shots < expected) {
 		std::printf("\nonly %d of %d dialogs were measured; that is not a "
 		             "check of anything\n", g_shots, expected);
