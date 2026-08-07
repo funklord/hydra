@@ -87,6 +87,15 @@ auth_dialog::auth_dialog(const QString &host, const QString &realm,
 	m_password->setEchoMode(QLineEdit::Password);
 	column->addWidget(m_password);
 
+	// **Spare height goes here, not between the sentences.** On a desktop the
+	// dialog is whatever height its contents ask for and this changes nothing.
+	// On Android it is handed the whole screen, and with nothing willing to
+	// absorb the difference a word-wrapped label takes a share of it -- so the
+	// prompt arrived with an inch of nothing between each line and the two
+	// fields pushed to the bottom edge, which reads as a broken window rather
+	// than a question.
+	column->addStretch(1);
+
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok |
 	                                      QDialogButtonBox::Cancel, this);
 	buttons->button(QDialogButtonBox::Ok)->setText("Sign &in");

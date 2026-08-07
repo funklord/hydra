@@ -24,12 +24,16 @@
 // touch the X server.
 #include "shell_fixture.h"
 
+#include "auth_dialog.h"
+#include "cert_dialog.h"
 #include "main_window.h"
+#include "web_view_backend.h"
 
 #include <QApplication>
 #include <QDialog>
 #include <QDir>
 #include <QLayout>
+#include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
 #include <QTimer>
@@ -199,6 +203,43 @@ static void measure(QDialog *dlg, const QString &name) {
 		pages->setCurrentRow(0);
 	}
 
+	// **Spare height has to go somewhere, and a paragraph is the wrong
+	// somewhere.** A dialog handed the whole screen has more height than its
+	// contents asked for. If nothing in it is willing to absorb the difference
+	// -- no list, no stretch -- a word-wrapped QLabel will, because its policy
+	// permits it, and the result is an inch of nothing between each sentence
+	// with the fields pushed to the bottom edge. The proxy password prompt
+	// arrived exactly like that, and neither check above could see it: every
+	// button was on screen and none was cut.
+	//
+	// A label taller than the text it holds is the signature. Measured against
+	// `heightForWidth` at the width it actually got, with a line of slack for
+	// the margins a style adds.
+	int stretched = 0;
+	QStringList puffed;
+	for (QLabel *l : dlg->findChildren<QLabel *>()) {
+		if (!l->isVisible() || !l->wordWrap() || l->width() <= 0)
+			continue;
+		// `empty_state`'s overlay is *meant* to take the whole viewport -- it
+		// is a message centred in an empty list, and centring is the point. It
+		// was the first thing this check reported, on two dialogs, and the
+		// check was the thing that was wrong.
+		if (l->objectName() == "empty_state")
+			continue;
+		const int wants = l->heightForWidth(l->width());
+		if (wants > 0 && l->height() > wants + l->fontMetrics().height()) {
+			++stretched;
+			if (puffed.size() < 3)
+				puffed << QString("\"%1…\" (%2 tall for %3 of text)")
+				            .arg(l->text().left(24)).arg(l->height()).arg(wants);
+		}
+	}
+	verdict(stretched == 0, stretched == 0
+	          ? QString("%1: and no paragraph is absorbing spare height")
+	                .arg(name)
+	          : QString("%1: %2 label(s) stretched past their text -- %3")
+	                .arg(name).arg(stretched).arg(puffed.join("; ")));
+
 	verdict(squeezed == 0, squeezed == 0
 	          ? QString("%1: and none has its label cut").arg(name)
 	          : QString("%1: %2 button(s) squeezed below their label -- %3")
@@ -244,11 +285,55 @@ int main(int argc, char *argv[]) {
 	for (const auto &d : dialogs)
 		visit(&f.window, d.slot, d.name);
 
+	// **The two a person cannot walk away from.** A password prompt and a
+	// certificate chooser are not opened by a menu -- the network puts them in
+	// front of you -- so no slot reaches them and the pass above never saw
+	// either. They are also the two where being unable to reach a button
+	// matters most: one of them is how you say "do not send my identity".
+	//
+	// Built directly and never exec'd, which is what `try_chrome` does with
+	// them for the same reason: a modal blocks the driver.
+	std::printf("\n== and the two the network puts in front of you ==\n");
+	{
+		auth_dialog site("bank.example", "Accounts", true, &f.window);
+		site.show();
+		QApplication::processEvents();
+		measure(&site, "auth-site");
+	}
+	{
+		auth_dialog proxy("proxy.corp.example", "Staff", false, &f.window,
+		                   auth_dialog::asker::proxy);
+		proxy.show();
+		QApplication::processEvents();
+		measure(&proxy, "auth-proxy");
+	}
+	{
+		// Two offers rather than one: the list is the part that has to fit, and
+		// a single row cannot show whether it wraps.
+		QList<web_view_backend::certificate_offer> offered;
+		web_view_backend::certificate_offer a;
+		a.subject = "Ada Lovelace";
+		a.issuer  = "Example Certification Authority";
+		a.valid_until = "2027-01-01";
+		web_view_backend::certificate_offer b;
+		b.subject = "Ada (work)";
+		b.issuer  = "Corp CA";
+		b.valid_until = "2026-09-01";
+		offered << a << b;
+
+		cert_dialog dlg("id.example", offered, &f.window);
+		dlg.show();
+		QApplication::processEvents();
+		measure(&dlg, "certificate");
+	}
+
 	// **A floor, so a run that opened nothing cannot report success.** Every
 	// dialog above can decline to open -- three of the shell's do, for want of
 	// a page or a model -- and a driver that measured none of them would
 	// otherwise print a clean sweep of an empty list.
-	const int expected = int(sizeof(dialogs) / sizeof(dialogs[0]));
+	// The four opened by a slot, plus the three built directly above; the
+	// settings walk adds one shot per page on top of that.
+	const int expected = int(sizeof(dialogs) / sizeof(dialogs[0])) + 3;
 	if (g_shots < expected) {
 		std::printf("\nonly %d of %d dialogs were measured; that is not a "
 		             "check of anything\n", g_shots, expected);

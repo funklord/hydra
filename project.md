@@ -6825,6 +6825,38 @@ what it was.
 What is left is the button box: 373, because the Restore label names the page it
 acts on, which is a deliberate choice. On a device it elides rather than
 anything becoming unreachable, so it stays a named gap.
+
+### The two dialogs the network puts in front of you, and a third check
+
+A password prompt and a certificate chooser are not opened by a menu, so no
+slot reaches them and the phone pass had never seen either -- although they are
+the two where being unable to reach a button matters most, one of them being how
+you say "do not send my identity". `try_phone` builds them directly now, the way
+`try_chrome` does and for the same reason: a modal blocks the driver.
+
+All three fit at 188 pixels, and the certificate dialog is worth a note about
+why. It sets `setMinimumWidth(460)` on itself so its list can show issuer and
+expiry, which is right on a desktop -- and `android_dialogs` clears exactly that
+before assigning the screen rectangle. The driver copies that step, so it
+measures what a phone gets rather than what a desktop keeps.
+
+**The defect was in the other axis, and no check could see it.** Handed the
+whole screen, the proxy prompt came up with an inch of nothing between each
+sentence and its two fields against the bottom edge. Every button was on screen
+and none was cut, so both existing checks passed it; it was found by looking at
+the picture. The cause is that a dialog given more height than it asked for has
+to put the difference somewhere, and with no list and no stretch to absorb it a
+word-wrapped QLabel will, because its size policy permits it. One
+`addStretch(1)` before the buttons, which changes nothing on a desktop where the
+dialog is already the height of its contents.
+
+A label taller than the text it holds is the signature, so that is the third
+check: `height()` against `heightForWidth()` at the width it actually got. It
+was confirmed by removing the stretch again and watching it report labels 260
+pixels tall holding 17 pixels of text. Its first run failed the downloads and
+consent dialogs, whose `empty_state` overlay is *meant* to fill the viewport --
+the check was the thing that was wrong there, and it skips that one label by
+name.
 The sweep reads the "N failed" line, and this tree's own rule is that a summary
 which is always wrong trains people to skip the summary; a named gap is visible
 without being noise. The pages carry object names now, because the first run of
