@@ -30,6 +30,23 @@ QString ollama_provider::name() const {
 	return QString("Local model (Ollama, %1)").arg(m_model);
 }
 
+bool ollama_provider::ready(QString *reason) const {
+	if (!m_reachable) {
+		if (reason)
+			*reason = "No local model is answering. Start Ollama, or choose "
+			           "another backend in Settings.";
+		return false;
+	}
+	if (!m_models.isEmpty() && !m_models.contains(m_model)) {
+		if (reason)
+			*reason = QString("Ollama is running but does not have \"%1\". "
+			                   "Pull it, or pick one it has in Settings.")
+			              .arg(m_model);
+		return false;
+	}
+	return true;
+}
+
 bool ollama_provider::available() const {
 	return m_reachable;
 }

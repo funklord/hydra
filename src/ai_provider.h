@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <QAbstractButton>
 #include <QObject>
 #include <QString>
 
@@ -42,6 +43,26 @@ public:
 	// credential is present. Cheap and non-blocking; not a guarantee.
 	virtual bool available() const = 0;
 
+	// True when a request stands a chance of being answered, which is not the
+	// same as `available()`.
+	//
+	// **`available()` is about the backend; this is about the model.** Ollama
+	// answers its API as soon as it is serving, so `available()` is true with
+	// no usable model installed at all -- and the dialogs then offered Send,
+	// beside a label reading "not installed", which is the shape this project
+	// keeps removing: a control that looks usable and cannot work.
+	//
+	// Default is `available()`, because for a backend with no separate notion
+	// of a model the two questions are the same one. Say why in `reason` when
+	// answering false, since a disabled button has to explain itself somewhere.
+	virtual bool ready(QString *reason = nullptr) const {
+		if (available())
+			return true;
+		if (reason)
+			*reason = name() + " is not available.";
+		return false;
+	}
+
 	// Does anything leave the machine? Drives the review-before-send gate.
 	virtual bool is_external() const = 0;
 
@@ -53,3 +74,24 @@ signals:
 	void finished(const QString &reply);
 	void failed(const QString &error);
 };
+
+// Disable a Send button when the provider cannot answer, and say why on it.
+//
+// **The label was already honest and the button was not.** `ollama_provider`
+// grew a "not installed" name precisely because the reorganizer used to
+// announce a model that was not there, and the first anyone knew was a failed
+// request after pressing Send -- but the button that produces that failure sat
+// beside the warning, enabled. This project's own rule is that a control which
+// cannot work should look unavailable rather than explain itself afterwards.
+//
+// A tooltip rather than a status message: the question "why is this greyed
+// out" is asked of the button, so the answer belongs on it.
+inline void gate_send(QAbstractButton *send, const ai_provider *provider) {
+	if (!send)
+		return;
+	QString why;
+	const bool ok = provider && provider->ready(&why);
+	send->setEnabled(ok);
+	send->setToolTip(ok ? QString() : why);
+}
+

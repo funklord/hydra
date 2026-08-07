@@ -106,6 +106,11 @@ void filter_dialog::build_ui() {
 	m_apply->setEnabled(false);
 	m_send->setEnabled(!m_signals->suspects_for(m_site).isEmpty() ||
 	                    m_picked.is_valid());
+	// And not at all when the provider cannot answer -- the header says so
+	// already, and a button beside an explanation of why it will fail is the
+	// pattern this window spent a pass removing.
+	if (m_send->isEnabled())
+		gate_send(m_send, m_provider);
 	connect(m_send,  &QPushButton::clicked, this, &filter_dialog::on_send);
 	connect(m_apply, &QPushButton::clicked, this, &filter_dialog::on_accept);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);

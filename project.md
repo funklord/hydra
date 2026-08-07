@@ -6749,14 +6749,39 @@ its issuer and expiry the same way, and the media dialog stranded its empty
 state under an empty table. All three were found by looking and none by a test,
 because each is a fact about pixels rather than about the widget tree.
 
-**Not fixed, and worth a decision.** The filter dialog's header reads "Local
-model (Ollama, llama3 -- not installed)" while its Send button stays enabled.
-That label exists precisely because the reorganizer used to announce a model
-that was not there and "the first anyone knew was a failed request after
-pressing Send" -- so the label is the fix for that, and the button that
-produces the failed request is still available beside it. The project's own
-rule from the GUI pass says a control that cannot work should look unavailable.
-That is three dialogs and a behaviour change, so it is raised rather than done.
+### Send, offered for a model that is not there
+
+The filter dialog's header read "Local model (Ollama, llama3 -- not installed)"
+while its Send button stayed enabled. That label exists precisely because the
+reorganizer used to announce a model that was not there and the first anyone
+knew was a failed request after pressing Send -- so the label was the fix for
+that, and the button that produces the failed request was still sitting beside
+it. The rule from the GUI pass says a control that cannot work should look
+unavailable.
+
+**The question `available()` answers is not the one the button needed.** Ollama
+answers its API as soon as it is serving, so `available()` is true with no
+usable model installed at all -- correctly, because it is about the backend.
+`ready(QString *reason)` is about the model, defaults to `available()` for a
+backend with no separate notion of one, and hands back the sentence explaining
+itself. One `gate_send()` helper does both halves at each of the three call
+sites, so the rule is stated once and the tooltip is never left stale.
+
+**An empty model list is an unanswered question, not a no.** `name()` already
+took this care -- `m_models` is empty before the server has replied, and
+reading that as "not installed" would grey out Send on a working setup, which
+is the same guess dressed as a fact in the other direction. `ready()` keeps the
+same guard, and a test holds it.
+
+**The driver caught itself passing vacuously**, which is worth more than the
+fix. `try_send_gate` builds the real dialog against a fake Ollama and
+photographs it. Its first run showed Send greyed in *both* cases and reported a
+pass -- because with no requests recorded, `suspects_for()` was empty and the
+button was already disabled for having nothing to ask about. The gate under
+test had not run at all. It now files two ad-shaped requests first and refuses
+to continue if no suspect was recorded, so the only remaining reason for the
+button to be grey is the one being tested. The two pictures differ in exactly
+one pixel region.
 
 ### The dependency list, written down and therefore found to be wrong
 

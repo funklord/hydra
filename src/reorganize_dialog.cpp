@@ -93,6 +93,7 @@ void reorganize_dialog::build_ui() {
 	m_send  = buttons->addButton("&Send", QDialogButtonBox::ActionRole);
 	m_apply = buttons->addButton("&Apply Selected", QDialogButtonBox::AcceptRole);
 	m_apply->setEnabled(false);
+	gate_send(m_send, m_provider);
 	connect(m_send,  &QPushButton::clicked, this, &reorganize_dialog::on_send);
 	connect(m_apply, &QPushButton::clicked, this, &reorganize_dialog::on_accept);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);

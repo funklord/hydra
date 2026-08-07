@@ -336,6 +336,12 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
 	connect(m_provider, &ai_provider::finished, this, &extractor_dialog::on_reply);
 	connect(m_provider, &ai_provider::failed,   this, &extractor_dialog::on_failed);
 
+	// Before the evidence question, the provider question: a model that is not
+	// installed cannot answer however good the evidence is. Ordered this way so
+	// that "nothing recorded yet" still wins when both are true -- it is the
+	// one the user can do something about from here.
+	gate_send(m_send, m_provider);
+
 	if (m_evidence.isEmpty()) {
 		m_status->setText("No requests recorded for this page yet. Many sites "
 		                  "fetch nothing until their player starts, so press "

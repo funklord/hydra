@@ -40,6 +40,14 @@ public:
 	QStringList models() const { return m_models; }
 	bool has_model(const QString &name) const { return m_models.contains(name); }
 
+	// Reachable, and the configured model is one the server actually has.
+	//
+	// **An unprobed list is not an absent model.** `m_models` is empty before
+	// the server has answered, and treating that as "not installed" would
+	// disable Send on a perfectly good setup -- the same guess-dressed-as-fact
+	// that `name()` is careful to avoid.
+	bool ready(QString *reason = nullptr) const override;
+
 	// Probes the local server and remembers the answer for available().
 	// Asynchronous: probe_finished() follows, and available() is stale until
 	// it does.
