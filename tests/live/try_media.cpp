@@ -7,6 +7,7 @@
 #include "media_detector.h"
 #include "web_view_backend.h"
 #include "sample_tree.h"
+#include "media_fixture.h"
 
 #include <QApplication>
 #include <QDir>
@@ -70,7 +71,11 @@ int main(int argc, char *argv[]) {
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
 
-	const QString target = argc > 1 ? argv[1] : "https://dramafren.org/";
+	// A local fixture unless a real site is named. See media_fixture.h for
+	// why the default is not a real one, and what that costs.
+	media_fixture::server fixture;
+	const QString target = argc > 1 ? QString::fromLocal8Bit(argv[1])
+	                                : fixture.start();
 
 	policy_engine  policy;
 	request_filter filter(&policy);
@@ -79,7 +84,9 @@ int main(int argc, char *argv[]) {
 	qtwebengine_factory factory(&filter);
 
 	main_window w(&factory, &policy, &filter);
-	w.load_tree(shell::sample_tree_copy());
+	// The tree it opens is the fixture's, not the committed example's: this
+	// driver activates the first tab on purpose, and that entry is a real site.
+	w.load_tree(shell::single_tab_tree(target));
 	w.resize(1280, 860);
 	w.show();
 

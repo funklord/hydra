@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
 	policy_engine policy; request_filter filter(&policy);
 	qtwebengine_factory factory(&filter);
 	main_window w(&factory, &policy, &filter);
-	w.load_tree(shell::sample_tree_copy());
+	w.load_tree(shell::inert_sample_tree());
 	w.resize(1100, 760); w.show();
 	QDir().mkpath(outdir);
 	auto *dm = w.findChild<download_manager *>();

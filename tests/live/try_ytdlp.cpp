@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
 	request_filter      filter(&policy);
 	qtwebengine_factory factory(&filter);
 	main_window w(&factory, &policy, &filter);
-	w.load_tree(shell::sample_tree_copy());
+	w.load_tree(shell::inert_sample_tree());
 	w.resize(1200, 820);
 	w.show();
 	auto *det = w.findChild<media_detector *>();

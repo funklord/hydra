@@ -77,4 +77,56 @@ inline QString sample_tree_copy(const QString &out_dir = scratch_dir()) {
 	return dest;
 }
 
+// The same copy with nothing in it that opens itself.
+//
+// **The example holds a suspended tab pointing at doc.qt.io**, and loading a
+// tree restores what was suspended -- so every driver that opened the example
+// fetched that site, and with it googletagmanager, amplitude, surveymonkey and
+// nine other hosts. Seventy requests across twelve hosts, on a driver whose
+// subject was a local fixture.
+//
+// A driver wants the tree's *shape* -- folders, nesting, a few entries -- and
+// almost never wants it to start loading the web. So the copy is made inert:
+// every entry becomes `unopened`, which is the type that means "a url and a
+// title, nothing loaded". A driver that wants a page open opens one, which is
+// what they all already do.
+inline QString inert_sample_tree(const QString &out_dir = scratch_dir()) {
+	const QString path = sample_tree_copy(out_dir);
+	QFile f(path);
+	if (!f.open(QIODevice::ReadOnly))
+		return path;
+	QString text = QString::fromUtf8(f.readAll());
+	f.close();
+	// Only the type field, which is the word after the id in brackets.
+	text.replace(QStringLiteral("] suspended | "), QStringLiteral("] unopened | "));
+	text.replace(QStringLiteral("] open | "), QStringLiteral("] unopened | "));
+	if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+		f.write(text.toUtf8());
+	return path;
+}
+
+// A tree holding one tab, at `url`.
+//
+// **For a driver that opens the first tab and then navigates it.** Those need
+// somewhere to start, and the committed example's first entry is a real site --
+// so a driver that activated row 0 fetched `doc.qt.io` and the ten hosts its
+// page pulls in, whatever the driver's actual subject was. Making the copy
+// inert does not help there: the driver opens the tab on purpose, and an
+// unopened tab opens fine.
+//
+// So the tree it opens should be the one it means to look at.
+inline QString single_tab_tree(const QString &url,
+	                                const QString &out_dir = scratch_dir()) {
+	QDir().mkpath(out_dir);
+	const QString dest = QDir(out_dir).filePath("one-tab-tree.txt");
+	QFile f(dest);
+	if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+		QString line = QStringLiteral("- [f0] folder | Fixture\n");
+		line += QStringLiteral("  - [a1] unopened | fixture | ") + url;
+		line += QStringLiteral("\n");
+		f.write(line.toUtf8());
+	}
+	return dest;
+}
+
 }  // namespace shell

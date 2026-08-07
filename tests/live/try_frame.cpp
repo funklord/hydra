@@ -1,6 +1,7 @@
 // Does the player iframe load in a *plain* QWebEngineView, with none of our
 // interceptor, scripts or bridges? That is the difference between a browser
 // bug of ours and a site behaviour.
+#include "media_fixture.h"
 #include <QApplication>
 #include <QTimer>
 #include <QWebEngineView>
@@ -12,8 +13,13 @@ int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
-	const QString url = argc > 1 ? argv[1]
-	                             : "https://dramafren.org/watch/born-to-be-tortured/";
+	// The fixture's page, which holds the player in an iframe -- the shape a
+	// mirror has, and the one this driver is about. Pointing it at the
+	// player page directly reported "no iframe", correctly: that page is
+	// the player rather than a page containing one.
+	media_fixture::server fixture;
+	const QString url = argc > 1 ? QString::fromLocal8Bit(argv[1])
+	                             : fixture.start();
 
 	auto *view = new QWebEngineView;
 	view->resize(1280, 860);

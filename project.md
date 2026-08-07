@@ -6689,6 +6689,41 @@ Both are named skips now, with their reasons, the way `try_watch` and
 passed, 12 report-only, 0 failed -- and a failure line in it now means
 something.
 
+### The drivers no longer fetch a real site to make a point
+
+`try_media`, `try_frame` and `try_mse` each carried a `dramafren.org` url as
+the value used when given no argument, so a sweep fetched a live ad-serving
+site three times over -- announcing the machine to it and pulling in whatever
+it served that day. That is where the tracking urls in the committed example
+came from.
+
+It also made those three unrepeatable in the way that matters: what they
+measured changed between runs for reasons nothing here controls, so a
+difference in output was as likely to be the site's week as the code's.
+
+`tests/live/media_fixture.h` serves the shape instead -- a manifest, segments
+under it, a player in an iframe, and a MediaSource that is opened and appended
+to -- from a `QTcpServer` on loopback, in the same shape `try_cookies` already
+used for its origins. A real url is still what you pass when a real site is the
+question, which is how `try_extract` always worked.
+
+**The default was not the only thing reaching the network.** With the fixture
+in place `try_media` still fetched ten hosts: it activates the tree's first tab
+on purpose, and in the committed example that entry is `doc.qt.io`, which
+brings googletagmanager, amplitude and surveymonkey with it. Two separate
+things had to be fixed for one symptom -- the url the driver navigates to, and
+the tree it opens -- and fixing the first alone left 61 requests across 10
+hosts looking like an improvement on 70 across 12.
+
+It is 10 requests across 1 host now, and the driver still finds what it is
+looking for: one item filed, the badge lit, two video-shaped urls. The other
+two hook the MediaSource and find the iframe against the fixture as well.
+
+**What the fixture cannot answer** is whether a real site's obfuscation defeats
+the detector, which is the question those drivers were originally pointed at a
+real site to ask. That question now needs the url typed deliberately -- which is
+the right shape for it, since the answer was never repeatable anyway.
+
 ### A sweep wrote somebody's ad-tracking into the committed example
 
 Found by `git status` after the sweep rather than by any check. Two

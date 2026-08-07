@@ -1,5 +1,6 @@
 // Can a main-world tap see the video bytes, whatever the transport delivered
 // them? If MediaSource is being fed, this reports the mime types and totals.
+#include "media_fixture.h"
 #include <QApplication>
 #include <QMouseEvent>
 #include <QTimer>
@@ -69,7 +70,12 @@ int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
-	const QString url = argc > 1 ? argv[1] : "https://dramafrenvip.upns.pro/#r3rqgi";
+	// The fixture opens a MediaSource and appends to it, which is what the tap
+	// hooks. Whether a real player defeats the tap is a question only a real
+	// player answers, and that is what the argument is for.
+	media_fixture::server fixture;
+	const QString url = argc > 1 ? QString::fromLocal8Bit(argv[1])
+	                             : fixture.start();
 
 	QWebEngineScript tap;
 	tap.setName("hydra-mse-tap");

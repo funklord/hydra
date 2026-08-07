@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
 		}
 	};
 	w.installEventFilter(new watcher);
-	w.load_tree(shell::sample_tree_copy());
+	w.load_tree(shell::inert_sample_tree());
 	w.resize(1100, 780);
 	w.show();
 
