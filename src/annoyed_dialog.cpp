@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "annoyed_dialog.h"
 
+#include "flow_layout.h"
+
 #include "site_extractor.h"
 
 #include <QDialogButtonBox>
@@ -111,15 +113,26 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 	hint->setWordWrap(true);
 	box->addWidget(hint);
 
-	auto *bb = new QDialogButtonBox(this);
+	// **Three tools that wrap, and the plain answer below them.** All four were
+	// one QDialogButtonBox, whose minimum is the sum of its buttons -- 457
+	// pixels, so this window would not go below 479 and its labels squeezed
+	// past reading on anything narrower. The same shape, and the same fix, as
+	// the downloads dialog.
+	//
 	// Ordered by how specific each is: a picked element is the most precise
-	// thing anyone can give, and the least specific answer is on the right
-	// where a default button sits.
-	QPushButton *zap = bb->addButton("&Zap an Element…", QDialogButtonBox::ActionRole);
-	QPushButton *evo = bb->addButton("Propose &Filter Rules…",
-	                                  QDialogButtonBox::ActionRole);
-	QPushButton *con = bb->addButton("&Cookie Banner Rule…",
-	                                  QDialogButtonBox::ActionRole);
+	// thing anyone can give. The least specific answer keeps its place last
+	// and still carries the default, which is now the bottom row rather than
+	// the right of one -- the reading is the same and it survives a narrow
+	// screen, which the row did not.
+	auto *tools = new flow_layout;
+	auto *zap = new QPushButton("&Zap an Element…", this);
+	auto *evo = new QPushButton("Propose &Filter Rules…", this);
+	auto *con = new QPushButton("&Cookie Banner Rule…", this);
+	for (QPushButton *b : { zap, evo, con })
+		tools->addWidget(b);
+	box->addLayout(tools);
+
+	auto *bb = new QDialogButtonBox(this);
 	QPushButton *rec = bb->addButton("Just &Record It", QDialogButtonBox::AcceptRole);
 	rec->setDefault(true);
 

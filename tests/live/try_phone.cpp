@@ -24,6 +24,8 @@
 // touch the X server.
 #include "shell_fixture.h"
 
+#include "annoyance_log.h"
+#include "annoyed_dialog.h"
 #include "auth_dialog.h"
 #include "cert_dialog.h"
 #include "main_window.h"
@@ -326,6 +328,21 @@ int main(int argc, char *argv[]) {
 		QApplication::processEvents();
 		measure(&dlg, "certificate");
 	}
+	{
+		// The one-click report, which offers four tools in a row and is
+		// therefore the same shape that squeezed the downloads dialog. It takes
+		// only a report, so it needs no page to reach here.
+		annoyance_report r;
+		r.host     = "example.invalid";
+		r.page     = "http://example.invalid/article";
+		r.observed = 41;
+		r.suspects << "http://ads.invalid/pagead/banner.js";
+		r.suspects << "http://tracker.invalid/track?id=1";
+		annoyed_dialog dlg(r, &f.window);
+		dlg.show();
+		QApplication::processEvents();
+		measure(&dlg, "annoyance");
+	}
 
 	// **A floor, so a run that opened nothing cannot report success.** Every
 	// dialog above can decline to open -- three of the shell's do, for want of
@@ -333,7 +350,7 @@ int main(int argc, char *argv[]) {
 	// otherwise print a clean sweep of an empty list.
 	// The four opened by a slot, plus the three built directly above; the
 	// settings walk adds one shot per page on top of that.
-	const int expected = int(sizeof(dialogs) / sizeof(dialogs[0])) + 3;
+	const int expected = int(sizeof(dialogs) / sizeof(dialogs[0])) + 4;
 	if (g_shots < expected) {
 		std::printf("\nonly %d of %d dialogs were measured; that is not a "
 		             "check of anything\n", g_shots, expected);

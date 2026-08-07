@@ -6857,6 +6857,13 @@ pixels tall holding 17 pixels of text. Its first run failed the downloads and
 consent dialogs, whose `empty_state` overlay is *meant* to fill the viewport --
 the check was the thing that was wrong there, and it skips that one label by
 name.
+
+The annoyance report went the same way once it was measured: 479 wide, of which
+457 was a `QDialogButtonBox` holding four buttons, so its labels squeezed past
+reading on anything narrower. The three tools are a `flow_layout` now and "Just
+Record It" keeps its place last, in a box of its own -- which is the bottom row
+rather than the right of one, and the reading the ordering was chosen for
+survives a narrow screen, which the row did not. 479 to 149.
 The sweep reads the "N failed" line, and this tree's own rule is that a summary
 which is always wrong trains people to skip the summary; a named gap is visible
 without being noise. The pages carry object names now, because the first run of

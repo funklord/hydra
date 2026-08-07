@@ -92,12 +92,14 @@ OBJSETS_SOURCES = \
 OBJS_test_annoyance = \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
+	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o \
-	$(BUILD_DIR)/moc/moc_stream_probe.o
+	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/moc/moc_flow_layout.o
 
 OBJS_test_assembler = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
@@ -3199,13 +3201,19 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_phone = \
+	$(BUILD_DIR)/app/auth_dialog.o \
+	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/main_window.o \
 	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/app/request_filter.o \
 	$(BUILD_DIR)/app/settings_dialog.o \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/app/theme.o \
+	$(BUILD_DIR)/moc/moc_auth_dialog.o \
+	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
@@ -3230,10 +3238,12 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
-	$(BUILD_DIR)/app/auth_dialog.o \
-	$(BUILD_DIR)/app/cert_dialog.o \
+	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
+	$(BUILD_DIR)/app/stream_probe.o \
+	$(BUILD_DIR)/moc/moc_extractor_helpers.o \
+	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
 	$(BUILD_DIR)/app/state_store.o \
@@ -3243,7 +3253,6 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
-	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
 	$(BUILD_DIR)/moc/moc_capture_source.o \
 	$(BUILD_DIR)/app/consent_dialog.o \
@@ -3257,7 +3266,6 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/session_import.o \
 	$(BUILD_DIR)/moc/moc_session_mirror.o \
 	$(BUILD_DIR)/app/session_mirror.o \
-	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
@@ -3285,10 +3293,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
-	$(BUILD_DIR)/moc/moc_auth_dialog.o \
-	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
-	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
@@ -3298,8 +3303,6 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
-	$(BUILD_DIR)/app/stream_probe.o \
-	$(BUILD_DIR)/moc/moc_stream_probe.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
@@ -3311,8 +3314,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
-	$(BUILD_DIR)/moc/moc_local_proxy.o \
-	$(BUILD_DIR)/moc/moc_extractor_helpers.o
+	$(BUILD_DIR)/moc/moc_local_proxy.o
 
 OBJS_try_rename = \
 	$(BUILD_DIR)/app/main_window.o \
