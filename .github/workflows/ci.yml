@@ -59,25 +59,42 @@ jobs:
   build:
     name: build and offline suites
     runs-on: ubuntu-latest
+    # **Debian trixie, not the runner's own Ubuntu.** ubuntu-24.04 ships Qt
+    # 6.4.2 and this needs 6.8 -- which is what the first CI run found, as two
+    # hundred lines of "'ColorScheme' is not a member of 'Qt'". Trixie ships
+    # 6.8 and is what the developer's machine runs, so CI now builds against
+    # the same Qt as the person writing the code rather than an older one
+    # nobody uses.
+    container: debian:trixie
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: false   # third_party/yt-dlp is a runtime tool, not a build input
-
-      # Named individually rather than through a meta-package: each optional
-      # one buys exactly one feature, and a missing one is a smaller build
-      # rather than a failure -- so a silent absence here would produce a
-      # green run of a browser with no password manager and no BitTorrent.
-      # The check below is what stops that being invisible.
+      # Before checkout, deliberately: actions/checkout falls back to
+      # downloading a tarball over the API when the container has no git,
+      # which works and then leaves no repository for anything to inspect.
       - name: Install Qt and the optional dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential pkg-config \
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git ca-certificates make build-essential pkg-config python3 \
             qt6-base-dev qt6-webengine-dev qt6-declarative-dev \
             qt6-base-dev-tools libgl1-mesa-dev \
             libsodium-dev libsecret-1-dev liblz4-dev \
             libtorrent-rasterbar-dev
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: false   # third_party/yt-dlp is a runtime tool, not a build input
+
+      # The floor is 6.8 and hydra.pro refuses anything older by name, so this
+      # is a statement of what was built rather than a gate. Printed because a
+      # build log that does not say which Qt it used cannot be argued with
+      # later.
+      - name: Say which Qt this is
+        run: |
+          qmake6 -query QT_VERSION
+          test "$(qmake6 -query QT_VERSION | cut -d. -f1-2)" != "6.4" || {
+            echo "Qt 6.4 cannot build this; see hydra.pro"
+            exit 1
+          }
 
       # The qualified name, never the bare `libtorrent`: two unrelated
       # projects install a .pc by that name and the bare one resolves to

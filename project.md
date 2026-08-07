@@ -6585,6 +6585,42 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### CI, and the first thing it found was a lie in the documentation
+
+The first run went green on the gates in eight seconds and failed the build in
+ninety, with two hundred lines of `'ColorScheme' is not a member of 'Qt'`.
+
+**The declared Qt floor was 6.4 and had not been true for months.** It was
+derived once, honestly, from the menu bar's `addAction` overload -- and then two
+things raised it and neither re-derived it. `theme.h` names `Qt::ColorScheme`,
+which arrived in 6.5. `qtwebengine_view.cpp` includes `QWebEnginePermission`,
+which arrived in 6.8 -- and **that include sits outside the
+`#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)` guard around the code that uses
+it**, so the guard bought nothing at all: the file could not compile on an
+older Qt whether or not the guarded code was reached.
+
+This file predicted it. The note on building against 6.11 said moving to
+`QWebEnginePermission` "would lift the floor from 6.4 to 6.8". The move
+happened; the floor stayed where it was.
+
+**So the floor is 6.8, and `hydra.pro` now refuses anything older by name**
+rather than letting it fail in the compiler. 6.8.2 and 6.11 are the versions
+actually built against; 6.5 to 6.7 are excluded by that include rather than by
+evidence, and nobody has tried them.
+
+**CI builds in a `debian:trixie` container, not on the runner's Ubuntu.**
+ubuntu-24.04 ships Qt 6.4.2, which is what found the problem and cannot build
+the result. Trixie ships 6.8 and is what this machine runs, so CI now compiles
+against the same Qt as the person writing the code.
+
+**What the failure did not cost.** The two risks flagged when the workflow was
+written were the Ubuntu package names and `test_credstore` needing a Secret
+Service. The first was fine -- the dependency check passed, naming all four
+optional packages. The second is handled in the suite itself, which reports
+`skipped` with a reason when `credential_store::available()` is false. Neither
+was the thing that broke, which is the ordinary experience of predicting which
+part will fail.
+
 ### Every driver screenshot this session was in the wrong theme
 
 The capture pass found it, and it invalidates how several decisions were

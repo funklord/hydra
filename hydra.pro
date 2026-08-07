@@ -19,6 +19,28 @@ TARGET   = hydra
 # would otherwise be three places to change one number.
 VERSION  = $$cat(VERSION, singleline)
 
+# **Qt 6.8, refused here rather than discovered in the compiler.** The floor
+# used to be stated as 6.4, derived once from the menu bar's addAction
+# overload and never derived again as the code moved. Two things have raised
+# it since and neither updated it: `theme.h` names `Qt::ColorScheme`, which
+# arrived in 6.5, and `qtwebengine_view.cpp` includes `QWebEnginePermission`,
+# which arrived in 6.8 -- and that include sits *outside* the
+# `#if QT_VERSION >= 6.8` guard around the code using it, so the guard never
+# bought anything.
+#
+# Found by CI on Qt 6.4, as two hundred lines of "'ColorScheme' is not a
+# member of 'Qt'" a long way from any statement about versions. A configure
+# that stops and says the number is worth more than every one of them.
+#
+# 6.8.2 and 6.11 are the versions actually built against; 6.5 to 6.7 are
+# untested and are excluded by the include above rather than by evidence.
+lessThan(QT_MAJOR_VERSION, 6) {
+	error("Hydra needs Qt 6.8 or newer; this is Qt $$QT_VERSION")
+}
+equals(QT_MAJOR_VERSION, 6):lessThan(QT_MINOR_VERSION, 8) {
+	error("Hydra needs Qt 6.8 or newer; this is Qt $$QT_VERSION")
+}
+
 QT     += widgets network webchannel qml
 CONFIG += c++17 link_pkgconfig
 

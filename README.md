@@ -74,11 +74,14 @@ what is merely assumed — and `docs/architecture.md` for the full design;
 
 ## Requirements
 
-- **Qt 6.4 or newer**, components `Widgets Network WebChannel Qml`, plus
+- **Qt 6.8 or newer**, components `Widgets Network WebChannel Qml`, plus
   `WebEngineWidgets` off Android (Debian/Ubuntu: `qt6-base-dev
   qt6-webengine-dev qt6-declarative-dev`; Arch: `qt6-base qt6-webengine
   qt6-declarative`). `Qml` is needed only for `QJSEngine`, the extractor
-  sandbox — there is no QML in the UI.
+  sandbox — there is no QML in the UI. The floor is 6.8 because
+  `QWebEnginePermission` and `Qt::ColorScheme` are used unguarded; 6.8.2 and
+  6.11 are the versions actually built against, and `qmake` refuses anything
+  older with a message rather than a wall of template errors.
 - `make`, `qmake` (Debian: `qmake6`) and a C++17 compiler.
 - **Optional, each buying one feature and nothing else**: `libsodium`
   (KeePassXC bridge), `libsecret-1` (pairing that survives a restart), `liblz4`,
