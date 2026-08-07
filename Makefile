@@ -57,8 +57,10 @@
 #   make replay       -- re-score recorded model replies against the gate (no model)
 #   make deb          -- build a .deb into build/deb (dependencies computed)
 #   make deb-check    -- build it and print what it declares and contains
-#   make apk          -- build a signed-for-debug Android .apk
-#   make android      -- same as `apk`, kept because it was the older name
+#   make apk          -- build a signed-for-debug Android .apk, check the ABI
+#                        it really carries, and name it after that
+#   make android      -- the build alone, without the check-and-name step
+#                        (ANDROID_ABI picks the architecture; see ANDROID)
 #   make install      -- install the binary, desktop entry and icon set
 #   make uninstall    -- remove what install put there
 #   make clean        -- remove build output, leaving the source tree alone
@@ -102,7 +104,16 @@
 #   unhelpfully when missing, and Qt WebEngine does not exist for Android at
 #   all, so that build goes through the WebViewBackend seam (arch §19.2).
 #
-#     make android QT_ANDROID_ROOT=$HOME/Qt/6.11.1/android_arm64_v8a
+#   **ANDROID_ABI picks the architecture and the kit follows it.**
+#
+#     make android                       arm64-v8a, which is a phone
+#     make android ANDROID_ABI=x86_64    which is what an emulator usually is
+#
+#   The kit is found under QT_ROOT (~/Qt), newest Qt first, and is asked what
+#   it actually builds before anything compiles. Naming one by hand still
+#   works and is checked the same way:
+#
+#     make android ANDROID_ABI=x86_64 QT_ANDROID_ROOT=$HOME/Qt/6.10.0/android_x86_64
 #
 # =============================================================================
 
@@ -124,13 +135,53 @@ PREFIX ?= $(HOME)/.local
 SHARE  ?= $(PREFIX)/share
 
 # Android. Kept together so the "you are missing one" message can name them.
-QT_ANDROID_ROOT   ?= $(HOME)/Qt/6.11.1/android_arm64_v8a
-# Only used to name the copied apk; the kit above decides the real ABI.
-ANDROID_ABI       ?= arm64-v8a
+#
+# **ANDROID_ABI selects the build.** It used to select nothing: the kit named
+# by QT_ANDROID_ROOT decided the real architecture and this variable was only
+# pasted into the output filename, so `make apk ANDROID_ABI=x86_64` produced
+# an arm64 apk called x86_64. That is the combination somebody actually types
+# -- an emulator is x86_64 on almost every desktop -- and adb then refuses the
+# install with a message about the package rather than about the architecture,
+# which is a long way from the cause. project.md records the session that lost
+# to it.
+ANDROID_ABI ?= arm64-v8a
+
+# Qt names its kit directories after the ABI but not in Android's spelling, so
+# the two are mapped rather than substituted. An ANDROID_ABI with no entry here
+# leaves QT_KIT empty and is refused by name, instead of silently becoming a
+# path that matches nothing.
+QT_KIT_arm64-v8a   = android_arm64_v8a
+QT_KIT_armeabi-v7a = android_armv7
+QT_KIT_x86_64      = android_x86_64
+QT_KIT_x86         = android_x86
+QT_KIT             = $(QT_KIT_$(ANDROID_ABI))
+ANDROID_ABIS       = arm64-v8a armeabi-v7a x86_64 x86
+
+# The kit for that ABI, newest Qt first. Discovered rather than written down:
+# the version here was 6.11.1, which is not a version this machine has, and a
+# default naming a directory nobody has is a default that must always be
+# overridden. `sort -V` because a lexical sort puts 6.3.2 above 6.10.0.
+#
+# `ifndef` rather than `?=` so the search runs once rather than at every
+# reference, and so an explicit QT_ANDROID_ROOT skips it entirely -- that
+# override is still cross-checked against ANDROID_ABI below.
+QT_ROOT ?= $(HOME)/Qt
+ifndef QT_ANDROID_ROOT
+QT_ANDROID_ROOT := $(shell ls -d $(QT_ROOT)/*/$(QT_KIT) 2>/dev/null | sort -V | tail -1)
+endif
+
 ANDROID_NDK_ROOT  ?= $(HOME)/android-ndk-r29
 ANDROID_SDK_ROOT  ?= $(HOME)/Android/Sdk
 JAVA_HOME         ?= $(HOME)/android-studio/jbr
-ANDROID_BUILD_DIR ?= build-android
+
+# **Per ABI, because two architectures' objects must not meet.** One shared
+# build-android/ meant switching ABI reused the previous one's generated
+# Makefile and objects -- the same foot-gun one level down, and the one that
+# would have made the fix above look like it had not worked.
+ANDROID_BUILD_DIR ?= build-android-$(ANDROID_ABI)
+# Named, not globbed, so `clean` can say what it removes. The bare
+# `build-android` is what versions before the split left behind.
+ANDROID_BUILD_DIRS = $(foreach a,$(ANDROID_ABIS),build-android-$(a)) build-android
 
 # **-Os, and -Og under DEBUG.** Both live in `hydra.pro`, which subtracts
 # qmake's own -O2 and -O0 before adding them: two -O flags on one command line
@@ -177,7 +228,7 @@ TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test \
 # after a source change and never reproducible afterwards, with nothing kept.
 FAILED_DIR = $(TESTS_DIR)/failed
 
-.PHONY: all run test test-one drivers sweep replay deb deb-check apk android install uninstall clean help style style-docs style-source check hooks jni
+.PHONY: all run test test-one drivers sweep replay deb deb-check version-check apk android android-abi-check install uninstall clean veryclean distclean help style style-docs style-source check hooks jni
 
 # Always delegates, never compares timestamps itself. The first version made
 # the binary a real target depending on the configure output, and `make` after
@@ -311,15 +362,71 @@ deb-check: deb
 # five directories down inside the build tree. Copied out under a name that says
 # what it is, because "which of these is the one I just built" is a question a
 # packaging target should not leave anyone asking.
+#
+# **The apk is asked what it contains before it is named after it.** The name
+# is what made the old bug invisible: it was the only thing that ever said
+# which architecture the file was, and it said so by string substitution. So
+# the zip is opened -- `lib/<abi>/` is where Android looks for native code --
+# and a build that did not honour the kit is refused rather than published
+# under a name it has not earned.
+#
+# python3 rather than aapt2: the check must run wherever the build does, and
+# aapt2 lives in a build-tools version the Makefile would then have to pick.
+# The gate already requires python3. `aapt2 dump badging` is still the richer
+# thing to run by hand, and is what project.md's verification used.
 apk: android
 	@src=$$(find $(ANDROID_BUILD_DIR) -name '*.apk' -newer $(ANDROID_BUILD_DIR) \
 	         -print 2>/dev/null | head -1); \
 	 test -n "$$src" || src=$$(find $(ANDROID_BUILD_DIR) -name '*.apk' | head -1); \
-	 test -n "$$src" || { echo "no apk produced"; exit 1; }; \
+	 test -n "$$src" || { echo "no apk produced" >&2; exit 1; }; \
+	 abis=$$(python3 -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); print(' '.join(sorted({n.split('/')[1] for n in z.namelist() if n.startswith('lib/') and n.count('/') > 1})))" "$$src"); \
+	 test -n "$$abis" || { \
+	   echo "$$src carries no native code at all; not naming it for an ABI" >&2; \
+	   exit 1; }; \
+	 test "$$abis" = "$(ANDROID_ABI)" || { \
+	   echo "apk carries native code for: $$abis" >&2; \
+	   echo "  but ANDROID_ABI=$(ANDROID_ABI); refusing to name it that" >&2; \
+	   echo "  apk: $$src" >&2; \
+	   exit 1; }; \
 	 out=$(ANDROID_BUILD_DIR)/hydra-$(VERSION)-$(ANDROID_ABI)-debug.apk; \
 	 cp "$$src" "$$out"; \
 	 echo "$$out"; \
-	 echo "install it with: adb install -r $$out"
+	 echo "  native code: $$abis (read from the apk, not assumed)"; \
+	 echo "  install it with: adb install -r $$out"
+
+# **Ask the kit what it is; do not read it off the path.** The Qt6Core a kit
+# ships carries the ABI in its filename in Android's own spelling --
+# `libQt6Core_arm64-v8a.so` -- and that is the same string that ends up in the
+# apk's `lib/` directory, which makes it the thing worth comparing against.
+#
+# `qmake -query QT_ARCH` was the obvious source and was tried first: all four
+# kits on this machine answer `**Unknown**`, so it cannot tell them apart. The
+# directory name would work today and is Qt's to change; the library name is
+# what the linker and Android both actually use.
+#
+# A kit that will not say what it is fails rather than passes. An unconfirmed
+# ABI is the state this whole check exists to refuse.
+android-abi-check:
+	@test -n "$(QT_KIT)" || { \
+	   echo "ANDROID_ABI=$(ANDROID_ABI) is not one of: $(ANDROID_ABIS)" >&2; exit 2; }
+	@test -n "$(QT_ANDROID_ROOT)" || { \
+	   echo "no Qt kit for $(ANDROID_ABI) under $(QT_ROOT)" >&2; \
+	   echo "  looked for $(QT_ROOT)/*/$(QT_KIT)" >&2; \
+	   ls -d $(QT_ROOT)/*/android_* 2>/dev/null | sed 's/^/  have: /' >&2; \
+	   echo "  or set QT_ANDROID_ROOT to a kit directly" >&2; exit 2; }
+	@test -x "$(QT_ANDROID_ROOT)/bin/qmake" || { \
+	   echo "no qmake in $(QT_ANDROID_ROOT)" >&2; exit 2; }
+	@core=$$(ls $(QT_ANDROID_ROOT)/lib/libQt6Core_*.so 2>/dev/null | head -1); \
+	 test -n "$$core" || { \
+	   echo "$(QT_ANDROID_ROOT) ships no libQt6Core_<abi>.so," >&2; \
+	   echo "  so its ABI cannot be confirmed; refusing to guess" >&2; exit 2; }; \
+	 kit=$${core##*/libQt6Core_}; kit=$${kit%.so}; \
+	 if [ "$$kit" != "$(ANDROID_ABI)" ]; then \
+	   echo "ABI mismatch: ANDROID_ABI=$(ANDROID_ABI), but that kit builds $$kit" >&2; \
+	   echo "  kit: $(QT_ANDROID_ROOT)" >&2; \
+	   exit 2; \
+	 fi; \
+	 echo "android: $(ANDROID_ABI), kit $(QT_ANDROID_ROOT)"
 
 # **The kit's own qmake, not the host's.** `~/Qt/<ver>/android_<abi>/bin/qmake`
 # is configured for that ABI and knows where the kit's Qt libraries are; the
@@ -328,10 +435,7 @@ apk: android
 # The SDK, NDK and JDK go in the environment rather than on the command line
 # because that is where Qt's android mkspec reads them from, and androiddeployqt
 # reads the same variables again in the second step.
-android:
-	@test -x "$(QT_ANDROID_ROOT)/bin/qmake" || \
-	  { echo "no Qt-for-Android kit at $(QT_ANDROID_ROOT)"; \
-	    echo "set QT_ANDROID_ROOT to the kit for your ABI"; exit 2; }
+android: android-abi-check
 	@test -d "$(ANDROID_NDK_ROOT)" || { echo "no NDK at $(ANDROID_NDK_ROOT)"; exit 2; }
 	@test -d "$(ANDROID_SDK_ROOT)" || { echo "no SDK at $(ANDROID_SDK_ROOT)"; exit 2; }
 	@test -d "$(JAVA_HOME)" || { echo "no JDK at $(JAVA_HOME) -- Gradle will not run on a JRE"; exit 2; }
@@ -380,7 +484,7 @@ uninstall:
 # `..`, and not `.` itself. Anything else is refused and said out loud, because
 # a clean that silently skipped what it was asked to remove is its own problem.
 clean:
-	@for d in $(BUILD_DIR) $(TESTS_DIR) $(ANDROID_BUILD_DIR); do \
+	@for d in $(sort $(BUILD_DIR) $(TESTS_DIR) $(ANDROID_BUILD_DIR) $(ANDROID_BUILD_DIRS)); do \
 	   case "$$d" in \
 	     "" ) echo "refusing to remove an empty path"; continue ;; \
 	     /* ) echo "refusing to remove absolute path: $$d"; continue ;; \
@@ -437,7 +541,7 @@ check: style test
 # products, `veryclean` adds the build directories themselves, `distclean`
 # adds editor and tool droppings.
 veryclean: clean
-	@for d in $(BUILD_DIR) $(ANDROID_BUILD_DIR) $(TESTS_DIR); do \
+	@for d in $(sort $(BUILD_DIR) $(ANDROID_BUILD_DIR) $(ANDROID_BUILD_DIRS) $(TESTS_DIR)); do \
 	   case "$$d" in \
 	     "" | /* | . | ./ ) echo "veryclean: refusing to remove '$$d'" ;; \
 	     * ) rm -rf "$$d" && echo "veryclean: removed $$d" ;; \

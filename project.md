@@ -7812,6 +7812,55 @@ green in this project twice already. Backing both changes out and rebuilding:
 Ten live views against a cap of four. That third line is the whole reason the
 section exists, and it is the one no offline test could have produced.
 
+### ANDROID_ABI named the apk instead of choosing it
+
+`make apk ANDROID_ABI=x86_64` produced an **arm64 apk called x86_64**. The
+variable was interpolated into the output filename and nowhere else; the
+architecture came from whichever kit `QT_ANDROID_ROOT` happened to point at,
+and its default pointed at an arm64 kit. The Makefile said so in a comment --
+"only used to name the copied apk" -- which documents the trap rather than
+removing it.
+
+**It is the emulator case that makes this expensive.** A desktop emulator is
+x86_64 and a phone is arm64, so the person most likely to set the variable is
+the one about to be lied to, and `adb install` then fails complaining about the
+package rather than about the architecture. The session recorded above at
+§"Android: it builds, and there is an APK" lost time to exactly that.
+
+**ANDROID_ABI now selects the kit.** Qt's kit directories are named for the ABI
+in Qt's spelling rather than Android's (`android_armv7` for `armeabi-v7a`), so
+the four are mapped explicitly and an unlisted ABI is refused by name. The kit
+itself is discovered under `QT_ROOT` newest-Qt-first, because the default was
+`Qt/6.11.1/...` -- a version this machine does not have, so the default always
+had to be overridden anyway.
+
+**The kit is asked what it is, not read off its path.** `qmake -query QT_ARCH`
+was the obvious source and was tried first: all four kits here answer
+`**Unknown**`. What is reliable is the Qt6Core they ship --
+`libQt6Core_arm64-v8a.so` -- which carries the ABI in Android's own spelling
+and is the same string that lands in the apk's `lib/` directory. A kit that
+will not say what it is now fails rather than passes.
+
+**And the apk is opened before it is named.** The old name was the only thing
+that ever asserted an architecture, which is what kept the bug invisible; `make
+apk` now reads `lib/<abi>/` out of the zip and refuses to write the name when
+it disagrees, carries more than one ABI, or carries no native code at all.
+python3 rather than `aapt2`, so the check runs wherever the build does instead
+of depending on a build-tools version the Makefile would have to choose.
+
+Build directories are per ABI (`build-android-<abi>`) for the same reason: one
+shared tree meant switching ABI reused the previous architecture's generated
+Makefile and objects, which would have made the fix look like it had not
+worked.
+
+Verified against the four kits in `~/Qt/6.10.0`: each ABI resolves to its own
+kit and reports it; `ANDROID_ABI=x86_64 QT_ANDROID_ROOT=.../android_arm64_v8a`
+-- the original foot-gun -- exits 2 naming both sides; an unknown ABI, a
+missing kit and a directory with no qmake each fail with their own message. The
+apk check was exercised against synthetic zips carrying one ABI, two, and none.
+**What is not verified is a real build**: this machine has the kits but no NDK
+or JDK, so `make android` gets as far as the NDK check and stops.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

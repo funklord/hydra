@@ -164,13 +164,26 @@ include. `project.md` carries the measurements and the reasoning.
 ## Android
 
 ```sh
-make android                  # the APK (make apk is the same target)
+make android                       # arm64-v8a, which is a phone
+make android ANDROID_ABI=x86_64    # which is what an emulator usually is
 ```
 
-Needs `QT_ANDROID_ROOT` pointing at a Qt for Android kit, plus
-`ANDROID_SDK_ROOT`, `ANDROID_NDK_ROOT` and `JAVA_HOME` — each checked before
-anything runs, because Gradle will not run on a JRE and the failure a long way
-in says something else. Installing and running are `adb` by hand for now; the
+`ANDROID_ABI` selects the architecture and the Qt kit follows it — the kit is
+found under `QT_ROOT` (`~/Qt`), newest Qt first, and is asked what it actually
+builds before anything compiles. It used to select nothing but the output
+filename, so that second line produced an arm64 apk called x86_64; a mismatch
+now fails, and `make apk` reads the ABI back out of the finished zip rather
+than trusting the name. Naming a kit by hand still works and is checked the
+same way:
+
+```sh
+make android ANDROID_ABI=x86_64 QT_ANDROID_ROOT=$HOME/Qt/6.10.0/android_x86_64
+```
+
+Also needs `ANDROID_SDK_ROOT`, `ANDROID_NDK_ROOT` and `JAVA_HOME` — each
+checked before anything runs, because Gradle will not run on a JRE and the
+failure a long way in says something else. Installing and running are `adb` by
+hand for now; the
 `android-install` / `android-run` / `android-log` vocabulary is agreed across
 these projects but not implemented here. There is
 no Qt WebEngine for Android at all, which is why the `web_view_backend` seam
