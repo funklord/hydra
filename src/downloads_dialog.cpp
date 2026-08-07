@@ -3,6 +3,7 @@
 
 #include "download_manager.h"
 #include "empty_state.h"
+#include "flow_layout.h"
 #include "local_proxy.h"
 #include "media_detector.h"
 #include "player_launcher.h"
@@ -183,7 +184,20 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 	m_action->setVisible(false);
 	outer->addWidget(m_action);
 
-	auto *row = new QHBoxLayout;
+	// **Five actions that wrap, and Close on its own line.** They were one
+	// `QHBoxLayout` with a stretch between the two groups, which has a single
+	// strategy when the space runs short: squeeze every child equally. At 360
+	// logical pixels that gave six buttons 51 pixels each against an 80-pixel
+	// label, so "Open Folder" was on screen reading "pen Folde" -- inside the
+	// dialog, which is why a check that asked only about position passed it,
+	// and unusable.
+	//
+	// `flow_layout` has no notion of a stretch, so Close could not stay on the
+	// same line and keep its right edge. Two rows is the honest arrangement
+	// rather than a workaround: the five are things to do to the selected
+	// download, Close is leaving, and separating them says so. On a desktop the
+	// five still sit in one line exactly as before.
+	auto *row = new flow_layout;
 	m_pause  = new QPushButton("&Pause", this);
 	m_resume = new QPushButton("&Resume", this);
 	m_cancel = new QPushButton("&Cancel", this);
@@ -194,11 +208,11 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 		b->setEnabled(false);
 		row->addWidget(b);
 	}
-	row->addStretch(1);
+	outer->addLayout(row);
+
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::hide);
-	row->addWidget(buttons);
-	outer->addLayout(row);
+	outer->addWidget(buttons);
 
 	connect(m_pause,  &QPushButton::clicked, this, &downloads_dialog::act_pause);
 	connect(m_resume, &QPushButton::clicked, this, &downloads_dialog::act_resume);

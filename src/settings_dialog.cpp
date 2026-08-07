@@ -2,6 +2,7 @@
 #include "settings_dialog.h"
 #include "claude_provider.h"
 #include "download_manager.h"
+#include "flow_layout.h"
 #include "ollama_provider.h"
 #include "player_launcher.h"
 #include "torrent_download_source.h"
@@ -306,6 +307,10 @@ settings_dialog::settings_dialog(player_launcher *players,
 	connect(m_categories, &QListWidget::currentRowChanged,
 	         stack, &QStackedWidget::setCurrentIndex);
 
+	// **Named, because a diagnostic that says "QWidget" names nothing.**
+	// `try_phone` reports the widest children of a dialog that will not fit a
+	// phone screen, and on this one the answer came back as four anonymous
+	// QWidgets -- which is the question again, not an answer.
 	auto *privacy_page = new QWidget;
 	auto *appearance_page = new QWidget;
 	auto *kiosk_page  = new QWidget;
@@ -313,6 +318,13 @@ settings_dialog::settings_dialog(player_launcher *players,
 	auto *player_page = new QWidget;
 	auto *dl_page     = new QWidget;
 	auto *ai_page     = new QWidget;
+	privacy_page->setObjectName("page_privacy");
+	appearance_page->setObjectName("page_appearance");
+	kiosk_page->setObjectName("page_kiosk");
+	filter_page->setObjectName("page_filters");
+	player_page->setObjectName("page_players");
+	dl_page->setObjectName("page_downloads");
+	ai_page->setObjectName("page_ai");
 	build_privacy_page(privacy_page);
 	build_appearance_page(appearance_page);
 	build_kiosk_page(kiosk_page);
@@ -761,7 +773,7 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	  "one is reviewed before it takes effect.", page);
 	v->addWidget(m_bundle_note);
 
-	auto *bundle_row = new QHBoxLayout;
+	auto *bundle_row = new flow_layout;
 	auto *do_export = new QPushButton("E&xport all settings…", page);
 	do_export->setObjectName("settings_export");
 	auto *do_import = new QPushButton("Im&port settings…", page);
@@ -770,7 +782,6 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	connect(do_import, &QPushButton::clicked, this, &settings_dialog::import_settings);
 	bundle_row->addWidget(do_export);
 	bundle_row->addWidget(do_import);
-	bundle_row->addStretch(1);
 	v->addLayout(bundle_row);
 
 	// What used to be a footnote about cookie consent banners is now the
@@ -1067,7 +1078,10 @@ void settings_dialog::build_filter_page(QWidget *page) {
 	m_rules_view->setRootIsDecorated(false);
 	rv->addWidget(m_rules_view, 1);
 
-	auto *rrow = new QHBoxLayout;
+	// Five buttons that wrap rather than squeeze. A QHBoxLayout's minimum is
+	// the sum of its children, so at any width below that it shrinks all of
+	// them past their labels -- the failure `flow_layout` was written for.
+	auto *rrow = new flow_layout;
 	m_rules_remove = new QPushButton("R&emove", rules_box);
 	m_rules_remove->setObjectName("rules_remove");
 	m_rules_remove->setEnabled(false);
@@ -1084,7 +1098,6 @@ void settings_dialog::build_filter_page(QWidget *page) {
 	auto *rules_forget = new QPushButton("Forget imported", rules_box);
 	rules_forget->setObjectName("rules_forget");
 	rrow->addWidget(rules_forget);
-	rrow->addStretch(1);
 
 	// The safety valve. If a rule set turns out to be careless or hostile,
 	// undoing it has to be one action rather than a hunt through a list -- and
@@ -1330,6 +1343,21 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 	m_kiosk_scale->addItem("Geometric — exact transform (test on the target GPU)",
 	                        int(scale_mode::geometric));
 	m_kiosk_scale->setObjectName("kiosk_scale");
+	// **A combo's minimum width is its longest item**, and the longest here is
+	// "Geometric -- exact transform (test on the target GPU)". That one line
+	// made this page 439 pixels wide at minimum, which is why the settings
+	// window would not fit a phone and why its text came out clipped -- the
+	// page overflowed the scroll area it sits in and had to be scrolled
+	// sideways to read.
+	//
+	// Costs the desktop nothing: this is a `wide` row, so the control is given
+	// a share of the width by the layout's stretch rather than by its own size
+	// hint. Lowering the hint changes what it will *accept*, not what it gets.
+	// Twelve characters is enough to show that something is selected; the
+	// popup still lists every option in full, which is where they are read.
+	m_kiosk_scale->setSizeAdjustPolicy(
+	  QComboBox::AdjustToMinimumContentsLengthWithIcon);
+	m_kiosk_scale->setMinimumContentsLength(12);
 	v->addWidget(settings_row(
 	  "Scaling",
 	  "Reflow re-lays the page out at a zoom factor and is the robust choice. "

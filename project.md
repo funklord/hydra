@@ -6749,6 +6749,65 @@ its issuer and expiry the same way, and the media dialog stranded its empty
 state under an empty table. All three were found by looking and none by a test,
 because each is a fact about pixels rather than about the widget tree.
 
+### Do the dialogs fit a phone? Two of four did not
+
+`android_dialogs::install()` exists because the media dialog came up 1200
+logical pixels wide on a 1080-pixel screen, so its list was visible and its
+buttons were not -- found by tapping Play and discovering there was nothing to
+tap. **The fix was never checked against the contents.** It clears the dialog's
+own minimum and hands it the screen rectangle, which is the right instruction,
+but a widget cannot go below its *layout's* minimum, and a horizontal row's
+minimum is the sum of its children. So the fix can be exactly right and the
+dialog still too wide, and nothing said so.
+
+`try_phone` asks the question on a desktop, because it is entirely layout
+arithmetic: give each dialog the instruction Android gives it, then ask what its
+layout will actually accept. Two of the four measured could not shrink to 360
+pixels -- downloads at 532, settings at 395.
+
+**The driver's first check was vacuous and it was the interesting failure.** It
+compared `dlg->size()` to the screen straight after `setGeometry`, which is the
+value just assigned, so it agreed every time -- reporting downloads as fitting
+while the number that disproved it, the layout floor, was printed on the same
+line. Qt honours an assigned geometry only until something re-lays-out, and on a
+device something always does. The check reads `minimumSize()` now.
+
+**Its second check was too weak in a subtler way.** Asking only whether each
+button's rectangle fell inside the dialog passed the downloads dialog, whose
+"Open Folder" was on screen reading "pen Folde": six buttons squeezed to 51
+pixels against an 80-pixel label. Inside the dialog and unusable are different
+things, so a button narrower than its own `sizeHint` now counts as cut.
+
+`flow_layout` is the fix for the row: at any width where the items fit it lays
+out exactly as a QHBoxLayout would, so no desktop window changes shape, and
+below that it uses a second line. Its `minimumSize()` is the widest single item
+rather than the sum, which is the number the Android path reads. Downloads went
+from a floor of 532x123 to 102x154, and Close moved to its own right-aligned row
+-- deliberate, since a flow layout has no stretch to hold it at the right edge,
+and separating the five things you can do from the one that leaves reads better
+than it sounds.
+
+**Settings is a named gap rather than a fix.** Two of its rows use the flow
+layout now, but the binding constraints are elsewhere and each is a page:
+`page_downloads` 367, `page_ai` 347, and the button box needs 373 because the
+Restore label names the page it acts on -- a deliberate choice worth keeping.
+That is a pass over seven pages, not a row, so `try_phone` names it with those
+numbers and prints them without failing on them.
+
+One of them is done and it shows the shape of the rest. `page_kiosk` was the
+worst at 439, and the whole of it was one combo item: "Geometric -- exact
+transform (test on the target GPU)", because a `QComboBox` will not go below its
+longest entry. Lowering that entry's claim took the page out of the top five
+altogether. It costs the desktop nothing, and the reason is worth stating
+because it decides the technique for the other pages too: that is a `wide` row,
+so the layout's stretch is what gives the control its width, and the size hint
+only decides what it will *accept*. The popup still lists every option in full,
+which is where they are read.
+The sweep reads the "N failed" line, and this tree's own rule is that a summary
+which is always wrong trains people to skip the summary; a named gap is visible
+without being noise. The pages carry object names now, because the first run of
+that diagnostic answered "QWidget" four times, which is the question again.
+
 ### The empty state, written three times and wrong the third
 
 The consent-rules dialog showed a large blank table with the sentence
