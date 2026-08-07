@@ -74,24 +74,59 @@ what is merely assumed — and `docs/architecture.md` for the full design;
 
 ## Requirements
 
-- **Qt 6.8 or newer**, components `Widgets Network WebChannel Qml`, plus
-  `WebEngineWidgets` off Android (Debian/Ubuntu: `qt6-base-dev
-  qt6-webengine-dev qt6-declarative-dev`; Arch: `qt6-base qt6-webengine
-  qt6-declarative`). `Qml` is needed only for `QJSEngine`, the extractor
-  sandbox — there is no QML in the UI. The floor is 6.8 because
-  `QWebEnginePermission` and `Qt::ColorScheme` are used unguarded; 6.8.2 and
-  6.11 are the versions actually built against, and `qmake` refuses anything
-  older with a message rather than a wall of template errors.
+- **Qt 6.8 or newer.** The floor is 6.8 because `QWebEnginePermission` and
+  `Qt::ColorScheme` are used unguarded; 6.8.2 and 6.11 are the versions actually
+  built against, and `qmake` refuses anything older with a message rather than a
+  wall of template errors. `Qml` is wanted only for `QJSEngine`, the extractor
+  sandbox — there is no QML in the UI.
 - `make`, `qmake` (Debian: `qmake6`) and a C++17 compiler.
-- **Optional, each buying one feature and nothing else**: `libsodium`
-  (KeePassXC bridge), `libsecret-1` (pairing that survives a restart), `liblz4`,
-  `libtorrent-rasterbar` (BitTorrent), Qt DBus. A missing one is a smaller
-  build, not a failure.
-- `python3` if the vendored `third_party/yt-dlp` is used rather than one on
-  PATH. Clone with `--recurse-submodules`.
+- **Optional, each buying one feature and nothing else.** A missing one is a
+  smaller build rather than a failure, which is worth knowing: without
+  `libsodium` there is no KeePassXC bridge, without `libtorrent-rasterbar` no
+  BitTorrent, without `libsecret-1` the KeePassXC pairing does not survive a
+  restart, and without `liblz4` Firefox session files go through this project's
+  own decoder instead.
 - **X11 / XWayland** on Linux — `main.cpp` forces `QT_QPA_PLATFORM=xcb` there
   unless the environment already set it, matching the X11-only design decision.
   The forcing is guarded to desktop Linux.
+
+### Every dependency, and the package that carries it
+
+Debian and Ubuntu names. The Qt column is what `hydra.pro` asks for; the
+package column is what `dpkg -S` says provides it, rather than what looked
+likely.
+
+| what for | Qt module / library | Debian package |
+|---|---|---|
+| the shell, networking, DBus, and the test harness | `widgets` `network` `dbus` `Test` | `qt6-base-dev` |
+| moc, rcc, uic | — | `qt6-base-dev-tools` |
+| the page bridge | `webchannel` | `qt6-webchannel-dev` |
+| the extractor sandbox (`QJSEngine`) | `qml` | `qt6-declarative-dev` |
+| the engine (not on Android) | `webenginewidgets` | `qt6-webengine-dev` |
+| KeePassXC bridge — *optional* | libsodium | `libsodium-dev` |
+| pairing that survives a restart — *optional* | libsecret-1 | `libsecret-1-dev` |
+| BitTorrent — *optional* | libtorrent-rasterbar | `libtorrent-rasterbar-dev` |
+| Firefox session decoding — *optional* | liblz4 | `liblz4-dev` |
+
+**`qt6-webengine-dev` happens to pull in the declarative and webchannel
+packages**, so a shorter list builds too. They are named anyway because this
+project uses them directly and an Android build asks for no WebEngine at all,
+which is exactly where a transitively-satisfied dependency stops being
+satisfied.
+
+```sh
+sudo apt install build-essential pkgconf \
+  qt6-base-dev qt6-base-dev-tools qt6-declarative-dev \
+  qt6-webchannel-dev qt6-webengine-dev \
+  libsodium-dev libsecret-1-dev liblz4-dev libtorrent-rasterbar-dev
+```
+
+Arch: `qt6-base qt6-declarative qt6-webchannel qt6-webengine libsodium
+libsecret liblz4 libtorrent-rasterbar`.
+
+`debian/control` carries the same list as `Build-Depends`, and CI installs it
+explicitly; all three are meant to agree, and the two that did not were found by
+writing this table.
 
 ## Build & run
 

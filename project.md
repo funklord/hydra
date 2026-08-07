@@ -6689,6 +6689,47 @@ Both are named skips now, with their reasons, the way `try_watch` and
 passed, 12 report-only, 0 failed -- and a failure line in it now means
 something.
 
+### The dependency list, written down and therefore found to be wrong
+
+Three places name what this needs to build -- `README.md`, `debian/control`'s
+`Build-Depends`, and CI's apt line -- and no two of them agreed. Writing the
+list out as a table, with each package confirmed by `dpkg -S` on the file that
+provides the module rather than by what looked likely, is what surfaced it.
+
+| what for | Qt module / library | Debian package |
+|---|---|---|
+| shell, networking, DBus, test harness | `widgets` `network` `dbus` `Test` | `qt6-base-dev` |
+| moc, rcc, uic | -- | `qt6-base-dev-tools` |
+| the page bridge | `webchannel` | `qt6-webchannel-dev` |
+| the extractor sandbox (`QJSEngine`) | `qml` | `qt6-declarative-dev` |
+| the engine (not on Android) | `webenginewidgets` | `qt6-webengine-dev` |
+| KeePassXC bridge | libsodium | `libsodium-dev` |
+| pairing across a restart | libsecret-1 | `libsecret-1-dev` |
+| BitTorrent | libtorrent-rasterbar | `libtorrent-rasterbar-dev` |
+| Firefox session decoding | liblz4 | `liblz4-dev` |
+
+**`Build-Depends` was missing three.** `qt6-declarative-dev` and
+`qt6-webchannel-dev` are direct dependencies -- `hydra.pro` says
+`QT += webchannel qml` -- and were satisfied only because `qt6-webengine-dev`
+happens to depend on both. That works and is fragile in a specific way: the
+Android build asks for no WebEngine at all, which is exactly where a
+transitively-satisfied dependency stops being satisfied.
+
+**`liblz4-dev` was the one that cost something.** It was in nobody's build
+dependencies, so a `.deb` built in a clean chroot would have come out without
+the LZ4 decoder -- silently, because a missing optional dependency is a smaller
+build rather than a failure. The package is the one place that hazard has no
+guard: CI checks that the *binary it builds* links all four, and the deb build
+is not in CI.
+
+Checked rather than assumed after the fix: `make deb` succeeds and
+`dpkg-deb -f` shows `liblz4-1`, `libsecret-1-0`, `libsodium23` and
+`libtorrent-rasterbar2.0t64` in the package's computed `Depends`, which is
+`dpkg-shlibdeps` reporting what the binary actually linked.
+
+All three lists name every direct dependency now, including the two that arrive
+anyway, and each says so.
+
 ### The drivers no longer fetch a real site to make a point
 
 `try_media`, `try_frame` and `try_mse` each carried a `dramafren.org` url as

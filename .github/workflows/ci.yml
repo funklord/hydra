@@ -75,13 +75,22 @@ jobs:
       # Before checkout, deliberately: actions/checkout falls back to
       # downloading a tarball over the API when the container has no git,
       # which works and then leaves no repository for anything to inspect.
+      #
+      # **Every direct dependency named, including the two that arrive anyway.**
+      # `qt6-webengine-dev` pulls in `qt6-declarative-dev` and
+      # `qt6-webchannel-dev`, so a shorter list builds -- and this project uses
+      # both directly, while the Android build asks for no WebEngine at all,
+      # which is exactly where a transitively-satisfied dependency stops being
+      # satisfied. The same list is in README.md and in debian/control's
+      # Build-Depends; the latter two were missing three packages between them
+      # until somebody wrote the list down and compared it.
       - name: Install Qt and the optional dependencies
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            git ca-certificates make build-essential pkg-config python3 \
-            qt6-base-dev qt6-webengine-dev qt6-declarative-dev \
-            qt6-base-dev-tools libgl1-mesa-dev \
+            git ca-certificates make build-essential pkgconf python3 \
+            qt6-base-dev qt6-base-dev-tools qt6-declarative-dev \
+            qt6-webchannel-dev qt6-webengine-dev libgl1-mesa-dev \
             libsodium-dev libsecret-1-dev liblz4-dev \
             libtorrent-rasterbar-dev
 

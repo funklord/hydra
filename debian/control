@@ -3,7 +3,8 @@ Section: web
 Priority: optional
 Maintainer: Nabeel Sowan <nabeel@vibes.se>
 Build-Depends: debhelper-compat (= 13), qt6-base-dev, qt6-base-dev-tools,
-               qt6-webengine-dev, libsecret-1-dev, libsodium-dev,
+               qt6-declarative-dev, qt6-webchannel-dev, qt6-webengine-dev,
+               libsecret-1-dev, libsodium-dev, liblz4-dev,
                libtorrent-rasterbar-dev, pkgconf
 Rules-Requires-Root: no
 
