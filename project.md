@@ -6585,6 +6585,54 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### The Android port has been dead since the rename, and nothing said so
+
+Found while going to wire the navigation decider into Android. The port does
+not work at all, and has not since `android: rename the application id to
+se.vibes.hydra` -- which is the most recent commit to touch `android/src`, so
+nothing has been run on a device since it landed.
+
+**JNI binds by name and by nothing else.** A `native` method `m` on class
+`p.q.C` resolves to the C symbol `Java_p_q_C_m`. The rename moved the Java to
+`se.vibes.hydra` and updated the class paths C++ hands to `QJniObject` -- those
+are string literals containing `org/qtproject/example/hydra`, which a grep for
+the old id finds. The seven JNI entry points kept their old names, because in a
+function name the separator is `_` rather than `/` and the same grep does not
+match them.
+
+Not inferred. The APK built earlier this session was unpacked and its library
+read:
+
+    nm -D --defined-only libhydra_arm64-v8a.so | grep Java_
+    Java_org_qtproject_example_hydra_HydraWebView_onUrlChanged
+    ... and six more
+
+against `package se.vibes.hydra;` in the same package's Java. Every native call
+would have thrown `UnsatisfiedLinkError` on first use: no url reporting, no
+request filtering, no script bridges, no external links, no file picker. The
+System WebView backend is all seven of those.
+
+**Nothing could have caught it.** The Java compiles without the C++ and the C++
+compiles without the Java; the two are joined at runtime by string equality. It
+built, packaged, signed and passed the APK content checks written earlier
+today -- which verified that our Java classes were in the dex and that the
+library was present, both true and neither sufficient.
+
+So `tools/jni_check.py` compares them at rest: every `native` method's expected
+symbol against the symbols `src/*.cpp` defines, in either direction. It is pure
+text, needs no SDK, NDK or device, and runs with the other gates -- `make style`
+and CI's cheap job, in milliseconds. It refuses to pass when it finds no native
+methods at all, since a check over an empty set reports success as loudly as a
+real one. Verified against the bug itself: it exits 1 on the tree as it was and
+0 on the tree as it is.
+
+The APK was rebuilt afterwards and the library's exported symbols compared to
+the names the Java declares. Seven wanted, seven exported, matched exactly.
+
+**Still unverified: that it now runs.** Symbol resolution was the defect and it
+is fixed at the level the defect existed; whether the port works on a device is
+a separate question needing a device, and this is not evidence about it.
+
 ### CI, and the first thing it found was a lie in the documentation
 
 The first run went green on the gates in eight seconds and failed the build in

@@ -39,7 +39,12 @@ jobs:
         with:
           submodules: false
 
-      - name: Run both gates
+      # `make style` is three gates now: the shared source gate, the
+      # project.md document gate, and the JNI name check. The last one is here
+      # rather than in the build job on purpose -- it is pure text, it needs no
+      # Android tooling at all, and the mistake it exists to catch reached a
+      # signed APK without any build failing.
+      - name: Run the gates
         run: make style
 
       # `make style` runs the source gate and the document gate. The source

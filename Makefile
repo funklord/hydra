@@ -62,8 +62,10 @@
 #   make install      -- install the binary, desktop entry and icon set
 #   make uninstall    -- remove what install put there
 #   make clean        -- remove build output, leaving the source tree alone
-#   make style        -- the shared source gate plus this repo's project.md
-#                        heading checks (see DOC CHECKS)
+#   make style        -- the shared source gate, this repo's project.md heading
+#                        checks (see DOC CHECKS), and the JNI name check
+#   make jni          -- just the JNI check: every Java `native` method has a
+#                        C++ symbol JNI can actually resolve
 #   make check        -- style and test together, the one to run before a commit
 #   make hooks        -- install the git hooks from tools/hooks/
 #   make veryclean    -- clean, plus the generated artefacts it leaves
@@ -175,7 +177,7 @@ TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test \
 # after a source change and never reproducible afterwards, with nothing kept.
 FAILED_DIR = $(TESTS_DIR)/failed
 
-.PHONY: all run test test-one drivers sweep replay deb deb-check apk android install uninstall clean help style style-docs style-source check hooks
+.PHONY: all run test test-one drivers sweep replay deb deb-check apk android install uninstall clean help style style-docs style-source check hooks jni
 
 # Always delegates, never compares timestamps itself. The first version made
 # the binary a real target depending on the configure output, and `make` after
@@ -414,7 +416,15 @@ help:
 
 # `style` is every consistency gate this project has: the shared source gate,
 # and the doc check that keeps project.md honest about the tree it describes.
-style: style-source style-docs
+# The JNI names, checked as text: a native method and its C++ symbol are
+# joined at runtime by string equality and by nothing else, and this tree
+# shipped a rename that broke seven of them. Costs milliseconds and needs no
+# Android tooling, so it runs with the other gates rather than only when
+# somebody builds an APK.
+style: style-source style-docs jni
+
+jni:
+	@python3 tools/jni_check.py
 
 style-source:
 	python3 tools/style_gate.py check

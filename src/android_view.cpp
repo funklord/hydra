@@ -93,7 +93,7 @@ qint64 next_id() {
 // Called from Java when a load starts. Static, because JNI has nowhere to put a
 // `this`, so the id is the handle back to the view that asked.
 extern "C" JNIEXPORT void JNICALL
-Java_org_qtproject_example_hydra_HydraWebView_onUrlChanged(JNIEnv *env, jclass,
+Java_se_vibes_hydra_HydraWebView_onUrlChanged(JNIEnv *env, jclass,
                                                             jlong id, jstring url) {
 	const char *utf = env->GetStringUTFChars(url, nullptr);
 	const QString s = QString::fromUtf8(utf);
@@ -105,7 +105,7 @@ Java_org_qtproject_example_hydra_HydraWebView_onUrlChanged(JNIEnv *env, jclass,
 // true makes the Java side answer with an empty response, which is how a
 // WebView blocks: there is no "cancel this request" to call.
 extern "C" JNIEXPORT jboolean JNICALL
-Java_org_qtproject_example_hydra_HydraWebView_shouldBlock(JNIEnv *env, jclass,
+Java_se_vibes_hydra_HydraWebView_shouldBlock(JNIEnv *env, jclass,
                                                            jstring url, jstring accept,
                                                            jstring page_url) {
 	const auto pull = [env](jstring s) {
@@ -153,7 +153,7 @@ QString from_java(JNIEnv *env, jstring s) {
 }  // namespace
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_org_qtproject_example_hydra_HydraWebView_bridgeDescribe(JNIEnv *env, jclass,
+Java_se_vibes_hydra_HydraWebView_bridgeDescribe(JNIEnv *env, jclass,
                                                               jlong id, jstring name) {
 	const QString n = from_java(env, name);
 	const QString r = on_qt_thread([id, n] { return android_view::describe_bridge(id, n); });
@@ -161,7 +161,7 @@ Java_org_qtproject_example_hydra_HydraWebView_bridgeDescribe(JNIEnv *env, jclass
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_org_qtproject_example_hydra_HydraWebView_bridgeCall(JNIEnv *env, jclass, jlong id,
+Java_se_vibes_hydra_HydraWebView_bridgeCall(JNIEnv *env, jclass, jlong id,
                                                           jstring name, jstring method,
                                                           jstring args) {
 	const QString n = from_java(env, name), m = from_java(env, method),
@@ -177,7 +177,7 @@ Java_org_qtproject_example_hydra_HydraWebView_bridgeCall(JNIEnv *env, jclass, jl
 // rather than waited on: the picker Qt is about to show needs that same UI
 // thread, so blocking here would deadlock the two against each other.
 extern "C" JNIEXPORT void JNICALL
-Java_org_qtproject_example_hydra_HydraWebView_chooseFile(JNIEnv *env, jclass, jlong id,
+Java_se_vibes_hydra_HydraWebView_chooseFile(JNIEnv *env, jclass, jlong id,
                                                           jboolean multiple,
                                                           jstring accept) {
 	const QString a = from_java(env, accept);
@@ -188,7 +188,7 @@ Java_org_qtproject_example_hydra_HydraWebView_chooseFile(JNIEnv *env, jclass, jl
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_org_qtproject_example_hydra_HydraWebView_takeExternalUrl(JNIEnv *env, jclass,
+Java_se_vibes_hydra_HydraWebView_takeExternalUrl(JNIEnv *env, jclass,
                                                                jstring url) {
 	const QString u = from_java(env, url);
 	// The answer has to come from the Qt thread: it runs the handler, which
@@ -202,7 +202,7 @@ Java_org_qtproject_example_hydra_HydraWebView_takeExternalUrl(JNIEnv *env, jclas
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_org_qtproject_example_hydra_HydraWebView_injectedScripts(JNIEnv *env, jclass,
+Java_se_vibes_hydra_HydraWebView_injectedScripts(JNIEnv *env, jclass,
                                                                jlong id) {
 	const QString r = on_qt_thread([id] { return android_view::injected_scripts(id); });
 	return env->NewStringUTF(r.toUtf8().constData());
