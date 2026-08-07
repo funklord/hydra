@@ -9,12 +9,17 @@
 // including the one that machine actually produces. The sources themselves need
 // a desktop; the decision does not.
 #include "theme.h"
+
+#include "node.h"
+#include "tab_tree_model.h"
 #include <QFile>
 #include <QDir>
 
 #include <QApplication>
+#include <QBrush>
 #include <QPalette>
 #include <cstdio>
+#include <cstdlib>
 
 static int g_pass = 0, g_fail = 0;
 static void check(bool ok, const QString &w) {
@@ -186,6 +191,54 @@ int main(int argc, char **argv) {
 		      "and nothing at all gives nothing, not a guess");
 
 		QDir(dir).removeRecursively();
+	}
+
+	section("the two colours this tree writes by hand");
+	{
+		// **Everything else asks the palette; these two do not.** The tab tree
+		// paints an unopened link mid-grey, and the downloads list paints the
+		// "public" marker amber. Both are deliberate -- one is a shade of the
+		// normal text colour, the other is a warning that must not read as
+		// ordinary -- and both are frozen numbers that a colour scheme cannot
+		// move.
+		//
+		// That is the shape of a bug this tree has had: the settings
+		// descriptions dimmed by writing a colour, which froze under whichever
+		// scheme was current when the widget was built, and a contrast check
+		// exists there because of it. These two survive both schemes, and the
+		// point of measuring is that nobody knew it -- a mid-grey happens to
+		// clear a dark background and a light one, and "happens to" is the part
+		// worth holding still.
+		// **Asked of the model, not copied from it.** Restating the literal here
+		// would test this file against itself: change the colour in
+		// `tab_tree_model.cpp` and a copy sitting in the test agrees with the
+		// old value forever. So the model is built and asked what it paints,
+		// which is the thing that would actually change.
+		tab_tree_model model;
+		node *unopened = model.add_tab(nullptr, "A tab nobody opened",
+		                                "https://example.invalid/");
+		const QVariant ink = model.data(model.index_for_node(unopened),
+		                                 Qt::ForegroundRole);
+		check(ink.canConvert<QBrush>() && ink.value<QBrush>().color().isValid(),
+		      "the tree paints an unopened tab in a colour of its own");
+
+		const theme::choice both[] = { theme::choice::light, theme::choice::dark };
+		for (theme::choice c : both) {
+			theme::apply(c);
+			const QColor bg = QApplication::palette().color(QPalette::Base);
+			const QColor fg = ink.value<QBrush>().color();
+			const int gap = std::abs(fg.lightness() - bg.lightness());
+			check(gap >= 25,
+			      QString("%1: an unopened tab stands %2 lightness levels off "
+			               "the tree behind it").arg(
+			          c == theme::choice::light ? "light" : "dark").arg(gap));
+		}
+
+		// The downloads list writes one too -- amber, for a transfer whose
+		// address is visible to others. It is deliberately not checked here:
+		// reaching it means a live download, and asserting against a second
+		// copy of the literal would be this file agreeing with itself. Named
+		// so the omission is a decision rather than an oversight.
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

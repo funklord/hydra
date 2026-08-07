@@ -6909,6 +6909,30 @@ background colour outright took both schemes to 0 and the contrast check failed.
 So neither is redundant, and the pair is worth more than either: one is about
 the mechanism, the other about the result.
 
+### The two colours this tree writes by hand
+
+Everything else asks the palette. Two places do not: the tab tree paints an
+unopened link mid-grey, and the downloads list paints the public-swarm marker
+amber. Both are deliberate -- one is a shade of the ordinary text colour, the
+other a warning that must not read as ordinary -- and both are frozen numbers a
+colour scheme cannot move, which is the shape of the settings-description bug.
+
+They survive both schemes: 115 lightness levels clear in light and 107 in dark.
+The point of measuring is that nobody knew it. A mid-grey happens to clear a
+dark background and a light one, and "happens to" is the part worth holding
+still.
+
+**Asked of the model rather than copied from it.** The first version restated
+`QColor(140, 140, 140)` in the test, which tests the file against itself:
+change the colour in `tab_tree_model.cpp` and the copy agrees with the old value
+forever. It builds a model and reads `Qt::ForegroundRole` now, and was confirmed
+by changing the colour in the source and watching the light case drop to 10.
+
+The downloads marker is deliberately not checked, and named so the omission is a
+decision rather than an oversight: reaching it needs a live download, and
+asserting against a second copy of the literal would be the same self-agreement
+in a different file.
+
 ### The site controls had no keyboard way in
 
 Nothing in this tree sets a tab order and nothing tested one, so what Qt does by

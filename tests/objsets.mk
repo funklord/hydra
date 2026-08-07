@@ -369,8 +369,12 @@ OBJS_test_streamtype = \
 	$(BUILD_DIR)/moc/moc_stream_probe.o
 
 OBJS_test_theme = \
+	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/app/theme.o \
-	$(BUILD_DIR)/moc/moc_theme.o
+	$(BUILD_DIR)/moc/moc_theme.o \
+	$(BUILD_DIR)/app/tree_outline.o \
+	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
+	$(BUILD_DIR)/app/tree_diff.o
 
 OBJS_test_torrent = \
 	$(BUILD_DIR)/app/download_manager.o \
