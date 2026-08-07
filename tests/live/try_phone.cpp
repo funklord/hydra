@@ -30,6 +30,7 @@
 #include <QDialog>
 #include <QDir>
 #include <QLayout>
+#include <QListWidget>
 #include <QPushButton>
 #include <QTimer>
 #include <algorithm>
@@ -75,10 +76,10 @@ static void as_android_would(QDialog *dlg) {
 // still printed. What is suppressed is only the verdict.
 static QString known_gap(const QString &name) {
 	if (name == "settings")
-		return "seven pages laid out for a desktop; page_kiosk alone will not "
-		        "go below 439, and the button box needs 373 for a Restore "
-		        "label that names its page. Fixing it is a pass over every "
-		        "page, not a row.";
+		return "its seven pages fit now; what is left is the button box, which "
+		        "needs 373 because the Restore label names the page it acts "
+		        "on. That is a deliberate choice, and on a device the label "
+		        "elides rather than anything being unreachable.";
 	return QString();
 }
 
@@ -184,6 +185,20 @@ static void measure(QDialog *dlg, const QString &name) {
 	          ? QString("%1: every button is on screen").arg(name)
 	          : QString("%1: %2 button(s) off the edge -- %3")
 	                .arg(name).arg(off).arg(lost.join(", ")));
+	// **The settings window is seven windows.** Measuring only the page that
+	// happens to be selected says nothing about the other six, and every
+	// constraint found here was on a page the first shot never showed.
+	if (auto *pages = dlg->findChild<QListWidget *>("categories")) {
+		for (int i = 0; i < pages->count(); ++i) {
+			pages->setCurrentRow(i);
+			QApplication::processEvents();
+			const QString leaf = pages->item(i)->text().toLower()
+			                         .replace(' ', '-').replace('&', "and");
+			save(dlg, QString("%1-%2").arg(name, leaf));
+		}
+		pages->setCurrentRow(0);
+	}
+
 	verdict(squeezed == 0, squeezed == 0
 	          ? QString("%1: and none has its label cut").arg(name)
 	          : QString("%1: %2 button(s) squeezed below their label -- %3")

@@ -6794,15 +6794,37 @@ Restore label names the page it acts on -- a deliberate choice worth keeping.
 That is a pass over seven pages, not a row, so `try_phone` names it with those
 numbers and prints them without failing on them.
 
-One of them is done and it shows the shape of the rest. `page_kiosk` was the
-worst at 439, and the whole of it was one combo item: "Geometric -- exact
-transform (test on the target GPU)", because a `QComboBox` will not go below its
-longest entry. Lowering that entry's claim took the page out of the top five
-altogether. It costs the desktop nothing, and the reason is worth stating
-because it decides the technique for the other pages too: that is a `wide` row,
-so the layout's stretch is what gives the control its width, and the size hint
-only decides what it will *accept*. The popup still lists every option in full,
-which is where they are read.
+**The pages are done, and one technique did most of it.** A `wide` row gives its
+control width through the layout's stretch, so the control's size *hint* only
+ever decides what it will accept when there is not enough -- which means
+lowering a hint costs the desktop nothing and buys the whole difference on a
+phone. Three findings, each a single widget holding a page hostage:
+
+- `page_kiosk`, 439, was one combo entry: "Geometric -- exact transform (test on
+  the target GPU)". A `QComboBox` will not go below its longest item. The popup
+  still lists every option in full, which is where they are read.
+- `page_downloads`, 367, was `setMinimumWidth(260)` on the torrent interface
+  field. It was reaching for the right thing by the wrong instrument -- it
+  existed so the placeholder stays readable, but a *minimum* is a promise no
+  phone screen can keep.
+- `page_ai`, 347, was three radio buttons carrying their qualifier in the label,
+  and a `QRadioButton` does not wrap. Their explanations were tooltips, which
+  need a pointer to hover -- so on the Android build the reasoning behind the
+  one setting that decides whether anything leaves the machine was readable on a
+  desktop and invisible on a phone. Short labels with the explanation under
+  them, which is what every other setting on these pages already does.
+
+**And then the sidebar, which was the real one.** With the pages fixed the
+window still gave 190 of 360 pixels to a permanent category list, leaving about
+150 for the settings -- enough to wrap every description to two words a line and
+still clip the controls off the right edge. Below 520 pixels the list becomes a
+dropdown under the search box and the pages take the full width. The same shape
+the main window already uses for the tab tree, and the desktop is byte-for-byte
+what it was.
+
+What is left is the button box: 373, because the Restore label names the page it
+acts on, which is a deliberate choice. On a device it elides rather than
+anything becoming unreachable, so it stays a named gap.
 The sweep reads the "N failed" line, and this tree's own rule is that a summary
 which is always wrong trains people to skip the summary; a named gap is visible
 without being noise. The pages carry object names now, because the first run of

@@ -63,7 +63,16 @@ public:
 	void accept() override;
 	void reject() override;
 
+protected:
+	void resizeEvent(QResizeEvent *event) override;
+
 private:
+	// Below this the category list stops being a sidebar and becomes a
+	// dropdown. Named for the same reason `main_window::k_drawer_threshold`
+	// is: a bare number in a comparison is a decision nobody can find later.
+	static constexpr int k_narrow_threshold = 520;   // logical px
+	void update_layout_mode();
+
 	void build_privacy_page(QWidget *page);
 	void build_appearance_page(QWidget *page);
 	void build_kiosk_page(QWidget *page);
@@ -119,6 +128,9 @@ private:
 	// One combo per policy feature, indexed by the enum, so a feature added to
 	// the model turns up here without anyone remembering to add a row.
 	QListWidget          *m_categories = nullptr;
+	// Stands in for the list when the window is too narrow to afford a
+	// permanent sidebar. See `update_layout_mode` for the threshold and why.
+	QComboBox            *m_category_pick = nullptr;
 	QLineEdit            *m_search      = nullptr;
 	QListWidget          *m_results     = nullptr;
 	// Everything findable, gathered by walking the built pages rather than

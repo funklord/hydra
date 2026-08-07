@@ -20,6 +20,7 @@
 #include <QAbstractButton>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QResizeEvent>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QTreeWidget>
@@ -300,12 +301,33 @@ settings_dialog::settings_dialog(player_launcher *players,
 	m_categories->setMaximumWidth(190);
 	split->addWidget(m_categories);
 
+	// **The same list, as a dropdown, for when there is no room for a
+	// sidebar.** 190 pixels of permanent category list is a fair trade on a
+	// desktop and a bad one on a 360-pixel screen, where it leaves about 150
+	// for the settings themselves -- enough to wrap every description to two
+	// words a line and still clip the controls off the right edge.
+	//
+	// Sits under the search box so it reads as saying which page is below it,
+	// and stays hidden until `update_layout_mode` says otherwise. Populated by
+	// `add_page` alongside the list, so the two cannot fall out of step.
+	m_category_pick = new QComboBox(this);
+	m_category_pick->setObjectName("categories_narrow");
+	m_category_pick->hide();
+	outer->insertWidget(outer->indexOf(m_search) + 1, m_category_pick);
+
 	auto *stack = new QStackedWidget(this);
 	m_stack = stack;
 	stack->setObjectName("pages");
 	split->addWidget(stack, 1);
 	connect(m_categories, &QListWidget::currentRowChanged,
 	         stack, &QStackedWidget::setCurrentIndex);
+	// Both directions, so whichever one is on screen stays right and the other
+	// is already correct when the width changes under it. `setCurrentIndex` on
+	// an unchanged index emits nothing, so there is no loop between them.
+	connect(m_category_pick, &QComboBox::currentIndexChanged, this,
+	         [this](int i) { m_categories->setCurrentRow(i); });
+	connect(m_categories, &QListWidget::currentRowChanged, this,
+	         [this](int i) { m_category_pick->setCurrentIndex(i); });
 
 	// **Named, because a diagnostic that says "QWidget" names nothing.**
 	// `try_phone` reports the widest children of a dialog that will not fit a
@@ -364,6 +386,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 	auto add_page = [&](QWidget *w, const QString &name) {
 		stack->addWidget(w);
 		m_categories->addItem(name);
+		m_category_pick->addItem(name);
 	};
 	// A QListWidgetItem draws its text literally -- no mnemonics -- so "&&"
 	// arrived on screen as two ampersands. The escape belongs to menus and
@@ -1543,7 +1566,14 @@ void settings_dialog::build_download_page(QWidget *page) {
 
 	m_interfaces = new QLineEdit(bt);
 	m_interfaces->setPlaceholderText("0.0.0.0:6881  (blank = any interface)");
-	m_interfaces->setMinimumWidth(260);
+	// The 260-pixel minimum that used to be here was reaching for the right
+	// thing by the wrong instrument. It existed so the placeholder above stays
+	// readable -- but a *minimum* says "never narrower than this", which held
+	// the whole page at 367 and is a promise no phone screen can keep. This is
+	// a `wide` row, so the layout's stretch already gives the field a share of
+	// the width wherever there is width to give; the minimum only ever decided
+	// what happened when there was not.
+
 	// Not a VPN, and says so. §11.4 decided Hydra ships no tunnel; this is the
 	// field that makes the user's own system-level choice reliable instead of
 	// competing with it.
@@ -1657,27 +1687,48 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	auto *gv    = new QVBoxLayout(group);
 	gv->setContentsMargins(0, 0, 0, 0);
 
-	m_ai_auto = new QRadioButton(
-	  "Automatic — use the local model when it is running", group);
-	m_ai_local = new QRadioButton(
-	  "Local only — never use an external service", group);
-	m_ai_external = new QRadioButton("Claude (external service)", group);
+	// **A short label with the explanation under it, which is what every other
+	// setting on these pages does.** These three carried their qualifier in the
+	// label -- "Automatic — use the local model when it is running" -- and a
+	// QRadioButton does not wrap, so that one line held this page at 309 pixels
+	// and would not give any of it back.
+	//
+	// The explanations were tooltips, and a tooltip needs a pointer to hover.
+	// On the Android build there is none, so the reasoning behind the one
+	// setting on these pages that decides whether anything leaves the machine
+	// was reachable on a desktop and invisible on a phone. Putting it under the
+	// button costs three lines and is legible everywhere.
+	m_ai_auto     = new QRadioButton("Automatic", group);
+	m_ai_local    = new QRadioButton("Local only", group);
+	m_ai_external = new QRadioButton("Claude", group);
 
-	m_ai_auto->setToolTip("Falls back to Claude only when no local model answers");
-	// The point of this option: §1's "data stays on the machine" should be
-	// something you can hold the app to, not a default that silently lapses
-	// the first time Ollama is not running.
-	m_ai_local->setToolTip(
-	  "If the local model is not running, the AI features are simply "
-	  "unavailable rather than quietly switching to a service");
+	// The point of the middle one: §1's "data stays on the machine" should be
+	// something you can hold the app to, not a default that silently lapses the
+	// first time Ollama is not running.
+	const char *why[] = {
+		"Uses the local model when it is running, and falls back to Claude "
+		"only when none answers.",
+		"Never uses an external service. If the local model is not running "
+		"the AI features are simply unavailable, rather than quietly "
+		"switching.",
+		"An external service. Everything sent is reviewed first, on every "
+		"feature that sends anything.",
+	};
+	int which = 0;
 	for (QRadioButton *b : { m_ai_auto, m_ai_local, m_ai_external }) {
 		gv->addWidget(b);
+		QLabel *note = dim_label(why[which++], group);
+		// Indented under its button rather than against the margin, so it reads
+		// as belonging to the one above it and not to the one below.
+		note->setContentsMargins(22, 0, 0, 6);
+		gv->addWidget(note);
 		connect(b, &QRadioButton::toggled, this, &settings_dialog::update_ai_state);
 	}
 	v->addWidget(group);
-	v->addWidget(dim_label(
-	  "Local only means the AI features become unavailable when no local "
-	  "model is running, rather than quietly switching to a service.", page));
+	// The paragraph that used to sit here said what "Local only" means, which
+	// is now written under the button it is about. Two statements of one fact,
+	// four lines apart, read as two facts and send the reader back to compare
+	// them.
 
 	v->addWidget(section_heading("Local model (Ollama)", page));
 	m_ollama_url = new QLineEdit(page);
@@ -1880,6 +1931,26 @@ void settings_dialog::reject() {
 	// nobody agreed to keep.
 	theme::apply(settings_store::appearance());
 	QDialog::reject();
+}
+
+// One place decides which of the two is on screen, called on every resize.
+//
+// A dialog is not resized often, so this is cheap; what it must not do is
+// thrash. `update_layout_mode` returns immediately when the mode is unchanged,
+// which matters because Android hands the dialog a geometry on every show.
+void settings_dialog::resizeEvent(QResizeEvent *event) {
+	QDialog::resizeEvent(event);
+	update_layout_mode();
+}
+
+void settings_dialog::update_layout_mode() {
+	if (!m_categories || !m_category_pick)
+		return;
+	const bool narrow = width() < k_narrow_threshold;
+	if (narrow == m_category_pick->isVisible())
+		return;
+	m_category_pick->setVisible(narrow);
+	m_categories->setVisible(!narrow);
 }
 
 void settings_dialog::accept() {
