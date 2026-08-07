@@ -509,7 +509,19 @@ void extractor_dialog::build_ui() {
 	m_payload = new QPlainTextEdit(this);
 	m_payload->setObjectName("payload");
 	m_payload->setReadOnly(true);
-	m_payload->setLineWrapMode(QPlainTextEdit::NoWrap);
+	// **Wrapped, which it was not.** This pane holds two kinds of text: a
+	// column-aligned request table, and paragraphs of prose explaining what is
+	// about to be sent. `NoWrap` was chosen for the table -- its columns line
+	// up only if nothing reflows -- and it left every prose line running off
+	// the right edge behind a horizontal scrollbar.
+	//
+	// Photographing this dialog for the first time is what showed it, and the
+	// trade goes the other way once seen: this is the pane somebody reads to
+	// decide whether to send anything to a model at all, and a paragraph that
+	// has to be scrolled sideways line by line is one nobody reads. The table
+	// rows are short and survive wrapping; a long url now folds instead of
+	// disappearing, which is the smaller loss.
+	m_payload->setLineWrapMode(QPlainTextEdit::WidgetWidth);
 	m_pages->addWidget(m_payload);
 
 	auto *result_page = new QWidget(this);

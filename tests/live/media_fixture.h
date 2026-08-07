@@ -36,6 +36,11 @@ namespace media_fixture {
 // Raw literals rather than concatenated lines: a continuation inside a string
 // is still a continuation to the indentation gate, and HTML reads better
 // unbroken anyway.
+// A 1x1 transparent GIF, as hex, so no line here is a continuation.
+inline const char *k_gif =
+	"47494638396101000100800000000000ffffff21"
+	"f90401000000002c00000000010001000002024401003b";
+
 inline const char *k_manifest = R"M3U(#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-TARGETDURATION:4
@@ -55,6 +60,13 @@ inline const char *k_page = R"HTML(<!doctype html><title>fixture</title>
 <h1>local media fixture</h1>
 <iframe src="/player" width=320 height=180></iframe>
 <video id=v controls muted></video>
+<!-- Third-party and ad-shaped, so filter evolution has something to reason
+     from. THIRD_PARTY is rewritten to 127.0.0.2 with this server's port
+     before the page is served: a different host, still loopback. -->
+<img src="THIRD_PARTY/ads/banner.gif" width=1 height=1>
+<img src="THIRD_PARTY/analytics/beacon.gif" width=1 height=1>
+<img src="THIRD_PARTY/track/pixel.gif" width=1 height=1>
+<script src="THIRD_PARTY/adservice/loader.js"></script>
 <script>
 var v = document.getElementById('v');
 if (window.MediaSource) {
@@ -71,14 +83,39 @@ if (window.MediaSource) {
 </script>
 )HTML";
 
+// The paths that stand in for somebody else's advertising. Kept as a
+// function so the branch below is one line: a continuation inside an
+// `if` is what the indentation gate counts.
+inline bool is_ad_shaped(const QByteArray &path) {
+	if (path.startsWith("/ads/"))
+		return true;
+	if (path.startsWith("/analytics/"))
+		return true;
+	return path.startsWith("/track/");
+}
+
 // Serves four things, each the smallest thing that carries its shape.
 class server : public QTcpServer {
 public:
 	// The base url, once listening. Empty when it could not.
+	//
+	// **AnyIPv4, not LocalHost**, so the same server answers on 127.0.0.1 and
+	// 127.0.0.2. Both are loopback and nothing leaves the machine, and they are
+	// *different hosts* -- which is the only way this fixture can produce a
+	// third-party request. `filter_signals::looks_ad_shaped` refuses anything
+	// first-party outright, on the grounds that proposing a rule against the
+	// page's own host is how a filter list breaks the page it was meant to fix.
+	// `try_cookies` uses the same two addresses for the same reason.
 	QString start() {
-		if (!listen(QHostAddress::LocalHost, 0))
+		if (!listen(QHostAddress::AnyIPv4, 0))
 			return QString();
 		return QStringLiteral("http://127.0.0.1:%1/").arg(serverPort());
+	}
+
+	// Where the fixture's "third party" lives, for a driver that wants to name
+	// it in output.
+	QString third_party() const {
+		return QStringLiteral("http://127.0.0.2:%1/").arg(serverPort());
 	}
 
 	// Every path this served, for a driver that wants to say what was asked
@@ -110,6 +147,12 @@ private:
 		} else if (path.startsWith("/seg-")) {
 			type = "video/mp2t";
 			body = QByteArray(2048, '\0');
+		} else if (is_ad_shaped(path)) {
+			type = "image/gif";
+			body = QByteArray::fromHex(k_gif);
+		} else if (path.startsWith("/adservice/")) {
+			type = "application/javascript";
+			body = "/* fixture ad loader */";
 		} else if (path.startsWith("/player")) {
 			// What `try_frame` loads in a plain view: a page whose whole
 			// content is a player, the way a mirror's iframe is.
@@ -118,6 +161,10 @@ private:
 			// The page a person would open: a player in an iframe, and a
 			// MediaSource opened and appended to, which is what the tap hooks.
 			body = k_page;
+			// The one substitution this fixture makes: the third-party host
+			// cannot be a literal, because the port is only known once the
+			// server is listening.
+			body.replace("THIRD_PARTY", third_party().toUtf8().chopped(1));
 		}
 
 		// Built by appending rather than as one expression: a continuation

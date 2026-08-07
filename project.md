@@ -6714,12 +6714,49 @@ status line stays empty in that state rather than repeating the sentence two
 inches lower. `m_status` could not simply be moved: it is the dialog's status
 line and also reports assembling, progress and errors.
 
-**Still unphotographed:** the extractor dialog and the filter-evolution dialog
-report "no dialog appeared" against the fixture. Both want evidence the fixture
-does not produce -- the extractor probes candidates it has none of, and filter
-evolution wants signals from a page with something to block. That is a fixture
-problem rather than a dialog problem, and it is the next thing to fix if those
-two are ever to be seen.
+**And then the other two, which needed something different.** The note that
+used to sit here said they wanted evidence the fixture did not produce. That
+was wrong: both call `choose_ai()` first and return with a status message when
+no provider answers. They were blocked on a model, not on fixture content --
+the same blocker as `try_evolve_confirm`. Reading the two slots settled in a
+minute what guessing had got backwards.
+
+With Ollama running they both open, and so does the reorganizer, which is
+gated the same way. The fixture did need extending for the *filter* dialog to
+have anything to say: `filter_signals::looks_ad_shaped` refuses first-party
+requests outright, so a page serving its own ad-shaped paths produces nothing.
+It serves them from 127.0.0.2 now -- loopback, and a different host -- which is
+the same trick `try_cookies` uses for its third-party cookie, and the dialog
+lists all four.
+
+### The extractor dialog, first look: every paragraph clipped
+
+Photographing it for the first time showed the pane you read before sending
+anything to a model, with every prose line running off the right edge behind a
+horizontal scrollbar. The request table was fine; the paragraphs explaining
+what the table means were not.
+
+`NoWrap` was set deliberately, and for a real reason: the pane holds a
+column-aligned request table whose columns line up only if nothing reflows. The
+trade goes the other way once seen. This is the dialog whose entire purpose is
+"read this before it leaves the machine", and a paragraph that has to be
+scrolled sideways line by line is one nobody reads. The table rows are short
+and survive wrapping; a long url folds instead of disappearing, which is the
+smaller loss.
+
+Same defect, same shape, third time this session: the certificate chooser hid
+its issuer and expiry the same way, and the media dialog stranded its empty
+state under an empty table. All three were found by looking and none by a test,
+because each is a fact about pixels rather than about the widget tree.
+
+**Not fixed, and worth a decision.** The filter dialog's header reads "Local
+model (Ollama, llama3 -- not installed)" while its Send button stays enabled.
+That label exists precisely because the reorganizer used to announce a model
+that was not there and "the first anyone knew was a failed request after
+pressing Send" -- so the label is the fix for that, and the button that
+produces the failed request is still available beside it. The project's own
+rule from the GUI pass says a control that cannot work should look unavailable.
+That is three dialogs and a behaviour change, so it is raised rather than done.
 
 ### The dependency list, written down and therefore found to be wrong
 
