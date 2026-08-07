@@ -36,10 +36,14 @@ tab_tree_model::~tab_tree_model() {
 // light background, and what reached the screen was a dark blob. An emblem
 // theme designers drew *for* 16px reads at 16px, which is the whole difference.
 //
-// The hand-drawn shape stays as the fallback for a machine with no icon theme,
-// with the colours the right way round this time -- dark stroke on light fill,
-// because the tree's background is light and a white outline on white is not an
-// outline.
+// The hand-drawn shape stays as the fallback for a machine with no icon theme:
+// a light fill with a dark stroke, which is an outlined shape and therefore
+// reads on either background. The first version was a white outline with no
+// fill and vanished against a light tree -- and the reasoning that replaced it,
+// "the tree's background is light", was itself wrong: this desktop's portal
+// answers *prefer dark*, and every screenshot that had been used to judge the
+// icon was taken in a light palette no user here sees, because the drivers
+// applied no scheme at all. An outline needs neither assumption.
 //
 // The base icon is kept underneath instead of replaced, so a locked folder
 // still reads as a folder and a locked tab as a tab. Locking is a property of

@@ -17,6 +17,8 @@
 #include "policy_engine.h"
 #include "qtwebengine_factory.h"
 #include "request_filter.h"
+#include "settings_dialog.h"   // settings_store
+#include "theme.h"
 #include "tab_tree_model.h"
 #include "tab_tree_view.h"
 
@@ -137,6 +139,25 @@ int main(int argc, char *argv[]) {
 	          "created=2026-01-04T09:00:00 | seen=2026-08-01T09:00:00\n"
 	          "- [f1] folder | Empty folder\n");
 	tf.close();
+
+	// **The colour scheme first, the way `main()` does it.** This driver builds
+	// its own window rather than using `shell_fixture` -- it predates it -- so
+	// the fixture's copy of this does not reach here, and the two are now the
+	// same line in two places. Worth collapsing when something else brings this
+	// driver onto the fixture.
+	//
+	// Without it the captures were a browser nobody runs: nothing applied a
+	// scheme, so the first five surfaces came out in Qt's default light palette
+	// and the sixth onwards in the desktop's dark one -- the flip being the
+	// settings dialog's Cancel, which restores the stored setting and was the
+	// first thing all run to ask the desktop what it wanted.
+	theme::apply(settings_store::appearance());
+	// **And the icon theme, which is the other half.** Applying the palette
+	// alone gave a dark window wearing the light theme's icons: on this desktop
+	// that made the locked-tab padlock a dark glyph on a dark row, almost
+	// invisible, where the same icon reads clearly on light. `main()` calls both
+	// and a driver that calls one photographs a mismatch no user has.
+	theme::apply_icon_theme(theme::resolve(settings_store::appearance()));
 
 	policy_engine       policy;
 	request_filter      filter(&policy);

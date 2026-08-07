@@ -2707,8 +2707,29 @@ void main_window::navigate_to_address() {
 		return;
 	}
 
-	if (web_view_backend *v = current_view())
-		v->load(QUrl::fromUserInput(text));
+	const QUrl target = QUrl::fromUserInput(text);
+	if (web_view_backend *v = current_view()) {
+		v->load(target);
+		return;
+	}
+
+	// **With no tab open this used to do nothing at all.** The address bar is
+	// enabled and inviting on an empty window -- the empty state next to it says
+	// "Select a tab from the tree" -- so typing an address and pressing return is
+	// an obvious thing to try, and it silently discarded what was typed. That is
+	// the same defect as a navigation button that looks available and refuses,
+	// which this window spent a pass removing; it survived because nothing had
+	// looked at the window with no tab in it.
+	//
+	// Opening a tab is what every other browser does with a typed address, and
+	// the tree is where this one keeps tabs, so it goes in at the root -- there
+	// is no "current" folder to prefer when nothing is selected.
+	if (text.isEmpty() || !target.isValid())
+		return;
+	if (open_child_tab(m_model->root(), target))
+		m_status->showMessage(QString("Opened %1 in a new tab.")
+		                          .arg(target.host().isEmpty() ? target.toString()
+		                                                        : target.host()), 6000);
 }
 
 void main_window::start_download(const QUrl &url) {

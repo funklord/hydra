@@ -18,6 +18,8 @@
 #include "policy_engine.h"
 #include "qtwebengine_factory.h"
 #include "request_filter.h"
+#include "settings_dialog.h"   // settings_store
+#include "theme.h"
 
 #include <QAction>
 #include <QDir>
@@ -100,12 +102,38 @@ struct fixture {
 	QLineEdit *address = nullptr;
 	QTreeView *tv = nullptr;
 
+	// **The colour scheme, before the window is built**, because `main()` does
+	// it there and a driver that skips `main()` photographs a browser nobody
+	// runs.
+	//
+	// This was found by looking: `try_look`'s captures came out light through
+	// the first five surfaces and dark from the sixth, because nothing had
+	// applied a scheme and the first call to `theme::apply()` -- from the
+	// settings dialog's Cancel, which restores what was stored -- was the first
+	// time anyone asked the desktop. The desktop's portal answers "prefer dark"
+	// on this machine, so every driver screenshot taken before that point showed
+	// a light theme this desktop never displays.
+	//
+	// That matters beyond tidiness: a screenshot is the evidence these drivers
+	// exist to produce, and one taken in the wrong palette is evidence about
+	// nothing. An icon judged legible against a white tree is not judged at all.
 	explicit fixture(const QString &fallback_dir)
 		    : out(qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
 		              ? QString::fromLocal8Bit(qgetenv("HYDRA_TEST_OUT"))
 		              : fallback_dir),
 		      filter(&policy), factory(&filter),
 		      window(&factory, &policy, &filter) {
+		// Applied here rather than before the window is built, which is where
+		// `main()` does it: `QApplication::setPalette` repaints what already
+		// exists, so the result is the same and the ordering does not have to be
+		// smuggled into the member-initialiser list.
+		theme::apply(settings_store::appearance());
+		// **And the icon theme, which is the other half.** Applying the palette
+		// alone gave a dark window wearing the light theme's icons: on this desktop
+		// that made the locked-tab padlock a dark glyph on a dark row, almost
+		// invisible, where the same icon reads clearly on light. `main()` calls both
+		// and a driver that calls one photographs a mismatch no user has.
+		theme::apply_icon_theme(theme::resolve(settings_store::appearance()));
 		QDir(out).removeRecursively();
 		QDir().mkpath(out);
 		one  = out + "/one.html";

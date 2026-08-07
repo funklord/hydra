@@ -6585,6 +6585,66 @@ on the qmake side -- `QMAKE_CXXFLAGS_RELEASE -= -O2` before adding `-Os`. Two
 `-O` flags on one command line leave the last one winning, which makes the
 setting depend on where in the line the generator happened to put it.
 
+### Every driver screenshot this session was in the wrong theme
+
+The capture pass found it, and it invalidates how several decisions were
+judged. `try_look`'s images came out light for the first five surfaces and dark
+from the sixth onwards. Nothing in the driver changes the theme, and the flip
+was reproducible at the same point.
+
+**The drivers never run `main()`.** They construct `main_window` directly, so
+`theme::apply()` and `theme::apply_icon_theme()` -- which `main()` calls before
+anything is shown -- never ran. The window came up in Qt's default light
+palette. The settings dialog's Cancel restores the stored appearance, and that
+was the first time in the whole run that anything asked the desktop what it
+wanted; from there on, everything was dark.
+
+**This desktop is dark.** Asked directly:
+
+    dbus-send --session --print-reply --dest=org.freedesktop.portal.Desktop \
+      /org/freedesktop/portal/desktop org.freedesktop.portal.Settings.Read \
+      string:org.freedesktop.appearance string:color-scheme
+    -> variant variant uint32 1        # 1 = prefer dark
+
+So every screenshot taken from a driver before this fix showed a browser nobody
+here runs, and the locked-tab padlock -- whose legibility was argued about at
+length, and whose fallback colours were chosen "because the tree's background is
+light" -- had been judged entirely against a white tree that this desktop never
+draws.
+
+**The fix is two lines in each of two places**, matching what `main()` does: the
+palette and the icon theme. `shell_fixture` covers the drivers that use it;
+`try_look` predates the fixture and builds its own window, so it carries the
+same two lines, and collapsing that duplication is worth doing when something
+else brings that driver onto the fixture.
+
+**The icon theme is the half that is easy to miss.** Applying only the palette
+gave a dark window wearing the light theme's icons, and the padlock became a
+dark glyph on a dark row -- less legible than the smudge that started this. With
+both applied it is breeze-dark's `emblem-locked`, orange and unmistakable, which
+is also what every other application on this desktop uses to mean the same
+thing.
+
+**What this says about the method.** Looking at the screenshots is what caught
+the smudged padlock and the clipped certificate row; this is the same lesson one
+level further out -- a picture is only evidence of what a user sees if it was
+taken in the conditions a user has. The offscreen note at the top of `try_look`
+already said colours and icons are not faithful under `QT_QPA_PLATFORM=offscreen`;
+what nobody had noticed is that they were not faithful on the real display
+either, for a different reason.
+
+### The address bar did nothing with no tab open
+
+Found in the same pass, from the picture of the window with an empty tree. The
+address bar is enabled and inviting -- the empty state beside it says "Select a
+tab from the tree" -- and typing an address and pressing return discarded it
+silently, because `navigate_to_address` loads into the current view and there
+was no current view.
+
+That is the defect the GUI pass spent its time removing, in the one state
+nobody had photographed. It opens a tab at the root now, which is what every
+other browser does with a typed address, and says so in the status bar.
+
 ### The test tree's archive, replaced by fmake's symbol closure
 
 `tests/Makefile` built one `libhydra_app.a` and linked all seventy-odd binaries
