@@ -1,0 +1,148 @@
+# Continuous integration.
+#
+# Two jobs, split by what they cost. The gates need python3 and nothing else
+# and finish in seconds; the build needs Qt WebEngine and does not. Keeping
+# them apart means a misplaced tab is reported in under a minute rather than
+# after a twenty-minute compile, and that a failed build does not hide a
+# failed gate.
+#
+# **Spaces, not tabs.** The YAML spec forbids tabs for indentation outright,
+# which is one of the settled exceptions in code-style.md rather than a
+# divergence from it.
+#
+# **A green check has to mean something was checked.** Every job here asserts
+# that it inspected a plausible number of things before it is allowed to pass:
+# an empty file list, a collapsed suite list or a test binary that did not
+# rebuild all report success exactly as loudly as a real pass. The style gate
+# carries its own floor (`.style-gate.toml`), and the counts below are the
+# same idea for the parts that have none.
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+# A second push supersedes the first. These builds are long enough that
+# queueing them all wastes the runner on results nobody will read.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: style and document gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Run both gates
+        run: make style
+
+      # `make style` runs the source gate and the document gate. The source
+      # gate refuses to pass on fewer than 150 files by its own configuration,
+      # so it cannot come back green over an empty list; this is the same
+      # assurance for the document gate, which has no floor of its own.
+      - name: The document gate actually read project.md
+        run: |
+          test -s project.md || { echo "project.md is empty or missing"; exit 1; }
+          lines=$(wc -l < project.md)
+          test "$lines" -gt 1000 || {
+            echo "project.md is $lines lines; expected thousands."
+            echo "A gate over a truncated file passes for the wrong reason."
+            exit 1
+          }
+
+  build:
+    name: build and offline suites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false   # third_party/yt-dlp is a runtime tool, not a build input
+
+      # Named individually rather than through a meta-package: each optional
+      # one buys exactly one feature, and a missing one is a smaller build
+      # rather than a failure -- so a silent absence here would produce a
+      # green run of a browser with no password manager and no BitTorrent.
+      # The check below is what stops that being invisible.
+      - name: Install Qt and the optional dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            qt6-base-dev qt6-webengine-dev qt6-declarative-dev \
+            qt6-base-dev-tools libgl1-mesa-dev \
+            libsodium-dev libsecret-1-dev liblz4-dev \
+            libtorrent-rasterbar-dev
+
+      # The qualified name, never the bare `libtorrent`: two unrelated
+      # projects install a .pc by that name and the bare one resolves to
+      # rakshasa's different API.
+      - name: Every optional feature is actually available
+        run: |
+          missing=0
+          for pkg in libsodium libsecret-1 liblz4 libtorrent-rasterbar; do
+            if pkg-config --exists "$pkg"; then
+              echo "ok      $pkg"
+            else
+              echo "MISSING $pkg"
+              missing=1
+            fi
+          done
+          test "$missing" -eq 0 || {
+            echo
+            echo "A build without these is smaller and still green, which is"
+            echo "why this is checked rather than assumed."
+            exit 1
+          }
+
+      - name: Build the app
+        run: make JOBS=2
+
+      - name: The build produced a binary with its features in it
+        run: |
+          test -x build/hydra || { echo "no build/hydra"; exit 1; }
+          for lib in sodium secret-1 lz4 torrent-rasterbar; do
+            ldd build/hydra | grep -q "$lib" || {
+              echo "build/hydra does not link $lib"
+              exit 1
+            }
+          done
+          echo "links all four optional libraries"
+
+      - name: Run the offline suites
+        run: make test JOBS=2
+
+      # `make test` loops over a computed suite list and exits non-zero when
+      # one fails -- but an empty list would exit zero having run nothing at
+      # all, which is the shape of vacuous pass this repository keeps meeting.
+      - name: The suite list did not collapse
+        run: |
+          found=$(ls tests/test_*.cpp | wc -l)
+          echo "$found suite sources"
+          test "$found" -ge 30 || {
+            echo "expected at least 30; a shrunken list passes for free."
+            exit 1
+          }
+          built=$(find tests/build-make -maxdepth 1 -type f -executable \
+                    -name 'test_*' | wc -l)
+          echo "$built suite binaries built"
+          test "$built" -ge 25 || {
+            echo 'expected at least 25 binaries; make test cannot have run them.'
+            exit 1
+          }
+
+      # The link sets are generated and committed, and the Makefile refuses to
+      # build when they no longer describe the tree -- so reaching this point
+      # already proves they match. Kept as its own step so that when it does
+      # fail, the log says what to do about it.
+      - name: The committed link sets match the tree
+        if: always()
+        run: |
+          echo "tests/Makefile compares objsets.mk against its own glob on"
+          echo "every build; a mismatch stops it with the regeneration command."
+          echo "Reaching this step means they agreed."
