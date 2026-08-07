@@ -27,6 +27,13 @@ This file is a running log and is long. The fastest orientation is: **What is
 implemented** (the table below), then **What is next**, then the section for
 whatever you are touching.
 
+The `##` headings past the feature sections group the log rather than order it.
+Sections were inserted wherever the writer happened to be reading, so the file
+is **not in date order** and a heading that implied one would be lying: the
+groups say what a run of sections is about, not when it happened. Two of them
+are single pieces of work and read as one -- *The GUI pass* and *Light and
+dark*; the rest are runs that only share a subject.
+
 **And the log itself can go wrong in the way the code does.** A revision that
 rewrote a finding — the `test_extloop` flake, once "recorded rather than
 explained" and later explained — was *added* rather than applied, leaving
@@ -53,6 +60,24 @@ they had become `box_crypto` and `site_rules` — and this same file documents t
 `site_rules` rename in prose a thousand lines further down. **A table of
 filenames rots silently**, because nothing compiles it and the prose beside it
 stays true.
+
+**And it rots in the other direction, which neither of those could see.** Both
+ask whether what the table names still exists. Neither asks whether what exists
+is named — and a third of `src/` was not: the tree view, every chrome dialog,
+the shared UI helpers, the page tools, the extractor files, media assembly,
+session import, the settings bundle, scheme rules and the whole Android backend,
+under a heading that says *What is implemented*. A table that is silently
+partial is worse than a short one, because its shape promises completeness.
+
+```sh
+# every header in src/ is named by the implemented table
+table=$(sed -n '/^| Area | Files | Notes |/,/^$/p' project.md)
+for f in src/*.h; do b=$(basename "$f" .h)
+  echo "$table" | grep -q "$b" && continue
+  stem=${b%%_*}; rest=${b#*_}      # the table writes siblings as a_{b,c}
+  echo "$table" | grep -q "${stem}_{.*${rest}" || echo "not in table: $b"
+done
+```
 
 ### On this machine
 
@@ -729,7 +754,7 @@ A detail that fell out rather than being designed: mirrored rows render in the
 muted style the model already gives an unopened tab, so they read as *not yours*
 without any new styling.
 
-## The icon## The icon## The icon
+## The icon
 
 `icons/` holds the app icon and `icons/build_icons.py` regenerates every size
 from `hydra-master.png`. One drawing, downscaled, with the small sizes
@@ -1053,6 +1078,16 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Consent banners | `consent_blocker.{h,cpp}`, `site_rules.{h,cpp}`, `consent_dialog.{h,cpp}` | answers "accept cookies?" dialogs; rules as data, shareable later |
 | Anti-adblock notice | `antiadblock_watch.{h,cpp}` | says so when a page is checking for a blocker, and names the lever |
 | Shared rule store | `site_rules.{h,cpp}` | consent-banner and detector rules as one file, with provenance; the unit a future exchange would move |
+| Tree view | `tab_tree_view.{h,cpp}`, `tree_invariants.{h,cpp}` | context menu, drag and drop, properties editor; the invariants a rewrite must not break |
+| Chrome dialogs | `auth_dialog.{h,cpp}`, `cert_dialog.{h,cpp}`, `annoyed_dialog.{h,cpp}`, `annoyance_log.{h,cpp}` | what the network puts in front of you -- password, client certificate -- and the one-click "something got through here" report |
+| Shared UI helpers | `empty_state.{h,cpp}`, `flow_layout.{h,cpp}`, `theme.{h,cpp}` | the message an empty list shows, a button row that wraps instead of squeezing, and the colour and icon scheme |
+| Page tools | `find_bar.{h,cpp}`, `element_picker.{h,cpp}`, `picker_script.h`, `cosmetic_filters.{h,cpp}` | find in page, pick an element to block, and the rules that hide it |
+| Site extractors | `site_extractor.{h,cpp}`, `extractor_signals.{h,cpp}`, `extractor_dialog.{h,cpp}`, `extractor_helpers.{h,cpp}`, `stream_probe.{h,cpp}` | a per-site script that names the stream, the evidence it is written from, and the budgeted fetch a helper may make |
+| Media assembly | `hls_playlist.{h,cpp}`, `hls_assembler.{h,cpp}`, `network_fetcher.{h,cpp}`, `local_proxy.{h,cpp}`, `capture_source.{h,cpp}` | segments to one file, and a recording in progress presented as a download |
+| Session import | `session_import.{h,cpp}`, `session_mirror.{h,cpp}` | another browser's open tabs, read and then followed |
+| Settings file | `settings_bundle.{h,cpp}` | everything on the settings pages plus site exceptions and accepted rules, in one INI you can read and carry |
+| Scheme rules | `scheme_rules.{h,cpp}` | which urls the engine renders itself and which are somebody else's to open |
+| Android backend | `android_view.{h,cpp}`, `android_downloads.{h,cpp}`, `android_intents.{h,cpp}`, `android_dialogs.{h,cpp}`, `bridge_invoker.{h,cpp}` | System WebView behind the same seam, plus the platform's downloads, external links and phone-sized dialogs |
 
 Persistence: `policy.ini`, `state/<id>.blob`, and the tree file all sit next to
 the outline file passed on the command line — checked against
@@ -5022,6 +5057,14 @@ desktop that produces it. DBus is optional and the build says so when it is
 missing; the Android build was run to confirm it takes the fallback rather than
 failing to configure.
 
+## The extractor loop, packaging, and the tab tree
+
+A long run of sections that had been sitting under the colour-scheme heading
+above, which is about `theme.cpp` and about nothing else. They are not one piece
+of work and they are not strictly in date order -- this file is a running log
+and sections were inserted wherever the writer was reading at the time. What
+they have in common is only that they predate the window pass below.
+
 ### Pages are a separate mechanism, and the UI admits it
 
 Qt forwards the application's scheme to Chromium by watching
@@ -6689,6 +6732,35 @@ Both are named skips now, with their reasons, the way `try_watch` and
 passed, 12 report-only, 0 failed -- and a failure line in it now means
 something.
 
+## The GUI pass: every window, looked at and then measured
+
+Nine sections follow, and they are one piece of work. The method is worth
+stating once rather than eleven times, because it is the finding: **looking
+found the defects, and measuring found the next ones.**
+
+Every one of the first four was found by opening a window and reading the
+picture -- an empty table with its explanation stranded underneath, a dialog
+whose every paragraph was clipped, a Send button offered for a model that was
+not installed, six buttons squeezed to "pen Folde". None was found by a test,
+because each is a fact about pixels rather than about the widget tree, and the
+suites were all green throughout.
+
+So the pass turned into building the instrument. `try_phone` opens all thirteen
+windows and asks six questions of each: can the layout shrink to a phone screen,
+is every button on it, is any label cut, is a paragraph absorbing height meant
+for a stretch, does anything have focus, does Tab reach the rest. It found five
+more defects, including one in a dialog the "what is next" list had written off
+as not worth testing.
+
+**And three of its own checks were wrong before they were right.** The width
+check compared a size against the value just assigned to it and agreed every
+time. The button check asked only whether a rectangle fell inside the dialog and
+passed a button reading "pen Folde". The stretch check flagged the empty-state
+overlay, which is *meant* to fill its viewport. Each was caught by the same
+habit that found the defects -- read what it actually reported, not what it was
+supposed to -- and the tally is worth keeping: on this pass the instrument was
+wrong about as often as the code.
+
 ### The media dialog's empty state, finally photographed
 
 The capture pass has always skipped four dialogs with a line saying they need a
@@ -6714,6 +6786,11 @@ status line stays empty in that state rather than repeating the sentence two
 inches lower. `m_status` could not simply be moved: it is the dialog's status
 line and also reports assembling, progress and errors.
 
+**Three treatments turned out to be four**, and the count is what eventually
+forced the fix into one place -- see *The empty state, written three times and
+wrong the third* below, where the consent dialog turned out to have the same
+defect and the pattern became `empty_state`.
+
 **And then the other two, which needed something different.** The note that
 used to sit here said they wanted evidence the fixture did not produce. That
 was wrong: both call `choose_ai()` first and return with a status message when
@@ -6722,8 +6799,12 @@ the same blocker as `try_evolve_confirm`. Reading the two slots settled in a
 minute what guessing had got backwards.
 
 With Ollama running they both open, and so does the reorganizer, which is
-gated the same way. The fixture did need extending for the *filter* dialog to
-have anything to say: `filter_signals::looks_ad_shaped` refuses first-party
+gated the same way. **Neither needs one to be measured**, which is the later
+correction: a layout does not care whether the provider behind it can answer, so
+`try_phone` builds all three against a closed port and photographs them. What a
+running model is still needed for is watching one of them actually reply.
+
+The fixture did need extending for the *filter* dialog to have anything to say: `filter_signals::looks_ad_shaped` refuses first-party
 requests outright, so a page serving its own ad-shaped paths produces nothing.
 It serves them from 127.0.0.2 now -- loopback, and a different host -- which is
 the same trick `try_cookies` uses for its third-party cookie, and the dialog
@@ -6748,6 +6829,88 @@ Same defect, same shape, third time this session: the certificate chooser hid
 its issuer and expiry the same way, and the media dialog stranded its empty
 state under an empty table. All three were found by looking and none by a test,
 because each is a fact about pixels rather than about the widget tree.
+
+### Send, offered for a model that is not there
+
+The filter dialog's header read "Local model (Ollama, llama3 -- not installed)"
+while its Send button stayed enabled. That label exists precisely because the
+reorganizer used to announce a model that was not there and the first anyone
+knew was a failed request after pressing Send -- so the label was the fix for
+that, and the button that produces the failed request was still sitting beside
+it. The rule from the GUI pass says a control that cannot work should look
+unavailable.
+
+**The question `available()` answers is not the one the button needed.** Ollama
+answers its API as soon as it is serving, so `available()` is true with no
+usable model installed at all -- correctly, because it is about the backend.
+`ready(QString *reason)` is about the model, defaults to `available()` for a
+backend with no separate notion of one, and hands back the sentence explaining
+itself. One `gate_send()` helper does both halves at each of the three call
+sites, so the rule is stated once and the tooltip is never left stale.
+
+**An empty model list is an unanswered question, not a no.** `name()` already
+took this care -- `m_models` is empty before the server has replied, and
+reading that as "not installed" would grey out Send on a working setup, which
+is the same guess dressed as a fact in the other direction. `ready()` keeps the
+same guard, and a test holds it.
+
+**The driver caught itself passing vacuously**, which is worth more than the
+fix. `try_send_gate` builds the real dialog against a fake Ollama and
+photographs it. Its first run showed Send greyed in *both* cases and reported a
+pass -- because with no requests recorded, `suspects_for()` was empty and the
+button was already disabled for having nothing to ask about. The gate under
+test had not run at all. It now files two ad-shaped requests first and refuses
+to continue if no suspect was recorded, so the only remaining reason for the
+button to be grey is the one being tested. The two pictures differ in exactly
+one pixel region.
+
+### The empty state, written three times and wrong the third
+
+The consent-rules dialog showed a large blank table with the sentence
+explaining it -- "Nothing recorded. A banner is only listed here when it was
+found, looked like consent, and offered nothing any rule matched." -- in a
+status label *under* the table, in small text, reading as a footnote about the
+window rather than as the answer to the question a blank table asks. The
+downloads and media dialogs both centre theirs inside the empty list. Same
+defect, fourth occurrence, and again found by looking rather than by a test.
+
+**The fix was not to write it a third time.** Two of the three had grown the
+same overlay label, the same viewport resize filter and the same placement
+function independently, so `empty_state` now holds one copy and all three
+attach to it. The count comes from the model rather than from the caller,
+because a caller that must remember to call `refresh()` forgets on exactly one
+path and it is always the one that empties the list.
+
+**And it crashed, which is the part worth keeping.** `try_look` segfaulted
+every run immediately after photographing that dialog. The backtrace: inside
+`~QTreeWidget`, `deleteChildren()` frees the viewport and the overlay with it,
+and *then* the item model emits `modelReset` -- so `refresh()` ran on a label
+that had been freed one frame earlier. `QPointer` for both members turns
+teardown into a no-op instead of a fault.
+
+Two things about how it was found. The live driver caught it and the unit test
+did not, because every section of that test declared the view first and the
+helper second, so the helper always died first and the ordering that crashes
+could not occur; the dialogs parent the helper to the dialog, where the list
+goes first. The test now has that section, and it was confirmed by reverting
+the `QPointer` and watching it segfault at exactly that point rather than by
+reading the code and being satisfied.
+
+**And `try_look` runs against the fixture now**, which is what made the last
+part possible. Four surfaces -- the window with a page in it, the media dialog,
+the annoyance report and the extractor -- were skipped on every run that did not
+name a url, which was every run, so the dialogs needing a page were exactly the
+ones nobody looked at. That is where two of this session's visible defects had
+been hiding. A `file://` page is not enough and it is worth saying why: the
+annoyance report and the extractor both key on the site host, and a file url has
+none, so both correctly refuse and neither gets photographed. The fixture serves
+from 127.0.0.1 and needs no network.
+
+Still not photographed: the extractor and filter dialogs, which call
+`choose_ai()` and return when no provider answers. `try_send_gate` reaches the
+filter dialog by building it directly against a fake Ollama; making the *shell*
+reach it would mean writing an endpoint into the user's real settings, which is
+a decision rather than a driver change.
 
 ### Do the dialogs fit a phone? Two of four did not
 
@@ -6887,52 +7050,6 @@ photographed before -- takes 82% of the screen and leaves a strip of page to tap
 back on. Nothing to fix, which is worth recording as a result rather than as
 silence.
 
-### A claim about legibility, now checked rather than asserted
-
-`empty_state` dims its message with `setEnabled(false)` rather than by writing a
-colour, and the comment beside that line says it is "so it stays legible in both
-colour schemes". That is a statement about a palette this code does not own, and
-it had never been measured -- the settings dialog carries a contrast check
-precisely because the same assumption was wrong there once: it dimmed by writing
-a colour, which froze under whichever scheme was current when the widget was
-built.
-
-The claim holds. Composited over the base it is painted on, the message stands
-49 lightness levels clear in light and 124 in dark, against the floor of 25 that
-`try_settings_ui` already uses.
-
-**Two checks, and they catch different things.** Breaking it the historical way
--- a written grey instead of a role -- left the contrast at 27 in dark, above the
-floor and visibly poor; what caught that was the older check that the label is
-dimmed by the style rather than by a colour. Painting the disabled text in the
-background colour outright took both schemes to 0 and the contrast check failed.
-So neither is redundant, and the pair is worth more than either: one is about
-the mechanism, the other about the result.
-
-### The two colours this tree writes by hand
-
-Everything else asks the palette. Two places do not: the tab tree paints an
-unopened link mid-grey, and the downloads list paints the public-swarm marker
-amber. Both are deliberate -- one is a shade of the ordinary text colour, the
-other a warning that must not read as ordinary -- and both are frozen numbers a
-colour scheme cannot move, which is the shape of the settings-description bug.
-
-They survive both schemes: 115 lightness levels clear in light and 107 in dark.
-The point of measuring is that nobody knew it. A mid-grey happens to clear a
-dark background and a light one, and "happens to" is the part worth holding
-still.
-
-**Asked of the model rather than copied from it.** The first version restated
-`QColor(140, 140, 140)` in the test, which tests the file against itself:
-change the colour in `tab_tree_model.cpp` and the copy agrees with the old value
-forever. It builds a model and reads `Qt::ForegroundRole` now, and was confirmed
-by changing the colour in the source and watching the light case drop to 10.
-
-The downloads marker is deliberately not checked, and named so the omission is a
-decision rather than an oversight: reaching it needs a live download, and
-asserting against a second copy of the literal would be the same self-agreement
-in a different file.
-
 ### The site controls had no keyboard way in
 
 Nothing in this tree sets a tab order and nothing tested one, so what Qt does by
@@ -6979,87 +7096,59 @@ which is always wrong trains people to skip the summary; a named gap is visible
 without being noise. The pages carry object names now, because the first run of
 that diagnostic answered "QWidget" four times, which is the question again.
 
-### The empty state, written three times and wrong the third
+### A claim about legibility, now checked rather than asserted
 
-The consent-rules dialog showed a large blank table with the sentence
-explaining it -- "Nothing recorded. A banner is only listed here when it was
-found, looked like consent, and offered nothing any rule matched." -- in a
-status label *under* the table, in small text, reading as a footnote about the
-window rather than as the answer to the question a blank table asks. The
-downloads and media dialogs both centre theirs inside the empty list. Same
-defect, fourth occurrence, and again found by looking rather than by a test.
+`empty_state` dims its message with `setEnabled(false)` rather than by writing a
+colour, and the comment beside that line says it is "so it stays legible in both
+colour schemes". That is a statement about a palette this code does not own, and
+it had never been measured -- the settings dialog carries a contrast check
+precisely because the same assumption was wrong there once: it dimmed by writing
+a colour, which froze under whichever scheme was current when the widget was
+built.
 
-**The fix was not to write it a third time.** Two of the three had grown the
-same overlay label, the same viewport resize filter and the same placement
-function independently, so `empty_state` now holds one copy and all three
-attach to it. The count comes from the model rather than from the caller,
-because a caller that must remember to call `refresh()` forgets on exactly one
-path and it is always the one that empties the list.
+The claim holds. Composited over the base it is painted on, the message stands
+49 lightness levels clear in light and 124 in dark, against the floor of 25 that
+`try_settings_ui` already uses.
 
-**And it crashed, which is the part worth keeping.** `try_look` segfaulted
-every run immediately after photographing that dialog. The backtrace: inside
-`~QTreeWidget`, `deleteChildren()` frees the viewport and the overlay with it,
-and *then* the item model emits `modelReset` -- so `refresh()` ran on a label
-that had been freed one frame earlier. `QPointer` for both members turns
-teardown into a no-op instead of a fault.
+**Two checks, and they catch different things.** Breaking it the historical way
+-- a written grey instead of a role -- left the contrast at 27 in dark, above the
+floor and visibly poor; what caught that was the older check that the label is
+dimmed by the style rather than by a colour. Painting the disabled text in the
+background colour outright took both schemes to 0 and the contrast check failed.
+So neither is redundant, and the pair is worth more than either: one is about
+the mechanism, the other about the result.
 
-Two things about how it was found. The live driver caught it and the unit test
-did not, because every section of that test declared the view first and the
-helper second, so the helper always died first and the ordering that crashes
-could not occur; the dialogs parent the helper to the dialog, where the list
-goes first. The test now has that section, and it was confirmed by reverting
-the `QPointer` and watching it segfault at exactly that point rather than by
-reading the code and being satisfied.
+### The two colours this tree writes by hand
 
-**And `try_look` runs against the fixture now**, which is what made the last
-part possible. Four surfaces -- the window with a page in it, the media dialog,
-the annoyance report and the extractor -- were skipped on every run that did not
-name a url, which was every run, so the dialogs needing a page were exactly the
-ones nobody looked at. That is where two of this session's visible defects had
-been hiding. A `file://` page is not enough and it is worth saying why: the
-annoyance report and the extractor both key on the site host, and a file url has
-none, so both correctly refuse and neither gets photographed. The fixture serves
-from 127.0.0.1 and needs no network.
+Everything else asks the palette. Two places do not: the tab tree paints an
+unopened link mid-grey, and the downloads list paints the public-swarm marker
+amber. Both are deliberate -- one is a shade of the ordinary text colour, the
+other a warning that must not read as ordinary -- and both are frozen numbers a
+colour scheme cannot move, which is the shape of the settings-description bug.
 
-Still not photographed: the extractor and filter dialogs, which call
-`choose_ai()` and return when no provider answers. `try_send_gate` reaches the
-filter dialog by building it directly against a fake Ollama; making the *shell*
-reach it would mean writing an endpoint into the user's real settings, which is
-a decision rather than a driver change.
+They survive both schemes: 115 lightness levels clear in light and 107 in dark.
+The point of measuring is that nobody knew it. A mid-grey happens to clear a
+dark background and a light one, and "happens to" is the part worth holding
+still.
 
-### Send, offered for a model that is not there
+**Asked of the model rather than copied from it.** The first version restated
+`QColor(140, 140, 140)` in the test, which tests the file against itself:
+change the colour in `tab_tree_model.cpp` and the copy agrees with the old value
+forever. It builds a model and reads `Qt::ForegroundRole` now, and was confirmed
+by changing the colour in the source and watching the light case drop to 10.
 
-The filter dialog's header read "Local model (Ollama, llama3 -- not installed)"
-while its Send button stayed enabled. That label exists precisely because the
-reorganizer used to announce a model that was not there and the first anyone
-knew was a failed request after pressing Send -- so the label was the fix for
-that, and the button that produces the failed request was still sitting beside
-it. The rule from the GUI pass says a control that cannot work should look
-unavailable.
+The downloads marker is deliberately not checked, and named so the omission is a
+decision rather than an oversight: reaching it needs a live download, and
+asserting against a second copy of the literal would be the same self-agreement
+in a different file.
 
-**The question `available()` answers is not the one the button needed.** Ollama
-answers its API as soon as it is serving, so `available()` is true with no
-usable model installed at all -- correctly, because it is about the backend.
-`ready(QString *reason)` is about the model, defaults to `available()` for a
-backend with no separate notion of one, and hands back the sentence explaining
-itself. One `gate_send()` helper does both halves at each of the three call
-sites, so the rule is stated once and the tooltip is never left stale.
+## Dependencies, CI, and the chrome a browser needs
 
-**An empty model list is an unanswered question, not a no.** `name()` already
-took this care -- `m_models` is empty before the server has replied, and
-reading that as "not installed" would grey out Send on a working setup, which
-is the same guess dressed as a fact in the other direction. `ready()` keeps the
-same guard, and a test holds it.
-
-**The driver caught itself passing vacuously**, which is worth more than the
-fix. `try_send_gate` builds the real dialog against a fake Ollama and
-photographs it. Its first run showed Send greyed in *both* cases and reported a
-pass -- because with no requests recorded, `suspects_for()` was empty and the
-button was already disabled for having nothing to ask about. The gate under
-test had not run at all. It now files two ad-shaped requests first and refuses
-to continue if no suspect was recorded, so the only remaining reason for the
-button to be grey is the one being tested. The two pictures differ in exactly
-one pixel region.
+Another such run, and grouped for the same reason: the dependency list and the
+build system, CI taken from nothing to green, the drivers that stopped fetching
+real sites to make a point, and the chrome the browser simply did not have -- a
+password prompt, a certificate chooser, find in page, zoom, a loading indicator
+-- until somebody used it and noticed.
 
 ### The dependency list, written down and therefore found to be wrong
 
@@ -7405,14 +7494,21 @@ with `ldd`.
 
 Written down because the reasoning is expensive to rebuild and cheap to record.
 
-**The GUI pass** closed, in order: two empty states that could not say which
+**The chrome pass** closed, in order: two empty states that could not say which
 kind of empty they were, navigation buttons that offered what they could not do,
 a window title that never named the page, no sign that a page was loading, no
 way to stop one, no find-in-page, no zoom, no link target on hover, a tab whose
 renderer died in silence, a link that opened nothing, a certificate failure that
 read as a site being down, and a site asking for a password that nobody
-answered. Each is a section above with what it cost and why the answer is the
+answered. Each is a section below with what it cost and why the answer is the
 one chosen.
+
+**The window pass** closed after it, and is *The GUI pass* above: every dialog
+this browser has, opened and read, then measured. Nine defects, five of them
+found by looking at a picture and four by an instrument built because looking
+does not scale. Its own three checks were wrong before they were right, which is
+the part worth carrying forward -- on that pass the instrument was wrong about
+as often as the code.
 
 **Open, in rough order of how much they matter:**
 
@@ -7436,6 +7532,13 @@ touching either:
   qmake build measured 142s standalone, 347s under load and 82s idle, and a
   four-fold difference was briefly attributed to a build-system property it had
   nothing to do with.
+- **A new source file means `python3 tools/objsets.py` before `make test`.** The
+  link sets are generated, so a `.cpp` that gains a dependency -- or a new file
+  that some test now needs -- links against a stale set and fails with undefined
+  references in a test nobody touched. It happened twice in one session, on
+  `test_settings` and `test_annoyance`, and both times the error named a file
+  that was perfectly correct. The staleness guard in `tests/Makefile` catches a
+  *new source*; it cannot catch an existing one that gained an include.
 
 ### One driver that had become three, and the bug that fell out
 
@@ -8089,10 +8192,15 @@ carried along as amendments to a list item.
    exist there. What is *not* established is that filling works: the emulator has
    no autofill service configured, so that claim needs a device that does.
 
-4. **What is left untested now needs a window or a network.** The sweep through
+4. **What is left untested now needs a network or a device.** The sweep through
    never-tested files is finished — see the sections above; four of nine were
-   wrong. The remainder are dialogs (`media_dialog`, `filter_dialog`,
-   `reorganize_dialog`, `site_policy_dialog`), thin adapters (`capture_source`,
-   `qtwebengine_interceptor`), and the WebEngine backend, all of which the live
-   drivers already drive through the shell. A unit test for any of them would be
-   testing Qt.
+   wrong. The line that used to sit here said the remaining dialogs were covered
+   only incidentally and that a unit test for one would be testing Qt. That is
+   no longer the state: `try_phone` opens all thirteen windows and measures each
+   for width, button reachability, cut labels, stretched paragraphs, opening
+   focus and Tab coverage — and it found five real defects doing it, including
+   one in `site_policy_dialog`, which was on that list as not worth testing.
+
+   What remains genuinely out of reach here is the WebEngine backend and the
+   thin adapters around it, which need a page rather than a fixture, and are
+   driven through the shell by the live drivers instead.
