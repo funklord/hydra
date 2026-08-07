@@ -65,6 +65,7 @@ public:
 
 private:
 	void build_privacy_page(QWidget *page);
+	void build_appearance_page(QWidget *page);
 	void build_kiosk_page(QWidget *page);
 	void build_filter_page(QWidget *page);
 	void rebuild_filter_list();

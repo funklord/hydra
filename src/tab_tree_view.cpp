@@ -9,6 +9,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QDialog>
+#include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDragMoveEvent>
 #include <QKeyEvent>
@@ -387,10 +388,31 @@ void tab_tree_view::edit_properties(node *n) {
 	id->setToolTip("Not editable: this is what the tab's saved state and the "
 	                "tree file are keyed by.");
 
+	// **The lock belongs here too.** It is a property of the node, like the
+	// title and the tags, and a dialog called "properties" that does not show
+	// one of them makes the tree's context menu the only place to learn it
+	// exists -- or to discover that a row will not move because of it.
+	//
+	// Ticking it here pins to the address in the box above, which is the
+	// address OK is about to write. The context menu pins to the page actually
+	// showing, because there it has no box to read. One rule underneath both:
+	// locking pins to the url the node ends up with.
+	auto *locked = new QCheckBox(
+	  n->is_folder() ? "Keep this folder where it is"
+	                  : "Keep this tab on this page, and in this place", &dlg);
+	locked->setObjectName("properties_locked");
+	locked->setChecked(n->locked);
+	locked->setToolTip(n->is_folder()
+	                       ? "A locked folder cannot be dragged, reordered, or "
+	                         "moved by the reorganizer."
+	                       : "A locked tab keeps its page -- browsing opens a "
+	                         "sub-tab below it -- and cannot be moved.");
+
 	form->addRow("Title", title);
 	if (!n->is_folder())
 		form->addRow("Address", url);
 	form->addRow("Tags", tags);
+	form->addRow("Locked", locked);
 	form->addRow("Id", id);
 	form->addRow("Added", new QLabel(n->created.toString(Qt::ISODate), &dlg));
 	form->addRow("Last seen", new QLabel(n->last_seen.toString(Qt::ISODate), &dlg));
@@ -409,6 +431,9 @@ void tab_tree_view::edit_properties(node *n) {
 			tag_list << t.trimmed();
 	m->update_node(n, title->text(), n->is_folder() ? n->url : url->text(),
 	                tag_list);
+	// After update_node, so the pin is the address just written rather than the
+	// one the dialog opened on.
+	m->set_locked(n, locked->isChecked());
 }
 
 bool tab_tree_view::reordering_is_meaningful() const {

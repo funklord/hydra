@@ -307,12 +307,14 @@ settings_dialog::settings_dialog(player_launcher *players,
 	         stack, &QStackedWidget::setCurrentIndex);
 
 	auto *privacy_page = new QWidget;
+	auto *appearance_page = new QWidget;
 	auto *kiosk_page  = new QWidget;
 	auto *filter_page = new QWidget;
 	auto *player_page = new QWidget;
 	auto *dl_page     = new QWidget;
 	auto *ai_page     = new QWidget;
 	build_privacy_page(privacy_page);
+	build_appearance_page(appearance_page);
 	build_kiosk_page(kiosk_page);
 	build_filter_page(filter_page);
 	build_player_page(player_page);
@@ -355,6 +357,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 	// arrived on screen as two ampersands. The escape belongs to menus and
 	// buttons, not here.
 	add_page(wrap(privacy_page), "Privacy & security");
+	add_page(wrap(appearance_page), "Appearance");
 	add_page(wrap(player_page), "Media & players");
 	add_page(wrap(dl_page), "Downloads");
 	add_page(wrap(filter_page), "Filters");
@@ -605,6 +608,49 @@ QWidget *settings_row(const QString &title, const QString &help,
 
 }  // namespace
 
+// **Its own page, because it was on the wrong one.** The colour scheme sat at
+// the top of Privacy & security, under that page's own opening line -- "what
+// every site is allowed to do unless you have said otherwise" -- which is not
+// what a colour scheme is. It was put there to be findable rather than because
+// it belonged, and a page of its own is more findable still.
+//
+// It also fixes something that followed from the misplacement: "Restore Privacy
+// & security defaults" never touched the scheme, so the one setting on that
+// page which was not a permission was also the one its restore button ignored.
+void settings_dialog::build_appearance_page(QWidget *page) {
+	auto *v = new QVBoxLayout(page);
+	v->setSpacing(0);
+
+	auto *intro = new QLabel(
+	  "How Hydra itself looks. Everything else in here is about what pages are "
+	  "allowed to do; this is about the window around them.", page);
+	intro->setWordWrap(true);
+	v->addWidget(intro);
+
+	v->addWidget(section_heading("Appearance", page));
+	m_appearance = new QComboBox(page);
+	m_appearance->setObjectName("appearance");
+	m_appearance->addItem("Follow the desktop", int(theme::choice::system));
+	m_appearance->addItem("Light", int(theme::choice::light));
+	m_appearance->addItem("Dark", int(theme::choice::dark));
+	const theme::choice now = settings_store::appearance();
+	m_appearance->setCurrentIndex(m_appearance->findData(int(now)));
+	// Applied as it is chosen rather than on OK: this one is visible, so seeing
+	// it is how you decide whether you want it. Cancel puts back what was
+	// stored, which is what makes trying one safe.
+	connect(m_appearance, &QComboBox::currentIndexChanged, this, [this] {
+		theme::apply(static_cast<theme::choice>(m_appearance->currentData().toInt()));
+	});
+	v->addWidget(settings_row(
+	  "Colour scheme",
+	  "Following the desktop is the default, and it keeps following: a system "
+	  "that switches at sunset takes Hydra with it. Web pages pick this up when "
+	  "Hydra next starts — the engine reads it once, at launch.",
+	  m_appearance, page));
+
+	v->addStretch(1);
+}
+
 void settings_dialog::build_privacy_page(QWidget *page) {
 	auto *v = new QVBoxLayout(page);
 
@@ -633,31 +679,6 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 		if (!order.contains(QString::fromUtf8(fg.group)))
 			order << QString::fromUtf8(fg.group);
 	order << "Other";
-
-	// Appearance first, because it is the one setting on this page that is about
-	// the browser rather than about what a site may do -- and because somebody
-	// opening settings on a machine whose theme came out wrong is looking for
-	// exactly this and should not have to scroll past fifteen permissions.
-	v->addWidget(section_heading("Appearance", page));
-	m_appearance = new QComboBox(page);
-	m_appearance->setObjectName("appearance");
-	m_appearance->addItem("Follow the desktop", int(theme::choice::system));
-	m_appearance->addItem("Light", int(theme::choice::light));
-	m_appearance->addItem("Dark", int(theme::choice::dark));
-	const theme::choice now = settings_store::appearance();
-	m_appearance->setCurrentIndex(m_appearance->findData(int(now)));
-	// Applied as it is chosen rather than on OK: this one is visible, so seeing
-	// it is how you decide whether you want it. Cancel puts back what was
-	// stored, which is what makes trying one safe.
-	connect(m_appearance, &QComboBox::currentIndexChanged, this, [this] {
-		theme::apply(static_cast<theme::choice>(m_appearance->currentData().toInt()));
-	});
-	v->addWidget(settings_row(
-	  "Colour scheme",
-	  "Following the desktop is the default, and it keeps following: a system "
-	  "that switches at sunset takes Hydra with it. Web pages pick this up when "
-	  "Hydra next starts — the engine reads it once, at launch.",
-	  m_appearance, page));
 
 	for (const QString &group_name : order) {
 		QList<policy::feature> in_group;
@@ -825,6 +846,12 @@ void settings_dialog::restore_page_defaults(int page) {
 		// particular sites rather than defaults, they each have their own
 		// Remove, and quietly discarding them behind a button labelled
 		// "defaults" would be the kind of surprise this project keeps out.
+	} else if (name.startsWith("Appearance")) {
+		// Back to following the desktop, and applied at once, because that
+		// is how this control behaves everywhere else on the page.
+		if (m_appearance)
+			m_appearance->setCurrentIndex(
+			  m_appearance->findData(int(theme::choice::system)));
 	} else if (name.startsWith("Media")) {
 		player_launcher fresh;
 		m_custom_cmd->clear();
