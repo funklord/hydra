@@ -6887,6 +6887,28 @@ photographed before -- takes 82% of the screen and leaves a strip of page to tap
 back on. Nothing to fix, which is worth recording as a result rather than as
 silence.
 
+### A claim about legibility, now checked rather than asserted
+
+`empty_state` dims its message with `setEnabled(false)` rather than by writing a
+colour, and the comment beside that line says it is "so it stays legible in both
+colour schemes". That is a statement about a palette this code does not own, and
+it had never been measured -- the settings dialog carries a contrast check
+precisely because the same assumption was wrong there once: it dimmed by writing
+a colour, which froze under whichever scheme was current when the widget was
+built.
+
+The claim holds. Composited over the base it is painted on, the message stands
+49 lightness levels clear in light and 124 in dark, against the floor of 25 that
+`try_settings_ui` already uses.
+
+**Two checks, and they catch different things.** Breaking it the historical way
+-- a written grey instead of a role -- left the contrast at 27 in dark, above the
+floor and visibly poor; what caught that was the older check that the label is
+dimmed by the style rather than by a colour. Painting the disabled text in the
+background colour outright took both schemes to 0 and the contrast check failed.
+So neither is redundant, and the pair is worth more than either: one is about
+the mechanism, the other about the result.
+
 ### The site controls had no keyboard way in
 
 Nothing in this tree sets a tab order and nothing tested one, so what Qt does by

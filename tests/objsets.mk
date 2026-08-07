@@ -149,7 +149,9 @@ OBJS_test_dlheaders = \
 
 OBJS_test_empty_state = \
 	$(BUILD_DIR)/app/empty_state.o \
-	$(BUILD_DIR)/moc/moc_empty_state.o
+	$(BUILD_DIR)/app/theme.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
+	$(BUILD_DIR)/moc/moc_theme.o
 
 OBJS_test_extloop = \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \

@@ -12,12 +12,16 @@
 // the thing under test here.
 #include "empty_state.h"
 
+#include "theme.h"
+
 #include <QApplication>
+#include <QPalette>
 #include <QLabel>
 #include <QStandardItemModel>
 #include <QTreeView>
 #include <QTreeWidget>
 #include <cstdio>
+#include <cstdlib>
 
 static int g_pass = 0, g_fail = 0;
 static void check(bool ok, const QString &w) {
@@ -182,6 +186,50 @@ int main(int argc, char **argv) {
 		e->refresh();
 		check(true, "and refresh() afterwards is a no-op rather than a fault");
 		delete e;
+	}
+
+	section("it is readable in both colour schemes");
+	{
+		// **A claim in `empty_state.cpp` that nobody had checked.** It dims by
+		// `setEnabled(false)` rather than by writing a colour, and the comment
+		// beside it says that is "so it stays legible in both colour schemes".
+		// That is a statement about a palette this code does not own, and the
+		// settings dialog already has a contrast check because the same
+		// assumption was wrong there once: it dimmed by writing a colour, which
+		// froze under whichever scheme was current when the widget was built.
+		//
+		// Composited over the background it is actually painted on, because a
+		// disabled colour with alpha is not a fixed distance from unreadable.
+		// Twenty-five levels of lightness is the same floor `try_settings_ui`
+		// uses, and it is a floor rather than a target.
+		const theme::choice both[] = { theme::choice::light, theme::choice::dark };
+		for (theme::choice c : both) {
+			theme::apply(c);
+			QTreeWidget list;
+			list.resize(400, 300);
+			list.show();
+			empty_state e(&list);
+			e.set_text("Nothing here yet.");
+			QApplication::processEvents();
+			QLabel *l = overlay(&list);
+			if (!l) {
+				check(false, "an overlay exists to measure");
+				continue;
+			}
+			const QColor bg = l->palette().color(QPalette::Base);
+			const QColor raw = l->palette().color(QPalette::Disabled,
+			                                       l->foregroundRole());
+			const qreal a = raw.alphaF();
+			const QColor fg(qRound(raw.red()   * a + bg.red()   * (1 - a)),
+			                 qRound(raw.green() * a + bg.green() * (1 - a)),
+			                 qRound(raw.blue()  * a + bg.blue()  * (1 - a)));
+			const int gap = std::abs(fg.lightness() - bg.lightness());
+			check(gap >= 25,
+			      QString("%1: the message stands %2 lightness levels off the "
+			               "list behind it")
+			          .arg(c == theme::choice::light ? "light" : "dark")
+			          .arg(gap));
+		}
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
