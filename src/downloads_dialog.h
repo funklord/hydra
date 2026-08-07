@@ -7,6 +7,7 @@
 #include <QHash>
 
 class QLabel;
+class empty_state;
 class QPushButton;
 class QTimer;
 class QTreeWidget;
@@ -75,15 +76,13 @@ private:
 	// measured was a few pixels tall and the message came out clipped against
 	// the header. The viewport tells us when it is actually the size it will
 	// be drawn at.
-	bool eventFilter(QObject *o, QEvent *e) override;
-	void place_empty_state();
 
 	QTreeWidget *m_list   = nullptr;
 	// Shown over the empty list. A window of column headings above four
 	// hundred pixels of nothing reads as broken rather than as idle, which is
 	// the same complaint the comment beside the action buttons already makes
 	// about them.
-	QLabel      *m_nothing = nullptr;
+	empty_state *m_empty   = nullptr;
 	QLabel      *m_note   = nullptr;   // standing "public transfer" explanation
 	QLabel      *m_action = nullptr;   // transient feedback from a button press
 	QPushButton *m_pause  = nullptr;

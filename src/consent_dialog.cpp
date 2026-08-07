@@ -2,6 +2,7 @@
 #include "consent_dialog.h"
 
 #include "consent_blocker.h"
+#include "empty_state.h"
 
 #include <QDialogButtonBox>
 #include <QHeaderView>
@@ -64,6 +65,11 @@ consent_dialog::consent_dialog(consent_blocker *blocker, const QString &rules_pa
 	connect(m_list, &QTreeWidget::itemSelectionChanged, this,
 	         &consent_dialog::refresh_buttons);
 
+	m_empty = new empty_state(m_list, this);
+	m_empty->set_text("Nothing recorded.\n\nA banner is only listed here when "
+	                   "it was found, looked like consent, and offered nothing "
+	                   "any rule matched.");
+
 	rebuild();
 }
 
@@ -86,10 +92,14 @@ void consent_dialog::rebuild() {
 		}
 		top->setExpanded(true);
 	}
+	// **The count under the table, the explanation inside it.** These were one
+	// label under the list, so on the common case -- nothing recorded -- the
+	// sentence explaining the blank table sat below it in small text, reading
+	// as a footnote about the window rather than as the answer to the question
+	// the blank table asks. The downloads and media dialogs both put theirs in
+	// the viewport; this one did not, and looked it.
 	if (m_list->topLevelItemCount() == 0)
-		m_status->setText("Nothing recorded. A banner is only listed here when "
-		                   "it was found, looked like consent, and offered "
-		                   "nothing any rule matched.");
+		m_status->clear();
 	else
 		m_status->setText(QString("%1 banner(s) recorded.")
 		                      .arg(m_list->topLevelItemCount()));

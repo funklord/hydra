@@ -6749,6 +6749,54 @@ its issuer and expiry the same way, and the media dialog stranded its empty
 state under an empty table. All three were found by looking and none by a test,
 because each is a fact about pixels rather than about the widget tree.
 
+### The empty state, written three times and wrong the third
+
+The consent-rules dialog showed a large blank table with the sentence
+explaining it -- "Nothing recorded. A banner is only listed here when it was
+found, looked like consent, and offered nothing any rule matched." -- in a
+status label *under* the table, in small text, reading as a footnote about the
+window rather than as the answer to the question a blank table asks. The
+downloads and media dialogs both centre theirs inside the empty list. Same
+defect, fourth occurrence, and again found by looking rather than by a test.
+
+**The fix was not to write it a third time.** Two of the three had grown the
+same overlay label, the same viewport resize filter and the same placement
+function independently, so `empty_state` now holds one copy and all three
+attach to it. The count comes from the model rather than from the caller,
+because a caller that must remember to call `refresh()` forgets on exactly one
+path and it is always the one that empties the list.
+
+**And it crashed, which is the part worth keeping.** `try_look` segfaulted
+every run immediately after photographing that dialog. The backtrace: inside
+`~QTreeWidget`, `deleteChildren()` frees the viewport and the overlay with it,
+and *then* the item model emits `modelReset` -- so `refresh()` ran on a label
+that had been freed one frame earlier. `QPointer` for both members turns
+teardown into a no-op instead of a fault.
+
+Two things about how it was found. The live driver caught it and the unit test
+did not, because every section of that test declared the view first and the
+helper second, so the helper always died first and the ordering that crashes
+could not occur; the dialogs parent the helper to the dialog, where the list
+goes first. The test now has that section, and it was confirmed by reverting
+the `QPointer` and watching it segfault at exactly that point rather than by
+reading the code and being satisfied.
+
+**And `try_look` runs against the fixture now**, which is what made the last
+part possible. Four surfaces -- the window with a page in it, the media dialog,
+the annoyance report and the extractor -- were skipped on every run that did not
+name a url, which was every run, so the dialogs needing a page were exactly the
+ones nobody looked at. That is where two of this session's visible defects had
+been hiding. A `file://` page is not enough and it is worth saying why: the
+annoyance report and the extractor both key on the site host, and a file url has
+none, so both correctly refuse and neither gets photographed. The fixture serves
+from 127.0.0.1 and needs no network.
+
+Still not photographed: the extractor and filter dialogs, which call
+`choose_ai()` and return when no provider answers. `try_send_gate` reaches the
+filter dialog by building it directly against a fake Ollama; making the *shell*
+reach it would mean writing an endpoint into the user's real settings, which is
+a decision rather than a driver change.
+
 ### Send, offered for a model that is not there
 
 The filter dialog's header read "Local model (Ollama, llama3 -- not installed)"

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "media_dialog.h"
+
+#include "empty_state.h"
 #include "download_manager.h"
 #include "mse_tap.h"
 #include "player_launcher.h"
@@ -54,18 +56,12 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 	// explanation stranded beneath it -- the tab tree and the downloads dialog
 	// both centre theirs in the space that is empty, and this was the odd one
 	// out. Nobody had seen it because the media dialog needs a loaded page to
-	// photograph, so the capture pass had always skipped it.
+	// photograph, so the capture pass had always skipped it -- `try_look` runs
+	// against a local fixture now, so it does not.
 	//
-	// Parented to the viewport and transparent to the mouse, so it cannot
-	// swallow a click meant for the list the moment a row arrives.
-	m_nothing = new QLabel(m_list->viewport());
-	m_nothing->setObjectName("nothing_detected");
-	m_nothing->setAlignment(Qt::AlignCenter);
-	m_nothing->setWordWrap(true);
-	m_nothing->setAttribute(Qt::WA_TransparentForMouseEvents);
-	m_nothing->setEnabled(false);   // the style's dimmed text, not a picked grey
-	m_nothing->hide();
-	m_list->viewport()->installEventFilter(this);
+	// The placement is `empty_state`'s business; see its header for why the
+	// overlay is in the viewport and why both its pointers are guarded.
+	m_empty = new empty_state(m_list, this);
 
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
@@ -168,32 +164,11 @@ void media_dialog::repopulate() {
 	} else {
 		// Said once, in the space it is about. The status line stays empty
 		// here rather than repeating it two inches lower.
-		m_nothing->setText("Nothing detected yet.\n\nMany sites only request "
-		                    "the manifest when their player starts, so try "
-		                    "pressing play first.");
+		m_empty->set_text("Nothing detected yet.\n\nMany sites only request "
+		                   "the manifest when their player starts, so try "
+		                   "pressing play first.");
 		m_status->clear();
 	}
-	place_empty_state();
-}
-
-bool media_dialog::eventFilter(QObject *o, QEvent *e) {
-	// The viewport knows the size it will be drawn at; the dialog's own resize
-	// fires before that, which is how the same message came out clipped into a
-	// corner elsewhere in this tree.
-	if (m_list && o == m_list->viewport() && e->type() == QEvent::Resize)
-		place_empty_state();
-	return QDialog::eventFilter(o, e);
-}
-
-// Centred over the viewport rather than laid out beside the list, so the list
-// keeps its full size and the message occupies none of it.
-void media_dialog::place_empty_state() {
-	if (!m_nothing || !m_list)
-		return;
-	m_nothing->setVisible(m_list->topLevelItemCount() == 0
-	                       && !m_nothing->text().isEmpty());
-	m_nothing->setGeometry(m_list->viewport()->rect());
-	m_nothing->raise();
 }
 
 void media_dialog::assemble_then(const media_item &item, bool play_it) {

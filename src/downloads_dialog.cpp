@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "downloads_dialog.h"
+
 #include "download_manager.h"
+#include "empty_state.h"
 #include "local_proxy.h"
 #include "media_detector.h"
 #include "player_launcher.h"
@@ -151,18 +153,9 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 	m_list->setAlternatingRowColors(true);
 	m_list->setSelectionBehavior(QAbstractItemView::SelectRows);
 
-	// The empty state, parented to the viewport so it sits over the rows area
-	// and scrolls with nothing. Transparent to the mouse, so it cannot swallow
-	// a click meant for the list the moment a download arrives.
-	m_nothing = new QLabel("No downloads yet.\n\nAnything you save, or hand to "
-	                        "the player, appears here.", m_list->viewport());
-	m_nothing->setObjectName("nothing_yet");
-	m_nothing->setAlignment(Qt::AlignCenter);
-	m_nothing->setWordWrap(true);
-	m_nothing->setAttribute(Qt::WA_TransparentForMouseEvents);
-	m_nothing->setEnabled(false);   // the style's dimmed text, not a hand-picked grey
-	m_nothing->hide();
-	m_list->viewport()->installEventFilter(this);
+	m_empty = new empty_state(m_list, this);
+	m_empty->set_text("No downloads yet.\n\nAnything you save, or hand to the "
+	                   "player, appears here.");
 	m_list->header()->setSectionResizeMode(col_name, QHeaderView::Stretch);
 	// Source and Size must never be elided: a truncated "⇅ public" marker
 	// defeats the entire point of showing it, and a truncated size is noise.
@@ -230,24 +223,8 @@ void downloads_dialog::schedule_refresh() {
 		m_coalesce->start();
 }
 
-bool downloads_dialog::eventFilter(QObject *o, QEvent *e) {
-	if (m_list && o == m_list->viewport() && e->type() == QEvent::Resize)
-		place_empty_state();
-	return QDialog::eventFilter(o, e);
-}
-
-// Centred over the viewport rather than laid out beside the list, so the list
-// keeps its full size and the message occupies none of it.
-void downloads_dialog::place_empty_state() {
-	if (!m_nothing || !m_list)
-		return;
-	m_nothing->setVisible(m_list->topLevelItemCount() == 0);
-	m_nothing->setGeometry(m_list->viewport()->rect());
-}
-
 void downloads_dialog::refresh() {
 	bool any_public = false;
-	place_empty_state();
 
 	for (const download_job &j : m_downloads->jobs()) {
 		QTreeWidgetItem *row = m_rows.value(j.id, nullptr);

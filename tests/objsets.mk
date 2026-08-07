@@ -19,6 +19,7 @@ OBJSETS_SOURCES = \
 	tests/test_crypto.cpp \
 	tests/test_diff.cpp \
 	tests/test_dlheaders.cpp \
+	tests/test_empty_state.cpp \
 	tests/test_extloop.cpp \
 	tests/test_extractor.cpp \
 	tests/test_fetcher.cpp \
@@ -142,6 +143,10 @@ OBJS_test_dlheaders = \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o
 
+OBJS_test_empty_state = \
+	$(BUILD_DIR)/app/empty_state.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o
+
 OBJS_test_extloop = \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -245,6 +250,8 @@ OBJS_test_pick = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/tmoc/moc_fake_sources.o \
+	$(BUILD_DIR)/app/empty_state.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o
 
 OBJS_test_picker = \
@@ -479,7 +486,9 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -591,7 +600,9 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -703,7 +714,9 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -815,7 +828,9 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -927,7 +942,9 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -1044,7 +1061,9 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
@@ -1151,7 +1170,9 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -1186,6 +1207,8 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/empty_state.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -1375,7 +1398,9 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -1487,7 +1512,9 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -1599,7 +1626,9 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -1711,7 +1740,9 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -1824,7 +1855,9 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/tree_outline.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -1937,7 +1970,9 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -2047,7 +2082,9 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -2161,7 +2198,9 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -2274,7 +2313,9 @@ OBJS_try_import = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -2398,7 +2439,9 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -2510,7 +2553,9 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -2616,7 +2661,9 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -2731,7 +2778,9 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -2847,7 +2896,9 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
@@ -2959,7 +3010,9 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
@@ -3066,7 +3119,9 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -3179,7 +3234,9 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -3300,7 +3357,9 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -3437,7 +3496,9 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -3549,7 +3610,9 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -3661,7 +3724,9 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -3773,7 +3838,9 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
@@ -3885,7 +3952,9 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \

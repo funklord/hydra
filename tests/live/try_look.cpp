@@ -18,6 +18,7 @@
 #include "qtwebengine_factory.h"
 #include "request_filter.h"
 #include "settings_dialog.h"   // settings_store
+#include "media_fixture.h"
 #include "theme.h"
 #include "tab_tree_model.h"
 #include "tab_tree_view.h"
@@ -242,10 +243,23 @@ int main(int argc, char *argv[]) {
 	// extractor works from the requests a page actually made. Both are empty by
 	// construction on an empty tab, so photographing them there says nothing
 	// about how they look in use.
-	const QString target = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString();
+	//
+	// **So the local fixture, unless a real site is named.** These four surfaces
+	// were skipped on every run that did not name a url, which is every run --
+	// so the dialogs that need a page were the ones nobody ever looked at, and
+	// two of the defects this file exists to catch were found in them long
+	// after they were written. The fixture serves a page, a player and a
+	// manifest from 127.0.0.1, so it needs no network.
+	//
+	// A `file://` url will not do, and that is why the fixture rather than a
+	// local html file: the annoyance report and the extractor both key on the
+	// site host, and `file://` has none, so both correctly refuse and neither
+	// gets photographed.
+	media_fixture::server fixture;
+	const QString target = argc > 1 ? QString::fromLocal8Bit(argv[1])
+	                                : fixture.start();
 	if (target.isEmpty()) {
-		std::printf("\n(no url given; the media and extractor dialogs need a "
-		             "loaded page -- pass one to include them)\n");
+		std::printf("\n(the fixture did not start, and no url was given)\n");
 	} else {
 		std::printf("\n== with %s loaded ==\n", qPrintable(target));
 		node *tab = w.findChild<tab_tree_model *>()->add_tab(nullptr, "Live",

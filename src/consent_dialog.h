@@ -7,6 +7,7 @@
 
 class QLabel;
 class QTreeWidget;
+class empty_state;
 class QPushButton;
 class consent_blocker;
 
@@ -46,6 +47,7 @@ private:
 	QString          m_path;
 	QLabel          *m_intro   = nullptr;
 	QTreeWidget     *m_list    = nullptr;
+	empty_state     *m_empty   = nullptr;
 	QLabel          *m_status  = nullptr;
 	QPushButton     *m_reject  = nullptr;
 	QPushButton     *m_accept  = nullptr;

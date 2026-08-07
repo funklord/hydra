@@ -9,6 +9,7 @@
 #include <QDialog>
 
 class QLabel;
+class empty_state;
 class QEvent;
 class QTreeWidget;
 class download_manager;
@@ -37,12 +38,7 @@ signals:
 	// shell owns that.
 	void capture_requested();
 
-protected:
-	bool eventFilter(QObject *o, QEvent *e) override;
-
 private:
-	void place_empty_state();
-
 	void repopulate();
 	void watch(const media_item &item);
 	void save(const media_item &item);
@@ -65,5 +61,5 @@ private:
 	// The "nothing here" message, over the empty rows area rather than under
 	// it. `m_status` cannot carry this: it is the dialog's status line and
 	// also reports assembling, progress and errors.
-	QLabel      *m_nothing = nullptr;
+	empty_state *m_empty   = nullptr;
 };
