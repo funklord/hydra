@@ -166,10 +166,20 @@ NEEDS_ENGINE := $(shell grep -lE 'main_window\.h|qtwebengine|QWebEngine|web_view
 ENGINE_BINS  := $(LIVE) $(patsubst %.cpp,$(BUILD_DIR)/%,$(NEEDS_ENGINE))
 $(ENGINE_BINS): LDLIBS += $(ENGINE_LIBS)
 
-.PHONY: all offline live clean help objsets
+.PHONY: all offline live live-objs clean help objsets
 all: offline live
 offline: $(OFFLINE)
 live: $(LIVE)
+
+# **Compile every live driver without linking one.** A driver's object needs
+# only headers, so this costs thirty-five translation units; linking them costs
+# thirty-five Qt WebEngine links and a display to run them on, which is why CI
+# does not build them and why a change that breaks a driver's *compilation* has
+# been reaching the tree unnoticed. It did repeatedly in one session: the
+# drivers were fixed by hand each time, after the fact.
+#
+# This is the half that is cheap and catches most of it.
+live-objs: $(patsubst live/%.cpp,$(BUILD_DIR)/%.o,$(LIVE_SRCS))
 
 # --- rules -----------------------------------------------------------------
 $(BUILD_DIR)/moc/moc_%.cpp: $(SRC)/%.h | $(BUILD_DIR)/moc

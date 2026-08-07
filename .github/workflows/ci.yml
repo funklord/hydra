@@ -150,6 +150,25 @@ jobs:
       - name: Run the offline suites
         run: make test JOBS=2
 
+      # **The live drivers, compiled but not linked.** Linking them means
+      # thirty-five Qt WebEngine links, and running them wants a display, so
+      # neither belongs in a job that has to finish. Compiling them costs
+      # thirty-five translation units and catches the thing that actually kept
+      # happening: a change to the shell that breaks a driver's compilation,
+      # found by hand after the fact because nothing here built them.
+      - name: Compile the live drivers
+        run: make -C tests JOBS=2 live-objs
+
+      - name: Every driver was compiled, not skipped
+        run: |
+          built=$(ls tests/build-make/try_*.o 2>/dev/null | wc -l)
+          want=$(ls tests/live/try_*.cpp | wc -l)
+          echo "$built driver objects for $want sources"
+          test "$built" -eq "$want" || {
+            echo 'a driver did not compile, or the glob found nothing.'
+            exit 1
+          }
+
       # `make test` loops over a computed suite list and exits non-zero when
       # one fails -- but an empty list would exit zero having run nothing at
       # all, which is the shape of vacuous pass this repository keeps meeting.

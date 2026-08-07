@@ -6778,10 +6778,16 @@ the binary, 38 suite sources produced 28 binaries, and 28 suites passed. Those
 counts are asserted, not printed -- an empty file list or a collapsed suite list
 fails the run.
 
-**What it does not establish.** The live drivers are not built or run: they need
-a display and thirty-four WebEngine links, and none of that belongs in a job
-that has to finish. The APK is not built either. Both are still things this
-machine does, and the gap is worth naming rather than reading a green tick as
+**What it does not establish.** The live drivers are not *linked* or run: that
+wants thirty-five Qt WebEngine links and a display, and neither belongs in a job
+that has to finish. They are compiled, which is the half that is cheap and
+catches what actually kept happening -- a change to the shell breaking a
+driver's compilation, found by hand after the fact because nothing built them.
+Checked by breaking one on purpose: the step exits non-zero and names the file
+and line.
+
+The APK is still not built, and running the drivers is still something this
+machine does. The gap is worth naming rather than reading a green tick as
 "everything is checked".
 
 ### CI, and the first thing it found was a lie in the documentation
