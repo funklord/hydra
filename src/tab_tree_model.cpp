@@ -106,6 +106,23 @@ static void index_subtree(node *n, QHash<QString, node *> &map) {
 	}
 }
 
+// A node's `order` is its position in its parent's child list, written down.
+// Keep the two in step at the point the list changes.
+//
+// It used to be set once, at creation, from `parent->children.size()` -- one
+// past the highest, which is true only while nothing has *left* the list. A
+// delete and a drag-out each leave a gap in the numbering without leaving one
+// in the count, so the next node added collides with a sibling that is still
+// there; three siblings were measured holding order 2. Two rows with the same
+// order are not in the wrong order, they have *no* order: `lessThan` reports
+// them equal, and the reorganizer's diff reads the tie as a move nobody made.
+static void renumber(node *parent) {
+	if (!parent)
+		return;
+	for (int i = 0; i < parent->children.size(); ++i)
+		parent->children[i]->order = i;
+}
+
 void tab_tree_model::reindex() {
 	m_id_index.clear();
 	index_subtree(m_root, m_id_index);
@@ -399,6 +416,11 @@ bool tab_tree_model::dropMimeData(const QMimeData *data, Qt::DropAction action,
 	// begin/endMoveRows index mistake for, since those corrupt the view in ways
 	// that show up much later than they happen.
 	beginResetModel();
+	// Parents a move takes something *out* of. Only the target was renumbered
+	// before, so a tab dragged from one folder to another left the folder it
+	// came from numbered around the gap -- and the next tab added there took a
+	// number one of its siblings already had.
+	QList<node *> emptied;
 	for (node *n : moving) {
 		if (action == Qt::CopyAction) {
 			node *c = deep_copy(n, this, [this](const QString &like) {
@@ -410,8 +432,31 @@ bool tab_tree_model::dropMimeData(const QMimeData *data, Qt::DropAction action,
 			else
 				target->children << c;
 		} else {
-			if (n->parent)
+			// **Where it sits now matters when it is already in here.** A view
+			// hands `dropMimeData` a row counted against the list as it stands
+			// *before* anything moves. Taking the node out of that same list
+			// shifts every later sibling down by one, so inserting at the
+			// number we were given lands one place too far.
+			//
+			// Only when moving downwards -- removing from *below* the insertion
+			// point changes nothing above it -- and dropping past the last row
+			// appends either way. So the fault was invisible in three of the
+			// four directions somebody might drag, which is what made it read
+			// as the tree being unreliable rather than as an off-by-one.
+			//
+			// Worth stating what it cost, because the no-op case is the one
+			// that reads as corruption: dropping a row back into its own gap
+			// moved it one place down. The gesture that means "leave this
+			// where it is" was the gesture that disturbed it.
+			const int was = n->parent == target
+			                  ? target->children.indexOf(n) : -1;
+			if (n->parent) {
+				if (n->parent != target && !emptied.contains(n->parent))
+					emptied << n->parent;
 				n->parent->children.removeOne(n);
+			}
+			if (was >= 0 && row > was)
+				--row;
 			n->parent = target;
 			if (row >= 0 && row <= target->children.size())
 				target->children.insert(row++, n);
@@ -421,8 +466,9 @@ bool tab_tree_model::dropMimeData(const QMimeData *data, Qt::DropAction action,
 	}
 	// Sibling order is what the outline file records, so it has to agree with
 	// the list we just rearranged or the next save undoes the drag.
-	for (int i = 0; i < target->children.size(); ++i)
-		target->children[i]->order = i;
+	renumber(target);
+	for (node *p : emptied)
+		renumber(p);
 	reindex();
 	endResetModel();
 	emit structure_changed();
@@ -442,8 +488,8 @@ node *tab_tree_model::add_folder(node *parent, const QString &title) {
 	f->created = QDateTime::currentDateTime();
 	f->last_seen = f->created;
 	f->parent  = parent;
-	f->order   = parent->children.size();
 	parent->children << f;
+	renumber(parent);
 	reindex();
 	endResetModel();
 	emit structure_changed();
@@ -468,8 +514,8 @@ node *tab_tree_model::add_tab(node *parent, const QString &title,
 	t->created   = QDateTime::currentDateTime();
 	t->last_seen = t->created;
 	t->parent    = parent;
-	t->order     = parent->children.size();
 	parent->children << t;
+	renumber(parent);
 	reindex();
 	endResetModel();
 	emit structure_changed();
@@ -488,11 +534,13 @@ bool tab_tree_model::remove_node(node *n) {
 	// cap gives up when it cannot resolve its chosen victim.
 	emit about_to_remove(n);
 	beginResetModel();
-	n->parent->children.removeOne(n);
+	node *parent = n->parent;
+	parent->children.removeOne(n);
 	// Deletes the whole subtree through node's destructor, which is what the
 	// gesture means -- deleting a folder in a file manager takes what is in it.
 	// The caller is responsible for having asked first.
 	delete n;
+	renumber(parent);
 	reindex();
 	endResetModel();
 	emit structure_changed();
@@ -554,6 +602,14 @@ bool tab_tree_model::set_locked(node *n, bool locked, const QString &pin_url) {
 
 bool tab_tree_model::set_page_title(node *n, const QString &title) {
 	if (!n || title.isEmpty() || n->renamed || title == n->title)
+		return false;
+	// **`about:blank` is not a name.** An empty tab now genuinely loads the
+	// blank page -- that is what makes it the current tab, and what stopped a
+	// typed address going to the tab before it -- and Chromium duly reports the
+	// address as the title, which is correct of Chromium and useless on a row.
+	// The label a person is looking at should say what `add_tab` called it
+	// until a real page says otherwise.
+	if (title == QLatin1String("about:blank"))
 		return false;
 	n->title = title;
 	refresh_node(n);

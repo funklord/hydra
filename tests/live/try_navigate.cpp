@@ -18,6 +18,8 @@
 #include "policy.h"
 #include "tab_tree_model.h"
 #include <QAbstractButton>
+#include <QAction>
+#include <QSortFilterProxyModel>
 #include <QApplication>
 #include <QStatusBar>
 
@@ -178,6 +180,75 @@ int main(int argc, char *argv[]) {
 		spin(300);
 		check(allowed != nullptr, "allowing popups lets one through");
 		policy.set_setting("*", policy::feature::popups, policy::setting::block);
+	}
+
+	section("a new tab is the tab the address bar is talking to");
+	{
+		// The reported defect, and both of its symptoms from one cause.
+		// `add_tab` makes a row with no address -- that is what a new tab *is*
+		// -- and `open_node` refused any node whose url was empty, so nothing
+		// was ever shown for it and the stack went on showing the tab before.
+		//
+		// From there the tree gained a row that never loaded and so never
+		// changed the title `add_tab` gave it, while `current_view()` -- which
+		// reads the stack, not the tree -- still answered with the previous
+		// tab. `new_tab` then focuses the address bar, inviting an address, and
+		// `navigate_to_address` loaded it into whatever was showing. One defect,
+		// wearing "the tab doesn't update its text" and "it opens the wrong
+		// page" at the same time.
+		auto *model = w.findChild<tab_tree_model *>();
+		node *folder = model->root()->children.first();
+
+		check(f.open_tab(0, "one.html"), "the first tab is showing page one");
+		const int before = folder->children.size();
+
+		// Through the menu entry, which is the way a person reaches it.
+		QAction *new_tab_action = nullptr;
+		for (QAction *a : w.findChildren<QAction *>())
+			if (QString(a->text()).remove('&') == "New Tab")
+				new_tab_action = a;
+		check(new_tab_action != nullptr, "the menu offers New Tab");
+		if (new_tab_action) {
+			new_tab_action->trigger();
+			spin(1500);
+			check(folder->children.size() == before + 1,
+			      QString("which adds a row beside the tab that was showing "
+			               "(%1 -> %2)").arg(before)
+			          .arg(folder->children.size()));
+			node *fresh = folder->children.last();
+
+			// The tree has to agree about which row is current, because that is
+			// what the shell reads to decide where the *next* tab is filed.
+			node *current = nullptr;
+			if (tv->currentIndex().isValid()) {
+				auto *proxy = qobject_cast<QSortFilterProxyModel *>(tv->model());
+				const QModelIndex src = proxy
+				  ? proxy->mapToSource(tv->currentIndex()) : tv->currentIndex();
+				current = model->node_for_index(src);
+			}
+			check(current == fresh,
+			      QString("and highlights it in the tree (%1)")
+			          .arg(current ? current->title : QString("nothing")));
+
+			// Now the gesture the address bar was just focused for.
+			address->setText(QUrl::fromLocalFile(two).toString());
+			emit address->returnPressed();
+			check(wait_for(address, "two.html"),
+			      "typing an address after New Tab loads it");
+			f.wait_idle();
+
+			// Loaded into the *new* tab. The old one is still on page one, and
+			// under the defect it was the old one that moved.
+			check(f.open_tab(0, "one.html"),
+			      "and the tab that was showing before is still on page one");
+
+			// The new row wears the page's title rather than the placeholder
+			// `add_tab` gave it -- which is only possible because a page loaded
+			// into it at all.
+			check(fresh->title != "New tab",
+			      QString("and the new row took the page's title (%1)")
+			          .arg(fresh->title));
+		}
 	}
 
 	return report();

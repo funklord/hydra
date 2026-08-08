@@ -37,6 +37,15 @@ public:
 	// use the same entry.
 	void edit_properties(node *n);
 
+	// Make `n` the current row: expanded to, highlighted, scrolled into view.
+	//
+	// Opening a tab and highlighting it are one act from where the user sits,
+	// and they were two here -- nothing set the current row when a tab opened,
+	// so the highlight stayed wherever it was last clicked. More than cosmetic:
+	// the shell reads the highlight to decide where a *new* tab goes, so a tab
+	// opened by any route but a click filed the next one under the wrong parent.
+	void show_node(node *n);
+
 	// **Keeps folders open across a model reset.** Several operations rebuild
 	// the model wholesale -- a drop, a load, a mirror swap -- and a reset tells
 	// the view that everything it knew is void, so it collapses the lot. After

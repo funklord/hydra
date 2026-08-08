@@ -18,6 +18,11 @@ static void check(bool ok, const QString &w) {
 static void note(const QString &w) { std::printf("     %s\n", qPrintable(w)); }
 static void section(const char *n) { std::printf("\n== %s ==\n", n); }
 
+// **`tests/tree_gen.h` is the same generator**, down to the docstring below,
+// and the two are kept in step by hand -- which is how this one came to build
+// trees whose every node recorded order 0 while the shared one was fixed.
+// Collapsing them is a test-tree change rather than part of the bug this file
+// was last edited for, so it is noted here rather than done in passing.
 static node *make(const QString &id, node_type t, node *parent) {
 	node *n = new node;
 	n->id = id;
@@ -26,8 +31,14 @@ static node *make(const QString &id, node_type t, node *parent) {
 	if (!n->is_folder())
 		n->url = "https://example.test/" + id;
 	n->parent = parent;
-	if (parent)
+	if (parent) {
+		// Position in the list, recorded on the node. A generator that skips
+		// this builds a shape nothing in the application can produce: the
+		// outline reader numbers as it nests, the model renumbers on every
+		// mutation, and `tree_diff` renumbers after a restore.
+		n->order = parent->children.size();
 		parent->children.append(n);
+	}
 	return n;
 }
 
@@ -96,6 +107,22 @@ int main(int argc, char **argv) {
 		// Broken before the tree is deleted: `~node` deletes its children, and
 		// a cycle would take the same node twice.
 		f->children.removeAll(f);
+		delete root;
+	}
+	{
+		// A sibling whose recorded order disagrees with where it actually sits.
+		// This is what a mutation forgetting to renumber leaves behind, and the
+		// damage is not that the number is wrong -- it is that two siblings can
+		// then hold the *same* number, and tree-order sorting compares on it.
+		// Rows that compare equal are not in the wrong order, they have no
+		// order at all, and the reorganizer's diff reads the tie as a move
+		// nobody made.
+		node *root = generate(1, 3, 0);
+		node *f = root->children.first();
+		f->children.at(2)->order = 1;          // now a duplicate of its sibling
+		const auto r = tree_invariants::check(root);
+		check(!r.ok && r.summary().contains("records order"),
+		      "a sibling whose order disagrees with its position is caught");
 		delete root;
 	}
 	{

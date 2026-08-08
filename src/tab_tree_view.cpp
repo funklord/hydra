@@ -202,6 +202,22 @@ void tab_tree_view::reopen_folders() {
 	}
 }
 
+void tab_tree_view::show_node(node *n) {
+	const QModelIndex idx = view_index(n);
+	if (!idx.isValid())
+		return;
+	// Ancestors first, outermost in: `setExpanded` on a row inside a folder
+	// that is still shut does nothing, so opening from the inside out leaves
+	// the deeper ones closed -- the same ordering `reopen_folders` learned.
+	QList<QModelIndex> chain;
+	for (QModelIndex p = idx.parent(); p.isValid(); p = p.parent())
+		chain.prepend(p);
+	for (const QModelIndex &p : chain)
+		setExpanded(p, true);
+	setCurrentIndex(idx);
+	scrollTo(idx, QAbstractItemView::EnsureVisible);
+}
+
 // The view's index for a node, through the proxy when there is one.
 QModelIndex tab_tree_view::view_index(node *n) const {
 	tab_tree_model *src = source_model();
@@ -213,13 +229,29 @@ QModelIndex tab_tree_view::view_index(node *n) const {
 	return s;
 }
 
+// **Never the root, whatever the index turns out to be.** `node_for_index`
+// answers the root for an invalid index, because `rowCount(QModelIndex())` has
+// to mean "how many top-level rows" -- correct there, and a trap here. A view
+// index is a *row*, the root is not one, and a caller writing the obvious
+// `if (node *n = ...)` gets a non-null answer it cannot tell apart from a real
+// one. Two indices arrive invalid: no current row at all, and a source index
+// the proxy could not map. F2 with nothing selected took the first and opened
+// the properties editor on the invisible root, where OK edited a node nobody
+// can see and the typing went nowhere.
+static node *row_node(tab_tree_model *src, const QModelIndex &source_index) {
+	if (!src || !source_index.isValid())
+		return nullptr;
+	node *n = src->node_for_index(source_index);
+	return n == src->root() ? nullptr : n;
+}
+
 node *tab_tree_view::node_at_index(const QModelIndex &idx) const {
 	tab_tree_model *src = source_model();
 	if (!src || !idx.isValid())
 		return nullptr;
 	if (auto *proxy = qobject_cast<tree_sort_proxy *>(model()))
-		return src->node_for_index(proxy->mapToSource(idx));
-	return src->node_for_index(idx);
+		return row_node(src, proxy->mapToSource(idx));
+	return row_node(src, idx);
 }
 
 tab_tree_model *tab_tree_view::source_model() const {
@@ -238,8 +270,8 @@ node *tab_tree_view::node_at(const QPoint &pos) const {
 	// Through the proxy if there is one: the row under the pointer is a proxy
 	// row, and mapping it here is the only place that has to know that.
 	if (auto *proxy = qobject_cast<tree_sort_proxy *>(model()))
-		return m->node_for_index(proxy->mapToSource(at));
-	return m->node_for_index(at);
+		return row_node(m, proxy->mapToSource(at));
+	return row_node(m, at);
 }
 
 void tab_tree_view::show_menu(const QPoint &pos) {
@@ -345,14 +377,13 @@ void tab_tree_view::keyPressEvent(QKeyEvent *event) {
 	// should not remove a folder and everything in it, and the menu entry asks
 	// first.
 	if (event->key() == Qt::Key_F2) {
-		if (tab_tree_model *m = source_model()) {
-			QModelIndex at = currentIndex();
-			if (auto *proxy = qobject_cast<tree_sort_proxy *>(model()))
-				at = proxy->mapToSource(at);
-			if (node *n = m->node_for_index(at)) {
-				edit_properties(n);
-				return;
-			}
+		// `node_at_index` rather than the mapping written out here: it is the
+		// one that refuses the root, and this is where that mattered. With no
+		// row selected the index is invalid, which used to resolve to the root
+		// and open a properties dialog for a node that is not on screen.
+		if (node *n = node_at_index(currentIndex())) {
+			edit_properties(n);
+			return;
 		}
 	}
 	QTreeView::keyPressEvent(event);

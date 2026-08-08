@@ -70,13 +70,30 @@ void walk(node *root, report &r) {
 			// left nothing here to keep.
 		}
 
-		for (node *c : n->children) {
+		for (int i = 0; i < n->children.size(); ++i) {
+			node *c = n->children.at(i);
 			if (!c)
 				continue;
 			if (c->parent != n)
 				r.problems << QString("'%1' is listed under '%2' but its parent "
 						"points elsewhere")
 						.arg(c->id, n->id);
+			// `order` is the position in this list, written down. It is what
+			// tree-order sorting compares on and what the reorganizer diffs, so
+			// a stored value that disagrees with the list is two answers to one
+			// question -- and the sort has no defined result for a tie.
+			//
+			// Checked here rather than trusted at each mutation because it is a
+			// property of the tree rather than of any one edit: a new node took
+			// `children.size()` as its order, which is one past the highest only
+			// while nothing has left the list. A delete and a drag-out both
+			// leave a gap in the numbering without leaving one in the count, so
+			// the next node added collides with a sibling still sitting there.
+			// Three siblings were measured holding order 2.
+			if (c->order != i)
+				r.problems << QString("'%1' is at position %2 under '%3' but "
+						"records order %4")
+						.arg(c->id).arg(i).arg(n->id).arg(c->order);
 			// A mirror is a subtree, and half a mirror is the dangerous shape:
 			// the unmarked half would be written to the tree file, resurrecting
 			// somebody else's tabs as though they had been filed.

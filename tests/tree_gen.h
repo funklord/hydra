@@ -18,16 +18,30 @@
 // have a function for.
 namespace tree_gen {
 
+// **`order` is set here, and it was not.** Every node came out holding the
+// default 0, so a generated tree had ten thousand siblings all claiming
+// position zero -- a shape no code path in the application can produce, since
+// the outline reader numbers as it nests, the model renumbers on every
+// mutation and `tree_diff` renumbers after a restore. A fixture that builds
+// something the product cannot is testing a tree nobody will ever have, and it
+// hid the invariant that says so: the checker could not be given the rule until
+// the generator obeyed it.
+inline node *attach(node *n, node *parent) {
+	n->parent = parent;
+	if (parent) {
+		n->order = parent->children.size();
+		parent->children.append(n);
+	}
+	return n;
+}
+
 inline node *leaf(const QString &id, node *parent) {
 	node *n   = new node;
 	n->id     = id;
 	n->type   = node_type::unopened_tab;
 	n->title  = "Tab " + id;
 	n->url    = "https://example.test/" + id;
-	n->parent = parent;
-	if (parent)
-		parent->children.append(n);
-	return n;
+	return attach(n, parent);
 }
 
 inline node *folder(const QString &id, node *parent) {
@@ -35,10 +49,7 @@ inline node *folder(const QString &id, node *parent) {
 	n->id     = id;
 	n->type   = node_type::folder;
 	n->title  = "Folder " + id;
-	n->parent = parent;
-	if (parent)
-		parent->children.append(n);
-	return n;
+	return attach(n, parent);
 }
 
 // `depth` nested folders, then `folders` folders side by side at the bottom,

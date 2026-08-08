@@ -8206,6 +8206,118 @@ apk check was exercised against synthetic zips carrying one ABI, two, and none.
 **What is not verified is a real build**: this machine has the kits but no NDK
 or JDK, so `make android` gets as far as the NDK check and stops.
 
+## Five defects in the tab tree, reported as "it is unreliable"
+
+Reported from use, in two sentences: sometimes a tab does not update its text,
+sometimes it does not open the correct page. Both turned out to be one defect,
+and looking for it found four more. Worth recording as a group because the
+report was vague in a way that was *earned* — three of the five only misbehave
+in one of the directions you might do the thing, which is exactly how a pile of
+specific bugs reads as general unreliability.
+
+### One defect wore both reported symptoms
+
+`add_tab` makes a row with no address on purpose — that is what a new tab is —
+and `open_node` refused any node whose url was empty, so nothing was ever shown
+for it. Nothing said so. The row appeared in the tree, and the stack went on
+showing the previous tab.
+
+From there both symptoms follow. `current_view()` derives from the stack rather
+than from the tree, so it kept answering with the tab *before* the new one.
+`new_tab` focuses the address bar — an empty tab is a question about where to
+go — and `navigate_to_address` loaded whatever was typed into that stale answer.
+So the new row never loaded a page and therefore never changed the title
+`add_tab` gave it, **and** the address typed for it opened somewhere else.
+
+The guard is about being a *folder* now, which is the thing that genuinely has
+no page; an empty tab opens `about:blank`. That had a tail: Chromium reports the
+address as the title of the blank page, correct of Chromium and useless on a
+row, so the tree read `about:blank` until you went somewhere. `set_page_title`
+refuses that one name.
+
+### Dropping a row into its own folder put it one place too low
+
+`dropMimeData` was handed a row counted against the list *before* the move, then
+removed the node from that same list — which shifts every later sibling down one
+— and inserted at the number it was given. One place too far.
+
+Only downwards: removing from below the insertion point changes nothing above
+it, and a drop past the last row appends either way. **Three of the four
+directions were correct**, which is why this never got reported as an off-by-one.
+The case that reads as corruption rather than as a bug is the no-op: dropping a
+row back into its own gap moved it. The gesture that means "leave this where it
+is" was the one that disturbed it.
+
+### Sibling `order` could collide, and nothing checked
+
+A new node took `parent->children.size()` as its `order` — one past the highest,
+true only while nothing has *left* the list. A delete and a drag-out each leave a
+gap in the numbering without leaving one in the count, so the next node added
+collided with a sibling still sitting there. **Three siblings were measured
+holding order 2.**
+
+Two rows with the same order are not in the wrong order, they have *no* order:
+`lessThan` reports them equal. Being honest about the damage — the visible
+symptom was **not** reproduced. The proxy showed the list in list order before
+and after a title arrived, twice. What is established is the collision and its
+two real consumers: tree-order sorting has no defined answer for the tied rows,
+and `tree_diff` reads a stale `order` as a reorder nobody made. It does not reach
+the outline file, which writes children in list order and renumbers on load.
+
+The fix is a `renumber` at every point the list changes. The part worth keeping
+is the *other* half: `tree_invariants` now checks that a child's recorded order
+equals its position, so `holds()` — which `test_model` runs after every section —
+catches any future mutation that forgets. It immediately caught a case reading
+had missed, in a test that already existed: a cross-folder move renumbered the
+target and left the source parent stale.
+
+`tests/tree_gen.h` and `test_invariants`'s private copy of the same generator
+both had to be fixed first: they appended without numbering, so every generated
+node recorded order 0 and ten thousand siblings all claimed position zero. **The
+checker could not be given the rule until the fixtures obeyed it** — a fixture
+building a shape no code path can produce was hiding the invariant that says so.
+Those two generators are the same idea written twice, docstring included, and
+collapsing them is left as its own piece of work.
+
+### F2 with nothing selected edited the invisible root
+
+`node_for_index` answers the *root* for an invalid index, because
+`rowCount(QModelIndex())` has to mean "how many top-level rows". Correct there,
+and a trap for a caller holding a view index: `if (node *n = ...)` gets a
+non-null answer it cannot tell from a real row. F2 with no row selected opened a
+properties dialog for a node nobody can see, where OK sent the typing nowhere.
+The view resolves rows through one helper that refuses the root now.
+
+### Opening a tab did not highlight it
+
+Nothing set the current row when a tab opened — only `new_folder` did. So the
+row that was showing and the row that looked selected were different rows. Not
+merely cosmetic: `selected_parent()` reads the highlight to decide where a *new*
+tab is filed, so a tab opened by any route but a click filed the next one under
+the wrong parent. `open_node` calls `tab_tree_view::show_node` now, which expands
+ancestors outermost-first — the ordering `reopen_folders` had already learned,
+because expanding into a folder that is still shut does nothing.
+
+### How far this is verified
+
+`test_model` covers the reorder arithmetic in both directions, at the end, into
+its own gap, across parents, and two rows at once; the order collisions by both
+routes; and what a page may call a tab. The first version of the reorder section
+shared one folder across its cases, so case 1's wrong answer became case 2's
+starting position and three cases failed together — one fault reported three
+times, with nothing to say which was independently broken. Each case builds its
+own list now.
+
+`try_navigate` drives the reported defect through the real window: New Tab from
+the menu, the tree's current row, an address typed, the page arriving in the new
+tab, and **the previous tab still on the page it was on** — which is the half
+that would have failed before. `try_menus`, `try_lock`, `try_rename` and
+`try_delete` were re-run because `show_node` changes selection under them; all
+four pass.
+
+Offline: 31 suites, 0 failures. Not run: the ten drivers needing a network, a
+device or a model.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

@@ -1673,9 +1673,26 @@ web_view_backend *main_window::current_view() const {
 	return nullptr;
 }
 
+// **A folder has no page; an empty tab does.** This used to refuse any node
+// with an empty url, which quietly took `new_tab` with it: `add_tab` makes a
+// row with no address on purpose -- that is what a new tab *is* -- so opening
+// one returned here having done nothing.
+//
+// Nothing said so. The row appeared in the tree, and the stack kept showing the
+// previous tab, so `current_view()` -- which reads the stack rather than the
+// tree -- went on answering with the tab before. `new_tab` then focuses the
+// address bar, inviting an address, and `navigate_to_address` loaded it into
+// whatever was showing. That is one defect wearing both of the reported
+// symptoms: the new row keeps the title `add_tab` gave it because no page ever
+// loads into it, and the address typed for it opens somewhere else.
+//
+// So the guard is about being a *folder*, which is the thing that genuinely has
+// no page, and an empty tab opens `about:blank` -- already this tree's spelling
+// for "no address yet", the properties dialog having used it as the address
+// placeholder since before this.
 void main_window::open_node(node *n) {
-	if (!n || n->url.isEmpty())
-		return;  // folders and empty nodes have nothing to show
+	if (!n || n->is_folder())
+		return;
 
 	n->last_seen = QDateTime::currentDateTime();
 
@@ -1837,7 +1854,9 @@ void main_window::open_node(node *n) {
 			view->restore_state(m_state->load(n->id));
 			m_state->remove(n->id);
 		} else {
-			view->load(QUrl::fromUserInput(n->url));
+			view->load(n->url.isEmpty()
+			               ? QUrl(QStringLiteral("about:blank"))
+			               : QUrl::fromUserInput(n->url));
 		}
 	}
 
@@ -1845,6 +1864,12 @@ void main_window::open_node(node *n) {
 	m_model->refresh_node(n);
 	apply_zoom(view, n->id);
 	m_stack->setCurrentWidget(view->widget());
+	// The tree follows the page. Without this the highlight stayed on whatever
+	// was last clicked, so the row that was showing and the row that looked
+	// selected were different rows -- and `selected_parent()` reads the second
+	// one to decide where the next new tab is filed.
+	if (m_tree)
+		m_tree->show_node(n);
 	// Everything the chrome asserts belongs to the page in front of you: the
 	// bar would otherwise report the last tab's load against this one, the
 	// button would offer to stop a load that is not this tab's, and the find

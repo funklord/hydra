@@ -276,6 +276,261 @@ int main(int argc, char **argv) {
 		holds(m, "dragging a tab about, which the tree c");
 	}
 
+	section("reordering a row inside the folder it is already in");
+	{
+		// The case the drop tests above never made: source parent == target
+		// parent. Qt hands `dropMimeData` a row measured against the model as it
+		// stands *now*, before anything is removed -- so a move that takes the
+		// node out of that same list first has shortened it under the row it was
+		// given, and inserting at the number it was handed lands one place too
+		// far down. Only when moving *downwards*: dragging upwards removes from
+		// below the insertion point and is unaffected, which is why this is the
+		// kind of bug that reads as "sometimes".
+		// Each case starts from the same four rows. The first version of this
+		// shared one folder across the cases, so case 1's wrong answer became
+		// case 2's starting position and all three failed together -- three
+		// reports of one fault, and no way to see from the output which of them
+		// was independently broken.
+		tab_tree_model m;
+		node *folder = m.add_folder(m.root(), "Reading");
+		const auto titles = [&] {
+			QStringList out;
+			for (node *c : folder->children)
+				out << c->title;
+			return out;
+		};
+		const auto reset = [&] {
+			while (!folder->children.isEmpty())
+				m.remove_node(folder->children.first());
+			for (const char *t : { "Alpha", "Beta", "Gamma", "Delta" })
+				m.add_tab(folder, QString::fromLatin1(t), "http://x/");
+		};
+		// `at` is a row counted against the list as it stands before the move,
+		// which is what a view hands `dropMimeData`.
+		const auto drag = [&](const QString &what, int at) {
+			node *pick = nullptr;
+			for (node *c : folder->children)
+				if (c->title == what)
+					pick = c;
+			if (!pick)
+				return false;
+			QMimeData *md = m.mimeData({ m.index_for_node(pick) });
+			const bool ok = m.dropMimeData(md, Qt::MoveAction, at, 0,
+			                                m.index_for_node(folder));
+			delete md;
+			return ok;
+		};
+
+		reset();
+		check(titles() == QStringList({ "Alpha", "Beta", "Gamma", "Delta" }),
+		      "four tabs in a folder, in the order they were added");
+
+		// Downwards: Alpha dropped between Gamma and Delta, which is row 3.
+		reset();
+		check(drag("Alpha", 3), "dropping a row between two of its own siblings");
+		check(titles() == QStringList({ "Beta", "Gamma", "Alpha", "Delta" }),
+		      QString("lands it where it was dropped, not past it (%1)")
+		          .arg(titles().join(", ")));
+
+		// Downwards to the very end, the case that appends either way and so
+		// cannot tell a correct implementation from the broken one on its own.
+		reset();
+		check(drag("Alpha", 4), "dropping a row past the last of its siblings");
+		check(titles() == QStringList({ "Beta", "Gamma", "Delta", "Alpha" }),
+		      QString("puts it last (%1)").arg(titles().join(", ")));
+
+		// Upwards, which never had the fault and must not acquire one.
+		reset();
+		check(drag("Delta", 1), "dragging the last row up to row 1");
+		check(titles() == QStringList({ "Alpha", "Delta", "Beta", "Gamma" }),
+		      QString("lands it there (%1)").arg(titles().join(", ")));
+
+		// Onto the position it already occupies: a real gesture, and the one
+		// most likely to be broken by an over-eager correction.
+		reset();
+		check(drag("Beta", 2), "dropping a row back into its own gap");
+		check(titles() == QStringList({ "Alpha", "Beta", "Gamma", "Delta" }),
+		      QString("changes nothing (%1)").arg(titles().join(", ")));
+
+		// `order` is what the outline file records and what tree-order sorting
+		// reads, so a move that does not renumber it is a move the next save
+		// undoes -- the row would be back where it started on the next launch.
+		reset();
+		drag("Alpha", 3);
+		bool numbered = true;
+		for (int i = 0; i < folder->children.size(); ++i)
+			if (folder->children.at(i)->order != i)
+				numbered = false;
+		check(numbered, "and sibling order is renumbered to match the new list");
+
+		// A drop from *another* parent at the same row must be unaffected,
+		// which is the usual regression when an off-by-one is patched with a
+		// blanket decrement.
+		reset();
+		node *elsewhere = m.add_folder(m.root(), "Elsewhere");
+		node *visitor   = m.add_tab(elsewhere, "Visitor", "http://y/");
+		QMimeData *md = m.mimeData({ m.index_for_node(visitor) });
+		check(m.dropMimeData(md, Qt::MoveAction, 1, 0, m.index_for_node(folder)),
+		      "a tab from another folder drops in at row 1");
+		delete md;
+		QStringList with_visitor{ "Alpha", "Visitor", "Beta", "Gamma" };
+		with_visitor << "Delta";
+		check(titles() == with_visitor,
+		      QString("exactly at row 1 (%1)").arg(titles().join(", ")));
+
+		// Two rows at once, dragged downwards together. Each removal shortens
+		// the list under the insertion point, so the correction has to hold for
+		// the second node as well as the first.
+		reset();
+		const QModelIndex first  = m.index_for_node(folder->children.at(0));
+		const QModelIndex second = m.index_for_node(folder->children.at(1));
+		QMimeData *pair = m.mimeData({ first, second });
+		check(m.dropMimeData(pair, Qt::MoveAction, 3, 0, m.index_for_node(folder)),
+		      "two rows dropped together before the last one");
+		delete pair;
+		check(titles() == QStringList({ "Gamma", "Alpha", "Beta", "Delta" }),
+		      QString("both land in front of it, in order (%1)")
+		          .arg(titles().join(", ")));
+		holds(m, "reordering inside one folder");
+	}
+
+	section("sibling order stays unique, whatever emptied the list");
+	{
+		// `order` is the key tree-order sorting compares on, and the proxy is
+		// in tree order by default -- so it decides what the user sees. New
+		// nodes take `parent->children.size()` as their order, which is only
+		// one past the highest while nothing has *left* the list. Removing a
+		// row leaves a gap in the numbering but not in the count, so the next
+		// node added collides with a sibling that is still there.
+		//
+		// Two rows comparing equal is not a wrong order, it is *no* order: the
+		// proxy is free to place them either way and free to change its mind on
+		// any dataChanged. A title arriving from a page therefore reorders rows
+		// nobody touched, which is the shape of "the tree sometimes rearranges
+		// itself" rather than anything a single reproduction pins down.
+		tab_tree_model m;
+		node *folder = m.add_folder(m.root(), "Reading");
+		node *a = m.add_tab(folder, "Alpha", "http://a/");
+		node *b = m.add_tab(folder, "Beta", "http://b/");
+		node *c = m.add_tab(folder, "Gamma", "http://c/");
+		check(a->order == 0 && b->order == 1 && c->order == 2,
+		      "three tabs are numbered 0, 1, 2");
+
+		m.remove_node(b);
+		node *d = m.add_tab(folder, "Delta", "http://d/");
+
+		QStringList seen;
+		for (node *k : folder->children)
+			seen << QString("%1=%2").arg(k->title).arg(k->order);
+		QSet<int> distinct;
+		for (node *k : folder->children)
+			distinct << k->order;
+		check(distinct.size() == folder->children.size(),
+		      QString("after a delete and an add, no two siblings share an "
+		               "order (%1)").arg(seen.join(", ")));
+
+		bool sequential = true;
+		for (int i = 0; i < folder->children.size(); ++i)
+			if (folder->children.at(i)->order != i)
+				sequential = false;
+		check(sequential,
+		      QString("and the numbering matches the list (%1)")
+		          .arg(seen.join(", ")));
+
+		// The same hole reached the other way: moving a row *out* shortens the
+		// list without renumbering what is left, so the next add collides just
+		// as it does after a delete.
+		node *away = m.add_folder(m.root(), "Away");
+		QMimeData *md = m.mimeData({ m.index_for_node(a) });
+		m.dropMimeData(md, Qt::MoveAction, -1, 0, m.index_for_node(away));
+		delete md;
+		node *e = m.add_tab(folder, "Epsilon", "http://e/");
+		QStringList after;
+		QSet<int> after_distinct;
+		for (node *k : folder->children) {
+			after << QString("%1=%2").arg(k->title).arg(k->order);
+			after_distinct << k->order;
+		}
+		check(after_distinct.size() == folder->children.size(),
+		      QString("and after a row is dragged out, still no two share one "
+		               "(%1)").arg(after.join(", ")));
+		Q_UNUSED(c); Q_UNUSED(d); Q_UNUSED(e);
+
+		// What it looks like from the view, which is the part that matters:
+		// the proxy must show the list in the list's own order, and must still
+		// show it that way after a page reports a title.
+		tree_sort_proxy proxy;
+		proxy.setSourceModel(&m);
+		proxy.set_sort_mode(tree_sort_proxy::sort_mode::tree_order);
+		const QModelIndex pf = proxy.mapFromSource(m.index_for_node(folder));
+		const auto shown = [&] {
+			QStringList out;
+			for (int i = 0; i < proxy.rowCount(pf); ++i)
+				out << proxy.data(proxy.index(i, 0, pf),
+				                   tab_tree_model::title_role).toString();
+			return out;
+		};
+		QStringList want;
+		for (node *k : folder->children)
+			want << k->title;
+		check(shown() == want,
+		      QString("the proxy shows them in list order (%1)")
+		          .arg(shown().join(", ")));
+		// A title arriving from a page is a dataChanged and nothing more. It
+		// must not be able to move a row.
+		m.set_page_title(folder->children.last(), "Renamed by the page");
+		QStringList want_after;
+		for (node *k : folder->children)
+			want_after << k->title;
+		check(shown() == want_after,
+		      QString("and still does after a page reports a title (%1)")
+		          .arg(shown().join(", ")));
+		holds(m, "sibling order after a delete and an add");
+	}
+
+	section("what a page is allowed to call a tab");
+	{
+		tab_tree_model m;
+		node *t = m.add_tab(m.root(), QString(), QString());
+		check(t->title == "New tab", "an empty tab starts with a placeholder name");
+		// A blank tab really does load `about:blank` -- that is what makes it
+		// the current tab rather than a row the address bar ignores -- and the
+		// engine reports the address as the title. Correct of the engine, and
+		// not a name to put on a row.
+		check(!m.set_page_title(t, "about:blank"),
+		      "the blank page does not get to rename it");
+		check(t->title == "New tab",
+		      QString("so it keeps the placeholder (%1)").arg(t->title));
+		check(m.set_page_title(t, "Example Domain"),
+		      "a real page title is taken");
+		check(t->title == "Example Domain",
+		      QString("and replaces it (%1)").arg(t->title));
+		// Still refused on a tab somebody has named, which is the older rule
+		// and must not have been weakened by the one above.
+		m.update_node(t, "My bank", "http://x/", {});
+		check(!m.set_page_title(t, "Something Else"),
+		      "and a tab a person named is left alone");
+		holds(m, "what a page may call a tab");
+	}
+
+	section("an invalid index is the root, and callers have to mean it");
+	{
+		// `node_for_index` answers the *root* for an invalid index, because
+		// `rowCount(QModelIndex())` has to mean "how many top-level rows". That
+		// is correct and load-bearing, and it also means every caller holding a
+		// possibly-invalid index gets a non-null node back and cannot tell.
+		// Written down as a test because the return is easy to read as "null if
+		// there is nothing there", and one caller did read it that way: F2 with
+		// no row selected opened the properties editor on the invisible root.
+		tab_tree_model m;
+		check(m.node_for_index(QModelIndex()) == m.root(),
+		      "an invalid index resolves to the root, not to null");
+		node *t = m.add_tab(m.root(), "Real", "http://x/");
+		check(m.node_for_index(m.index_for_node(t)) == t,
+		      "and a valid one resolves to its own node");
+		holds(m, "the root is what an invalid index means");
+	}
+
 	section("Ctrl-drag copies, which is a different branch of the same drop");
 	{
 		// **The path Ctrl actually takes.** `supportedDropActions` offers
