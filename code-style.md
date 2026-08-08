@@ -255,9 +255,35 @@ software handles. Documentation may use typographic punctuation; so may
 user-facing text in UI software, and anything that genuinely requires
 Unicode.
 
-**This project is excepted** and does not enable the check: it is a browser,
-and its user-facing strings are not repository prose.
+Where a project needs the rule enforced, `ascii_only` in `.style-gate.toml`
+turns it on. In Python it enforces exactly that shape -- ASCII outside
+string literals, Unicode allowed inside them -- because the gate reads the
+file with `tokenize`. Other languages get a whole-file byte check, having no
+tokenizer there, and so does a Python file that will not tokenise: a file
+nobody can parse is not a file that has been cleared.
 
+It was the whole file for everyone until a project that prints two status
+ticks had to switch the check off to keep them, which switched it off for
+its comments as well, and an em dash arrived in one. **An exception wider
+than its reason is how a rule stops being enforced.**
+
+**This project is the same shape, and further along it.** `ascii_only` is
+off here, and the reason is real: the tree is C++, the gate has no C++
+tokenizer, and a whole-file byte check cannot tell a glyph in a button label
+from an em dash in a comment. The glyphs are genuine output -- the toolbar's
+`☰`, the media dialog's `▶ Watch` and `⬇ Download`. But the exception taken
+for them covers every comment in the tree, and counting says what that
+bought. Of 1114 non-ASCII characters in the 233 C and C++ files the gate
+reads, 260 are inside string literals and are output; the other **854 are in
+comments, across 163 files** -- 437 em dashes and 369 section signs, which
+are the two characters this rule names by example.
+
+Nothing catches those today. Closing it needs either the comments spelled
+back to ASCII first or a C++ tokenizer in the gate, and each is its own
+piece of work rather than something to do in passing. Recorded in
+`project.md` with the measurement.
+
+## The commit-msg hook
 
 The commit-msg hook is `tools/hooks/commit-msg`, installed with `make hooks`.
 It rejects generator attribution and a subject over 75 columns. It lives in
@@ -279,5 +305,5 @@ edited it.
 - **`project.md`** -- what exists, what is next, and why. It wins over this
   file where the two disagree.
 - **`../fuzzypickles/code-style.md`**, **`../beerssh/code-style.md`** -- the
-  sibling Qt Widgets trees, which carry the same rules and the tooling this
-  project lacks.
+  sibling Qt Widgets trees, which carry the same rules and the same copies
+  of `style_gate.py` and the commit-msg hook.

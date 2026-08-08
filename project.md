@@ -193,6 +193,48 @@ side: the messages are accurate, and widening a gate copied from
 `~/.claude/tools/commit-msg` is a convention change to raise rather than make in
 passing. It will refuse the commit if one of those five is ever amended.
 
+### The ASCII rule is unenforced here, and 854 characters walked in
+
+`ascii_only` is off in `.style-gate.toml`, and the reason for switching it off
+was sound: the gate reads whole files as bytes for every language but Python,
+and this tree's user-facing strings genuinely need Unicode — the toolbar's
+`☰`, the media dialog's `▶ Watch` and `⬇ Download`. Those are output, which
+the rule has always allowed.
+
+What the exception *also* covers is every comment in the tree, which is not
+what it was for. Counting the 233 C and C++ files the gate reads: 1114
+non-ASCII characters, of which 260 sit inside string literals and are output,
+and **854 sit in comments, spread over 163 of the 233 files**. The comment
+half is 437 em dashes, 369 section signs and 32 ellipses — every one of them
+a character the rule names by example and gives an ASCII spelling for, `--`
+and "section". `src/main_window.cpp` alone holds 54.
+
+This is the incident the global `code-style.md` now records, reproduced here
+at two orders of magnitude: a project switched the check off to keep two
+glyphs and switched it off for its prose as well. There it was one em dash
+found by grepping. Here nothing had grepped.
+
+Measured by walking each file with a small state machine that separates code,
+`//` and `/* */` comments, and string literals including the `R"(...)"` raw
+strings the embedded JavaScript uses — then spot-checked against the lines it
+named, both directions: `src/ai_provider.h:8` (`§9.1` in a comment) and
+`src/media_dialog.cpp:97` (`▶ Watch` in a `QPushButton` argument).
+
+Closing it is two separable pieces of work, neither started, and both are
+their own change rather than something to do in passing:
+
+- **Spell the comments back to ASCII.** A mechanical bulk edit over 163 files,
+  so it carries a proof rather than a sampled diff. The invariant is cheap and
+  exact: strip every comment from each file before and after, and the results
+  must be byte-identical — that is precisely the claim that only comment text
+  moved.
+- **Give the gate a C++ tokenizer**, so `ascii_only` can be turned on and keep
+  the glyphs, the way it already keeps Python's f-string ticks.
+
+Until one of the two lands, turning the flag on fails the tree on its own
+button labels, and leaving it off gates nothing. `code-style.md` says the same
+in shorter form.
+
 ### ⚠️ Do not build with unbounded `-j`
 
 The live drivers under `tests/live/` each compile ~40 app sources and link Qt
