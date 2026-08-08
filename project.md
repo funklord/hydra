@@ -8276,8 +8276,22 @@ both had to be fixed first: they appended without numbering, so every generated
 node recorded order 0 and ten thousand siblings all claimed position zero. **The
 checker could not be given the rule until the fixtures obeyed it** — a fixture
 building a shape no code path can produce was hiding the invariant that says so.
-Those two generators are the same idea written twice, docstring included, and
-collapsing them is left as its own piece of work.
+
+**The two generators are now one** (`tests/tree_gen.h`, used by
+`test_invariants` and `test_tree_scale`). They had the same three parameters,
+the same node ids, and the same docstring arguing for one generator rather than
+a pile of fixtures — an argument both copies made while being two of them, and
+neither said the other existed. That is what the duplication cost here: the
+`order` fix had to be made twice, and the second copy was found only because
+fixing the first left its suite still failing.
+
+Nothing was lost collapsing them. The local copy took a `node_type` where the
+shared one has `leaf` and `folder`, and titled nodes by their bare id where the
+shared one writes `Tab t0_1`; no assertion in the file reads a title, and every
+violation it provokes is reported by id. The proof it is the same generator is
+the suite's own arithmetic, unchanged and still passing: `build(3, 4, 2)` gives
+`2 + 3 + 12` nodes at depth 4, and the 10,208-node scale case round-trips
+through the file with the same shape. 20 checks before, 20 after.
 
 ### F2 with nothing selected edited the invisible root
 

@@ -2,6 +2,7 @@
 #include "tree_invariants.h"
 #include "tree_outline.h"
 #include "node.h"
+#include "tree_gen.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -18,48 +19,24 @@ static void check(bool ok, const QString &w) {
 static void note(const QString &w) { std::printf("     %s\n", qPrintable(w)); }
 static void section(const char *n) { std::printf("\n== %s ==\n", n); }
 
-// **`tests/tree_gen.h` is the same generator**, down to the docstring below,
-// and the two are kept in step by hand -- which is how this one came to build
-// trees whose every node recorded order 0 while the shared one was fixed.
-// Collapsing them is a test-tree change rather than part of the bug this file
-// was last edited for, so it is noted here rather than done in passing.
-static node *make(const QString &id, node_type t, node *parent) {
-	node *n = new node;
-	n->id = id;
-	n->type = t;
-	n->title = id;
-	if (!n->is_folder())
-		n->url = "https://example.test/" + id;
-	n->parent = parent;
-	if (parent) {
-		// Position in the list, recorded on the node. A generator that skips
-		// this builds a shape nothing in the application can produce: the
-		// outline reader numbers as it nests, the model renumbers on every
-		// mutation, and `tree_diff` renumbers after a restore.
-		n->order = parent->children.size();
-		parent->children.append(n);
-	}
-	return n;
-}
-
-// A tree of `folders` folders, each holding `per` tabs, nested `depth` deep.
-// One generator rather than a pile of fixtures: the shapes that break a tree
-// are combinations of these three numbers, and a future operation gets the
-// same coverage without anybody writing a new fixture for it.
-static node *generate(int folders, int per, int depth) {
-	node *root = new node;
-	root->id = "root";
-	root->type = node_type::folder;
-	node *at = root;
-	for (int d = 0; d < depth; ++d)
-		at = make(QString("d%1").arg(d), node_type::folder, at);
-	for (int f = 0; f < folders; ++f) {
-		node *fo = make(QString("f%1").arg(f), node_type::folder, at);
-		for (int i = 0; i < per; ++i)
-			make(QString("t%1_%2").arg(f).arg(i), node_type::unopened_tab, fo);
-	}
-	return root;
-}
+// The generator is `tests/tree_gen.h`, shared with `test_tree_scale`.
+//
+// **It was written twice**, here and there, with the same three parameters,
+// the same node ids and the same docstring arguing for one generator rather
+// than a pile of fixtures -- an argument both copies made while being two.
+// They then drifted in the way two copies do: `order` was added to one of
+// them and not the other, so this file went on generating trees whose every
+// node recorded position zero. That is a shape no code path in the
+// application can produce, and it hid the invariant that says so -- the
+// checker could not be told to enforce `order` until the fixture obeyed it.
+//
+// Nothing was lost in collapsing them. The local copy took a `node_type`
+// where the shared one has `leaf` and `folder`, and it titled nodes by their
+// bare id where the shared one writes "Tab t0_1" -- no assertion here reads a
+// title, and the violations this file provokes are all reported by id.
+//
+// Called qualified, the way `test_tree_scale` already calls it, so a reader
+// meeting `build(200, 50, 8)` can see it is not this file's own.
 
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -67,7 +44,7 @@ int main(int argc, char **argv) {
 
 	section("a tree that is fine");
 	{
-		node *root = generate(3, 4, 2);
+		node *root = tree_gen::build(3, 4, 2);
 		const auto r = tree_invariants::check(root);
 		check(r.ok, QString("passes (%1)").arg(r.summary()));
 		check(r.nodes == 2 + 3 + 12,
@@ -78,15 +55,15 @@ int main(int argc, char **argv) {
 
 	section("each violation, one at a time");
 	{
-		node *root = generate(1, 1, 0);
-		make("f0", node_type::folder, root);   // duplicate of the generated f0
+		node *root = tree_gen::build(1, 1, 0);
+		tree_gen::folder("f0", root);   // duplicate of the generated f0
 		const auto r = tree_invariants::check(root);
 		check(!r.ok && r.summary().contains("used more than once"),
 		      "a repeated id is caught");
 		delete root;
 	}
 	{
-		node *root = generate(1, 1, 0);
+		node *root = tree_gen::build(1, 1, 0);
 		node *stray = new node;
 		stray->id = "x";
 		stray->type = node_type::unopened_tab;
@@ -98,7 +75,7 @@ int main(int argc, char **argv) {
 		delete root;
 	}
 	{
-		node *root = generate(1, 1, 0);
+		node *root = tree_gen::build(1, 1, 0);
 		node *f = root->children.first();
 		f->children.append(f);                 // its own child
 		const auto r = tree_invariants::check(root);
@@ -117,7 +94,7 @@ int main(int argc, char **argv) {
 		// Rows that compare equal are not in the wrong order, they have no
 		// order at all, and the reorganizer's diff reads the tie as a move
 		// nobody made.
-		node *root = generate(1, 3, 0);
+		node *root = tree_gen::build(1, 3, 0);
 		node *f = root->children.first();
 		f->children.at(2)->order = 1;          // now a duplicate of its sibling
 		const auto r = tree_invariants::check(root);
@@ -126,16 +103,16 @@ int main(int argc, char **argv) {
 		delete root;
 	}
 	{
-		node *root = generate(0, 0, tree_limits::max_depth + 3);
+		node *root = tree_gen::build(0, 0, tree_limits::max_depth + 3);
 		const auto r = tree_invariants::check(root);
 		check(!r.ok && r.summary().contains("past the limit"),
 		      QString("nesting past %1 is caught").arg(tree_limits::max_depth));
 		delete root;
 	}
 	{
-		node *root = generate(1, 1, 0);
+		node *root = tree_gen::build(1, 1, 0);
 		node *tab = root->children.first()->children.first();
-		make("under_a_tab", node_type::unopened_tab, tab);
+		tree_gen::leaf("under_a_tab", tab);
 		const auto r = tree_invariants::check(root);
 		// **This assertion was the opposite one**, and it was wrong on its own
 		// terms: it required a tab with children to be reported, "since the
@@ -150,7 +127,7 @@ int main(int argc, char **argv) {
 		delete root;
 	}
 	{
-		node *root = generate(1, 1, 0);
+		node *root = tree_gen::build(1, 1, 0);
 		node *f = root->children.first();
 		f->mirror = "firefox";                 // the child is left unmarked
 		const auto r = tree_invariants::check(root);
@@ -192,7 +169,7 @@ int main(int argc, char **argv) {
 		// the invariants hold on a tree far larger than anyone files by hand,
 		// and that checking one is cheap enough to do after every mutation.
 		QElapsedTimer t; t.start();
-		node *root = generate(200, 50, 8);     // 10,208 nodes
+		node *root = tree_gen::build(200, 50, 8);     // 10,208 nodes
 		const qint64 built = t.elapsed();
 		t.restart();
 		const auto r = tree_invariants::check(root);

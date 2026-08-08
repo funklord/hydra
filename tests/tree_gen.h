@@ -5,7 +5,15 @@
 
 #include <QString>
 
-// One tree generator, shared by the suites that need trees.
+// One tree generator, shared by the suites that need trees --
+// `test_invariants` and `test_tree_scale`. **Add a third caller here rather
+// than a third generator**, which is not a style preference: this file and
+// `test_invariants` each held a copy of it, with the same three parameters,
+// the same node ids and the same docstring arguing for one generator rather
+// than a pile of fixtures. Both copies made that argument while being two of
+// them, and neither said the other existed.
+//
+// What the duplication cost is recorded under `attach` below.
 //
 // **Parameterised rather than fixed**, because the shapes that break a tab tree
 // are combinations of three numbers -- how many nodes, how wide a folder gets,
@@ -18,14 +26,18 @@
 // have a function for.
 namespace tree_gen {
 
-// **`order` is set here, and it was not.** Every node came out holding the
-// default 0, so a generated tree had ten thousand siblings all claiming
-// position zero -- a shape no code path in the application can produce, since
-// the outline reader numbers as it nests, the model renumbers on every
-// mutation and `tree_diff` renumbers after a restore. A fixture that builds
-// something the product cannot is testing a tree nobody will ever have, and it
-// hid the invariant that says so: the checker could not be given the rule until
-// the generator obeyed it.
+// **`order` is set here, and it was not** -- in either copy, and that is what
+// the duplication cost. Every node came out holding the default 0, so a
+// generated tree had ten thousand siblings all claiming position zero: a shape
+// no code path in the application can produce, since the outline reader numbers
+// as it nests, the model renumbers on every mutation and `tree_diff` renumbers
+// after a restore.
+//
+// A fixture that builds something the product cannot is testing a tree nobody
+// will ever have, and this one hid the invariant that says so -- the checker
+// could not be given the rule about `order` until the generator obeyed it. Then
+// it had to be fixed twice, and the second copy was found only because the
+// first fix left its suite still failing.
 inline node *attach(node *n, node *parent) {
 	n->parent = parent;
 	if (parent) {
