@@ -256,32 +256,36 @@ user-facing text in UI software, and anything that genuinely requires
 Unicode.
 
 Where a project needs the rule enforced, `ascii_only` in `.style-gate.toml`
-turns it on. In Python it enforces exactly that shape -- ASCII outside
-string literals, Unicode allowed inside them -- because the gate reads the
-file with `tokenize`. Other languages get a whole-file byte check, having no
-tokenizer there, and so does a Python file that will not tokenise: a file
-nobody can parse is not a file that has been cleared.
+turns it on. In Python and in C/C++ it enforces exactly that shape -- ASCII
+outside string literals, Unicode allowed inside them. Python is read with
+`tokenize`; C and C++ get a scanner written for the purpose, nothing in the
+standard library lexing them. Every other language still gets a whole-file
+byte check, having no lexer there, and so does a file in either of those two
+that will not lex: a file nobody can parse is not a file that has been
+cleared.
 
 It was the whole file for everyone until a project that prints two status
 ticks had to switch the check off to keep them, which switched it off for
 its comments as well, and an em dash arrived in one. **An exception wider
 than its reason is how a rule stops being enforced.**
 
-**This project is the same shape, and further along it.** `ascii_only` is
-off here, and the reason is real: the tree is C++, the gate has no C++
-tokenizer, and a whole-file byte check cannot tell a glyph in a button label
-from an em dash in a comment. The glyphs are genuine output -- the toolbar's
-`☰`, the media dialog's `▶ Watch` and `⬇ Download`. But the exception taken
-for them covers every comment in the tree, and counting says what that
-bought. Of 1114 non-ASCII characters in the 233 C and C++ files the gate
-reads, 260 are inside string literals and are output; the other **854 are in
-comments, across 163 files** -- 437 em dashes and 369 section signs, which
-are the two characters this rule names by example.
+**This project is that second tree, and the C/C++ scanner was written for
+it.** `ascii_only` is still off here, but the reason has changed. It used to
+be that the check could not tell a glyph in a button label from an em dash
+in a comment: the glyphs are genuine output -- the toolbar's `☰`, the media
+dialog's `▶ Watch` and `⬇ Download` -- so the only way to keep them was to
+exempt every comment in the tree as well. Counting said what that bought. Of
+1114 non-ASCII characters in the 233 C and C++ files the gate reads, 260 are
+inside string literals and are output; the other **854 are in comments,
+across 163 files** -- 437 em dashes and 369 section signs, which are the two
+characters this rule names by example.
 
-Nothing catches those today. Closing it needs either the comments spelled
-back to ASCII first or a C++ tokenizer in the gate, and each is its own
-piece of work rather than something to do in passing. Recorded in
-`project.md` with the measurement.
+The gate can now tell those apart, and turning `ascii_only` on today reports
+exactly those 854 and nothing else -- no Python, no Makefile, no `.pro`
+file, and not one of the glyphs. What still blocks the flag is the 854
+themselves: they have to be spelled back to ASCII first, which is a
+mechanical bulk edit over 163 files and carries a proof rather than a
+sampled diff. `project.md` holds the measurement and the invariant.
 
 ## The commit-msg hook
 

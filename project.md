@@ -220,20 +220,49 @@ strings the embedded JavaScript uses — then spot-checked against the lines it
 named, both directions: `src/ai_provider.h:8` (`§9.1` in a comment) and
 `src/media_dialog.cpp:97` (`▶ Watch` in a `QPushButton` argument).
 
-Closing it is two separable pieces of work, neither started, and both are
-their own change rather than something to do in passing:
+Closing it was two separable pieces of work. **The second is done**, and it
+was done first because it is what makes the first one checkable:
 
-- **Spell the comments back to ASCII.** A mechanical bulk edit over 163 files,
-  so it carries a proof rather than a sampled diff. The invariant is cheap and
-  exact: strip every comment from each file before and after, and the results
-  must be byte-identical — that is precisely the claim that only comment text
-  moved.
-- **Give the gate a C++ tokenizer**, so `ascii_only` can be turned on and keep
-  the glyphs, the way it already keeps Python's f-string ticks.
+- **Give the gate a C++ scanner** — done, in the shared tool, so `ascii_only`
+  can distinguish a comment from a button label the way it already does for
+  Python's f-string ticks. See below.
+- **Spell the comments back to ASCII** — not started. A mechanical bulk edit
+  over 163 files, so it carries a proof rather than a sampled diff. The
+  invariant is cheap and exact: strip every comment from each file before and
+  after, and the results must be byte-identical — that is precisely the claim
+  that only comment text moved. `gcc -fpreprocessed -E` does the stripping
+  without needing this tree's include paths.
 
-Until one of the two lands, turning the flag on fails the tree on its own
-button labels, and leaving it off gates nothing. `code-style.md` says the same
-in shorter form.
+### The gate can now read C++, so the 854 are a work list
+
+`tools/style_gate.py` gained a C/C++ literal scanner, spread from the source
+the way the tokenize change was. Turning `ascii_only` on in this tree today
+reports **exactly 854 findings, all of them real** — 434 in `.cpp`, 420 in
+`.h`, and not one false positive on `☰`, `▶ Watch` or `⬇ Download`. Nothing
+outside C++ contributes: no Python, no Makefile, no `.pro` file, no
+`debian/rules`. Before the scanner the same flag failed 163 files on their
+first non-ASCII byte, glyphs included, which is why it was off.
+
+The flag stays off until the comments are cleaned, because 854 findings is a
+failing gate. But the list is now precise enough to work from, which it was
+not.
+
+**How the scanner was checked, since a gate that under-reports reads exactly
+like a clean tree.** Twenty cases cover the shapes that classically
+desynchronise a hand-written C scanner — a backslash-continued `//` comment,
+C++14's `1'000'000'000` digit separator (spelled like a character literal and
+not one), `L'x'` and `u8'x'`, quotes inside comments, `//` and `/*` inside
+strings, raw strings holding both, escaped quotes, and the three unterminated
+forms, which return None so the caller falls back to the byte check.
+
+Then the whole tree was checked against **GCC**, which lexes C for a living
+and shares no code with this: `gcc -fpreprocessed -E` strips comments without
+following includes, so what it keeps is the literals and what it drops is the
+prose. Across all 233 files and 1114 characters the two agree on every one,
+no file refused, none in code context. That is corroboration from an
+independent witness rather than two readings by the same hand — which matters
+here, because the first count of these 854 was made by a throwaway script
+written in the same session.
 
 ### ⚠️ Do not build with unbounded `-j`
 
