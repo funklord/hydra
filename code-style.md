@@ -290,18 +290,31 @@ sampled diff. `project.md` holds the measurement and the invariant.
 ## The commit-msg hook
 
 The commit-msg hook is `tools/hooks/commit-msg`, installed with `make hooks`.
-It rejects generator attribution and a subject over 75 columns. It lives in
-the tree rather than only in `.git/hooks` so that it is reviewable and
-survives a clone; the copy that runs is installed from it.
+It rejects generator attribution, a subject over 75 columns, and body prose
+over 75 columns. It lives in the tree rather than only in `.git/hooks` so
+that it is reviewable and survives a clone; the copy that runs is installed
+from it.
 
-Two things it deliberately does not reject. The directory `.claude` and the
+The body limit was stated long before anything checked it, and only the
+subject was checked -- so a body line at 76 went through while a subject at
+76 was refused, which is how one reached this log.
+
+Four things it deliberately does not reject. The directory `.claude` and the
 file `CLAUDE.md` are names, so a message may say where the shared tooling
 comes from -- the ban is on crediting a generator, and neither spelling is
-one. And it ignores what git is about to discard: comment lines, and the
-diff that `git commit -v` puts below the scissors line. Reading those
-refused commits over text that never reaches the message -- the hook's own
-diff contains its own pattern list, so it rejected every commit that
-edited it.
+one. It ignores what git is about to discard: comment lines, and the diff
+that `git commit -v` puts below the scissors line. Reading those refused
+commits over text that never reaches the message -- the hook's own diff
+contains its own pattern list, so it rejected every commit that edited it.
+
+And the length check exempts three shapes, each because wrapping them is
+the actual mistake: a **trailer**, since git parses the block a line at a
+time and a broken `Link:` stops being a trailer at all; a line holding a
+**url**, which no longer works once it is split; and an **indented** line,
+which is how a message quotes a compiler error or a stack trace, and
+reflowing what you are quoting corrupts it. It cannot tell prose opening
+`Note:` from a trailer, so it forgives that -- the wrong way round would
+refuse a real trailer, and that is the expensive error.
 
 ## See also
 

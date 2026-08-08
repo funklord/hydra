@@ -193,6 +193,20 @@ side: the messages are accurate, and widening a gate copied from
 `~/.claude/tools/commit-msg` is a convention change to raise rather than make in
 passing. It will refuse the commit if one of those five is ever amended.
 
+**And eight more fail it now, for a different reason.** The hook holds body
+prose to 75 columns as of this pass — the limit the convention always stated
+and only the subject was ever checked against, which is how a 76-column body
+line reached this log and was caught by counting rather than by the gate. Eight
+of the 263 commits here have a body line past 75 once trailers, urls and
+indented (quoted) lines are excluded, which they are. Measured by running the
+hook itself over every message rather than by a second implementation of its
+rules.
+
+Same standing as the five above: the hook only sees new messages, so the
+history is untouched and correct, but amending one of those eight means
+rewrapping its body first. Across the eight private trees the figure is 81 of
+1,880, and 58 of those are in one project whose log was wrapped at about 79.
+
 ### The ASCII rule is unenforced here, and 854 characters walked in
 
 `ascii_only` is off in `.style-gate.toml`, and the reason for switching it off
