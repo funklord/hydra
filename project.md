@@ -419,6 +419,50 @@ author imagined and blind to the one the model finds in ten tries. When a real
 model is available, running it is a cheaper source of adversarial inputs than
 inventing them.
 
+### Files this program writes are INI unless something defeats it
+
+Default to INI for anything Hydra persists. Reach for JSON, or anything
+nested, only where the data is genuinely shaped and an INI would have to
+encode structure into key names to survive.
+
+Asked for directly: *"I want primarily inifile type format, other formats
+where the structure needs to be more complex"*, and immediately after, *"if
+the format is good enough to contain that kind of data then convert
+policy.json and site-rules.json to ini too"*. So it governs what already
+exists as well as what is added -- a format that turns out to be sufficient
+is a reason to migrate, not to leave the old one alone.
+
+Applied so far to the settings bundle, `policy.ini` and `site-rules.ini`.
+Each still reads the older JSON at the same path once and rewrites it as INI
+on the next save, so an upgrade is silent and nobody loses rules to a
+migration step they had to run. Keep that shape when converting the next one.
+
+The reason is legibility under pressure: a key=value file can be read by a
+person, diffed by a tool, and edited by hand when something is broken. That
+is worth more here than the ability to nest.
+
+### Build the generic design; do not wait for a case to force it
+
+Where a design is sound but no concrete case demands it yet, build it anyway
+rather than recording it as "wait for a site that needs this". The reasoning,
+in the user's words: *"We can't experience everything everyone else will."*
+Waiting means every user meets the gap before we do, and a feature designed
+against the single example that finally forced it fits that example rather
+than the problem.
+
+This overruled the opposite recommendation and was immediately vindicated.
+The extractor helper tier at 11.5.1 was proposed as a design to write down
+and defer, citing this project's own measure-first habit; built instead, it
+found three defects on first contact with a real CDN that no amount of design
+review had -- including evidence-folding that had been silently measuring
+nothing.
+
+**Measure-first still governs claims, not whether to build.** Never assert a
+hit rate or a fix that has not been run; the ledger above exists for exactly
+that. Propose the generic design, build it behind a default-off permission or
+a seam where that applies, and say plainly which parts are proven and which
+are merely built.
+
 ## Tabs move like files now (§4)
 
 The tree calls itself a side-tree of tabs and, until this, **a tab could not be
