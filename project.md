@@ -193,19 +193,28 @@ side: the messages are accurate, and widening a gate copied from
 `~/.claude/tools/commit-msg` is a convention change to raise rather than make in
 passing. It will refuse the commit if one of those five is ever amended.
 
-**And eight more fail it now, for a different reason.** The hook holds body
+**Eight more appeared to fail it, and none of them did.** The hook holds body
 prose to 75 columns as of this pass — the limit the convention always stated
-and only the subject was ever checked against, which is how a 76-column body
-line reached this log and was caught by counting rather than by the gate. Eight
-of the 263 commits here have a body line past 75 once trailers, urls and
-indented (quoted) lines are excluded, which they are. Measured by running the
-hook itself over every message rather than by a second implementation of its
-rules.
+and only the subject was ever checked against. It reported eight commits here
+over the limit, and every one was **exactly 75 columns and correct**.
 
-Same standing as the five above: the hook only sees new messages, so the
-history is untouched and correct, but amending one of those eight means
-rewrapping its body first. Across the eight private trees the figure is 81 of
-1,880, and 58 of those are in one project whose log was wrapped at about 79.
+The gate was counting bytes. `${#var}` in `/bin/sh` is a byte count, so a line
+carrying one em dash or ellipsis measured 76 or 77 — and this project's
+messages use typographic punctuation, which is why it bit here and not in the
+trees whose logs are ASCII. A character three bytes wide still occupies one
+column.
+
+**The rewrap was built, run, and thrown away**, which is the part worth
+keeping. All eight were rewrapped and verified — trees identical, every
+character surviving, the merge commit's parents preserved — and then the
+before/after measurement showed *zero* of them had ever exceeded 75
+characters. Eight messages reflowed to satisfy a checker that could not model
+what it was checking. Reset, and the count fixed instead: the hook strips
+UTF-8 continuation bytes before measuring, which is the character count
+without depending on a locale it cannot control.
+
+So the log stands untouched, and 0 of 269 commits are refused for length. The
+five above remain, and remain correct.
 
 ### The ASCII rule is unenforced here, and 854 characters walked in
 
