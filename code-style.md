@@ -148,16 +148,35 @@ it here.
 
 ## 3. Filenames
 
-Lowercase, `snake_case`, for everything this project names itself --
-sources, headers, docs. So `tab_tree_model.cpp`, not `TabTreeModel.cpp`.
-`src/` is already consistent.
+**Lowercase, always**, for everything this project names itself. So
+`tab_tree_model.cpp`, not `TabTreeModel.cpp`.
+
+**The separator follows what the name binds to**, and the two cases are a
+technical difference rather than a matter of taste:
+
+- **`snake_case` where the filename becomes an identifier** -- a source
+  file, a header, a module. Python is where that bites here, since the
+  filename *is* the module path and a hyphen is not legal in one:
+  `icons/build_icons.py` and `tests/live/serve.py` could not be imported
+  under a kebab-case name. A C++ source is not imported by its name, but
+  it keeps the same spelling so that one rule covers the whole of `src/`.
+- **`kebab-case` for prose** -- documentation, design notes, decision
+  records. Nothing imports `code-style.md`, so no identifier is at stake,
+  and kebab-case is what markdown and URLs settled on long ago.
+
+Both halves already hold and nothing has to move: every basename under
+`src/` and `tests/` is `snake_case` with no hyphen among them, and the
+prose is `code-style.md` and `docs/architecture.md`, with `project.md` and
+the two `README.md` single words that have no separator to argue about.
 
 Settled exceptions:
 
 - **Names a tool will not accept lowercased** -- `CMakeLists.txt`,
   `AndroidManifest.xml`, `Makefile`.
 - **Root files with an established convention** -- `README.md`, `LICENSE`.
-- **Package-system spellings** -- kebab-case where Debian requires it.
+- **Package-system spellings** -- kebab-case where Debian requires it,
+  which is now the same spelling prose uses, so the package name and a
+  design note beside it agree by construction rather than by coincidence.
 
 ## Formatters
 
