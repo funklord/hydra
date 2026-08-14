@@ -19,10 +19,11 @@ class hls_assembler;
 class mse_tap;
 
 // The compact list behind the media badge (architecture doc sec 11.2/sec 11.3).
-// One row per detected stream, each offering both Watch and Download -- each
-// labelled with its own glyph, set below -- with
-// the primary stream first. Watch is the default action, because the whole
-// point is that the site's own player is broken.
+// One row per detected stream, each offering both Watch and Download -- both
+// buttons carry a leading glyph, and the labels are built in
+// `media_dialog.cpp` rather than here -- with the primary stream first. Watch
+// is the default action, because the whole point is that the site's own player
+// is broken.
 class media_dialog : public QDialog {
 	Q_OBJECT
 public:
