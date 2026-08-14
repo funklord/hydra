@@ -217,7 +217,7 @@ TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test \
 # after a source change and never reproducible afterwards, with nothing kept.
 FAILED_DIR = $(TESTS_DIR)/failed
 
-.PHONY: all run test test-one drivers sweep replay deb deb-check version-check android android-build install uninstall clean veryclean distclean help style style-docs style-source check hooks jni
+.PHONY: all run test test-one drivers sweep replay deb deb-check version-check android android-build android-aab install uninstall clean veryclean distclean help style style-docs style-source check hooks jni
 
 # Always delegates, never compares timestamps itself. The first version made
 # the binary a real target depending on the configure output, and `make` after
@@ -368,6 +368,28 @@ deb-check: deb
 # aapt2 lives in a build-tools version the Makefile would then have to pick.
 # The gate already requires python3. `aapt2 dump badging` is still the richer
 # thing to run by hand, and is what project.md's verification used.
+# The Play bundle. Its own target because a bundle is not an APK: Play
+# resigns it, so an unsigned or debug-signed one is not a thing to upload
+# and a versionCode Play has already taken cannot be reused.
+#
+# Refuses without a keystore rather than producing a debug-signed bundle
+# under a message announcing a release -- which is the failure beerssh paid
+# for, and the reason tools/android.mk verifies signatures at all.
+#
+# Depends on android-build rather than on a qmake step of its own: qmake
+# runs inside that rule, so there is nothing else to hang this off without
+# splitting it, and the generated tree is what `aab` needs.
+android-aab: android-build
+	@if [ -z "$(ANDROID_KEYSTORE)" ]; then \
+		echo "android-aab: ANDROID_KEYSTORE is not set." >&2; \
+		echo "android-aab:   Play will not take a debug-signed bundle, and a" >&2; \
+		echo "android-aab:   versionCode it HAS taken cannot be reused." >&2; \
+		exit 1; \
+	fi
+	ANDROID_SDK_ROOT=$(ANDROID_SDK_ROOT) ANDROID_NDK_ROOT=$(ANDROID_NDK_ROOT) \
+	  JAVA_HOME=$(JAVA_HOME) \
+	  $(MAKE) --no-print-directory -C $(ANDROID_BUILD_DIR) aab
+
 android: android-build
 	@src=$$(find $(ANDROID_BUILD_DIR) -name '*.apk' -newer $(ANDROID_BUILD_DIR) \
 	         -print 2>/dev/null | head -1); \
