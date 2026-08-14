@@ -2925,10 +2925,26 @@ the proxy's context injection). Reachable from **Tools → Find Media on This
 Page…**; results land in `media_detector` through a new `add_item()` and show
 up in the existing media dialog with Watch and Download.
 
-Found in one of two ways, in this order: `yt-dlp` on PATH, which is the copy
-the user's package manager keeps current and therefore the point of the whole
-exercise; else the vendored submodule under `python3`. Neither means
-`available()` is false and the action reports why — nothing else degrades.
+Found in one of two ways, in this order: the vendored submodule under
+`python3`; else `yt-dlp` on PATH. Neither means `available()` is false and the
+action reports why — nothing else degrades.
+
+**The vendored copy is preferred because it is pinned**, and that order was
+the other way round until it was measured. The reasoning for PATH-first was
+that a package manager keeps that copy current, which is exactly what yt-dlp
+is for; the premise turned out to be false here, and a stable distribution is
+where it is falsest. This machine had 2025.04.30 on PATH against 2026.07.04
+vendored — fourteen months of extractors, in the wrong direction. Devuan
+backports offers 2026.03.17, which narrows the gap without closing it.
+
+Currency is not the whole argument, though, and determinism is why the order
+should stay this way even on a machine whose PATH copy is newer. What the
+resolver returns is handed to the model as worked reference and used as
+ground truth (§ extraction), so preferring PATH makes that pipeline's input
+depend on whatever the distribution shipped, and the same page can resolve
+differently on two machines. The pin makes the extractor set a fact of the
+tree, and bumping the submodule is the one reviewable act that changes it —
+at the cost that nothing bumps it on its own.
 
 **Format preference is deliberate**: progressive HTTP beats a taller manifest.
 480p progressive is chosen over 720p HLS and 1080p video-only, because it needs

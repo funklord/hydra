@@ -50,31 +50,49 @@ void ytdlp_resolver::refresh() {
 	m_prefix.clear();
 	m_origin.clear();
 
-	// The user's own copy first: it is the one their package manager keeps
-	// current, and staying current is most of what yt-dlp is for.
+	// **The vendored copy first, because it is pinned.** This used to prefer
+	// PATH, on the reasoning that the package manager keeps that one current
+	// and staying current is most of what yt-dlp is for. The reasoning was
+	// sound and the premise is not: measured on this machine, PATH held
+	// 2025.04.30 and the submodule 2026.07.04, fourteen months the other way,
+	// and a stable distribution is where that gap is widest rather than an
+	// accident. Preferring PATH bought the older extractors.
+	//
+	// Determinism is the better reason to keep it this way round even where
+	// PATH happens to be newer. What this resolver returns is handed to the
+	// model as worked reference and used as ground truth, so the same page
+	// resolving differently on two machines makes that pipeline's input
+	// depend on whatever a distribution shipped. The pin makes the extractor
+	// set a fact of the tree, and bumping the submodule is then the one
+	// reviewable act that changes it.
+	//
+	// python3 is what makes the checkout runnable; without an interpreter it
+	// is inert source, so fall through to PATH rather than reporting nothing.
+	const QString python = QStandardPaths::findExecutable("python3");
+	if (!python.isEmpty()) {
+		for (const QString &dir : vendored_candidates()) {
+			if (!looks_like_checkout(dir))
+				continue;
+			m_program = python;
+			m_prefix  = { "-m", "yt_dlp" };
+			m_origin  = dir;
+			return;
+		}
+	}
+
+	// Else whatever the machine has, which is what a tree cloned without
+	// `--recurse-submodules` falls back to -- easy to do, and the README
+	// warns about it.
 	const QString on_path = QStandardPaths::findExecutable("yt-dlp");
 	if (!on_path.isEmpty()) {
 		m_program = on_path;
 		m_origin  = "PATH";
-		return;
-	}
-
-	const QString python = QStandardPaths::findExecutable("python3");
-	if (python.isEmpty())
-		return;   // vendored copy is Python source; without an interpreter it is inert
-	for (const QString &dir : vendored_candidates()) {
-		if (!looks_like_checkout(dir))
-			continue;
-		m_program = python;
-		m_prefix  = { "-m", "yt_dlp" };
-		m_origin  = dir;
-		return;
 	}
 }
 
 QString ytdlp_resolver::description() const {
 	if (m_program.isEmpty())
-		return "yt-dlp not found — install it, or clone with --recurse-submodules";
+		return "yt-dlp not found — clone with --recurse-submodules, or install it";
 	if (m_origin == "PATH")
 		return QString("yt-dlp from PATH (%1)").arg(m_program);
 	return QString("vendored yt-dlp (%1)").arg(m_origin);
