@@ -85,7 +85,30 @@ APP_OBJS  := $(patsubst $(SRC)/%.cpp,$(BUILD_DIR)/app/%.o,$(APP_SRCS))
 # computed rather than written: a header that gains Q_OBJECT and is not moc'd
 # links with an undefined vtable, which is a confusing error a long way from
 # its cause. `grep -l` is the whole mechanism CMake's AUTOMOC wraps.
-MOC       := $(shell pkg-config --variable=libexecdir Qt6Core)/moc
+# **Emptiness has to read as absence, not as a directory called "".**
+#
+# pkg-config answers an UNDEFINED variable on a PRESENT module with an empty
+# string and exit 0, and an ABSENT module with an empty string and exit 1 --
+# so the status is the only thing separating "no such Qt" from "no such
+# variable", and appending /moc to either gives the literal `/moc`. The build
+# then fails with a shell error naming a path that was never a path, instead
+# of naming the Qt that is missing. fmake's PkgConfig.variable records the
+# same rule; this is that rule in make.
+QT_LIBEXECDIR := $(shell pkg-config --variable=libexecdir Qt6Core 2>/dev/null)
+MOC       := $(if $(QT_LIBEXECDIR),$(QT_LIBEXECDIR)/moc,)
+
+# Checked where moc is USED, not here: a missing Qt must not stop `make
+# clean`, which needs no moc at all. One logical line, so it can be a recipe
+# line rather than a `define` -- a multi-line define expanded at column zero
+# is parsed as rules, and make reports it as "overriding recipe for target
+# '@test'", which names nothing a reader can act on.
+MOC_GUARD = test -n "$(MOC)" || { \
+	   echo "tests: cannot find moc." >&2; \
+	   echo "tests:   pkg-config gave no libexecdir for Qt6Core: either Qt 6" >&2; \
+	   echo "tests:   is absent or its .pc file defines no such variable." >&2; \
+	   echo "tests:   Install the Qt 6 development files, or name it:" >&2; \
+	   echo "tests:   make -C tests MOC=/path/to/moc" >&2; \
+	   exit 1; }
 MOC_HDRS  := $(shell grep -l Q_OBJECT $(SRC)/*.h | grep -v '$(SRC)/android_')
 MOC_SRCS  := $(patsubst $(SRC)/%.h,$(BUILD_DIR)/moc/moc_%.cpp,$(MOC_HDRS))
 
@@ -183,15 +206,19 @@ live-objs: $(patsubst live/%.cpp,$(BUILD_DIR)/%.o,$(LIVE_SRCS))
 
 # --- rules -----------------------------------------------------------------
 $(BUILD_DIR)/moc/moc_%.cpp: $(SRC)/%.h | $(BUILD_DIR)/moc
+	@$(MOC_GUARD)
 	@$(MOC) $< -o $@
 
 $(BUILD_DIR)/%.moc: $(SRC)/%.cpp | $(BUILD_DIR)
+	@$(MOC_GUARD)
 	@$(MOC) $< -o $@
 
 $(BUILD_DIR)/%.moc: %.cpp | $(BUILD_DIR)
+	@$(MOC_GUARD)
 	@$(MOC) $< -o $@
 
 $(BUILD_DIR)/tmoc/moc_%.cpp: %.h | $(BUILD_DIR)/tmoc
+	@$(MOC_GUARD)
 	@$(MOC) $< -o $@
 
 $(BUILD_DIR)/tmoc/%.o: $(BUILD_DIR)/tmoc/%.cpp
