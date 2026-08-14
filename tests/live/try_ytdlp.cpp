@@ -38,7 +38,17 @@ int main(int argc, char *argv[]) {
 	qtwebengine_factory::register_url_schemes(torrent_download_source::url_schemes());
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
-	const QString target = argc > 1 ? argv[1] : "";
+	// The same empty default, and it read worse here than anywhere: the log
+	// said `navigated to ` with nothing after it, then `detector count for : 0`
+	// and `NO WINDOW 'Watch or download'`, which is a report that the yt-dlp
+	// handoff found nothing -- about a page that was never opened.
+	if (argc < 2) {
+		std::fprintf(stderr, "usage: try_ytdlp <url>\n"
+		                      "needs a watch page; it asks yt-dlp what the video "
+		                      "on that page actually is.\n");
+		return 2;
+	}
+	const QString target = argv[1];
 
 	policy_engine       policy;
 	request_filter      filter(&policy);

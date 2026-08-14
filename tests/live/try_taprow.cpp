@@ -27,6 +27,18 @@ int main(int argc, char *argv[]) {
 	qtwebengine_factory::register_url_schemes(torrent_download_source::url_schemes());
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
+	// Guarded like try_extract's. `argv[1]` with no arguments is the NULL the
+	// standard guarantees, so this was defined rather than dangerous -- but it
+	// yielded an empty target, and the driver then reported `detector=0
+	// tap_active=0 dialog rows=0` about a page it had never opened. Zeros that
+	// mean "not measured" are worse than a refusal, because they read like a
+	// result.
+	if (argc < 2) {
+		std::fprintf(stderr, "usage: try_taprow <url>\n"
+		                      "needs a page with a video; it measures what the "
+		                      "tap and the media row report.\n");
+		return 2;
+	}
 	const QString target = argv[1];
 
 	policy_engine policy; request_filter filter(&policy);

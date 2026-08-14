@@ -31,7 +31,17 @@ int main(int argc, char *argv[]) {
 	qtwebengine_factory::register_url_schemes(torrent_download_source::url_schemes());
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
-	const QString target = argc > 1 ? argv[1] : "";
+	// Empty was the default, so with no argument this navigated nowhere and
+	// still printed `detector items: 0 / tap active: no` -- a measurement of a
+	// page that was never loaded, indistinguishable in the log from a tap that
+	// genuinely failed on a real one.
+	if (argc < 2) {
+		std::fprintf(stderr, "usage: try_tap <url>\n"
+		                      "needs a page that plays through Media Source; "
+		                      "there is nothing to tap without one.\n");
+		return 2;
+	}
+	const QString target = argv[1];
 
 	policy_engine       policy;
 	request_filter      filter(&policy);

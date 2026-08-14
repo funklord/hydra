@@ -97,6 +97,24 @@ skip_reason() {
 	case "$1" in
 		try_extract) echo "a capture tool; takes a url argument" ;;
 		try_watch)   echo "needs a live network" ;;
+		# **Four more that take a url, and were not named here.** They ran in
+		# every sweep with no argument and were counted as report-only
+		# successes -- "ran to the end" is true of a driver that navigated
+		# nowhere. try_ytdlp printed `navigated to ` and `detector count for :
+		# 0`, which reads as the handoff finding nothing rather than as a page
+		# never opened; try_tap and try_taprow printed zeros the same way.
+		#
+		# try_cancel was the expensive one: it read `argv[2]` without checking
+		# argc, which is one past the NULL the standard puts at argv[argc], and
+		# on Linux the environment block sits there. It got `environ[0]` --
+		# which is HYDRA_TEST_OUT, set on the line below -- and mkpath'd it as
+		# a relative tree in the repository root, invisible to `git status`
+		# because the directories it made were empty. All four refuse without a
+		# url now; they are named here so the sweep says why instead.
+		try_cancel)  echo "takes a url and an output directory" ;;
+		try_tap)     echo "takes a url; needs a page that plays through MSE" ;;
+		try_taprow)  echo "takes a url; needs a page with a video" ;;
+		try_ytdlp)   echo "takes a watch-page url to hand to yt-dlp" ;;
 		# **Cannot pass offscreen, and that is the platform rather than the
 		# driver.** It hands a url to another application through
 		# QDesktopServices::openUrl, and the offscreen platform plugin has no

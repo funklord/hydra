@@ -22,6 +22,23 @@ int main(int argc, char *argv[]) {
 	qtwebengine_factory::register_url_schemes(torrent_download_source::url_schemes());
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
+	// **Refuse rather than read past argv.** This took both arguments without
+	// checking argc, and the sweep runs every driver with none. `argv[1]` is
+	// then the NULL terminator the standard guarantees -- harmless -- but
+	// `argv[2]` is one past the end of the array, and on Linux the environment
+	// block sits immediately after it. So `outdir` became `environ[0]`, which
+	// the sweep sets to `HYDRA_TEST_OUT=/tmp/hydra-sweep/try_cancel.out`, and
+	// the mkpath below built that as a *relative* tree in whatever directory
+	// the sweep ran from -- the repository root. It was invisible to
+	// `git status`, because every directory in it was empty and git does not
+	// report an untracked directory holding no files.
+	if (argc < 3) {
+		std::fprintf(stderr,
+		              "usage: try_cancel <url> <outdir>\n"
+		              "needs both; it captures from a real page into a "
+		              "directory it creates.\n");
+		return 2;
+	}
 	const QString target = argv[1], outdir = argv[2];
 
 	policy_engine policy; request_filter filter(&policy);
