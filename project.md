@@ -87,7 +87,7 @@ done
 | `libtorrent-rasterbar` 2.0.11 | installed — BitTorrent builds |
 | `Qt6::Qml` | required, and only for `QJSEngine` (the extractor sandbox). No QML in the UI |
 | `third_party/yt-dlp` | vendored submodule. Clone with `--recurse-submodules` |
-| `yt-dlp` on PATH | **not** installed, so the vendored copy is used via `python3` |
+| `yt-dlp` on PATH | installed, `/usr/bin/yt-dlp` 2025.04.30 — so the PATH branch is the one taken and the vendored copy is not exercised here |
 | Ollama | installed user-local at `~/.local/ollama` (release tarball, no root). **Not running** — start with `~/.local/ollama/bin/ollama serve` |
 | models | `~/.ollama/models`, ~13.7 GB: `qwen2.5-coder:7b` and `:14b` |
 | inference | **CPU-only.** Ollama drops the integrated Intel GPU, so it is 12 cores / ~29 GB. A 14B proposal takes a minute or two; 32B is not viable |
