@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
 		QList<evidence_request> with_sibling = ev;
 		with_sibling << evidence_request{
 			QUrl("https://site.example/watch/1/stream"), "other",
-			with_sibling.size() };
+			int(with_sibling.size()) };
 		const QString same_host =
 		  "extract = function(p, r){ for (var i=0;i<r.length;i++) "
 		  "if (r[i].url.indexOf('/stream')!==-1) "
@@ -274,9 +274,9 @@ int main(int argc, char **argv) {
 		// an image and as something else is not settled by which came first.
 		QList<evidence_request> mixed = sample();
 		mixed << evidence_request{ QUrl("https://site.example/both"), "image",
-			                          mixed.size() };
+			                          int(mixed.size()) };
 		mixed << evidence_request{ QUrl("https://site.example/both"), "other",
-			                          mixed.size() };
+			                          int(mixed.size()) };
 		const extractor_verdict both =
 		  site_extractor::check(pick.arg("/both"), page, mixed);
 		check(both.usable && !both.is_asset,
@@ -293,7 +293,7 @@ int main(int argc, char **argv) {
 		QList<evidence_request> parts = sample();
 		const QString init =
 		  "https://sil5.player.example/v4/db/abc/init-f1-v1-a1.woff?k=UCp";
-		parts << evidence_request{ QUrl(init), "other", parts.size() };
+		parts << evidence_request{ QUrl(init), "other", int(parts.size()) };
 
 		const QString pick =
 		  "extract = function(p, r){ for (var i=0;i<r.length;i++) "
@@ -326,7 +326,7 @@ int main(int argc, char **argv) {
 		// is the helper tier's job, and returning it is a fine answer.
 		const QString index =
 		  "https://sil5.player.example/v4/db/abc/index-f1-v1-a1.txt?k=UCp";
-		parts << evidence_request{ QUrl(index), "other", parts.size() };
+		parts << evidence_request{ QUrl(index), "other", int(parts.size()) };
 		manifests.insert(index);
 		check(site_extractor::check(pick.arg("index-"), page, parts, nullptr,
 		                             &manifests).usable,
@@ -337,7 +337,7 @@ int main(int argc, char **argv) {
 		// a rule that refused it would be doing harm.
 		QList<evidence_request> elsewhere = parts;
 		const QString mp4 = "https://sil5.player.example/files/movie.mp4";
-		elsewhere << evidence_request{ QUrl(mp4), "other", elsewhere.size() };
+		elsewhere << evidence_request{ QUrl(mp4), "other", int(elsewhere.size()) };
 		check(site_extractor::check(pick.arg("movie.mp4"), page, elsewhere, nullptr,
 		                             &manifests).usable,
 		      "a file elsewhere on the same host is left alone");
@@ -777,7 +777,7 @@ int main(int argc, char **argv) {
 		QList<evidence_request> long_ev = sample();
 		QString big = "https://long.example/v4/db/abc/cf-master.1774687168.txt?k=";
 		big += QString("x").repeated(400);
-		long_ev << evidence_request{ QUrl(big), "other", long_ev.size() };
+		long_ev << evidence_request{ QUrl(big), "other", int(long_ev.size()) };
 
 		int kept = 0;
 		const QString shown = extractor_dialog::summarise(long_ev, &kept);
