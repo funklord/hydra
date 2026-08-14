@@ -21,7 +21,18 @@ int main(int argc, char *argv[]) {
 	const QString url = argc > 1 ? QString::fromLocal8Bit(argv[1])
 	                             : fixture.start();
 
-	auto *view = new QWebEngineView;
+	// **Owned, and owned by something that dies before QApplication.** This was
+	// `new QWebEngineView` with no parent and no delete, so the view outlived
+	// `app` -- and it is `app` going away that releases the default profile,
+	// while a page built on that profile was still alive. Qt says so on the way
+	// out: "Release of profile requested but WebEnginePage still not deleted.
+	// Expect troubles !"
+	//
+	// A stack object declared *after* `app` is destroyed *before* it, which is
+	// the whole fix; no smart pointer and no include. Everything below still
+	// takes a pointer, so nothing else changes.
+	QWebEngineView view_owner;
+	QWebEngineView *view = &view_owner;
 	view->resize(1280, 860);
 	view->show();
 	view->load(QUrl(url));

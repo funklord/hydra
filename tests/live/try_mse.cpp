@@ -87,7 +87,13 @@ int main(int argc, char *argv[]) {
 	tap.setRunsOnSubFrames(true);
 	QWebEngineProfile::defaultProfile()->scripts()->insert(tap);
 
-	auto *view = new QWebEngineView;
+	// Stack-owned, and declared after `app` so it is destroyed before it --
+	// see try_frame for the reasoning. It matters more here: `pg` is built on
+	// the default profile explicitly, and being parented to the view is what
+	// gets it destroyed in time. A leaked view took the page with it, and Qt
+	// reported the profile being released underneath a live page.
+	QWebEngineView view_owner;
+	QWebEngineView *view = &view_owner;
 	auto *pg = new page(QWebEngineProfile::defaultProfile(), view);
 	view->setPage(pg);
 	QObject::connect(pg, &QWebEnginePage::loadFinished, [pg](bool ok) {
