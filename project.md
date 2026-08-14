@@ -3013,6 +3013,16 @@ by people tracking site changes; hand its nearest extractor to the model as
 worked reference when it does not; and use it as ground truth where it does.
 Not a build dependency — nothing in `CMakeLists.txt` refers to it.
 
+**The pin tracks `master`, not a release tag**, and that is worth stating
+because two things mislead otherwise. Upstream cuts releases every few weeks
+while extractors are fixed daily, so the newest tag is routinely behind the
+branch — when this was last bumped the tag `2026.07.04` was nineteen days
+older than the commit already pinned, and "move to the latest release" would
+have been a step backwards. And the version yt-dlp reports is the last
+release's until the next one cuts, so `--version` says `2026.07.04` for
+commits well past it: the sha is the only honest answer to what is vendored,
+which is why bumping is read from the log rather than from a version string.
+
 **And there is a mechanism that works today, measured.** A main-world script
 wrapping `MediaSource.addSourceBuffer` / `SourceBuffer.appendBuffer` captured
 the real video on this exact site: a `video/mp4;codecs=mp4a.40.2,avc1.64001E`
