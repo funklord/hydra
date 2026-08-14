@@ -187,6 +187,55 @@ int main(int argc, char **argv) {
 		      "and leaves the ones nobody touched alone");
 	}
 
+	// The search engine, which is on this page because it is a privacy setting:
+	// every other row here decides what a site may do to you, and this one
+	// decides who is told what you typed.
+	//
+	// **Its own dialog, deliberately.** The one above has been accepted, and
+	// re-accepting it would write every other control on it a second time --
+	// so a failure here would be indistinguishable from a failure caused by
+	// the previous section's leftovers.
+	section("the search engine, and the one way to get it wrong");
+	{
+		settings_dialog d3(&players, &downloads, nullptr, nullptr, nullptr, &policy);
+		d3.show();
+		auto *field = d3.findChild<QLineEdit *>("search_engine");
+		check(field != nullptr, "there is a control for it, not just a stored key");
+		if (field) {
+			check(field->text() == settings_store::search_engine(),
+			      "showing what is actually stored rather than a placeholder");
+			check(field->text().contains("%1"),
+			      "and what is stored has somewhere to put the terms");
+
+			// The note is the whole reason the control is a template rather
+			// than a menu: a template with no %1 searches for the empty string
+			// on every query, and nothing about the result says so.
+			//
+			// Found by its text rather than by an object name, so the check
+			// fails if the wording stops saying what it means. A label nobody
+			// can read is the same defect as a label that is absent.
+			auto complains = [&] {
+				for (QLabel *l : d3.findChildren<QLabel *>())
+					if (l->text().contains("nowhere to put the terms"))
+						return true;
+				return false;
+			};
+			check(!complains(),
+			      "with nothing complained about while the template is good");
+
+			field->setText("https://example.invalid/search");   // no %1
+			check(complains(),
+			      "a template with no %1 is complained about as it is typed");
+
+			field->setText("https://s.example/?q=%1");
+			check(!complains(), "and the complaint goes when it is fixed");
+
+			d3.accept();
+			check(settings_store::search_engine() == "https://s.example/?q=%1",
+			      "accepting stores the template, so the address bar uses it");
+		}
+	}
+
 	section("cancelling does not");
 	{
 		settings_dialog d2(&players, &downloads, nullptr, nullptr, nullptr, &policy);

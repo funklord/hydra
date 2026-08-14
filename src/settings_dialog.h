@@ -165,6 +165,8 @@ private:
 	QVBoxLayout    *m_player_group_layout = nullptr;
 	QLineEdit      *m_custom_cmd   = nullptr;
 	QLabel         *m_player_note  = nullptr;
+	QLineEdit      *m_search_engine = nullptr;
+	QLabel         *m_search_note   = nullptr;
 
 	QLineEdit      *m_dir          = nullptr;
 	QSpinBox       *m_conn_global  = nullptr;

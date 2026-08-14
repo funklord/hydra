@@ -769,6 +769,47 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 		}
 	}
 
+	// --- Search ------------------------------------------------------------
+	//
+	// **On the privacy page rather than a general one, because that is what it
+	// is.** Everything else here decides what a site may do to you; this
+	// decides who is told what you typed. Typing terms into the address bar
+	// sends them somewhere, and the somewhere is the setting -- so it belongs
+	// beside the permissions rather than beside the colour scheme.
+	//
+	// The control is the template itself rather than a menu of engines. The
+	// stored value has always been a template, and a menu would either be a
+	// second representation to keep in step with it or a list that quietly
+	// refuses whatever is not on it. A self-hosted SearxNG is a first-class
+	// answer here and would never have earned a menu entry.
+	v->addWidget(section_heading("Search", page));
+	m_search_engine = new QLineEdit(settings_store::search_engine(), page);
+	m_search_engine->setObjectName("search_engine");
+	m_search_engine->setPlaceholderText("https://duckduckgo.com/?q=%1");
+	v->addWidget(settings_row(
+	  "Search engine",
+	  "Where the address bar sends what you type when it is not an address. "
+	  "%1 stands for the terms, url-encoded. The default asks least of you: "
+	  "no account, and no profile built from what you search for.",
+	  m_search_engine, page, true));
+
+	// The one thing that can be typed here and silently do nothing. `%1` is
+	// where the terms go, so a template without it searches for the empty
+	// string on every query -- a request that goes out and a results page that
+	// comes back, with no sign anything is wrong. Said as it is typed rather
+	// than on OK, because the mistake is invisible afterwards.
+	m_search_note = dim_label(QString(), page);
+	v->addWidget(m_search_note);
+	auto say_if_broken = [this] {
+		const bool ok = m_search_engine->text().contains("%1");
+		m_search_note->setText(
+		  ok ? QString()
+		     : QString("No %1 in the template, so there is nowhere to put the "
+		                "terms. The address bar will say so rather than search."));
+	};
+	connect(m_search_engine, &QLineEdit::textChanged, this, say_if_broken);
+	say_if_broken();
+
 	// --- Site exceptions ---------------------------------------------------
 	//
 	// The page above says an exception always wins over what is chosen here,
@@ -1986,6 +2027,16 @@ void settings_dialog::apply() {
 	if (m_appearance)
 		settings_store::set_appearance(
 		  static_cast<theme::choice>(m_appearance->currentData().toInt()));
+	// **Stored even when it has no %1**, deliberately. Refusing to save it
+	// would leave the dialog showing one thing and the browser using another,
+	// which is worse than a setting that is wrong in the way its own note
+	// says it is wrong. The address bar reports it at the moment it matters
+	// and searches nothing rather than searching for nothing.
+	if (m_search_engine) {
+		const QString tmpl = m_search_engine->text().trimmed();
+		if (!tmpl.isEmpty())
+			settings_store::set_search_engine(tmpl);
+	}
 	if (m_policy) {
 		// Exceptions the user removed. Every feature is set back to unset, which
 		// is what "falls through to the defaults" means in the policy model --
