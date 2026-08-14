@@ -1,4 +1,4 @@
-// The cookie filter, which until now was wired and never exercised — the exact
+// The cookie filter, which until now was wired and never exercised -- the exact
 // category this project's defects keep coming from.
 //
 // It is driven the only way that proves anything: a real profile, a real
@@ -12,7 +12,7 @@
 // twice, differing only in the policy. If a third-party cookie is stored under
 // `allow` and refused under `block`, our filter is what made the difference. If
 // it is refused under both, Chromium's own SameSite rules are dominating and
-// this measures nothing — which the driver says out loud rather than reporting
+// this measures nothing -- which the driver says out loud rather than reporting
 // as a pass, because "blocked" and "blocked by someone else" look identical
 // from here.
 #include "main_window.h"
@@ -101,7 +101,7 @@ public:
 				// One image from each host. The same-host one exists so the
 				// first-party cookie's *return journey* is observed on a request
 				// this driver asked for, rather than on whatever favicon fetch
-				// happens to follow — which is what it was relying on by accident.
+				// happens to follow -- which is what it was relying on by accident.
 				const QByteArray base = urls.scheme.toUtf8() + "://";
 				const QByteArray p = ":" + QByteArray::number(urls.port);
 				body = "<!doctype html><html><body>page"
@@ -136,7 +136,7 @@ public:
 
 // Cookies are watched as they arrive, not asked for afterwards. The first
 // version of this called `loadAllCookies()` once the page had loaded and
-// collected what `cookieAdded` then emitted — which is nothing, because the
+// collected what `cookieAdded` then emitted -- which is nothing, because the
 // store was already loaded and does not re-announce what it already holds. It
 // reported "(none)" for a cookie the server could see coming back on the very
 // next request. Two channels, and only the one that was wrong was being read.
@@ -166,7 +166,7 @@ int main(int argc, char *argv[]) {
 	// Before the engine starts, and it is why the TLS half can run at all: the
 	// certificate below is self-signed, and without this Chromium refuses the
 	// page before any cookie is set. It is a flag for this driver's own process,
-	// not something the app does. (Single token deliberately — Qt splits this
+	// not something the app does. (Single token deliberately -- Qt splits this
 	// variable on spaces, so a flag containing one arrives mangled.)
 	qputenv("QTWEBENGINE_CHROMIUM_FLAGS", "--ignore-certificate-errors");
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
@@ -280,7 +280,7 @@ int main(int argc, char *argv[]) {
 		return false;
 	};
 
-	// 1. The defaults, which are §7.2's privacy-leaning ones: cookies allowed,
+	// 1. The defaults, which are sec 7.2's privacy-leaning ones: cookies allowed,
 	//    third-party cookies blocked.
 	const QStringList a = run_case(&site, "http: cookies allow, third-party block");
 	auto sent_to = [&](const char *path, const char *want) {

@@ -5,7 +5,7 @@
 
 // The crypto the KeePassXC-Browser protocol needs: libsodium `crypto_box`
 // (X25519 key exchange + XSalsa20-Poly1305 authenticated encryption), and
-// nothing else (architecture doc §13.1).
+// nothing else (architecture doc sec 13.1).
 //
 // This is a thin shim, not an abstraction layer. It exists so the protocol and
 // bridge compile whether or not libsodium is present: when it is absent every
@@ -13,8 +13,8 @@
 // unusable instead of the whole application failing to build over an optional
 // dependency.
 //
-// We implement no crypto of our own and never see the master password —
-// KeePassXC holds the vault, the unlock, and everything derived from it (§13.3).
+// We implement no crypto of our own and never see the master password --
+// KeePassXC holds the vault, the unlock, and everything derived from it (sec 13.3).
 namespace box_crypto {
 
 // False when Hydra was built without libsodium.

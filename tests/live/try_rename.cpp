@@ -1,4 +1,4 @@
-// Renaming a tab, through the dialog a person actually uses (§4).
+// Renaming a tab, through the dialog a person actually uses (sec 4).
 //
 // The rule is covered offline in `test_model`: a page title follows the page, a
 // chosen name does not get replaced, clearing it hands the tab back. What is

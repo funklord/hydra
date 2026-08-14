@@ -31,8 +31,8 @@ android_downloads::android_downloads(download_manager *downloads, QObject *paren
     : QObject(parent), m_downloads(downloads) {
 	if (!m_downloads)
 		return;
-	// `changed()` is the only signal there is — the manager reports that
-	// something moved, not which job finished — so completion is worked out here
+	// `changed()` is the only signal there is -- the manager reports that
+	// something moved, not which job finished -- so completion is worked out here
 	// rather than asked for. A set of ids already handled keeps it to once each,
 	// which matters because `changed()` fires on every progress tick.
 	connect(m_downloads, &download_manager::changed, this, &android_downloads::poll);

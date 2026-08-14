@@ -25,11 +25,11 @@ class ollama_provider;
 class player_launcher;
 class torrent_download_source;
 
-// Settings (architecture doc §11.3, §11.4).
+// Settings (architecture doc sec 11.3, sec 11.4).
 //
 // Everything here already existed as API and could only be reached by editing
-// code — the external-player choice §11.3 specifies in detail, and the
-// BitTorrent knobs §11.4's whole connection-scaling argument rests on. A
+// code -- the external-player choice sec 11.3 specifies in detail, and the
+// BitTorrent knobs sec 11.4's whole connection-scaling argument rests on. A
 // setting nobody can change is a setting that does not exist, which is why the
 // caps in particular belong here: the argument for rasterbar was that the
 // ceiling can be raised, and that claim is only true if someone can raise it.
@@ -192,7 +192,7 @@ private:
 // objects that use them.
 //
 // Split out from the dialog so startup can apply saved values without building
-// any UI — otherwise "settings persist" would quietly mean "settings persist if
+// any UI -- otherwise "settings persist" would quietly mean "settings persist if
 // you open the dialog", which is the usual way this goes wrong.
 namespace settings_store {
 
@@ -207,17 +207,17 @@ void save_from(player_launcher *players, download_manager *downloads,
 // Which backend the user picked. Read straight from storage rather than held
 // on any one object, because it is a preference *about* providers rather than
 // a property of either of them.
-// Kiosk (§8). Kept here rather than on the controller for the same reason the
+// Kiosk (sec 8). Kept here rather than on the controller for the same reason the
 // AI mode is: it is a preference *about* a session that may not exist yet, and
 // until now it was code-level defaults with no way to reach it from the app at
-// all — a presentation mode nobody could configure.
+// all -- a presentation mode nobody could configure.
 kiosk_config kiosk();
 void set_kiosk(const kiosk_config &c);
 
 ai_choice ai_mode();
 void set_ai_mode(ai_choice mode);
 
-// Light, dark, or follow the desktop. Default is to follow — see `theme.h` for
+// Light, dark, or follow the desktop. Default is to follow -- see `theme.h` for
 // why that is harder than it sounds.
 theme::choice appearance();
 void          set_appearance(theme::choice c);

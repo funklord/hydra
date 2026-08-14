@@ -8,7 +8,7 @@
 namespace {
 
 // The snippet exists to give the model context, not to be rendered, so it is
-// capped hard. §12.2 also asks for personal data to be stripped: the cheap,
+// capped hard. sec 12.2 also asks for personal data to be stripped: the cheap,
 // reliable version of that is to keep the element's shape and drop its text.
 constexpr int k_max_snippet = 1200;
 

@@ -61,7 +61,7 @@ void walk(node *root, report &r) {
 						.arg(n->id).arg(f.depth).arg(tree_limits::max_depth);
 
 			// **A tab with children was a violation here** and is not one now:
-			// that is what a sub-tab is (architecture doc §5.5). The rule gave
+			// that is what a sub-tab is (architecture doc sec 5.5). The rule gave
 			// its reason as "the tree file cannot express that", and the file
 			// always could -- `write_node` recurses into any node's children
 			// and the reader nests by indentation without consulting the type.

@@ -122,7 +122,7 @@ void consent_dialog::on_accept_selected() {
 	const QString as = property("as").toString();
 
 	// The rule is built from the label the page really offered, escaped on the
-	// way in — nothing here is typed.
+	// way in -- nothing here is typed.
 	const site_rule r = m_blocker->rule_from_label(label, as);
 
 	// And it is judged before it is kept, by the same check an imported rule

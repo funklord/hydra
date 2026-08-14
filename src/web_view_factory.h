@@ -9,11 +9,11 @@ class QWidget;
 class web_view_backend;
 
 // Makes views, and owns whatever profile-wide machinery an engine needs behind
-// them — on desktop that is the shared QWebEngineProfile with the request
-// interceptor and cookie filter installed on it (architecture doc §6/§7.3).
+// them -- on desktop that is the shared QWebEngineProfile with the request
+// interceptor and cookie filter installed on it (architecture doc sec 6/sec 7.3).
 //
 // The shell holds only this interface, so the concrete backend is named in
-// exactly one place: main(). That is what keeps §19.2's rule enforceable rather
+// exactly one place: main(). That is what keeps sec 19.2's rule enforceable rather
 // than merely intended.
 class web_view_factory {
 public:
@@ -21,8 +21,8 @@ public:
 
 	virtual web_view_backend *create_view(QWidget *parent) = 0;
 
-	// Called when the engine is handed a URL it will not render as a page —
-	// a `magnet:` link being the motivating case (§11.4). The shell decides
+	// Called when the engine is handed a URL it will not render as a page --
+	// a `magnet:` link being the motivating case (sec 11.4). The shell decides
 	// what to do with it; the engine's only job is to hand it over and not
 	// draw an error page.
 	//

@@ -25,7 +25,7 @@ state_store::state_store(const QString &dir) : m_dir(dir) {
 
 QString state_store::path_for(const QString &id) const {
 	// Ids are short opaque tokens, but they come from the tree file, which is
-	// documented as human-editable — so "regardless" has to mean it.
+	// documented as human-editable -- so "regardless" has to mean it.
 	static const QRegularExpression unsafe("[^A-Za-z0-9._-]");
 	QString safe = id;
 	safe.replace(unsafe, "_");

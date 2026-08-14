@@ -3,7 +3,7 @@
 // The file is an INI on purpose: everything in it is a value or a list of flat
 // records, so a key=value file a person can read and a tool can diff is worth
 // more than the ability to nest. That choice is only worth anything if the file
-// really does round-trip, which is what this checks — along with the refusals,
+// really does round-trip, which is what this checks -- along with the refusals,
 // since an import that quietly applies nothing looks exactly like one that
 // worked.
 #include "settings_bundle.h"

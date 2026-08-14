@@ -1,4 +1,4 @@
-// The helper tier against a real CDN (architecture doc §11.5.1).
+// The helper tier against a real CDN (architecture doc sec 11.5.1).
 //
 // Everything else about this tier is tested against an injected fake, which is
 // the right way to exercise refusals and spent budgets but proves nothing about
@@ -8,7 +8,7 @@
 //
 //   test_helpers_live <evidence.json>
 //
-// Evidence comes from tests/live/try_extract, and must be fresh — CDN tokens
+// Evidence comes from tests/live/try_extract, and must be fresh -- CDN tokens
 // expire in minutes, and stale evidence produces 403s that look like a broken
 // allowlist.
 #include "extractor_helpers.h"
@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
 	             qPrintable(page.toString()), qint64(ev.size()));
 
 	// The page's own context, which is what makes these addresses fetchable at
-	// all — naked they come back 403 (§11.3).
+	// all -- naked they come back 403 (sec 11.3).
 	stream_context ctx;
 	ctx.referer = page.toString();
 	network_fetcher net(ctx);

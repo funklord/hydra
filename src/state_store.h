@@ -4,7 +4,7 @@
 #include <QString>
 #include <QByteArray>
 
-// Per-node suspended-state blobs, keyed by node id (architecture doc §4.2/§5.4).
+// Per-node suspended-state blobs, keyed by node id (architecture doc sec 4.2/sec 5.4).
 // A blob is the serialized navigation history of a suspended tab; it lives in a
 // sidecar directory next to the tree file, never inside the canonical outline.
 class state_store {

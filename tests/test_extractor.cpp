@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
 			  "extract = function(){ return { url: '%1:' + (%2), kind: 'direct' }; };")
 			  .arg("x", probe);
 			const extraction r = site_extractor::run(src, page, ev);
-			// It should run and report "undefined" — the point is that the name
+			// It should run and report "undefined" -- the point is that the name
 			// resolves to nothing, not that the script fails.
 			check(r.ok && r.url.toString().endsWith("undefined"),
 			      QString("%1 is not available (%2)")
@@ -316,7 +316,7 @@ int main(int argc, char **argv) {
 		      "and not mistaken for any of the other four");
 		check(v.message.contains("cf-master"), "the reason names the playlist");
 
-		// The playlist itself is in the set, so it passes — this rule must not
+		// The playlist itself is in the set, so it passes -- this rule must not
 		// refuse the answer it is pointing at.
 		check(site_extractor::check(pick.arg("cf-master"), page, parts, nullptr,
 		                             &manifests).usable,
@@ -435,7 +435,7 @@ int main(int argc, char **argv) {
 		      "and it is a fact about one page, not the browser");
 
 		// A detector name learned rather than shipped is generic for the same
-		// reason a button label is — it describes a script, not a site — so it
+		// reason a button label is -- it describes a script, not a site -- so it
 		// is flagged for the binary and travels in the same file.
 		site_rules learned = site_rules::defaults();
 		site_rule d;
@@ -459,7 +459,7 @@ int main(int argc, char **argv) {
 	{
 		// A consent rule is a licence to click buttons on pages the user is
 		// logged into, so an imported one is not trusted for being well-formed.
-		// This is §12.4's argument applied to a different corpus: decide what a
+		// This is sec 12.4's argument applied to a different corpus: decide what a
 		// rule would do before letting it do anything.
 		auto refused = [](const char *kind, const char *value) {
 			site_rule r; r.kind = kind; r.value = value;
@@ -578,7 +578,7 @@ int main(int argc, char **argv) {
 		      "naming what to do instead, since the model is asked again");
 
 		// 2. Reading the note at run time. `serves` is a column of the evidence,
-		// never a field of a request, so this finds nothing every time — and
+		// never a field of a request, so this finds nothing every time -- and
 		// "found nothing" is what it reports, which reads as a model that could
 		// not find the stream rather than one that did and then asked the wrong
 		// object.
@@ -603,7 +603,7 @@ int main(int argc, char **argv) {
 		      "however it is spelled");
 
 		// 3. Matching on where a request fell in this visit's list. The notes
-		// are keyed by order number so the model reads them by eye — and `order`
+		// are keyed by order number so the model reads them by eye -- and `order`
 		// is a real field, so a script can join on it, compile, run, and be
 		// right about this capture and nothing else. One advert more and the
 		// numbers move.
@@ -671,7 +671,7 @@ int main(int argc, char **argv) {
 
 		// "Every way" was three ways. The wrapper declared `var extract;` beside
 		// the proposal, so a `const` or `let` of the same name was "Identifier
-		// extract has already been declared" — a SyntaxError raised before the
+		// extract has already been declared" -- a SyntaxError raised before the
 		// proposal ran at all, naming *our* variable, about a parser that was
 		// correct. Five runs in five against real evidence died there while the
 		// section above reported that every spelling worked.
@@ -768,7 +768,7 @@ int main(int argc, char **argv) {
 	section("a url too long to show is a trap");
 	{
 		// summarise() truncates each url for display. The model can only return
-		// what it was shown, and the gate compares against the full address —
+		// what it was shown, and the gate compares against the full address --
 		// so anything past the display limit is unreturnable by construction.
 		// Real evidence has such requests: the analytics calls on the measured
 		// site run past 300 characters. No stream has yet been long enough for
@@ -844,7 +844,7 @@ int main(int argc, char **argv) {
 		const QString folded = extractor_dialog::summarise(real, &kept);
 		check(kept == 2, QString("ten requests fold to two lines (%1)").arg(kept));
 		// The `seen` column, not a suffix after the url. Anything printed after
-		// an address is something a model can read as part of it — which is
+		// an address is something a model can read as part of it -- which is
 		// exactly what went wrong with the served-type note.
 		// Read out of the column rather than matched as a substring: the count
 		// is right-aligned, so a substring check is a check on the padding.

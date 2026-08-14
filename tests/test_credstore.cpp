@@ -1,7 +1,7 @@
-// Where the KeePassXC pairing lives between runs (architecture doc §13.1, §14).
+// Where the KeePassXC pairing lives between runs (architecture doc sec 13.1, sec 14).
 //
 // Two halves, and they need different treatment. The **encoding** is a pure
-// function and is tested exhaustively with no keyring anywhere near it — that
+// function and is tested exhaustively with no keyring anywhere near it -- that
 // is the part that can be wrong quietly, because a blob that decodes to the
 // wrong id produces a pairing KeePassXC refuses and an error message about
 // association rather than about storage.

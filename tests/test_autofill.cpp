@@ -1,8 +1,8 @@
-// The gate between an untrusted page and the vault (architecture doc §13.3).
+// The gate between an untrusted page and the vault (architecture doc sec 13.3).
 //
-// This class exists to say no. Its header lists four rules — the page does not
+// This class exists to say no. Its header lists four rules -- the page does not
 // choose the origin, autofill answers to the policy engine, HTTPS only, nothing
-// held longer than the fill that asked — and nothing checked that any of them
+// held longer than the fill that asked -- and nothing checked that any of them
 // held. A gate whose refusals are untested is a gate in name.
 //
 // The delivery half needs a connected, paired KeePassXC and lives in
@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
 	QCoreApplication app(argc, argv);
 
 	// No bridge at all. Every gate before "is KeePassXC there" can be exercised
-	// without one, and the last gate is then the one that reports — which is
+	// without one, and the last gate is then the one that reports -- which is
 	// also how a first run behaves before anyone has paired anything.
 	policy_engine policy;
 
@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
 		check(!a.blocked_reason("http://plain.example").contains("HTTPS"),
 		      "and allowed when the user turns the requirement off");
 
-		// A file:// url has no host, so it never reaches the https check — it is
+		// A file:// url has no host, so it never reaches the https check -- it is
 		// refused one gate earlier, for having no origin worth the name. Worth
 		// pinning because the *reason* differs from what one would guess, and
 		// the reason is what the key icon shows the user.
@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
 		      "and allowed once the user says so");
 
 		// Subdomains follow the policy engine's own pattern language rather than
-		// any rule of this class's — one place decides what a site is. That
+		// any rule of this class's -- one place decides what a site is. That
 		// language is `*`, `*.domain`, or an exact host, so an exact rule does
 		// **not** reach a subdomain, and expecting otherwise here would have been
 		// a rule about sites written in the wrong file.
@@ -241,7 +241,7 @@ int main(int argc, char **argv) {
 
 	section("the key hears about a page whether or not the fill is allowed");
 	{
-		// The affordance §13.2 asks for is only useful if it appears on the
+		// The affordance sec 13.2 asks for is only useful if it appears on the
 		// pages that have something to say. A `requested` that fired after the
 		// gate would show the key exactly when everything worked and hide it
 		// when autofill was blocked -- which is the page where a user needs to

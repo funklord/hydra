@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Locking a tab, and the sub-tab that comes of navigating one (§5.5).
+// Locking a tab, and the sub-tab that comes of navigating one (sec 5.5).
 //
 // The unit tests already prove the model half -- the flag persists, a locked
 // node refuses to move, a tab can hold children. What they cannot reach is the

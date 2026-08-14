@@ -24,7 +24,7 @@ void extractor_signals::on_request(const request_context &ctx,
 
 	// Keep the newest. A stream's segment requests would otherwise bury the
 	// handful of requests that actually matter, and the manifest is usually
-	// near the end anyway — it is fetched when the player starts.
+	// near the end anyway -- it is fetched when the player starts.
 	while (list.size() > k_limit)
 		list.removeFirst();
 }

@@ -270,7 +270,7 @@ static void test_cancel_and_failure() {
 	check(job_by_id(m, ids[0])->error.isEmpty(),
 	      "a cancelled job is not relabelled as failed");
 
-	// Cancel one that is still queued — the source never knew about it.
+	// Cancel one that is still queued -- the source never knew about it.
 	const int queued_id = ids[4];
 	check(!tor->live(queued_id), "precondition: still queued");
 	m.cancel(queued_id);

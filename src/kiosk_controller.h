@@ -17,14 +17,14 @@ class QGraphicsScene;
 class QGraphicsView;
 class QGraphicsProxyWidget;
 
-// How pixels get from the page to the screen (architecture doc §8.1).
+// How pixels get from the page to the screen (architecture doc sec 8.1).
 enum class scale_mode {
 	reflow,      // setZoomFactor: the page re-lays out. Robust, and the default.
 	none,        // no scaling; oversize geometry + parent clipping crops.
 	geometric,   // QGraphicsProxyWidget transform: exact layout, no reflow.
 };
 
-// Composes scale and crop the way CSS object-fit does (architecture doc §8.2).
+// Composes scale and crop the way CSS object-fit does (architecture doc sec 8.2).
 enum class fit_mode { contain, cover, stretch, actual };
 
 struct kiosk_config {
@@ -40,11 +40,11 @@ struct kiosk_config {
 };
 
 // Kiosk mode: a presentation mode plus a policy preset, not a new engine
-// (architecture doc §8).
+// (architecture doc sec 8).
 //
 // The view's widget is reparented into a frameless fullscreen stage of our own
-// for the duration, which is what makes "strip all chrome" free — the stage has
-// none to strip — and gives crop-via-clip somewhere to clip against. On exit the
+// for the duration, which is what makes "strip all chrome" free -- the stage has
+// none to strip -- and gives crop-via-clip somewhere to clip against. On exit the
 // widget goes back where it came from.
 //
 // How scale and fit combine, since not every pair is meaningful:
@@ -52,15 +52,15 @@ struct kiosk_config {
 //   reflow    + contain/cover/actual : one zoom factor, viewport fills the
 //                                      stage, page reflows. Nothing overflows,
 //                                      so alignment does not apply.
-//   reflow    + stretch              : not representable — a single zoom factor
+//   reflow    + stretch              : not representable -- a single zoom factor
 //                                      cannot scale axes independently. Falls
 //                                      back to cover and says so.
 //   none      + any                  : viewport is the design size, positioned
 //                                      by alignment, overflow clipped by the
 //                                      stage. This is the robust crop path.
 //   geometric + any                  : exact per-axis transform, including
-//                                      stretch. Historically fragile — see
-//                                      §8.3; may render black on some GPUs, so
+//                                      stretch. Historically fragile -- see
+//                                      sec 8.3; may render black on some GPUs, so
 //                                      it stays opt-in and wants testing on the
 //                                      target hardware.
 class kiosk_controller : public QObject {

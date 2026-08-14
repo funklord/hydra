@@ -13,7 +13,7 @@ class qtwebengine_interceptor;
 // The desktop web_view_factory. Owns the shared QWebEngineProfile and installs
 // the profile-wide machinery on it once: the request interceptor and the
 // cookie filter, both deciding through the shared request_filter
-// (architecture doc §6/§7.3). The download handler attaches here too in step 6.
+// (architecture doc sec 6/sec 7.3). The download handler attaches here too in step 6.
 class qtwebengine_factory : public web_view_factory {
 public:
 	explicit qtwebengine_factory(request_filter *filter);
@@ -22,7 +22,7 @@ public:
 	web_view_backend *create_view(QWidget *parent) override;
 	void set_external_url_handler(external_url_handler fn) override;
 
-	// Must be called before QApplication exists — Qt requires custom schemes to
+	// Must be called before QApplication exists -- Qt requires custom schemes to
 	// be registered before the engine initialises, and it is a fatal warning
 	// otherwise. main() is therefore the only possible caller, which is also
 	// where the concrete backend is already named.

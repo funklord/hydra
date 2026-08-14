@@ -113,7 +113,7 @@ public:
 		// row height clips the digits top and bottom and reads as a rendering
 		// fault; drawing it over the finished bar is exact.
 		bar.textVisible      = false;
-		// An indeterminate job — a magnet with no metadata yet — has no
+		// An indeterminate job -- a magnet with no metadata yet -- has no
 		// meaningful percentage. Qt draws min == max == 0 as a busy bar, which
 		// is exactly the honest thing to show.
 		if (pct.toInt() < 0) {
@@ -158,7 +158,8 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 	m_empty->set_text("No downloads yet.\n\nAnything you save, or hand to the "
 	                   "player, appears here.");
 	m_list->header()->setSectionResizeMode(col_name, QHeaderView::Stretch);
-	// Source and Size must never be elided: a truncated "⇅ public" marker
+	// Source and Size must never be elided: a truncated "public" transfer
+	// marker -- the arrow glyph and the word together --
 	// defeats the entire point of showing it, and a truncated size is noise.
 	m_list->header()->setSectionResizeMode(col_source, QHeaderView::ResizeToContents);
 	m_list->header()->setSectionResizeMode(col_size, QHeaderView::ResizeToContents);
@@ -177,7 +178,7 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 
 	// A separate label for what a button press just did. Sharing one with the
 	// standing note above does not work: refresh() rewrites that every 200 ms,
-	// so anything an action wrote there was erased before it could be read —
+	// so anything an action wrote there was erased before it could be read --
 	// pressing Watch appeared to do nothing at all.
 	m_action = new QLabel(this);
 	m_action->setWordWrap(true);
@@ -249,7 +250,7 @@ void downloads_dialog::refresh() {
 		}
 
 		// Before a source knows a filename there is nothing better than the
-		// address itself — and it must be the *whole* address, since stripping
+		// address itself -- and it must be the *whole* address, since stripping
 		// the query off a magnet link leaves the useless string "magnet:".
 		// Elision is the view's job, not ours.
 		const QString name = j.path.isEmpty() ? j.url.toString()
@@ -258,12 +259,12 @@ void downloads_dialog::refresh() {
 		row->setToolTip(col_name, j.url.toString());
 
 		// Source label comes from the source itself, never from a test on the
-		// URL — the seam's rule (§11.4) applies to the UI as much as the model.
+		// URL -- the seam's rule (sec 11.4) applies to the UI as much as the model.
 		download_source *src = m_downloads->source_by_id(j.source_id);
 		QString source_text = src ? src->display_name() : j.source_id;
 		if (j.public_participation) {
 			any_public = true;
-			// The visible difference the §11.4 decision requires. It is on the
+			// The visible difference the sec 11.4 decision requires. It is on the
 			// row, not in a one-time dialog, because the transfer keeps
 			// announcing for as long as it exists.
 			source_text += "  ⇅ public";
@@ -276,7 +277,7 @@ void downloads_dialog::refresh() {
 
 		// A job with no known total draws a busy bar, which says "working".
 		// That is right for a magnet resolving metadata and wrong for one that
-		// has failed or been cancelled — an animation on a dead transfer reads
+		// has failed or been cancelled -- an animation on a dead transfer reads
 		// as activity that is not happening.
 		int pct;
 		if (j.total > 0)
@@ -309,7 +310,7 @@ void downloads_dialog::refresh() {
 		                                 : QString("From tab %1").arg(j.node_id));
 
 		// Multi-file jobs list their files as children, once the file list is
-		// known — for a magnet that is only after metadata arrives.
+		// known -- for a magnet that is only after metadata arrives.
 		if (!j.files.isEmpty() && row->childCount() != j.files.size()) {
 			while (row->childCount())
 				delete row->takeChild(0);
@@ -471,7 +472,7 @@ void downloads_dialog::act_watch() {
 
 	// Ask the source to fetch the front first. Without this a torrent downloads
 	// in whatever order the swarm offers, and the beginning of the file may be
-	// the last thing to arrive — which is the difference between "watchable
+	// the last thing to arrive -- which is the difference between "watchable
 	// now" and "watchable when it finishes".
 	src->prioritize_streaming(id, rel, true);
 
@@ -560,7 +561,7 @@ void downloads_dialog::try_launch_watch() {
 	  [eventual, dm, job_id, rel]() -> qint64 {
 		  if (eventual >= 0)
 			  return eventual;
-		  // Fall back to whatever the job now knows — a magnet has no sizes
+		  // Fall back to whatever the job now knows -- a magnet has no sizes
 		  // until metadata lands, which can be after Watch was pressed.
 		  for (const download_job &j : dm->jobs()) {
 			  if (j.id != job_id)
@@ -601,7 +602,7 @@ void downloads_dialog::act_open_folder() {
 		if (j.id != id || j.path.isEmpty())
 			continue;
 		// The containing folder, never the file. Swarms and web servers carry
-		// whatever is in them, and the standing rule (§11.4) is that a download
+		// whatever is in them, and the standing rule (sec 11.4) is that a download
 		// is written to disk and not opened by us.
 		const QFileInfo fi(j.path);
 		const QString dir = fi.isDir() ? fi.absoluteFilePath()

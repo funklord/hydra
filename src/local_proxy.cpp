@@ -162,7 +162,7 @@ void local_proxy::serve_file(QTcpSocket *client, const entry &e,
 	//
 	// For a sparsely-allocated file the size is already the final one while the
 	// content is still arriving, so the publisher's own answer wins where it
-	// has one — otherwise every read past the real data returns zeros and the
+	// has one -- otherwise every read past the real data returns zeros and the
 	// player renders them rather than waiting.
 	auto readable_now = [&]() -> qint64 {
 		qint64 n = QFileInfo(e.local_path).size();
@@ -233,7 +233,7 @@ void local_proxy::serve_file(QTcpSocket *client, const entry &e,
 		// The wait pumps the event loop, and that is not optional: the bytes
 		// being waited for arrive through libtorrent's alert timer and Qt's own
 		// sockets, so a wait that blocks the loop is a wait for data that can
-		// never come — it would deadlock rather than stall.
+		// never come -- it would deadlock rather than stall.
 		static constexpr int k_stall_ms = 30000;   // no growth for this long: give up
 		qint64 pos  = start;
 		qint64 left = length;

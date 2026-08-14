@@ -5,7 +5,7 @@
 #include <QList>
 #include <QString>
 
-// Reading the tabs another browser has open (architecture doc §4).
+// Reading the tabs another browser has open (architecture doc sec 4).
 //
 // Tabs rather than bookmarks, deliberately: a bookmark is something a person
 // filed once, and the thing worth bringing across is the working set they

@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// The "zap this" overlay (architecture doc §12.1), injected through the same
+// The "zap this" overlay (architecture doc sec 12.1), injected through the same
 // isolated-world seam the autofill script uses.
 //
 // It highlights whatever is under the cursor, captures it on click, and sends
-// the shape of the element back — selector, tag, id, classes and a trimmed
+// the shape of the element back -- selector, tag, id, classes and a trimmed
 // outerHTML. Escape cancels. It deliberately does not block the ad itself:
 // what it produces is evidence for a *proposal* the user then reviews, which is
 // the whole point of the diff/accept pipeline.
 //
-// The text nodes are stripped before the snippet is sent (§12.2 asks for
+// The text nodes are stripped before the snippet is sent (sec 12.2 asks for
 // personal data stripped from the snippet). Keeping structure and dropping
 // prose is the cheap version of that, and it loses nothing the model needs to
 // write a selector.

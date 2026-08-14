@@ -7,16 +7,16 @@
 
 class filter_list;
 
-// The cosmetic half of the filter-evolution loop (architecture doc §12).
+// The cosmetic half of the filter-evolution loop (architecture doc sec 12).
 //
 // A `##` rule hides an element rather than blocking a request, so it cannot ride
-// the interceptor the way `||host^` does — it has to reach the page. This is the
+// the interceptor the way `||host^` does -- it has to reach the page. This is the
 // piece that takes it there: the shell tells it which host is on screen, an
 // injected script asks it for that host's selectors, and the script writes them
 // into a stylesheet.
 //
 // **It was missing entirely.** Accepted cosmetic rules were stored, listed and
-// re-loaded, and hid nothing — the same gap the network half had, in the same
+// re-loaded, and hid nothing -- the same gap the network half had, in the same
 // loop, found by writing down that the network half was fixed and the cosmetic
 // half was not.
 //

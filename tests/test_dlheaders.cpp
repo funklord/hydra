@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
 
 	section("resume still owns Range");
 	{
-		// A partial file on disk means the source must ask for the rest — and a
+		// A partial file on disk means the source must ask for the rest -- and a
 		// caller naming Range itself must not be able to move that offset.
 		const QString path = QDir(dir).filePath("resume.mp4");
 		{ QFile f(path); f.open(QIODevice::WriteOnly); f.write(QByteArray(500, 'x')); }

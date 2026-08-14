@@ -9,7 +9,7 @@
 #include <QObject>
 
 // The evidence a generated extractor is proposed against, and judged against
-// (architecture doc §11.5): what a page actually requested, in order.
+// (architecture doc sec 11.5): what a page actually requested, in order.
 //
 // A third rider on the interceptor's observer seam, beside media detection and
 // filter signals. It overlaps them in that all three keep URLs per site, and

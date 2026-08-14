@@ -8,7 +8,7 @@
 #include <QString>
 #include <QStringList>
 
-// One filter rule in EasyList / uBO syntax (architecture doc §12.3).
+// One filter rule in EasyList / uBO syntax (architecture doc sec 12.3).
 struct filter_rule {
 	QString text;        // "||ads.example.com^" or "example.com##.ad-banner"
 	bool    cosmetic = false;
@@ -16,7 +16,7 @@ struct filter_rule {
 	QString note;        // why it was proposed, if it came from the AI
 };
 
-// What a rule would do, computed before it is accepted (architecture doc §12.4).
+// What a rule would do, computed before it is accepted (architecture doc sec 12.4).
 struct dry_run {
 	QStringList would_block;   // observed URLs this rule matches
 	bool        rejected = false;
@@ -28,9 +28,9 @@ struct dry_run {
 };
 
 // The AI/user-authored filter list, kept deliberately apart from any imported
-// EasyList so a scheduled upstream update never clobbers custom rules (§12.5).
+// EasyList so a scheduled upstream update never clobbers custom rules (sec 12.5).
 //
-// The validation half of §12.4 is the safety core here, and it is the same
+// The validation half of sec 12.4 is the safety core here, and it is the same
 // shape as the reorganizer's invariant check: nothing reaches the accept UI
 // until a static breadth check and a simulation against real observed requests
 // have both run. A rule that would hide a generic tag globally, match a whole
@@ -59,7 +59,7 @@ public:
 	// Does this URL match any accepted network rule?
 	bool blocks(const QString &url, const QString &site_host) const;
 
-	// Static breadth check plus simulation against `observed` (§12.4).
+	// Static breadth check plus simulation against `observed` (sec 12.4).
 	static dry_run evaluate(const filter_rule &r, const QStringList &observed,
 	                         const QString &site_host,
 	                         const picked_element &picked = picked_element{});
@@ -67,8 +67,8 @@ public:
 	// Would this cosmetic selector hide the picked element?
 	//
 	// Approximate on purpose: matching a full selector needs a live DOM, which
-	// is not available here. This checks the selector's *rightmost* compound —
-	// the part that names the element itself — against the element's tag, id
+	// is not available here. This checks the selector's *rightmost* compound --
+	// the part that names the element itself -- against the element's tag, id
 	// and classes. That answers the question the user actually has ("will this
 	// hit the thing I zapped?") and never claims more than it checked.
 	static bool cosmetic_matches(const QString &selector, const picked_element &e);

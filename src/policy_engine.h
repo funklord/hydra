@@ -8,7 +8,7 @@
 #include <QVector>
 
 // Holds all per-site rules and resolves the effective decision for a feature on
-// a host (architecture doc §7.1/§7.2). Consulted by the interceptor, the cookie
+// a host (architecture doc sec 7.1/sec 7.2). Consulted by the interceptor, the cookie
 // filter, per-page settings, and permission handling. Thread note: reads happen
 // from the interceptor which Qt may call off the UI thread; the rule set is
 // only mutated from the UI thread and reads tolerate a stale snapshot.

@@ -1,4 +1,4 @@
-// Calling a shell object from a page, by name — the marshalling that replaces
+// Calling a shell object from a page, by name -- the marshalling that replaces
 // QWebChannel where there is no QWebChannel.
 //
 // The interesting checks here are the refusals. This is the one place a page

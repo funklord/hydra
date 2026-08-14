@@ -147,8 +147,8 @@ void ytdlp_resolver::resolve(const QUrl &page_url) {
 
 		if (code != 0 || out.isEmpty()) {
 			// yt-dlp's own message is far more useful than anything invented
-			// here — "Unsupported URL" is the answer that matters, and it is
-			// the answer the long-tail paths (§11.5, §11.6) exist for.
+			// here -- "Unsupported URL" is the answer that matters, and it is
+			// the answer the long-tail paths (sec 11.5, sec 11.6) exist for.
 			QString reason = QString::fromUtf8(err).trimmed();
 			if (reason.isEmpty())
 				reason = QString("yt-dlp exited with %1").arg(code);
@@ -251,7 +251,7 @@ media_format ytdlp_resolver::best(const resolved_media &m) {
 	};
 
 	// Progressive first, tallest of those. It needs no assembly, resumes with a
-	// Range request and plays in anything — worth more than extra pixels behind
+	// Range request and plays in anything -- worth more than extra pixels behind
 	// a manifest this build cannot yet assemble for every player.
 	media_format pick;
 	for (const media_format &f : m.formats) {

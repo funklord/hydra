@@ -1,4 +1,4 @@
-// Deleting tabs and folders, and what has to be cleaned up when they go (§4).
+// Deleting tabs and folders, and what has to be cleaned up when they go (sec 4).
 //
 // The model's own removal is covered offline in `test_model`. What is not
 // coverable there is everything the *shell* keeps beside the tree: a live view

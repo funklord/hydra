@@ -17,8 +17,8 @@ hls_assembler::~hls_assembler() {
 
 QNetworkReply *hls_assembler::get(const QUrl &url, const QByteArray &range) {
 	QNetworkRequest req(url);
-	// The same context injection the proxy does — a CDN that 403s a naked
-	// stream URL will 403 our segment fetches too (§11.3).
+	// The same context injection the proxy does -- a CDN that 403s a naked
+	// stream URL will 403 our segment fetches too (sec 11.3).
 	if (!m_ctx.referer.isEmpty())
 		req.setRawHeader("Referer", m_ctx.referer.toUtf8());
 	if (!m_ctx.user_agent.isEmpty())

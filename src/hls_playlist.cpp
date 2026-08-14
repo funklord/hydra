@@ -5,7 +5,7 @@
 
 namespace {
 
-// Attribute lists look like BANDWIDTH=123,RESOLUTION=1x2,CODECS="a,b" — the
+// Attribute lists look like BANDWIDTH=123,RESOLUTION=1x2,CODECS="a,b" -- the
 // quoted value can contain commas, so a plain split on ',' is wrong.
 QHash<QString, QString> parse_attributes(const QString &s) {
 	QHash<QString, QString> out;
@@ -106,7 +106,7 @@ hls_playlist parse(const QByteArray &text, const QUrl &base) {
 			seg.duration    = pending_duration;
 			seg.byte_offset = pending_offset;
 			seg.byte_length = pending_length;
-			// An omitted offset is not zero. RFC 8216 §4.3.2.2: the sub-range
+			// An omitted offset is not zero. RFC 8216 sec 4.3.2.2: the sub-range
 			// begins at the byte after the previous segment's sub-range, and
 			// that previous segment is required to be a slice of the same
 			// resource. Byte-range playlists say `1000@0` once and then only

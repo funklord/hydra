@@ -19,12 +19,12 @@ class helper_host;
 struct helper_call;
 
 // Ask for a parser for this site, then judge the answer (architecture doc
-// §11.5).
+// sec 11.5).
 //
-// The third use of the same diff/accept shape as the tree reorganizer (§9) and
-// the filter loop (§12): show exactly what will be sent, send nothing until
+// The third use of the same diff/accept shape as the tree reorganizer (sec 9) and
+// the filter loop (sec 12): show exactly what will be sent, send nothing until
 // asked, validate what comes back, and let the user accept or refuse. What
-// differs is the output — a script rather than a rearrangement or a rule — and
+// differs is the output -- a script rather than a rearrangement or a rule -- and
 // the gate, which here is that the script must pick a URL the page really
 // requested.
 class extractor_dialog : public QDialog {
@@ -53,7 +53,7 @@ public:
 	// Not all of them: probing costs a request each, and most of a page's
 	// traffic is furniture the gate would refuse anyway. Skips the page itself
 	// and anything fetched as a script or an image, keeps one per repeated
-	// shape, and puts the addresses fetched *once* first — a manifest is
+	// shape, and puts the addresses fetched *once* first -- a manifest is
 	// fetched once and its segments are not, so that ordering spends the budget
 	// where the answer usually is.
 	static QList<evidence_request> candidates(const QList<evidence_request> &evidence,
@@ -66,8 +66,8 @@ public:
 	// Models fence code even when asked not to. Strip it rather than fail.
 	static QString strip_fences(const QString &reply);
 
-	// What the script did, rendered for a person (§11.5.1). Pure, so the
-	// wording is tested without standing up a dialog — and the wording is the
+	// What the script did, rendered for a person (sec 11.5.1). Pure, so the
+	// wording is tested without standing up a dialog -- and the wording is the
 	// point, since this is what consent is given against.
 	static QString transcript_text(const QList<helper_call> &calls);
 
@@ -83,7 +83,7 @@ private:
 	void on_failed(const QString &error);
 	void on_accept();
 
-	// The §10 content-type tier: fetch what was picked, with the page's own
+	// The sec 10 content-type tier: fetch what was picked, with the page's own
 	// context, and say what it really serves. Advisory unless it contradicts.
 	void confirm_by_fetching();
 	void show_transcript();

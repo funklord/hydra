@@ -15,13 +15,13 @@ struct media_format {
 	QString format_id;
 	QUrl    url;
 	QString ext;
-	QString protocol;      // "https", "m3u8_native", "http_dash_segments"…
+	QString protocol;      // "https", "m3u8_native", "http_dash_segments"...
 	QString note;
 	int     height   = 0;
 	qint64  filesize = -1;   // -1 when unknown
 	bool    has_video = true;
 	bool    has_audio = true;
-	QMap<QString, QString> headers;   // what the CDN expects to see (§11.3)
+	QMap<QString, QString> headers;   // what the CDN expects to see (sec 11.3)
 };
 
 struct resolved_media {
@@ -33,22 +33,22 @@ struct resolved_media {
 	QList<media_format> formats;
 };
 
-// Asks yt-dlp what the video on a page actually is (architecture doc §11.5).
+// Asks yt-dlp what the video on a page actually is (architecture doc sec 11.5).
 //
 // This is the *first* thing to try, before anything cleverer. Where yt-dlp
 // supports a site it yields a real URL, and a URL is the best possible outcome
 // because everything downstream already works with one: the external player,
 // the download manager's Range resume, the local proxy's context injection.
-// The Media Source tap (§11.6) and generated extractors (§11.5) are for the
-// long tail this cannot reach — measured: it does not support every site, and
+// The Media Source tap (sec 11.6) and generated extractors (sec 11.5) are for the
+// long tail this cannot reach -- measured: it does not support every site, and
 // says so plainly rather than guessing.
 //
 // yt-dlp is a Python program, so it is run as a subprocess rather than linked.
 // Two ways it can be present, preferred in this order:
 //
-//   1. `yt-dlp` on PATH — the user's own, kept current by their package
+//   1. `yt-dlp` on PATH -- the user's own, kept current by their package
 //      manager, which is the point of preferring it.
-//   2. the vendored `third_party/yt-dlp` submodule under the system python3 —
+//   2. the vendored `third_party/yt-dlp` submodule under the system python3 --
 //      pinned, always there after a recursive clone, but only as current as
 //      the submodule pointer.
 //

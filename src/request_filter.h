@@ -21,8 +21,8 @@ struct request_decision {
 	bool strip_referer = false;
 };
 
-// One request, reduced to what a decision needs — plus the full URL, which
-// the decision ignores but the media detector (§11.1) reads for extensions
+// One request, reduced to what a decision needs -- plus the full URL, which
+// the decision ignores but the media detector (sec 11.1) reads for extensions
 // and manifest paths.
 struct request_context {
 	QString       request_host;   // host the request goes to
@@ -35,7 +35,7 @@ struct request_context {
 //
 // Qt WebEngine states the resource type outright; Android's `WebResourceRequest`
 // does not, and offers only headers and a url. So the Android interceptor has to
-// infer it, and this is where that inference lives — shared and testable rather
+// infer it, and this is where that inference lives -- shared and testable rather
 // than buried in a platform file, because a wrong guess here silently turns a
 // per-origin script rule into no rule at all.
 //
@@ -47,7 +47,7 @@ struct request_context {
 // rule the user set for scripts, which looks like the site being broken.
 resource_kind kind_from_hints(const QString &accept, const QUrl &url);
 
-// The interceptor is a shared *sensor*, not just a gate (architecture doc §10):
+// The interceptor is a shared *sensor*, not just a gate (architecture doc sec 10):
 // ad-blocking, media detection, and filter-evolution signal collection all ride
 // the same stream of requests. Observers see every request and its decision.
 //
@@ -60,8 +60,8 @@ public:
 	virtual void on_request(const request_context &ctx, const request_decision &d) = 0;
 };
 
-// The platform-neutral half of request interception (architecture doc §7.3,
-// §19.5). Deciding what to block is identical on every platform because it is
+// The platform-neutral half of request interception (architecture doc sec 7.3,
+// sec 19.5). Deciding what to block is identical on every platform because it is
 // just policy plus a host list; only the plumbing that delivers requests
 // differs, so that plumbing stays in the per-platform interceptor and this
 // stays shared.
@@ -73,11 +73,11 @@ class request_filter {
 public:
 	explicit request_filter(policy_engine *engine);
 
-	// The AI/user-authored list (§12), consulted on every request.
+	// The AI/user-authored list (sec 12), consulted on every request.
 	//
 	// **This was the gap.** The filter-evolution loop proposed rules, the dry-run
 	// checked them, the user accepted them and they were written to
-	// `filters-ai.txt` and listed in settings — and nothing ever asked them about
+	// `filters-ai.txt` and listed in settings -- and nothing ever asked them about
 	// a request. `filter_list::blocks()` existed with no caller in the request
 	// path, so the whole loop's output was decoration. The architecture puts
 	// filter enforcement on spine 1, the interceptor, which is here.

@@ -204,7 +204,7 @@ int main(int argc, char **argv) {
 			sampled = true;
 			mid_value = c;
 
-			// The file on disk is already full size (sparse) — that is the trap.
+			// The file on disk is already full size (sparse) -- that is the trap.
 			const qint64 on_disk = QFileInfo(local_file).size();
 			check(on_disk >= c, QString("file is allocated ahead of the data "
 			                             "(on disk %1, readable %2)")

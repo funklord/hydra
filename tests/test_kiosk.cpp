@@ -1,4 +1,4 @@
-// Kiosk mode (architecture doc §8), which had never been run by anything.
+// Kiosk mode (architecture doc sec 8), which had never been run by anything.
 //
 // It is the last feature in the shell with neither a unit test nor a live
 // driver, and it is the one that borrows a live view's widget out of the window,
@@ -7,7 +7,7 @@
 // is gone when you leave kiosk mode.
 //
 // A fake backend is enough: kiosk only asks a view for its widget, its url, a
-// zoom factor and a settings application, so none of this needs a web engine —
+// zoom factor and a settings application, so none of this needs a web engine --
 // which is why it is here rather than in `tests/live/`.
 #include "kiosk_controller.h"
 #include "web_view_backend.h"

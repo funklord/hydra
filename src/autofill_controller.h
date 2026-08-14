@@ -10,15 +10,15 @@
 class keepass_bridge;
 class policy_engine;
 
-// The object injected pages talk to (architecture doc §13.2), and the gate
+// The object injected pages talk to (architecture doc sec 13.2), and the gate
 // between an untrusted page and the vault.
 //
-// Everything a page can reach goes through here, so this is where §13.3's
+// Everything a page can reach goes through here, so this is where sec 13.3's
 // rules are enforced rather than trusted to the content script:
 //
 //  * The page does not choose the origin it is asking about. The shell sets it
 //    from the real URL of the view, and a request naming anything else is
-//    refused — otherwise a cross-origin iframe could ask for the top page's
+//    refused -- otherwise a cross-origin iframe could ask for the top page's
 //    credentials, or a lookalike could ask for the real site's.
 //  * Autofill is a PolicyEngine feature, so the per-site tri-state and the
 //    global default govern it exactly like JavaScript or cookies, and a
@@ -123,7 +123,7 @@ private:
 	// matching credential across the boundary and the script then refused to
 	// fill any of them, so a vault holding three logins for a site put three
 	// passwords into the page and used none. Cleared on navigation, on choice,
-	// and on refusal -- §13.3's "held only for the fill that asked".
+	// and on refusal -- sec 13.3's "held only for the fill that asked".
 	QList<credential> m_waiting;
 	// The origin the waiting entries were fetched for. A choice that arrives
 	// after the page has moved is answered with nothing rather than with a

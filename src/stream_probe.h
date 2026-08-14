@@ -12,7 +12,7 @@
 
 class QNetworkAccessManager;
 
-// What a candidate address turned out to be (architecture doc §10, §11.1).
+// What a candidate address turned out to be (architecture doc sec 10, sec 11.1).
 struct probe_result {
 	bool    reached = false;   // an HTTP response came back at all
 	int     status  = 0;
@@ -23,19 +23,19 @@ struct probe_result {
 	QByteArray head;           // the opening bytes the verdict was drawn from
 };
 
-// The content-type tier (architecture doc §10).
+// The content-type tier (architecture doc sec 10).
 //
 // URL-shaped detection loses on real sites, and this project has the
-// measurement rather than the suspicion: on the site that motivated §11.5 the
-// manifest arrives as `cf-master.<digits>.txt?k=…`, its segments arrive as
+// measurement rather than the suspicion: on the site that motivated sec 11.5 the
+// manifest arrives as `cf-master.<digits>.txt?k=...`, its segments arrive as
 // `.woff2`, and its init segment as `.woff`. Nothing in the address says
 // "video". `media_detector::classify()` sees nothing, and four rounds of prompt
 // work could not make an extractor find it either, because there was no signal
 // in the evidence to find.
 //
-// So ask the server. Fetch the opening bytes with the page's own context — the
+// So ask the server. Fetch the opening bytes with the page's own context -- the
 // same `stream_context` the proxy injects, because a naked fetch of these URLs
-// returns 403 — and decide from what comes back.
+// returns 403 -- and decide from what comes back.
 //
 // **The body outranks the Content-Type, deliberately.** A server that serves a
 // master playlist as `text/plain` under a `.txt` name is not making a mistake;
@@ -44,7 +44,7 @@ struct probe_result {
 // question whatever the header claims, and the disagreement is worth reporting
 // rather than smoothing over.
 //
-// This is *not* the browser-through-the-proxy half of §10. Inspecting every
+// This is *not* the browser-through-the-proxy half of sec 10. Inspecting every
 // response would mean terminating TLS with a certificate the browser must
 // trust, which the design does not address. This fetches one address the user
 // is already being asked about, which needs none of that.

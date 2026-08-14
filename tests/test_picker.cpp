@@ -1,6 +1,6 @@
-// What "zap this" hands the shell (architecture doc §12.1).
+// What "zap this" hands the shell (architecture doc sec 12.1).
 //
-// The C++ half is thin on purpose — the page script does the picking — which
+// The C++ half is thin on purpose -- the page script does the picking -- which
 // means everything arriving here is a string a page composed, and the only
 // defences are in this file. It had no test.
 //
@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
 	{
 		// The shell sets the url from the view it is showing. A page that could
 		// override it would have its proposal reviewed under another site's name
-		// — and a cosmetic rule accepted under the wrong scope applies where
+		// -- and a cosmetic rule accepted under the wrong scope applies where
 		// nobody chose it.
 		element_picker p;
 		p.begin("https://real.example/page");

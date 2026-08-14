@@ -10,12 +10,12 @@
 
 struct node;
 
-// The single source of truth for the tree (architecture doc §5.1). Exposes
+// The single source of truth for the tree (architecture doc sec 5.1). Exposes
 // node attributes through custom roles so the sort/filter proxy can order and
 // filter without the model caring how.
 // **Needs a QApplication, not merely a QCoreApplication.** It answers
 // `DecorationRole` with a style icon and `FontRole` with a font, so it asks
-// `QApplication::style()` — which is null when there is no GUI application, and
+// `QApplication::style()` -- which is null when there is no GUI application, and
 // dereferencing it crashes inside `data()`. That is the right failure for a
 // misuse rather than something to guard: a model handing back blank icons is
 // harder to trace than a crash where the mistake was made. Written down here
@@ -54,12 +54,12 @@ public:
 	QModelIndex index_for_node(node *n) const;
 	void        refresh_node(node *n);            // emit dataChanged for one node
 
-	// Apply an accepted AI reorganization (architecture doc §9.5). Structural,
+	// Apply an accepted AI reorganization (architecture doc sec 9.5). Structural,
 	// so it goes through a model reset rather than per-row moves; returns the
 	// number of changes applied. Payloads follow ids, so nothing else moves.
 	int apply_reorganization(const QList<tree_change> &changes);
 
-	// The §9.4 undo snapshot: take one before applying, restore it to revert.
+	// The sec 9.4 undo snapshot: take one before applying, restore it to revert.
 	tree_snapshot take_snapshot() const;
 	int restore_snapshot(const tree_snapshot &snap);
 
@@ -122,7 +122,7 @@ public:
 	// A title that came from the page rather than from a person.
 	//
 	// Refused on a node somebody has named: that is the whole distinction. A
-	// tab called "Bank — statements" should stay called that when it is used,
+	// tab called "Bank -- statements" should stay called that when it is used,
 	// while a tab that has only ever worn the page's own title should follow
 	// the page. Returns whether anything changed, so a caller can avoid saving
 	// the tree for a title that is already right -- `titleChanged` fires
@@ -131,7 +131,7 @@ public:
 	// A duplicate under the same parent, with an id of its own.
 	node *duplicate_node(node *n);
 
-	// Pin or unpin a node (architecture doc §5.5). Returns whether anything
+	// Pin or unpin a node (architecture doc sec 5.5). Returns whether anything
 	// changed, for the same reason `set_page_title` does: the caller saves the
 	// tree on a change and should not write the file for a no-op.
 	//

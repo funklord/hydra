@@ -191,7 +191,7 @@ int main(int argc, char *argv[]) {
 		}
 		case 6: {
 			QString err;
-			// A .torrent the torrent source will take — the consent gate fires.
+			// A .torrent the torrent source will take -- the consent gate fires.
 			const int id = dm->enqueue(QUrl::fromLocalFile(tpath), QString(), &err);
 			std::printf("torrent queued: id=%d %s\n", id, qPrintable(err));
 			break;

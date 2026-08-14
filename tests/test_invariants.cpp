@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
 		// file cannot hold it". The file always could -- `write_node` recurses
 		// into any node's children and the reader nests by indentation without
 		// consulting the type -- so the rule was enforcing a model restriction
-		// while citing a format limit that did not exist. Sub-tabs (§5.5)
+		// while citing a format limit that did not exist. Sub-tabs (sec 5.5)
 		// removed the restriction, and a tab with a child below it is now the
 		// shape the feature produces rather than a violation.
 		check(r.ok,

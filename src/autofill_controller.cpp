@@ -55,7 +55,7 @@ void autofill_controller::set_page_origin(const QString &origin) {
 
 QString autofill_controller::blocked_reason(const QString &origin) const {
 	// Origin gate first: a page asking about anything other than where it
-	// actually is has no legitimate reason to (§13.3).
+	// actually is has no legitimate reason to (sec 13.3).
 	if (origin.isEmpty() || origin != m_origin)
 		return "Origin mismatch — the page asked about a different site than "
 		       "the one it is on.";
@@ -194,7 +194,7 @@ void autofill_controller::on_logins(int tag, const QList<credential> &entries) {
 	// it out, and the script's answer to more than one was to fill nothing. So
 	// a vault with three logins for a site sent three passwords across the
 	// boundary and used none of them, which is the worst of both: no fill, and
-	// credentials delivered for a fill that never happened. §13.3 says they are
+	// credentials delivered for a fill that never happened. sec 13.3 says they are
 	// held only for the fill that asked.
 	m_waiting        = entries;
 	m_waiting_origin = m_origin;

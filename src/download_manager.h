@@ -12,26 +12,26 @@
 struct download_job {
 	int         id = 0;
 	QUrl        url;
-	QString     source_id;      // which transport took it ("http", "torrent"…)
+	QString     source_id;      // which transport took it ("http", "torrent"...)
 	QString     path;           // destination on disk, once the source knows it
 	QList<download_file> files; // multi-file jobs; empty for single-file
-	QString     node_id;        // the tree node it came from (§11.2), may be empty
+	QString     node_id;        // the tree node it came from (sec 11.2), may be empty
 	qint64      received = 0;
 	qint64      total    = -1;  // -1 while unknown, and it may stay unknown
-	QString     detail;         // source's own words: "fetching metadata"…
+	QString     detail;         // source's own words: "fetching metadata"...
 	QMap<QString, QString> headers;   // what this address needs sent with it
 	QString     error;
 	download_state status = download_state::queued;
 
 	// Copied from the source's capabilities at enqueue time so the UI can mark
-	// the row without asking what transport this is (§11.4).
+	// the row without asking what transport this is (sec 11.4).
 	bool public_participation = false;
 
 	bool complete() const { return is_complete(status); }
 	bool terminal() const { return is_terminal(status); }
 };
 
-// One queue fed by multiple sources (architecture doc §11.2, §11.4).
+// One queue fed by multiple sources (architecture doc sec 11.2, sec 11.4).
 //
 // The manager owns the queue, the destination directory, consent, and the job
 // records. It does not own a transport: bytes are moved by a `download_source`,
@@ -39,11 +39,11 @@ struct download_job {
 // what the user is told. Nothing here names HTTP or BitTorrent.
 //
 // Scheduling is per source rather than global, because "one at a time" is the
-// right answer for HTTP and the wrong one for torrents — a swarm that is not
+// right answer for HTTP and the wrong one for torrents -- a swarm that is not
 // connected is not downloading. Each source declares its own concurrency.
 //
 // Consent is enforced here rather than in the UI. A source whose participation
-// is publicly observable (§11.4) cannot start until consent for that source has
+// is publicly observable (sec 11.4) cannot start until consent for that source has
 // been given; the job waits and `consent_required` is emitted. That makes the
 // privacy obligation structural: since Hydra ships no VPN and torrents are
 // deliberately made to look like every other download, the one thing that must
@@ -72,16 +72,16 @@ public:
 
 	// Returns the job id, or 0 if no source would take it (see `error`).
 	//
-	// `headers` travel with the request to whichever source takes it — what a
-	// CDN wants to see before it will serve a stream (§11.3).
+	// `headers` travel with the request to whichever source takes it -- what a
+	// CDN wants to see before it will serve a stream (sec 11.3).
 	int enqueue(const QUrl &url, const QString &node_id, QString *error,
 	             const QMap<QString, QString> &headers = {});
 
 	// Register a job whose transport is *already* running.
 	//
 	// enqueue() schedules: it picks a source, waits for a slot and calls
-	// start(). A media capture (§11.6) is the other shape — the page drives the
-	// transfer and the manager only tracks it — so there is nothing to schedule
+	// start(). A media capture (sec 11.6) is the other shape -- the page drives the
+	// transfer and the manager only tracks it -- so there is nothing to schedule
 	// and start() would have nothing to do. Everything after this point is
 	// identical: the source reports through progressed()/finished() exactly as
 	// any other, and the downloads window cannot tell the difference.
@@ -103,7 +103,7 @@ signals:
 	//
 	// Emitted from inside enqueue(). A handler that opens a dialog should take
 	// this on a queued connection, or enqueue() will not return until the user
-	// has answered — which turns every call site into one that must survive a
+	// has answered -- which turns every call site into one that must survive a
 	// nested event loop.
 	void consent_required(const QString &source_id, const QString &note, int job_id);
 

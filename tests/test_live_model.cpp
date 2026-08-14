@@ -1,5 +1,5 @@
 // The extractor loop against a real local model. Reports what it actually
-// produced and how the gate judged it — pass or fail, the point is to measure.
+// produced and how the gate judged it -- pass or fail, the point is to measure.
 #include "extractor_dialog.h"
 #include "extractor_signals.h"
 #include "site_extractor.h"
@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
 	             prov.probe_now() ? "yes" : "NO");
 	if (!prov.available()) return 1;
 
-	// Evidence shaped like the site that motivated §11.5: a disguised manifest
+	// Evidence shaped like the site that motivated sec 11.5: a disguised manifest
 	// among ordinary page traffic and a flood of segments.
 	extractor_signals sig;
 	auto feed = [&](const QString &u, resource_kind k) {
@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
 	// Wait for Send rather than clicking the instant the dialog exists. The
 	// dialog now asks the server what the candidate addresses serve before it
 	// will let anything be sent, and a disabled button ignores a click in
-	// silence — which presented as the model never answering, with no request
+	// silence -- which presented as the model never answering, with no request
 	// reaching Ollama at all.
 	QPushButton *send = button(&dlg, "Send");
 	QElapsedTimer waited;
@@ -137,7 +137,7 @@ int main(int argc, char **argv) {
 	// the rows instead.
 	// Counted off the legend under the table. This has now had to be rewritten
 	// for every arrangement of the note -- `->` suffix, `serves` column, and now
-	// "request N turned out to be …" -- and each time the old counter would have
+	// "request N turned out to be ..." -- and each time the old counter would have
 	// gone on reporting a confident **zero**, which reads exactly like a probe
 	// budget that never reached the media host. That is the wrong diagnosis in
 	// the wrong file, and it is the mistake this line keeps being one edit away
@@ -251,18 +251,18 @@ int main(int argc, char **argv) {
 	}
 
 	// What the *shipping path* concluded, in its own words. The line below is a
-	// second, weaker judgement — `check()` with no probe results and no fetch of
-	// the pick — and reading it as the verdict is a mistake this harness has
+	// second, weaker judgement -- `check()` with no probe results and no fetch of
+	// the pick -- and reading it as the verdict is a mistake this harness has
 	// already caused once: it scored an analytics beacon `usable=1` while the
 	// dialog beside it had refused that pick, because the content-type tier had
 	// fetched it and found no stream. `gate:` above and this are the answer;
 	// `check-only:` is a diagnostic about one rule set.
 	if (QLabel *verdict = dlg.findChild<QLabel *>("verdict")) {
-		// Elided in the middle, not the tail. **The reason is at the end** —
-		// "It does not look like a stream: served as …" comes after the address
+		// Elided in the middle, not the tail. **The reason is at the end** --
+		// "It does not look like a stream: served as ..." comes after the address
 		// it is talking about, so a plain `left(300)` keeps the pick and throws
 		// away the verdict on it. With a long analytics url that is exactly what
-		// happened: the line read "Accepted. Picks a hls stream…" beside a
+		// happened: the line read "Accepted. Picks a hls stream..." beside a
 		// `gate: REJECTED`, and the sentence explaining the contradiction had
 		// been cut off by this very print. Two readers spent time on an
 		// inconsistency that only existed in the log.

@@ -356,7 +356,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 	build_ai_page(ai_page);
 
 	// Each page scrolls. These pages carry explanatory text, and text height
-	// depends on the system font and the user's scaling — any fixed dialog
+	// depends on the system font and the user's scaling -- any fixed dialog
 	// height is a guess that silently clips the explanation on somebody's
 	// machine, which is worse than a scrollbar.
 	auto wrap = [stack](QWidget *page) {
@@ -366,7 +366,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 		area->setFrameShape(QFrame::NoFrame);
 		// Never sideways. Everything on these pages wraps or is a control, so a
 		// horizontal scrollbar can only ever mean the layout is a few pixels
-		// out — and that is exactly how it appeared: the vertical scrollbar
+		// out -- and that is exactly how it appeared: the vertical scrollbar
 		// arrives, takes ~15px off the viewport, and content laid out at the
 		// wider size then overflows by that much. The result was a full-width
 		// scrollbar whose slider filled its own track, scrolling nothing, on
@@ -374,7 +374,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 		area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 		// A gutter, set here so every page gets the same one rather than each
 		// remembering to. Without it a right-aligned control ends exactly where
-		// the vertical scrollbar begins, which reads as clipping — it was
+		// the vertical scrollbar begins, which reads as clipping -- it was
 		// mistaken for clipping here, and the difference is a margin rather
 		// than a layout fault.
 		if (QLayout *lay = page->layout())
@@ -400,7 +400,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 
 	// The AI page scrolls, but its status line does not. It is the answer to
 	// the button directly above it, and a result that has scrolled out of
-	// sight is the same as no result — pressing Check now would appear to do
+	// sight is the same as no result -- pressing Check now would appear to do
 	// nothing at all.
 	auto *ai_tab = new QWidget(stack);
 	auto *ai_col = new QVBoxLayout(ai_tab);
@@ -751,7 +751,7 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	// The page above says an exception always wins over what is chosen here,
 	// and until now there was nowhere to see one. The only way to find out that
 	// JavaScript had been blocked on some site months ago was to go back to that
-	// site and open the shield — which is fine if you remember which site, and
+	// site and open the shield -- which is fine if you remember which site, and
 	// useless otherwise. Every browser with per-site permissions grew this list
 	// for the same reason.
 	v->addWidget(section_heading("Site exceptions", page));
@@ -863,7 +863,7 @@ void settings_dialog::restore_page_defaults(int page) {
 	const QString name = m_categories->item(page)->text();
 
 	// "Default" means what a freshly built object holds before anything has
-	// been stored — the same values the program runs on the first time it is
+	// been stored -- the same values the program runs on the first time it is
 	// started. Reading them from a new instance rather than from a second table
 	// of constants is what keeps the two from drifting apart.
 	if (name.startsWith("Privacy")) {
@@ -1080,7 +1080,7 @@ void settings_dialog::build_filter_page(QWidget *page) {
 
 	// The second corpus, on the same page because it is the same kind of thing:
 	// small perishable facts about how sites behave, kept as data so they can be
-	// corrected without a release — and, in the stated direction, exchanged.
+	// corrected without a release -- and, in the stated direction, exchanged.
 	// A heading and a dimmed line rather than a titled box: the page above it
 	// is already a heading and a table, and one bordered frame among them looks
 	// like the frame means something.
@@ -1142,7 +1142,7 @@ void settings_dialog::build_filter_page(QWidget *page) {
 	});
 
 	// Sharing, in the only form it takes for now: a file someone sends. The
-	// transport is deliberately undecided — what a received rule has to prove is
+	// transport is deliberately undecided -- what a received rule has to prove is
 	// the part that had to be right first, and that does not change when the
 	// bytes eventually arrive some other way.
 	connect(rules_export, &QPushButton::clicked, this, [this] {
@@ -1308,7 +1308,7 @@ void settings_dialog::rebuild_filter_list() {
 		// Not `r.scope` directly: for a cosmetic rule that field is the site the
 		// rule applies on, but for `||host^` it is the host being *blocked*, so
 		// this column was labelling a global tracker rule as though it only
-		// applied on the tracker's own domain. Network rules are global here —
+		// applied on the tracker's own domain. Network rules are global here --
 		// per-site ones would need `$domain=`, which the parser does not read.
 		it->setText(1, r.cosmetic
 		                   ? (r.scope.isEmpty() ? QStringLiteral("every site") : r.scope)
@@ -1534,7 +1534,7 @@ void settings_dialog::build_download_page(QWidget *page) {
 	m_conn_torrent->setRange(5, 5000);
 	m_conn_torrent->setSingleStep(10);
 
-	// The §11.4 argument, split across the two rows it actually applies to,
+	// The sec 11.4 argument, split across the two rows it actually applies to,
 	// rather than as a paragraph underneath both.
 	bv->addWidget(settings_row(
 	  "Connections, all torrents",
@@ -1574,7 +1574,7 @@ void settings_dialog::build_download_page(QWidget *page) {
 	// the width wherever there is width to give; the minimum only ever decided
 	// what happened when there was not.
 
-	// Not a VPN, and says so. §11.4 decided Hydra ships no tunnel; this is the
+	// Not a VPN, and says so. sec 11.4 decided Hydra ships no tunnel; this is the
 	// field that makes the user's own system-level choice reliable instead of
 	// competing with it.
 	bv->addWidget(settings_row(
@@ -1605,7 +1605,7 @@ void settings_dialog::build_download_page(QWidget *page) {
 	v->addStretch(1);
 }
 
-// §11.3's radio group: everything supported is shown, installed ones are
+// sec 11.3's radio group: everything supported is shown, installed ones are
 // selectable, missing ones are greyed with the reason. The point is that a
 // machine with only mplayer still gets a working default and can see why the
 // others are unavailable.
@@ -1637,7 +1637,7 @@ void settings_dialog::populate_players() {
 
 void settings_dialog::rescan_players() {
 	// Scanning PATH is cheap, but it is still a probe, and it happens because
-	// the user asked — not because a window opened.
+	// the user asked -- not because a window opened.
 	QString was;
 	for (QRadioButton *b : m_player_buttons)
 		if (b->isChecked())
@@ -1689,7 +1689,7 @@ void settings_dialog::build_ai_page(QWidget *page) {
 
 	// **A short label with the explanation under it, which is what every other
 	// setting on these pages does.** These three carried their qualifier in the
-	// label -- "Automatic — use the local model when it is running" -- and a
+	// label -- "Automatic -- use the local model when it is running" -- and a
 	// QRadioButton does not wrap, so that one line held this page at 309 pixels
 	// and would not give any of it back.
 	//
@@ -1702,7 +1702,7 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	m_ai_local    = new QRadioButton("Local only", group);
 	m_ai_external = new QRadioButton("Claude", group);
 
-	// The point of the middle one: §1's "data stays on the machine" should be
+	// The point of the middle one: sec 1's "data stays on the machine" should be
 	// something you can hold the app to, not a default that silently lapses the
 	// first time Ollama is not running.
 	const char *why[] = {
@@ -1801,7 +1801,7 @@ void settings_dialog::update_ai_state() {
 	                      !m_claude_key->text().trimmed().isEmpty());
 
 	// Report only what has been established. Before the button is pressed the
-	// honest answer is "not checked", not "unavailable" — the latter would be
+	// honest answer is "not checked", not "unavailable" -- the latter would be
 	// a claim about the user's machine that nothing here has verified.
 	if (m_probe_state == probe_state::checking) {
 		m_ai_status->setText("Checking the local model…");
@@ -1984,7 +1984,7 @@ void settings_dialog::apply() {
 		}
 	}
 	if (m_players) {
-		// The command first: selecting Custom… is only meaningful once the
+		// The command first: selecting Custom... is only meaningful once the
 		// launcher knows what to run, and set_custom_command re-resolves
 		// whether that entry counts as installed.
 		m_players->set_custom_command(m_custom_cmd->text());

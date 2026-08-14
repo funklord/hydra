@@ -6,12 +6,12 @@
 #include <QString>
 #include <QStringList>
 
-// "Something got through here" — a report a person files in one click, and the
+// "Something got through here" -- a report a person files in one click, and the
 // evidence that was on screen when they filed it.
 //
 // **The point is that it costs nothing to file.** The three teaching tools this
-// project already has — the element picker, filter evolution, the consent-rule
-// editor — all require knowing *what* went wrong and acting precisely on it.
+// project already has -- the element picker, filter evolution, the consent-rule
+// editor -- all require knowing *what* went wrong and acting precisely on it.
 // The hard part of writing a filter rule is not the rule; it is being back in
 // the moment where the thing happened, with the traffic that caused it still in
 // front of you. This records that moment so the diagnosis can come later, or

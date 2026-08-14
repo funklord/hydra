@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
 	auto *det = w.findChild<media_detector *>();
 	std::printf("media_detector: %s\n", det ? "found" : "MISSING");
 
-	// Open a tab first — the address bar acts on the current view — then
+	// Open a tab first -- the address bar acts on the current view -- then
 	// navigate, exactly as a user would.
 	QTimer::singleShot(2000, [&] {
 		auto *tree = w.findChild<QTreeView *>();
@@ -186,7 +186,7 @@ int main(int argc, char *argv[]) {
 	});
 
 	// Press play. Streams are usually not requested until the player is told
-	// to start (§11.3 says exactly this), so without a real click the detector
+	// to start (sec 11.3 says exactly this), so without a real click the detector
 	// has nothing to detect. A posted Qt mouse event goes through the engine's
 	// normal input path and counts as a user gesture.
 	QTimer::singleShot(21000, [&] {

@@ -16,13 +16,14 @@ struct info_hash_t;
 class QNetworkAccessManager;
 class QTimer;
 
-// BitTorrent as a first-class download source (architecture doc §11.4), on
+// BitTorrent as a first-class download source (architecture doc sec 11.4), on
 // libtorrent-rasterbar.
 //
-// Why rasterbar and not rakshasa's library of the same name is argued in §11.4
+// Why rasterbar and not rakshasa's library of the same name is argued in sec 11.4
 // from the shipped headers: rakshasa's is a peer-scaling core with no magnet
-// support, no µTP, no port mapping and no streaming piece order, all of which
-// are what "works when you click the link" is made of. µTP decides it — without
+// support, no uTP, no port mapping and no streaming piece order, all of which
+// are what "works when you click the link" is made of. uTP decides it --
+// without
 // LEDBAT backoff a torrent saturates the uplink and makes its own browser
 // unusable, which no first-class download may do.
 //
@@ -41,7 +42,7 @@ class QTimer;
 //
 // Built optional, like libsodium: without HYDRA_HAVE_LIBTORRENT this compiles
 // to a stub whose available() is false, and the shell simply does not add it as
-// a source. There is no degraded mode — a torrent engine cannot be faked.
+// a source. There is no degraded mode -- a torrent engine cannot be faked.
 class torrent_download_source : public download_source {
 	Q_OBJECT
 public:
@@ -75,18 +76,18 @@ public:
 	qint64 contiguous_bytes(int id, const QString &file) const override;
 
 	// --- Settings ---------------------------------------------------------
-	// The §11.4 caps. `global` is the whole session; `per_torrent` bounds one
+	// The sec 11.4 caps. `global` is the whole session; `per_torrent` bounds one
 	// swarm. Defaults here are already well above a desktop GUI's, because the
 	// ceiling that matters is the one you can actually reach.
 	void set_connection_limits(int global, int per_torrent);
 
-	// The §11.4 privacy decision made usable: Hydra ships no VPN, but a user
+	// The sec 11.4 privacy decision made usable: Hydra ships no VPN, but a user
 	// who configured one at the OS layer can bind the session to that
 	// interface, and announces stop if it disappears. A settings field wired to
-	// a libtorrent option — not a VPN implementation.
+	// a libtorrent option -- not a VPN implementation.
 	void set_listen_interfaces(const QString &interfaces);
 
-	// Seeding is a policy question, not a default (§11.4). Ratio <= 0 means
+	// Seeding is a policy question, not a default (sec 11.4). Ratio <= 0 means
 	// "stop as soon as the download completes".
 	void set_seed_ratio(double ratio);
 

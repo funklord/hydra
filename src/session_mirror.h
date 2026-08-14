@@ -15,13 +15,13 @@ class QTimer;
 // is not: Firefox writes its session by creating a temporary file and renaming
 // it over the old one, so the inode the watcher holds stops being the file, the
 // watch fires exactly once and then never again. Watching the *directory*
-// instead trades that for a different problem — every unrelated write in the
+// instead trades that for a different problem -- every unrelated write in the
 // profile wakes us. A timer that stats one path is duller and does not stop
 // working.
 //
 // **A file change is not a tab change**, and this is the whole reason this
 // class exists rather than a naked timer. Firefox rewrites that file constantly
-// — scroll offsets, form state, which tab is focused — so refreshing on every
+// -- scroll offsets, form state, which tab is focused -- so refreshing on every
 // write would rebuild the mirror every few seconds while the set of tabs sat
 // completely still. So the parsed result is reduced to a fingerprint and the
 // signal is only emitted when *that* changes. Cheap check first (size and

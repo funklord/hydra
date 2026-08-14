@@ -1,4 +1,4 @@
-// Per-node suspended state (architecture doc §4.2/§5.4).
+// Per-node suspended state (architecture doc sec 4.2/sec 5.4).
 //
 // A blob here is a tab's navigation history: where it had been, what the back
 // button would do, where it was scrolled to. Losing one costs a suspended tab
@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
 		// **The case worth having a test for.** Sanitising by replacing every
 		// unsafe character with '_' is not injective: "a b" and "a_b" both
 		// become "a_b". Two suspended tabs would then share one file, and the
-		// second to be restored would come back with the first one's history —
+		// second to be restored would come back with the first one's history --
 		// a tab claiming a past that is not its own.
 		check(s.save("a b", "history-of-a-space-b"), "the first id saves");
 		check(s.save("a_b", "history-of-a-underscore-b"), "the second saves");
@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
 	section("blobs written before the collision fix are still found");
 	{
 		// The fix appends a hash to the filename, but **only when sanitising
-		// changed the id** — so every id the application generates keeps the name
+		// changed the id** -- so every id the application generates keeps the name
 		// it already had on disk. Without that, the fix would have silently
 		// orphaned every suspended tab's history on upgrade: no error, no
 		// warning, just tabs that had forgotten where they had been.

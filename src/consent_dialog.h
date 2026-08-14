@@ -16,7 +16,7 @@ class consent_blocker;
 // The same accept-or-refuse shape as the filter and extractor loops, and the
 // simplest of the three, because there is no model in it: the evidence *is* the
 // proposal. A banner that could not be answered was recorded with the labels it
-// offered, and a label is very nearly a rule already — all that is missing is
+// offered, and a label is very nearly a rule already -- all that is missing is
 // which of them means "reject" and which means "accept", and that is a question
 // only a person can answer for a language nobody here reads.
 //

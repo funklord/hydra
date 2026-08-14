@@ -1,4 +1,4 @@
-// The blocking fetcher behind the helper tier (architecture doc §11.5.1).
+// The blocking fetcher behind the helper tier (architecture doc sec 11.5.1).
 //
 // A real socket, because what is being tested is exactly the part the fake
 // fetcher in test_helpers cannot stand in for: that a synchronous call from one
@@ -54,7 +54,7 @@ public:
 // Not a convenience: `fetch` blocks its caller, and the fake origin below lives
 // on the main thread, so calling it directly from main stops the server from
 // ever answering and every request "times out". That is the whole hazard the
-// design warns about, reproduced by accident — a blocked thread serves nothing,
+// design warns about, reproduced by accident -- a blocked thread serves nothing,
 // which is exactly why the script must not run on the UI thread once this is
 // wired into the dialog.
 static fetch_result off_thread(network_fetcher &f, const QUrl &url,
@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
 		      QString("with the content type (%1)").arg(r.content_type));
 		check(r.body.startsWith("#EXTM3U"), "and the body");
 
-		// The whole reason it goes through the page's context (§11.3).
+		// The whole reason it goes through the page's context (sec 11.3).
 		const QByteArray saw = server.last_head.toLower();
 		check(saw.contains("referer: https://site.example/watch/1"),
 		      "the page's Referer reached the origin");

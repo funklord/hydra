@@ -8,12 +8,12 @@
 class QNetworkAccessManager;
 class QNetworkReply;
 
-// The default external backend (architecture doc §9.1): the Anthropic Messages
+// The default external backend (architecture doc sec 9.1): the Anthropic Messages
 // API over plain HTTP. There is no official Anthropic SDK for C++, so this
 // speaks the REST endpoint directly rather than pulling in a shim.
 //
 // Because this is external, everything it sends is gated behind the
-// review-before-send dialog, and only the §9.3 metadata is ever in the payload.
+// review-before-send dialog, and only the sec 9.3 metadata is ever in the payload.
 class claude_provider : public ai_provider {
 	Q_OBJECT
 public:
@@ -25,7 +25,7 @@ public:
 	void send(const QString &system_prompt, const QString &user_prompt) override;
 	void cancel() override;
 
-	// Held in memory only; never written to disk with the tree or policy — and
+	// Held in memory only; never written to disk with the tree or policy -- and
 	// that includes the settings file, which is plain INI.
 	void set_api_key(const QString &key) { m_api_key = key; }
 	bool has_api_key() const { return !m_api_key.isEmpty(); }

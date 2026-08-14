@@ -12,7 +12,7 @@ class filter_list;
 // **The file is an INI**, because everything in it is either a value or a list
 // of flat records and neither needs anything cleverer. A key=value file can be
 // read by a person, diffed by a tool and edited in an emergency, which is worth
-// more here than the ability to nest — and where the project does use JSON, it
+// more here than the ability to nest -- and where the project does use JSON, it
 // is for data that is genuinely shaped, not out of habit.
 //
 //   [hydra]      the format version, so a future reader knows what it has
@@ -29,7 +29,7 @@ class filter_list;
 //   * The tab tree. That is the session, not a setting, and it has its own file
 //     in the same readable spirit.
 //   * The Claude API key, which is never written to disk at all.
-//   * Learned site rules — consent wording and detector names. Those have their
+//   * Learned site rules -- consent wording and detector names. Those have their
 //     own import on the Filters page, and it exists because rules from
 //     elsewhere are reviewed before they take effect (`site_rules::judge_import`
 //     deliberately adds nothing on its own). Carrying them in a one-click

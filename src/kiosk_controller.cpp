@@ -21,7 +21,7 @@ namespace {
 // Place `inner` inside `outer` per alignment. Sizes larger than `outer` get
 // negative offsets, which is exactly what produces the crop: child widgets are
 // clipped to their parent's bounds, so the overflow simply is not drawn, and
-// input still maps correctly (architecture doc §8.1).
+// input still maps correctly (architecture doc sec 8.1).
 QRect aligned_rect(const QSize &inner, const QSize &outer, Qt::Alignment a) {
 	int x = (outer.width() - inner.width()) / 2;
 	int y = (outer.height() - inner.height()) / 2;
@@ -39,7 +39,7 @@ kiosk_controller::kiosk_controller(QObject *parent) : QObject(parent) {
 	m_idle_timer->setSingleShot(true);
 	connect(m_idle_timer, &QTimer::timeout, this, [this] {
 		// The single most-used real kiosk feature: walk back to the home URL
-		// after inactivity so an abandoned session does not persist (§8.3).
+		// after inactivity so an abandoned session does not persist (sec 8.3).
 		if (m_view && m_config.home.isValid())
 			m_view->load(m_config.home);
 	});
@@ -86,7 +86,7 @@ bool kiosk_controller::enter(web_view_backend *view, QWidget *restore_to) {
 
 	if (m_config.watchdog) {
 		connect(view, &web_view_backend::render_process_gone, this, [this] {
-			// Self-heal: an unattended screen must not stay dead (§8.3).
+			// Self-heal: an unattended screen must not stay dead (sec 8.3).
 			if (m_view)
 				m_view->load(m_config.home.isValid() ? m_config.home : m_view->url());
 		});
@@ -184,14 +184,14 @@ void kiosk_controller::relayout() {
 	case scale_mode::none: {
 		// Crop via clip: native size, positioned, overflow clipped by the
 		// stage. No transform anywhere, which is why this path is the robust
-		// one (§8.1).
+		// one (sec 8.1).
 		m_view->set_zoom_factor(1.0);
 		w->setGeometry(aligned_rect(design, stage, m_config.alignment));
 		break;
 	}
 	case scale_mode::geometric: {
 		// Render at the design size and transform the pixels. Exact layout, no
-		// reflow — and the historically fragile path (§8.3).
+		// reflow -- and the historically fragile path (sec 8.3).
 		m_view->set_zoom_factor(1.0);
 		if (!m_scene) {
 			m_scene = new QGraphicsScene;
@@ -207,7 +207,7 @@ void kiosk_controller::relayout() {
 			m_proxy = m_scene->addWidget(w);
 			if (!m_proxy) {
 				// Embedding failed; fall back rather than present a blank
-				// screen (§8.3 — this path is the fragile one).
+				// screen (sec 8.3 -- this path is the fragile one).
 				w->setParent(m_stage);
 				w->show();
 				m_config.scale = scale_mode::reflow;

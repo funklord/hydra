@@ -52,7 +52,7 @@ void qtwebengine_factory::register_url_schemes(const QStringList &schemes) {
 
 qtwebengine_factory::qtwebengine_factory(request_filter *filter)
   : m_filter(filter) {
-	// One shared profile for every view (architecture doc §6).
+	// One shared profile for every view (architecture doc sec 6).
 	m_profile = QWebEngineProfile::defaultProfile();
 
 	m_interceptor = new qtwebengine_interceptor(m_filter);
@@ -67,7 +67,7 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 		  return f->allow_cookie(r.firstPartyUrl.host(), r.thirdParty);
 	  });
 
-	// Links that are not pages (§11.4). Installed per scheme main() registered;
+	// Links that are not pages (sec 11.4). Installed per scheme main() registered;
 	// with none registered this does nothing and such links behave as before.
 	if (!g_custom_schemes.isEmpty()) {
 		m_scheme_handler = new magnet_scheme_handler;

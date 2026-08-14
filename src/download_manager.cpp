@@ -61,7 +61,7 @@ int download_manager::enqueue(const QUrl &url, const QString &node_id,
                                QString *error,
                                const QMap<QString, QString> &headers) {
 	// First source that accepts wins. If none does, report the most specific
-	// reason offered rather than a generic refusal — the sources know why.
+	// reason offered rather than a generic refusal -- the sources know why.
 	download_source *chosen = nullptr;
 	QString first_reason;
 	for (download_source *s : m_sources) {
@@ -202,7 +202,7 @@ void download_manager::on_finished(int id, bool ok, const QString &message) {
 		if (j->status == download_state::cancelled) {
 			// A cancellation is the user's decision and final. A source that
 			// reports success afterwards is describing what it managed before
-			// stopping, not undoing the cancel — and this used to overwrite it,
+			// stopping, not undoing the cancel -- and this used to overwrite it,
 			// so cancelling a capture showed as "Complete". HTTP never exposed
 			// it because aborting a reply reports failure; a capture reports
 			// success whenever any bytes were written.

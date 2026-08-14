@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-// The content script injected into every page (architecture doc §13.2). Kept
+// The content script injected into every page (architecture doc sec 13.2). Kept
 // as a string rather than a resource so the injection seam stays the only
-// engine-specific piece — an Android backend injects the same source.
+// engine-specific piece -- an Android backend injects the same source.
 //
 // Field detection is the fiddly "just works" part every password manager
 // faces, so it leans on the standard signals: type=password, the
 // current-password / new-password autocomplete values, and input types and
 // names that identify a username field.
 //
-// Two §13.3 rules are visible here and are also enforced on the C++ side,
+// Two sec 13.3 rules are visible here and are also enforced on the C++ side,
 // because a page can rewrite anything in its own document:
-//   * the script never asks about an origin it invents — it sends
+//   * the script never asks about an origin it invents -- it sends
 //     location.origin, and the controller checks that against the real URL;
 //   * nothing is auto-submitted. Fields are filled and the user presses the
 //     button themselves.

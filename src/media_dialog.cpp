@@ -90,7 +90,7 @@ void media_dialog::repopulate() {
 		row->setText(1, item.label);
 		row->setText(2, item.url.host());
 
-		// Both actions on every row; the list is already primary-first (§11.3).
+		// Both actions on every row; the list is already primary-first (sec 11.3).
 		auto *cell    = new QWidget(m_list);
 		auto *layout  = new QHBoxLayout(cell);
 		layout->setContentsMargins(0, 0, 0, 0);
@@ -102,8 +102,8 @@ void media_dialog::repopulate() {
 		connect(save,  &QPushButton::clicked, this, [this, item] { this->save(item); });
 		m_list->setItemWidget(row, 3, cell);
 	}
-	// What the tap can see but no URL can name (§11.6). These rows are not
-	// streams anyone can fetch — the bytes exist only inside the player — so
+	// What the tap can see but no URL can name (sec 11.6). These rows are not
+	// streams anyone can fetch -- the bytes exist only inside the player -- so
 	// the one thing offered is to record them.
 	const QList<mse_stream> playing = m_tap ? m_tap->streams_for(m_site)
 	                                        : QList<mse_stream>{};
@@ -185,7 +185,7 @@ void media_dialog::assemble_then(const media_item &item, bool play_it) {
 		m_status->setText(QString("Assembling %1/%2 segments (%3 KiB)…")
 		                      .arg(done).arg(total).arg(bytes / 1024));
 		// Hand the player the growing file as soon as there is something to
-		// play — that is the §11.3 tee-to-disk trick, and it is what turns a
+		// play -- that is the sec 11.3 tee-to-disk trick, and it is what turns a
 		// live stream into a locally seekable one.
 		if (play_it && done == 1) {
 			const QUrl via = m_proxy ? m_proxy->publish_file(out, "video/mp2t") : QUrl();
@@ -210,7 +210,7 @@ void media_dialog::assemble_then(const media_item &item, bool play_it) {
 
 void media_dialog::watch(const media_item &item) {
 	// A player that cannot take a manifest gets an assembled progressive file
-	// instead — "the app compensates in the proxy for what the player lacks".
+	// instead -- "the app compensates in the proxy for what the player lacks".
 	if (item.kind == media_kind::hls && !m_players->selected_handles_streams()) {
 		assemble_then(item, true);
 		return;
@@ -218,7 +218,7 @@ void media_dialog::watch(const media_item &item) {
 
 	const QString warn = m_players->warning_for(item);
 	// Hand the player a localhost URL when the proxy is up, so the CDN sees
-	// the page's Referer and cookies rather than a naked request (§11.3).
+	// the page's Referer and cookies rather than a naked request (sec 11.3).
 	// The page's own context, overlaid with anything this particular stream
 	// asked for. A learned extractor names the headers its CDN checks, and
 	// they are useless if they stop here.
@@ -243,7 +243,7 @@ void media_dialog::watch(const media_item &item) {
 }
 
 void media_dialog::save(const media_item &item) {
-	// HLS is saveable now: fetch the segments and concatenate them (§11.2).
+	// HLS is saveable now: fetch the segments and concatenate them (sec 11.2).
 	if (item.kind == media_kind::hls) {
 		assemble_then(item, false);
 		return;
@@ -258,7 +258,7 @@ void media_dialog::save(const media_item &item) {
 	// On Android naming the directory is worse than useless: Qt downloads into
 	// app-private storage, whose path is long, unopenable by any file manager,
 	// and not where the finished file ends up anyway -- it is copied into the
-	// shared Downloads collection when it completes (§19).
+	// shared Downloads collection when it completes (sec 19).
 #ifdef Q_OS_ANDROID
 	const QString where = QStringLiteral("Queued. It will appear in Downloads "
 	                                      "when it finishes.");

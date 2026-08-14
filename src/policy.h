@@ -5,7 +5,7 @@
 #include <QtGlobal>
 
 // Per-site security features and the tri-state setting model (architecture
-// doc §7.1). Each rule packs one 2-bit setting per feature into a quint64.
+// doc sec 7.1). Each rule packs one 2-bit setting per feature into a quint64.
 namespace policy {
 
 enum class feature : int {
@@ -22,13 +22,13 @@ enum class feature : int {
 	notifications,
 	referer,
 	autofill,
-	// The §11.5.1 helper tier. Two powers rather than one, deliberately:
+	// The sec 11.5.1 helper tier. Two powers rather than one, deliberately:
 	// reading a manifest the page already fetched is not comparable to reading
 	// the DOM of a logged-in page, and a single "advanced extractor" switch
 	// would quietly grant the second to get the first. Defaults to block.
 	//
 	// **`extractor_dom` is deliberately absent, and its design is not.** The DOM
-	// half of §11.5.1 is designed and unbuilt, so the permission was offered and
+	// half of sec 11.5.1 is designed and unbuilt, so the permission was offered and
 	// read by nothing: denying it gave false assurance and granting it did
 	// nothing, for a control whose own description says it grants access to
 	// "whatever you are logged in to". A permission is a promise about what the
@@ -47,7 +47,7 @@ enum class feature : int {
 	count
 };
 
-// `unset` is the architecture doc's "Default" state — no rule expressed at
+// `unset` is the architecture doc's "Default" state -- no rule expressed at
 // this scope, so resolution falls through to the global default. Spelled
 // `unset` because `default` is a keyword.
 enum class setting : quint8 { unset = 0, allow = 1, block = 2 };
@@ -60,7 +60,7 @@ const char *feature_name(feature f);
 const char *feature_label(feature f);
 // One line saying what the setting governs, shown under the label the way a
 // browser's settings page does. It describes the *power*, not the state, so it
-// reads correctly whichever way the setting is set — "where you are, when a page
+// reads correctly whichever way the setting is set -- "where you are, when a page
 // asks" is true whether that is allowed or blocked, while "sites cannot see
 // where you are" would be a lie half the time.
 const char *feature_help(feature f);
@@ -69,7 +69,7 @@ feature     feature_from_name(const QString &name);
 
 // --- one line of settings, as the INI files write it ------------------------
 //
-// "javascript:block, cookies:allow" — the encoding shared by the policy file
+// "javascript:block, cookies:allow" -- the encoding shared by the policy file
 // and the exported settings bundle. Shared because two encoders for one line
 // drift, and the drift is invisible until a file written by one is read by the
 // other.

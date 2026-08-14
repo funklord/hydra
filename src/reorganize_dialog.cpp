@@ -16,7 +16,7 @@
 namespace {
 
 // Kept explicit rather than clever: the model is told the exact grammar back,
-// and told the one rule the invariant check will enforce anyway (§9.4). Saying
+// and told the one rule the invariant check will enforce anyway (sec 9.4). Saying
 // it up front turns most violations into non-events instead of repairs.
 const char *k_system_prompt =
 	"You reorganize a browser's tab tree. You are given an outline where every "
@@ -121,7 +121,7 @@ void reorganize_dialog::on_reply(const QString &text) {
 		return;
 	}
 
-	// Nothing is shown until the invariant check has run (§9.4).
+	// Nothing is shown until the invariant check has run (sec 9.4).
 	const proposal_report rep = tree_diff::check_and_repair(m_model->root(), m_proposal);
 	if (!rep.usable) {
 		delete m_proposal;

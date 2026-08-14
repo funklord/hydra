@@ -1,4 +1,4 @@
-// The importers, through the real shell (§4).
+// The importers, through the real shell (sec 4).
 //
 // Both readers are covered offline in `test_session`. What is not coverable
 // there is the part a person actually meets: a menu item that builds a folder

@@ -15,7 +15,7 @@
 
 #include <functional>
 
-// The helper tier (architecture doc §11.5.1).
+// The helper tier (architecture doc sec 11.5.1).
 //
 // The pure tier hands a script the request log and takes an address back. It
 // cannot help where the address is computed in page JS and never appears in the
@@ -54,7 +54,7 @@ struct helper_budget {
 
 // What a fetch produced. Deliberately not a QNetworkReply: the fetcher is
 // injected, so the whole tier is exercised offline with a fake one and the only
-// component that touches a network — or a thread — is the real implementation.
+// component that touches a network -- or a thread -- is the real implementation.
 struct fetch_result {
 	bool       reached = false;
 	int        status  = 0;
@@ -81,7 +81,7 @@ public:
 	int  size() const { return m_allowed.size(); }
 
 	// Grow the set from a document the app fetched, resolving relative
-	// references against the address it came from — which is how a master
+	// references against the address it came from -- which is how a master
 	// playlist legitimately leads to its variants. Returns how many new
 	// addresses it learned.
 	//
@@ -111,7 +111,7 @@ public:
 	// Free: it is data already computed, with no I/O behind it. It exists
 	// because a budget is spent by *order*, and a script scanning the request
 	// log left to right spends it on stylesheets and beacons before reaching
-	// the video — measured against a real capture, where eight calls went to
+	// the video -- measured against a real capture, where eight calls went to
 	// page furniture and the manifest was never reached. A script that starts
 	// here spends its budget where the answer is.
 	Q_INVOKABLE QStringList candidates() const { return m_candidates; }
@@ -122,7 +122,7 @@ public:
 	Q_INVOKABLE void log(const QString &message);
 
 	// What the server says an address is, without pulling its body: status,
-	// content type, and the §10 classification. Empty map if refused.
+	// content type, and the sec 10 classification. Empty map if refused.
 	Q_INVOKABLE QVariantMap head(const QString &url);
 
 	// The body, capped, as text. Empty string if refused. Anything it returns

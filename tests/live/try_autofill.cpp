@@ -1,4 +1,4 @@
-// The key: the affordance §13.2 asks for, driven through the real shell.
+// The key: the affordance sec 13.2 asks for, driven through the real shell.
 //
 // Nothing here needs KeePassXC, and that is the point of choosing this case.
 // **Autofill is HTTPS-only by default**, so a login form served over plain HTTP

@@ -4,13 +4,13 @@
 //
 // Driven end to end and observed from the *page's* side. The page asks for each
 // permission and reports what it got by fetching `/report?...`, so what is
-// measured is what a site would actually experience — not what our decider
+// measured is what a site would actually experience -- not what our decider
 // returned, which is the thing that could be right while the wiring under it is
 // not. `main_window` installs the decider, the backend maps Qt's feature enum
 // onto ours, and the policy engine answers; a break anywhere in that chain shows
 // up here as the wrong answer reaching the page.
 //
-// Served from `127.0.0.1`, which Chromium counts as a secure context — without
+// Served from `127.0.0.1`, which Chromium counts as a secure context -- without
 // that, geolocation and getUserMedia are refused before any permission is asked
 // for and the whole run would measure nothing.
 //
@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
 	tf.close();
 
 	// One origin per case, on its own port. Chromium remembers a permission
-	// answer per *origin* for the session, and an origin is host **and port** —
+	// answer per *origin* for the session, and an origin is host **and port** --
 	// so re-asking on the same port would be answered from that memory and the
 	// page would never reach our decider a second time. Same host throughout, so
 	// the per-host policy still applies to all three.
@@ -211,7 +211,7 @@ int main(int argc, char *argv[]) {
 	// "Refused", as the page can tell.
 	//
 	// Chromium says `NotAllowedError` when a permission is denied and
-	// `AbortError` when it cannot open the device at all — and which of the two
+	// `AbortError` when it cannot open the device at all -- and which of the two
 	// getUserMedia reports for a denied camera changed between the Chromium in
 	// Qt 6.8.2 and the one in 6.11: same machine, same decision, same run,
 	// different word. Neither is a grant, and the thing under test is that the
@@ -222,7 +222,7 @@ int main(int argc, char *argv[]) {
 		return v == "NotAllowedError" || v == "AbortError";
 	};
 
-	// 1. The §7.2 defaults: every one of these is block.
+	// 1. The sec 7.2 defaults: every one of these is block.
 	run_case(0, "defaults: geo, camera, microphone, notifications all blocked");
 	check(answered("notifications", "denied") && answered("geolocation", "denied") &&
 	       answered("microphone", "denied") && answered("camera", "denied"),
@@ -247,7 +247,7 @@ int main(int argc, char *argv[]) {
 	      "and the page still cannot open a microphone");
 	// Deliberately not asserted: what the page sees for geolocation. This build
 	// has no location provider, so a granted request still ends as
-	// PERMISSION_DENIED — the same code a refusal produces. Asserting on it
+	// PERMISSION_DENIED -- the same code a refusal produces. Asserting on it
 	// would be asserting on the engine's build options.
 	std::printf("  --    page saw geo '%s' (engine has no location provider "
 	             "here, so this cannot distinguish grant from refusal)\n",

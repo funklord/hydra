@@ -13,20 +13,20 @@
 class QLabel;
 class request_filter;
 
-// The Android side of the WebView seam — **a System WebView, driven over JNI.**
+// The Android side of the WebView seam -- **a System WebView, driven over JNI.**
 //
 // Pages load, links navigate, back returns, and the address bar follows along.
 // The WebView itself lives outside Qt's widget tree: Qt for Widgets draws into
 // its own surface and cannot host a native Android view, so `HydraWebView.java`
 // adds one to the Activity *on top* of Qt's surface and this class keeps it
 // glued to wherever the page-area widget is, in device pixels. The cost of that
-// arrangement is that this view sits above everything Qt draws — **including
+// arrangement is that this view sits above everything Qt draws -- **including
 // Qt's own dialogs**, which is not a caveat but a bug: tapping "Media" depressed
 // the button and showed nothing, because the dialog opened behind the page.
 //
 // The view therefore hides while any dialog is visible, counted rather than
 // inferred. The first attempt used `WindowBlocked`, which Qt sends to a window
-// covered by a *modal* dialog — and that missed the downloads dialog, which is
+// covered by a *modal* dialog -- and that missed the downloads dialog, which is
 // shown rather than exec'd and came up with the page drawn through the middle of
 // it. Counting needs no assumption about modality, and "none of the shell's
 // windows are non-modal" was exactly the kind of claim that was false already.
@@ -51,7 +51,7 @@ class request_filter;
 //
 // **Content scripts run, and can call back.** There is no QWebChannel here, so
 // `addJavascriptInterface` carries a two-method native object and a shim builds
-// the same `window.hydraChannel(cb)` the desktop scripts are written against —
+// the same `window.hydraChannel(cb)` the desktop scripts are written against --
 // they run unmodified. `bridge_invoker` does the marshalling, and is where the
 // rules about what a page may call are written down.
 //
@@ -67,7 +67,7 @@ class request_filter;
 //     androidx.webkit is the real answer and is a dependency decision, not a
 //     line of code.
 //
-// **File inputs open the system picker**, through Qt's own `QFileDialog` — on
+// **File inputs open the system picker**, through Qt's own `QFileDialog` -- on
 // Android that is the document picker, and what comes back is a `content:` url
 // the WebView can read because the picker granted *this* app access to it. No
 // storage permission is asked for and none is needed, which is the point of the
@@ -76,7 +76,7 @@ class request_filter;
 // **Links that are not pages go where they go on the desktop.**
 // `shouldOverrideUrlLoading` asks about every navigation and takes silence as
 // consent, so anything `renders_as_page()` does not claim is handed to the
-// shell's external-url handler — the same one `magnet:` links already use, and
+// shell's external-url handler -- the same one `magnet:` links already use, and
 // the same shared rule about which schemes those are.
 class android_view : public web_view_backend {
 	Q_OBJECT
@@ -88,7 +88,7 @@ public:
 	// to put a `this`; the id is how it finds its way back.
 	static void report_url(qint64 id, const QString &url);
 
-	// Called from JNI, on the WebView's *network* thread — not the UI thread and
+	// Called from JNI, on the WebView's *network* thread -- not the UI thread and
 	// not Qt's. It consults the shared filter and touches nothing else, which is
 	// exactly what `request_filter::decide()` documents itself as safe for.
 	//
@@ -108,7 +108,7 @@ public:
 	static QString injected_scripts(qint64 id);
 
 	// A navigation the WebView is about to attempt. Returns true when the shell
-	// took it instead — `magnet:` and anything else that is not a page.
+	// took it instead -- `magnet:` and anything else that is not a page.
 	//
 	// Static, and the handler with it, because there is one shell: the factory is
 	// told the handler once, after the views exist on the desktop and before them
@@ -116,7 +116,7 @@ public:
 	static bool take_external_url(const QString &url);
 
 	// Whether the view behind `id` may navigate to `url` (architecture doc
-	// §5.5). Static for the same reason the others are: JNI has nowhere to put
+	// sec 5.5). Static for the same reason the others are: JNI has nowhere to put
 	// a `this`, so the id is the handle back.
 	//
 	// **True when nothing is listening**, which is what a view without a
@@ -126,8 +126,8 @@ public:
 	                              bool user_initiated);
 	static void set_external_handler(std::function<void(const QUrl &)> fn);
 
-	// A page asked for a file. Runs on the Qt thread, shows Qt's file dialog —
-	// which on Android *is* the system document picker — and hands the chosen
+	// A page asked for a file. Runs on the Qt thread, shows Qt's file dialog --
+	// which on Android *is* the system document picker -- and hands the chosen
 	// urls back to Java, which is the only place that may answer the WebView.
 	//
 	// Answered exactly once, cancel included: a WebView whose chooser callback

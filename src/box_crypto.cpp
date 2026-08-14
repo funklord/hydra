@@ -80,7 +80,7 @@ bool open(const QByteArray &cipher, const QByteArray &nonce,
 		                       reinterpret_cast<const unsigned char *>(nonce.constData()),
 		                       reinterpret_cast<const unsigned char *>(their_public.constData()),
 		                       reinterpret_cast<const unsigned char *>(our_secret.constData())) != 0)
-		return false;   // authentication failed — tampered or wrong key
+		return false;   // authentication failed -- tampered or wrong key
 	*out = plain;
 	return true;
 }

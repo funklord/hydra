@@ -6,7 +6,7 @@
 // answered at all, which is not a result about the model.
 //
 // But most of what gets changed is not the model. The gate's rules, the fields
-// handed to the script, the shape of the evidence — all of it is deterministic
+// handed to the script, the shape of the evidence -- all of it is deterministic
 // code, and the replies the model has already given are on disk. Scoring those
 // again costs milliseconds. What it cannot measure is a change to the *prompt*,
 // because that changes what the model would say; the corpus is fixed replies
@@ -15,7 +15,7 @@
 // **It is validated against rates already measured**, and that is the whole
 // design. Each capture records what the gate accepted when those replies were
 // produced. A replay that cannot reproduce those numbers is not a cheaper
-// measurement, it is a different one — so a mismatch is a failure here rather
+// measurement, it is a different one -- so a mismatch is a failure here rather
 // than a footnote.
 #include "site_extractor.h"
 
@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
 	if (!QFile::exists(index)) {
 		// Said loudly and failed, not skipped. A corpus suite that quietly
 		// reports success when it scored nothing is the same trap as a driver
-		// that writes no screenshots and prints "done" — this project has been
+		// that writes no screenshots and prints "done" -- this project has been
 		// caught by that once already.
 		std::printf("no corpus at %s\n"
 		             "  The replies live beside the captures in evidence/, which is not "
@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
 		// **Matched as prefixes**, because the exact addresses are not reliably
 		// recoverable. The logs these were read from print a pick through
 		// `left(140)` and an analytics beacon here is 677 characters, so copying
-		// "the url" out of a log yields a string that matches nothing — which is
+		// "the url" out of a log yields a string that matches nothing -- which is
 		// how this entry failed silently on its first attempt. A prefix naming
 		// the endpoint is both recoverable and the true statement: it is that
 		// endpoint that was fetched and found not to be a stream.

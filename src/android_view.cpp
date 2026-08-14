@@ -37,8 +37,8 @@ const char *k_cls = "se/vibes/hydra/HydraWebView";
 // desktop's QWebChannel bootstrap provides, so every injected script runs
 // unmodified on both engines.
 //
-// The desktop's proxies are asynchronous — a call takes a trailing callback and
-// the answer arrives later — because QWebChannel talks over a transport.
+// The desktop's proxies are asynchronous -- a call takes a trailing callback and
+// the answer arrives later -- because QWebChannel talks over a transport.
 // `hydraNative` is a synchronous Java call, so the callback is invoked inline.
 // That difference is invisible to a script written against the desktop shape,
 // which is the point: the scripts are the contract, not the transport.

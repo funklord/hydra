@@ -5,8 +5,8 @@
 
 #include <QString>
 
-// Reads and writes the canonical, human-readable tree file — the source of
-// truth for structure and order (architecture doc §4.4). Format, two spaces
+// Reads and writes the canonical, human-readable tree file -- the source of
+// truth for structure and order (architecture doc sec 4.4). Format, two spaces
 // per depth level:
 //
 //   - [f0] folder | Work
@@ -30,7 +30,7 @@ node *load(const QString &path, int *flattened = nullptr);
 bool  save(const QString &path, node *root);
 
 // The shared type vocabulary. Exposed because the AI payload (tree_serializer)
-// uses the same words — one spelling of "folder"/"open" across the project.
+// uses the same words -- one spelling of "folder"/"open" across the project.
 QString   type_to_string(node_type t);
 node_type type_from_string(const QString &s);
 

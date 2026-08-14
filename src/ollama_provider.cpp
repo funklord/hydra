@@ -79,7 +79,7 @@ bool ollama_provider::probe_now() {
 	connect(this, &ollama_provider::probe_finished, &loop, &QEventLoop::quit);
 	// The abort above is what normally ends this, and it produces a real
 	// answer rather than a guess. The grace period is only a backstop for the
-	// case where the abort itself does not deliver finished() promptly — so
+	// case where the abort itself does not deliver finished() promptly -- so
 	// the wait cannot outlive the timeout by anything a user would notice.
 	QTimer::singleShot(m_probe_timeout + 500, &loop, &QEventLoop::quit);
 	probe();

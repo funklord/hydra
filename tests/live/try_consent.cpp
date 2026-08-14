@@ -1,6 +1,6 @@
-// The cookie-consent blocker (§7.1's `cookie_notices`), driven end to end.
+// The cookie-consent blocker (sec 7.1's `cookie_notices`), driven end to end.
 //
-// Fixture banners rather than live sites, for the reason §11.5 gives about
+// Fixture banners rather than live sites, for the reason sec 11.5 gives about
 // extractors: a real CMP changes shape every few weeks, so a test pinned to one
 // measures that vendor's current markup and nothing else. These are the
 // *shapes* that recur -- a reject button, an accept-only banner, a banner with
@@ -118,7 +118,7 @@ static const char *k_foreign = R"HTML(
 </div>
 <script>wire('cc');</script>)HTML";
 
-// The same banner, but inside a cross-origin iframe — which is where a great
+// The same banner, but inside a cross-origin iframe -- which is where a great
 // many real consent dialogs live, since that is how a CMP vendor ships one.
 static const char *k_framed = R"HTML(
 <p>article text</p>
@@ -182,7 +182,7 @@ int main(int argc, char *argv[]) {
 	QFile::remove(out + "/policy.json");   // and the file it migrates from
 	// The shell loads its rules from this directory, and the round-trip phase
 	// below writes a rule file. Left in place, a run starts already knowing what
-	// the previous run learned — and the "a banner nothing matches" case quietly
+	// the previous run learned -- and the "a banner nothing matches" case quietly
 	// stops testing anything. Same shape as the tree and state contamination
 	// `try_extract` had: an artefact of the last run, indistinguishable from a
 	// real result.
@@ -305,7 +305,7 @@ int main(int argc, char *argv[]) {
 	      "banner that merely hides would not fix");
 
 	// The policy side, and it has to start from cookies actually blocked or the
-	// relaxation has nothing to do and the check passes for the wrong reason —
+	// relaxation has nothing to do and the check passes for the wrong reason --
 	// which it did, the first time this was written.
 	std::printf("\n== what it does to policy when cookies are blocked ==\n");
 	policy.set_setting("127.0.0.1", policy::feature::cookies,
@@ -468,8 +468,8 @@ int main(int argc, char *argv[]) {
 
 	// Does the consent bridge follow the *visible* tab?
 	//
-	// It did not, and nothing here noticed. The page host was set in one place —
-	// the current view's url_changed — so switching to an already-loaded tab
+	// It did not, and nothing here noticed. The page host was set in one place --
+	// the current view's url_changed -- so switching to an already-loaded tab
 	// navigated nothing, sent no signal, and left the blocker answering
 	// active_now() and rules_json() for the site of the tab before it. A bridge
 	// deliberately built so a page cannot name its own host is worth little if

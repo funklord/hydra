@@ -12,7 +12,7 @@
 // them still opened it directly.
 //
 // What that costs got worse rather than staying still. A page's new window is a
-// *sub-tab* now (architecture doc §5.5), so a driver pointed at a real site
+// *sub-tab* now (architecture doc sec 5.5), so a driver pointed at a real site
 // saves what that site opened as children of the tab it came from. A sweep left
 // two `fedoq.com/clicks/...` ad-redirect urls in the committed example --
 // carrying screen size, timezone, browser version and the referring page -- as

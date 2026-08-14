@@ -1,4 +1,4 @@
-// The content-type tier (architecture doc §10, §11.1). Two halves: the
+// The content-type tier (architecture doc sec 10, sec 11.1). Two halves: the
 // classification, which is pure and where the subtlety is, and one real fetch
 // through a server that answers the way the measured site does.
 #include "stream_probe.h"

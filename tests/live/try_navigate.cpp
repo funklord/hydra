@@ -148,7 +148,7 @@ int main(int argc, char *argv[]) {
 		// folder, while the message read "under the tab that asked, where the
 		// tree shows the relationship" -- the same contradiction the shell
 		// carried, where the comment described the design and the code
-		// described a restriction. A tab can hold children now (§5.5), so the
+		// described a restriction. A tab can hold children now (sec 5.5), so the
 		// relationship is recorded where both always said it should be.
 		check(folder->children.size() == before,
 		      QString("not beside the tab that asked (%1 -> %2)")

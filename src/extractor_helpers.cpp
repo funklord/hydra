@@ -34,7 +34,7 @@ int helper_allowlist::learn_from(const QUrl &base, const QByteArray &body) {
 	// name.
 	static const QRegularExpression absolute(
 	  R"((https?://[^\s"'<>\\)\]]+))");
-	// A manifest line is bare: `index-f1-v1-a1.txt?k=…` on its own line, or a
+	// A manifest line is bare: `index-f1-v1-a1.txt?k=...` on its own line, or a
 	// quoted URI attribute.
 	static const QRegularExpression relative(
 	  R"((?:^|["'\s,=(])([A-Za-z0-9._~!$&*+;@%-][A-Za-z0-9._~!$&*+;@%/-]*\.[A-Za-z0-9]{1,8}(?:\?[^\s"'<>\\)\]]*)?))",
@@ -122,7 +122,7 @@ void helper_host::finish(helper_call call) { m_calls << call; }
 
 void helper_host::log(const QString &message) {
 	// A note costs nothing to serve, so it must not compete with fetches for
-	// the call budget — a script that explained itself well spent its last slot
+	// the call budget -- a script that explained itself well spent its last slot
 	// on the explanation and was refused for it. Bounded separately, because an
 	// unbounded log is still its own denial of service.
 	helper_call c;
@@ -191,7 +191,7 @@ QString helper_host::text(const QString &url) {
 		return {};
 	}
 
-	// The body is what extends the allowlist — this is the "follow" half of
+	// The body is what extends the allowlist -- this is the "follow" half of
 	// follow-not-fabricate, and the only way the set ever grows.
 	const int learned = m_allow ? m_allow->learn_from(target, r.body) : 0;
 	c.outcome = QString("%1 bytes%2")

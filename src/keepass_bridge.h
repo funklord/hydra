@@ -10,14 +10,14 @@
 
 class QLocalSocket;
 
-// Client for KeePassXC's BrowserServer (architecture doc §13.1).
+// Client for KeePassXC's BrowserServer (architecture doc sec 13.1).
 //
 // The point of this design is what it does *not* do: it never parses .kdbx,
 // never sees the master password, and stores no vault of its own. KeePassXC is
 // already an unlocked local daemon in the user's session, so we become a
 // first-class client of it and add no new crypto we own.
 //
-// Transport is the Unix domain socket directly — the keepassxc-proxy helper
+// Transport is the Unix domain socket directly -- the keepassxc-proxy helper
 // exists only to bridge stdio for sandboxed browser extensions, and a native
 // app skips it.
 class keepass_bridge : public QObject {
@@ -46,7 +46,7 @@ public:
 	// inside KeePassXC; the returned id and key are what we keep.
 	void associate();
 
-	// Restore a saved pairing and verify it still holds (§13.1).
+	// Restore a saved pairing and verify it still holds (sec 13.1).
 	void set_association(const QString &id, const QString &id_key_b64);
 	QString association_id() const { return m_assoc_id; }
 	QString association_key() const { return m_id_key_b64; }

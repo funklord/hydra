@@ -8,7 +8,7 @@
 
 namespace {
 
-// Runs in the isolated world (§13.2), like autofill and the picker: it reads
+// Runs in the isolated world (sec 13.2), like autofill and the picker: it reads
 // and clicks the page's DOM, so the page must not be able to rewrite it.
 //
 // Two passes, and the order is the whole design. **Answer first, hide second.**
@@ -20,7 +20,7 @@ namespace {
 //
 // Detection is by *button text within a consent-shaped container*, not by a
 // list of vendor selectors alone. Vendor ids churn and a list of them is stale
-// within weeks -- the same argument §11.5 makes for extractors. The vendor ids
+// within weeks -- the same argument sec 11.5 makes for extractors. The vendor ids
 // that are here are the handful that are stable and unambiguous, used to find
 // the container faster; the text pass is what makes an unknown CMP work.
 const char *k_script = R"JS(

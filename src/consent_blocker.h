@@ -34,7 +34,7 @@ class policy_engine;
 // ordinary per-site rule, visible in the shield and revertible there like any
 // other. Nothing silent, nothing that cannot be found again.
 //
-// The security shape is §13.2's, unchanged: the page-side script does detection
+// The security shape is sec 13.2's, unchanged: the page-side script does detection
 // and clicking, and every fact that matters is decided here. The host comes
 // from the view's real URL and never from the page, so a frame cannot ask for a
 // relaxation on someone else's behalf.
@@ -108,7 +108,7 @@ public slots:
 	// screen, and not one button in it matched anything we know. `labels` is
 	// what it offered, tab-separated.
 	//
-	// This is the discovery signal, and it is the same shape §12 uses for
+	// This is the discovery signal, and it is the same shape sec 12 uses for
 	// filters: the system records where it fell short rather than guessing, and
 	// a rule is proposed from real evidence afterwards. A banner nobody could
 	// answer is exactly the case a new rule has to cover, and the labels it

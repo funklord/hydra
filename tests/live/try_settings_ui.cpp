@@ -10,7 +10,7 @@
 // global default that only the shield could reach, so the answer to "what does
 // this browser allow by default" lived in a popup attached to whichever page
 // happened to be open. Firefox's privacy pane is the model for the grouping,
-// including putting cookie-banner handling directly after site data — the
+// including putting cookie-banner handling directly after site data -- the
 // banner is a question about cookies, and permissions are a different subject.
 #include "settings_dialog.h"
 #include "policy_engine.h"
@@ -397,7 +397,7 @@ int main(int argc, char **argv) {
 			//
 			// A settings page is text that wraps and controls that do not need
 			// to grow, so a page that wants more width is always one widget
-			// refusing to shrink — and the symptom is a horizontal scrollbar
+			// refusing to shrink -- and the symptom is a horizontal scrollbar
 			// across a page that looks like it fits, or a control sitting under
 			// the vertical scrollbar. Both happened here; neither was visible to
 			// any other assertion.
@@ -638,7 +638,7 @@ int main(int argc, char **argv) {
 	{
 		// It holds rules learned on this machine rather than preferences.
 		// "Restore defaults" there would mean deleting them, which is not what
-		// the button means anywhere else — so it is off, and says why.
+		// the button means anywhere else -- so it is off, and says why.
 		policy_engine p;
 		settings_dialog d(&players, &downloads, nullptr, nullptr, nullptr, &p);
 		d.show();

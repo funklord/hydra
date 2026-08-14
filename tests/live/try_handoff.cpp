@@ -1,4 +1,4 @@
-// Handing an address to another application (§19).
+// Handing an address to another application (sec 19).
 //
 // On Android this is an untyped ACTION_VIEW and the point is background audio:
 // a page cannot keep playing with the screen off, while VLC, NewPipe or YouTube

@@ -1,9 +1,9 @@
 // Does the media badge see a player that lives in a third-party iframe?
 //
 // This is the normal case on real sites, not a corner: the measured site's
-// player is an iframe from an unrelated vendor, and §11.6 already says a tap
+// player is an iframe from an unrelated vendor, and sec 11.6 already says a tap
 // confined to the top frame sees nothing. The hook does run on subframes. What
-// this asks is the question after that one — whether what it reports can be
+// this asks is the question after that one -- whether what it reports can be
 // *found* again by the shell.
 //
 // The hook reports `location.hostname`, which in a subframe is the iframe's
@@ -14,7 +14,7 @@
 // Deterministic and offline: a page on 127.0.0.1 embeds an iframe from
 // 127.0.0.2 which feeds a MediaSource. Both loopback, different hosts, which is
 // the same trick the interceptor and cookie checks use. The bytes appended are
-// not real video — the tap counts what a page hands to `appendBuffer`, and
+// not real video -- the tap counts what a page hands to `appendBuffer`, and
 // whether the decoder then likes it is a different subsystem's problem.
 #include "main_window.h"
 #include "policy_engine.h"
@@ -188,7 +188,7 @@ int main(int argc, char *argv[]) {
 
 	// The control, and it comes first: the same player page as its own document.
 	// Without it, a tap that reports nothing for the iframe case cannot be told
-	// apart from a fixture that never fed a MediaSource — and this driver's
+	// apart from a fixture that never fed a MediaSource -- and this driver's
 	// fixture is the newest, least trustworthy thing in the room.
 	go(QString("http://127.0.0.2:%1/player").arg(server.port), 2000);
 	wait_for_report(20000);
@@ -231,12 +231,12 @@ int main(int argc, char *argv[]) {
 		std::printf("  (the tap saw nothing)\n");
 
 	// Asserted as it currently *is*, not as it should be, so this run is green
-	// today and fails loudly the moment the tap starts working — which is the
+	// today and fails loudly the moment the tap starts working -- which is the
 	// signal, not a regression. What is known, in order of how far it was
 	// chased:
 	//
 	//   * the main-world hook does run in the cross-origin iframe;
-	//   * a subframe *can* hand its report to the top frame —
+	//   * a subframe *can* hand its report to the top frame --
 	//     `window.top.postMessage` was tried and the top frame's relay received
 	//     it, confirmed by console instrumentation;
 	//   * and it still did not arrive, because on a page that contains a
@@ -246,7 +246,7 @@ int main(int argc, char *argv[]) {
 	//     connects immediately, so this is not the relay script being wrong.
 	//
 	// That last point is where the next attempt should start, and it is not the
-	// `setRunsOnSubFrames` flag or the transport-is-main-frame-only rule — both
+	// `setRunsOnSubFrames` flag or the transport-is-main-frame-only rule -- both
 	// were tried and reverted rather than left in for no benefit.
 	check(!tap->sites().isEmpty(),
 	      "a player in a cross-origin iframe is reported at all");

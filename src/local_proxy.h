@@ -14,7 +14,7 @@ class QTcpSocket;
 class QNetworkAccessManager;
 
 // The request context a CDN expects to see, captured from the page that
-// actually loaded the stream (architecture doc §11.3).
+// actually loaded the stream (architecture doc sec 11.3).
 struct stream_context {
 	QString referer;
 	QString user_agent;
@@ -27,12 +27,12 @@ struct stream_context {
 	QMap<QString, QString> extra;
 };
 
-// The local HTTP proxy (architecture doc §10, §11.3).
+// The local HTTP proxy (architecture doc sec 10, sec 11.3).
 //
 // A naked stream URL frequently returns 403, because the CDN expects the same
 // Referer, cookies and User-Agent the page carried. The player-agnostic fix is
 // to point the player at localhost and inject that context upstream, rather
-// than depending on whichever header flags a given player happens to support —
+// than depending on whichever header flags a given player happens to support --
 // which vary, and for mplayer are limited.
 //
 // Two properties matter more than anything else here:
@@ -48,10 +48,10 @@ struct stream_context {
 //
 // Security: it binds to 127.0.0.1 only, and serves nothing but URLs explicitly
 // published to it, each behind an unguessable token. It is a context-injecting
-// relay for streams the user chose, not a general forward proxy — a local page
+// relay for streams the user chose, not a general forward proxy -- a local page
 // that guessed the port still cannot make it fetch anything.
 //
-// Scope: this is the player-facing half of §10. Routing the *browser* through
+// Scope: this is the player-facing half of sec 10. Routing the *browser* through
 // it for response inspection is a separate problem, because intercepting HTTPS
 // means terminating TLS with a generated certificate the browser must trust,
 // which the design does not currently address.
@@ -79,35 +79,35 @@ public:
 	//
 	// This is what makes *holding* possible at all. HTTP wants a length before
 	// the body, so a server that only knows what it has right now can promise
-	// no more than that — and a player that reaches the end of a complete-
+	// no more than that -- and a player that reaches the end of a complete-
 	// looking response stops, which is exactly the "File ended prematurely" a
 	// growing file produces. Advertising the eventual size instead lets the
 	// response stay open and the player keep waiting.
 	using expected_length = std::function<qint64()>;
 
-	// Publish a local file that is still being written — the assembled HLS
-	// output (§11.3), or a torrent being watched as it downloads (§11.4).
+	// Publish a local file that is still being written -- the assembled HLS
+	// output (sec 11.3), or a torrent being watched as it downloads (sec 11.4).
 	// Ranges are served against whatever has landed so far, so a player can
 	// seek backwards through a live capture while it grows.
 	//
 	// `avail` exists because a file's size is not always a statement about what
 	// is in it. An appended capture can be trusted (omit it). A torrent's files
 	// are allocated **sparse and full-size from the outset**, so the size is
-	// right immediately while the content is mostly holes that read as zeros —
+	// right immediately while the content is mostly holes that read as zeros --
 	// serving those would hand the player silence instead of an honest short
 	// read, and it would look like a corrupt stream rather than a slow one.
 	QUrl publish_file(const QString &path, const QString &content_type,
 	                   available_length avail = {}, expected_length total = {});
 	void unpublish_all();
 
-	// --- capture (architecture doc §11.6) ---------------------------------
+	// --- capture (architecture doc sec 11.6) ---------------------------------
 	// Open a file for a page to append to, and get back the URL it posts to.
 	//
 	// The token ends up inside the page, which is worth being explicit about:
 	// it grants exactly one thing, appending to a file the user just asked to
 	// create, and the bytes going into that file are page-supplied by
 	// definition. So a page abusing its own token can only corrupt its own
-	// capture — it gains nothing it did not already have. It cannot read, cannot
+	// capture -- it gains nothing it did not already have. It cannot read, cannot
 	// name a path, and cannot reach another capture.
 	QUrl open_capture(const QString &path);
 	void close_capture(const QUrl &url);

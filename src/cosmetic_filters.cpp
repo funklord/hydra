@@ -25,7 +25,7 @@ QStringList cosmetic_filters::selectors_for(const filter_list *list,
 	for (const filter_rule &r : list->rules()) {
 		if (!r.cosmetic)
 			continue;
-		// For a cosmetic rule `scope` really is the site it applies on — unlike a
+		// For a cosmetic rule `scope` really is the site it applies on -- unlike a
 		// network rule, where the same field holds the host being blocked. That
 		// dual meaning is why this reads the field only after checking `cosmetic`.
 		//
@@ -61,7 +61,7 @@ QString cosmetic_filters::script_source() {
 	//
 	// `display: none !important` rather than removing nodes, for two reasons. A
 	// removed node changes the page's own DOM in ways its scripts notice, and a
-	// stylesheet applies to elements that have not been created yet — which is
+	// stylesheet applies to elements that have not been created yet -- which is
 	// most of them, since this runs before the page's own content.
 	return QStringLiteral(R"JS(
 (function () {

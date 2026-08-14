@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // End-to-end test of torrent_download_source against a real libtorrent swarm:
 // a seeder session inside this process, and the source downloading from it over
-// loopback. No tracker, no DHT — the seeder connects to us directly.
+// loopback. No tracker, no DHT -- the seeder connects to us directly.
 #include "download_manager.h"
 #include "torrent_download_source.h"
 
@@ -75,7 +75,7 @@ static made_torrent make_torrent(const QString &root, const QString &name,
 	lt::file_storage fs;
 	for (const QString &rel : rel_files) {
 		// The files live under root/<name>/, which is also what the torrent
-		// records — using root/<rel> here silently yields size 0 for every
+		// records -- using root/<rel> here silently yields size 0 for every
 		// file and libtorrent rejects the result as "invalid length".
 		const QString full = QDir(root).filePath(name + "/" + rel);
 		fs.add_file((name + "/" + rel).toStdString(),
@@ -265,7 +265,7 @@ static void test_multi_file_and_seeding() {
 	check(!j->terminal(), "but not terminal — the source has not let go");
 	check(j->files.size() == 3,
 	      QString("all three files are reported (%1)").arg(j->files.size()));
-	// The state already reads "Complete — seeding"; the detail carries only
+	// The state already reads "Complete -- seeding"; the detail carries only
 	// the specifics, so repeating the word there would be noise.
 	check(!j->detail.contains("seeding"),
 	      QString("and a detail that does not repeat the state (%1)").arg(j->detail));

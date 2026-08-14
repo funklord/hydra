@@ -4,7 +4,7 @@
 #include <QSortFilterProxyModel>
 #include <QString>
 
-// Hierarchical sort + filter over tab_tree_model (architecture doc §5.2/§5.3).
+// Hierarchical sort + filter over tab_tree_model (architecture doc sec 5.2/sec 5.3).
 // Sorts siblings while preserving nesting; folders are grouped ahead of leaves.
 // A search string keeps any node whose title/url matches, plus its ancestors.
 class tree_sort_proxy : public QSortFilterProxyModel {

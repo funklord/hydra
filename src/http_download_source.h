@@ -10,10 +10,10 @@ class QFile;
 class QNetworkAccessManager;
 class QNetworkReply;
 
-// The transport the download manager used to contain (architecture doc §11.2):
+// The transport the download manager used to contain (architecture doc sec 11.2):
 // direct files over HTTP, with resume via a Range request when a partial file
-// is already on disk. Behaviour is unchanged by the move — this is the same
-// code behind the §11.4 seam, not a reimplementation.
+// is already on disk. Behaviour is unchanged by the move -- this is the same
+// code behind the sec 11.4 seam, not a reimplementation.
 //
 // It refuses HLS and DASH manifests, because fetching one saves the playlist
 // text rather than the video. Segment assembly lives in `hls_assembler`, which

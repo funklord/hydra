@@ -1,7 +1,7 @@
-// The helper tier (architecture doc §11.5.1): follow, not fabricate.
+// The helper tier (architecture doc sec 11.5.1): follow, not fabricate.
 //
 // No network here. The fetcher is injected, so the allowlist, the budgets and
-// the transcript are all exercised against a scripted origin — which is also
+// the transcript are all exercised against a scripted origin -- which is also
 // how the awkward cases (a refused address, a spent budget, a body that grows
 // the allowlist) get tested at all, since a real server will not produce them
 // on demand.
@@ -34,7 +34,7 @@ static QList<evidence_request> sample() {
 	return ev;
 }
 
-// A master playlist that refers to a variant nobody has requested yet — the
+// A master playlist that refers to a variant nobody has requested yet -- the
 // case the tier exists for.
 static const char *k_master =
   "#EXTM3U\n"
@@ -272,7 +272,7 @@ int main(int argc, char **argv) {
 		      "fetching is blocked by default");
 
 		// **The two-powers checks that stood here are gone with the permission
-		// they tested.** §11.5.1 splits the helper tier into fetching and
+		// they tested.** sec 11.5.1 splits the helper tier into fetching and
 		// reading the page precisely so that granting the first cannot grant
 		// the second, and this asserted it. The DOM half is designed and
 		// unbuilt, so its permission is no longer offered -- a control read by
@@ -322,7 +322,7 @@ int main(int argc, char **argv) {
 		check(policy::feature_from_name("extractorFetch") ==
 		          policy::feature::extractor_fetch,
 		      "and parses back");
-		// The DOM half of §11.5.1 is designed and unbuilt, so its permission is
+		// The DOM half of sec 11.5.1 is designed and unbuilt, so its permission is
 		// not offered. An old policy file may still carry the key, and the
 		// loader must ignore it rather than mistake it for something: every
 		// caller of `feature_from_name` skips `feature::count`.

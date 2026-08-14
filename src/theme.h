@@ -13,7 +13,7 @@ class QDBusVariant {};
 #include <QStringList>
 #include <Qt>
 
-// Light, dark, or whatever the desktop is set to (architecture doc §6.1).
+// Light, dark, or whatever the desktop is set to (architecture doc sec 6.1).
 //
 // **The detection is the hard part, and Qt alone is not enough.** On the machine
 // this was written on, KDE with a dark Breeze setup, `QStyleHints::colorScheme()`
@@ -24,7 +24,7 @@ class QDBusVariant {};
 // So there is a ladder, and each rung is asked only when the one above has no
 // opinion:
 //
-//   1. `QStyleHints::colorScheme()` — the platform's own answer, and the right
+//   1. `QStyleHints::colorScheme()` -- the platform's own answer, and the right
 //      one on Windows and macOS where Qt does read it.
 //   2. The **XDG desktop portal**, `org.freedesktop.appearance/color-scheme`:
 //      1 means prefer dark, 2 prefer light, 0 no preference. This is the
@@ -92,7 +92,7 @@ void apply(choice c);
 //
 // **This has to happen before the engine starts, and cannot be undone while it
 // runs.** Qt propagates the application's colour scheme to Chromium by watching
-// `QStyleHints::colorSchemeChanged` — but on a desktop where Qt reports
+// `QStyleHints::colorSchemeChanged` -- but on a desktop where Qt reports
 // `Unknown`, `setColorScheme()` is a request the platform is free to ignore, and
 // this one does: the value reads back unchanged and the signal never fires, so
 // the window goes dark and every page stays white. Measured, not assumed.
@@ -116,7 +116,7 @@ public:
 
 signals:
 	// Emitted after the application has been repainted, so the shell can pass
-	// the scheme to anything that does not read a QPalette — the web engine's
+	// the scheme to anything that does not read a QPalette -- the web engine's
 	// `prefers-color-scheme`, for one.
 	void applied(Qt::ColorScheme scheme);
 

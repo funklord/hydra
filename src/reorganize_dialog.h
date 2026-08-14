@@ -15,9 +15,9 @@ class ai_provider;
 class tab_tree_model;
 struct node;
 
-// The non-destructive reorganize pipeline, as a dialog (architecture doc §9.2).
+// The non-destructive reorganize pipeline, as a dialog (architecture doc sec 9.2).
 //
-//   review payload → send → receive → check invariants → diff → cherry-pick
+//   review payload -> send -> receive -> check invariants -> diff -> cherry-pick
 //
 // The live tree is not touched until the user accepts. The proposal is parsed
 // into a shadow tree that this dialog owns and deletes; "accept" turns the

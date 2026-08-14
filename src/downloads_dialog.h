@@ -15,23 +15,23 @@ class QTreeWidgetItem;
 class local_proxy;
 class player_launcher;
 
-// The downloads window (architecture doc §11.2, §11.4).
+// The downloads window (architecture doc sec 11.2, sec 11.4).
 //
 // One list for every source, which is the whole point: a torrent appears beside
 // an HTTP file with the same columns, the same progress bar and the same
-// controls, because §11.4 decided torrents are a first-class download rather
+// controls, because sec 11.4 decided torrents are a first-class download rather
 // than a side feature.
 //
 // Two rules this window is built around:
 //
-//  1. **It never asks what transport a row is.** Everything it varies — whether
+//  1. **It never asks what transport a row is.** Everything it varies -- whether
 //     Pause is offered, whether children are shown, whether the row carries a
-//     warning — comes from `source_capabilities` and the job's own fields. The
+//     warning -- comes from `source_capabilities` and the job's own fields. The
 //     word "torrent" does not appear in the logic, only in a source's
 //     display_name.
 //
 //  2. **Publicly-observable rows are visibly different.** This is the other
-//     half of the §11.4 privacy decision. Making a torrent behave exactly like
+//     half of the sec 11.4 privacy decision. Making a torrent behave exactly like
 //     every other download is the goal, and it is also exactly what could
 //     mislead someone into thinking it *is* like every other download. The
 //     consent dialog says it once before the first one; this says it
@@ -57,7 +57,7 @@ private:
 	void try_launch_watch();
 	int  selected_job() const;
 	// Is there something in this job worth playing, and if so which file?
-	// `rel` is the job-relative path, left empty for a single-file job — that
+	// `rel` is the job-relative path, left empty for a single-file job -- that
 	// is a real answer, not a failure, which is why it cannot be signalled by
 	// returning an empty string. UI-level media judgement, which is why it
 	// lives here and not behind the transport seam.

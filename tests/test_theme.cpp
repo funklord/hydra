@@ -1,4 +1,4 @@
-// Which colour scheme the desktop is in (architecture doc §6.1).
+// Which colour scheme the desktop is in (architecture doc sec 6.1).
 //
 // The reason this has a test file of its own is that **Qt's answer is not
 // enough**. On the KDE desktop this was written on, `QStyleHints::colorScheme()`
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
 
 	section("when nobody has a preference, the palette is evidence");
 	{
-		// Portal 0 is "no preference" — a real answer, not a missing one — and a
+		// Portal 0 is "no preference" -- a real answer, not a missing one -- and a
 		// desktop that says that can still have handed Qt a dark theme.
 		check(theme::decide(CS::Unknown, 0, darkish_palette()) == CS::Dark,
 		      "a window darker than its own text is a dark theme");

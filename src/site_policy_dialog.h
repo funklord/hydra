@@ -10,7 +10,7 @@ class QLabel;
 class policy_engine;
 
 // The compact per-site editor that drops down from the address-bar shield
-// (architecture doc §7.4). A scope selector (this host / *.domain / global) and
+// (architecture doc sec 7.4). A scope selector (this host / *.domain / global) and
 // one tri-state combo per feature, all writing straight into the policy_engine.
 class site_policy_dialog : public QDialog {
 	Q_OBJECT

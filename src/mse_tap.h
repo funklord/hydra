@@ -6,7 +6,7 @@
 #include <QString>
 #include <QUrl>
 
-// What a page is actually feeding its <video> element (architecture doc §11.6).
+// What a page is actually feeding its <video> element (architecture doc sec 11.6).
 struct mse_stream {
 	QString mime;         // "video/mp4;codecs=..." as the player declared it
 	qint64  bytes = 0;    // appended so far
@@ -17,10 +17,10 @@ struct mse_stream {
 
 // The Media Source tap.
 //
-// §11.1's URL-shaped detection was measured against a real site and finds
+// sec 11.1's URL-shaped detection was measured against a real site and finds
 // nothing there: the manifest is disguised, and part of the delivery is
 // peer-to-peer. But every adaptive player, whatever fetched the bytes, ends up
-// pushing them through `SourceBuffer.appendBuffer` — so a hook on that call
+// pushing them through `SourceBuffer.appendBuffer` -- so a hook on that call
 // sees the video when nothing else does. Measured on that site: a
 // `video/mp4;codecs=mp4a.40.2,avc1.64001E` buffer, past 5 MB appended, with the
 // element reporting real playback positions.
@@ -29,13 +29,13 @@ struct mse_stream {
 // because an isolated world cannot wrap the page's `MediaSource`. Anything
 // there is visible and modifiable by the page, so the main-world half holds
 // nothing and grants nothing: it wraps two methods and dispatches a DOM
-// CustomEvent. The privileged half — the QWebChannel bridge — stays in the
+// CustomEvent. The privileged half -- the QWebChannel bridge -- stays in the
 // isolated world where autofill already lives, and only listens for those
 // events. The page can therefore lie to us, and everything arriving here is
 // treated as a claim rather than a fact; it is page-controlled either way.
 //
 // This reports *that* a page is playing and what it is playing. Getting the
-// bytes out is the next step and belongs on the local proxy (§11.6), not on
+// bytes out is the next step and belongs on the local proxy (sec 11.6), not on
 // this channel.
 class mse_tap : public QObject {
 	Q_OBJECT
@@ -62,7 +62,7 @@ public:
 
 	// Every key held. The hook reports `location.hostname` of the frame it runs
 	// in, which on a page whose player is a third-party iframe is *not* the host
-	// the shell looks up — so "nothing here" and "filed under a name nobody
+	// the shell looks up -- so "nothing here" and "filed under a name nobody
 	// asked for" are different answers, and without this they look the same.
 	QStringList sites() const;
 

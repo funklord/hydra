@@ -236,7 +236,7 @@ int main(int argc, char **argv) {
 	{
 		// The gate rule has its own checks; this is the wiring above it, which is
 		// where this project's defects actually live. The dialog probes on open,
-		// keeps what came back, and hands it to the judge on another thread — a
+		// keeps what came back, and hands it to the judge on another thread -- a
 		// chain where any link can be right and the path still dead.
 		fake_cdn cdn;
 		if (!cdn.listen(QHostAddress::LocalHost, 0)) {

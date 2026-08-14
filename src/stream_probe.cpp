@@ -119,7 +119,7 @@ void stream_probe::probe(const QUrl &url, const stream_context &ctx,
 	// Shared, not owned by the lambda that runs first. `readyRead`, `finished`
 	// and the timeout can all arrive, and an earlier version deleted this guard
 	// inside the first one and then let the next read the freed memory to decide
-	// whether it had already run — which duly let some replies through twice.
+	// whether it had already run -- which duly let some replies through twice.
 	auto fired = std::make_shared<bool>(false);
 
 	auto finish = [reply, done, fired](bool reached) {

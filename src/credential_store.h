@@ -3,14 +3,14 @@
 
 #include <QString>
 
-// Where the KeePassXC pairing is kept between runs (architecture doc §13.1,
-// §13.3, §14).
+// Where the KeePassXC pairing is kept between runs (architecture doc sec 13.1,
+// sec 13.3, sec 14).
 //
 // **What is stored is a capability, not a credential.** The association key is
 // what proves to KeePassXC that this program is the one the user confirmed; it
 // is not a password and it opens no vault on its own. But it is the whole of
 // that proof, so it is the one thing this project keeps that has to be
-// encrypted at rest — §14 says so, and the alternative is a key sitting beside
+// encrypted at rest -- sec 14 says so, and the alternative is a key sitting beside
 // the settings in a file anyone can read.
 //
 // **So it goes to the session's Secret Service** (libsecret / gnome-keyring,
@@ -18,12 +18,12 @@
 // That is a deliberate refusal to invent storage: an "app-encrypted config"
 // that the app can open unattended must keep its key on disk too, which is
 // obfuscation wearing the word encryption. If there is no Secret Service, this
-// says so and the pairing simply does not persist — the same
+// says so and the pairing simply does not persist -- the same
 // "found, and the feature is on; absent, and it reports itself unavailable with
 // no degraded mode" rule libsodium and libtorrent follow.
 //
 // The calls are synchronous. They talk to the session bus, so they can block if
-// the keyring is locked and prompts — which is why nothing here runs at
+// the keyring is locked and prompts -- which is why nothing here runs at
 // startup or in a hot path; every caller is a user-driven moment (pair,
 // connect, forget). libsecret's async API wants a GLib main loop, and a Qt app
 // is not guaranteed to be running one.

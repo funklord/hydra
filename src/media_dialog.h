@@ -18,8 +18,9 @@ class local_proxy;
 class hls_assembler;
 class mse_tap;
 
-// The compact list behind the media badge (architecture doc §11.2/§11.3).
-// One row per detected stream, each offering both ▶ Watch and ⬇ Download, with
+// The compact list behind the media badge (architecture doc sec 11.2/sec 11.3).
+// One row per detected stream, each offering both Watch and Download -- each
+// labelled with its own glyph, set below -- with
 // the primary stream first. Watch is the default action, because the whole
 // point is that the site's own player is broken.
 class media_dialog : public QDialog {
@@ -34,7 +35,7 @@ public:
 
 signals:
 	// A page whose video only the tap can see has nothing to Watch or
-	// Download — the only way to get those bytes is to record them, and the
+	// Download -- the only way to get those bytes is to record them, and the
 	// shell owns that.
 	void capture_requested();
 

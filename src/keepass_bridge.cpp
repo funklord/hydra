@@ -37,7 +37,7 @@ QString keepass_bridge::unavailable_reason() {
 	// would send someone looking for a KeePassXC to start.
 	//
 	// The platform's own answer is the system autofill service, which fills
-	// WebView forms without this browser implementing anything -- §13.2's shell
+	// WebView forms without this browser implementing anything -- sec 13.2's shell
 	// bridge is the desktop mechanism, not the only one that may fill a form.
 	return QStringLiteral(
 	  "KeePassXC's browser integration is a desktop socket. On Android the "

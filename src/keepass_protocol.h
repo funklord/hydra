@@ -6,7 +6,7 @@
 #include <QList>
 #include <QString>
 
-// One entry as KeePassXC returns it. Never persisted by us — it lives only as
+// One entry as KeePassXC returns it. Never persisted by us -- it lives only as
 // long as the fill that requested it.
 struct credential {
 	QString name;
@@ -14,12 +14,12 @@ struct credential {
 	QString password;
 };
 
-// The wire half of the KeePassXC-Browser protocol (architecture doc §13.1),
+// The wire half of the KeePassXC-Browser protocol (architecture doc sec 13.1),
 // with no socket and no crypto in it.
 //
 // That split is deliberate. The message shapes, the nonce discipline and the
 // association state machine are where the protocol bugs live, and they are all
-// pure functions of their input — so they can be tested without libsodium, a
+// pure functions of their input -- so they can be tested without libsodium, a
 // running KeePassXC, or a socket. The bridge is then a thin transport that
 // encrypts what these produce.
 //
@@ -32,7 +32,7 @@ namespace keepass_protocol {
 // with carry, exactly as libsodium's sodium_increment does.
 QByteArray increment_nonce(const QByteArray &nonce);
 
-// The one message sent in the clear — it is what establishes the shared key.
+// The one message sent in the clear -- it is what establishes the shared key.
 QJsonObject change_public_keys(const QString &client_id, const QString &public_key_b64,
 	                              const QString &nonce_b64);
 
@@ -59,7 +59,7 @@ QJsonObject set_login_request(const QString &url, const QString &login,
 	                            const QString &assoc_id, const QString &id_key_b64);
 
 // generate-password takes no arguments -- KeePassXC generates per its own
-// configured policy, which is the point (§13.1): we ask, we do not configure.
+// configured policy, which is the point (sec 13.1): we ask, we do not configure.
 //
 // **Unverified:** whether the real client sends this as a normal encrypted,
 // enveloped action (like `associate` or `get-logins`) or as a bare top-level

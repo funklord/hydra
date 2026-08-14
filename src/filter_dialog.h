@@ -14,13 +14,13 @@ class QPlainTextEdit;
 class ai_provider;
 class filter_signals;
 
-// The filter-evolution loop's accept UI (architecture doc §12.5) — Spine 3's
+// The filter-evolution loop's accept UI (architecture doc sec 12.5) -- Spine 3's
 // diff/accept machinery pointed at the filter list instead of the tree.
 //
 // The shape deliberately mirrors reorganize_dialog, because it is the same
-// pipeline: review payload → send → receive → validate → per-item accept.
+// pipeline: review payload -> send -> receive -> validate -> per-item accept.
 // What differs is the safety core. There the invariant was "no node left
-// behind"; here it is the dry run (§12.4), which statically rejects
+// behind"; here it is the dry run (sec 12.4), which statically rejects
 // dangerously broad rules and simulates the survivors against the requests
 // actually observed on the page, so each rule is shown with exactly what it
 // would have blocked.

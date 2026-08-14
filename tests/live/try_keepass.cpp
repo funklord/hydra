@@ -1,12 +1,12 @@
-// The KeePassXC bridge, against a real KeePassXC (architecture doc §13.1).
+// The KeePassXC bridge, against a real KeePassXC (architecture doc sec 13.1).
 //
 // Wired since step 8 and never once run, which in this project is the same
-// sentence as "probably broken" — the whole of §13.1 is transport, framing and
+// sentence as "probably broken" -- the whole of sec 13.1 is transport, framing and
 // end-to-end crypto, and none of it had ever met the other end.
 //
 // **What this needs**, and it will say so rather than passing vacuously: a
 // running KeePassXC with browser integration enabled. A self-contained one is
-// enough and is what the notes describe setting up — its own config file, its own
+// enough and is what the notes describe setting up -- its own config file, its own
 // database, nothing touching the user's.
 //
 // **What it cannot do alone.** `associate()` makes KeePassXC show a dialog that a
@@ -14,8 +14,8 @@
 // program may read their vault, and a browser that could grant itself that would
 // be the bug. So the association step runs only under
 // `HYDRA_KEEPASS_INTERACTIVE=1`, and the run says plainly which parts went
-// unchecked. Everything before it — socket, handshake, key exchange, the
-// not-associated path — runs unattended.
+// unchecked. Everything before it -- socket, handshake, key exchange, the
+// not-associated path -- runs unattended.
 #include "credential_store.h"
 #include "keepass_bridge.h"
 #include "keepass_protocol.h"
@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
 	// Connect, do not merely look.
 	//
 	// The first version of this checked QFile::exists on the path and reported
-	// "KeePassXC is listening" — and that path is a symlink into the runtime
+	// "KeePassXC is listening" -- and that path is a symlink into the runtime
 	// directory which **outlives the process**. So after KeePassXC exited, this
 	// driver announced a listening server, then failed the handshake, and the
 	// one check that was supposed to establish the precondition was the one
@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
 		// The lambda above captures this block's locals by reference, and the
 		// bridge outlives the block. Pairing emits associated_changed a second
 		// time, so leaving this connected runs a dead lambda against reclaimed
-		// stack — `message = m` frees whatever the old QString's d-pointer has
+		// stack -- `message = m` frees whatever the old QString's d-pointer has
 		// become. That is a heap corruption rather than a wrong answer: it
 		// aborted this driver in `get_logins_request`, three checks and one
 		// allocation later, the first time pairing ever succeeded. A scoped
@@ -156,7 +156,7 @@ int main(int argc, char **argv) {
 		QObject::disconnect(c);
 	}
 
-	// A pairing that survives a restart (§13.1). This is what makes everything
+	// A pairing that survives a restart (sec 13.1). This is what makes everything
 	// below reachable without a person: the first confirmed run stores it, and
 	// every run after restores it and goes straight to the requests. Before it
 	// existed, the association lived in this process's memory, so `get-logins`
@@ -219,7 +219,7 @@ int main(int argc, char **argv) {
 			message = m;
 		});
 		// Clear what the bogus-pairing check planted. It called set_association
-		// with an id and a key, and both are still on the bridge — so asserting
+		// with an id and a key, and both are still on the bridge -- so asserting
 		// below that they are non-empty asserts on what this test wrote three
 		// checks ago, not on anything KeePassXC said. Measured: on a run where
 		// the dialog was never confirmed, "hands back an id to save" and "and a

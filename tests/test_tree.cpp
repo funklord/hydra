@@ -1,7 +1,7 @@
-// The tree file, which is the user's data (architecture doc §4.4).
+// The tree file, which is the user's data (architecture doc sec 4.4).
 //
 // It is the source of truth for structure and order, it is written on every
-// change, and it is read back on every launch — so a round-trip that loses
+// change, and it is read back on every launch -- so a round-trip that loses
 // something loses the thing the whole application is about. Nothing tested it.
 //
 // The same field format is used for the AI reorganizer's payload
@@ -94,7 +94,7 @@ int main(int argc, char **argv) {
 		// **This is the case that matters**, and it is not exotic: "Article Title
 		// | Site Name" is one of the commonest shapes a page title takes on the
 		// web. The file's fields are separated by " | ", so a title containing
-		// one used to shift every field after it — the url became the tail of the
+		// one used to shift every field after it -- the url became the tail of the
 		// title, and the real url was left in a position nothing reads.
 		node root;
 		root.id = "root";

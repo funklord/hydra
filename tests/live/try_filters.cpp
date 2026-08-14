@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
 	QFile::remove(out + "/policy.ini");
 	QFile::remove(out + "/policy.json");   // and the file it migrates from
 
-	// The rules, written where the shell will find them — through the real file
+	// The rules, written where the shell will find them -- through the real file
 	// it loads at startup, not injected past it. A rule that only works when a
 	// test hands it over directly would not be the thing under test.
 	{

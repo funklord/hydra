@@ -42,14 +42,14 @@ filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
 	connect(m_provider, &ai_provider::finished, this, &filter_dialog::on_reply);
 	connect(m_provider, &ai_provider::failed,   this, &filter_dialog::on_failed);
 
-	// The payload is the §12.2 context: page URL plus the requests that slipped
+	// The payload is the sec 12.2 context: page URL plus the requests that slipped
 	// through. Personal data is not in it because only URLs of third-party
 	// ad-shaped requests are collected in the first place.
 	const QStringList suspects = m_signals->suspects_for(m_site);
 	QString payload = "Page: " + m_site + "\n";
 	if (m_picked.is_valid()) {
-		// The user pointed at the ad, so the model gets the element itself —
-		// this is what makes a *cosmetic* rule proposable at all (§12.1/§12.2).
+		// The user pointed at the ad, so the model gets the element itself --
+		// this is what makes a *cosmetic* rule proposable at all (sec 12.1/sec 12.2).
 		payload += "\nThe user marked this element as an ad:\n";
 		payload += "  selector: " + m_picked.selector + "\n";
 		payload += "  tag: " + m_picked.tag + "\n";
@@ -138,7 +138,7 @@ void filter_dialog::on_reply(const QString &text) {
 			continue;
 		QString note;
 		const int pipe = line.indexOf('|');
-		// "reason | rule" — but `||host^` also starts with a pipe, so only
+		// "reason | rule" -- but `||host^` also starts with a pipe, so only
 		// treat it as a reason when there is text before it.
 		if (pipe > 0 && !line.startsWith("||")) {
 			note = line.left(pipe).trimmed();
@@ -149,7 +149,7 @@ void filter_dialog::on_reply(const QString &text) {
 			continue;
 		r.note = note;
 		if (m_list->contains(r.text))
-			continue;   // already have it; de-dup on import (§12.5)
+			continue;   // already have it; de-dup on import (sec 12.5)
 		proposed << r;
 	}
 
@@ -177,7 +177,7 @@ void filter_dialog::show_proposals(const QList<filter_rule> &rules) {
 
 		if (sim.rejected) {
 			// Statically unsafe: shown so the user can see what was proposed
-			// and why it was refused, but not selectable (§12.4).
+			// and why it was refused, but not selectable (sec 12.4).
 			++rejected;
 			row->setText(1, "rejected — " + sim.reason);
 			row->setCheckState(0, Qt::Unchecked);
@@ -196,7 +196,7 @@ void filter_dialog::show_proposals(const QList<filter_rule> &rules) {
 			                    .arg(sim.would_block.size()).arg(observed.size()));
 		}
 		// A rule that matches nothing observed is not obviously wrong, but it
-		// is unproven — leave it unticked so accepting it is a deliberate act.
+		// is unproven -- leave it unticked so accepting it is a deliberate act.
 		// Pre-tick only what is demonstrably doing something: a rule that
 		// matched nothing, or a cosmetic rule that misses the picked element,
 		// is unproven and stays for the user to decide.

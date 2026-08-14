@@ -1,9 +1,9 @@
-// Turning an HLS stream into one local file (architecture doc §11.3).
+// Turning an HLS stream into one local file (architecture doc sec 11.3).
 //
 // The parser's byte-range fix is only half the story: what matters is the file
 // that comes out the other end. A playlist that is one resource cut into slices
 // used to yield a file of the right length assembled from the same opening slice
-// repeated — no error anywhere, just a video that is wrong. So this assembles
+// repeated -- no error anywhere, just a video that is wrong. So this assembles
 // against a real server and compares the bytes.
 //
 // The server is in-process and speaks enough HTTP to be a CDN for this purpose,

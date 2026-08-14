@@ -1,7 +1,7 @@
-// Passive evidence for the filter-evolution loop (architecture doc §12.1).
+// Passive evidence for the filter-evolution loop (architecture doc sec 12.1).
 //
 // Two lists come out of here and they are not the same thing. *Observed* is
-// everything a page asked for — the corpus a proposed rule is simulated against,
+// everything a page asked for -- the corpus a proposed rule is simulated against,
 // so a dry-run can say "this would have blocked four of these". *Suspects* is
 // the much smaller set that got through and looks ad-shaped, which is what the
 // model is shown as evidence.

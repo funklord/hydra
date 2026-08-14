@@ -5,7 +5,7 @@
 #include <QString>
 #include <QStringList>
 
-// What "zap this" captured (architecture doc §12.1).
+// What "zap this" captured (architecture doc sec 12.1).
 struct picked_element {
 	QString     selector;   // a CSS selector the page-side script derived
 	QString     tag;        // lowercase tag name
@@ -17,14 +17,14 @@ struct picked_element {
 	bool is_valid() const { return !tag.isEmpty(); }
 };
 
-// The user-driven half of filter-evolution signal collection (§12.1).
+// The user-driven half of filter-evolution signal collection (sec 12.1).
 //
 // This was deferred from step 6 for a structural reason: capturing a leaked
 // ad's selector needs script injection and a channel into the page, which is
-// the plumbing the password manager introduced (§13.2). It is that same seam,
+// the plumbing the password manager introduced (sec 13.2). It is that same seam,
 // used for a second purpose.
 //
-// The C++ side stays deliberately thin — the page script does the picking, and
+// The C++ side stays deliberately thin -- the page script does the picking, and
 // everything it sends is treated as untrusted text that only ever becomes a
 // *proposal* for the user to review, never a rule applied directly.
 class element_picker : public QObject {

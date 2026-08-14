@@ -213,7 +213,7 @@ QList<tree_change> compute(node *original, node *proposal) {
 		}
 	}
 
-	// Duplicate URLs, offered for merge rather than acted on (§9.5).
+	// Duplicate URLs, offered for merge rather than acted on (sec 9.5).
 	QHash<QString, QString> first_by_url;   // url -> id
 	for (node *n : all_leaves(proposal)) {
 		if (n->url.isEmpty())
@@ -271,7 +271,7 @@ int apply(node *original, const QList<tree_change> &changes) {
 			case change_kind::reparented:
 			case change_kind::reordered: {
 				// A locked node does not move, and the model is not the only
-				// thing that has to know it (§5.5). The reorganizer proposes
+				// thing that has to know it (sec 5.5). The reorganizer proposes
 				// from a serialized tree, so a lock has to be enforced where
 				// the move is *applied* rather than trusted to survive a round
 				// trip through a model's answer -- this is the same shape as

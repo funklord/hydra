@@ -1,8 +1,8 @@
-// "No node left behind" (architecture doc §9.4/§9.5).
+// "No node left behind" (architecture doc sec 9.4/sec 9.5).
 //
 // The reorganizer hands a language model the whole tree and asks it to rearrange
 // it. What comes back is text, and this is the gate that decides whether it is
-// safe to show a diff for — so a bug here does not produce a wrong pixel, it
+// safe to show a diff for -- so a bug here does not produce a wrong pixel, it
 // loses somebody's tabs to a machine that hallucinated.
 //
 // The invariant, from the header: every original *leaf* id appears exactly once

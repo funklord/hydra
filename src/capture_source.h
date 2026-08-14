@@ -3,11 +3,11 @@
 
 #include "download_source.h"
 
-// A recording in progress, as a download (architecture doc §11.6).
+// A recording in progress, as a download (architecture doc sec 11.6).
 //
 // A media capture is a download in every sense the user cares about: bytes
 // accumulating into a file, with progress, a destination and a reason to stop
-// it. It is not a download in one sense only — nothing here fetches anything.
+// it. It is not a download in one sense only -- nothing here fetches anything.
 // The page drives the transfer and the shell watches the proxy's byte count.
 //
 // That is why it is adopted rather than enqueued: `download_manager::adopt()`
@@ -53,7 +53,7 @@ public:
 	void ended(int job_id, bool ok, const QString &message);
 
 	// Cancel comes from the downloads window, so the shell has to hear about
-	// it and stop the recording — the source cannot stop the page by itself.
+	// it and stop the recording -- the source cannot stop the page by itself.
 	void cancel(int id) override { emit stop_requested(id); }
 
 signals:

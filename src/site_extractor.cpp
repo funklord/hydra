@@ -29,23 +29,23 @@ namespace {
 //
 // `var extract;` rather than `var extract = null;`, and the difference is not
 // cosmetic. A function *declaration* hoists to the top of this scope, and an
-// initialiser here then runs afterwards and overwrites it with null — so
-// `function extract(page, requests) { … }`, which is both valid and the most
+// initialiser here then runs afterwards and overwrites it with null -- so
+// `function extract(page, requests) { ... }`, which is both valid and the most
 // natural way to write it, was rejected as "defines no extract() function".
 // A declaration with no initialiser does not disturb the hoisted binding, so
 // both forms now arrive intact. A real model wrote the broken-by-us form on
 // its first properly-formatted answer against real evidence.
-// And `const extract = …` is the third form, which the arrangement above
+// And `const extract = ...` is the third form, which the arrangement above
 // rejected outright: a `var extract;` in the same scope as a `const extract`
 // is "Identifier extract has already been declared", a SyntaxError raised
-// before a line of the proposal runs. Measured, and it cost everything — five
+// before a line of the proposal runs. Measured, and it cost everything -- five
 // runs in five against real evidence died there, and the message names our
 // wrapper's variable rather than anything the model did, so it reads like the
 // model produced nonsense when it had in fact produced a correct parser.
 //
 // The source therefore gets a scope of its own. A declaration of any kind
 // (`function`, `var`, `let`, `const`) binds inside it and is handed back; a
-// bare `extract = …` with no declaration finds the outer `var` and assigns
+// bare `extract = ...` with no declaration finds the outer `var` and assigns
 // that instead of leaking a global, which is what the outer one is still for.
 QString wrap(const QString &source) {
 	return QStringLiteral(
@@ -65,7 +65,7 @@ QString wrap(const QString &source) {
 // Does the proposal carry a value that only this page load has?
 //
 // The rotating parts of these addresses are the query values and the long digit
-// runs in the path — `?k=4_Lxg1uYRS4SPCO4a_CE8A&kx=1785787643`, or the
+// runs in the path -- `?k=4_Lxg1uYRS4SPCO4a_CE8A&kx=1785787643`, or the
 // `1742380998` in `cf-master.1742380998.txt`. `shape_of` already treats exactly
 // those as the variable parts, so this asks the same question of the *script*:
 // if a run of characters appears both in the evidence's variable parts and
@@ -73,8 +73,8 @@ QString wrap(const QString &source) {
 // from the shape of the address.
 //
 // Measured: a model wrote a lookup table of the five annotated urls, tokens and
-// all, and searched it. Every check the gate had passed — the address really
-// was requested, really was a manifest, really was fetched once — and the
+// all, and searched it. Every check the gate had passed -- the address really
+// was requested, really was a manifest, really was fetched once -- and the
 // extractor would have failed on the next visit, stored, with nothing pointing
 // back here.
 //
@@ -102,7 +102,7 @@ bool embeds_a_token(const QString &source, const QList<evidence_request> &eviden
 // Does the proposal match on the position of a request in this visit's list?
 //
 // `order` is a real field, so this compiles, runs, and returns the right answer
-// on this evidence — and it is this capture's ordering, not a property of the
+// on this evidence -- and it is this capture's ordering, not a property of the
 // site. One extra advert, one request that lost a race, and the numbers shift.
 //
 // Anticipated rather than measured, and worth saying which: the notes moved out
@@ -113,7 +113,7 @@ bool embeds_a_token(const QString &source, const QList<evidence_request> &eviden
 // stored.
 bool matches_on_order(const QString &source) {
 	// Either side of the comparison, and the thing being indexed can be any
-	// ordinary expression — `x.order === 3`, but also `3 === r[i].order`, which
+	// ordinary expression -- `x.order === 3`, but also `3 === r[i].order`, which
 	// the first version of this missed because it only allowed a bare
 	// identifier before `.order` and real code writes `r[i]`.
 	static const QRegularExpression compare(
@@ -124,7 +124,7 @@ bool matches_on_order(const QString &source) {
 // Does the proposal try to read the served-type note at run time?
 //
 // It is a column of the table the model is shown, never a field of the requests
-// the script receives — it cannot be, because a stored extractor runs on later
+// the script receives -- it cannot be, because a stored extractor runs on later
 // visits where nothing has been fetched to ask. A script reading it gets
 // `undefined` every time, so it reports "found nothing" and looks like a model
 // that could not find the stream, when it is a model that found it and then
@@ -171,7 +171,7 @@ QString shape_of(const QUrl &u) {
 		keys << pair.first;
 	bare.setQuery(QString());
 	// Long random-looking path tokens, before anything else touches them. A
-	// tracker that puts its payload in the *path* -- `/sbx/b/3NIK470KmUnKT…` --
+	// tracker that puts its payload in the *path* -- `/sbx/b/3NIK470KmUnKT...` --
 	// produces a different string every time, so digit-collapsing alone left
 	// every beacon its own shape. Three consequences, all measured on the second
 	// site: the flood was invisible, so the segment rule could not refuse one;
@@ -205,8 +205,8 @@ QString shape_of(const QUrl &u) {
 	QString s = bare.toString(QUrl::RemoveFragment);
 	if (!keys.isEmpty())
 		s += "?" + keys.join('&');
-	// Then digit runs of any length: a flood indexed `seg-1 … seg-9` is the
-	// same flood as one indexed `seg-0001 … seg-0009`, and requiring two
+	// Then digit runs of any length: a flood indexed `seg-1 ... seg-9` is the
+	// same flood as one indexed `seg-0001 ... seg-0009`, and requiring two
 	// digits meant the first kind never folded at all.
 	s.replace(digits, "#");
 	return s;
@@ -219,8 +219,8 @@ extraction run(const QString &source, const QUrl &page,
 	QJSEngine engine;
 	engine.installExtensions(QJSEngine::ConsoleExtension);
 
-	// The §11.5.1 tier, and only when one was supplied. Without it there is no
-	// `hydra` in scope at all — a pure-tier script cannot discover the surface
+	// The sec 11.5.1 tier, and only when one was supplied. Without it there is no
+	// `hydra` in scope at all -- a pure-tier script cannot discover the surface
 	// exists, let alone use it, which keeps the default the empty sandbox it
 	// has always been.
 	if (helpers) {
@@ -231,7 +231,7 @@ extraction run(const QString &source, const QUrl &page,
 
 	// A script that never returns must not be able to hang the browser. The
 	// interrupt is set from another thread because a tight loop in JS never
-	// yields to this one — a timer here would simply never fire.
+	// yields to this one -- a timer here would simply never fire.
 	std::atomic<bool> done{false};
 	std::thread watchdog([&engine, &done, timeout_ms] {
 		QElapsedTimer t;
@@ -285,7 +285,7 @@ extraction run(const QString &source, const QUrl &page,
 		// `type`, not `kind`. What the browser fetched this as ("script",
 		// "image", "other") and what a stream is ("hls", "dash", "direct") are
 		// two vocabularies, and they shared the name `kind` until a model read
-		// it the obvious way and wrote `request.kind === 'hls'` — never true of
+		// it the obvious way and wrote `request.kind === 'hls'` -- never true of
 		// anything, so it returned null and looked like a model failure. The
 		// return value keeps `kind`, which is the one the proposal decides.
 		r.setProperty("type", evidence[i].kind);
@@ -342,11 +342,11 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	// broken extractor on the next visit, which is the worst shape a defect can
 	// have here: the proposal is accepted, stored for the host, and fails later
 	// with nothing to connect it back to this moment. They are checked
-	// statically because running the script reports each as something else — a
+	// statically because running the script reports each as something else -- a
 	// baked-in token looks like a correct answer, and a read of a column that
 	// does not exist looks like "the script found nothing".
 	//
-	// This is §12.4's argument once more: decide what a proposal *would* do
+	// This is sec 12.4's argument once more: decide what a proposal *would* do
 	// before letting it do it.
 	if (reads_serves(source)) {
 		v.reads_note = true;
@@ -375,7 +375,7 @@ extractor_verdict check(const QString &source, const QUrl &page,
 		return v;
 	}
 
-	// The gate. §9.4 rejects a reorganization that invents a tab id because
+	// The gate. sec 9.4 rejects a reorganization that invents a tab id because
 	// there is no safe repair for one; the same holds here. A proposal is
 	// choosing among addresses the page actually fetched, and one that returns
 	// something else has authored a destination of its own.
@@ -384,7 +384,7 @@ extractor_verdict check(const QString &source, const QUrl &page,
 		seen.insert(normalise(r.url));
 
 	// Observed, or reachable by following what a fetched document named. With
-	// no helper tier these are the same set; with one, the second is the point —
+	// no helper tier these are the same set; with one, the second is the point --
 	// a variant listed inside a master playlist was never requested by the page
 	// and is still not invented.
 	const bool followable =
@@ -434,7 +434,7 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	// Observed is not the same as correct, and a real model showed why: asked
 	// for a manifest it returned `seg-00000.ts`, which the page had genuinely
 	// requested, so the observed-URL rule waved it through. A stream that
-	// arrives as hundreds of near-identical requests is a *segment* — the
+	// arrives as hundreds of near-identical requests is a *segment* -- the
 	// manifest is fetched once. Anything picked out of that flood is refused.
 	QHash<QString, int> shape_count;
 	for (const evidence_request &r : evidence)
@@ -451,7 +451,7 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	// The interceptor already knows what the browser asked for each address as,
 	// and the gate was throwing that away. A real run picked a Yandex
 	// cookie-sync pixel and was accepted: genuinely requested, fetched once,
-	// not the page, so nothing else refused it — and the media list would have
+	// not the page, so nothing else refused it -- and the media list would have
 	// offered a tracking pixel as a video. What the browser fetched as an image
 	// or a script is page furniture.
 	//
@@ -480,7 +480,7 @@ extractor_verdict check(const QString &source, const QUrl &page,
 
 	// A fifth rule, and the last wrong answer the whole apparatus still accepted.
 	// Measured: given evidence whose content types were annotated, three runs in
-	// five returned `init-f1-v1-a1.woff` — the initialisation segment. Every
+	// five returned `init-f1-v1-a1.woff` -- the initialisation segment. Every
 	// existing rule says yes. It is fetched exactly once, so the segment rule
 	// does not fire; it is not the page and not furniture; and when the tier
 	// fetches it the body genuinely is an ISO-BMFF stream, so the probe confirms
@@ -491,7 +491,7 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	// from the manifest's own directory that is not itself a confirmed manifest
 	// is a piece of that stream rather than an alternative to it. A media
 	// playlist listed alongside a master is in the set and passes, which is
-	// right — it is a manifest, and following it is the helper tier's job.
+	// right -- it is a manifest, and following it is the helper tier's job.
 	//
 	// Same *directory*, not same host, and the narrowness is deliberate: a
 	// progressive mp4 served elsewhere on the same host is a better answer than
@@ -502,7 +502,7 @@ extractor_verdict check(const QString &source, const QUrl &page,
 		const QString dir = directory_of(v.result.url);
 		// Named in the order the page fetched them, not in the set's. A player
 		// asks for the master and then for the variant it chose, so the earlier
-		// sighting is the one to send someone back to — and iterating a QSet gave
+		// sighting is the one to send someone back to -- and iterating a QSet gave
 		// whichever the hash happened to yield, which is a user-facing sentence
 		// that changes between runs for no reason.
 		QString named;
@@ -513,8 +513,8 @@ extractor_verdict check(const QString &source, const QUrl &page,
 			named = r.url.fileName();
 			break;
 		}
-		// A confirmed manifest the page never requested — one the helper tier
-		// followed to — is not in the evidence to be ordered. Falling back keeps
+		// A confirmed manifest the page never requested -- one the helper tier
+		// followed to -- is not in the evidence to be ordered. Falling back keeps
 		// the rule firing; only the sentence loses its ordering.
 		if (named.isEmpty())
 			for (const QString &m : *manifests)

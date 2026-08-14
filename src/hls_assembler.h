@@ -13,22 +13,22 @@ class QFile;
 class QNetworkAccessManager;
 class QNetworkReply;
 
-// Turns an HLS stream into one growing local file (architecture doc §11.3).
+// Turns an HLS stream into one growing local file (architecture doc sec 11.3).
 //
 // This is what "the app compensates in the proxy for what the player lacks"
 // means concretely. Classic mplayer is strong on progressive files and weak at
 // native HLS, so rather than hand it a manifest and hope, we fetch the segments
 // ourselves and append them to a single file the player can seek around in.
 //
-// It is also the §11.3 tee-to-disk trick: because segments are written as they
-// arrive, a *live* stream becomes a local VOD — full backward seek over
+// It is also the sec 11.3 tee-to-disk trick: because segments are written as they
+// arrive, a *live* stream becomes a local VOD -- full backward seek over
 // everything captured so far, plus a saved copy, in one step. The same
 // mechanism therefore serves both "watch this properly" and "save this".
 //
 // Deliberately simple: segments are fetched strictly in order, one at a time.
 // Concatenated MPEG-TS is directly playable, which is why this works at all
 // without a remux; fMP4 segments would need their init segment prepended and a
-// real remux to be seekable, and that is the ffmpeg step §11.2 describes and
+// real remux to be seekable, and that is the ffmpeg step sec 11.2 describes and
 // this does not do.
 class hls_assembler : public QObject {
 	Q_OBJECT

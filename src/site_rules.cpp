@@ -86,8 +86,8 @@ namespace {
 
 // Ordinary buttons that appear on ordinary pages. A consent pattern that fires
 // on any of these is not a consent pattern; it is a licence to press whatever
-// is in front of it. This is the same idea as §12.4's static breadth check on a
-// filter rule — decide what a rule *would* do before letting it do anything —
+// is in front of it. This is the same idea as sec 12.4's static breadth check on a
+// filter rule -- decide what a rule *would* do before letting it do anything --
 // and the list is deliberately full of things that are destructive, expensive,
 // or simply nothing to do with cookies.
 const char *k_decoys[] = {
@@ -352,7 +352,7 @@ QString site_rules::to_script_literal() const {
 	QJsonObject o;
 	o.insert("containers", containers);
 	// Joined into one alternation each, so the script does no rule arithmetic of
-	// its own — it applies what it was given and nothing else.
+	// its own -- it applies what it was given and nothing else.
 	o.insert("reject", reject.join('|'));
 	o.insert("accept", accept.join('|'));
 	return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));

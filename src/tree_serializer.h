@@ -6,10 +6,10 @@
 struct node;
 
 // Turns the tree into the payload an AI provider sees, and turns a proposal
-// back into a tree (architecture doc §9.2/§9.3).
+// back into a tree (architecture doc sec 9.2/sec 9.3).
 //
-// This is deliberately NOT the canonical outline. §9.3 fixes exactly what may
-// leave the machine — per node: id, parent/depth, title, URL, type, tags — so
+// This is deliberately NOT the canonical outline. sec 9.3 fixes exactly what may
+// leave the machine -- per node: id, parent/depth, title, URL, type, tags -- so
 // this format carries those and nothing else. In particular it drops the
 // `created=` / `seen=` timestamps the on-disk file keeps, because they are not
 // on that list; browsing history is precisely the sort of thing that should not
@@ -25,7 +25,7 @@ namespace tree_serializer {
 QString to_payload(node *root);
 
 // Parse a proposal back. Returns a synthetic root owning the tree (delete to
-// free), or nullptr if the text contains no usable node lines at all — an
+// free), or nullptr if the text contains no usable node lines at all -- an
 // empty proposal is a provider failure, not a request to delete everything.
 node *parse_proposal(const QString &text);
 

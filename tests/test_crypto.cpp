@@ -1,8 +1,8 @@
-// The crypto shim under the KeePassXC bridge (architecture doc §13.1).
+// The crypto shim under the KeePassXC bridge (architecture doc sec 13.1).
 //
 // There is no cryptography of our own here and there should never be: this wraps
 // libsodium's `crypto_box` and nothing else. What is worth testing is not the
-// cipher — libsodium's own suite does that far better — but **the shim's edges**,
+// cipher -- libsodium's own suite does that far better -- but **the shim's edges**,
 // where a mistake would be ours: whether a wrong key is refused rather than
 // accepted, whether a tampered message is rejected rather than returned, and
 // whether a bad size fails cleanly rather than reading past the end of a buffer.

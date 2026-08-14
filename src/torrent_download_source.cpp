@@ -82,14 +82,14 @@ torrent_download_source::torrent_download_source(QObject *parent)
 	            lt::alert_category::status | lt::alert_category::error |
 	            lt::alert_category::storage);
 
-	// §11.4: the caps are the whole point of the connection-scaling argument,
+	// sec 11.4: the caps are the whole point of the connection-scaling argument,
 	// so set them deliberately rather than inheriting a desktop-GUI default.
 	sp.set_int(lt::settings_pack::connections_limit, m_global_limit);
 	sp.set_int(lt::settings_pack::active_downloads, -1);
 	sp.set_int(lt::settings_pack::active_seeds, -1);
 	sp.set_int(lt::settings_pack::active_limit, -1);
 
-	// The reason rasterbar was chosen (§11.4). µTP's LEDBAT congestion control
+	// The reason rasterbar was chosen (sec 11.4). uTP's LEDBAT congestion control
 	// yields to competing traffic, so a torrent does not starve the browser it
 	// is running inside. Explicit because it is load-bearing, not incidental.
 	sp.set_bool(lt::settings_pack::enable_outgoing_utp, true);
@@ -99,8 +99,8 @@ torrent_download_source::torrent_download_source(QObject *parent)
 	sp.set_bool(lt::settings_pack::enable_dht, true);
 	sp.set_bool(lt::settings_pack::enable_lsd, true);
 
-	// Port mapping is a security posture change — asking the router to open a
-	// hole (§11.4). On by default because inbound connectivity is most of what
+	// Port mapping is a security posture change -- asking the router to open a
+	// hole (sec 11.4). On by default because inbound connectivity is most of what
 	// makes a swarm usable, but it is a setting, and it is written down.
 	sp.set_bool(lt::settings_pack::enable_upnp, true);
 	sp.set_bool(lt::settings_pack::enable_natpmp, true);
@@ -171,7 +171,7 @@ bool torrent_download_source::accepts(const QUrl &url, QString *why_not) const {
 
 // Resume data is keyed by **info-hash**, never by job id. Job ids are handed
 // out by the manager starting from 1 in each session, so a file named after one
-// would be loaded by an unrelated torrent after a restart — resurrecting some
+// would be loaded by an unrelated torrent after a restart -- resurrecting some
 // previous download's piece state onto a new job. The info-hash is the identity
 // of the content itself and is the only stable name available.
 QString torrent_download_source::resume_path(const QString &info_hash) const {
@@ -258,7 +258,7 @@ bool torrent_download_source::start(const download_request &req, QString *error)
 	QDir().mkpath(req.directory);
 
 	// A .torrent behind an http(s) URL has to be fetched before it can be
-	// added — libtorrent 2.0 does not fetch them itself. A magnet needs no
+	// added -- libtorrent 2.0 does not fetch them itself. A magnet needs no
 	// fetch, which is why it is the fast path.
 	if (req.url.scheme().compare("magnet", Qt::CaseInsensitive) != 0 &&
 	    (req.url.scheme().startsWith("http"))) {
@@ -276,7 +276,7 @@ bool torrent_download_source::start(const download_request &req, QString *error)
 
 	// Report a name now if the URI carried one. A magnet's `dn` parameter is
 	// exactly that, and without it the list has nothing to show but the raw
-	// magnet string until metadata arrives — which can be a long wait on a
+	// magnet string until metadata arrives -- which can be a long wait on a
 	// cold swarm. Naming is the source's job, not the UI's: the window must
 	// not have to know what a magnet link looks like.
 	download_progress p;
@@ -292,7 +292,7 @@ bool torrent_download_source::start(const download_request &req, QString *error)
 }
 
 // Fills an add_torrent_params for `req`. `atp_ptr` is void* so the header does
-// not have to name a libtorrent type — the seam's rule is that nothing above
+// not have to name a libtorrent type -- the seam's rule is that nothing above
 // download_source knows what transport this is, and that is cheapest to keep
 // true if the header stays clean.
 bool torrent_download_source::add_params(const download_request &req,
@@ -602,7 +602,7 @@ void torrent_download_source::poll_alerts() {
 			// add_torrent_alert carries no id of ours, so the job it belongs to
 			// has to be recovered. libtorrent posts these in the same order the
 			// async_add_torrent calls were made, so a FIFO of pending job ids
-			// is exact — and unlike matching on info-hash it still works for a
+			// is exact -- and unlike matching on info-hash it still works for a
 			// magnet, whose hash we would have to parse twice to know.
 			if (m_d->pending.isEmpty())
 				continue;
@@ -685,7 +685,7 @@ void torrent_download_source::poll_alerts() {
 				}
 				emit progressed(job, p);
 
-				// Seeding stops when the ratio is met — §11.4 makes this a
+				// Seeding stops when the ratio is met -- sec 11.4 makes this a
 				// policy question, and this is where the policy lands.
 				if (m_d->completed.contains(job) && m_seed_ratio > 0.0 &&
 				    st.all_time_download > 0 &&
@@ -711,7 +711,7 @@ void torrent_download_source::poll_alerts() {
 			fin->handle.save_resume_data(lt::torrent_handle::save_info_dict);
 
 			if (m_seed_ratio <= 0.0) {
-				// "Do not seed" — the transfer is over the moment it completes.
+				// "Do not seed" -- the transfer is over the moment it completes.
 				// Report the final tally first: finished() carries no numbers,
 				// and a torrent that completed between two polls would
 				// otherwise be left showing whatever the last poll saw.
@@ -723,15 +723,15 @@ void torrent_download_source::poll_alerts() {
 				emit finished(job, true, QString());
 			} else {
 				// Complete, but the source has not let go. This is exactly the
-				// state the seam grew `seeding` for (§11.4).
+				// state the seam grew `seeding` for (sec 11.4).
 				m_d->completed.insert(job);
 				const lt::torrent_status st = fin->handle.status();
 				download_progress p;
 				p.state    = download_state::seeding;
 				p.received = st.total_wanted_done;
 				p.total    = st.total_wanted;
-				// No detail: the state label already says "Complete — seeding",
-				// and repeating the word produced "Complete — seeding —
+				// No detail: the state label already says "Complete -- seeding",
+				// and repeating the word produced "Complete -- seeding --
 				// seeding". The next status poll fills in peers and ratio.
 				p.detail   = QString();
 				if (!st.name.empty())

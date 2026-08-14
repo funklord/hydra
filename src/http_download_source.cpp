@@ -16,7 +16,7 @@ http_download_source::http_download_source(QObject *parent)
 
 http_download_source::~http_download_source() {
 	// abort() delivers finished() synchronously, which lands in the lambda in
-	// wire() and calls teardown() — which removes from m_transfers and deletes
+	// wire() and calls teardown() -- which removes from m_transfers and deletes
 	// the transfer. Doing that while iterating m_transfers invalidates the
 	// iterator and double-frees. So empty the map first: the callbacks then
 	// find nothing and return, and this loop owns every transfer outright.
@@ -126,7 +126,7 @@ void http_download_source::wire(transfer *t) {
 
 	// Did the server actually honour the Range we asked for?
 	//
-	// **It does not have to, and many do not** — a server with no Range support
+	// **It does not have to, and many do not** -- a server with no Range support
 	// answers 200 with the whole body, which is a correct HTTP response and a
 	// disaster for a file opened in Append: the complete body lands after the
 	// bytes already on disk and the result is a file of exactly twice the right

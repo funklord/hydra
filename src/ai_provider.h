@@ -5,7 +5,7 @@
 #include <QObject>
 #include <QString>
 
-// Which backend the user wants used (architecture doc §9.1).
+// Which backend the user wants used (architecture doc sec 9.1).
 //
 // `automatic` is the local-first rule the design describes: a reachable local
 // model handles everything and nothing leaves the machine, falling back to an
@@ -21,12 +21,12 @@ enum class ai_choice {
 	external,
 };
 
-// One pluggable AI backend (architecture doc §9.1).
+// One pluggable AI backend (architecture doc sec 9.1).
 //
 // Resolution is local-first: if a local model is present and enabled it handles
 // requests and nothing leaves the machine. An external provider is used only
 // when the user configures and selects one, and whenever an external provider
-// is active the review-before-send gate defaults on — URLs and titles are
+// is active the review-before-send gate defaults on -- URLs and titles are
 // themselves sensitive.
 //
 // The interface is deliberately small: one text request, one text reply. The
@@ -39,7 +39,7 @@ public:
 
 	virtual QString name() const = 0;
 
-	// True when this backend looks usable — a local server is reachable, or a
+	// True when this backend looks usable -- a local server is reachable, or a
 	// credential is present. Cheap and non-blocking; not a guarantee.
 	virtual bool available() const = 0;
 

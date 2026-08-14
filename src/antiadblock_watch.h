@@ -16,7 +16,7 @@
 // watch page the video player simply never started: the play button stayed put,
 // every click was answered by the ad network, and nothing in the request log
 // looked wrong. What the log actually contained was
-// `cdnjs.cloudflare.com/ajax/libs/fuckadblock/3.2.1/fuckadblock.min.js` — the
+// `cdnjs.cloudflare.com/ajax/libs/fuckadblock/3.2.1/fuckadblock.min.js` -- the
 // page was watching for a blocker and refusing to play. Allowing ads for that
 // site alone started it.
 //
@@ -24,25 +24,25 @@
 // site, or like a broken browser, and gives the user nothing to act on. Our own
 // blocking is the cause and only we can say so. So this reports; it does not
 // decide. The shield already has a per-site tri-state for ads and the user can
-// use it — what was missing was any way to know that is the lever.
+// use it -- what was missing was any way to know that is the lever.
 //
 // A fourth rider on the interceptor's observer seam, beside the media detector,
 // filter signals and extractor signals: the request stream is already being
 // watched, and a second sensor for the same facts would be a second thing to
-// keep true (§10).
+// keep true (sec 10).
 //
 // **Detected by name, from the shared rule store.** The names live in
 // `site_rules` beside the consent-banner rules rather than in an array here: a
 // detector renames itself, and a list compiled into the binary is a release
 // behind for everyone. They are the same kind of fact, they go stale the same
-// way, and they are meant to travel together — one file with one provenance
+// way, and they are meant to travel together -- one file with one provenance
 // model, not two.
 class antiadblock_watch : public QObject, public request_observer {
 	Q_OBJECT
 public:
 	explicit antiadblock_watch(QObject *parent = nullptr);
 
-	// Called off the UI thread, like every observer (§10). Guarded accordingly.
+	// Called off the UI thread, like every observer (sec 10). Guarded accordingly.
 	void on_request(const request_context &ctx, const request_decision &d) override;
 
 	// Whether this page fetched something whose whole job is to detect us.

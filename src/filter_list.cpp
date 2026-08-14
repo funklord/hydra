@@ -42,7 +42,7 @@ bool filter_list::parse_rule(const QString &line, filter_rule *out) {
 
 bool filter_list::matches(const QString &pattern, const QString &url) {
 	QString p = pattern;
-	// `||host^` — anchored at a domain boundary.
+	// `||host^` -- anchored at a domain boundary.
 	if (p.startsWith("||")) {
 		p.remove(0, 2);
 		const int caret = p.indexOf('^');
@@ -118,7 +118,7 @@ dry_run filter_list::evaluate(const filter_rule &r, const QStringList &observed,
                                const picked_element &picked) {
 	dry_run out;
 
-	// --- Static breadth check: reject dangerously broad rules (§12.4).
+	// --- Static breadth check: reject dangerously broad rules (sec 12.4).
 	if (r.cosmetic) {
 		const QString selector = r.text.mid(r.text.indexOf("##") + 2).trimmed();
 		if (r.scope.isEmpty()) {
@@ -157,7 +157,7 @@ dry_run filter_list::evaluate(const filter_rule &r, const QStringList &observed,
 		}
 	}
 
-	// --- Simulation: show exactly what it would have blocked (§12.4).
+	// --- Simulation: show exactly what it would have blocked (sec 12.4).
 	if (r.cosmetic && picked.is_valid()) {
 		out.cosmetic_checked = true;
 		out.cosmetic_hits =

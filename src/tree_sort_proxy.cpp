@@ -42,7 +42,7 @@ void tree_sort_proxy::set_search_text(const QString &text) {
 	// and the pair does not exist before it, so both spellings are here.
 	//
 	// **Measured before changed**: the deprecated call still filters correctly on
-	// 6.11 — `test_model`'s twenty-four checks pass there — so this is
+	// 6.11 -- `test_model`'s twenty-four checks pass there -- so this is
 	// forward-compatibility rather than a repair. That distinction is worth
 	// making because the *other* deprecation this project met, the WebEngine
 	// permission API, was documented as functional and was not: geolocation

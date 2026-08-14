@@ -6,7 +6,7 @@
 #include <QString>
 #include <QUrl>
 
-// One quality variant from a master playlist — what §11.2 means by "stream
+// One quality variant from a master playlist -- what sec 11.2 means by "stream
 // quality variants from the manifest".
 struct hls_variant {
 	QUrl    url;
@@ -36,7 +36,7 @@ struct hls_playlist {
 	double total_duration() const;
 };
 
-// Parsing only — no network, no state. The assembler and the media list both
+// Parsing only -- no network, no state. The assembler and the media list both
 // need to read manifests, and the parsing is where the fiddly cases live
 // (relative URIs, byte ranges, VOD versus live), so it is separated out and
 // tested on its own.
@@ -45,7 +45,7 @@ namespace hls {
 // `base` is the manifest's own URL; relative URIs resolve against it.
 hls_playlist parse(const QByteArray &text, const QUrl &base);
 
-// Highest bandwidth wins — the §11.3 heuristic for the primary stream.
+// Highest bandwidth wins -- the sec 11.3 heuristic for the primary stream.
 // Returns nullptr when there are no variants.
 const hls_variant *best_variant(const hls_playlist &p);
 

@@ -8,8 +8,8 @@
 
 // A single entry in the tab/link tree. Folder or leaf.
 // Runtime weight (a live web view backend, or a suspended state blob) is attached
-// separately by `id` in the shell — never stored on the node itself — so moving
-// a node never disturbs its payload. See architecture doc §4.2.
+// separately by `id` in the shell -- never stored on the node itself -- so moving
+// a node never disturbs its payload. See architecture doc sec 4.2.
 enum class node_type { folder, open_tab, unopened_tab, suspended_tab };
 
 struct node {
@@ -48,7 +48,7 @@ struct node {
 	// choose this" is not recoverable from the string afterwards.
 	bool      renamed = false;
 
-	// Pinned: this node keeps its page and its place (architecture doc §5.5).
+	// Pinned: this node keeps its page and its place (architecture doc sec 5.5).
 	//
 	// Two effects, and they are one idea rather than two features bolted
 	// together -- "this row stays as it is". Navigating a locked tab does not

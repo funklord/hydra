@@ -10,7 +10,7 @@
 class QNetworkAccessManager;
 class QNetworkReply;
 
-// Local-model backend: Ollama on localhost (architecture doc §9.1). Nothing
+// Local-model backend: Ollama on localhost (architecture doc sec 9.1). Nothing
 // leaves the machine, which is why this is the default when it is reachable.
 class ollama_provider : public ai_provider {
 	Q_OBJECT
@@ -56,7 +56,7 @@ public:
 	// Probe and wait for the answer, up to the probe timeout.
 	//
 	// Deliberately blocking, which is the right trade here. The backend choice
-	// cannot be deferred — something has to be asked *now* — and getting it
+	// cannot be deferred -- something has to be asked *now* -- and getting it
 	// wrong is not symmetric: treating a running local model as absent sends
 	// the payload to an external service when it never had to leave the
 	// machine. A user-initiated action may cost a moment to avoid that.
@@ -68,7 +68,7 @@ public:
 	// endpoint points. On loopback the answer arrives in about a millisecond
 	// and a short timeout costs nothing. A remote host that *drops* packets
 	// rather than refusing gives no answer at all, and then the timeout is paid
-	// in full every time a dialog that needs a backend is opened — so the
+	// in full every time a dialog that needs a backend is opened -- so the
 	// person who moved the endpoint off localhost is the person who needs to be
 	// able to change this.
 	void set_probe_timeout(int ms) { m_probe_timeout = qMax(100, ms); }

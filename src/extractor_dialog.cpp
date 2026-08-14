@@ -71,7 +71,7 @@ const char *k_system_prompt =
 
 // How much an address reads like a playlist. Two tiers, because "master" and
 // "m3u8" name the thing itself while "index" and "hls" merely sit near it -- on
-// one measured site `index.php?…do=getVideo` is an API and `master.txt` is the
+// one measured site `index.php?...do=getVideo` is an API and `master.txt` is the
 // manifest, and asking the wrong one first wastes the only question that host
 // gets.
 int playlistish(const QUrl &u) {
@@ -114,7 +114,7 @@ QString extractor_dialog::summarise(const QList<evidence_request> &evidence,
 		// channel the measured site tells the truth on, so it belongs beside
 		// the address -- but in a **column of its own, with the url last**.
 		//
-		// It used to be appended to the url as `   -> …`, and that cost the
+		// It used to be appended to the url as `   -> ...`, and that cost the
 		// whole mechanism. Measured on kisskh: four runs in five wrote
 		// `url.includes('->')`, reading the note as part of the address it was
 		// printed against, so those branches matched nothing and both hits came
@@ -159,7 +159,7 @@ QList<evidence_request> extractor_dialog::candidates(
 			continue;
 		// Only things that can be fetched. A websocket address cannot answer
 		// "what do you serve", and spending a question on one is spending it to
-		// learn nothing — two of ten went that way on a real capture.
+		// learn nothing -- two of ten went that way on a real capture.
 		if (r.url.scheme() != "http" && r.url.scheme() != "https")
 			continue;
 		if (r.url.adjusted(QUrl::RemoveFragment | QUrl::StripTrailingSlash)
@@ -179,7 +179,7 @@ QList<evidence_request> extractor_dialog::candidates(
 
 	// Ranking, and "fetched once" alone is not enough: analytics beacons and
 	// stylesheets are fetched once too, and they arrive first, so a budget
-	// ordered on that spends itself on trackers before reaching the video —
+	// ordered on that spends itself on trackers before reaching the video --
 	// measured, on a real capture, where the ten questions went to Google
 	// Analytics, Yandex and a CSS file.
 	//
@@ -205,13 +205,13 @@ QList<evidence_request> extractor_dialog::candidates(
 		// This is a *lexical* guess and it is placed here deliberately, because
 		// this is the one place where being wrong is nearly free: it decides
 		// which addresses we spend a 2 KB question on, not what the model may
-		// answer and not what the gate will accept. The words are HLS's own —
-		// master playlist, index/media playlist, `.m3u8` — so they are not one
+		// answer and not what the gate will accept. The words are HLS's own --
+		// master playlist, index/media playlist, `.m3u8` -- so they are not one
 		// site's vocabulary.
 		//
 		// Checked against all three captures rather than tuned until two passed,
 		// which is how the rule this replaces came to be wrong on the second
-		// site: `cf-master.…txt`, `master.txt` and `…_index.m3u8` are the three
+		// site: `cf-master....txt`, `master.txt` and `..._index.m3u8` are the three
 		// manifests, and each is the first thing asked about on its host.
 		const int look_a = playlistish(a.url);
 		const int look_b = playlistish(b.url);
@@ -228,7 +228,7 @@ QList<evidence_request> extractor_dialog::candidates(
 	//
 	// The flood rule above was derived from one capture and is wrong on the
 	// next. On a site whose ad networks are busier than its player, the busiest
-	// host is an ad network: measured, and comprehensively — all ten questions
+	// host is an ad network: measured, and comprehensively -- all ten questions
 	// went to beacons, fonts and a favicon, and the host actually serving the
 	// video was never asked about at all. The media host there served fourteen
 	// requests of fourteen *different* shapes, so it never looked like a flood.
@@ -400,7 +400,7 @@ void extractor_dialog::rebuild_payload() {
 	// Where that instruction goes decides whether it is read at all. Measured:
 	// with the note above and nothing in the tail, five runs in five wrote
 	// `endsWith('.m3u8')` over a list whose manifest was annotated HLS on the
-	// line beside it — the annotation was present, correct, and ignored. That is
+	// line beside it -- the annotation was present, correct, and ignored. That is
 	// the same displacement the three findings below record, so it gets the same
 	// remedy: say it after the evidence, in the paragraph the model demonstrably
 	// acts on.
@@ -408,7 +408,7 @@ void extractor_dialog::rebuild_payload() {
 	// The second half is the load-bearing one, and the first attempt at it was
 	// too subtle. Saying only that the notes "are not there on a later visit"
 	// moved three runs in five to `url.includes('-> application/vnd.apple.
-	// mpegurl')` — the annotation was finally being read, and read as part of
+	// mpegurl')` -- the annotation was finally being read, and read as part of
 	// the url, because the fold prints it on the same line and nothing said
 	// otherwise. So it now names the fields a request actually has and says
 	// plainly that the url ends where the note begins. The note exists only
@@ -417,8 +417,8 @@ void extractor_dialog::rebuild_payload() {
 	// match, never something the script may test for.
 	// The contract again, after the evidence rather than only before it, and the
 	// exact wording is measured rather than chosen. On the synthetic set this is
-	// redundant; on evidence captured from a real page — eighteen times longer,
-	// and shaped exactly like something one summarises — the model answered five
+	// redundant; on evidence captured from a real page -- eighteen times longer,
+	// and shaped exactly like something one summarises -- the model answered five
 	// times out of five with prose and no extract() at all. Three findings, five
 	// runs each:
 	//
@@ -509,8 +509,8 @@ void extractor_dialog::build_ui() {
 
 	m_pages = new QStackedWidget(this);
 
-	// Named, not merely ordered. Drivers used to find these by position — "the
-	// pane built second" — which broke silently the moment a pane was added,
+	// Named, not merely ordered. Drivers used to find these by position -- "the
+	// pane built second" -- which broke silently the moment a pane was added,
 	// and reported the wrong text rather than failing.
 	m_payload = new QPlainTextEdit(this);
 	m_payload->setObjectName("payload");
@@ -544,7 +544,7 @@ void extractor_dialog::build_ui() {
 	rl->addWidget(m_script, 1);
 
 	// What the script actually did, when it was allowed to do anything
-	// (§11.5.1). Hidden entirely on the pure tier, where there is nothing to
+	// (sec 11.5.1). Hidden entirely on the pure tier, where there is nothing to
 	// say and an empty box would only ask a question that has no answer.
 	m_transcript_label = new QLabel("What it did:", result_page);
 	m_transcript_label->setObjectName("transcript_label");
@@ -589,7 +589,7 @@ void extractor_dialog::on_reply(const QString &text) {
 	m_pages->setCurrentIndex(1);
 
 	// Judged before it is offered, never after. The gate is the whole reason
-	// this is safe to run at all (§11.5) — but it is judged on another thread,
+	// this is safe to run at all (sec 11.5) -- but it is judged on another thread,
 	// because a helper-tier script blocks on the network and blocking here
 	// would freeze the window for the whole deadline. The pure tier takes the
 	// same path: a runaway script is bounded by the watchdog either way, and one
@@ -671,7 +671,7 @@ void extractor_dialog::on_judged(const extractor_verdict &verdict) {
 	confirm_by_fetching();
 }
 
-// The evidence the model gets is urls, types and order — and on the site this
+// The evidence the model gets is urls, types and order -- and on the site this
 // was measured against, the url is the one channel that lies. Its manifest
 // wears `.txt` and its segments wear `.woff2`, while the server, asked
 // directly, answers `application/vnd.apple.mpegurl` and `video/mp4`. Four
@@ -736,12 +736,12 @@ void extractor_dialog::probe_candidates() {
 	}
 }
 
-// §11.5's last clause, and §10's content-type tier: the gate proves the address
+// sec 11.5's last clause, and sec 10's content-type tier: the gate proves the address
 // was observed, which is not the same as proving it is a stream. So fetch its
 // opening bytes with the page's own context and look.
 //
 // Held to advisory except when it *contradicts* the proposal. The tier is
-// optional by design — no network, a CDN that refuses the context, a 403 — and
+// optional by design -- no network, a CDN that refuses the context, a 403 -- and
 // none of those are evidence the pick is wrong, so none of them may block an
 // accept. A body that is plainly a web page is different, and does.
 void extractor_dialog::confirm_by_fetching() {

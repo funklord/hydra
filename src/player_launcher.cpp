@@ -18,8 +18,8 @@ struct known_player {
 	bool native_streams;   // handles HLS/DASH manifests itself
 };
 
-// The full menu of what is supported, installed or not — the settings UI shows
-// the missing ones greyed out so the user can see what to install (§11.3).
+// The full menu of what is supported, installed or not -- the settings UI shows
+// the missing ones greyed out so the user can see what to install (sec 11.3).
 const known_player k_known[] = {
 	{ "mpv",      "mpv",       true  },
 	{ "vlc",      "VLC",       true  },
@@ -51,7 +51,7 @@ void player_launcher::refresh() {
 		e.id        = QString::fromLatin1(system_id());
 		e.label     = "System player";
 		e.installed = true;
-		// Cautious, for the same reason Custom… is: which app takes the intent is
+		// Cautious, for the same reason Custom... is: which app takes the intent is
 		// the system's choice and the user's, so whether it reads a manifest
 		// cannot be known from here. Claiming it can is how a stream ends up
 		// handed to a player that shows a black screen.
@@ -71,7 +71,7 @@ void player_launcher::refresh() {
 		m_players.push_back(e);
 	}
 
-	// The Custom… entry is always offered; whether it works is up to whatever
+	// The Custom... entry is always offered; whether it works is up to whatever
 	// the user typed, which is checked when it is set rather than probed here.
 	{
 		player_entry e;
@@ -88,7 +88,7 @@ void player_launcher::refresh() {
 		set_custom_command(m_custom);   // re-resolves its path
 	}
 
-	// Resolve the default from what is present — never assume mpv exists.
+	// Resolve the default from what is present -- never assume mpv exists.
 	if (!entry(m_selected) || !entry(m_selected)->installed) {
 		m_selected.clear();
 		for (const player_entry &e : m_players) {
@@ -125,7 +125,7 @@ QString player_launcher::warning_for(const media_item &item) const {
 		return QString();
 
 	// HLS reaches a player like this only after being assembled into one
-	// progressive file (§11.3), so it is no longer a limitation to report.
+	// progressive file (sec 11.3), so it is no longer a limitation to report.
 	if (item.kind == media_kind::hls)
 		return QString();
 
@@ -167,7 +167,7 @@ bool player_launcher::play(const media_item &item, QString *error,
 		return false;
 	}
 
-	// Always a URL, never stdin: a pipe cannot seek (§11.3).
+	// Always a URL, never stdin: a pipe cannot seek (sec 11.3).
 	const QString target = via.isValid() ? via.toString() : item.url.toString();
 
 #ifdef Q_OS_ANDROID

@@ -1,12 +1,12 @@
-// The tree model and its sort/filter proxy (architecture doc §5.2/§5.3).
+// The tree model and its sort/filter proxy (architecture doc sec 5.2/sec 5.3).
 //
 // Everything the user sees of the tree goes through these two, and a model that
-// lies about its own shape does not produce a wrong answer — it produces a crash
+// lies about its own shape does not produce a wrong answer -- it produces a crash
 // inside Qt's view code, somewhere with no stack frames of ours in it.
 //
 // So this does two different things. Qt's own `QAbstractItemModelTester` walks
-// the model and checks the contract — parent/index round trips, row counts,
-// signal ordering — which is the part no hand-written assertion covers well.
+// the model and checks the contract -- parent/index round trips, row counts,
+// signal ordering -- which is the part no hand-written assertion covers well.
 // Then the rest is behaviour: sorting, and a search that has to keep the
 // ancestors of a hit or the hit is invisible inside a collapsed folder.
 #include "tab_tree_model.h"
@@ -69,8 +69,8 @@ static QStringList visible(const QAbstractItemModel *m,
 
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
-	// QApplication, not QCoreApplication: this is a *GUI* model — it answers
-	// DecorationRole with a style icon and FontRole with a font — so it needs a
+	// QApplication, not QCoreApplication: this is a *GUI* model -- it answers
+	// DecorationRole with a style icon and FontRole with a font -- so it needs a
 	// style to exist. Testing it under QCoreApplication segfaults inside
 	// QApplication::style(), which is the test being wrong about what it is
 	// testing rather than the model being wrong.
@@ -242,7 +242,7 @@ int main(int argc, char **argv) {
 		// **This assertion used to be the opposite one**, and the reason it
 		// changed is worth keeping: a tab refused drops because "inside a tab"
 		// named nothing, so the gesture would have meant "beside it" on one row
-		// and "inside it" on the next. Sub-tabs (§5.5) give it a place to mean,
+		// and "inside it" on the next. Sub-tabs (sec 5.5) give it a place to mean,
 		// so the gesture is uniform -- onto a row puts it under that row.
 		check(m.flags(ti) & Qt::ItemIsDropEnabled,
 		      "and so does a tab, now that a tab can hold sub-tabs");
@@ -591,7 +591,7 @@ int main(int argc, char **argv) {
 		QMimeData *md = m.mimeData({ m.index_for_node(outer) });
 		// A ring: the outline writer would recurse forever and everything below
 		// the drag would vanish from the file. The reorganizer refuses the same
-		// move (§9.4); this is that rule one gesture closer to the user.
+		// move (sec 9.4); this is that rule one gesture closer to the user.
 		check(!m.dropMimeData(md, Qt::MoveAction, -1, 0, m.index_for_node(inner)),
 		      "cannot be dropped inside its own child");
 		check(outer->parent == root, "and is left where it was");
@@ -840,7 +840,7 @@ int main(int argc, char **argv) {
 		check(t && m.node_by_id(t->id) == t, "and an id the index knows");
 
 		// **Reversed, deliberately.** Asked for on a tab it now goes *inside*
-		// it, because a tab can hold sub-tabs (§5.5). This used to land the new
+		// it, because a tab can hold sub-tabs (sec 5.5). This used to land the new
 		// node beside its target, on the grounds that "in here" named nothing
 		// for a leaf -- and that redirect would now put a sub-tab somewhere
 		// other than under the tab it came from, which is the one relationship

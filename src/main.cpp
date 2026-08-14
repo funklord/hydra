@@ -15,7 +15,7 @@
 #endif
 #include "policy_engine.h"
 #include "request_filter.h"
-// The single place that names a concrete backend (architecture doc §19.2). The
+// The single place that names a concrete backend (architecture doc sec 19.2). The
 // whole point of the seam is that this is the only file that has to know, and
 // that is now measured rather than asserted: the other fifty-one translation
 // units compile for arm64 unchanged.
@@ -37,9 +37,9 @@
 int main(int argc, char *argv[]) {
 	// Desktop Linux only: force the xcb platform plugin unless the environment
 	// has already chosen one, so the X11 behaviour this design relies on
-	// (architecture doc §2/§14) stays predictable, and a Wayland session runs
-	// under XWayland. Every other target has one sensible platform plugin —
-	// Windows, macOS, and Android each pick correctly on their own — so forcing
+	// (architecture doc sec 2/sec 14) stays predictable, and a Wayland session runs
+	// under XWayland. Every other target has one sensible platform plugin --
+	// Windows, macOS, and Android each pick correctly on their own -- so forcing
 	// anything there would be actively wrong. Q_OS_LINUX is also defined on
 	// Android, hence the second half of the guard.
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
 	// this cannot move later. Each download source names the non-web schemes it
 	// claims; without the registration Chromium treats them as external
 	// protocols and drops such navigations before anything of ours can see them
-	// (§11.4). The list is empty when the feature is not built, and then
+	// (sec 11.4). The list is empty when the feature is not built, and then
 	// nothing changes.
 #ifndef Q_OS_ANDROID
 	qtwebengine_factory::register_url_schemes(torrent_download_source::url_schemes());
@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
 	QApplication::setWindowIcon(icon);
 
 	// The only place in the tree that names a concrete web view backend
-	// (architecture doc §19.2). Swapping in the Android System WebView is
+	// (architecture doc sec 19.2). Swapping in the Android System WebView is
 	// meant to be a change to these two lines plus one new backend class.
 	// Declaration order matters: each of these outlives the ones below it.
 	policy_engine       policy;

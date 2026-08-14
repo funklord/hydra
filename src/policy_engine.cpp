@@ -27,7 +27,7 @@ setting setting_from_name(const QString &n) {
 }  // namespace
 
 policy_engine::policy_engine(QObject *parent) : QObject(parent) {
-	// Sensible privacy-leaning defaults (architecture doc §7.2). Flip
+	// Sensible privacy-leaning defaults (architecture doc sec 7.2). Flip
 	// JavaScript to block here to run in per-site "whitelist mode".
 	set_global_default(feature::javascript,          setting::allow);
 	set_global_default(feature::cookies,             setting::allow);
@@ -45,11 +45,11 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	set_global_default(feature::cookie_notices,      setting::block);
 	set_global_default(feature::referer,             setting::allow);
 	// Autofill defaults on; the per-site tri-state and the strict origin gate
-	// are what actually govern it (§13.3).
+	// are what actually govern it (sec 13.3).
 	set_global_default(feature::autofill,            setting::allow);
 	// The helper tier is off until a site is explicitly trusted with it: it is
 	// the only feature here that lets generated code cause a request. The DOM
-	// half of §11.5.1 has no default here because it has no permission -- it is
+	// half of sec 11.5.1 has no default here because it has no permission -- it is
 	// designed and unbuilt, and a default for a capability that does not exist
 	// is a setting nothing can honour.
 	set_global_default(feature::extractor_fetch,     setting::block);

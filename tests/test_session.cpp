@@ -1,4 +1,4 @@
-// Reading another browser's open tabs off disk (§4).
+// Reading another browser's open tabs off disk (sec 4).
 //
 // The load-bearing check here is the decompressor. Firefox's session file is a
 // raw LZ4 block behind a `mozLz40\0` header, and this project implements that

@@ -9,15 +9,15 @@
 #include <QStringList>
 
 // Passive signal collection for the filter-evolution loop (architecture doc
-// §12.1): the second interceptor consumer. It logs requests that slipped
-// through and match ad-shaped heuristics — third-party, ad-serving URL shapes,
-// high-frequency beacons — so the AI has real evidence to propose against and
+// sec 12.1): the second interceptor consumer. It logs requests that slipped
+// through and match ad-shaped heuristics -- third-party, ad-serving URL shapes,
+// high-frequency beacons -- so the AI has real evidence to propose against and
 // the dry-run has real URLs to simulate on.
 //
-// §12.1's *user-driven* half — the "zap this" element picker that captures a
-// leaked ad's selector and DOM snippet — is not here. It needs script
+// sec 12.1's *user-driven* half -- the "zap this" element picker that captures a
+// leaked ad's selector and DOM snippet -- is not here. It needs script
 // injection and a QWebChannel bridge into the page, which is plumbing that
-// arrives with the password manager in step 7 (§13.2). Until then the loop runs
+// arrives with the password manager in step 7 (sec 13.2). Until then the loop runs
 // on passive evidence only, which is enough for network rules but not for
 // cosmetic ones.
 //
@@ -37,7 +37,7 @@ public:
 	// with N and M always equal. Moved up beside the list it actually counts.
 	int count_for(const QString &site_host) const;
 
-	// Everything seen on this page — the corpus a rule is simulated against.
+	// Everything seen on this page -- the corpus a rule is simulated against.
 	QStringList observed_for(const QString &site_host) const;
 
 	void clear_site(const QString &site_host);

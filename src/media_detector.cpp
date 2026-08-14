@@ -50,8 +50,8 @@ media_kind media_detector::classify(const QUrl &url, bool *saveable) {
 
 	if (ext == "m3u8") { *saveable = true; return media_kind::hls; }
 	if (ext == "mpd")  { *saveable = true; return media_kind::dash; }
-	// Segments are not offered for saving on their own — they exist to tell us
-	// which manifest is actually playing (§11.1).
+	// Segments are not offered for saving on their own -- they exist to tell us
+	// which manifest is actually playing (sec 11.1).
 	if (ext == "ts" || ext == "m4s") return media_kind::segment;
 
 	for (const char *e : k_direct_ext) {
@@ -108,7 +108,7 @@ void media_detector::on_request(const request_context &ctx, const request_decisi
 			// Not just the filename: variant manifests are routinely all named
 			// master.m3u8 or index.mpd, and a list of identical labels is
 			// useless for choosing between them. Keep the parent directory,
-			// which is what actually distinguishes them (/hd/, /720p/…).
+			// which is what actually distinguishes them (/hd/, /720p/...).
 			const QStringList segs =
 			  ctx.url.path().split('/', Qt::SkipEmptyParts);
 			if (segs.size() >= 2)
@@ -128,7 +128,7 @@ QList<media_item> media_detector::items_for(const QString &site_host) const {
 	QMutexLocker guard(&m_lock);
 	QList<media_item> list = m_by_site.value(site_host);
 	// Manifests before direct files, and within manifests the most-fetched
-	// first — that is the heuristic for "the stream the page is playing".
+	// first -- that is the heuristic for "the stream the page is playing".
 	std::sort(list.begin(), list.end(), [](const media_item &a, const media_item &b) {
 		const bool am = (a.kind == media_kind::hls || a.kind == media_kind::dash);
 		const bool bm = (b.kind == media_kind::hls || b.kind == media_kind::dash);

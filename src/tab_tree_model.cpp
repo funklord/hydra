@@ -251,7 +251,7 @@ int tab_tree_model::restore_snapshot(const tree_snapshot &snap) {
 
 int tab_tree_model::apply_reorganization(const QList<tree_change> &changes) {
 	// Moves and new folders restructure whole subtrees at once, so a reset is
-	// both simpler and safer here than a sequence of begin/endMoveRows calls —
+	// both simpler and safer here than a sequence of begin/endMoveRows calls --
 	// and this runs once, on an explicit user action, not on a hot path.
 	beginResetModel();
 	const int applied = tree_diff::apply(m_root, changes);
@@ -274,11 +274,11 @@ Qt::ItemFlags tab_tree_model::flags(const QModelIndex &index) const {
 	// grounds that dropping onto a tab would have to mean "beside it" and a
 	// gesture meaning one thing on one row and another on the next is one
 	// people stop trusting. That reasoning was right and its premise is gone:
-	// sub-tabs (§5.5) make "inside a tab" a real place, so the gesture is the
+	// sub-tabs (sec 5.5) make "inside a tab" a real place, so the gesture is the
 	// same everywhere -- onto a row puts it under that row.
 	f |= Qt::ItemIsDropEnabled;
 
-	// A locked node does not move (§5.5). Refusing the drag here is what makes
+	// A locked node does not move (sec 5.5). Refusing the drag here is what makes
 	// that visible rather than surprising: the row simply does not lift, so
 	// nobody carries it across the tree and discovers at the drop that it was
 	// pinned. `dropMimeData` refuses it as well, since a drag is not the only
@@ -361,7 +361,7 @@ static node *deep_copy(const node *src, tab_tree_model *model,
 	// Nor a copy of `locked` or `renamed`, for a related reason: both say
 	// something a person decided about *that* row. A copy nobody has pinned yet
 	// starts unpinned, or the gesture hands back something that has to be
-	// unlocked before it will move (§5.5).
+	// unlocked before it will move (sec 5.5).
 	for (const node *k : src->children) {
 		node *kid = deep_copy(k, model, fresh);
 		kid->parent = c;
@@ -393,7 +393,7 @@ bool tab_tree_model::dropMimeData(const QMimeData *data, Qt::DropAction action,
 		// A folder cannot be dropped inside itself: the tree would become a
 		// ring, the outline writer would recurse forever, and every node below
 		// the drag would vanish from the file. The reorganizer refuses the same
-		// move for the same reason (§9.4) and this is that rule again, one
+		// move for the same reason (sec 9.4) and this is that rule again, one
 		// gesture closer to the user.
 		if (is_ancestor_of(n, target))
 			return false;
@@ -502,7 +502,7 @@ node *tab_tree_model::add_tab(node *parent, const QString &title,
 		parent = m_root;
 	// **A tab is a legal parent now.** This used to redirect to the nearest
 	// folder, because a tab held no children and "in here" had no meaning for
-	// one. Sub-tabs (§5.5) give it a meaning, and the redirect would now
+	// one. Sub-tabs (sec 5.5) give it a meaning, and the redirect would now
 	// silently put a sub-tab somewhere other than under the tab that spawned
 	// it -- which is the whole relationship the feature exists to record.
 	beginResetModel();

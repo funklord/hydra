@@ -1,8 +1,8 @@
-// The HLS manifest parser (architecture doc §11.3).
+// The HLS manifest parser (architecture doc sec 11.3).
 //
 // Its own header said it was "separated out and tested on its own". It was
 // separated out. This is the other half, written after noticing the claim was
-// unaccompanied — and it is worth having because this is a parser for a text
+// unaccompanied -- and it is worth having because this is a parser for a text
 // format that arrives from a CDN, which is to say from nobody trustworthy, and
 // everything downstream of it (the quality list, the assembler, the media
 // dialog) believes what it says.
@@ -102,8 +102,8 @@ int main(int argc, char **argv) {
 	{
 		// The shape a byte-range playlist actually has: one resource, each
 		// segment a sub-range, and **the offset omitted after the first**.
-		// RFC 8216 §4.3.2.2: a missing offset means the byte after the previous
-		// sub-range — not zero. Treating it as zero fetches the first slice over
+		// RFC 8216 sec 4.3.2.2: a missing offset means the byte after the previous
+		// sub-range -- not zero. Treating it as zero fetches the first slice over
 		// and over and assembles a file that is wrong without being empty.
 		const QByteArray text =
 		  "#EXTM3U\n"

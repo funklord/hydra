@@ -3,14 +3,14 @@
 //
 // It does one thing and writes it down: drive the real shell to a real watch
 // page, press play, and dump what the interceptor saw as JSON. The proposal
-// step is deliberately *not* here — evidence captured once and replayed offline
+// step is deliberately *not* here -- evidence captured once and replayed offline
 // is repeatable and costs the site nothing, and it is the second evidence set
 // project.md says the prompt work needs before it can mean anything.
 //
 //   try_extract <url> [seconds-to-watch] [out.json] [css-to-click-first]
 //
 // The fourth argument exists because a watch page often puts the player behind
-// a chooser — this site lists two mirrors from unrelated vendors, and only one
+// a chooser -- this site lists two mirrors from unrelated vendors, and only one
 // iframe is in the initial HTML. Loading the other mirror's address directly
 // does not work: it wants the embedding page's context and bounces to its own
 // homepage without it. So the way to reach it is the way a user does, by
@@ -97,20 +97,20 @@ int main(int argc, char *argv[]) {
 
 	// A private copy of the tree, beside the output. State blobs and policy.json
 	// live next to the tree file, so sharing the repo's one means a capture
-	// starts by *restoring the page the last capture left open* — and those
+	// starts by *restoring the page the last capture left open* -- and those
 	// requests then land in this capture's evidence, attributed to this host. A
 	// contaminated evidence file looks exactly like a real one. It also stops the
 	// drivers rewriting `sample-tree.txt`, which until now had to be checked out
 	// again by hand after every run.
 	//
-	// Only what this driver itself writes is cleared — the tree, its state
+	// Only what this driver itself writes is cleared -- the tree, its state
 	// directory and its policy file. Not the output directory, which holds the
 	// previous captures and screenshots someone may still be reading.
 	//
 	// The one node it holds is `about:blank`, and that is the other half of the
 	// fix. The driver opens a tab and *then* types the address, so seeding it
 	// with a real page meant that page's slower subresources were still arriving
-	// after the navigation committed — by which time Chromium reports the new
+	// after the navigation committed -- by which time Chromium reports the new
 	// address as their first party, and they land in this capture's evidence
 	// under this capture's host. Twelve `doc.qt.io` requests in a dramafren
 	// capture is how that presented. A blank first page has nothing to straggle.
@@ -131,7 +131,7 @@ int main(int argc, char *argv[]) {
 
 	policy_engine       policy;
 	// The second mirror pulls in `fuckadblock.min.js`, so it is watching for a
-	// blocker before it will play — which makes "does this player start" and
+	// blocker before it will play -- which makes "does this player start" and
 	// "is Hydra blocking ads" the same question, and an evidence capture cannot
 	// answer the first while the second is true. Off by default: a capture that
 	// silently stopped blocking ads would be measuring a browser nobody runs.
@@ -171,7 +171,7 @@ int main(int argc, char *argv[]) {
 
 	// Swap in the mirror we were asked for, before anything hunts for an iframe.
 	// Clicked in the page rather than by loading its address, because that is
-	// what supplies the referer the vendor checks — and it is what a user does.
+	// what supplies the referer the vendor checks -- and it is what a user does.
 	if (!pre_click.isEmpty())
 		QTimer::singleShot(13000, [&] {
 		  const auto vs = w.findChildren<QWebEngineView *>();
@@ -196,7 +196,7 @@ int main(int argc, char *argv[]) {
 	// A popunder that cannot open its window may never let a click through: the
 	// usual pattern is to swallow clicks until `window.open` has succeeded once,
 	// and `popups` is blocked by default. It turned out not to be the cause here
-	// — allowing ads alone is what starts that player, with this still off — but
+	// -- allowing ads alone is what starts that player, with this still off -- but
 	// the lever is worth keeping, and keeping separate, so the two cannot be
 	// confounded in a future capture.
 	//
@@ -213,8 +213,8 @@ int main(int argc, char *argv[]) {
 	  });
 
 	// How many, because three is not always enough. On the second mirror every
-	// click was answered by the ad network rather than by the player — a
-	// popunder consuming one click at a time — so the clicks were landing and
+	// click was answered by the ad network rather than by the player -- a
+	// popunder consuming one click at a time -- so the clicks were landing and
 	// being eaten. Requests appearing on an ad host after a click is the signal
 	// to raise this rather than to conclude the player is broken.
 	const int clicks = qEnvironmentVariableIsSet("HYDRA_CLICKS")
@@ -234,7 +234,7 @@ int main(int argc, char *argv[]) {
 
 	QTimer::singleShot(16000 + watch_s * 1000, [&] {
 		const QList<evidence_request> ev = sig->evidence_for(host);
-		// What the §11.6 tap saw, beside what the request log saw. The two
+		// What the sec 11.6 tap saw, beside what the request log saw. The two
 		// answer different questions and the difference is the point: a page
 		// that fetched no media but is feeding bytes into a MediaSource is
 		// delivering over something a request log cannot see, while a page that
@@ -245,7 +245,7 @@ int main(int argc, char *argv[]) {
 			             tap->active_for(host) ? "YES" : "no");
 			// Every key, not just the one asked about. The hook reports the
 			// hostname of the frame it runs in, so a player in a third-party
-			// iframe files under *that* name — and asking only about the page's
+			// iframe files under *that* name -- and asking only about the page's
 			// host answers "no" to a page that is plainly playing.
 			for (const QString &s : tap->sites()) {
 				std::printf("  tap site %s%s\n", qPrintable(s),

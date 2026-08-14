@@ -27,7 +27,7 @@ QString ok(const QJsonValue &value) {
 }
 
 // Methods a page may call: declared on the class itself, and callable rather
-// than emittable. The index floor is the whole of the QObject-slot exclusion —
+// than emittable. The index floor is the whole of the QObject-slot exclusion --
 // see the header for why that one matters.
 bool reachable(const QMetaObject *mo, int index) {
 	if (index < QObject::staticMetaObject.methodCount())
@@ -162,7 +162,7 @@ QString bridge_invoker::invoke(const QString &name, const QString &method,
 	//
 	// That form is declared under `QT_VERSION <= QT_VERSION_CHECK(7, 0, 0)`, so
 	// Qt 7 removes it and this function has to be rewritten against the
-	// templated one — which, taking values rather than type-erased pointers, will
+	// templated one -- which, taking values rather than type-erased pointers, will
 	// mean dispatching on arity and type rather than looping. Worth knowing
 	// before it is a build error.
 	const QMetaType ret = found.returnMetaType();
