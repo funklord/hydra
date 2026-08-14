@@ -120,6 +120,29 @@ void set_appearance(theme::choice c) {
 	s.sync();
 }
 
+QString search_engine() {
+	// **DuckDuckGo by default, and the default is a decision rather than a
+	// pick.** This is the only setting in the program that sends what somebody
+	// typed to a third party, so the shipped answer should be the one that
+	// asks least of them: no account, no profile built from the queries, and
+	// no redirect through a tracker on the way to the result. A browser that
+	// blocks trackers on every page and then routes its own address bar
+	// through one would be arguing with itself.
+	//
+	// Stored as the whole template rather than an engine name from a list, so
+	// changing it needs no code here -- a self-hosted SearxNG or a company
+	// search is one line in the settings file, and neither would ever be worth
+	// adding to a menu.
+	QSettings s = open_settings();
+	return s.value("ui/searchEngine", "https://duckduckgo.com/?q=%1").toString();
+}
+
+void set_search_engine(const QString &tmpl) {
+	QSettings s = open_settings();
+	s.setValue("ui/searchEngine", tmpl);
+	s.sync();
+}
+
 ai_choice ai_mode() {
 	const QString v = open_settings().value("ai/mode", "automatic").toString();
 	if (v == "local_only")

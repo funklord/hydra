@@ -12,6 +12,7 @@
 #include "site_policy_dialog.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"
+#include "address_input.h"
 #include "scheme_rules.h"
 #include "kiosk_controller.h"
 #include "reorganize_dialog.h"
@@ -2804,7 +2805,24 @@ void main_window::navigate_to_address() {
 		return;
 	}
 
-	const QUrl target = QUrl::fromUserInput(text);
+	// **Not everything typed here is an address**, and until this it was
+	// treated as one: `QUrl::fromUserInput` turned terms into either an
+	// invalid url, which loaded nothing and said nothing, or a guess like
+	// `http://weather tomorrow`. `looks_like_address` decides, and it is a
+	// separate unit because the interesting half is a privacy question rather
+	// than a parsing one -- see its header for why a bare hostname must never
+	// end up in a search box.
+	const bool searching = !looks_like_address(text);
+	const QUrl target = searching
+	                      ? search_url(text, settings_store::search_engine())
+	                      : QUrl::fromUserInput(text);
+	if (searching && !target.isValid()) {
+		m_status->showMessage("The search engine setting has no %1 in it, so "
+		                       "there is nowhere to put the search terms.",
+		                       8000);
+		return;
+	}
+
 	if (web_view_backend *v = current_view()) {
 		v->load(target);
 		return;

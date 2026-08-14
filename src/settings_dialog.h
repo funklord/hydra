@@ -222,4 +222,11 @@ void set_ai_mode(ai_choice mode);
 theme::choice appearance();
 void          set_appearance(theme::choice c);
 
+// The search template the address bar uses when what was typed is not an
+// address, with `%1` standing for the terms. Stored rather than compiled in
+// because the engine somebody searches through is theirs to choose, and it is
+// the one setting here that sends what they typed to a third party.
+QString search_engine();
+void    set_search_engine(const QString &tmpl);
+
 }  // namespace settings_store
