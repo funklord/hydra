@@ -72,7 +72,24 @@ def sources():
 
 
 def main():
-	fragment = subprocess.run(["fmake", "--eject", "make-fragment"],
+	# **fmake compiles the tree to answer this, so it needs the job limit the
+	# rest of the build has.** Reading symbol tables means producing objects
+	# first, and fmake defaults `-j` to the cpu count -- so this script, which
+	# looks like a metadata step and is documented as a thing to run before
+	# `make test`, was quietly the least bounded build in the project. Measured
+	# once it was looked at: twelve concurrent compilers, on a machine already
+	# under load from elsewhere.
+	#
+	# Two is the Makefile's `JOBS`, and the reason is written out there: each
+	# live driver links Qt WebEngine, and unbounded parallelism has taken this
+	# machine's desktop session down twice, the OOM killer taking dbus and
+	# pipewire with it. A helper that bypasses that cap undoes the care taken
+	# in the file that documents it.
+	#
+	# Overridable by the same name the Makefile uses, so `JOBS=8` means the
+	# same thing to both and there is one habit rather than two.
+	jobs = os.environ.get("JOBS", "2")
+	fragment = subprocess.run(["fmake", "-j", jobs, "--eject", "make-fragment"],
 	                           cwd=ROOT, capture_output=True, text=True)
 	if fragment.returncode != 0:
 		sys.stderr.write(fragment.stderr[-2000:])
