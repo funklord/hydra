@@ -201,7 +201,10 @@ endif
 
 # Suites that need nothing but a build. Written as an exclusion rather than a
 # list, so a new test_*.cpp is picked up without editing this file -- the same
-# property the live-driver glob has, and the reason the CMake side was kept.
+# property the live-driver glob has. It used to be the argument for keeping
+# CMake, which globbed while the hand-written half of the source list did not;
+# it survived dropping CMake instead, since `tests/Makefile` globs `test_*.cpp`
+# and fmake wants no source list at all.
 # The excluded ones each need something the machine may not have; tests/README.md
 # says which, and they are named at the end of a run rather than silently
 # skipped.
