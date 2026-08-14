@@ -250,13 +250,13 @@ int main(int argc, char *argv[]) {
 				if (auto *b = qobject_cast<QMessageBox *>(x))
 					if (b->isVisible()) {
 						saw = true;
-				    for (QAbstractButton *bt : b->buttons())
-					    if (bt->text().remove('&').startsWith("It Broke")) {
-						    bt->click(); return;
-				      }
+						for (QAbstractButton *bt : b->buttons())
+							if (bt->text().remove('&').startsWith("It Broke")) {
+								bt->click(); return;
+							}
 				    b->reject();
-				    return;
-			    }
+						return;
+					}
 		});
 		confirm->trigger();
 		spin(1500);

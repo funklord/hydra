@@ -162,10 +162,10 @@ int main(int argc, char *argv[]) {
 		for (QLineEdit *e : w.findChildren<QLineEdit *>())
 			if (e->placeholderText() == "Address") {
 				e->setText(target);
-			  QMetaObject::invokeMethod(e, "returnPressed");
-			  std::printf("navigated\n");
-			  return;
-		  }
+				QMetaObject::invokeMethod(e, "returnPressed");
+				std::printf("navigated\n");
+				return;
+			}
 		std::printf("NO ADDRESS BAR\n");
 	});
 

@@ -57,10 +57,10 @@ int main(int argc, char *argv[]) {
 		for (QLineEdit *e : w.findChildren<QLineEdit *>())
 			if (e->placeholderText() == "Address") {
 				e->setText(target);
-			  QMetaObject::invokeMethod(e, "returnPressed");
-			  std::printf("navigated\n");
-			  return;
-		  }
+				QMetaObject::invokeMethod(e, "returnPressed");
+				std::printf("navigated\n");
+				return;
+			}
 	});
 	QTimer::singleShot(13000, [&] {
 		QAction *a = action("Capture Playing");
@@ -79,15 +79,15 @@ int main(int argc, char *argv[]) {
 				if (ww->isVisible() && ww->windowTitle().contains("Downloads")) {
 					ww->grab().save((test_out() +
 					                 "scratchpad/live/50-capjob-%1.png").arg(t));
-				  auto *tree = ww->findChild<QTreeWidget *>();
-				  if (tree && tree->topLevelItemCount())
-					  std::printf("t+%-6d row: %s | %s | %s | %s\n", t,
-					               qPrintable(tree->topLevelItem(0)->text(0)),
-					               qPrintable(tree->topLevelItem(0)->text(1)),
-					               qPrintable(tree->topLevelItem(0)->text(3)),
-					               qPrintable(tree->topLevelItem(0)->text(4)));
-				  return;
-			  }
+					auto *tree = ww->findChild<QTreeWidget *>();
+					if (tree && tree->topLevelItemCount())
+						std::printf("t+%-6d row: %s | %s | %s | %s\n", t,
+						             qPrintable(tree->topLevelItem(0)->text(0)),
+						             qPrintable(tree->topLevelItem(0)->text(1)),
+						             qPrintable(tree->topLevelItem(0)->text(3)),
+						             qPrintable(tree->topLevelItem(0)->text(4)));
+					return;
+				}
 			std::printf("t+%-6d no downloads window\n", t);
 		});
 	}

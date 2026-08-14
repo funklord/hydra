@@ -579,8 +579,8 @@ int main(int argc, char **argv) {
 			if (p.setting_for(gone, static_cast<policy::feature>(i)) !=
 			    policy::setting::unset) {
 				check(false, QString("%1 still has a setting after OK").arg(gone));
-			  break;
-		  }
+				break;
+			}
 		check(p.effective_setting(policy::feature::javascript, gone) ==
 		          p.global_default(policy::feature::javascript),
 		      "and the site falls back to the defaults, which is what removal means");

@@ -437,8 +437,8 @@ settings_dialog::settings_dialog(player_launcher *players,
 			for (QWidget *p = w->parentWidget(); p; p = p->parentWidget())
 				if (auto *sa = qobject_cast<QScrollArea *>(p)) {
 					sa->ensureWidgetVisible(w);
-				  break;
-			  }
+					break;
+				}
 		}
 	});
 	connect(m_results, &QListWidget::itemClicked, m_results,
@@ -892,8 +892,8 @@ void settings_dialog::restore_page_defaults(int page) {
 		for (QRadioButton *b : m_player_buttons)
 			if (b->property("player_id").toString() == fresh.selected()) {
 				b->setChecked(true);
-			  break;
-		  }
+				break;
+			}
 	} else if (name.startsWith("Downloads")) {
 		download_manager fresh;
 		m_dir->setText(fresh.directory());

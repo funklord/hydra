@@ -128,6 +128,27 @@ skip_reason() {
 			[ -n "${SWEEP_ONSCREEN:-}" ] || \
 				echo "hands a url to another application; offscreen has no desktop services"
 			;;
+		# **Conditional, because most of this driver is worth running.** Four of
+		# its eleven checks are about the camera and they cannot pass on a
+		# machine that has none: the engine answers NotFoundError before our
+		# decider is ever consulted, so the assertion that we refused the camera
+		# has no way to tell our refusal from the device's absence. The
+		# microphone check passing with NotAllowedError beside it is what shows
+		# the difference is the hardware rather than the code.
+		#
+		# Skipping it outright would have cost the seven that do work, and they
+		# are the ones worth having -- geolocation, notifications, and that a
+		# grant is per-feature rather than global, which is the permission
+		# decider's whole contract. So the skip is keyed on the device: a
+		# machine with a camera runs the lot.
+		#
+		# Accepting NotFoundError as success was the other option and is worse
+		# than either. It would make the check incapable of failing, which is
+		# the shape this script has twice been caught reporting already.
+		try_permissions)
+			ls /dev/video* >/dev/null 2>&1 || \
+				echo "four checks need a camera; this machine has no /dev/video*"
+			;;
 		# Waits on a local model to return a proposal. With none running it
 		# reaches the timeout and is killed, which costs the sweep five minutes
 		# and reports a failure about the machine rather than the code.
