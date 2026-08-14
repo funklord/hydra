@@ -959,7 +959,13 @@ QMenuBar *main_window::build_menu_bar() {
 	// the rest without any of them being told about it. Filing it under the
 	// page it belongs to is what the tree is for: the alternative, a second
 	// window, is the thing sec 5.5 exists to avoid.
-	m_source_action = view_menu->addAction("View Page &Source",
+	// **So&urce, not &Source.** `&Sort By` already holds Alt+S in this menu, and
+	// two items sharing a mnemonic means the first press selects rather than
+	// activates and the second cycles -- which reads as a menu entry that does
+	// not work. `try_menus` caught it; nothing about the code says it.
+	// Alt+U also agrees with the Ctrl+U accelerator, so the letter is the same
+	// one either way in.
+	m_source_action = view_menu->addAction("View Page So&urce",
 	                                        QKeySequence("Ctrl+U"), this,
 	                                        [this] { view_page_source(); });
 	m_source_action->setStatusTip("Open this page's HTML as a sub-tab");

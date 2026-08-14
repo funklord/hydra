@@ -20,6 +20,12 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QMenuBar>
+// **Needed for the `delete` below, not for the call.** `mimeData()` can be
+// used through a forward declaration, so this compiled and ran with only a
+// warning -- but deleting through an incomplete type does not run the
+// destructor, and QMimeData's is virtual. The drop leaked its payload every
+// time this driver exercised a cross-folder move.
+#include <QMimeData>
 #include <QTimer>
 #include <QLabel>
 #include <QLineEdit>
