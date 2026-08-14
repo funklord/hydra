@@ -171,8 +171,8 @@ int main(int argc, char *argv[]) {
 
 		// First run gets the example, so the app opens with something in it
 		// rather than an empty pane that looks like a failure. Preference
-		// order: a checkout being worked in, then the copy CMake puts beside
-		// the binary, then the one compiled into the executable -- which is
+		// order: a checkout being worked in, then the copy the build puts
+		// beside the binary, then the one compiled in -- which is
 		// the only one an installed or packaged copy has.
 		if (!QFileInfo::exists(tree_path)) {
 			QStringList seeds;

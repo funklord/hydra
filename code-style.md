@@ -173,8 +173,14 @@ the two `README.md` single words that have no separator to argue about.
 
 Settled exceptions:
 
-- **Names a tool will not accept lowercased** -- `CMakeLists.txt`,
-  `AndroidManifest.xml`, `Makefile`.
+- **Names a tool will not accept lowercased** -- `Makefile` and
+  `AndroidManifest.xml`, which are the two this tree has. The source lists
+  `CMakeLists.txt` too; there is no CMake here, so naming it would describe
+  a build system the tree does not have.
+- **Java classes are the compiler's, not ours** -- `HydraWebView.java` and
+  its two siblings under `android/`. A public Java class must sit in a file
+  named exactly for it, so the filename inherits the `PascalCase` the
+  language imposes on the type.
 - **Root files with an established convention** -- `README.md`, `LICENSE`,
   `VERSION`. The last is this workspace's own rather than the wider
   world's, and is settled by use: thirteen of the fourteen private

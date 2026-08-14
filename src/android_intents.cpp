@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// **Guarded here, not only by the build system.** CMake adds this file only
-// inside `if(ANDROID)`, and until it also said so itself the file depended on a
+// **Guarded here, not only by the build system.** `hydra.pro` drops this file
+// outside `android {}`, and until it also said so itself the file depended on a
 // build file to be correct: anything reading the tree rather than the build --
 // an indexer, a language server, a static analyser, `fmake` -- reached
 // `<QJniEnvironment>` on a desktop and stopped. Measured, not imagined.

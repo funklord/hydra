@@ -290,13 +290,13 @@ written in the same session.
 ### ⚠️ Do not build with unbounded `-j`
 
 The live drivers under `tests/live/` each compile ~40 app sources and link Qt
-WebEngine, and there are a dozen of them. `cmake --build … -j` with no number
-has exhausted memory and taken the desktop session down on this machine, twice
+WebEngine, and there are a dozen of them. `make -j` with no number has
+exhausted memory and taken the desktop session down on this machine, twice
 — worst when a model is loaded, since a 14B holds ~10 GB before the compiler
 starts. Use `-j2`, or name a single target. Stop Ollama first if it is running.
 
-The mechanism, since it is easy to underestimate: this repo configures the
-**Unix Makefiles** generator, and `make -j` with no number is *unlimited*, not
+The mechanism, since it is easy to underestimate: `make -j` with no number is
+*unlimited*, not
 one job per core. Every ready translation unit starts at once. What follows is
 not a failed build — the kernel OOM killer takes the whole user session slice.
 The 2026-07-30 23:08 event killed `dbus`, `pipewire`, `wireplumber`, both
@@ -953,32 +953,35 @@ make help                     # android, install, clean, DEBUG=1, SANITIZE=1
 ./build/hydra my-tree.txt     # or a custom outline file
 ```
 
-**The Makefile is a wrapper over CMake, not a build system.** It exists because
-this tree was the odd one out: beerssh and fuzzypickles' `gui/` subtree both
-present `make` / `make test` / `make android` with `DEBUG=1` and `SANITIZE=1`,
-and hydra presented two different cmake invocations plus a per-binary test run
-you had to know to prefix with `QT_QPA_PLATFORM=offscreen`. Now all three look
-the same from outside. CMake underneath is unchanged and can still be driven
-directly:
+**The Makefile is the single entry point, and it wraps qmake.** It exists
+because this tree was the odd one out: beerssh and fuzzypickles' `gui/` subtree
+both present `make` / `make test` / `make android` with `DEBUG=1` and
+`SANITIZE=1`, and hydra presented two different build invocations plus a
+per-binary test run you had to know to prefix with `QT_QPA_PLATFORM=offscreen`.
+Now all three look the same from outside.
 
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j2       # a number, always: see the warning above
-```
+**Two build systems are maintained, and CMake is not one of them.** The
+migration this section used to describe as deferred is closed, and the
+`CMakeLists.txt` files are gone from the tree:
 
-**A migration to qmake was considered and deferred rather than rejected.** The
-argument for it is real — a Makefile is easier to read than `CMakeLists.txt`,
-and beerssh ships a Qt 6 app *and* an APK from qmake today. What is keeping
-CMake is dependency discovery and the target count, and the Makefile's own
-header lists the three things a later migration has to solve so they are not
-rediscovered: 54 executables of which 21 are globbed so adding one costs
-nothing; `find_package(LibtorrentRasterbar)` disambiguating rasterbar's library
-from rakshasa's identically-named one, which pkg-config alone cannot; and the
-host pkg-config answering cheerfully for an Android cross build, which once
-reported libsodium found and failed at link looking like a toolchain fault.
+- **qmake, driven from the Makefile** (`hydra.pro`) builds the app and the APK.
+- **plain Make** (`tests/Makefile`) builds the test tree.
+- **fmake** builds the same sources from no build file at all, as a cross-check
+  and a second opinion. It needs six annotations in the sources — one `@target`
+  and five `@pkg_optional` — and nothing else.
 
-Requires Qt 6 with **Widgets** and **WebEngineWidgets** (Arch: `qt6-base
-qt6-webengine`; Debian/Ubuntu: `qt6-base-dev qt6-webengine-dev`), CMake ≥ 3.19,
+The Makefile's own header records what the migration had to solve, so none of
+it is rediscovered: 72 executables, globbed rather than listed, so adding a
+suite costs no build-system work; the two unrelated libraries both called
+`libtorrent`, where `find_package(LibtorrentRasterbar)` used to do the
+disambiguating and `hydra.pro` now asks for `libtorrent-rasterbar` by name;
+the host pkg-config answering cheerfully about the host during an Android
+cross build, which `hydra.pro` avoids by asking for no optional packages under
+`android {}`; and the APK, which CMake alone used to build through `qt-cmake`
+and which `make android` now drives through the kit's own `qmake`.
+
+Requires Qt 6.8 or newer with **Widgets** and **WebEngineWidgets** (Arch:
+`qt6-base qt6-webengine`; Debian/Ubuntu: `qt6-base-dev qt6-webengine-dev`),
 C++17. Clone with `--recurse-submodules`, or run `git submodule update --init
 --depth 1` — `third_party/yt-dlp` is vendored for the site-extractor work
 (arch §11.5) and is source and tooling, not something the build compiles.
@@ -997,18 +1000,21 @@ smaller, not broken. On Debian/Ubuntu:
 
 **Watch the library name.** Both rasterbar's and rakshasa's unrelated libraries
 install a pkg-config file called `libtorrent`, and the bare name resolves to
-rakshasa's. `CMakeLists.txt` asks for `find_package(LibtorrentRasterbar)` first
-and falls back only to the *qualified* `libtorrent-rasterbar` pkg-config name.
+rakshasa's. `hydra.pro` asks for the *qualified* `libtorrent-rasterbar`
+pkg-config name, and `torrent_download_source.cpp` carries the same qualified
+name in an `@pkg_optional` beside the include, so fmake asks for the same one.
 
 ### Tests
 
-`tests/` holds the harnesses, built separately from the app — the app's
-`CMakeLists.txt` never references them:
+`tests/` holds the harnesses, built separately from the app — `hydra.pro` never
+references them, and `make test` is what builds and runs them:
 
 ```sh
-cmake -S tests -B tests/build
-cmake --build tests/build -j2          # a job limit, always: see the warning above
-QT_QPA_PLATFORM=offscreen ./tests/build/test_seam
+make test                              # every offline suite
+make test-one T=test_seam              # one of them
+make -C tests -j2 offline              # or drive the test tree directly;
+                                       # a job limit, always: see the warning above
+QT_QPA_PLATFORM=offscreen ./tests/build-make/test_seam
 ```
 
 `tests/README.md` says which suites need a helper server, libtorrent, or a
@@ -1020,7 +1026,7 @@ instantly.
 ## Build-verification state
 
 **Builds and runs.** Verified on Debian 13 with Qt 6.8.2 and
-`qt6-webengine-dev` 6.8.2: a clean `cmake --build` produces `build/hydra` with
+`qt6-webengine-dev` 6.8.2: a clean `make` produces `build/hydra` with
 no errors, and the binary starts both on X11 and headless
 (`QT_QPA_PLATFORM=offscreen`), loads `sample-tree.txt`, and renders the shell —
 menu bar, toolbar, populated tree with its bold/italic/muted state cues, status
@@ -1160,17 +1166,27 @@ swapped.
 
 ### Qt version floor
 
-`CMakeLists.txt` requires **Qt 6.4**, and that number is derived, not guessed:
-the menu bar uses the `addAction(text, shortcut, receiver, member)` argument
-order that 6.4 introduced (the older order is deprecated from 6.4 onward).
-Everything else in the tree is 6.0-era API. Developed and tested against 6.8.2.
+`hydra.pro` requires **Qt 6.8**, and refuses at configure time rather than
+letting the compiler discover it. The floor used to be stated as 6.4, derived
+once from the menu bar's `addAction(text, shortcut, receiver, member)` argument
+order and never derived again as the code moved. Two things raised it since and
+neither updated the number: `theme.h` names `Qt::ColorScheme`, which arrived in
+6.5, and `qtwebengine_view.cpp` includes `QWebEnginePermission`, which arrived
+in 6.8 — and that include sits *outside* the `#if QT_VERSION >= 6.8` guard
+around the code using it, so the guard never bought anything.
+
+CI on Qt 6.4 found it, as two hundred lines of "'ColorScheme' is not a member
+of 'Qt'" a long way from any statement about versions. A configure that stops
+and names the number is worth more than every one of them. 6.8.2 and 6.11 are
+what it is actually built against; 6.5 to 6.7 are untested and are excluded by
+that include rather than by evidence.
 
 Qt WebEngine is a **system dependency, not a vendored one** — it bundles
 Chromium, must be ABI-matched to the rest of Qt, and is LGPLv3/GPL/commercial
 (arch §2), so linking the platform's build is far simpler than carrying it. How
-it arrives differs per platform, but the CMake side is identical everywhere
-(`find_package(Qt6 6.4 ...)`, with `CMAKE_PREFIX_PATH` pointed at the Qt
-install where needed):
+it arrives differs per platform, but the build side is identical everywhere
+(`QT += webenginewidgets` in `hydra.pro`, with the kit's own `qmake` on PATH,
+or `QT_ROOT` pointed at the Qt install where needed):
 
 - **Linux** — distro packages (`qt6-webengine-dev` / `qt6-webengine`).
 - **Windows / macOS** — the official Qt online installer, `aqtinstall`, or
@@ -3011,7 +3027,7 @@ GPL-3-or-later; shallow submodule, ~15 MB). Three jobs: try it first and skip
 the model entirely where it supports a site, since it is free and maintained
 by people tracking site changes; hand its nearest extractor to the model as
 worked reference when it does not; and use it as ground truth where it does.
-Not a build dependency — nothing in `CMakeLists.txt` refers to it.
+Not a build dependency — neither `hydra.pro` nor `tests/Makefile` refers to it.
 
 **The pin tracks `master`, not a release tag**, and that is worth stating
 because two things mislead otherwise. Upstream cuts releases every few weeks
@@ -5735,7 +5751,8 @@ tree contains the address that was passed in, carrying the page title the engine
 resolved — which is also the proof that WebEngine renders from the package.
 
 Worth keeping about the method: **the build binary could not have found either
-bug.** CMake copies `sample-tree.txt` next to it, so the beside-the-binary branch
+bug.** The build copies `sample-tree.txt` next to it — `hydra.pro`'s
+`QMAKE_POST_LINK` — so the beside-the-binary branch
 always matches and the installed path is never taken. The first attempt at
 testing this "passed" for exactly that reason. Verifying packaging means running
 what was packaged, from somewhere the source tree is not.

@@ -9,13 +9,12 @@ Two kinds live here.
   were found that no offline test could see. Expensive to build; see the
   warning below.
 
-Nothing here is wired into CTest, and the app's own `CMakeLists.txt` does not
-reference it. Building the app never builds the tests.
+Nothing here is wired into a test runner, and the app's own `hydra.pro` does
+not reference it. Building the app never builds the tests.
 
 ## ⚠️ Build this with a job limit
 
-**Do not run `cmake --build tests/build -j` with no number**, and do not run
-`make -j` either. Each live driver compiles **~61** app sources and links Qt
+**Do not run `make -j` with no number.** Each live driver compiles **~61** app sources and links Qt
 WebEngine; there are **21** of them, and unbounded parallelism on a many-core
 machine will try to hold well over 20 GB. (Both numbers said something smaller
 for a long time, because nothing counts them — `ls src/*.cpp | wc -l` and
@@ -25,9 +24,10 @@ if a local model is loaded at the same time, because a 14B model holds ~10 GB
 before the compiler starts.
 
 ```sh
-cmake -S tests -B tests/build
-cmake --build tests/build -j2                    # a limit, always
-cmake --build tests/build -j2 --target test_seam # or one target at a time
+make test                          # every offline suite, built and run
+make test-one T=test_seam          # or one at a time
+make -C tests -j2 offline          # or drive the test tree directly;
+                                   # a limit, always
 ```
 
 Free memory first if a model is running:
