@@ -12,3 +12,10 @@ bool renders_as_page(const QUrl &url) {
 	};
 	return web.contains(url.scheme().toLower());
 }
+
+bool has_viewable_source(const QUrl &url) {
+	if (url.isEmpty() || !url.isValid())
+		return false;
+	static const QSet<QString> fetched = { "http", "https", "file" };
+	return fetched.contains(url.scheme().toLower());
+}

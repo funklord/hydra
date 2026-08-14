@@ -132,13 +132,14 @@ namespace {
 // Schemes a browser is expected to render itself. Anything outside this set is
 // not a page, which makes it a candidate for handing to something that can
 // actually deal with it. Kept as a property of the web rather than of any
-// engine, so the same rule holds behind the Android backend (§19.2).
+// engine, so the same rule holds behind the Android backend (sec 19.2).
+
 }  // namespace
 
 main_window::main_window(web_view_factory *factory, policy_engine *policy,
                           request_filter *filter, QWidget *parent)
   : QWidget(parent), m_factory(factory), m_policy(policy) {
-	// The two interceptor consumers (architecture doc §10): both observe the
+	// The two interceptor consumers (architecture doc sec 10): both observe the
 	// same request stream the blocker already rides, rather than adding a
 	// second sensor.
 	m_media      = new media_detector(this);
@@ -160,7 +161,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_extractors.load(QDir(QStandardPaths::writableLocation(
 	                            QStandardPaths::AppDataLocation))
 	                       .filePath("extractors.json"));
-	// The §11.6 tap: what a page is actually feeding its <video>, for the sites
+	// The sec 11.6 tap: what a page is actually feeding its <video>, for the sites
 	// where watching request URLs finds nothing.
 	m_mse = new mse_tap(this);
 	connect(m_mse, &mse_tap::site_updated, this, [this](const QString &host) {
@@ -207,7 +208,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		// not an error worth a message.
 		m_autofill->choose(ok ? labels.indexOf(pick) : -1);
 	});
-	// The refusal is the key icon's job (§13.2) and there is no key icon yet, so
+	// The refusal is the key icon's job (sec 13.2) and there is no key icon yet, so
 	// the status bar carries it meanwhile. Silence here is the thing to avoid:
 	// "nothing stored for this site" and "KeePassXC is not running" produce the
 	// same empty form, and only one of them is worth doing something about.
@@ -365,10 +366,10 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		});
 	}
 #endif
-	// The manager has no transport of its own (§11.4); give it one. Sources are
+	// The manager has no transport of its own (sec 11.4); give it one. Sources are
 	// tried in order, so adding a torrent source later is one line here.
 	m_downloads->add_source(new http_download_source);
-	// BitTorrent is a first-class source, not a side feature (§11.4). It is
+	// BitTorrent is a first-class source, not a side feature (sec 11.4). It is
 	// only present when the build found libtorrent; there is no degraded mode.
 	// A recording is a download once it exists; it is only started differently.
 	m_capture_src = new capture_source;
@@ -380,12 +381,12 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		m_torrents = new torrent_download_source;
 		m_downloads->add_source(m_torrents);
 	}
-	// The §11.4 obligation that replaces the VPN we deliberately do not ship:
+	// The sec 11.4 obligation that replaces the VPN we deliberately do not ship:
 	// a source whose participation is publicly observable cannot start until
 	// the user has been told what it does. The manager holds the job; this is
 	// where the telling happens.
 	// Queued, not direct. consent_required is emitted from inside
-	// download_manager::enqueue(), and this handler opens a modal dialog — so a
+	// download_manager::enqueue(), and this handler opens a modal dialog -- so a
 	// direct connection would run a nested event loop inside enqueue() and not
 	// return until the user answered. Every caller would then have to be safe
 	// against that, including the URL-scheme handler that turns an in-page
@@ -395,7 +396,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(m_downloads, &download_manager::consent_required, this,
 	         &main_window::confirm_public_download, Qt::QueuedConnection);
 
-	// Links that are not pages (§11.4). The rule is deliberately general rather
+	// Links that are not pages (sec 11.4). The rule is deliberately general rather
 	// than a test for one scheme: anything the browser will not render, but
 	// which some download source will take, becomes a download. A magnet link
 	// is simply the first thing that fits, and the shell still never names a
@@ -414,24 +415,24 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		});
 	}
 	// The local proxy is optional: if it cannot listen, Watch still works and
-	// simply hands over the raw URL (§10 — it is an upgrade tier, not a
+	// simply hands over the raw URL (sec 10 -- it is an upgrade tier, not a
 	// prerequisite).
 	m_local_proxy = new local_proxy(this);
 	m_local_proxy->start();
 	m_filters   = new filter_list;
-	// The cosmetic half of §12. It reads the same list the interceptor does, and
+	// The cosmetic half of sec 12. It reads the same list the interceptor does, and
 	// reaches pages the only way a `##` rule can: through the DOM.
 	m_cosmetic  = new cosmetic_filters(m_filters, this);
 
 	// Saved settings are applied here rather than by the settings dialog, so
-	// they take effect on a run where that dialog is never opened — otherwise
+	// they take effect on a run where that dialog is never opened -- otherwise
 	// "settings persist" quietly means "settings persist if you go and look".
 	settings_store::load_into(m_players, m_downloads, m_torrents, nullptr, nullptr);
 	connect(m_media, &media_detector::site_updated,
 	         this, &main_window::on_media_found, Qt::QueuedConnection);
 	// The security spine is wired up before we get here: the factory owns the
 	// profile with the interceptor and cookie filter already installed on it
-	// (architecture doc §6/§7.3), and the policy engine is shared with them.
+	// (architecture doc sec 6/sec 7.3), and the policy engine is shared with them.
 
 	m_model = new tab_tree_model(this);
 	m_proxy = new tree_sort_proxy(this);
@@ -456,7 +457,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	bar->setMovable(false);
 
 	// Icons from the style, with the characters as their text. On the desktop
-	// the characters alone were fine; on a phone the font had no glyph for `↻`
+	// the characters alone were fine; on a phone the font had no glyph for the
+	// reload arrow
 	// and the reload button rendered as an empty box, while back and forward
 	// happened to survive. Asking the style for the icon is both prettier and
 	// not a bet on what fonts a platform ships.
@@ -498,8 +500,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	bar->addWidget(m_address);
 
 	// The media affordance sits next to the policy shield and stays hidden
-	// until something is detected — detection is progressive, so it fades in a
-	// beat after load rather than being present and empty (§11.3).
+	// until something is detected -- detection is progressive, so it fades in a
+	// beat after load rather than being present and empty (sec 11.3).
 	m_media_action = bar->addAction("Media");
 	m_media_action->setIcon(themed_icon({ "applications-multimedia",
 		                                     "media-playback-start" }, style(),
@@ -508,7 +510,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_media_action->setVisible(false);
 	connect(m_media_action, &QAction::triggered, this, &main_window::open_media);
 
-	// §13.2 asks for a key icon in the field or the toolbar, and now there is
+	// sec 13.2 asks for a key icon in the field or the toolbar, and now there is
 	// one. This was a *text* action, on the argument that inventing a glyph for
 	// one affordance would make it the odd one out -- true, and answered by not
 	// inventing one: `dialog-password` is a standard freedesktop name that every
@@ -530,7 +532,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		// Ask again, through the whole gate. Cheaper designs were available --
 		// re-opening the last picker, or caching the entries -- and both mean
 		// holding credentials for longer than the fill that asked for them.
-		// Re-asking costs one round trip to a local socket and keeps §13.3.
+		// Re-asking costs one round trip to a local socket and keeps sec 13.3.
 		if (m_autofill)
 			m_autofill->request_credentials(m_autofill->page_origin());
 	});
@@ -629,7 +631,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_stack->addWidget(m_placeholder);
 
 	// Sort and Search filter the *tree*, so they belong above the tree rather
-	// than in the toolbar beside Back/Forward/Address — those act on the page.
+	// than in the toolbar beside Back/Forward/Address -- those act on the page.
 	// Putting a control next to what it does not control is a small lie about
 	// the layout, and it costs a beat every time to work out which pane the
 	// search box searches.
@@ -732,8 +734,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// created up front, where there is nothing on screen to lose.
 	//
 	// Done through the factory rather than by naming an engine, so the seam
-	// holds — a backend with no such requirement simply pays a cheap create
-	// and destroy (§19.2).
+	// holds -- a backend with no such requirement simply pays a cheap create
+	// and destroy (sec 19.2).
 	if (m_factory) {
 		web_view_backend *warm = m_factory->create_view(this);
 		m_stack->addWidget(warm->widget());
@@ -801,6 +803,18 @@ QMenuBar *main_window::build_menu_bar() {
 	});
 	ext->setStatusTip("Hand this address to another application — on a phone "
 	                   "that is how audio keeps playing with the screen off");
+
+	// Greyed rather than absent when there is no page, and greyed again on a
+	// backend that cannot print at all: Android's WebView prints through the
+	// system PrintManager and is not wired to it, so an unconditional entry
+	// there would be a menu item that does nothing.
+	m_print_action = file_menu->addAction("&Print…", QKeySequence::Print, this,
+	                                       [this] {
+		if (web_view_backend *v = current_view())
+			v->print();
+	});
+	m_print_action->setStatusTip("Print this page");
+	m_print_action->setEnabled(false);
 	file_menu->addSeparator();
 
 	// Both importers together, which is the one thing the flat list made
@@ -937,6 +951,19 @@ QMenuBar *main_window::build_menu_bar() {
 	                                       this, &main_window::toggle_kiosk);
 	m_kiosk_action->setCheckable(true);
 	m_kiosk_action->setStatusTip("Fullscreen chrome-less presentation; Esc returns");
+
+	view_menu->addSeparator();
+	// **A sub-tab, not a window or a pane**, which costs nothing here because
+	// `view-source` is already a scheme `renders_as_page` accepts, so the
+	// source is an ordinary tab and inherits suspend, restore, find-on-page and
+	// the rest without any of them being told about it. Filing it under the
+	// page it belongs to is what the tree is for: the alternative, a second
+	// window, is the thing sec 5.5 exists to avoid.
+	m_source_action = view_menu->addAction("View Page &Source",
+	                                        QKeySequence("Ctrl+U"), this,
+	                                        [this] { view_page_source(); });
+	m_source_action->setStatusTip("Open this page's HTML as a sub-tab");
+	m_source_action->setEnabled(false);
 
 	// ---- Go -----------------------------------------------------------------
 	QMenu *go_menu = menu->addMenu("&Go");
@@ -1143,7 +1170,7 @@ void main_window::toggle_kiosk() {
 
 void main_window::open_reorganizer() {
 	// Which backend, and whether one is allowed at all, is a single global
-	// setting resolved in one place (§9.1). The dialog still gates an external
+	// setting resolved in one place (sec 9.1). The dialog still gates an external
 	// provider behind review-before-send either way.
 	QString why;
 	ai_provider *chosen = choose_ai(&why);
@@ -1152,8 +1179,8 @@ void main_window::open_reorganizer() {
 		return;
 	}
 
-	// §9.4: snapshot before applying, so any accepted change is one keystroke
-	// to revert. Structure only — payloads follow ids and are never touched.
+	// sec 9.4: snapshot before applying, so any accepted change is one keystroke
+	// to revert. Structure only -- payloads follow ids and are never touched.
 	const tree_snapshot before = m_model->take_snapshot();
 	reorganize_dialog dlg(m_model, chosen, this);
 	if (dlg.exec() == QDialog::Accepted) {
@@ -1184,7 +1211,7 @@ void main_window::refresh_media_affordance(const QString &site_host) {
 		return;
 	}
 
-	// The §11.6 case: the page is demonstrably playing, and watching request
+	// The sec 11.6 case: the page is demonstrably playing, and watching request
 	// URLs found nothing. Saying so is worth more than an empty badge, which
 	// on such a site is simply a lie.
 	qint64 buffered = 0;
@@ -1216,7 +1243,7 @@ void main_window::open_media() {
 	for (auto it = m_views_by_id.cbegin(); it != m_views_by_id.cend(); ++it)
 		if (it.value() == v) { node_id = it.key(); break; }
 
-	// Anything this site has been taught (§11.5) runs before the list is built,
+	// Anything this site has been taught (sec 11.5) runs before the list is built,
 	// so a learned stream appears beside whatever detection found on its own.
 	apply_extractor(v->url().host(), v->url());
 
@@ -1227,7 +1254,7 @@ void main_window::open_media() {
 	media_dialog dlg(m_media, m_players, m_downloads, m_local_proxy, m_mse, this);
 	connect(&dlg, &media_dialog::capture_requested, this, [this] {
 		// Queued: the dialog is closing itself, and starting a capture reloads
-		// the page — not something to do from inside its own exec().
+		// the page -- not something to do from inside its own exec().
 		QTimer::singleShot(0, this, [this] {
 			if (m_capture_url.isEmpty())
 				toggle_capture();
@@ -1427,7 +1454,7 @@ void main_window::toggle_password_manager() {
 	if (!m_keepass->connected()) {
 		connect(m_keepass, &keepass_bridge::ready, this, [this] {
 			// A stored pairing is tested rather than re-created, so the user is
-			// not asked to confirm a new connection on every launch (§13.1).
+			// not asked to confirm a new connection on every launch (sec 13.1).
 			//
 			// This comment described what was *meant* to happen for as long as
 			// there was nowhere to store a pairing: `associated()` only ever
@@ -1476,7 +1503,7 @@ void main_window::undo_reorganize() {
 	if (!m_undo.valid())
 		return;
 	const int n = m_model->restore_snapshot(m_undo);
-	m_undo = tree_snapshot{};        // one level, as §9.4 specifies
+	m_undo = tree_snapshot{};        // one level, as sec 9.4 specifies
 	m_undo_action->setEnabled(false);
 	m_tree->expandAll();
 	mark_dirty();
@@ -1545,14 +1572,14 @@ bool main_window::load_tree(const QString &path) {
 	delete m_state;
 	m_state = new state_store(dir + "/state");
 
-	// .ini, and the loader reads a policy.json left by an older build once —
+	// .ini, and the loader reads a policy.json left by an older build once --
 	// the first save writes the new file and the old one simply stops being
 	// consulted. Nobody has to migrate anything by hand.
 	m_policy_path = dir + "/policy.ini";
 	m_policy->load(m_policy_path);   // no-op if the file doesn't exist yet
 
 	// The AI/user-authored filter list lives beside the rest, kept separate
-	// from any imported EasyList so upstream updates cannot clobber it (§12.5).
+	// from any imported EasyList so upstream updates cannot clobber it (sec 12.5).
 	// Beside the policy, because a record of what somebody found annoying is a
 	// record of where they have been, and it belongs where they can read and
 	// clear it rather than in a store they cannot see.
@@ -1579,7 +1606,7 @@ bool main_window::load_tree(const QString &path) {
 	// code. The built-in set is always present; the file adds to it. This is
 	// the unit a future exchange between users would move, which is why it is a
 	// file from the start rather than something to be extracted from the binary
-	// later (§7.1, `cookie_notices`).
+	// later (sec 7.1, `cookie_notices`).
 	m_site_rules_path = dir + "/site-rules.ini";
 	site_rules cr;
 	if (!cr.load(m_site_rules_path))
@@ -1704,21 +1731,21 @@ void main_window::open_node(node *n) {
 
 		apply_policy(view, QUrl::fromUserInput(n->url).host());
 
-		// Autofill plumbing (architecture doc §13.2): the content script runs
+		// Autofill plumbing (architecture doc sec 13.2): the content script runs
 		// in an isolated world and talks to a bridge object the shell owns.
-		// The page never sets its own origin — the shell does, on navigation.
+		// The page never sets its own origin -- the shell does, on navigation.
 		view->set_script_bridge(m_autofill, "hydraAutofill");
 		view->inject_script("hydra-autofill",
 		                     QString::fromUtf8(autofill_script::source()));
-		// The element picker rides the same seam — that is why it waited for
-		// step 7 rather than shipping with the rest of §12.
+		// The element picker rides the same seam -- that is why it waited for
+		// step 7 rather than shipping with the rest of sec 12.
 		view->set_script_bridge(m_picker, "hydraPicker");
 		view->inject_script("hydra-picker",
 		                     QString::fromUtf8(picker_script::source()));
-		// §11.6, in two halves. The relay is privileged and stays isolated with
+		// sec 11.6, in two halves. The relay is privileged and stays isolated with
 		// the others; the hook is the only thing that goes into the page's own
 		// world, and it carries nothing.
-		// The consent banner, answered rather than merely hidden (§7.1's
+		// The consent banner, answered rather than merely hidden (sec 7.1's
 		// cookie_notices). Same isolated world as the others: it clicks the
 		// page's own buttons, so the page must not be able to rewrite it.
 		view->set_script_bridge(m_consent, consent_blocker::bridge_name());
@@ -1774,6 +1801,13 @@ void main_window::open_node(node *n) {
 		         [this, view](const QUrl &u) {
 			if (view == current_view())
 				show_link_target(u);
+		});
+		// Not guarded on being the current view, unlike its neighbours here. A
+		// print survives navigating away or switching tabs, and the outcome is
+		// the one thing about printing the window cannot otherwise show -- a
+		// job that failed after the user moved on would report nothing at all.
+		connect(view, &web_view_backend::print_finished, this, [this](bool ok) {
+			m_status->showMessage(ok ? "Printed." : "Nothing was printed.", 5000);
 		});
 		connect(view, &web_view_backend::find_result, this,
 		         [this, view](int matches, int active) {
@@ -1840,7 +1874,7 @@ void main_window::open_node(node *n) {
 		});
 
 		// A locked tab keeps its page: the navigation opens a sub-tab below it
-		// instead (§5.5). Answered here rather than in the backend because the
+		// instead (sec 5.5). Answered here rather than in the backend because the
 		// lock is a property of the *node*, and the seam deliberately knows
 		// nothing about the tree.
 		view->set_navigation_decider([this, view](const QUrl &u, bool main_frame,
@@ -1923,7 +1957,7 @@ void main_window::update_navigation() {
 		return;
 	web_view_backend *v = current_view();
 
-	// A locked tab does not walk out of its page backwards either (§5.5).
+	// A locked tab does not walk out of its page backwards either (sec 5.5).
 	// Greying the buttons is the honest way to say so: the alternative is a
 	// button that looks available and refuses, which is the shape this window
 	// spent a whole pass removing. Reload stays on -- reloading a pinned page
@@ -1934,6 +1968,14 @@ void main_window::update_navigation() {
 		if (node *n = id.isEmpty() ? nullptr : m_model->node_by_id(id))
 			pinned = n->locked;
 	}
+
+	// Printing is not navigation, so a locked tab prints like any other: the
+	// lock pins where the tab may go, not what may be done with the page it is
+	// already showing.
+	if (m_print_action)
+		m_print_action->setEnabled(v && v->can_print());
+	if (m_source_action)
+		m_source_action->setEnabled(v && has_viewable_source(v->url()));
 
 	m_back_action->setEnabled(v && !pinned && v->can_go_back());
 	m_fwd_action->setEnabled(v && !pinned && v->can_go_forward());
@@ -2197,6 +2239,30 @@ node *main_window::open_child_tab(node *parent, const QUrl &url) {
 	return made;
 }
 
+// **Built with `FullyEncoded`**, which is the whole of the difficulty. The
+// address becomes the tail of another url, so a query string that survives
+// `toString()` unencoded -- an `&`, a `#`, a space -- is re-parsed as part of
+// the outer one and the source view opens somewhere else, or nowhere. The
+// encoded form has no character that means anything to the outer parse.
+//
+// Routed through open_new_window() rather than add_tab() so the source lands
+// as a child of the page it belongs to, and so a page whose popups are blocked
+// cannot have that policy applied to a tab the user asked for by name: this is
+// user-initiated by construction, since a menu item and a keystroke are the
+// only two ways to reach it.
+void main_window::view_page_source() {
+	web_view_backend *v = current_view();
+	if (!v)
+		return;
+	const QUrl page = v->url();
+	if (!has_viewable_source(page)) {
+		m_status->showMessage("This page has no source to show.", 5000);
+		return;
+	}
+	open_new_window(QUrl("view-source:" + page.toString(QUrl::FullyEncoded)),
+	                 true);
+}
+
 node *main_window::open_new_window(const QUrl &url, bool user_initiated) {
 	if (!url.isValid() || url.isEmpty())
 		return nullptr;
@@ -2219,7 +2285,7 @@ node *main_window::open_new_window(const QUrl &url, bool user_initiated) {
 	// as long as a tab could hold no children: the node went to `n->parent`, so
 	// a window opened from a link became a *sibling* of the page that opened it
 	// and the relationship the tree was supposed to show was not recorded
-	// anywhere. Sub-tabs (§5.5) lifted that restriction, and this is the line
+	// anywhere. Sub-tabs (sec 5.5) lifted that restriction, and this is the line
 	// that had been waiting for it.
 	node *parent = nullptr;
 	if (from) {
@@ -2722,9 +2788,9 @@ void main_window::navigate_to_address() {
 	const QString text = m_address->text().trimmed();
 
 	// A magnet link is not a page. Handing it to the engine would produce an
-	// error page, so route it to the download manager instead — which is what
+	// error page, so route it to the download manager instead -- which is what
 	// "first class" means in practice: the same box, the same result as any
-	// other download link (§11.4).
+	// other download link (sec 11.4).
 	const QUrl direct(text);
 	if (m_downloads->source_for(direct) &&
 	    direct.scheme().compare("magnet", Qt::CaseInsensitive) == 0) {
@@ -2759,7 +2825,7 @@ void main_window::navigate_to_address() {
 
 void main_window::start_download(const QUrl &url) {
 	QString error;
-	// A download belongs to the node it came from (§11.2), so a torrent lands
+	// A download belongs to the node it came from (sec 11.2), so a torrent lands
 	// in the tree beside every other download rather than in a separate world.
 	QString node_id;
 	if (web_view_backend *v = current_view()) {
@@ -2774,7 +2840,7 @@ void main_window::start_download(const QUrl &url) {
 	}
 	m_address->clear();
 	// Show the list rather than announce it in the status bar: a download the
-	// user cannot watch is not a first-class download (§11.2).
+	// user cannot watch is not a first-class download (sec 11.2).
 	open_downloads();
 }
 
@@ -2788,7 +2854,7 @@ ai_provider *main_window::choose_ai(QString *why) {
 
 	// Re-probe every time rather than trusting a cached answer. Ollama is
 	// started and stopped like any other local service, so a result from
-	// earlier in the session says nothing about now — and the old code probed
+	// earlier in the session says nothing about now -- and the old code probed
 	// asynchronously then read the answer immediately, which meant the first
 	// use of the day *never* saw a running local model and quietly used the
 	// external one instead.
@@ -2801,7 +2867,7 @@ ai_provider *main_window::choose_ai(QString *why) {
 		case ai_choice::local_only:
 			// Deliberately does *not* fall back. The whole value of this
 			// setting is that "nothing leaves this machine" keeps meaning that
-			// on the day the local model is not running (§1, §9.1).
+			// on the day the local model is not running (sec 1, sec 9.1).
 			if (local_ok)
 				return m_local_ai;
 			if (why)
@@ -2882,7 +2948,7 @@ void main_window::learn_this_site() {
 	const QString host = v->url().host();
 	extractor_dialog dlg(m_ex_signals, &m_extractors, chosen, host, v->url(), this);
 
-	// The §11.5.1 helper tier, and only where this site has been trusted with
+	// The sec 11.5.1 helper tier, and only where this site has been trusted with
 	// it. `extractor_fetch` defaults to block, so on an ordinary site the
 	// script gets no `hydra` at all and cannot tell the surface exists.
 	//
@@ -3007,7 +3073,7 @@ void main_window::toggle_capture() {
 	// commonest way to get an empty file is forgetting to press play, and that
 	// deserves to be said out loud rather than discovered at the end.
 	// From here it is an ordinary job: the downloads window shows it with the
-	// same progress and the same Cancel as anything else (§11.6).
+	// same progress and the same Cancel as anything else (sec 11.6).
 	QString node_id;
 	for (auto it = m_views_by_id.cbegin(); it != m_views_by_id.cend(); ++it)
 		if (it.value() == v) { node_id = it.key(); break; }
@@ -3093,7 +3159,7 @@ void main_window::find_media_with_ytdlp() {
 			if (!f.has_video && !f.has_audio)
 				continue;
 			media_item item;
-			// Trust yt-dlp's protocol rather than re-guessing from the URL —
+			// Trust yt-dlp's protocol rather than re-guessing from the URL --
 			// knowing this authoritatively is the entire point of asking it.
 			item.kind = (f.protocol.startsWith("m3u8")) ? media_kind::hls
 			          : (f.protocol.startsWith("http_dash")) ? media_kind::dash
@@ -3118,7 +3184,7 @@ void main_window::find_media_with_ytdlp() {
 	}, Qt::SingleShotConnection);
 	connect(m_ytdlp, &ytdlp_resolver::failed, this, [this](const QString &e) {
 		// yt-dlp's own words: "Unsupported URL" is the answer that matters,
-		// and it is exactly the case §11.6's tap exists for.
+		// and it is exactly the case sec 11.6's tap exists for.
 		m_status->showMessage("yt-dlp: " + e, 10000);
 	}, Qt::SingleShotConnection);
 

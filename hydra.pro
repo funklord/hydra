@@ -73,7 +73,11 @@ android {
 	SOURCES -= $$files(src/qtwebengine_*.cpp)
 	HEADERS -= $$files(src/qtwebengine_*.h)
 } else {
-	QT      += webenginewidgets
+	# printsupport rides with webenginewidgets rather than sitting in the
+	# unconditional QT line: the only thing that includes it is
+	# qtwebengine_view.cpp, which this branch is what keeps. Android prints
+	# through the system PrintManager and has no QPrinter to link against.
+	QT      += webenginewidgets printsupport
 	SOURCES -= $$files(src/android_*.cpp)
 	HEADERS -= $$files(src/android_*.h)
 }

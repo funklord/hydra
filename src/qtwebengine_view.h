@@ -12,7 +12,7 @@ class QWebChannel;
 class navigating_page;
 
 // The desktop web_view_backend: a QWebEngineView plus its page, wrapped so the
-// shell never names either (architecture doc §19.2). Everything
+// shell never names either (architecture doc sec 19.2). Everything
 // Qt-WebEngine-specific about rendering a page lives behind this class.
 class qtwebengine_view : public web_view_backend {
 	Q_OBJECT
@@ -26,6 +26,8 @@ public:
 	void forward() override;
 	void reload() override;
 	void stop() override;
+	void print() override;
+	bool can_print() const override;
 	void apply_settings(const view_settings &s) override;
 	void set_permission_decider(permission_decider fn) override;
 	void set_authenticator(authenticator fn) override;

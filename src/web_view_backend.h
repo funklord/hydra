@@ -16,20 +16,20 @@ class QWidget;
 // Per-page toggles the shell derives from the policy engine and hands down.
 // Deliberately plain bools rather than engine settings: a backend applies what
 // its engine supports and ignores the rest, which is the honest shape given
-// Android's System WebView offers a reduced set (architecture doc §19.2).
+// Android's System WebView offers a reduced set (architecture doc sec 19.2).
 struct view_settings {
 	bool javascript = true;
 	bool images     = true;
 	bool autoplay   = true;
 	bool popups     = false;
-	bool scrollbars = true;   // kiosk mode turns these off (architecture doc §8)
+	bool scrollbars = true;   // kiosk mode turns these off (architecture doc sec 8)
 };
 
 // One rendered page.
 //
-// This is the seam described in architecture doc §19.2: the shell owns nodes,
+// This is the seam described in architecture doc sec 19.2: the shell owns nodes,
 // policy, and lifecycle, and a backend owns whatever engine actually draws a
-// page. Qt WebEngine on desktop, the Android System WebView later — the shell
+// page. Qt WebEngine on desktop, the Android System WebView later -- the shell
 // must never learn which, so nothing Qt-WebEngine-shaped may appear here.
 class web_view_backend : public QObject {
 	Q_OBJECT
@@ -55,6 +55,24 @@ public:
 	// does nothing -- which is why the shell only offers one while a load is
 	// actually running.
 	virtual void stop() {}
+
+	// Put the page on paper, running whatever flow the platform provides.
+	//
+	// **The backend owns the whole flow, dialog included**, which is the one
+	// place the shell deliberately does not own the UI. It is not squeamishness
+	// about QPrintDialog: Android prints through the system PrintManager, which
+	// presents its own chooser and cannot be driven from a QPrinter the shell
+	// filled in. A seam that took a configured printer would be Qt's spelling
+	// of printing written into every backend that ever implements this, which
+	// is exactly what sec 19.2 exists to prevent. So the shell asks for a print
+	// and the platform asks the questions.
+	//
+	// **Not pure, and the shell must ask before offering it.** A backend with
+	// no printing does nothing here, so an unconditional menu entry would be a
+	// second Stop button that silently fails -- the failure this seam already
+	// records once. `can_print()` is what the shell greys the action on.
+	virtual void print() {}
+	virtual bool can_print() const { return false; }
 
 	virtual void apply_settings(const view_settings &s) = 0;
 	virtual void set_permission_decider(permission_decider fn) = 0;
@@ -88,7 +106,7 @@ public:
 	// One certificate a site is willing to accept, described in plain strings.
 	//
 	// Strings rather than the engine's certificate type because this header is
-	// the line the shell must not see an engine through (§19.2): a chooser that
+	// the line the shell must not see an engine through (sec 19.2): a chooser that
 	// took a QSslCertificate would put Qt Networking's spelling of a
 	// certificate into every backend that ever implements this.
 	struct certificate_offer {
@@ -117,7 +135,7 @@ public:
 	// been committed or dropped.
 	//
 	// Returning false leaves the view where it is. That is what a locked tab
-	// needs (§5.5) -- the shell opens a sub-tab for the refused url and the
+	// needs (sec 5.5) -- the shell opens a sub-tab for the refused url and the
 	// pinned page never moves -- but the seam does not know about locking, and
 	// should not: it asks, the shell decides.
 	//
@@ -134,8 +152,8 @@ public:
 	                                               bool user_initiated)>;
 	virtual void set_navigation_decider(navigation_decider fn) { Q_UNUSED(fn) }
 
-	// Reflow zoom — the page re-lays out at the new scale. Kiosk mode's
-	// reliable scaling path (architecture doc §8.1); every engine has this.
+	// Reflow zoom -- the page re-lays out at the new scale. Kiosk mode's
+	// reliable scaling path (architecture doc sec 8.1); every engine has this.
 	virtual void set_zoom_factor(double factor) = 0;
 
 	// What it is now. **Not pure, and it answers 1.0** for a backend that
@@ -145,13 +163,13 @@ public:
 	virtual double zoom_factor() const { return 1.0; }
 
 	// Run `source` in every page this view loads, in an isolated world so the
-	// page cannot see or tamper with it (architecture doc §13.2). Android's
+	// page cannot see or tamper with it (architecture doc sec 13.2). Android's
 	// System WebView has its own injection mechanism, which is why this sits on
 	// the seam instead of appearing as QWebEngineScript in the shell.
 	// `subframes` defaults off and that default is the security one: a script
 	// that fills credentials or reads a picked element must not run inside a
 	// third-party iframe. The consent blocker is the exception, because the
-	// thing it acts on is frequently *shipped* as one — a CMP in an iframe is
+	// thing it acts on is frequently *shipped* as one -- a CMP in an iframe is
 	// the normal way vendors deliver them, and a top-frame-only script leaves
 	// those banners standing.
 	virtual void inject_script(const QString &name, const QString &source,
@@ -161,9 +179,9 @@ public:
 	//
 	// Separate from inject_script() rather than a flag on it, because this is a
 	// security escalation and should be greppable. An isolated world has its
-	// own globals, so a script there cannot see or wrap the page's objects —
+	// own globals, so a script there cannot see or wrap the page's objects --
 	// which is exactly why autofill and the picker live in one, and exactly why
-	// a Media Source tap (§11.6) cannot. A script injected here is visible and
+	// a Media Source tap (sec 11.6) cannot. A script injected here is visible and
 	// modifiable by the page, so it must hold nothing worth stealing and grant
 	// nothing: no bridge, no tokens, no privileged calls. It reports by
 	// dispatching DOM events that an isolated-world relay picks up.
@@ -178,9 +196,9 @@ public:
 	// nullptr withdraws it.
 	virtual void set_script_bridge(QObject *object, const QString &name) = 0;
 
-	// Session state — navigation history and whatever else the engine can
+	// Session state -- navigation history and whatever else the engine can
 	// serialize. Opaque to the shell, which only stores and returns the blob
-	// (state_store keys it by node id, architecture doc §4.2).
+	// (state_store keys it by node id, architecture doc sec 4.2).
 	virtual QByteArray save_state() const = 0;
 	virtual bool       restore_state(const QByteArray &blob) = 0;
 
@@ -255,6 +273,13 @@ signals:
 	void link_hovered(const QUrl &url);
 
 	// The engine's render process died. Kiosk mode's watchdog reloads on this
-	// so an unattended screen self-heals (architecture doc §8.3).
+	// so an unattended screen self-heals (architecture doc sec 8.3).
 	void render_process_gone();
+
+	// A print run ended, and whether paper came out of it. Emitted for a
+	// cancelled dialog as well as a failed spool, because from the shell's side
+	// those are the same event: the page was not printed. It exists so the
+	// status bar can say so -- printing is one of the few things a browser does
+	// whose outcome is invisible from inside the window.
+	void print_finished(bool ok);
 };

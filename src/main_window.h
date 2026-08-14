@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-#include "tree_diff.h"   // for the §9.4 undo snapshot
+#include "tree_diff.h"   // for the sec 9.4 undo snapshot
 #include "site_extractor.h"
 #include "site_rules.h"
 #include "session_mirror.h"   // for the mirror and imported_tab
@@ -63,23 +63,23 @@ class claude_provider;
 struct node;
 
 // The shell: a splitter with the tab tree on the left and a stack of
-// chrome-less web views on the right (architecture doc §6). Tabs follow a
-// lifecycle — unopened -> open (live view) -> suspended (history blob) — with a
-// small cap on how many views stay live at once (§5.4).
+// chrome-less web views on the right (architecture doc sec 6). Tabs follow a
+// lifecycle -- unopened -> open (live view) -> suspended (history blob) -- with a
+// small cap on how many views stay live at once (sec 5.4).
 //
 // A plain QWidget rather than a QMainWindow, stacking the classic desktop
 // furniture itself in one QVBoxLayout: menu bar, toolbar, splitter, status bar.
 // QMenuBar and QStatusBar are ordinary widgets and work fine outside a
 // QMainWindow, so laying them out directly costs nothing and keeps the window's
-// structure explicit — which kiosk mode (§8) and the Android drawer layout
-// (§19.3) both need to rearrange later.
+// structure explicit -- which kiosk mode (sec 8) and the Android drawer layout
+// (sec 19.3) both need to rearrange later.
 class main_window : public QWidget {
 	Q_OBJECT
 public:
 	// The factory and policy engine are injected rather than constructed here:
 	// that is what keeps this class free of any engine-specific type, and it
 	// leaves main() as the single place naming a concrete backend
-	// (architecture doc §19.2). Both must outlive the window.
+	// (architecture doc sec 19.2). Both must outlive the window.
 	main_window(web_view_factory *factory, policy_engine *policy,
 	             request_filter *filter, QWidget *parent = nullptr);
 	~main_window() override;
@@ -118,7 +118,7 @@ private slots:
 	void on_sort_mode_changed(int combo_index);
 	void on_search_changed(const QString &text);
 	void navigate_to_address();
-	// Downloads that are publicly observable (§11.4) get an explanation before
+	// Downloads that are publicly observable (sec 11.4) get an explanation before
 	// they start, never after.
 	void confirm_public_download(const QString &source_id, const QString &note,
 	                              int job_id);
@@ -134,7 +134,7 @@ private slots:
 	// One place decides what the media badge says, since two sources feed it.
 	void refresh_media_affordance(const QString &site_host);
 	void open_settings();
-	// The one place that resolves which backend to use (§9.1). Returns null
+	// The one place that resolves which backend to use (sec 9.1). Returns null
 	// when the user's choice cannot be satisfied, with `why` set.
 	ai_provider *choose_ai(QString *why);
 	void go_back();
@@ -200,6 +200,7 @@ public:
 	// the request was refused -- public so a driver can ask for one without an
 	// engine, since the decision is the part worth checking.
 	node *open_new_window(const QUrl &url, bool user_initiated);
+	void view_page_source();
 	node *open_child_tab(node *parent, const QUrl &url);
 	void  toggle_lock(node *n);
 	bool  allow_navigation(web_view_backend *view, const QUrl &url,
@@ -237,7 +238,7 @@ private:
 	void update_address(const QString &url);
 	void apply_policy(web_view_backend *view, const QString &host);
 
-	// §19.3's adaptive layout. A horizontal splitter is right on a desktop and
+	// sec 19.3's adaptive layout. A horizontal splitter is right on a desktop and
 	// unusable on a portrait phone, where it leaves the page a strip too narrow
 	// to read -- measured on a device before this existed. Narrow windows get the
 	// tree as a drawer that slides over the content instead; wide ones keep the
@@ -330,6 +331,8 @@ private:
 	QAction            *m_back_action   = nullptr;
 	QAction            *m_fwd_action    = nullptr;
 	QAction            *m_reload_action = nullptr;
+	QAction            *m_print_action  = nullptr;
+	QAction            *m_source_action = nullptr;
 	QAction            *m_key_action    = nullptr;
 	session_mirror     *m_fx_mirror     = nullptr;
 	session_mirror     *m_cr_mirror     = nullptr;

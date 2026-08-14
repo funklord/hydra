@@ -19,6 +19,8 @@
 #include <QWebEngineScriptCollection>
 #include <QWebChannel>
 #include <QFile>
+#include <QPrintDialog>
+#include <QPrinter>
 
 namespace {
 
@@ -146,7 +148,7 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	//
 	// The certificates are flattened to plain strings before they cross the
 	// seam, because the shell must not learn what kind of engine produced
-	// them (§19.2).
+	// them (sec 19.2).
 	connect(m_page, &QWebEnginePage::selectClientCertificate, this,
 	         [this](QWebEngineClientCertificateSelection selection) {
 		const QList<QSslCertificate> certs = selection.certificates();
@@ -220,7 +222,7 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	// working**. `featurePermissionRequested` is documented as deprecated but
 	// functional; on 6.11 it is not, for geolocation: the signal never arrives,
 	// so nothing answers, and the page's `getCurrentPosition` callback simply
-	// never fires. That is worse than a refusal — a refused page moves on, a
+	// never fires. That is worse than a refusal -- a refused page moves on, a
 	// page waiting on a callback that will never come just stops. `try_permissions`
 	// passes 11 of 11 against 6.8.2 and fails against 6.11 on exactly the checks
 	// that need geolocation, which is how this was found rather than guessed.
@@ -241,7 +243,7 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 			case PT::MediaAudioVideoCapture: pf = policy::feature::camera;        break;
 			case PT::Notifications:          pf = policy::feature::notifications; break;
 			default:
-				// Nothing the policy model covers — clipboard, local fonts,
+				// Nothing the policy model covers -- clipboard, local fonts,
 				// desktop capture, pointer lock. Refused rather than prompted,
 				// which is the same answer the old path gave.
 				perm.deny();
@@ -251,7 +253,7 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 		// What was asked and what was answered, on request. Without this the
 		// only observable is what the page ends up seeing, and "we refused" and
 		// "we granted and the engine could not deliver" look identical from
-		// there — which cost a diagnosis once already.
+		// there -- which cost a diagnosis once already.
 		//
 		// Our feature name, not Qt's enum number. The number was readable until
 		// 6.8 renumbered the enum underneath it, at which point a driver matching
@@ -290,7 +292,7 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 		// What was asked and what was answered, on request. Without this the
 		// only observable is what the page ends up seeing, and "we refused" and
 		// "we granted and the engine could not deliver" look identical from
-		// there — which cost a diagnosis once already.
+		// there -- which cost a diagnosis once already.
 		//
 		// Our feature name, not Qt's enum number. The number was readable until
 		// 6.8 renumbered the enum underneath it, at which point a driver matching
@@ -369,12 +371,12 @@ void qtwebengine_view::inject_script(const QString &name, const QString &source,
 	s.setName(name);
 	s.setSourceCode(source);
 	// Document creation, so the script is in place before the page's own code
-	// runs; and an isolated world so the page cannot read or rewrite it (§13.2).
+	// runs; and an isolated world so the page cannot read or rewrite it (sec 13.2).
 	s.setInjectionPoint(QWebEngineScript::DocumentCreation);
 	s.setWorldId(QWebEngineScript::ApplicationWorld);
 	// Off by default: credentials and picked elements must not be reachable from
 	// a third-party iframe. Where it is on, the script has to survive without a
-	// bridge — Qt installs `qt.webChannelTransport` in the main frame alone, so
+	// bridge -- Qt installs `qt.webChannelTransport` in the main frame alone, so
 	// a content script in a subframe has nothing to connect a QWebChannel to and
 	// must talk to the top frame instead. Measured; see project.md.
 	s.setRunsOnSubFrames(subframes);
@@ -387,7 +389,7 @@ void qtwebengine_view::inject_main_world_script(const QString &name,
 	s.setName(name);
 	s.setSourceCode(source);
 	s.setInjectionPoint(QWebEngineScript::DocumentCreation);
-	// MainWorld and every frame — see the comment on the seam. Both are
+	// MainWorld and every frame -- see the comment on the seam. Both are
 	// required rather than convenient: an isolated world cannot wrap the page's
 	// MediaSource, and on real sites the player lives in an iframe.
 	s.setWorldId(QWebEngineScript::MainWorld);
@@ -411,7 +413,7 @@ void qtwebengine_view::set_script_bridge(QObject *object, const QString &name) {
 	m_page->setWebChannel(m_channel, QWebEngineScript::ApplicationWorld);
 
 	// qwebchannel.js ships with Qt as a resource; the page-side script needs it
-	// before it can construct a QWebChannel. Inject it exactly once — more than
+	// before it can construct a QWebChannel. Inject it exactly once -- more than
 	// one bridge object registers here, and a second copy of the transport
 	// would run the whole setup twice in the same page.
 	if (!m_channel_api_injected) {
@@ -454,6 +456,53 @@ double qtwebengine_view::zoom_factor() const {
 void qtwebengine_view::stop() {
 	if (m_view)
 		m_view->stop();
+}
+
+bool qtwebengine_view::can_print() const {
+	return m_view != nullptr;
+}
+
+// **The dialog is modal and the printing is not**, which is the trap here.
+// `QWebEngineView::print` hands the job to the render process and returns
+// immediately, so the QPrinter has to outlive the call: a stack one is
+// destroyed while a spool is still reading it. It is heap-allocated and freed
+// when `printFinished` says the job is over.
+//
+// **Freed by hand, because a QPrinter is not a QObject.** It derives from
+// QPagedPaintDevice, so there is no `deleteLater` and no parent to own it --
+// which the first version of this assumed both of, and the compiler said so.
+// Deleting inside the handler is safe rather than merely convenient: the
+// signal is what marks the engine finished with it.
+//
+// `Qt::SingleShotConnection` disconnects after the first emission, so a second
+// print cannot re-enter this lambda and free a printer the first job is still
+// using. Doing it by hand wanted a heap-allocated QMetaObject::Connection to
+// disconnect itself from inside its own callback, which is a lifetime puzzle
+// in exchange for nothing.
+//
+// The dialog runs first and synchronously, because a cancelled dialog must not
+// start a job at all -- and cancelling is reported as a finish that produced
+// nothing, since from the shell's side "you did not print" is one outcome
+// however it was reached.
+void qtwebengine_view::print() {
+	if (!m_view)
+		return;
+
+	auto *printer = new QPrinter(QPrinter::HighResolution);
+	QPrintDialog dialog(printer, m_view);
+	dialog.setWindowTitle("Print Page");
+	if (dialog.exec() != QDialog::Accepted) {
+		delete printer;
+		emit print_finished(false);
+		return;
+	}
+
+	connect(m_view, &QWebEngineView::printFinished, this,
+	         [this, printer](bool ok) {
+		delete printer;
+		emit print_finished(ok);
+	}, Qt::SingleShotConnection);
+	m_view->print(printer);
 }
 
 void qtwebengine_view::set_authenticator(authenticator fn) {

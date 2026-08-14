@@ -367,6 +367,39 @@ int main(int argc, char **argv) {
 		check(!renders_as_page(QUrl("")), "an empty url is not a page");
 	}
 
+	// The narrower half of the same question. Written against the *exclusions*
+	// rather than the accepts, because every one of them is a case where the
+	// action would have opened a tab showing nothing and the accepts are the
+	// easy half.
+	section("scheme routing: what has a source worth showing");
+	{
+		const char *fetched[] = { "https://example.com/a", "http://example.com",
+			                         "file:///tmp/x.html" };
+		for (const char *u : fetched)
+			check(has_viewable_source(QUrl(u)),
+			      QString("%1 was fetched, so its markup can differ from its "
+			               "rendering").arg(u));
+
+		// Each of these renders_as_page, which is exactly why the two
+		// predicates cannot be one.
+		const char *assembled[] = { "about:blank", "chrome://settings",
+			                           "data:text/html,<b>hi",
+			                           "blob:https://e.com/1234",
+			                           "view-source:https://e.com" };
+		for (const char *u : assembled) {
+			check(renders_as_page(QUrl(u)),
+			      QString("%1 is still a page").arg(u));
+			check(!has_viewable_source(QUrl(u)),
+			      QString("but %1 has no fetched source behind it").arg(u));
+		}
+
+		check(has_viewable_source(QUrl("HTTPS://example.com")),
+		      "matched case-insensitively, like its neighbour");
+		check(!has_viewable_source(QUrl("")), "and an empty url has no source");
+		check(!has_viewable_source(QUrl("magnet:?xt=urn:btih:abc")),
+		      "nor does something that is not a page at all");
+	}
+
 	// The ad-host predicate, which the notes have listed as "verified mechanism,
 	// untested matching" for a long time because pointing a real ad name at a
 	// local server needs root or a Chromium flag Qt mangles. The predicate itself
@@ -423,8 +456,8 @@ int main(int argc, char **argv) {
 	//
 	// `parse_rule` fills it with the site for a cosmetic rule and with the
 	// *blocked host* for `||host^`, and `evaluate()`'s breadth check depends on
-	// the second. Filtering requests by it — which reads like an obvious fix for
-	// "blocks() ignores scope" — would compare a blocked host against the
+	// the second. Filtering requests by it -- which reads like an obvious fix for
+	// "blocks() ignores scope" -- would compare a blocked host against the
 	// visiting site, match almost nothing, and silently disable every network
 	// rule. These pin the real behaviour so that fix is not made twice.
 	section("network rules are global, and the field that looks like scope is not");
