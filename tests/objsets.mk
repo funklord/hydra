@@ -8,6 +8,14 @@
 # compares it against the tree it finds and refuses to build when they
 # differ, because a link set describing a tree that has moved on fails
 # as an undefined symbol a long way from the file somebody added.
+#
+# Which fmake answered, because it cannot be asked afterwards: every
+# build of it reports the same version, so an installed copy and the
+# tree it came from are indistinguishable, and the difference between
+# two of them here was 23 targets quietly missing. If this file is
+# wrong, start with whether this is the fmake you meant.
+#
+#     /tmp/claude-1000/-home-funk-src-hydra/9628fa8e-571e-4c5c-87ab-f870f325e6c1/scratchpad/bin/fmake  (mtime 2026-08-14 18:17)
 
 OBJSETS_SOURCES = \
 	tests/test_address.cpp \
