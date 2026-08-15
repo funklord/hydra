@@ -147,6 +147,17 @@ private:
 		} else if (path.startsWith("/seg-")) {
 			type = "video/mp2t";
 			body = QByteArray(2048, '\0');
+		} else if (path.startsWith("/trailer.mp4")) {
+			// **A file the download manager will actually take.** Everything
+			// else here is deliberately stream-shaped, and `http_download_source`
+			// is right to refuse all of it: a manifest saves the playlist text
+			// rather than the video, and a lone `.ts` saves one segment of it.
+			// So a driver testing a plain http download had nothing here to
+			// ask for, and try_downloads asked a port nobody served instead.
+			// Big enough to arrive in more than one read, so progress is a
+			// number that moves rather than 0 then done.
+			type = "video/mp4";
+			body = QByteArray(256 * 1024, '\0');
 		} else if (is_ad_shaped(path)) {
 			type = "image/gif";
 			body = QByteArray::fromHex(k_gif);

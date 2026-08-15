@@ -1,6 +1,7 @@
 // Opens a tab in the real shell, then puts a real HTTP download and a real
 // torrent through the real downloads window, on the real display.
 #include "main_window.h"
+#include "media_fixture.h"
 #include "policy_engine.h"
 #include "request_filter.h"
 #include "qtwebengine_factory.h"
@@ -75,6 +76,24 @@ int main(int argc, char *argv[]) {
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
 	app.setApplicationName("Hydra");
+
+	// --- something for the http half to actually fetch ---------------------
+	//
+	// **This half was measuring nothing.** It enqueued
+	// `http://127.0.0.1:8830/trailer.mp4` and nothing ever listened on 8830 --
+	// no fixture here, no helper started, no port that any other driver
+	// serves. So the job sat at `0/-1` in every sweep, which reads in the log
+	// as a download that stalled rather than as a server that was never there.
+	// The torrent beside it seeds itself and completes, which is what made the
+	// difference look like an http problem.
+	//
+	// The media fixture already serves real bytes -- `/seg-NNNNN.ts` is 2048
+	// of them with a content-length -- so the download becomes a genuine local
+	// one and the driver stops needing a network it was never given. Its
+	// README row lists it beside try_watch under "network"; after this only
+	// try_watch belongs there.
+	media_fixture::server fixture;
+	const QString http_base = fixture.start();
 
 	// --- a torrent to actually download, with a seeder for it --------------
 	const QString root = OUTDIR + "seed";
@@ -176,7 +195,7 @@ int main(int argc, char *argv[]) {
 			break;
 		case 5: {
 			QString err;
-			const int id = dm->enqueue(QUrl("http://127.0.0.1:8830/trailer.mp4"),
+			const int id = dm->enqueue(QUrl(http_base + "trailer.mp4"),
 					                        QString(), &err);
 			std::printf("http download queued: id=%d %s\n", id, qPrintable(err));
 			break;
