@@ -11,6 +11,7 @@
 // It reports what happened at each stage rather than only passing or failing,
 // because a model that proposes nothing acceptable is a legitimate outcome and
 // must not read as a broken trigger.
+#include "filter_signals.h"
 #include "main_window.h"
 #include "node.h"
 #include "policy_engine.h"
@@ -26,9 +27,11 @@
 #include <QFile>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSettings>
 #include <QTimer>
 #include <QToolBar>
 #include <QTreeWidget>
+#include <QUrl>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -96,6 +99,27 @@ int main(int argc, char *argv[]) {
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
 
+	// **Never the user's real configuration**, which this driver was reading
+	// until now -- the same redirect try_settings_ui has carried since it was
+	// written. It matters here for a second reason: the AI provider takes its
+	// model name from settings, so a run against a machine whose settings name
+	// a model it does not have refuses before asking anything, and the refusal
+	// is about the configuration rather than about the loop.
+	//
+	// Set by name rather than through XDG_CONFIG_HOME: QSettings resolves that
+	// itself and only writes a file when something is stored, so an env var
+	// that was never honoured looks exactly like one that was.
+	//
+	// **Not HYDRA_TEST_OUT**, which try_settings_ui uses and which would be
+	// wrong here: this driver wipes that directory with `removeRecursively()`
+	// a few lines below, so settings put there are deleted before anything
+	// reads them. Its own variable, and one that is not erased.
+	QSettings::setDefaultFormat(QSettings::IniFormat);
+	QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
+	                    qEnvironmentVariableIsSet("HYDRA_TEST_CONFIG")
+	                        ? QString::fromLocal8Bit(qgetenv("HYDRA_TEST_CONFIG"))
+	                        : QString("/tmp/hydra-evolve-config"));
+
 	const QString target = argc > 1 ? QString::fromLocal8Bit(argv[1])
 	    : QStringLiteral("https://kisskh.co/Drama/Revenged-Love/Episode-24?id=10826&ep=190076");
 	const QString out = qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
@@ -131,6 +155,23 @@ int main(int argc, char *argv[]) {
 		emit tv->activated(tv->model()->index(0, 0, tv->model()->index(0, 0)));
 		spin(qEnvironmentVariableIsSet("HYDRA_SETTLE")
 		         ? qEnvironmentVariableIntValue("HYDRA_SETTLE") : 18000);
+
+		// **What the page actually produced, printed rather than assumed.**
+		// A run that reached the dialog and stopped used to say only "Send
+		// never became enabled", which has two very different causes and named
+		// neither: no ad-shaped requests to propose about, or a provider that
+		// cannot answer. Send is enabled on `suspects_for(host)` being
+		// non-empty (filter_dialog.cpp), so the counts below decide which half
+		// to look at, and the run stops being a guess about a live site.
+		const QString host = QUrl(target).host();
+		auto *fs = w.findChild<filter_signals *>();
+		std::printf("     host=%s  observed=%d  ad-shaped=%d\n",
+		             qPrintable(host),
+		             fs ? int(fs->observed_for(host).size()) : -1,
+		             fs ? fs->count_for(host) : -1);
+		if (fs && fs->count_for(host) > 0)
+			for (const QString &u : fs->suspects_for(host).mid(0, 3))
+				std::printf("       suspect %s\n", qPrintable(u.left(90)));
 		note("page settled");
 	}
 
@@ -181,7 +222,19 @@ int main(int argc, char *argv[]) {
 			if (!sent) {
 				if (QPushButton *s = button_of(d, "Send")) {
 					if (s->isEnabled()) { s->click(); sent = true; }
-					else why_not = "Send never became enabled";
+					else
+						// `gate_send` puts its reason in the tooltip, so an
+						// empty one here means Send was never gated at all --
+						// the suspects condition failed and the provider was
+						// never consulted. A non-empty one names the provider
+						// fault. The two read identically without this.
+						why_not = QString("Send never became enabled (%1)")
+						              .arg(s->toolTip().isEmpty()
+						                       ? QStringLiteral("no suspects to "
+						                                         "propose about; "
+						                                         "provider not "
+						                                         "consulted")
+						                       : s->toolTip());
 				} else {
 					why_not = "no Send button";
 				}
