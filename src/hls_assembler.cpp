@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "hls_assembler.h"
 
+#include <QTimer>
+
 #include <QFile>
 #include <QFileInfo>
 #include <QNetworkAccessManager>
@@ -37,6 +39,7 @@ void hls_assembler::start(const QUrl &manifest, const stream_context &ctx,
 	m_path      = output_path;
 	m_written   = 0;
 	m_index     = 0;
+	m_attempt   = 0;
 	m_finished  = false;
 	m_stopped   = false;
 	m_redirects = 0;
@@ -130,10 +133,36 @@ void hls_assembler::next_segment() {
 		if (m_stopped)
 			return;
 		if (reply->error() != QNetworkReply::NoError) {
-			emit failed(QString("Segment %1 failed: %2")
-			                .arg(m_index).arg(reply->errorString()));
+			// **A segment that fails once is retried**, because one failure used
+			// to end the assembly and discard everything already fetched --
+			// reported as "segment 79 failed" after 78 had landed. Over a real
+			// CDN and hundreds of segments a transient error somewhere is close
+			// to certain, so the old behaviour meant long streams essentially
+			// could not be assembled.
+			//
+			// Retried regardless of which error it was. Sorting them into
+			// transient and permanent means guessing at somebody else's
+			// summary: a 403 can be an expired token that will never succeed or
+			// a CDN shedding load that will, and the reply cannot tell you
+			// which. A small bounded number of attempts costs a few requests
+			// when it is hopeless and rescues the case that is merely unlucky.
+			if (++m_attempt < k_segment_attempts) {
+				const int wait = k_retry_ms * m_attempt;   // 400, 800, 1200...
+				// `next_segment()` re-reads `segments.at(m_index)`, and the
+				// index only advances on success -- so this fetches the same
+				// segment again rather than skipping past it.
+				QTimer::singleShot(wait, this, [this] {
+					if (!m_stopped)
+						next_segment();
+				});
+				return;
+			}
+			emit failed(QString("Segment %1 failed after %2 attempts: %3")
+			                .arg(m_index).arg(m_attempt).arg(reply->errorString()));
 			return;
 		}
+		// Landed, so the next segment starts with a full budget of its own.
+		m_attempt = 0;
 		const QByteArray body = reply->readAll();
 		if (m_file) {
 			m_file->write(body);

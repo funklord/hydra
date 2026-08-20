@@ -3,6 +3,7 @@
 
 #include "empty_state.h"
 #include "download_manager.h"
+#include "download_source.h"
 #include "mse_tap.h"
 #include "player_launcher.h"
 #include "local_proxy.h"
@@ -16,6 +17,72 @@
 #include <QEvent>
 #include <QLabel>
 #include <QPushButton>
+
+namespace {
+
+// **A control that cannot work looks unavailable**, which is this project's
+// own rule -- see `gate_send` in ai_provider.h, written for the Send button
+// after it sat enabled beside an explanation of why pressing it would fail.
+// The media rows were the place the rule was not applied: Watch and Download
+// were offered on every row and refused after the click, with the reason
+// arriving as a message about something the user had already decided to do.
+//
+// The reason goes on the button, because "why is this greyed out" is a
+// question asked of the button.
+void gate(QAbstractButton *b, bool ok, const QString &why) {
+	if (!b)
+		return;
+	b->setEnabled(ok);
+	if (!ok)
+		b->setToolTip(why);
+}
+
+// Whether anything here can fetch this item, and why not when it cannot.
+//
+// **HLS is fetchable even when no download source will take it**: `save()`
+// routes it to the segment assembler instead, so asking the sources alone
+// would grey a row that works. That is the trap in gating on `accepts()` by
+// itself.
+bool can_fetch(const media_item &item, download_manager *dm, QString *why) {
+	if (item.kind == media_kind::hls)
+		return true;
+	if (!dm) {
+		*why = "Downloads are not available in this window.";
+		return false;
+	}
+	for (download_source *s : dm->sources()) {
+		QString w;
+		if (s->accepts(item.url, &w))
+			return true;
+		if (why->isEmpty() && !w.isEmpty())
+			*why = w;
+	}
+	if (why->isEmpty())
+		*why = "Nothing here knows how to fetch that address.";
+	return false;
+}
+
+// Whether a player can be handed this, and why not when it cannot.
+//
+// A player that does not take manifests is not a refusal: `watch()` assembles
+// an HLS stream into a progressive file first. What stops Watch entirely is
+// having no player at all.
+bool can_watch(const media_item &item, player_launcher *pl, QString *why) {
+	if (!pl) {
+		*why = "No player is configured in this window.";
+		return false;
+	}
+	if (item.kind == media_kind::hls && !pl->selected_handles_streams())
+		return true;
+	if (pl->installed().isEmpty() && pl->custom_command().trimmed().isEmpty()) {
+		*why = "No media player was found. Install one, or set a command in Settings.";
+		return false;
+	}
+	return true;
+}
+
+}  // namespace
+
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
@@ -98,6 +165,17 @@ void media_dialog::repopulate() {
 		auto *save    = new QPushButton("⬇ Download", cell);
 		layout->addWidget(watch);
 		layout->addWidget(save);
+		QString why_watch, why_save;
+		gate(watch, can_watch(item, m_players, &why_watch), why_watch);
+		gate(save,  can_fetch(item, m_downloads, &why_save), why_save);
+		// A player that will take it but warn about it stays enabled: a warning
+		// is advice, not a refusal, and greying on one would hide a stream that
+		// plays perfectly well.
+		if (watch->isEnabled() && m_players) {
+			const QString warn = m_players->warning_for(item);
+			if (!warn.isEmpty())
+				watch->setToolTip(warn);
+		}
 		connect(watch, &QPushButton::clicked, this, [this, item] { this->watch(item); });
 		connect(save,  &QPushButton::clicked, this, [this, item] { this->save(item); });
 		m_list->setItemWidget(row, 3, cell);
@@ -175,8 +253,30 @@ void media_dialog::assemble_then(const media_item &item, bool play_it) {
 	if (!m_assembler)
 		m_assembler = new hls_assembler(this);
 
+	// **`Qt::UniqueConnection` does nothing for the lambdas below**, and the
+	// three connections here relied on it. The flag deduplicates connections to
+	// *member functions*; a functor is a fresh object every time, so nothing
+	// matches and every press added another full set of handlers to the one
+	// assembler this dialog keeps.
+	//
+	// The second Watch therefore ran the progress handler twice and launched
+	// two players; the third launched three. Download drove one output path
+	// from several assemblies at once. It got worse the more it was used and
+	// differed every time, which is what "many bugs in watch/download" looks
+	// like from outside.
+	//
+	// Each press replaces the handlers rather than joining them: the captures
+	// below differ per press -- the output path and whether to play -- so
+	// connecting once up front is not available either.
+	m_assembler->disconnect(this);
+
 	const QString out = play_it
-	  ? m_scratch.filePath("stream.ts")
+	  // **A name of its own, not a shared one.** This was `stream.ts` for every
+	  // assembly, and `hls_assembler::start` opens the output with Truncate --
+	  // so watching a second stream cut the file the first player still had
+	  // open, and then wrote over it. The player does not notice; it simply
+	  // stops making sense.
+	  ? m_scratch.filePath(QString("stream-%1.ts").arg(++m_stream_seq))
 	  : QDir(m_downloads->directory()).filePath(
 	        item.label.section('/', -1).section('.', 0, 0) + ".ts");
 
@@ -193,16 +293,16 @@ void media_dialog::assemble_then(const media_item &item, bool play_it) {
 			if (!m_players->play(item, &error, via))
 				m_status->setText("<b>" + error.toHtmlEscaped() + "</b>");
 		}
-	}, Qt::UniqueConnection);
+	});
 
 	connect(m_assembler, &hls_assembler::completed, this, [this, out, play_it] {
 		m_status->setText(play_it ? "Stream assembled; playback continues locally."
 		                          : QString("Saved assembled stream to %1.").arg(out));
-	}, Qt::UniqueConnection);
+	});
 
 	connect(m_assembler, &hls_assembler::failed, this, [this](const QString &e) {
 		m_status->setText("<b>Assembly failed:</b> " + e.toHtmlEscaped());
-	}, Qt::UniqueConnection);
+	});
 
 	m_status->setText("Fetching manifest…");
 	m_assembler->start(item.url, m_ctx, out);

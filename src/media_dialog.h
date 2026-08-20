@@ -55,6 +55,9 @@ private:
 	stream_context    m_ctx;
 	hls_assembler    *m_assembler = nullptr;
 	QTemporaryDir     m_scratch;
+	// One name per assembly. A fixed one meant watching a second stream
+	// truncated the file the first player was still reading.
+	int               m_stream_seq = 0;
 	QString m_site;
 	QString m_node_id;
 

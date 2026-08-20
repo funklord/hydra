@@ -57,6 +57,12 @@ signals:
 private:
 	void fetch_manifest(const QUrl &url);
 	void next_segment();
+
+	// Attempts per segment, and the step between them. Three is enough for the
+	// blip this exists for and small enough that a segment which will never
+	// arrive fails in about two seconds rather than hanging the assembly.
+	static constexpr int k_segment_attempts = 3;
+	static constexpr int k_retry_ms         = 400;
 	QNetworkReply *get(const QUrl &url, const QByteArray &range = QByteArray());
 
 	QNetworkAccessManager *m_net = nullptr;
@@ -70,5 +76,10 @@ private:
 	int     m_index    = 0;
 	bool    m_finished = false;
 	bool    m_stopped  = false;
+	// Attempts spent on the segment currently being fetched. A single failure
+	// used to end the whole assembly, which over a real CDN and hundreds of
+	// segments meant one transient error threw away everything already
+	// downloaded.
+	int     m_attempt  = 0;
 	int     m_redirects = 0;   // master -> media playlist hops
 };
