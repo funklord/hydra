@@ -260,14 +260,21 @@ bool kiosk_controller::eventFilter(QObject *obj, QEvent *e) {
 		case QEvent::Resize:
 			relayout();
 			break;
-		case QEvent::KeyPress:
-			if (m_config.allow_escape &&
-			    static_cast<QKeyEvent *>(e)->key() == Qt::Key_Escape) {
+		case QEvent::KeyPress: {
+			// **F11 as well as Esc, because the stage is a window of its own.**
+			// F11 is the shell's action and the shell is hidden while this is
+			// up, so the key it is bound to reaches nothing at all -- the way
+			// in stopped being the way out. Handled here, where the key
+			// actually arrives.
+			const int k = static_cast<QKeyEvent *>(e)->key();
+			const bool leaving = k == Qt::Key_Escape || k == Qt::Key_F11;
+			if (m_config.allow_escape && leaving) {
 				exit();
 				return true;
 			}
 			reset_idle_timer();
 			break;
+		}
 		case QEvent::MouseMove:
 		case QEvent::MouseButtonPress:
 			reset_idle_timer();

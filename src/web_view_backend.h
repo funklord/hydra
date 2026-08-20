@@ -56,6 +56,15 @@ public:
 	// actually running.
 	virtual void stop() {}
 
+	// Leave fullscreen, when the shell is what ended it.
+	//
+	// **Both directions are needed or the two disagree.** The page asks to go
+	// fullscreen and the shell presents it; but the shell can also come back on
+	// its own -- Esc, or the presentation closing -- and a page never told that
+	// still believes it is fullscreen, so its own control does nothing and the
+	// video stays at the size it chose for a screen it no longer has.
+	virtual void exit_fullscreen() {}
+
 	// Put the page on paper, running whatever flow the platform provides.
 	//
 	// **The backend owns the whole flow, dialog included**, which is the one
@@ -275,6 +284,18 @@ signals:
 	// The engine's render process died. Kiosk mode's watchdog reloads on this
 	// so an unattended screen self-heals (architecture doc sec 8.3).
 	void render_process_gone();
+
+	// The page asked to fill the screen, or to stop. **Nothing handled this at
+	// all**, and an unhandled fullscreen request is not a refusal the page can
+	// see: `requestFullscreen()` is rejected by the engine before the shell is
+	// consulted, so a site's own fullscreen button did nothing whatsoever and
+	// said nothing about why. That is the worst of the three outcomes
+	// available, and it is the one this seam already records for window
+	// requests.
+	//
+	// `on` is false when the page is asking to come back, which it does for
+	// its own Esc handling and when a video ends.
+	void fullscreen_requested(bool on);
 
 	// A print run ended, and whether paper came out of it. Emitted for a
 	// cancelled dialog as well as a failed spool, because from the shell's side

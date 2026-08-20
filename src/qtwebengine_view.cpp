@@ -8,6 +8,7 @@
 #include <QWebEnginePermission>
 #include <QWebEngineProfile>
 #include <QWebEngineFindTextResult>
+#include <QWebEngineFullScreenRequest>
 #include <QAuthenticator>
 #include <QWebEngineCertificateError>
 #include <QWebEngineClientCertificateSelection>
@@ -190,6 +191,22 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	// `openIn` is deliberately not called -- taking the url and opening it
 	// ourselves drops the opener relationship, which a page can otherwise use
 	// to reach back into the window that spawned it.
+	// **Accepted here, presented by the shell.** The request must be answered
+	// synchronously -- Chromium is waiting on it and a reply that arrives later
+	// answers a request already abandoned, the same shape as the permission and
+	// authentication deciders above. So accept it, then tell the shell which
+	// way it went and let it decide what fullscreen looks like.
+	//
+	// Accepting is not the same as presenting: if the shell does nothing, the
+	// page believes it is fullscreen and lays itself out for a viewport that
+	// never changed. That is the shell's half of the contract.
+	connect(m_page, &QWebEnginePage::fullScreenRequested, this,
+	         [this](QWebEngineFullScreenRequest request) {
+		const bool on = request.toggleOn();
+		request.accept();
+		emit fullscreen_requested(on);
+	});
+
 	connect(m_page, &QWebEnginePage::newWindowRequested, this,
 	         [this](QWebEngineNewWindowRequest &request) {
 		emit new_window_requested(request.requestedUrl(), request.isUserInitiated());
@@ -340,6 +357,14 @@ void qtwebengine_view::apply_settings(const view_settings &s) {
 	set->setAttribute(QWebEngineSettings::PlaybackRequiresUserGesture, !s.autoplay);
 	set->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows, s.popups);
 	set->setAttribute(QWebEngineSettings::ShowScrollBars, s.scrollbars);
+	// **Not a per-page policy, so it is set here rather than plumbed through
+	// view_settings.** Qt defaults this off, and with it off the engine refuses
+	// `requestFullscreen()` before the shell is ever asked -- which is why a
+	// site's own fullscreen button did nothing at all, on every page, with no
+	// error anywhere. Whether the shell then *grants* a request is the shell's
+	// decision and is made on the signal below; this only makes the request
+	// reach it.
+	set->setAttribute(QWebEngineSettings::FullScreenSupportEnabled, true);
 }
 
 void qtwebengine_view::set_permission_decider(permission_decider fn) {
@@ -456,6 +481,14 @@ double qtwebengine_view::zoom_factor() const {
 void qtwebengine_view::stop() {
 	if (m_view)
 		m_view->stop();
+}
+
+// Tell the engine the page is no longer fullscreen. `ExitFullScreen` is the
+// action Chromium fires for its own Esc handling, so the page sees exactly what
+// it would have seen had the user pressed Esc inside it.
+void qtwebengine_view::exit_fullscreen() {
+	if (m_page)
+		m_page->triggerAction(QWebEnginePage::ExitFullScreen);
 }
 
 bool qtwebengine_view::can_print() const {

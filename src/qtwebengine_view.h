@@ -26,6 +26,7 @@ public:
 	void forward() override;
 	void reload() override;
 	void stop() override;
+	void exit_fullscreen() override;
 	void print() override;
 	bool can_print() const override;
 	void apply_settings(const view_settings &s) override;

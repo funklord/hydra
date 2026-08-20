@@ -201,6 +201,7 @@ public:
 	// engine, since the decision is the part worth checking.
 	node *open_new_window(const QUrl &url, bool user_initiated);
 	void view_page_source();
+	void present_fullscreen(web_view_backend *view, bool on);
 	node *open_child_tab(node *parent, const QUrl &url);
 	void  toggle_lock(node *n);
 	bool  allow_navigation(web_view_backend *view, const QUrl &url,
@@ -333,6 +334,8 @@ private:
 	QAction            *m_reload_action = nullptr;
 	QAction            *m_print_action  = nullptr;
 	QAction            *m_source_action = nullptr;
+	bool                m_page_fullscreen = false;
+	web_view_backend   *m_kiosk_view      = nullptr;
 	QAction            *m_key_action    = nullptr;
 	session_mirror     *m_fx_mirror     = nullptr;
 	session_mirror     *m_cr_mirror     = nullptr;

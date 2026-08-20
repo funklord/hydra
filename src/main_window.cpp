@@ -1125,17 +1125,87 @@ QMenuBar *main_window::build_menu_bar() {
 	return menu;
 }
 
+// A page asking to fill the screen, granted through the same stage kiosk mode
+// uses. One mechanism rather than two: the stage already reparents a view into
+// a frameless fullscreen top-level and puts it back afterwards, and a second
+// way of doing that would be a second set of bugs.
+//
+// **The preset is not the kiosk one, though.** Kiosk is a presentation *policy*
+// -- it can reload on an idle timer and on a dead renderer, both aimed at an
+// unattended screen. Applied to somebody watching a video those are wrong in
+// the same way: the page reloads underneath them and playback restarts. So the
+// config here is the saved one with exactly those two disabled, and the home
+// set to the page being watched rather than a kiosk target.
+void main_window::present_fullscreen(web_view_backend *view, bool on) {
+	if (!view)
+		return;
+	if (!on) {
+		// **Keyed on which view the stage holds, never on `current_view()`.**
+		// Entering removes the view from the stack, so while the stage is up
+		// `current_view()` does not return it -- and the first version tested
+		// exactly that, so a page asking to leave fullscreen was not recognised
+		// as the presenting one and the stage stayed up. With F11 bound to a
+		// window that is hidden, that left no way out at all.
+		if (m_kiosk && m_kiosk->active() && m_kiosk->view() == view)
+			toggle_kiosk();          // shares the `left` handler, so one path back
+		return;
+	}
+	if (view != current_view())
+		return;                       // only the visible tab may take the screen
+	if (m_kiosk && m_kiosk->active())
+		return;                       // already presenting; nothing to change
+
+	m_page_fullscreen = true;
+	toggle_kiosk();
+	if (!m_kiosk || !m_kiosk->active()) {
+		// Presentation refused. Tell the page rather than leaving it laid out
+		// for a screen it never got.
+		m_page_fullscreen = false;
+		view->exit_fullscreen();
+	}
+}
+
 void main_window::toggle_kiosk() {
 	if (!m_kiosk) {
 		m_kiosk = new kiosk_controller(this);
 		// Coming back from kiosk: put the view on screen again and resync the
 		// menu check, which also covers Esc exiting without going through here.
 		connect(m_kiosk, &kiosk_controller::left, this, [this] {
-			if (web_view_backend *v = m_kiosk->view())
-				m_stack->addWidget(v->widget());
+			// **Not `m_kiosk->view()`, which is already null here.** `exit()`
+			// clears its view before emitting this, so asking the controller
+			// what came back always answered nothing and the whole restore
+			// below was skipped: the widget never became a stack page again,
+			// and the page was never told its fullscreen had ended. That is
+			// the shape of all three symptoms -- a view the stack cannot find
+			// so the shown tab and the selected row disagree, a page still
+			// laid out for a screen it no longer has, and `requestFullscreen`
+			// doing nothing because the page thinks it is already there.
+			//
+			// So the shell remembers what it handed over. It is the only side
+			// that still knows.
+			web_view_backend *back = m_kiosk_view;
+			m_kiosk_view = nullptr;
+			if (back) {
+				// **addWidget, not the setParent() `exit()` already did.**
+				// Re-parenting to a QStackedWidget makes a widget its child
+				// and not one of its pages, so `currentWidget()` can never
+				// return it and `current_view()` cannot see it.
+				m_stack->addWidget(back->widget());
+				// Esc, or anything else that ended the presentation. A page
+				// that asked for fullscreen and was never told it ended keeps
+				// its fullscreen layout and its own control stops working.
+				if (m_page_fullscreen)
+					back->exit_fullscreen();
+			}
+			m_page_fullscreen = false;
 			m_kiosk_action->setChecked(false);
 			show();
-			if (web_view_backend *v = current_view())
+			// The view that came back, not `current_view()` -- that reads the
+			// stack's current widget, so asking it here sets the current widget
+			// to itself and changes nothing.
+			if (back)
+				m_stack->setCurrentWidget(back->widget());
+			else if (web_view_backend *v = current_view())
 				m_stack->setCurrentWidget(v->widget());
 			sync_page_context();
 	update_navigation();
@@ -1158,6 +1228,17 @@ void main_window::toggle_kiosk() {
 	// Saved settings, not the controller's compiled-in defaults: this is the
 	// whole difference between the kiosk page existing and mattering.
 	kiosk_config c = settings_store::kiosk();
+	if (m_page_fullscreen) {
+		// **A page may not borrow the lockdown.** `allow_escape=false` is a
+		// deliberate choice for an unattended screen somebody set up; applied
+		// to a website that asked for the screen it means the site decides you
+		// cannot leave, which is not a thing a page is allowed to decide. The
+		// two reloads are off for the same reason as below -- a video should
+		// not restart underneath whoever is watching it.
+		c.allow_escape = true;
+		c.watchdog = false;
+		c.idle_reset_seconds = 0;
+	}
 	// A configured home wins, because someone who set one meant it for exactly
 	// this. With none, the tab you were on is the sensible thing to show and is
 	// what it has always done.
@@ -1166,6 +1247,7 @@ void main_window::toggle_kiosk() {
 	m_kiosk->set_config(c);
 
 	m_stack->removeWidget(v->widget());   // the controller takes it from here
+	m_kiosk_view = v;                      // the only record of what to restore
 	if (m_kiosk->enter(v, m_stack)) {
 		m_kiosk_action->setChecked(true);
 		hide();                            // the stage is its own fullscreen window
@@ -1813,6 +1895,8 @@ void main_window::open_node(node *n) {
 		// print survives navigating away or switching tabs, and the outcome is
 		// the one thing about printing the window cannot otherwise show -- a
 		// job that failed after the user moved on would report nothing at all.
+		connect(view, &web_view_backend::fullscreen_requested, this,
+		         [this, view](bool on) { present_fullscreen(view, on); });
 		connect(view, &web_view_backend::print_finished, this, [this](bool ok) {
 			m_status->showMessage(ok ? "Printed." : "Nothing was printed.", 5000);
 		});
