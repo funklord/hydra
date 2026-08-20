@@ -480,7 +480,13 @@ bool tab_tree_model::dropMimeData(const QMimeData *data, Qt::DropAction action,
 node *tab_tree_model::add_folder(node *parent, const QString &title) {
 	if (!parent)
 		parent = m_root;
-	beginResetModel();
+	// **An insertion, not a reset.** A reset invalidates every index the view
+	// holds and it rebuilds from nothing, so adding one row shut every open row
+	// in the tree; what put them back afterwards only knew about folders. Both
+	// halves are fixed, and this is the half that means there is nothing to put
+	// back.
+	const int at = int(parent->children.size());
+	beginInsertRows(index_for_node(parent), at, at);
 	node *f = new node;
 	f->id      = unused_id("f");
 	f->type    = node_type::folder;
@@ -491,7 +497,7 @@ node *tab_tree_model::add_folder(node *parent, const QString &title) {
 	parent->children << f;
 	renumber(parent);
 	reindex();
-	endResetModel();
+	endInsertRows();
 	emit structure_changed();
 	return f;
 }
@@ -505,7 +511,8 @@ node *tab_tree_model::add_tab(node *parent, const QString &title,
 	// one. Sub-tabs (sec 5.5) give it a meaning, and the redirect would now
 	// silently put a sub-tab somewhere other than under the tab that spawned
 	// it -- which is the whole relationship the feature exists to record.
-	beginResetModel();
+	const int at = int(parent->children.size());
+	beginInsertRows(index_for_node(parent), at, at);
 	node *t = new node;
 	t->id        = unused_id("t");
 	t->type      = node_type::unopened_tab;
@@ -517,7 +524,7 @@ node *tab_tree_model::add_tab(node *parent, const QString &title,
 	parent->children << t;
 	renumber(parent);
 	reindex();
-	endResetModel();
+	endInsertRows();
 	emit structure_changed();
 	return t;
 }
@@ -532,9 +539,19 @@ bool tab_tree_model::remove_node(node *n) {
 	// map under an id nothing could resolve any more -- which leaked the view
 	// and, worse, stopped the live-view cap being enforced at all, because the
 	// cap gives up when it cannot resolve its chosen victim.
-	emit about_to_remove(n);
-	beginResetModel();
 	node *parent = n->parent;
+	const int row = parent->children.indexOf(n);
+	if (row < 0)
+		return false;
+
+	emit about_to_remove(n);
+	// **A removal, not a reset.** `beginResetModel` invalidates every index the
+	// view holds, and a QTreeView rebuilding from nothing has no expansion
+	// state left to restore -- so deleting one sub-tab folded its parent, and
+	// in fact folded the whole tree. Nothing here saves and restores that,
+	// because with a targeted removal there is nothing to save: every row the
+	// view keeps is still the row it was.
+	beginRemoveRows(index_for_node(parent), row, row);
 	parent->children.removeOne(n);
 	// Deletes the whole subtree through node's destructor, which is what the
 	// gesture means -- deleting a folder in a file manager takes what is in it.
@@ -542,7 +559,7 @@ bool tab_tree_model::remove_node(node *n) {
 	delete n;
 	renumber(parent);
 	reindex();
-	endResetModel();
+	endRemoveRows();
 	emit structure_changed();
 	return true;
 }
@@ -619,16 +636,21 @@ bool tab_tree_model::set_page_title(node *n, const QString &title) {
 node *tab_tree_model::duplicate_node(node *n) {
 	if (!n || !n->parent)
 		return nullptr;
-	beginResetModel();
+	// Directly below the row it copies, which is where the gesture puts it --
+	// and an insertion rather than a reset, so the rest of the tree keeps the
+	// rows it had open.
+	node *parent = n->parent;
+	const int at = parent->children.indexOf(n) + 1;
+	beginInsertRows(index_for_node(parent), at, at);
 	node *c = deep_copy(n, this, [this](const QString &like) {
 		return unused_id(like);
 	});
-	c->parent = n->parent;
-	n->parent->children.insert(n->parent->children.indexOf(n) + 1, c);
-	for (int i = 0; i < n->parent->children.size(); ++i)
-		n->parent->children[i]->order = i;
+	c->parent = parent;
+	parent->children.insert(at, c);
+	for (int i = 0; i < parent->children.size(); ++i)
+		parent->children[i]->order = i;
 	reindex();
-	endResetModel();
+	endInsertRows();
 	emit structure_changed();
 	return c;
 }

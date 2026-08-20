@@ -137,8 +137,16 @@ void tab_tree_view::update_empty_state() {
 	m_empty->raise();
 }
 
-// Walks the source tree and records the id of every folder the view has open,
-// plus whatever was current, so the selection does not jump to the top either.
+// Walks the source tree and records the id of every row the view has open, plus
+// whatever was current, so the selection does not jump to the top either.
+//
+// **Every row, not every folder**, and the difference is a reported bug. This
+// filtered on `is_folder()`, written when only a folder could hold children --
+// sub-tabs (arch sec 5.5) made a tab a parent too, and this was never revisited.
+// So a tab opened to show its sub-tabs was never recorded, and any rebuild of
+// the model shut it: deleting one sub-tab folded the parent it was under, which
+// is where this was found. `isExpanded` is already false for a row with no
+// children, so asking about folders bought nothing even before that.
 void tab_tree_view::remember_open_folders() {
 	m_open_ids.clear();
 	m_current_id.clear();
@@ -156,7 +164,7 @@ void tab_tree_view::remember_open_folders() {
 		node *n = stack.takeLast();
 		if (!n)
 			continue;
-		if (n->is_folder() && isExpanded(view_index(n)))
+		if (isExpanded(view_index(n)))
 			m_open_ids << n->id;
 		for (node *c : n->children)
 			stack << c;
