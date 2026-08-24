@@ -500,7 +500,7 @@ clean:
 #   while the prose beside them stayed true. Nothing compiles a table of
 #   filenames, so nothing else can notice.
 style-docs:
-	python3 tools/style_gate.py doc
+	python3 tools/style_gate.py docs
 	@# The shared gate checks backticked paths in table rows, which covers
 	@# most of what this target used to do by hand, and checks repeated
 	@# headings at every level rather than just `###`. What it cannot read is
