@@ -2,9 +2,9 @@
 
 Two kinds live here.
 
-- **`tests/*.cpp`** — offline suites. Deterministic, no display needed. These
+- **`test/*.cpp`** — offline suites. Deterministic, no display needed. These
   are the ones to run routinely.
-- **`tests/live/try_*.cpp`** — live drivers. They build the *whole shell* and
+- **`test/live/try_*.cpp`** — live drivers. They build the *whole shell* and
   drive it on a real X display, which is how several defects in this project
   were found that no offline test could see. Expensive to build; see the
   warning below.
@@ -18,7 +18,7 @@ not reference it. Building the app never builds the tests.
 WebEngine; there are **21** of them, and unbounded parallelism on a many-core
 machine will try to hold well over 20 GB. (Both numbers said something smaller
 for a long time, because nothing counts them — `ls src/*.cpp | wc -l` and
-`ls tests/live/try_*.cpp | wc -l` do.)
+`ls test/live/try_*.cpp | wc -l` do.)
 That has taken a desktop session down on this machine — twice — and it is worse
 if a local model is loaded at the same time, because a 14B model holds ~10 GB
 before the compiler starts.
@@ -85,7 +85,7 @@ helper server or a model is listed rather than quietly skipped. It sets
 own, which are the two things easy to forget by hand. Driven directly it is:
 
 ```sh
-QT_QPA_PLATFORM=offscreen ./tests/build/test_seam
+QT_QPA_PLATFORM=offscreen ./test/build/test_seam
 ```
 
 ### Need a helper server
@@ -94,8 +94,8 @@ Start the helper, run the suite, stop the helper.
 
 | suite | helper |
 |---|---|
-| `test_headers` | `python3 tests/echohdr.py 8850` — reports the headers it received |
-| `test_dlheaders` | `python3 tests/echodl.py 8851` — same, but as the response *body*, so a completed download is the record of what arrived |
+| `test_headers` | `python3 test/echohdr.py 8850` — reports the headers it received |
+| `test_dlheaders` | `python3 test/echodl.py 8851` — same, but as the response *body*, so a completed download is the record of what arrived |
 | `test_helpers_live` | the helper tier against a real CDN, with a hand-written extractor so a failure is the tier's and not a prompt's — takes a fresh capture from `try_extract` |
 | `test_probe`, `test_probe_ui` | a stub Ollama on 8811, plus a "blackhole" listener that accepts and never answers, for the timeout tests |
 
@@ -112,7 +112,7 @@ printf 'hydratest\ns3cr3t-from-vault\n' | keepassxc-cli add $KP/test.kdbx \
 printf '[Browser]\nEnabled=true\nAlwaysAllowAccess=true\n' > $KP/keepassxc.ini
 printf 'hydratest\n' | keepassxc --config $KP/keepassxc.ini \
     --localconfig $KP/local.ini --pw-stdin $KP/test.kdbx &
-./tests/build/try_keepass
+./test/build/try_keepass
 ```
 
 **Check the database actually opened.** `--pw-stdin` is taken from standard
@@ -132,7 +132,7 @@ KeePassXC asks a human whether this program may read the vault, and a browser
 that could answer that for itself would be the bug. For the rest:
 
 ```sh
-HYDRA_KEEPASS_INTERACTIVE=1 ./tests/build/try_keepass   # then accept the dialog
+HYDRA_KEEPASS_INTERACTIVE=1 ./test/build/try_keepass   # then accept the dialog
 ```
 
 **Start this only when you are at the machine.** It waits three minutes for the
@@ -183,7 +183,7 @@ do the same.
 submodule). `test_live_model` needs Ollama serving; pass the model name:
 
 ```sh
-QT_QPA_PLATFORM=offscreen ./tests/build/test_live_model qwen2.5-coder:14b
+QT_QPA_PLATFORM=offscreen ./test/build/test_live_model qwen2.5-coder:14b
 ```
 
 With a second argument it replays evidence captured from a real page by
@@ -192,9 +192,9 @@ measure anything that transfers, since the two disagree (real segments arrive
 disguised as `.woff2` web fonts, the synthetic ones as `.ts`):
 
 ```sh
-DISPLAY=:0 ./tests/build/try_extract https://site/watch/thing/ 60 /tmp/ev.json
+DISPLAY=:0 ./test/build/try_extract https://site/watch/thing/ 60 /tmp/ev.json
 HYDRA_MODEL_TIMEOUT_MS=900000 QT_QPA_PLATFORM=offscreen \
-    ./tests/build/test_live_model qwen2.5-coder:14b /tmp/ev.json
+    ./test/build/test_live_model qwen2.5-coder:14b /tmp/ev.json
 ```
 
 ## Drivers are silent and offscreen
@@ -225,7 +225,7 @@ generator (`tree_gen.h`), parameterised on node count, folder width and nesting
 depth. Modest sizes run as part of `make test`; the rest are opt-in:
 
 ```sh
-HYDRA_SCALE_EXTREME=1 ./tests/build/test_tree_scale
+HYDRA_SCALE_EXTREME=1 ./test/build/test_tree_scale
 ```
 
 It **caps its own address space** at 2 GB with `setrlimit`, so a shape that
@@ -262,7 +262,7 @@ reply failing and a wrong pick passing, one error cancelling the other.
 new prompt would produce different ones. That needs the model, and
 
 ```sh
-tests/live/measure.sh evidence/kisskh-2026-08-03.json kisskh-new 5
+test/live/measure.sh evidence/kisskh-2026-08-03.json kisskh-new 5
 ```
 
 runs it at `nice 19` with idle IO — renicing the Ollama server too, since that
@@ -328,7 +328,7 @@ For those, pass a CSS selector as the fourth argument and the driver clicks it
 before hunting for the player, which is how a user reaches it too:
 
 ```sh
-DISPLAY=:0 ./tests/build/try_extract https://site/watch/thing/ 80 /tmp/ev.json \
+DISPLAY=:0 ./test/build/try_extract https://site/watch/thing/ 80 /tmp/ev.json \
     'ul.mirror li:nth-child(2) a'
 ```
 
@@ -409,7 +409,7 @@ process and serves the page from `127.0.0.1` and a third-party image from
 prints pass/fail and returns non-zero on failure, so it can be run like a suite:
 
 ```sh
-DISPLAY=:0 ./tests/build/try_cookies
+DISPLAY=:0 ./test/build/try_cookies
 ```
 
 It runs the same three cases twice, over plain HTTP and over TLS, and only the

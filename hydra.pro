@@ -89,7 +89,7 @@ android {
 # stop mattering; a hand-written list would have inherited the omission and
 # failed at link with an undefined vtable.
 
-RESOURCES = icons/hydra.qrc hydra_seed.qrc
+RESOURCES = icon/hydra.qrc hydra_seed.qrc
 
 # The desktop's colour scheme comes over the XDG portal, which is DBus.
 # Optional on purpose: it is how *Linux* answers, and every other platform has

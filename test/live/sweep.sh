@@ -1,9 +1,9 @@
 #!/bin/bash
 # Run every live driver and say what happened. Needs a display.
 #
-#   tests/live/sweep.sh                       # all of them, offscreen
-#   tests/live/sweep.sh try_import            # just these
-#   SWEEP_ONSCREEN=1 tests/live/sweep.sh      # on the real display instead
+#   test/live/sweep.sh                       # all of them, offscreen
+#   test/live/sweep.sh try_import            # just these
+#   SWEEP_ONSCREEN=1 test/live/sweep.sh      # on the real display instead
 #
 # **Offscreen by default, and that is not only politeness.** These drivers put
 # real windows on a real screen, and a sweep of twenty-seven of them takes over
@@ -41,13 +41,13 @@ cd "$(dirname "$0")/../.." || exit 1
 # survives; the app does the same thing in theme.cpp for the colour scheme.
 export QTWEBENGINE_CHROMIUM_FLAGS="${QTWEBENGINE_CHROMIUM_FLAGS:+$QTWEBENGINE_CHROMIUM_FLAGS }--mute-audio"
 # **Where the drivers are, which moved with the build system.** This said
-# `tests/build` -- CMake's directory, and CMake is gone. The directory it named
+# `test/build` -- CMake's directory, and CMake is gone. The directory it named
 # survived on disk with two binaries in it from before the migration, so the
 # sweep did not fail: it found drivers, ran them, and reported a clean sweep of
 # two out of thirty-five, every one built before a session's worth of changes.
 #
 # Overridable, because a second build tree is a real thing to want.
-BIN=${HYDRA_SWEEP_BIN:-tests/build-make}
+BIN=${HYDRA_SWEEP_BIN:-test/build-make}
 OUT=${HYDRA_SWEEP_OUT:-/tmp/hydra-sweep}
 mkdir -p "$OUT"
 
@@ -80,7 +80,7 @@ fi
 if [ -z "${*:-}" ]; then
 	have=$(printf '%s
 ' $drivers | grep -c .)
-	want=$(ls tests/live/try_*.cpp 2>/dev/null | grep -c .)
+	want=$(ls test/live/try_*.cpp 2>/dev/null | grep -c .)
 	if [ "$want" -gt 0 ] && [ "$have" -lt $((want / 2)) ]; then
 		echo "only $have driver(s) built in $BIN, against $want source(s)."
 		echo "That is not a sweep -- build them with: make drivers"

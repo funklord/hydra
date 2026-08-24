@@ -13,9 +13,9 @@ share="${1:-$HOME/.local/share}"
 here="$(dirname "$0")/.."
 
 for size in 16 24 32 48 64 128 256; do
-	dir="$share/icons/hicolor/${size}x${size}/apps"
+	dir="$share/icon/hicolor/${size}x${size}/apps"
 	mkdir -p "$dir"
-	cp "$here/icons/hydra-$size.png" "$dir/hydra.png"
+	cp "$here/icon/hydra-$size.png" "$dir/hydra.png"
 done
 
 mkdir -p "$share/applications"
@@ -31,7 +31,7 @@ fi
 
 # Harmless if absent; without it a running desktop may not notice the new icon.
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-	gtk-update-icon-cache -q -t -f "$share/icons/hicolor" 2>/dev/null || true
+	gtk-update-icon-cache -q -t -f "$share/icon/hicolor" 2>/dev/null || true
 fi
 if command -v update-desktop-database >/dev/null 2>&1; then
 	update-desktop-database -q "$share/applications" 2>/dev/null || true

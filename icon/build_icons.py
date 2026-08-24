@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the icon set from the master artwork.
 
-    python3 icons/build_icons.py
+    python3 icon/build_icons.py
 
 One drawing, downscaled, with the small sizes retouched afterwards.
 

@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
 	// captured evidence is any use -- so pass a url to try it where there is
 	// something to catch:
 	//
-	//     QT_QPA_PLATFORM=offscreen ./tests/build/try_annoyed https://news.site/
+	//     QT_QPA_PLATFORM=offscreen ./test/build/try_annoyed https://news.site/
 	const QString target = argc > 1 ? QString::fromLocal8Bit(argv[1])
 	                                 : QStringLiteral("https://example.com/");
 	const QString target_host = QUrl(target).host();

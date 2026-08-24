@@ -14,7 +14,7 @@
 #   migration this header used to describe as deliberately open is closed:
 #
 #     * **qmake, driven from here** (`hydra.pro`) builds the app and the APK.
-#     * **plain Make** (`tests/Makefile`) builds the test tree.
+#     * **plain Make** (`test/Makefile`) builds the test tree.
 #     * **fmake** builds the same sources from no build file at all, as a
 #       cross-check and a second opinion. What it has to be told is six
 #       annotations in the sources -- `@target` and five `@pkg_optional` --
@@ -23,7 +23,7 @@
 #   The four problems a migration had to solve, and what solved them:
 #
 #     * **72 executables**, globbed rather than listed, so adding a suite or a
-#       driver is no build-system work. `tests/Makefile` globs `test_*.cpp`
+#       driver is no build-system work. `test/Makefile` globs `test_*.cpp`
 #       and `live/try_*.cpp` and needs no configure step to notice a new one.
 #     * **The library that is two libraries.** rasterbar's and rakshasa's
 #       unrelated torrent libraries both install a pkg-config file called
@@ -49,7 +49,7 @@
 #                        running the browser never dirties a tracked file
 #   make test         -- build and run every suite that needs nothing but a
 #                        build; the ones needing a helper, a torrent library
-#                        or a model are listed but not run (see tests/README.md)
+#                        or a model are listed but not run (see test/README.md)
 #   make test-one T=x -- build and run a single suite, e.g. T=test_theme
 #   make drivers      -- build the live drivers (expensive; see JOBS below)
 #   make sweep        -- build them and run them all, with a summary (offscreen;
@@ -129,7 +129,7 @@ JOBS ?= 2
 
 TARGET     = hydra
 BUILD_DIR  ?= build
-TESTS_DIR  ?= tests/build-make
+TESTS_DIR  ?= test/build-make
 TREE       ?= sample-tree.txt
 
 PREFIX ?= $(HOME)/.local
@@ -189,15 +189,15 @@ endif
 # list, so a new test_*.cpp is picked up without editing this file -- the same
 # property the live-driver glob has. It used to be the argument for keeping
 # CMake, which globbed while the hand-written half of the source list did not;
-# it survived dropping CMake instead, since `tests/Makefile` globs `test_*.cpp`
+# it survived dropping CMake instead, since `test/Makefile` globs `test_*.cpp`
 # and fmake wants no source list at all.
-# The excluded ones each need something the machine may not have; tests/README.md
+# The excluded ones each need something the machine may not have; test/README.md
 # says which, and they are named at the end of a run rather than silently
 # skipped.
 NEEDS_MORE = test_headers test_dlheaders test_helpers_live test_probe \
              test_probe_ui test_torrent test_watch test_live_model \
              test_ytdlp_live test_replay
-ALL_SUITES = $(basename $(notdir $(wildcard tests/test_*.cpp)))
+ALL_SUITES = $(basename $(notdir $(wildcard test/test_*.cpp)))
 SUITES     = $(filter-out $(NEEDS_MORE),$(ALL_SUITES))
 
 # Offscreen because none of these want a window, and a keyring item of their
@@ -261,12 +261,12 @@ run: all
 # Built one target at a time on purpose: naming them individually keeps the
 # live drivers out of it. `make drivers` is where that cost is opted into.
 #
-# `tests/Makefile` is the test tree's own build and needs no configure step,
+# `test/Makefile` is the test tree's own build and needs no configure step,
 # so there is nothing here standing in for a cache file. Its BUILD_DIR is
-# `build-make` relative to `tests/`, which is why the target named below is
-# spelled without the `tests/` that TESTS_DIR carries.
+# `build-make` relative to `test/`, which is why the target named below is
+# spelled without the `test/` that TESTS_DIR carries.
 test:
-	@for t in $(SUITES); do $(MAKE) --no-print-directory -C tests -j$(JOBS) \
+	@for t in $(SUITES); do $(MAKE) --no-print-directory -C test -j$(JOBS) \
 	   build-make/$$t >/dev/null || exit 1; done
 	@fail=0; for t in $(SUITES); do \
 	   out=$$($(TEST_ENV) ./$(TESTS_DIR)/$$t 2>&1); \
@@ -278,26 +278,26 @@ test:
 	 done; \
 	 echo; echo "not run here, each needs something this target does not provide:"; \
 	 echo "  $(NEEDS_MORE)"; \
-	 echo "  see tests/README.md for what each one wants"; \
+	 echo "  see test/README.md for what each one wants"; \
 	 exit $$fail
 
 test-one:
 	@test -n "$(T)" || { echo "usage: make test-one T=test_theme"; exit 2; }
-	@$(MAKE) --no-print-directory -C tests -j$(JOBS) build-make/$(T)
+	@$(MAKE) --no-print-directory -C test -j$(JOBS) build-make/$(T)
 	@$(TEST_ENV) ./$(TESTS_DIR)/$(T)
 
 # Separate from `test` because it is a different order of cost: each driver
 # compiles the whole app and links WebEngine, and they want a real display.
 drivers:
-	@$(MAKE) --no-print-directory -C tests -j$(JOBS) all
+	@$(MAKE) --no-print-directory -C test -j$(JOBS) all
 	@echo "live drivers built. Run them offscreen: QT_QPA_PLATFORM=offscreen ./$(TESTS_DIR)/try_cookies"
-	@echo "tests/README.md says which need a helper server, KeePassXC or a model."
+	@echo "test/README.md says which need a helper server, KeePassXC or a model."
 
 # Score the recorded model replies against the current gate. No model, no
 # network, milliseconds -- but it needs the corpus in evidence/replies, which is
 # not in git, so it cannot be part of `make test`.
 replay:
-	@$(MAKE) --no-print-directory -C tests -j$(JOBS) build-make/test_replay >/dev/null
+	@$(MAKE) --no-print-directory -C test -j$(JOBS) build-make/test_replay >/dev/null
 	@$(TEST_ENV) ./$(TESTS_DIR)/test_replay
 
 # Run them all and summarise. Offscreen by default, so it does not take over a
@@ -305,7 +305,7 @@ replay:
 # appearance rather than behaviour is the question.
 # Pass DRIVERS=... for a subset: make sweep DRIVERS="try_import try_delete".
 sweep: drivers
-	@tests/live/sweep.sh $(DRIVERS)
+	@test/live/sweep.sh $(DRIVERS)
 
 # --- Packaging -------------------------------------------------------------
 #
@@ -463,7 +463,7 @@ install: all
 uninstall:
 	@rm -f $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 	@rm -f $(DESTDIR)$(SHARE)/applications/hydra.desktop
-	@rm -f $(DESTDIR)$(SHARE)/icons/hicolor/*/apps/hydra.png
+	@rm -f $(DESTDIR)$(SHARE)/icon/hicolor/*/apps/hydra.png
 	@echo "removed $(TARGET), its desktop entry and its icons"
 
 # The build output only. `evidence/` is deliberately not touched: it is
@@ -500,7 +500,7 @@ clean:
 #   while the prose beside them stayed true. Nothing compiles a table of
 #   filenames, so nothing else can notice.
 style-docs:
-	python3 tools/style_gate.py docs
+	python3 tools/style_gate.py doc
 	@# The shared gate checks backticked paths in table rows, which covers
 	@# most of what this target used to do by hand, and checks repeated
 	@# headings at every level rather than just `###`. What it cannot read is

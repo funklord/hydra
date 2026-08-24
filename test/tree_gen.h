@@ -21,7 +21,7 @@
 // three shapes somebody thought of on the day. A future operation gets the same
 // coverage by being handed these, without anybody writing a fixture for it.
 //
-// Header-only and in `tests/` because it is test scaffolding: it builds
+// Header-only and in `test/` because it is test scaffolding: it builds
 // deliberately extreme trees, which is not something the application should
 // have a function for.
 namespace tree_gen {

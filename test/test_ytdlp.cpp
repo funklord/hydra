@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
 		// `yt_dlp/__main__.py` -- but from here rather than through the
 		// resolver, so the premise is established independently of the thing
 		// being tested. A couple of levels up, since a suite may be run from
-		// the repository root or from `tests/`.
+		// the repository root or from `test/`.
 		// Both roots the resolver searches from -- the binary's directory and
 		// the working directory -- because checking only one would call a copy
 		// absent that the resolver goes on to find, and then assert it was not

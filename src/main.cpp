@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
 	// gets the drawn 16, the alt-tab switcher gets 48, the about box gets 256.
 	QIcon icon;
 	for (int size : { 16, 24, 32, 48, 64, 128, 256 })
-		icon.addFile(QString(":/icons/hydra-%1.png").arg(size),
+		icon.addFile(QString(":/icon/hydra-%1.png").arg(size),
 		              QSize(size, size));
 	QApplication::setWindowIcon(icon);
 

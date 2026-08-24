@@ -8,7 +8,7 @@
 //
 // A fake backend is enough: kiosk only asks a view for its widget, its url, a
 // zoom factor and a settings application, so none of this needs a web engine --
-// which is why it is here rather than in `tests/live/`.
+// which is why it is here rather than in `test/live/`.
 #include "kiosk_controller.h"
 #include "web_view_backend.h"
 

@@ -19,7 +19,7 @@ static void check(bool ok, const QString &w) {
 static void note(const QString &w) { std::printf("     %s\n", qPrintable(w)); }
 static void section(const char *n) { std::printf("\n== %s ==\n", n); }
 
-// The generator is `tests/tree_gen.h`, shared with `test_tree_scale`.
+// The generator is `test/tree_gen.h`, shared with `test_tree_scale`.
 //
 // **It was written twice**, here and there, with the same three parameters,
 // the same node ids and the same docstring arguing for one generator rather

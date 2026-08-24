@@ -2,7 +2,7 @@
 
 Working notes and conventions for this repo: what exists, what is next, and the
 rules to follow while working in it. The full design lives in
-`docs/architecture.md` — read it before making changes; where this file and the
+`doc/architecture.md` — read it before making changes; where this file and the
 architecture doc disagree about intent, the architecture doc wins, and where
 they disagree about *current state*, this file wins.
 
@@ -14,12 +14,12 @@ own embedded Chromium, with a per-site security policy engine, and (planned)
 kiosk mode, AI tree-sorting + ad-filter evolution, a media detector with
 external-player handoff, and a KeePassXC-based password manager. **Android is a
 planned first-class target, deferred until desktop is complete** (see
-`docs/architecture.md` §19).
+`doc/architecture.md` §19).
 
 ## Resuming work here
 
-Read `docs/architecture.md` for what the design *intends*, this file for what
-currently *is*, and `tests/README.md` before running anything. Where the two
+Read `doc/architecture.md` for what the design *intends*, this file for what
+currently *is*, and `test/README.md` before running anything. Where the two
 docs disagree about intent the architecture doc wins; about current state, this
 file wins.
 
@@ -116,7 +116,7 @@ settled and one is not:
 
 Out-of-tree build dirs, screenshots and captured evidence are written to the
 session scratchpad, which is cleared when the session ends. `build/` and
-`tests/build/` are in-tree and do survive, so the desktop suite runs without a
+`test/build/` are in-tree and do survive, so the desktop suite runs without a
 rebuild; the Qt 6.11 and Android trees do not, and cost a full configure and
 build to recreate.
 
@@ -289,7 +289,7 @@ written in the same session.
 
 ### ⚠️ Do not build with unbounded `-j`
 
-The live drivers under `tests/live/` each compile ~40 app sources and link Qt
+The live drivers under `test/live/` each compile ~40 app sources and link Qt
 WebEngine, and there are a dozen of them. `make -j` with no number has
 exhausted memory and taken the desktop session down on this machine, twice
 — worst when a model is loaded, since a 14B holds ~10 GB before the compiler
@@ -383,7 +383,7 @@ rather than undefined behaviour somewhere later.
 **And two more from the same family, both found by running everything at once.**
 A driver that asserts nothing exits 0 whatever it saw, so a sweep reading "no
 `N passed` line" as failure reports false alarms — four of this project's
-drivers are report-only and `tests/README.md` now names them. Worse,
+drivers are report-only and `test/README.md` now names them. Worse,
 `try_settings` had been writing **no screenshots at all**: `import` cannot
 create a directory, so with a fresh output path every capture failed while the
 run printed "done" and exited 0. A driver whose entire output is pictures,
@@ -894,7 +894,7 @@ without any new styling.
 
 ## The icon
 
-`icons/` holds the app icon and `icons/build_icons.py` regenerates every size
+`icon/` holds the app icon and `icon/build_icons.py` regenerates every size
 from `hydra-master.png`. One drawing, downscaled, with the small sizes
 retouched afterwards.
 
@@ -931,13 +931,13 @@ and a warm body tapering to a point below it is the berry — and it took someon
 else saying so to see it. A retouched downscale keeps the palette, the
 proportions and the silhouette that were already approved at full size.
 
-All seven sizes are compiled in through `icons/hydra.qrc` and added to a single
+All seven sizes are compiled in through `icon/hydra.qrc` and added to a single
 `QIcon` in `main.cpp`, so Qt chooses per use instead of rescaling one image;
 adding only the large one would quietly discard the tuned small ones.
 `packaging/install-icons.sh` lays the same files into a `hicolor` theme with
 the desktop entry.
 
-**Judge small icons at their real size.** `tests/` has nothing for this because
+**Judge small icons at their real size.** `test/` has nothing for this because
 it is not a testable property, but the working method is: render at 16 and 32,
 magnify with nearest-neighbour on both a light and a dark ground, and look at
 the pixels. Every mistake in this section — the fringe, the ringing, the
@@ -965,7 +965,7 @@ migration this section used to describe as deferred is closed, and the
 `CMakeLists.txt` files are gone from the tree:
 
 - **qmake, driven from the Makefile** (`hydra.pro`) builds the app and the APK.
-- **plain Make** (`tests/Makefile`) builds the test tree.
+- **plain Make** (`test/Makefile`) builds the test tree.
 - **fmake** builds the same sources from no build file at all, as a cross-check
   and a second opinion. It needs six annotations in the sources — one `@target`
   and five `@pkg_optional` — and nothing else.
@@ -1006,7 +1006,7 @@ name in an `@pkg_optional` beside the include, so fmake asks for the same one.
 
 ### Tests
 
-`tests/` holds the harnesses, built separately from the app — `hydra.pro` never
+`test/` holds the harnesses, built separately from the app — `hydra.pro` never
 references them, and `make test` is what builds and runs them:
 
 ```sh
@@ -1014,10 +1014,10 @@ make test                              # every offline suite
 make test-one T=test_seam              # one of them
 make -C tests -j2 offline              # or drive the test tree directly;
                                        # a job limit, always: see the warning above
-QT_QPA_PLATFORM=offscreen ./tests/build-make/test_seam
+QT_QPA_PLATFORM=offscreen ./test/build-make/test_seam
 ```
 
-`tests/README.md` says which suites need a helper server, libtorrent, or a
+`test/README.md` says which suites need a helper server, libtorrent, or a
 model, and records the traps that cost time — screenshots going black when the
 screen blanks, `import` hanging against a modal grab, and libtorrent exempting
 loopback peers from rate limits so a "throttled" local transfer finishes
@@ -1072,7 +1072,7 @@ runtime.
 
 ### The cookie filter, half proven
 
-`tests/live/try_cookies` drives it the way the interceptor was driven, and for
+`test/live/try_cookies` drives it the way the interceptor was driven, and for
 the same reason: the page comes from `127.0.0.1` and one of its images from
 `127.0.0.2`, both loopback but *different hosts*, so first-party and third-party
 are told apart by something the test controls. The page carries a second image
@@ -1127,7 +1127,7 @@ casting a vote.
 
 ### The permission callbacks, exercised
 
-`tests/live/try_permissions` drives geolocation, camera, microphone and
+`test/live/try_permissions` drives geolocation, camera, microphone and
 notifications through the whole chain — `main_window` installs the decider, the
 backend maps Qt's feature enum onto ours, the policy engine answers — and the
 page reports what it got by fetching `/report?…`, so what is measured is what a
@@ -1533,7 +1533,7 @@ Three things keep that from being presumptuous, and each is checked:
 
 The reload is not decoration: the allowance only affects requests from then on,
 and the page has already been assembled without them, so without loading it
-again the fix is invisible. Seven checks (`tests/live/try_adblock_fix`), driven
+again the fix is invisible. Seven checks (`test/live/try_adblock_fix`), driven
 against a page that pulls in a detector.
 
 **Nothing matches on the word "ad", deliberately.** This message tells someone to
@@ -1747,7 +1747,7 @@ text, a small number of buttons. The vendor selectors are a shortcut to the same
 answer. A fixed bar with buttons on a page that merely *mentions* cookies is
 left alone, which is checked.
 
-**Verified through the real shell, 34 checks** (`tests/live/try_consent`),
+**Verified through the real shell, 34 checks** (`test/live/try_consent`),
 against fixture banners rather than a live CMP — pinning a test to one vendor's
 current markup measures that vendor, as §11.5 already learned. The fixtures are
 the shapes that recur and each is a different decision: one offering reject
@@ -2137,7 +2137,7 @@ everything typed into it. `accept()` is overridden now. Found by a test doing
 the obvious programmatic thing, which is the whole argument for driving a dialog
 rather than reading it.
 
-**15 checks** (`tests/live/try_settings_ui`): the list and stack exist and are
+**15 checks** (`test/live/try_settings_ui`): the list and stack exist and are
 connected both ways, privacy comes first, all sixteen features have a control
 including the banner blocker, a global default offers allow or block and never
 "default" — that is what a *site* says when it falls through to here, so
@@ -2817,7 +2817,7 @@ iframe, and a tap confined to the top frame sees nothing.
 
 **And that last sentence described the hook only. Until now the tap did not work
 in an iframe at all — which is the shape most watch pages have.**
-`tests/live/try_subframe` is the reproduction and the proof, offline and
+`test/live/try_subframe` is the reproduction and the proof, offline and
 deterministic: a page on `127.0.0.1` embedding a player from `127.0.0.2` that
 feeds a MediaSource, with the same player as its own document for a control and
 a same-origin iframe to separate the two candidate causes.
@@ -3027,7 +3027,7 @@ GPL-3-or-later; shallow submodule, ~15 MB). Three jobs: try it first and skip
 the model entirely where it supports a site, since it is free and maintained
 by people tracking site changes; hand its nearest extractor to the model as
 worked reference when it does not; and use it as ground truth where it does.
-Not a build dependency — neither `hydra.pro` nor `tests/Makefile` refers to it.
+Not a build dependency — neither `hydra.pro` nor `test/Makefile` refers to it.
 
 **The pin tracks `master`, not a release tag**, and that is worth stating
 because two things mislead otherwise. Upstream cuts releases every few weeks
@@ -3069,7 +3069,7 @@ gesture; and P2P-delivered video is outside the model entirely.
 
 ## The extractor loop against a real site (measured; it fails there)
 
-The step every prompt number in this file was waiting on. `tests/live/
+The step every prompt number in this file was waiting on. `test/live/
 try_extract` drives the real shell to a real watch page, scrolls the player
 into view, clicks it, and writes what the interceptor saw to JSON;
 `test_live_model <model> <evidence.json>` replays that file through the loop.
@@ -5415,7 +5415,7 @@ output matters most. The first was invisible twice over: it was read through a
 `tail -8` that cut off the line naming the suite, so it was written down as "an
 unexplained non-zero exit" when the summary had in fact named it.
 
-Failing suites now write their full output to `tests/build/failed/<t>.log`. The
+Failing suites now write their full output to `test/build/failed/<t>.log`. The
 third occurrence landed there and answered it in one read.
 
 **The dialog probes when it opens** -- it asks the server what its candidate
@@ -5479,7 +5479,7 @@ address fetched as an image page furniture — and re-running:
 
 Exactly the two replies that depended on it, named. Restored, and 15 of 15 pass.
 
-For the runs that do need a model, `tests/live/measure.sh` runs them at `nice 19`
+For the runs that do need a model, `test/live/measure.sh` runs them at `nice 19`
 with idle IO and renices the Ollama server too, since that is the process doing
 the work and nicing only the client would move nothing. It records every reply
 whole into the corpus, so the measurement *after* it is free. Runs are
@@ -5494,7 +5494,7 @@ only ones that ever have to.
 
 ### The two-clause rule, measured — and the regression it caused
 
-Both captures, five runs each, through `tests/live/measure.sh` at `nice 19` on a
+Both captures, five runs each, through `test/live/measure.sh` at `nice 19` on a
 machine sitting at load 85. The answer is **no**, and one of the runs found
 something worse than a null result.
 
@@ -6156,7 +6156,7 @@ to interactive window selection, and *held the grab* while waiting for a click
 that was never going to come. An X pointer grab blocks every other client, so
 the desktop stops and so does anything that might have cleared it.
 
-The repository never had this problem and still does not: `tests/live/shoot.sh`
+The repository never had this problem and still does not: `test/live/shoot.sh`
 uses `xwd -id`, which reads a window's contents and grabs nothing, and
 `try_menus` uses `QWidget::grab()`, which renders in-process and never touches
 the server. The hazard was entirely in an ad-hoc command typed outside the
@@ -6252,7 +6252,7 @@ walker blows the stack on exactly the input it exists to reject. A crash is a
 worse diagnosis than a report.
 
 **The scale suite is `test_tree_scale`**, driven by one generator
-(`tests/tree_gen.h`) parameterised on the three numbers that matter: how many
+(`test/tree_gen.h`) parameterised on the three numbers that matter: how many
 nodes, how wide a folder gets, how deep the nesting goes. Modest sizes run in
 `make test`; `HYDRA_SCALE_EXTREME=1` enables the rest.
 
@@ -6875,7 +6875,7 @@ CI does not run them and neither had anything else this session. Running all
 thirty-five found three failures, and every one was a different kind of thing.
 
 **The sweep was pointed at a directory that no longer exists.** `sweep.sh` had
-`BIN=tests/build`, which was CMake's, and CMake is gone. The directory survived
+`BIN=test/build`, which was CMake's, and CMake is gone. The directory survived
 on disk with two binaries in it from before the migration -- so the sweep did
 not fail. It found drivers, ran them, and would have reported a clean sweep of
 two out of thirty-five, every one built before a session's worth of changes.
@@ -7384,7 +7384,7 @@ It also made those three unrepeatable in the way that matters: what they
 measured changed between runs for reasons nothing here controls, so a
 difference in output was as likely to be the site's week as the code's.
 
-`tests/live/media_fixture.h` serves the shape instead -- a manifest, segments
+`test/live/media_fixture.h` serves the shape instead -- a manifest, segments
 under it, a player in an iframe, and a MediaSource that is opened and appended
 to -- from a `QTcpServer` on loopback, in the same shape `try_cookies` already
 used for its origins. A real url is still what you pass when a real site is the
@@ -7425,7 +7425,7 @@ Three things combined, and none of them was new on its own:
   site saves what that site opened, nested under the tab it came from. What was
   a stale timestamp became a third party's tracking parameters.
 
-`tests/live/sample_tree.h` gives each driver a private copy under its own
+`test/live/sample_tree.h` gives each driver a private copy under its own
 scratch directory, and finds the example rather than being told where it is, so
 the hardcoded paths are gone with it. A full sweep now leaves `git status`
 empty.
@@ -7571,7 +7571,7 @@ other browser does with a typed address, and says so in the status bar.
 
 ### The test tree's archive, replaced by fmake's symbol closure
 
-`tests/Makefile` built one `libhydra_app.a` and linked all seventy-odd binaries
+`test/Makefile` built one `libhydra_app.a` and linked all seventy-odd binaries
 against it. The reasoning was sound as far as it went -- an archive contributes
 only the members that resolve something, so each suite still linked only what
 it reached, and thirty-eight source lists never had to be written. What it cost
@@ -7588,7 +7588,7 @@ going to use, and would have been wrong wherever a header is implemented in a
 file it does not name.
 
 `tools/objsets.py` asks fmake once, rewrites the answer into the object names
-`tests/Makefile` uses, and writes `tests/objsets.mk`: 73 programs, 3655
+`test/Makefile` uses, and writes `test/objsets.mk`: 73 programs, 3655
 objects, 50 apiece. It is committed, so an ordinary build needs `make` and
 nothing else; fmake is needed only to regenerate it.
 
@@ -7620,7 +7620,7 @@ tree.
 
 **The archive was also confusing the other build system.** fmake at the repo
 root refused to decide anything, reporting `main_window::open_url` as defined
-by both `src/main_window.cpp` and `tests/build-make/libhydra_app.a` -- a build
+by both `src/main_window.cpp` and `test/build-make/libhydra_app.a` -- a build
 artifact of one system read as source by another. That went away with the
 archive.
 
@@ -7628,10 +7628,10 @@ archive.
 
 Three ways to build the same tree had been measured and none chosen. The
 decision is two: **Makefile + qmake** as the one people run, and **fmake** as
-the second opinion. CMakeLists.txt and tests/CMakeLists.txt are gone.
+the second opinion. CMakeLists.txt and test/CMakeLists.txt are gone.
 
 **What each does now.** `make` runs qmake against `hydra.pro` and builds into
-`build/`; `make test` drives `tests/Makefile`; `make android` runs the Android
+`build/`; `make test` drives `test/Makefile`; `make android` runs the Android
 kit's own qmake and then androiddeployqt. `fmake -C src` builds the same
 sources from no build file.
 
@@ -7718,7 +7718,7 @@ touching either:
   that some test now needs -- links against a stale set and fails with undefined
   references in a test nobody touched. It happened twice in one session, on
   `test_settings` and `test_annoyance`, and both times the error named a file
-  that was perfectly correct. The staleness guard in `tests/Makefile` catches a
+  that was perfectly correct. The staleness guard in `test/Makefile` catches a
   *new source*; it cannot catch an existing one that gained an include.
 
 ### One driver that had become three, and the bug that fell out
@@ -8207,7 +8207,7 @@ prints a `N passed, M failed` line, and the sweep judged them on one. Two lines
 of noise in every summary is how you learn to skip the summary, and the day one
 of them breaks for real it will look exactly as it does now.
 
-The sweep moved out of a scratch directory into `tests/live/sweep.sh` (and
+The sweep moved out of a scratch directory into `test/live/sweep.sh` (and
 `make sweep`), globbing whatever drivers were built rather than naming them, and
 it now distinguishes three outcomes rather than two: a result line that says
 zero failures, no result line but a clean run to `done`, and anything else.
@@ -8381,13 +8381,13 @@ catches any future mutation that forgets. It immediately caught a case reading
 had missed, in a test that already existed: a cross-folder move renumbered the
 target and left the source parent stale.
 
-`tests/tree_gen.h` and `test_invariants`'s private copy of the same generator
+`test/tree_gen.h` and `test_invariants`'s private copy of the same generator
 both had to be fixed first: they appended without numbering, so every generated
 node recorded order 0 and ten thousand siblings all claimed position zero. **The
 checker could not be given the rule until the fixtures obeyed it** — a fixture
 building a shape no code path can produce was hiding the invariant that says so.
 
-**The two generators are now one** (`tests/tree_gen.h`, used by
+**The two generators are now one** (`test/tree_gen.h`, used by
 `test_invariants` and `test_tree_scale`). They had the same three parameters,
 the same node ids, and the same docstring arguing for one generator rather than
 a pile of fixtures — an argument both copies made while being two of them, and

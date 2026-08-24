@@ -166,12 +166,12 @@ jobs:
       # happening: a change to the shell that breaks a driver's compilation,
       # found by hand after the fact because nothing here built them.
       - name: Compile the live drivers
-        run: make -C tests JOBS=2 live-objs
+        run: make -C test JOBS=2 live-objs
 
       - name: Every driver was compiled, not skipped
         run: |
-          built=$(ls tests/build-make/try_*.o 2>/dev/null | wc -l)
-          want=$(ls tests/live/try_*.cpp | wc -l)
+          built=$(ls test/build-make/try_*.o 2>/dev/null | wc -l)
+          want=$(ls test/live/try_*.cpp | wc -l)
           echo "$built driver objects for $want sources"
           test "$built" -eq "$want" || {
             echo 'a driver did not compile, or the glob found nothing.'
@@ -183,13 +183,13 @@ jobs:
       # all, which is the shape of vacuous pass this repository keeps meeting.
       - name: The suite list did not collapse
         run: |
-          found=$(ls tests/test_*.cpp | wc -l)
+          found=$(ls test/test_*.cpp | wc -l)
           echo "$found suite sources"
           test "$found" -ge 30 || {
             echo "expected at least 30; a shrunken list passes for free."
             exit 1
           }
-          built=$(find tests/build-make -maxdepth 1 -type f -executable \
+          built=$(find test/build-make -maxdepth 1 -type f -executable \
                     -name 'test_*' | wc -l)
           echo "$built suite binaries built"
           test "$built" -ge 25 || {
@@ -204,6 +204,6 @@ jobs:
       - name: The committed link sets match the tree
         if: always()
         run: |
-          echo "tests/Makefile compares objsets.mk against its own glob on"
+          echo "test/Makefile compares objsets.mk against its own glob on"
           echo "every build; a mismatch stops it with the regeneration command."
           echo "Reaching this step means they agreed."

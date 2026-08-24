@@ -92,7 +92,7 @@ Where a language enforces its own scheme, accept it rather than fight it:
 
 - **Python** -- a leading underscore (`_name`) is the language's private
   marker and stands in for "unprefixed" above. This project's Python is
-  `icons/build_icons.py` and `tests/live/serve.py`.
+  `icon/build_icons.py` and `test/live/serve.py`.
 - **Rust** -- not used here. **Debian package spellings** are kebab-case
   where `dpkg` requires it, and read back with their own spelling; the
   package is `hydra` and the directory is not named differently from it.
@@ -126,7 +126,7 @@ discussion:
 - **YAML** -- the spec forbids tabs for indentation outright. Use spaces.
 - **Markdown** -- list continuation and code fences are space-indented by
   specification. Exempt, which covers `project.md`, this file and
-  everything in `docs/`.
+  everything in `doc/`.
 - **Debian packaging files** -- exempt, and the two halves are exempt for
   different reasons. `debian/changelog` has a fixed layout that a tab is
   not part of: `dpkg-parsechangelog` calls a tab-indented change line
@@ -161,7 +161,7 @@ technical difference rather than a matter of taste:
 - **`snake_case` where the filename becomes an identifier** -- a source
   file, a header, a module. Python is where that bites here, since the
   filename *is* the module path and a hyphen is not legal in one:
-  `icons/build_icons.py` and `tests/live/serve.py` could not be imported
+  `icon/build_icons.py` and `test/live/serve.py` could not be imported
   under a kebab-case name. A C++ source is not imported by its name, but
   it keeps the same spelling so that one rule covers the whole of `src/`.
 - **`kebab-case` for prose** -- documentation, design notes, decision
@@ -169,8 +169,8 @@ technical difference rather than a matter of taste:
   and kebab-case is what markdown and URLs settled on long ago.
 
 Both halves already hold and nothing has to move: every basename under
-`src/` and `tests/` is `snake_case` with no hyphen among them, and the
-prose is `code-style.md` and `docs/architecture.md`, with `project.md` and
+`src/` and `test/` is `snake_case` with no hyphen among them, and the
+prose is `code-style.md` and `doc/architecture.md`, with `project.md` and
 the two `README.md` single words that have no separator to argue about.
 
 Settled exceptions:

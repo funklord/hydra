@@ -1,7 +1,7 @@
 #!/bin/bash
 # Measure the extractor loop against a capture, N runs, recording each reply.
 #
-#   tests/live/measure.sh evidence/kisskh-2026-08-03.json kisskh-new 5
+#   test/live/measure.sh evidence/kisskh-2026-08-03.json kisskh-new 5
 #
 # **Built for a machine that is never idle**, which is the normal case here. Two
 # things follow from that and both are the point of this script rather than an
@@ -31,7 +31,7 @@ REPLIES=${HYDRA_REPLIES:-evidence/replies}
 LOGS=${MEASURE_LOGS:-evidence/measure-$TAG}
 mkdir -p "$REPLIES" "$LOGS"
 
-BIN=tests/build/test_live_model
+BIN=test/build/test_live_model
 [ -x "$BIN" ] || { echo "build it first: make test-one T=test_live_model"; exit 1; }
 
 # The server does the generating, so it is the process that matters. Best

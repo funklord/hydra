@@ -160,7 +160,7 @@ include objsets.mk
 # is not guaranteed to be, so comparing them raw reports a difference that is
 # only an ordering.
 OBJSETS_FOUND := $(sort $(wildcard test_*.cpp) $(patsubst %,live/%,$(notdir $(wildcard live/try_*.cpp))))
-OBJSETS_HAVE  := $(sort $(patsubst tests/%,%,$(OBJSETS_SOURCES)))
+OBJSETS_HAVE  := $(sort $(patsubst test/%,%,$(OBJSETS_SOURCES)))
 
 ifneq ($(OBJSETS_FOUND),$(OBJSETS_HAVE))
 $(warning objsets.mk was generated from a different set of sources)

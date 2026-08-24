@@ -1,9 +1,9 @@
 # Build output
 /build/
-/tests/build/
+/test/build/
 /build-android/
 /build-qmake/
-/tests/build-make/
+/test/build-make/
 # fmake's object cache. It grew to 146 MB under src/ from a trial nobody
 # cleaned up, and an ignored directory is one nothing reminds you about.
 .fmake/
@@ -13,7 +13,7 @@
 *.o
 *.obj
 # Core dumps land beside whatever crashed, and a driver that segfaults leaves
-# one in tests/. They are build wreckage, not evidence worth keeping.
+# one in test/. They are build wreckage, not evidence worth keeping.
 core
 core.*
 *.moc

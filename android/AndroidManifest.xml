@@ -2,7 +2,7 @@
 <!-- Hydra's Android manifest.
 
      It exists for one reason at the moment: to name the launcher icon, so the
-     app wears the drawing in `icons/` rather than Qt's default. Everything else
+     app wears the drawing in `icon/` rather than Qt's default. Everything else
      here is what androiddeployqt generates, kept minimal on purpose — a manifest
      copied wholesale from a template is a pile of permissions nobody chose.
 -->

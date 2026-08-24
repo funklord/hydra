@@ -6,7 +6,7 @@
 // held. A gate whose refusals are untested is a gate in name.
 //
 // The delivery half needs a connected, paired KeePassXC and lives in
-// `tests/live/try_keepass.cpp`. Everything here is the refusal half, which is
+// `test/live/try_keepass.cpp`. Everything here is the refusal half, which is
 // the half that matters when it is wrong.
 #include "autofill_controller.h"
 #include "keepass_protocol.h"

@@ -11,15 +11,15 @@ WebView.
 
 All seven build-order steps of the architecture doc are implemented. See
 `project.md` for what currently *is* — including what has been measured versus
-what is merely assumed — and `docs/architecture.md` for the full design;
-`tests/README.md` before running anything.
+what is merely assumed — and `doc/architecture.md` for the full design;
+`test/README.md` before running anything.
 
 ## What works
 
 **The tree and the shell**
 
 - **Shell** — classic desktop furniture in a plain `QWidget` (not a
-  `QMainWindow` — `docs/architecture.md` §6): menu bar, toolbar, a splitter with
+  `QMainWindow` — `doc/architecture.md` §6): menu bar, toolbar, a splitter with
   the tab tree on the left and chrome-less web views on the right, status bar.
 - **Tree model** — `tab_tree_model` loads the canonical outline file, exposes
   custom sort roles, and keeps an id index for O(1) lookup. Nesting is bounded
@@ -148,7 +148,7 @@ session, not just the build. The Makefile defaults to `-j2` and takes `JOBS=`.
 
 **Two build systems are maintained, and the Makefile is the interface to
 both.** Underneath it, `hydra.pro` (qmake) builds the app and the APK, and
-`tests/Makefile` builds the test tree. The second is **fmake**, which builds the
+`test/Makefile` builds the test tree. The second is **fmake**, which builds the
 same sources from no build file at all:
 
 ```sh

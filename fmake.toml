@@ -8,7 +8,7 @@
 # source file.
 #
 # **Build directories contain generated C++.** `build/` and `build-android/`
-# hold the moc and qrc output qmake wrote, `tests/build-make/` the test tree's.
+# hold the moc and qrc output qmake wrote, `test/build-make/` the test tree's.
 # Left alone, fmake reads them as sources: it started compiling
 # `build-android/moc_main_window.cpp` -- generated for arm64 -- as an x86-64
 # translation unit, 196 of them against the 116 that are real, and every symbol
@@ -21,4 +21,4 @@
 # `third_party/` is the vendored yt-dlp, which is Python.
 [project]
 exclude = ["build/**", "build-android/**", "build-qmake/**",
-            "tests/build-make/**", "third_party/**", "attic/**"]
+            "test/build-make/**", "third_party/**", "attic/**"]

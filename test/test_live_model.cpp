@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
 		      resource_kind::other);
 	feed("https://mc.yandex.com/watch/98086865?wmode=7", resource_kind::script);
 
-	// Or real evidence, captured by tests/live/try_extract from an actual page.
+	// Or real evidence, captured by test/live/try_extract from an actual page.
 	// The synthetic set above is a guess at what a site does; a captured one is
 	// what a site did, and the two disagree in ways that matter (the real
 	// segments arrive disguised as .woff2 web fonts, not as .ts).

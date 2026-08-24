@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Per-binary link sets for the test tree, computed by fmake.
 
-`tests/Makefile` used to build one `libhydra_app.a` and link every binary
+`test/Makefile` used to build one `libhydra_app.a` and link every binary
 against it. That is against a written rule in `build-and-commit.md` and it
 cost what the rule says it costs: the archive is rebuilt when any of its
 inputs changes and all seventy binaries then relink, measured at a flat 19s
@@ -14,12 +14,12 @@ symbols. That is the same thing the linker does when deciding which members
 to pull from an archive, so the answer is exact rather than a guess from the
 include graph.
 
-So: ask fmake once, rewrite its answer into the object names `tests/Makefile`
-uses, and write `tests/objsets.mk`. No archive, and each binary relinks only
+So: ask fmake once, rewrite its answer into the object names `test/Makefile`
+uses, and write `test/objsets.mk`. No archive, and each binary relinks only
 when something it genuinely contains has changed.
 
 **The generated file carries the source list it was generated from**, and
-`tests/Makefile` refuses to build when that no longer matches the tree. A
+`test/Makefile` refuses to build when that no longer matches the tree. A
 generated file which silently describes a tree that has moved on is the exact
 failure this project keeps finding, and a stale link set fails as an undefined
 symbol a long way from the file somebody added.
@@ -34,16 +34,16 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# fmake writes `$(FM_BUILD_DIR)/<path>.cpp.o`; tests/Makefile has three object
+# fmake writes `$(FM_BUILD_DIR)/<path>.cpp.o`; test/Makefile has three object
 # namespaces and they are not the same shape.
 RE_APP  = re.compile(r"^\$\(FM_BUILD_DIR\)/src/(.+)\.cpp\.o$")
 RE_MOC  = re.compile(r"^\$\(FM_BUILD_DIR\)/moc/src/moc_(.+)\.cpp\.o$")
-RE_TMOC = re.compile(r"^\$\(FM_BUILD_DIR\)/moc/tests/moc_(.+)\.cpp\.o$")
-RE_SELF = re.compile(r"^\$\(FM_BUILD_DIR\)/tests/(?:live/)?(.+)\.cpp\.o$")
+RE_TMOC = re.compile(r"^\$\(FM_BUILD_DIR\)/moc/test/moc_(.+)\.cpp\.o$")
+RE_SELF = re.compile(r"^\$\(FM_BUILD_DIR\)/test/(?:live/)?(.+)\.cpp\.o$")
 
 
 def translate(obj, program):
-	"""One fmake object path in tests/Makefile's naming, or None to drop it."""
+	"""One fmake object path in test/Makefile's naming, or None to drop it."""
 	m = RE_APP.match(obj)
 	if m:
 		return "$(BUILD_DIR)/app/%s.o" % m.group(1)
@@ -65,7 +65,7 @@ def translate(obj, program):
 def sources():
 	"""Every source the test tree builds a program from, as the guard sees it."""
 	out = []
-	for d, pattern in (("tests", "test_"), ("tests/live", "try_")):
+	for d, pattern in (("tests", "test_"), ("test/live", "try_")):
 		full = os.path.join(ROOT, d)
 		for name in sorted(os.listdir(full)):
 			if name.startswith(pattern) and name.endswith(".cpp"):
@@ -140,7 +140,7 @@ def main():
 		"#",
 		"#     make -C tests objsets",
 		"#",
-		"# The list below is the tree this was generated from. tests/Makefile",
+		"# The list below is the tree this was generated from. test/Makefile",
 		"# compares it against the tree it finds and refuses to build when they",
 		"# differ, because a link set describing a tree that has moved on fails",
 		"# as an undefined symbol a long way from the file somebody added.",

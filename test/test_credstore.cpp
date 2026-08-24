@@ -116,7 +116,7 @@ int main(int argc, char **argv) {
 		note("skipped: HYDRA_SECRET_KIND is not set to a test-only value.");
 		note("This suite writes and deletes one keyring item, and under the");
 		note("default name that item is the user's real pairing. Run it as:");
-		note("  HYDRA_SECRET_KIND=hydra-test-$$ ./tests/build/test_credstore");
+		note("  HYDRA_SECRET_KIND=hydra-test-$$ ./test/build/test_credstore");
 		note("Refusing rather than skipping quietly, because a suite that");
 		note("deleted a real pairing would look exactly like one that passed.");
 	} else {

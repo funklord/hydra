@@ -8,7 +8,7 @@
 //
 //   test_helpers_live <evidence.json>
 //
-// Evidence comes from tests/live/try_extract, and must be fresh -- CDN tokens
+// Evidence comes from test/live/try_extract, and must be fresh -- CDN tokens
 // expire in minutes, and stale evidence produces 403s that look like a broken
 // allowlist.
 #include "extractor_helpers.h"
