@@ -181,8 +181,21 @@ int main(int argc, char **argv) {
 			n->history.index = 0;
 			check(n->history.back_count() == 0 && n->history.forward_count() == 2,
 			      "and one at the start has nothing behind");
-			check(!model.data(idx, Qt::DisplayRole).toString().contains("back"),
-			      "so its row goes back to saying nothing");
+			// **Not silence.** Counting backwards from the start gives zero,
+			// and a row that said nothing would hide a record that exists --
+			// 30 of the 1144 recovered from the crashed Chromium session were
+			// exactly this shape.
+			const QString at_start = model.data(idx, Qt::DisplayRole).toString();
+			check(!at_start.contains("back") && at_start.contains("2 ahead"),
+			      QString("so its row counts the other way instead (%1)")
+			          .arg(at_start));
+			// And back wins where both apply, so the row never carries two
+			// numbers.
+			n->history.index = 1;
+			const QString middle = model.data(idx, Qt::DisplayRole).toString();
+			check(middle.contains("1 back") && !middle.contains("ahead"),
+			      QString("with one page either side, it counts backwards (%1)")
+			          .arg(middle));
 			n->history = tab_history{};
 		}
 		holds(model, "history suffix");

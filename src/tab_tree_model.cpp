@@ -213,7 +213,21 @@ QVariant tab_tree_model::data(const QModelIndex &index, int role) const {
 			// nobody reads.
 			//
 			// The count is of pages *behind* it, because that is the one a
-			// person is looking for; the forward entries are in the dialog.
+			// person is looking for; the rest of the list is in the dialog.
+			//
+			// **Unless there is nothing behind it**, which was a silent hole:
+			// a tab sitting at the start of its own history has pages only
+			// ahead, so counting backwards gave zero and the row said nothing
+			// at all -- a record with no way to find out it exists, which is
+			// the exact failure this suffix is here to prevent. Measured on
+			// the tabs recovered from the crashed Chromium session: 30 of
+			// 1144 records were this shape.
+			//
+			// Only one of the two is ever shown, and back wins where both
+			// apply. The suffix is a hint that there is something to open,
+			// not a summary of it; two numbers on a row would cost more
+			// width than they buy, and the dialog states both anyway.
+			//
 			// Appended to the drawn text only: search matches the node's own
 			// title and url, and sorting reads `title_role`, so neither can
 			// see this and a row cannot be found by typing "back".
@@ -221,6 +235,10 @@ QVariant tab_tree_model::data(const QModelIndex &index, int role) const {
 			if (behind > 0)
 				return QString("%1  %2 %3 back")
 					         .arg(label).arg(QChar(0x00b7)).arg(behind);
+			const int ahead = n->history.forward_count();
+			if (ahead > 0)
+				return QString("%1  %2 %3 ahead")
+					         .arg(label).arg(QChar(0x00b7)).arg(ahead);
 			return label;
 		}
 		case Qt::ToolTipRole:

@@ -979,7 +979,17 @@ the record exists to preserve.
 
 Three places show it, and the split is deliberate. The row carries a count and
 nothing else -- `Music  · 2 back` -- because a record nobody can see is one
-nobody reads, and because *how many* is the question people actually have. The
+nobody reads, and because *how many* is the question people actually have.
+
+The first version counted only backwards, which left a hole of exactly the
+kind the suffix exists to close: a tab sitting at the *start* of its history
+has pages only ahead of it, so the count was zero and the row said nothing at
+all. Measured on the recovered Chromium tabs, 30 of 1144 records were that
+shape -- a record with no way to discover it exists. A row with nothing behind
+it now reads `· 3 ahead` instead. Only ever one of the two, and back wins where
+both apply: the suffix is a hint that there is something to open, not a summary
+of it, and two numbers cost more width than they buy when the dialog states
+both anyway. The
 properties dialog carries the list, capped at four rows high, since one imported
 tab here had ninety and a dialog that grows to fit its longest field goes off
 the bottom of the screen for the tab that most needs reading. The entry the tab
