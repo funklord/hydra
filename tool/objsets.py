@@ -62,10 +62,19 @@ def translate(obj, program):
 	return None
 
 
+# **The test directory, named once.** It was spelled three different ways in
+# this file and a rename to the singular changed one of them, which left the
+# generator unable to list its own inputs -- while the file it generates, which
+# had been corrected by hand, went on describing the tree correctly. A
+# generated artifact that is right and a generator that cannot run is the worst
+# arrangement of the two: nothing reports it until somebody needs to regenerate.
+TESTS = "test"
+
+
 def sources():
 	"""Every source the test tree builds a program from, as the guard sees it."""
 	out = []
-	for d, pattern in (("tests", "test_"), ("test/live", "try_")):
+	for d, pattern in ((TESTS, "test_"), (TESTS + "/live", "try_")):
 		full = os.path.join(ROOT, d)
 		for name in sorted(os.listdir(full)):
 			if name.startswith(pattern) and name.endswith(".cpp"):
@@ -138,7 +147,7 @@ def main():
 		"#",
 		"# Per-binary link sets, closed over symbols by fmake. Regenerate with",
 		"#",
-		"#     make -C tests objsets",
+		"#     make -C %s objsets" % TESTS,
 		"#",
 		"# The list below is the tree this was generated from. test/Makefile",
 		"# compares it against the tree it finds and refuses to build when they",
@@ -170,7 +179,7 @@ def main():
 			lines[-1] = "OBJS_%s =" % program
 		lines.append("")
 
-	path = os.path.join(ROOT, "tests", "objsets.mk")
+	path = os.path.join(ROOT, TESTS, "objsets.mk")
 	with open(path, "w") as fh:
 		fh.write("\n".join(lines) + "\n")
 

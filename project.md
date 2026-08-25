@@ -1012,7 +1012,7 @@ references them, and `make test` is what builds and runs them:
 ```sh
 make test                              # every offline suite
 make test-one T=test_seam              # one of them
-make -C tests -j2 offline              # or drive the test tree directly;
+make -C test -j2 offline              # or drive the test tree directly;
                                        # a job limit, always: see the warning above
 QT_QPA_PLATFORM=offscreen ./test/build-make/test_seam
 ```
@@ -7720,6 +7720,27 @@ touching either:
   `test_settings` and `test_annoyance`, and both times the error named a file
   that was perfectly correct. The staleness guard in `test/Makefile` catches a
   *new source*; it cannot catch an existing one that gained an include.
+- **And the generator could not be run at all.** `src/tab_history.cpp` was the
+  third occurrence, and running `objsets.py` to fix it failed on
+  `FileNotFoundError: .../hydra/tests`. The rename to singular directory names
+  changed one of the three places this file spelled the test directory and left
+  the other two, so the generator listed a directory that no longer exists --
+  while `objsets.mk`, which had been corrected by hand, went on describing the
+  tree perfectly. **A correct artifact beside a generator that cannot run is
+  the worst arrangement of the two**: everything builds, every check passes,
+  and nothing reports it until somebody needs to regenerate. The name is
+  declared once now. Four more `make -C tests` invocations in `test/Makefile`,
+  `test/README.md` and this file were stale the same way.
+- **The stale `/usr/bin/fmake` drops link sets silently-ish.** With the
+  installed Aug-4 copy the run reported "fmake produced no link set for:
+  test_bridge test_empty_state test_extloop test_probe_ui test_settings" and
+  refused to write -- five programs that are in the committed file, so the
+  regression was visible only because the generator refuses a partial answer.
+  Regenerating needs `FMAKE=` pointed at a current build until the installed
+  copy is replaced, which needs root. Note the provenance line records the
+  path it was run from, and both the previous and current generations name a
+  session scratch directory that no longer exists -- honest, and not
+  reproducible from the path alone. The mtime is the part that carries.
 
 ### One driver that had become three, and the bug that fell out
 

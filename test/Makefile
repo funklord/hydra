@@ -4,8 +4,8 @@
 # CMakeLists.txt beside it, and now the only build it has: `make test` at the
 # top level drives this file. See project.md for what the comparison found.
 #
-#   make -C tests -j2          # everything
-#   make -C tests offline -j2  # just the suites that need nothing but a build
+#   make -C test -j2          # everything
+#   make -C test offline -j2  # just the suites that need nothing but a build
 #
 # Always name a job count. `-j` with no number is *unlimited* under Make, and
 # each live driver links Qt WebEngine -- that has taken this machine's desktop
@@ -107,7 +107,7 @@ MOC_GUARD = test -n "$(MOC)" || { \
 	   echo "tests:   pkg-config gave no libexecdir for Qt6Core: either Qt 6" >&2; \
 	   echo "tests:   is absent or its .pc file defines no such variable." >&2; \
 	   echo "tests:   Install the Qt 6 development files, or name it:" >&2; \
-	   echo "tests:   make -C tests MOC=/path/to/moc" >&2; \
+	   echo "tests:   make -C test MOC=/path/to/moc" >&2; \
 	   exit 1; }
 MOC_HDRS  := $(shell grep -l Q_OBJECT $(SRC)/*.h | grep -v '$(SRC)/android_')
 MOC_SRCS  := $(patsubst $(SRC)/%.h,$(BUILD_DIR)/moc/moc_%.cpp,$(MOC_HDRS))
@@ -145,7 +145,7 @@ TMOC_OBJS := $(patsubst %.cpp,%.o,$(TMOC_SRCS))
 # --- the link sets ---------------------------------------------------------
 #
 # Generated, and committed, so an ordinary build needs `make` and nothing else.
-# fmake is needed only to regenerate them, which is `make -C tests objsets`.
+# fmake is needed only to regenerate them, which is `make -C test objsets`.
 include objsets.mk
 
 # **The guard, and it is the point of the file carrying its own source list.**
@@ -166,7 +166,7 @@ ifneq ($(OBJSETS_FOUND),$(OBJSETS_HAVE))
 $(warning objsets.mk was generated from a different set of sources)
 $(warning   only in the tree: $(filter-out $(OBJSETS_HAVE),$(OBJSETS_FOUND)))
 $(warning   only in the file:  $(filter-out $(OBJSETS_FOUND),$(OBJSETS_HAVE)))
-$(error run `make -C tests objsets` to regenerate it)
+$(error run `make -C test objsets` to regenerate it)
 endif
 
 # --- the suites ------------------------------------------------------------
@@ -277,6 +277,6 @@ objsets:
 	@python3 ../tool/objsets.py
 
 help:
-	@echo "make -C tests [offline|live|all|clean] -j2"
+	@echo "make -C test [offline|live|all|clean] -j2"
 	@echo "  $(words $(OFFLINE_SRCS)) offline suites, $(words $(LIVE_SRCS)) live drivers"
 	@echo "  optional packages found: $(OPT_PKGS)"

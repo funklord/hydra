@@ -26,7 +26,7 @@ before the compiler starts.
 ```sh
 make test                          # every offline suite, built and run
 make test-one T=test_seam          # or one at a time
-make -C tests -j2 offline          # or drive the test tree directly;
+make -C test -j2 offline          # or drive the test tree directly;
                                    # a limit, always
 ```
 
