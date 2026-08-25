@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include "tab_history.h"
+
 #include <QByteArray>
 #include <QList>
 #include <QString>
@@ -24,6 +26,13 @@ struct imported_tab {
 	QString url;
 	int     window = 0;   // which of the browser's windows it was in
 	bool    pinned = false;
+
+	// Where this tab had been, and which entry it was on. A record, not a Back
+	// button: only urls and titles ever cross from another browser -- no scroll
+	// position, no form contents, no engine state -- because that is all one
+	// browser's session file offers another and all that stays true once it is
+	// written down.
+	tab_history history;
 };
 
 // --- mozlz4 ---------------------------------------------------------------

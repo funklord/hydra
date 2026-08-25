@@ -8,6 +8,7 @@
 #include "tab_tree_view.h"
 #include "tree_sort_proxy.h"
 #include "state_store.h"
+#include "tab_history.h"
 #include "policy_engine.h"
 #include "site_policy_dialog.h"
 #include "web_view_backend.h"
@@ -601,12 +602,41 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// when it cannot resolve the victim it picked.
 	connect(m_model, &tab_tree_model::about_to_remove, this,
 	        &main_window::forget_subtree);
+	// An id changes in exactly one case -- a row dragged out of a mirror, whose
+	// id was minted in that mirror's namespace. Everything here that is keyed
+	// by id has to follow it, or a tab that was open a moment ago is a live
+	// view under a name nothing resolves: invisible, uncloseable, and holding
+	// a slot against the live-view cap.
+	connect(m_model, &tab_tree_model::id_changed, this,
+	         [this](const QString &was, const QString &now) {
+		if (web_view_backend *v = m_views_by_id.take(was))
+			m_views_by_id.insert(now, v);
+		const int at = m_lru.indexOf(was);
+		if (at >= 0)
+			m_lru[at] = now;
+		// A mirrored tab has no state of its own -- a mirror is never saved --
+		// but it can have been opened and suspended while it was on screen, and
+		// that blob is real. Moved rather than dropped: the tab the user is
+		// keeping is the one they were just looking at.
+		if (m_state && m_state->has_state(was)) {
+			m_state->save(now, m_state->load(was));
+			m_state->remove(was);
+		}
+	});
 	m_tree->setHeaderHidden(true);
 	m_tree->setUniformRowHeights(true);
 	// The menu lives in the view; these are the only two entries it cannot
 	// carry out itself -- opening needs an engine and the stacked widget,
 	// suspending needs the state store.
 	connect(m_tree, &tab_tree_view::open_requested, this, &main_window::open_node);
+	// A page out of an imported history opens *below* the tab it belongs to,
+	// which is the sub-tab gesture the whole tree is built around (sec 5.5) --
+	// and which leaves the record itself untouched.
+	connect(m_tree, &tab_tree_view::history_open_requested, this,
+	         [this](node *parent, const QUrl &url) {
+		if (parent)
+			open_child_tab(parent, url);
+	});
 	connect(m_tree, &tab_tree_view::suspend_requested, this, &main_window::suspend_node);
 	connect(m_tree, &tab_tree_view::lock_requested, this, &main_window::toggle_lock);
 	connect(m_tree, &tab_tree_view::open_externally_requested, this,
@@ -1704,6 +1734,10 @@ bool main_window::load_tree(const QString &path) {
 	m_antiadblock->set_rules(cr);
 
 	const bool ok = m_model->load(path);
+	// After the nodes exist and before anything draws: the tree shows a count
+	// from this, so restoring it later would flash a row that claimed no past
+	// and then quietly gained one.
+	restore_histories();
 	m_tree->expandAll();
 	return ok;
 }
@@ -2843,6 +2877,12 @@ void main_window::show_mirror_tabs(const QString &source, const QString &label,
 		n->url       = t.url;
 		n->created   = QDateTime::currentDateTime();
 		n->last_seen = n->created;
+		// The reason the mirror is worth more than a list of addresses: the
+		// other browser's session file records where each tab had *been*, and
+		// this is the only moment that record is available. It is dropped when
+		// the mirror is replaced, and kept for good the moment somebody drags
+		// the row into their own tree.
+		n->history   = t.history;
 		nodes << n;
 	}
 	m_model->replace_mirror(source,
@@ -3378,6 +3418,45 @@ void main_window::mark_dirty() {
 void main_window::flush_tree() {
 	if (!m_tree_path.isEmpty())
 		m_model->save(m_tree_path);
+	persist_histories();
+}
+
+// Write the imported back/forward records that are not on disk yet.
+//
+// **Written once, not on every flush.** A history is a record of where a tab
+// had been before it arrived, so it does not change afterwards -- which makes
+// "the file exists" a sufficient test and keeps a debounced save from
+// rewriting a few hundred small files every time a row is renamed. It also
+// leaves a file somebody has edited by hand alone, which the format is
+// human-readable in order to allow.
+void main_window::persist_histories(node *from) {
+	if (!m_state)
+		return;
+	node *n = from ? from : (m_model ? m_model->root() : nullptr);
+	if (!n)
+		return;
+	// A mirror is somebody else's session and is never written to the tree, so
+	// writing its histories would leave state/ full of blobs keyed to ids that
+	// no saved tree mentions.
+	if (!n->mirror.isEmpty())
+		return;
+	if (!n->history.is_empty() && !n->id.isEmpty() && !m_state->has_history(n->id))
+		m_state->save_history(n->id, tab_history_codec::encode(n->history));
+	for (node *c : n->children)
+		persist_histories(c);
+}
+
+// And the other direction, once the tree is in memory.
+void main_window::restore_histories(node *from) {
+	if (!m_state)
+		return;
+	node *n = from ? from : (m_model ? m_model->root() : nullptr);
+	if (!n)
+		return;
+	if (!n->id.isEmpty() && m_state->has_history(n->id))
+		n->history = tab_history_codec::decode(m_state->load_history(n->id));
+	for (node *c : n->children)
+		restore_histories(c);
 }
 
 // **The address bar shows the address; the status bar does not repeat it.**

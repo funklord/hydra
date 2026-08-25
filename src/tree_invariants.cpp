@@ -101,6 +101,25 @@ void walk(node *root, report &r) {
 				r.problems << QString("'%1' is inside mirror '%2' but is not "
 						"marked as mirrored")
 						.arg(c->id, n->mirror);
+			// **And the same shape read the other way**, which is the half
+			// this missed and which cost a tab. A row dragged out of a mirror
+			// with a plain drag was moved without the mark being cleared, so
+			// it sat in the user's own folder still belonging to Firefox --
+			// on screen, saved around, and absent from the file. The tree the
+			// user could see and the tree on disk disagreed, and only the
+			// second one survived a restart.
+			//
+			// Exempt at the top, and only there: the mirror's own folder is a
+			// child of the tree root, which is never mirrored. That is the
+			// shape by design -- the mark starts at that folder and covers
+			// everything beneath it -- so the rule is about a mirrored node
+			// somewhere *inside* the user's tree, not about where a mirror is
+			// allowed to be rooted.
+			if (n != root && n->mirror.isEmpty() && !c->mirror.isEmpty())
+				r.problems << QString("'%1' is marked as mirror '%2' but sits "
+						"under '%3', which is not mirrored -- it would be "
+						"dropped by the writer")
+						.arg(c->id, c->mirror, n->id);
 			stack.append({ c, f.depth + 1 });
 		}
 	}

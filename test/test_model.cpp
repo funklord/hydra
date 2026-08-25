@@ -142,6 +142,52 @@ int main(int argc, char **argv) {
 		holds(model, "shape");
 	}
 
+	section("an imported history marks its row without becoming part of it");
+	{
+		node *n = model.node_by_id("a3");
+		if (n) {
+			n->history.entries << history_entry{ "https://p.test/1", "First" }
+			                    << history_entry{ "https://p.test/2", "Second" }
+			                    << history_entry{ "https://p.test/3", "Third" };
+			n->history.index = 2;   // two pages behind it, none ahead
+			const QModelIndex idx = model.index_for_node(n);
+			const QString shown = model.data(idx, Qt::DisplayRole).toString();
+			check(shown.startsWith("Music") && shown.contains("2 back"),
+			      QString("the row says how many pages are behind it (%1)").arg(shown));
+			// **The suffix is drawn, not stored**, and these are the three
+			// places that would prove otherwise. A row found by typing "back",
+			// or sorted under the count rather than its name, would be the
+			// display leaking into the data.
+			check(model.data(idx, tab_tree_model::title_role).toString() == "Music",
+			      "while the title role is untouched, which is what sorting reads");
+			check(n->title == "Music", "and so is the node");
+			tree_sort_proxy proxy;
+			proxy.setSourceModel(&model);
+			proxy.set_search_text("back");
+			const int for_back = proxy.rowCount(QModelIndex());
+			// The control, without which the line above is worthless: a proxy
+			// that matched nothing at all would report exactly 0 here too.
+			proxy.set_search_text("Music");
+			const int for_music = proxy.rowCount(QModelIndex());
+			check(for_back == 0 && for_music > 0,
+			      QString("no row is found by searching for it, on a proxy that "
+			               "does find the row by name (%1 vs %2)")
+			          .arg(for_back).arg(for_music));
+			proxy.set_search_text("");
+
+			// The counts either side, since the dialog states both.
+			check(n->history.back_count() == 2 && n->history.forward_count() == 0,
+			      "a tab at the end of its history has nothing ahead");
+			n->history.index = 0;
+			check(n->history.back_count() == 0 && n->history.forward_count() == 2,
+			      "and one at the start has nothing behind");
+			check(!model.data(idx, Qt::DisplayRole).toString().contains("back"),
+			      "so its row goes back to saying nothing");
+			n->history = tab_history{};
+		}
+		holds(model, "history suffix");
+	}
+
 	section("sorting keeps the nesting and groups folders first");
 	{
 		tree_sort_proxy proxy;
@@ -624,6 +670,25 @@ int main(int argc, char **argv) {
 		          copy->type != node_type::suspended_tab,
 		      "and is not claimed to be open or suspended, since the state blob "
 		      "belongs to the id it was written under");
+		// **The crossing the imported record has to survive.** Dragging a tab
+		// out of the Firefox or Chromium mirror is this function, and the
+		// mirror is thrown away whole when it next refreshes -- so a history
+		// that does not copy here is one that existed for as long as the
+		// dialog was open and was then lost for good.
+		//
+		// It copies for the same reason `tags` does and the state blob does
+		// not: it describes the address, not a live view of it.
+		tab->history.entries << history_entry{ "https://old.test/1", "Before" }
+		                      << history_entry{ "https://old.test/2", "After" };
+		tab->history.index = 1;
+		node *kept = m.duplicate_node(tab);
+		check(kept && kept->history.entries.size() == 2,
+		      QString("a copy keeps the history it was made from (%1)")
+		          .arg(kept ? kept->history.entries.size() : -1));
+		check(kept && kept->history.index == 1,
+		      "and the position in it");
+		check(kept && kept->history.entries.at(0).url == "https://old.test/1",
+		      "with the entries themselves, not just a count");
 		holds(m, "copying gives the copy an id of its ow");
 	}
 
@@ -715,6 +780,59 @@ int main(int argc, char **argv) {
 		      "a second import does not add a second folder");
 		check(m.root()->children.first()->children.size() == 1,
 		      "and holds what the source has now, not the union of both reads");
+		// **And "keep this one" has to actually keep it.** The mirror exists so
+		// a row can be dragged out of it into the tree. `deep_copy` drops the
+		// mirror mark, so a Ctrl-drag was always safe -- but a plain drag is a
+		// *move*, and a moved node kept the mark, landed in the user's folder
+		// looking filed, and was then skipped by the writer for being
+		// somebody else's. The tab was gone at the next launch and nothing
+		// had reported anything.
+		node *fresh_mirror = m.root()->children.first();
+		node *keeper = fresh_mirror->children.first();
+		node *mine = nullptr;
+		for (node *c : m.root()->children)
+			if (c->mirror.isEmpty() && c->is_folder()) { mine = c; break; }
+		if (mine && keeper) {
+			keeper->history.entries
+			  << history_entry{ "https://elsewhere.test/old", "Where it had been" };
+			keeper->history.index = 0;
+			QMimeData *md = m.mimeData({ m.index_for_node(keeper) });
+			const bool moved = m.dropMimeData(md, Qt::MoveAction, -1, 0,
+			                                   m.index_for_node(mine));
+			delete md;
+			check(moved, "a mirrored tab can be dragged into the tree");
+			check(keeper->parent == mine, "and lands where it was dropped");
+			const QString mirror_id = "fx-0";
+			check(keeper->mirror.isEmpty(),
+			      "and stops being the other browser's, which is what keeping "
+			      "it means");
+			// **Its id was the mirror's too.** `replace_mirror` mints `fx-0`
+			// again on the next refresh, so a kept row holding that name would
+			// collide with a mirrored tab in the id index -- and the two would
+			// share a state blob and a history file.
+			check(keeper->id != mirror_id,
+			      QString("and is re-minted out of the mirror's namespace (%1)")
+			          .arg(keeper->id));
+			check(m.node_by_id(keeper->id) == keeper,
+			      "findable under the name it now has");
+			check(m.node_by_id(mirror_id) == nullptr,
+			      "and not under the one it left behind");
+			check(keeper->history.entries.size() == 1,
+			      "bringing what it had been with it");
+
+			const QString kept_path = dir + "/kept.txt";
+			check(m.save(kept_path), "the tree saves");
+			tab_tree_model back;
+			check(back.load(kept_path), "and loads again");
+			bool present = false;
+			for (node *c : back.root()->children)
+				for (node *k : c->children)
+					if (k->url == keeper->url)
+						present = true;
+			check(present,
+			      "with the kept tab in it -- the whole point of dragging it "
+			      "out of the mirror");
+		}
 		holds(m, "a mirror is shown and never written");
 	}
 

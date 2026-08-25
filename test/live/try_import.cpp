@@ -162,6 +162,87 @@ int main(int argc, char *argv[]) {
 				note("  " + line.left(72));
 	}
 
+	section("where a tab had been, kept across a restart");
+	{
+		// **The end of the record's journey, driven rather than reasoned
+		// about.** Everything either side of this is unit-tested -- the codec
+		// round-trips, the sidecar keeps the blob and the record apart,
+		// `deep_copy` carries the history across the mirror boundary. What
+		// only a real window can show is the two walks: the debounced save
+		// writing `state/<id>.history`, and `load_tree` reading it back.
+		node *carrier = nullptr;
+		for (const char *src : { "firefox", "chromium" }) {
+			node *m = mirror_folder(model, src);
+			if (!m)
+				continue;
+			for (node *c : m->children)
+				if (!c->history.is_empty()) { carrier = c; break; }
+			if (carrier)
+				break;
+		}
+		// Said out loud rather than skipped quietly: a section that finds
+		// nothing to test and prints nothing reads exactly like one that
+		// passed.
+		check(carrier != nullptr,
+		      "at least one imported tab arrived carrying its history");
+		if (carrier) {
+			note(QString("carrier: %1 -- %2 entries, on %3")
+			         .arg(carrier->title.left(40))
+			         .arg(carrier->history.entries.size())
+			         .arg(carrier->history.index));
+			node *mine_folder = nullptr;
+			for (node *c : model->root()->children)
+				if (c->mirror.isEmpty() && c->is_folder()) { mine_folder = c; break; }
+			check(mine_folder != nullptr, "and the user has a folder to keep it in");
+
+			if (mine_folder) {
+				const QString url = carrier->url;
+				const int entries = carrier->history.entries.size();
+				QMimeData *md = model->mimeData({ model->index_for_node(carrier) });
+				const bool dropped = model->dropMimeData(
+				    md, Qt::MoveAction, -1, 0, model->index_for_node(mine_folder));
+				delete md;
+				check(dropped, "it drags into the tree");
+
+				// Past the 1500ms debounce the shell saves on, because that is
+				// the real path: nothing here calls the writer by hand.
+				spin(2500);
+
+				node *kept = nullptr;
+				for (node *c : mine_folder->children)
+					if (c->url == url) { kept = c; break; }
+				check(kept != nullptr, "and is there afterwards");
+				if (kept) {
+					const QString blob = out + "/state";
+					QDir d(blob);
+					const QStringList records =
+					  d.entryList(QStringList() << "*.history", QDir::Files);
+					check(!records.isEmpty(),
+					      QString("the record is written beside the tree (%1 in "
+					               "%2)").arg(records.size()).arg(blob));
+
+					// **The restart.** Re-reading the tree from disk is what
+					// the next launch does, and it is the only thing that can
+					// tell a record that was kept from one that was merely
+					// still in memory.
+					const QString id = kept->id;
+					w.load_tree(tree);
+					spin(400);
+					auto *m2 = w.findChild<tab_tree_model *>();
+					node *again = m2 ? m2->node_by_id(id) : nullptr;
+					check(again != nullptr,
+					      QString("the kept tab is in the file (%1)").arg(id));
+					check(again && again->history.entries.size() == entries,
+					      QString("with the pages it had been on (%1 of %2)")
+					          .arg(again ? again->history.entries.size() : -1)
+					          .arg(entries));
+					check(again && again->history.index == carrier->history.index,
+					      "and where in them it stood");
+				}
+			}
+		}
+	}
+
 	section("an empty tree says which kind of empty it is");
 	{
 		// Filtering everything away and having nothing to begin with look

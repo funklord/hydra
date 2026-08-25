@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <QUrl>
+
 #include <QStringList>
 #include <QTreeView>
 
@@ -80,6 +82,13 @@ signals:
 	// address and browsed to another still records the first. Locking means
 	// "keep *this* page", and only the shell can see which page that is.
 	void lock_requested(node *n);
+	// One entry from a tab's imported history, opened as a **sub-tab** of the
+	// row it belongs to (sec 5.5). The shell, for the same reason as the rest
+	// of these: making a tab needs an engine and a stacked widget. A sub-tab
+	// rather than a navigation because the record is the point -- sending the
+	// row itself back into its own past would rewrite the address the record
+	// exists to preserve.
+	void history_open_requested(node *parent, const QUrl &url);
 
 protected:
 	// Where the file-manager gestures are actually decided.

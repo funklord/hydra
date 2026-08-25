@@ -2,7 +2,7 @@
 #
 # Per-binary link sets, closed over symbols by fmake. Regenerate with
 #
-#     make -C tests objsets
+#     make -C test objsets
 #
 # The list below is the tree this was generated from. test/Makefile
 # compares it against the tree it finds and refuses to build when they
@@ -15,7 +15,7 @@
 # two of them here was 23 targets quietly missing. If this file is
 # wrong, start with whether this is the fmake you meant.
 #
-#     /tmp/claude-1000/-home-funk-src-hydra/9628fa8e-571e-4c5c-87ab-f870f325e6c1/scratchpad/bin/fmake  (mtime 2026-08-14 18:17)
+#     /tmp/claude-1000/-home-funk-src-hydra/9628fa8e-571e-4c5c-87ab-f870f325e6c1/scratchpad/fmake-head/fmake  (mtime 2026-08-25 17:48)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -374,7 +374,8 @@ OBJS_test_signals = \
 	$(BUILD_DIR)/moc/moc_filter_signals.o
 
 OBJS_test_state = \
-	$(BUILD_DIR)/app/state_store.o
+	$(BUILD_DIR)/app/state_store.o \
+	$(BUILD_DIR)/app/tab_history.o
 
 OBJS_test_streamtype = \
 	$(BUILD_DIR)/app/stream_probe.o \
@@ -490,6 +491,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -534,8 +536,8 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -607,6 +609,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -651,8 +654,8 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -724,6 +727,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -768,8 +772,8 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -844,6 +848,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -885,8 +890,8 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -961,6 +966,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -1002,8 +1008,8 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -1091,6 +1097,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -1119,8 +1126,8 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -1192,6 +1199,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -1236,8 +1244,8 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -1312,6 +1320,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -1353,8 +1362,8 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -1426,6 +1435,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -1470,8 +1480,8 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -1545,6 +1555,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -1587,8 +1598,8 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -1663,6 +1674,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -1704,8 +1716,8 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -1713,8 +1725,10 @@ OBJS_try_downloads = \
 OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/app/main_window.o \
 	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/app/request_filter.o \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
+	$(BUILD_DIR)/app/filter_signals.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
@@ -1744,7 +1758,6 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/app/consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_element_picker.o \
 	$(BUILD_DIR)/app/element_picker.o \
-	$(BUILD_DIR)/app/filter_signals.o \
 	$(BUILD_DIR)/app/keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
@@ -1777,6 +1790,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -1820,9 +1834,8 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
-	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -1905,6 +1918,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -1939,8 +1953,8 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o
 
@@ -2013,6 +2027,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -2055,8 +2070,8 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -2131,6 +2146,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -2172,8 +2188,8 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -2247,6 +2263,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -2291,8 +2308,8 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -2367,6 +2384,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -2408,8 +2426,8 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -2503,6 +2521,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -2532,8 +2551,8 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -2620,6 +2639,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -2649,8 +2669,8 @@ OBJS_try_look = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -2725,6 +2745,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -2766,8 +2787,8 @@ OBJS_try_media = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -2844,6 +2865,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -2883,8 +2905,8 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -2972,6 +2994,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -3002,8 +3025,8 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -3087,6 +3110,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -3119,8 +3143,8 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -3192,6 +3216,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -3236,8 +3261,8 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -3335,6 +3360,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -3354,8 +3380,8 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o
 
@@ -3429,6 +3455,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -3470,8 +3497,8 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -3556,6 +3583,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -3597,8 +3625,8 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -3699,6 +3727,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -3741,8 +3770,8 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -3819,6 +3848,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -3858,8 +3888,8 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -3936,6 +3966,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -3975,8 +4006,8 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -4051,6 +4082,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -4092,8 +4124,8 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
@@ -4168,6 +4200,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
@@ -4209,8 +4242,8 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o

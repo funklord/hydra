@@ -204,8 +204,25 @@ QVariant tab_tree_model::data(const QModelIndex &index, int role) const {
 		return {};
 
 	switch (role) {
-		case Qt::DisplayRole:
-			return n->title.isEmpty() ? n->url : n->title;
+		case Qt::DisplayRole: {
+			const QString label = n->title.isEmpty() ? n->url : n->title;
+			// **What a tab brought with it, in the fewest characters that say
+			// it.** An imported tab carries the pages it had been on, and
+			// without a mark on the row there is nothing to suggest opening
+			// its properties to find them -- a record nobody can see is one
+			// nobody reads.
+			//
+			// The count is of pages *behind* it, because that is the one a
+			// person is looking for; the forward entries are in the dialog.
+			// Appended to the drawn text only: search matches the node's own
+			// title and url, and sorting reads `title_role`, so neither can
+			// see this and a row cannot be found by typing "back".
+			const int behind = n->history.back_count();
+			if (behind > 0)
+				return QString("%1  %2 %3 back")
+					         .arg(label).arg(QChar(0x00b7)).arg(behind);
+			return label;
+		}
 		case Qt::ToolTipRole:
 			return n->url;
 		case Qt::DecorationRole: {
@@ -352,6 +369,12 @@ static node *deep_copy(const node *src, tab_tree_model *model,
 	c->created  = src->created;
 	c->last_seen = src->last_seen;
 	c->tags     = src->tags;
+	// Copied, for the same reason `tags` is and the state blob is not: it
+	// describes the *address*, not a live view of it. This is also the one
+	// path that matters most -- dragging a tab out of the Firefox or Chromium
+	// mirror is a `deep_copy`, and it is the only moment the imported history
+	// has to cross into the tree or it is lost with the mirror.
+	c->history  = src->history;
 	// **Not** a copy of the open/suspended state. A copied tab is a second
 	// bookmark of the same address, not a second live view of it: the state
 	// blob belongs to the id it was written under, and duplicating the id is
@@ -464,6 +487,20 @@ bool tab_tree_model::dropMimeData(const QMimeData *data, Qt::DropAction action,
 				target->children << n;
 		}
 	}
+	// **Out of a mirror is out of it.** A copy never carried the mark --
+	// `deep_copy` does not take it -- but a move did, so a plainly dragged
+	// row landed in the user's folder looking filed and was then skipped by
+	// the writer for belonging to somebody else. It was gone at the next
+	// launch, with nothing having reported anything: the tree on screen and
+	// the tree on disk disagreed, and only one of them survived.
+	//
+	// Asked of the destination rather than the source, because that is what
+	// decides it. Dropping *into* a mirror is the same rule read the other
+	// way and does not arise -- a refresh replaces the whole folder.
+	if (target->mirror.isEmpty())
+		for (node *n : moving)
+			clear_mirror(n);
+
 	// Sibling order is what the outline file records, so it has to agree with
 	// the list we just rearranged or the next save undoes the drag.
 	renumber(target);
@@ -663,6 +700,39 @@ void tab_tree_model::mark_mirror(node *n, const QString &source) {
 	n->mirror = source;
 	for (node *c : n->children)
 		mark_mirror(c, source);
+}
+
+void tab_tree_model::clear_mirror(node *n) {
+	// **Nothing to do, and it must be nothing.** A node with no mark has no
+	// marked descendant either -- a mirror is a whole subtree -- so returning
+	// here is not an optimisation, it is what keeps an ordinary drag from
+	// re-minting ids. Falling through renamed every moved node in the tree,
+	// which three tests caught by asking whether a dragged row was still
+	// itself afterwards.
+	if (!n || n->mirror.isEmpty())
+		return;
+	n->mirror.clear();
+	// **And the id, which belonged to the mirror as much as the mark did.**
+	// Mirror ids are scoped to their source -- `firefox-0`, `firefox-1` -- and
+	// `replace_mirror` mints those same names again on the next refresh. A row
+	// that kept one after being dragged into the tree would collide with a
+	// mirrored tab in `m_id_index`, and `node_by_id` -- which the lifecycle and
+	// the AI payload both use -- would answer with whichever won. They would
+	// also share `state/<id>.blob` and `state/<id>.history`.
+	//
+	// Announced rather than done quietly: the shell keys live views and the
+	// recently-used list by id, and a mirrored tab can be open at the moment it
+	// is dragged.
+	if (!n->id.isEmpty()) {
+		const QString was = n->id;
+		n->id = unused_id(n->is_folder() ? "f" : "t");
+		m_id_index.insert(n->id, n);
+		emit id_changed(was, n->id);
+	}
+	// The whole subtree, because a mirrored folder's children are mirrored
+	// too and half a mirror is the shape `tree_invariants` refuses.
+	for (node *c : n->children)
+		clear_mirror(c);
 }
 
 node *tab_tree_model::replace_mirror(const QString &source, const QString &title,

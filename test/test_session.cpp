@@ -138,6 +138,67 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	section("a tab's past, on a document written here");
+	{
+		// The real profile above is only read if one exists, and it would not
+		// reliably contain either case that matters. Both are built here.
+		//
+		// Tab one pressed Back once: `index` is 1-based and points into the
+		// middle, so the imported address is the entry it is on and the two
+		// either side of it survive as history.
+		//
+		// Tab two went A, B, A and is on the *second* A, with an entry
+		// carrying no url in the middle of it. That is the pair of traps: the
+		// position cannot be found by matching the url, which would answer 0,
+		// and it cannot be the index into `entries` either, because the blank
+		// one is dropped from the history list and shifts everything after it.
+		const QByteArray doc = R"({"windows":[{"tabs":[
+		  {"index":2,"entries":[
+		    {"url":"https://a.test/1","title":"One"},
+		    {"url":"https://a.test/2","title":"Two"},
+		    {"url":"https://a.test/3","title":"Three"}]},
+		  {"index":4,"entries":[
+		    {"url":"https://b.test/a","title":"A"},
+		    {"title":"an entry with no address at all"},
+		    {"url":"https://b.test/b","title":"B"},
+		    {"url":"https://b.test/a","title":"A again"}]}]}]})";
+
+		QString herr;
+		const auto tabs = session_import::parse_firefox_session(doc, &herr);
+		check(tabs.size() == 2,
+		      QString("both tabs parse (%1%2)").arg(tabs.size())
+		          .arg(herr.isEmpty() ? "" : ", " + herr));
+		if (tabs.size() == 2) {
+			const auto &one = tabs.at(0);
+			check(one.url == "https://a.test/2",
+			      QString("a tab that went Back imports the page it is on (%1)")
+			          .arg(one.url));
+			check(one.history.entries.size() == 3,
+			      QString("with the whole list, not just what it is on (%1)")
+			          .arg(one.history.entries.size()));
+			check(one.history.entries.size() == 3 &&
+			          one.history.entries.at(0).url == "https://a.test/1" &&
+			          one.history.entries.at(2).url == "https://a.test/3",
+			      "oldest first, so Forward is not lost by importing");
+			check(one.history.index == 1,
+			      QString("and it knows where in that list it stands (%1)")
+			          .arg(one.history.index));
+
+			const auto &two = tabs.at(1);
+			check(two.history.entries.size() == 3,
+			      QString("an entry with no address is dropped (%1)")
+			          .arg(two.history.entries.size()));
+			check(two.history.index == 2,
+			      QString("and the position survives both the duplicate url "
+			              "and the dropped entry (%1, not 0)")
+			          .arg(two.history.index));
+			check(two.history.index >= 0 &&
+			          two.history.index < two.history.entries.size() &&
+			          two.history.entries.at(two.history.index).url == two.url,
+			      "the entry it points at is the address the tab imported as");
+		}
+	}
+
 	section("which profile, which is where an importer quietly imports nothing");
 	{
 		// The trap, reproduced: a profiles.ini whose Default=1 names a stub and
@@ -409,6 +470,28 @@ int main(int argc, char **argv) {
 		check(tabs.size() == 2 && tabs.at(0).url == "https://one.test/b",
 		      QString("the first is on the entry it selected (%1)")
 		          .arg(tabs.isEmpty() ? QString() : tabs.at(0).url));
+
+		// **The past, not only the present.** Both formats carry every entry a
+		// tab visited and both parsers used to keep one. Tab 1 was written with
+		// two navigations and selected the second, so the whole list must come
+		// through in the order Chromium indexed it, with the selected entry
+		// found rather than assumed to be last.
+		const bool one_ok = tabs.size() == 2 && tabs.at(0).history.entries.size() == 2;
+		check(one_ok, QString("its history comes through, both entries (%1)")
+		                  .arg(tabs.isEmpty() ? 0 : tabs.at(0).history.entries.size()));
+		check(one_ok && tabs.at(0).history.entries.at(0).url == "https://one.test/a" &&
+		          tabs.at(0).history.entries.at(1).url == "https://one.test/b",
+		      "in navigation-index order, oldest first");
+		check(one_ok && tabs.at(0).history.entries.at(0).title == "One A",
+		      "carrying the titles, not only the addresses");
+		check(one_ok && tabs.at(0).history.index == 1,
+		      QString("and says which entry the tab was on (%1)")
+		          .arg(one_ok ? tabs.at(0).history.index : -99));
+		// The one-entry case, which must not report itself as having no
+		// position: a tab that never navigated is still *on* its only entry.
+		check(tabs.size() == 2 && tabs.at(1).history.entries.size() == 1 &&
+		          tabs.at(1).history.index == 0,
+		      "a tab with one entry is on that entry, not nowhere");
 
 		// A tab closed later in the log is gone, however many navigations it
 		// accumulated first. This is the whole reason the log has to be

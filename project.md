@@ -786,6 +786,60 @@ set and an id of its own, so it becomes an ordinary tab in your tree, saved like
 any other. That fell out of the drag-and-drop work rather than needing anything
 of its own.
 
+#### It only worked if you held Ctrl
+
+"That fell out of the drag-and-drop work" was true of exactly one of the two
+gestures, and the other one lost the tab. A **copy** is `deep_copy`, which
+never took the `mirror` field and so produced a clean node. A plain drag is a
+**move**, and the move branch reparented the node without touching the mark --
+so the row landed in the user's own folder, looked filed, and was then skipped
+by `write_node` for belonging to somebody else. It was gone at the next launch.
+
+Nothing reported it, and nothing could have: the tree on screen and the tree on
+disk simply disagreed, and only the second one survives a restart. It is the
+same shape as the sample tree coming back -- a save that silently declines to
+record what is in front of you.
+
+The mark is cleared on the moved subtree now, decided by the **destination**
+rather than the source, since that is what the question is about.
+
+`tree_invariants` had half the rule: it refused an *unmarked* node inside a
+mirror, which is the half that would write foreign tabs into the file. The
+other half -- a *marked* node inside the user's tree, which drops one of theirs
+out of it -- was not checked, which is why this survived. Both are refused now,
+with the tree root exempt because the mirror folder legitimately hangs off it.
+The suite asserts the bad shape is caught **and** that a whole mirror at the
+top still passes, so the new rule is known to discriminate rather than merely
+to fire.
+
+#### And the id was the mirror's as well
+
+Making the move work exposed the next layer, which the driver found by printing
+what it had kept: the tab came back as `firefox-0`. A mirror's ids are scoped
+to it *on purpose* -- the paragraph above says why -- and `replace_mirror` mints
+those same names on every refresh. A kept row holding one collides with a
+mirrored tab in `m_id_index`, and `node_by_id` (the lifecycle and the AI payload
+both use it) answers with whichever won. They would also share
+`state/<id>.blob` and `state/<id>.history`.
+
+So leaving a mirror re-mints the id, out of the ordinary `t`/`f` namespace. The
+mark and the namespace belonged to the mirror equally, and they are given up
+together.
+
+That is the one case in this program where **an id changes during a node's
+lifetime**, which everything else is entitled to assume it never does. It is
+announced -- `id_changed(was, now)` -- because the shell keys live views, the
+recently-used list and the state sidecar by id, and a mirrored tab can be open
+at the moment it is dragged. A view left under a name nothing resolves is
+invisible, uncloseable, and still holding a slot against the live-view cap.
+
+The first version of the helper cleared and re-minted unconditionally, so
+*every* dragged row was renamed. Three existing tests caught it within a minute
+by asking whether a moved tab was still itself. The guard is that a node with no
+mark has no marked descendant either -- a mirror is a whole subtree -- so an
+unmarked node returns immediately, which is correctness rather than an
+optimisation.
+
 ### Following it, which needed two problems solved first
 
 **Tools ▸ Keep Firefox Tabs in Sync**, off unless asked for: reading another
@@ -891,6 +945,79 @@ from tabs the user filed, returning on every launch with nothing to remove them.
 A detail that fell out rather than being designed: mirrored rows render in the
 muted style the model already gives an unopened tab, so they read as *not yours*
 without any new styling.
+
+### Where a tab had been, kept (§4.2)
+
+Both session formats carry each tab's whole back/forward list, and both parsers
+read it in order to answer one question -- *which entry is this tab on?* -- and
+then threw the rest away. Firefox writes `entries[]` with a 1-based `index`;
+Chromium writes one `TabNavigationPath` command per entry and a second command
+naming the selected one. The list was already in memory in both cases. What it
+cost to keep it was a field.
+
+It is kept as **a record, not a Back button**, and the distinction is the whole
+design:
+
+- **Only urls and titles cross.** That is all one browser's session file offers
+  another. No scroll position, no form contents, no cache keys, no engine
+  state -- and nothing that could be reconstructed later, because the pages
+  have moved on.
+- **It is stored in our own format**, `state/<id>.history`, beside the engine's
+  opaque `state/<id>.blob` and never inside it. The two have different
+  lifetimes: a blob is Qt WebEngine's, is unreadable to anything else, and is
+  rightly discarded when the engine version moves on. This has to survive
+  exactly that, so it is line-based text in the tree file's own shape --
+  ` | `-separated, editable by a person, split on the *first* separator because
+  a title may contain one and a url may not.
+- **`state_store::remove` deletes both.** A history left behind by a delete is
+  the collision that file's own comment already warns about, one file over: the
+  next node handed that id would open wearing a stranger's past.
+
+**Opening an entry makes a sub-tab** (§5.5), below the row it came from. Not a
+navigation: sending the tab back into its own past would rewrite the address
+the record exists to preserve.
+
+Three places show it, and the split is deliberate. The row carries a count and
+nothing else -- `Music  · 2 back` -- because a record nobody can see is one
+nobody reads, and because *how many* is the question people actually have. The
+properties dialog carries the list, capped at four rows high, since one imported
+tab here had ninety and a dialog that grows to fit its longest field goes off
+the bottom of the screen for the tab that most needs reading. The entry the tab
+stands on is marked in the list rather than merely selected, because selection
+is the user's and moves the moment they click.
+
+The suffix is **drawn, not stored**: appended in `DisplayRole` only, while
+search matches the node's own title and url and sorting reads `title_role`. A
+test asserts all three, with a positive control on the search -- a proxy that
+matched nothing would report the same zero.
+
+#### The crossing that had to work
+
+A mirror is never written to the tree file and is replaced wholesale on every
+refresh, so an imported history exists only until the source is re-read. The
+one moment it can be kept is `deep_copy`, which is what dragging a row out of
+the mirror runs. It copies for the same reason `tags` does and the state blob
+does not: it describes the *address*, not a live view of it. `test_model`
+drives that path directly, because a history that does not survive it is one
+that was never anything but a dialog.
+
+#### What was found on the way
+
+- **The position cannot be located by matching the url.** The first version
+  searched the built list for the tab's own address, which answers 0 for a tab
+  that went A, B, A and is standing on the second A -- two steps further back
+  than it really is. It is counted as the list is built instead, which also
+  handles entries with no url being dropped: a position in `entries` is not a
+  position in `history`. The Chromium side never had the bug, being keyed by
+  navigation index rather than by content.
+- **`QHash` has no order.** Chromium's navigations are collected into one, so
+  the keys are sorted before the list is built. Unsorted, the record reads as a
+  tab that had visited its own past at random.
+- **A test that passes is not a test that discriminates.** The duplicate-url
+  assertion was checked by reintroducing the defect and watching it fail; the
+  neighbouring check -- that the position points at the address the tab
+  imported as -- passed throughout, because entry 0 happens to hold the same
+  url. Only the explicit `== 2` catches it.
 
 ## The icon
 
@@ -7588,8 +7715,8 @@ going to use, and would have been wrong wherever a header is implemented in a
 file it does not name.
 
 `tool/objsets.py` asks fmake once, rewrites the answer into the object names
-`test/Makefile` uses, and writes `test/objsets.mk`: 73 programs, 3655
-objects, 50 apiece. It is committed, so an ordinary build needs `make` and
+`test/Makefile` uses, and writes `test/objsets.mk`: 79 programs, 3992
+objects, 50.5 apiece. It is committed, so an ordinary build needs `make` and
 nothing else; fmake is needed only to regenerate it.
 
 **Measured, from an up-to-date tree each time**, counting offline suites that

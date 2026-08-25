@@ -106,6 +106,11 @@ private slots:
 	void open_url_externally(const QUrl &url);
 	void forget_subtree(node *n);
 	void save_tree_soon();
+	// The imported back/forward records, which live beside the tree file
+	// rather than in it. Both walk the whole tree from the root when called
+	// with no argument.
+	void persist_histories(node *from = nullptr);
+	void restore_histories(node *from = nullptr);
 	void new_tab();
 	void new_folder();
 	node *selected_parent() const;

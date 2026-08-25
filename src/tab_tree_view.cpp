@@ -15,6 +15,7 @@
 #include <QKeyEvent>
 #include <QFormLayout>
 #include <QLabel>
+#include <QListWidget>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
@@ -456,14 +457,85 @@ void tab_tree_view::edit_properties(node *n) {
 	form->addRow("Added", new QLabel(n->created.toString(Qt::ISODate), &dlg));
 	form->addRow("Last seen", new QLabel(n->last_seen.toString(Qt::ISODate), &dlg));
 
+	// **Where this tab had been, when it was imported from another browser.**
+	//
+	// Shown here rather than in the tree because it is the answer to a
+	// question nobody asks often: the row already says how many pages are
+	// behind this one, and this is where somebody goes when they want to know
+	// *which*. A read-only list, because it is a record -- there is nothing to
+	// edit and nothing that would be true if it were edited.
+	//
+	// Absent entirely when there is none, which is the usual case: an empty
+	// box captioned "History" tells a person their tab has lost something,
+	// when in fact it never had one.
+	// Set by the list below, acted on after `exec` returns. **Not emitted from
+	// inside the dialog**: that runs while a modal event loop is still on the
+	// stack, so the shell would build a view and start a load underneath one --
+	// the same re-entrancy the locked-tab sub-tab path avoids by queueing.
+	QUrl chosen_from_history;
+	QListWidget *history = nullptr;
+	if (!n->history.is_empty()) {
+		history = new QListWidget(&dlg);
+		history->setObjectName("properties_history");
+		history->setAlternatingRowColors(true);
+		// Four rows of it. The list can hold hundreds -- one imported tab here
+		// had ninety -- and a dialog that grows to fit its longest field is
+		// one that goes off the bottom of the screen for the tab that most
+		// needs reading.
+		history->setMaximumHeight(4 * history->fontMetrics().height() + 24);
+		for (int i = 0; i < n->history.entries.size(); ++i) {
+			const history_entry &e = n->history.entries.at(i);
+			auto *row = new QListWidgetItem(e.title, history);
+			row->setToolTip(e.url);
+			// The url on the item, so a reordered or filtered list cannot hand
+			// back the wrong one by index.
+			row->setData(Qt::UserRole, e.url);
+			if (i == n->history.index) {
+				// Where the tab stands in its own past, marked rather than
+				// merely selected: selection is the user's and is about to
+				// move the moment they click anything.
+				QFont f = row->font();
+				f.setBold(true);
+				row->setFont(f);
+				row->setText(e.title + "  (this page)");
+				history->setCurrentItem(row);
+			}
+		}
+		connect(history, &QListWidget::itemActivated, &dlg,
+		         [&chosen_from_history, &dlg](QListWidgetItem *item) {
+			const QUrl u(item->data(Qt::UserRole).toString());
+			if (!u.isValid() || u.isEmpty())
+				return;
+			// Rejected rather than accepted: opening a page out of the record
+			// is not a reason to write the form back, and leaving the dialog
+			// up over the tab that just appeared hides the thing the click
+			// asked for.
+			chosen_from_history = u;
+			dlg.reject();
+		});
+		auto *caption = new QLabel(
+		  QString("%1 %2, %3 back and %4 ahead. Double-click to open one below "
+		           "this tab.")
+		      .arg(n->history.entries.size())
+		      .arg(n->history.entries.size() == 1 ? "page" : "pages")
+		      .arg(n->history.back_count())
+		      .arg(n->history.forward_count()), &dlg);
+		caption->setWordWrap(true);
+		form->addRow("History", history);
+		form->addRow(QString(), caption);
+	}
+
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok |
 	                                      QDialogButtonBox::Cancel, &dlg);
 	connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
 	connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
 	form->addRow(buttons);
 
-	if (dlg.exec() != QDialog::Accepted)
+	if (dlg.exec() != QDialog::Accepted) {
+		if (!chosen_from_history.isEmpty())
+			emit history_open_requested(n, chosen_from_history);
 		return;
+	}
 	QStringList tag_list;
 	for (const QString &t : tags->text().split(',', Qt::SkipEmptyParts))
 		if (!t.trimmed().isEmpty())

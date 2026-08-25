@@ -253,6 +253,32 @@ QList<imported_tab> parse_firefox_session(const QByteArray &json, QString *error
 			tab.title  = e.value("title").toString();
 			tab.window = window_index;
 			tab.pinned = t.value("pinned").toBool(false);
+			// The rest of `entries` is where this tab had been. Kept in the
+			// order Firefox wrote it, oldest first, which is the order `index`
+			// counts in -- so the current entry keeps its place rather than
+			// being hoisted to the front and losing what came before it.
+			//
+			// The position is counted as the list is built, not searched for
+			// afterwards: entries with no url are skipped, so a position in
+			// `entries` is not a position in `history`, and matching on the
+			// url instead would find the *first* occurrence -- a tab that
+			// went A, B, A and is on the second A would report itself as
+			// being on the first, two steps of history further back than it
+			// really is.
+			for (int i = 0; i < entries.size(); ++i) {
+				const QJsonObject h = entries.at(i).toObject();
+				const QString hu = h.value("url").toString();
+				if (hu.isEmpty())
+					continue;
+				if (i == idx - 1)
+					tab.history.index = tab.history.entries.size();
+				history_entry he;
+				he.url   = hu;
+				he.title = h.value("title").toString();
+				if (he.title.isEmpty())
+					he.title = hu;
+				tab.history.entries << he;
+			}
 			if (tab.url.isEmpty())
 				continue;
 			// A tab that has never been loaded has no title of its own; its
@@ -483,6 +509,23 @@ QList<imported_tab> replay_snss(const QByteArray &file, QString *error) {
 		tab.url    = nav.first;
 		tab.title  = nav.second.isEmpty() ? nav.first : nav.second;
 		tab.window = int(t.window);
+		// The map is already the tab's whole history; it is keyed by Chromium's
+		// navigation index, which a QHash does not keep in order, so the keys
+		// are sorted before the list is built. Out of order this would read as
+		// a tab that had visited its own past at random.
+		QList<qint32> keys = t.navigations.keys();
+		std::sort(keys.begin(), keys.end());
+		for (qint32 k : keys) {
+			const auto n = t.navigations.value(k);
+			if (n.first.isEmpty())
+				continue;
+			history_entry he;
+			he.url   = n.first;
+			he.title = n.second.isEmpty() ? n.first : n.second;
+			tab.history.entries << he;
+			if (k == idx)
+				tab.history.index = int(tab.history.entries.size()) - 1;
+		}
 		if (tab.url.isEmpty())
 			continue;
 		ordered << qMakePair(qMakePair(t.window,

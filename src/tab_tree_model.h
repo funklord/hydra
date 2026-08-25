@@ -108,6 +108,9 @@ public:
 	//
 	// Anything the user dragged *out* of the mirror is untouched by this, since
 	// a drag out makes a copy with no `mirror` set -- that copy is theirs.
+	// Stop a subtree being another browser's -- what dragging a row out of a
+	// mirror into the tree means.
+	void clear_mirror(node *n);
 	node *replace_mirror(const QString &source, const QString &title,
 	                      const QList<node *> &tabs);
 	// Every node under `n` is marked as belonging to the same source.
@@ -170,6 +173,14 @@ signals:
 	// of them, and the model has no idea that views exist. Emitted *before* the
 	// delete, because afterwards there is nothing left to identify.
 	void about_to_remove(node *n);
+
+	// A node's id changed, which normally never happens -- an id is stable for
+	// the node's lifetime. The exception is a row leaving a mirror: its id was
+	// minted in the mirror's own namespace (`firefox-0`) and the next refresh
+	// mints that name again, so it cannot be carried into the tree. The shell
+	// keys live views, the recently-used list and the state sidecar by id, and
+	// none of them can see this happen.
+	void id_changed(const QString &was, const QString &now);
 
 private:
 	void reindex();  // rebuild m_id_index from the current tree

@@ -135,6 +135,35 @@ int main(int argc, char **argv) {
 		      "half a mirror is caught, which is the half that reaches the file");
 		delete root;
 	}
+	{
+		// **The other half, which is the one that cost a tab.** A row dragged
+		// out of a mirror with a plain drag was moved without the mark being
+		// cleared: it sat in the user's own folder still belonging to Firefox,
+		// looked filed, and was dropped by the writer for being somebody
+		// else's. Nothing reported it -- the tree on screen and the tree on
+		// disk simply disagreed, and only one of them survived a restart.
+		node *root = tree_gen::build(1, 1, 0);
+		node *f = root->children.first();
+		f->children.first()->mirror = "firefox";   // the parent is not mirrored
+		const auto r = tree_invariants::check(root);
+		check(!r.ok && r.summary().contains("not mirrored"),
+		      "a mirrored row inside the user's tree is caught too");
+
+		// And the shape that is legal, so the rule above is known to be
+		// discriminating rather than merely loud: a mirror folder hangs off
+		// the root, which is never itself mirrored.
+		node *ok_root = tree_gen::build(1, 1, 0);
+		node *top = ok_root->children.first();
+		top->mirror = "firefox";
+		for (node *c : top->children)
+			c->mirror = "firefox";
+		const auto r2 = tree_invariants::check(ok_root);
+		check(r2.ok,
+		      QString("while a whole mirror at the top is legal (%1)")
+		          .arg(r2.ok ? QString("no problems") : r2.summary()));
+		delete ok_root;
+		delete root;
+	}
 
 	section("a file nested past the limit is flattened, not refused");
 	{

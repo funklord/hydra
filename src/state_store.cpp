@@ -17,13 +17,16 @@ QString digest(const QString &id) {
 		  .left(8));
 }
 
+// Beside `.blob`, never inside it.
+const char k_history_ext[] = ".history";
+
 }  // namespace
 
 state_store::state_store(const QString &dir) : m_dir(dir) {
 	QDir().mkpath(m_dir);
 }
 
-QString state_store::path_for(const QString &id) const {
+QString state_store::path_for(const QString &id, const char *ext) const {
 	// Ids are short opaque tokens, but they come from the tree file, which is
 	// documented as human-editable -- so "regardless" has to mean it.
 	static const QRegularExpression unsafe("[^A-Za-z0-9._-]");
@@ -43,11 +46,11 @@ QString state_store::path_for(const QString &id) const {
 	const bool changed = (safe != id);
 	if (safe.size() > 100) {
 		safe.truncate(100);
-		return m_dir + "/" + safe + "-" + digest(id) + ".blob";
+		return m_dir + "/" + safe + "-" + digest(id) + ext;
 	}
 	if (changed)
-		return m_dir + "/" + safe + "-" + digest(id) + ".blob";
-	return m_dir + "/" + safe + ".blob";
+		return m_dir + "/" + safe + "-" + digest(id) + ext;
+	return m_dir + "/" + safe + ext;
 }
 
 bool state_store::has_state(const QString &id) const {
@@ -68,6 +71,33 @@ bool state_store::save(const QString &id, const QByteArray &blob) {
 	return f.write(blob) == blob.size();
 }
 
+bool state_store::has_history(const QString &id) const {
+	return QFile::exists(path_for(id, k_history_ext));
+}
+
+QByteArray state_store::load_history(const QString &id) const {
+	QFile f(path_for(id, k_history_ext));
+	if (!f.open(QIODevice::ReadOnly))
+		return {};
+	return f.readAll();
+}
+
+bool state_store::save_history(const QString &id, const QByteArray &bytes) {
+	// An empty record is an absent one. Writing a header with no entries under
+	// it would make `has_history` answer yes for a tab that has no past, and
+	// every caller would then have to re-check what the file said.
+	if (bytes.isEmpty())
+		return QFile::remove(path_for(id, k_history_ext));
+	QFile f(path_for(id, k_history_ext));
+	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+		return false;
+	return f.write(bytes) == bytes.size();
+}
+
 bool state_store::remove(const QString &id) {
-	return QFile::remove(path_for(id));
+	// Both, and the blob's answer is the one reported: a node that never had a
+	// history is the common case, and its missing file is not a failure.
+	const bool gone = QFile::remove(path_for(id));
+	QFile::remove(path_for(id, k_history_ext));
+	return gone;
 }

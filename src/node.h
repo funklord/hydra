@@ -6,6 +6,8 @@
 #include <QDateTime>
 #include <QList>
 
+#include "tab_history.h"
+
 // A single entry in the tab/link tree. Folder or leaf.
 // Runtime weight (a live web view backend, or a suspended state blob) is attached
 // separately by `id` in the shell -- never stored on the node itself -- so moving
@@ -20,6 +22,18 @@ struct node {
 	QDateTime created;
 	QDateTime last_seen;
 	QStringList tags;
+
+	// Where this tab had been before hydra ever saw it -- imported from another
+	// browser's session and then kept (architecture doc sec 4.2).
+	//
+	// **On the node rather than attached by id, unlike the state blob**, and
+	// the difference is what each thing is. A blob is runtime weight: the
+	// engine's, opaque, discardable, and moving a node must not disturb it. A
+	// history is content, like `tags` and the url itself -- it describes the
+	// address rather than any live view of it, so it copies with a copy and
+	// travels with a move. It is held in memory because the tree draws a count
+	// from it on every row; the file beside it is the record, written once.
+	tab_history history;
 
 	int       order = 0;          // canonical sibling order as loaded from disk
 

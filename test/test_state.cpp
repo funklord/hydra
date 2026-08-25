@@ -5,6 +5,7 @@
 // its past; handing the *wrong* one back is worse, because the tab then claims a
 // history that belongs to a different page.
 #include "state_store.h"
+#include "tab_history.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -129,6 +130,75 @@ int main(int argc, char **argv) {
 		state_store second(dir);
 		check(second.load("shared") == QByteArray("kept"),
 		      "state outlives the object that wrote it, which is the point of it");
+	}
+
+	section("the imported history, which is a record rather than engine state");
+	{
+		state_store s(dir);
+		tab_history h;
+		h.entries << history_entry{ "https://one.test/a", "First" }
+		           << history_entry{ "https://one.test/b", "Second | with a bar" }
+		           << history_entry{ "https://one.test/c", "Third" };
+		h.index = 1;
+
+		check(!s.has_history("h1"), "a node with no record has none");
+		s.save_history("h1", tab_history_codec::encode(h));
+		check(s.has_history("h1"), "and has one once it is written");
+
+		const tab_history back = tab_history_codec::decode(s.load_history("h1"));
+		check(back.entries.size() == 3,
+		      QString("every entry comes back (%1)").arg(back.entries.size()));
+		check(back.index == 1,
+		      QString("and the position with them (%1)").arg(back.index));
+		check(back.entries.size() == 3 &&
+		          back.entries.at(0).url == "https://one.test/a" &&
+		          back.entries.at(2).url == "https://one.test/c",
+		      "in the order they were visited");
+		// The separator is ` | ` and a *title* may contain one. Splitting on
+		// the last, or on every, occurrence would truncate this title -- urls
+		// cannot contain an unencoded space, so the first is the only one that
+		// divides the two fields.
+		check(back.entries.size() == 3 &&
+		          back.entries.at(1).title == "Second | with a bar",
+		      "a title containing the separator survives it");
+
+		// **It shares the id and not the file.** The two have different
+		// lifetimes: an engine blob is discarded when the engine moves on and
+		// the record must outlive it.
+		s.save("h1", "engine bytes, unreadable to anyone else");
+		check(s.load("h1") == QByteArray("engine bytes, unreadable to anyone else") &&
+		          tab_history_codec::decode(s.load_history("h1")).entries.size() == 3,
+		      "a blob and a record under one id do not overwrite each other");
+
+		section("deleting a node takes both, or the next id inherits a past");
+		s.remove("h1");
+		check(!s.has_state("h1"), "the blob is gone");
+		check(!s.has_history("h1"),
+		      "and so is the record -- a survivor here is the collision this "
+		      "store already exists to prevent, one file over");
+
+		section("what a person may have done to the file by hand");
+		// It is a text format on purpose, so it will be edited, and every one
+		// of these is a plausible edit rather than a hypothetical.
+		check(tab_history_codec::decode("").entries.isEmpty(),
+		      "an empty file is an empty record, not a crash");
+		check(tab_history_codec::decode("just some other file\n").entries.isEmpty(),
+		      "a file that is not this format is refused rather than guessed at");
+		const tab_history over = tab_history_codec::decode(
+		  "hydra-history 1 | index=9\nhttps://x.test/ | X\n");
+		check(over.entries.size() == 1 && over.index == 0,
+		      QString("a position past the end is pulled back into the list (%1)")
+		          .arg(over.index));
+		const tab_history none = tab_history_codec::decode(
+		  "hydra-history 1 | index=-1\nhttps://x.test/ | X\n");
+		check(none.index == -1,
+		      "and an unknown position stays unknown, rather than becoming 0");
+		check(none.back_count() == 0 && none.forward_count() == 0,
+		      "which counts as nothing behind and nothing ahead");
+		// An empty record must not leave a file claiming otherwise.
+		s.save_history("h2", tab_history_codec::encode(tab_history{}));
+		check(!s.has_history("h2"),
+		      "writing an empty record leaves no file to find");
 	}
 
 	QDir(dir).removeRecursively();
