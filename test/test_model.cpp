@@ -151,15 +151,31 @@ int main(int argc, char **argv) {
 			                    << history_entry{ "https://p.test/3", "Third" };
 			n->history.index = 2;   // two pages behind it, none ahead
 			const QModelIndex idx = model.index_for_node(n);
-			const QString shown = model.data(idx, Qt::DisplayRole).toString();
-			check(shown.startsWith("Music") && shown.contains("2 back"),
-			      QString("the row says how many pages are behind it (%1)").arg(shown));
+			// The count lives in its own column now. As a suffix on the title
+			// it was the first thing elision ate on a narrow panel, cutting
+			// off the only part of the row that was not already obvious.
+			const QModelIndex hidx =
+			  model.index(idx.row(), tab_tree_model::history_column, idx.parent());
+			check(hidx.isValid(), "the row has a history column");
+			const QString shown = model.data(hidx, Qt::DisplayRole).toString();
+			check(shown == "2 back",
+			      QString("which says how many pages are behind it (%1)").arg(shown));
+			check(model.data(hidx, Qt::TextAlignmentRole).toInt() ==
+			          (Qt::AlignRight | Qt::AlignVCenter),
+			      "right-aligned, so the numbers line up down the tree");
+			// The column is an annotation and nothing else: an icon here would
+			// give every row a second one, and a tooltip would replace the
+			// url the row already offers.
+			check(!model.data(hidx, Qt::DecorationRole).isValid(),
+			      "and carries no icon of its own");
 			// **The suffix is drawn, not stored**, and these are the three
 			// places that would prove otherwise. A row found by typing "back",
 			// or sorted under the count rather than its name, would be the
 			// display leaking into the data.
 			check(model.data(idx, tab_tree_model::title_role).toString() == "Music",
 			      "while the title role is untouched, which is what sorting reads");
+			check(model.data(idx, Qt::DisplayRole).toString() == "Music",
+			      "and the title column carries the title alone");
 			check(n->title == "Music", "and so is the node");
 			tree_sort_proxy proxy;
 			proxy.setSourceModel(&model);
@@ -185,18 +201,21 @@ int main(int argc, char **argv) {
 			// and a row that said nothing would hide a record that exists --
 			// 30 of the 1144 recovered from the crashed Chromium session were
 			// exactly this shape.
-			const QString at_start = model.data(idx, Qt::DisplayRole).toString();
-			check(!at_start.contains("back") && at_start.contains("2 ahead"),
+			const QString at_start = model.data(hidx, Qt::DisplayRole).toString();
+			check(at_start == "2 ahead",
 			      QString("so its row counts the other way instead (%1)")
 			          .arg(at_start));
 			// And back wins where both apply, so the row never carries two
 			// numbers.
 			n->history.index = 1;
-			const QString middle = model.data(idx, Qt::DisplayRole).toString();
-			check(middle.contains("1 back") && !middle.contains("ahead"),
+			const QString middle = model.data(hidx, Qt::DisplayRole).toString();
+			check(middle == "1 back",
 			      QString("with one page either side, it counts backwards (%1)")
 			          .arg(middle));
 			n->history = tab_history{};
+			check(!model.data(hidx, Qt::DisplayRole).isValid(),
+			      "and a tab with no record leaves the column empty rather "
+			      "than drawing a zero");
 		}
 		holds(model, "history suffix");
 	}

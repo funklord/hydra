@@ -193,7 +193,31 @@ int tab_tree_model::rowCount(const QModelIndex &parent) const {
 }
 
 int tab_tree_model::columnCount(const QModelIndex &) const {
-	return 1;
+	// Two: the row, and how much history it brought with it.
+	//
+	// **A column rather than a suffix on the label**, which is where this
+	// started. Appended to the title it was the first thing elision ate -- a
+	// narrow tree panel showed `PDA / RetroGameHandhelds  - 6...`, cutting off
+	// the one part that was not already obvious from the row. A column of its
+	// own is sized to its contents and never elided, and the title elides
+	// around it as it always did.
+	return column_count;
+}
+
+// The count a row carries, or empty when it has nothing to say.
+//
+// Pages *behind* the tab, because that is the question people have -- unless
+// there are none, in which case the ones ahead, because a tab at the start of
+// its own history would otherwise say nothing and hide the fact that a record
+// exists at all. Only ever one of the two: this is a hint that there is
+// something to open, not a summary of it, and the properties dialog states
+// both.
+static QString history_count_text(const node *n) {
+	if (const int behind = n->history.back_count(); behind > 0)
+		return QString("%1 back").arg(behind);
+	if (const int ahead = n->history.forward_count(); ahead > 0)
+		return QString("%1 ahead").arg(ahead);
+	return QString();
 }
 
 QVariant tab_tree_model::data(const QModelIndex &index, int role) const {
@@ -203,44 +227,34 @@ QVariant tab_tree_model::data(const QModelIndex &index, int role) const {
 	if (!n)
 		return {};
 
-	switch (role) {
-		case Qt::DisplayRole: {
-			const QString label = n->title.isEmpty() ? n->url : n->title;
-			// **What a tab brought with it, in the fewest characters that say
-			// it.** An imported tab carries the pages it had been on, and
-			// without a mark on the row there is nothing to suggest opening
-			// its properties to find them -- a record nobody can see is one
-			// nobody reads.
-			//
-			// The count is of pages *behind* it, because that is the one a
-			// person is looking for; the rest of the list is in the dialog.
-			//
-			// **Unless there is nothing behind it**, which was a silent hole:
-			// a tab sitting at the start of its own history has pages only
-			// ahead, so counting backwards gave zero and the row said nothing
-			// at all -- a record with no way to find out it exists, which is
-			// the exact failure this suffix is here to prevent. Measured on
-			// the tabs recovered from the crashed Chromium session: 30 of
-			// 1144 records were this shape.
-			//
-			// Only one of the two is ever shown, and back wins where both
-			// apply. The suffix is a hint that there is something to open,
-			// not a summary of it; two numbers on a row would cost more
-			// width than they buy, and the dialog states both anyway.
-			//
-			// Appended to the drawn text only: search matches the node's own
-			// title and url, and sorting reads `title_role`, so neither can
-			// see this and a row cannot be found by typing "back".
-			const int behind = n->history.back_count();
-			if (behind > 0)
-				return QString("%1  %2 %3 back")
-					         .arg(label).arg(QChar(0x00b7)).arg(behind);
-			const int ahead = n->history.forward_count();
-			if (ahead > 0)
-				return QString("%1  %2 %3 ahead")
-					         .arg(label).arg(QChar(0x00b7)).arg(ahead);
-			return label;
+	// The history column. Answered separately and narrowly: everything not
+	// named here is deliberately empty, so the column carries no icon of its
+	// own, no second tooltip, and nothing for a sort to catch hold of.
+	if (index.column() == history_column) {
+		const QString text = history_count_text(n);
+		switch (role) {
+			case Qt::DisplayRole:
+				return text.isEmpty() ? QVariant() : text;
+			case Qt::TextAlignmentRole:
+				return QVariant(Qt::AlignRight | Qt::AlignVCenter);
+			case Qt::ForegroundRole:
+				// Muted whatever the row is: this is an annotation, and it
+				// should not compete with the title for attention.
+				return QBrush(QColor(140, 140, 140));
+			case Qt::ToolTipRole:
+				// The row's tooltip is its url, which says nothing about this.
+				return text.isEmpty()
+				         ? QVariant()
+				         : QVariant("Where this tab had been. Open Properties "
+				                     "(F2) to see the pages.");
+			default:
+				return {};
 		}
+	}
+
+	switch (role) {
+		case Qt::DisplayRole:
+			return n->title.isEmpty() ? n->url : n->title;
 		case Qt::ToolTipRole:
 			return n->url;
 		case Qt::DecorationRole: {

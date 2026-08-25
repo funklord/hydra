@@ -34,6 +34,18 @@ public:
 		locked_role,
 	};
 
+	// The columns. Named rather than written as 0 and 1 at each call site,
+	// because a bare `1` in a view's resize call says nothing about what it
+	// is sizing.
+	enum columns {
+		title_column   = 0,
+		// How much history the row brought with it, right-aligned. Its own
+		// column so that it is sized to its contents and cannot be elided
+		// away, which is what happened when it was a suffix on the title.
+		history_column = 1,
+		column_count   = 2,
+	};
+
 	explicit tab_tree_model(QObject *parent = nullptr);
 	~tab_tree_model() override;
 

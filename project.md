@@ -981,6 +981,30 @@ Three places show it, and the split is deliberate. The row carries a count and
 nothing else -- `Music  · 2 back` -- because a record nobody can see is one
 nobody reads, and because *how many* is the question people actually have.
 
+**It is a column, not a suffix on the title, and that was the second
+correction.** Appended to the label it was the first thing elision ate: on a
+tree panel narrow enough to be useful beside a page, a row read
+`PDA / RetroGameHandhelds  - 6...`, cutting off the one part that was not
+already obvious from looking at it. A column of its own is sized to its
+contents and cannot be elided, and the title elides around it exactly as
+before. Right-aligned, so the numbers line up down the tree, and muted,
+because it is an annotation rather than something competing with the title.
+
+Two things had to follow from a second column, and only one was obvious.
+`QHeaderView` stretches its last section by default and ignores the resize
+mode until told not to, which puts the count hard against the panel edge with
+a gulf between it and its row. The other is that `QAbstractItemView` selects
+**items**, not rows -- invisible while a model has one column, and the moment
+it has two a click on the count selects that cell alone, leaving
+`selected_node` (which takes column 0 and skips the rest) with nothing to
+open, rename or delete. The whole context menu would have gone quiet on
+exactly the rows this feature is about.
+
+The model was already written for this: `mimeData` filtered non-zero columns
+with the comment "one entry per row, not per column", `rowCount` answered 0
+for them, and `dropMimeData` had `Q_UNUSED(column)`. Qt's own
+`QAbstractItemModelTester` passes over two columns with no complaints.
+
 The first version counted only backwards, which left a hole of exactly the
 kind the suffix exists to close: a tab sitting at the *start* of its history
 has pages only ahead of it, so the count was zero and the row said nothing at

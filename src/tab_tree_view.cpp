@@ -32,6 +32,16 @@ tab_tree_view::tab_tree_view(QWidget *parent) : QTreeView(parent) {
 	setDragDropMode(QAbstractItemView::DragDrop);
 	setDefaultDropAction(Qt::MoveAction);
 	setSelectionMode(QAbstractItemView::ExtendedSelection);
+	// **Rows, not cells.** The default is `SelectItems`, which is invisible
+	// while a model has one column and breaks everything the moment it has
+	// two: clicking the history column would select that cell alone, and
+	// `selected_node` -- which takes column 0 and skips the rest -- would find
+	// nothing to open, rename or delete. The row is the thing a person is
+	// pointing at; the columns are how it is drawn.
+	setSelectionBehavior(QAbstractItemView::SelectRows);
+	// So the focus rectangle follows the whole row rather than boxing the
+	// title and leaving the count outside it.
+	setAllColumnsShowFocus(true);
 
 	// **Hovering a closed folder opens it.** Without this a collapsed folder
 	// cannot be dropped into at all: the drag has nowhere to land, so somebody

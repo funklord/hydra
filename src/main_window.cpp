@@ -72,6 +72,7 @@
 #include <QToolBar>
 #include <QLineEdit>
 #include <QComboBox>
+#include <QHeaderView>
 #include <QLabel>
 #include <QProgressBar>
 #include <QMenu>
@@ -625,6 +626,15 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	});
 	m_tree->setHeaderHidden(true);
 	m_tree->setUniformRowHeights(true);
+	// The title takes what is left; the history count takes exactly what it
+	// needs. `setStretchLastSection` has to be turned off first or the last
+	// section ignores the resize mode and fills the panel, which puts the
+	// count against the far edge with a gulf between it and its row.
+	m_tree->header()->setStretchLastSection(false);
+	m_tree->header()->setSectionResizeMode(tab_tree_model::title_column,
+	                                        QHeaderView::Stretch);
+	m_tree->header()->setSectionResizeMode(tab_tree_model::history_column,
+	                                        QHeaderView::ResizeToContents);
 	// The menu lives in the view; these are the only two entries it cannot
 	// carry out itself -- opening needs an engine and the stacked widget,
 	// suspending needs the state store.
