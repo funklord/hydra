@@ -70,7 +70,7 @@
 #   make jni          -- just the JNI check: every Java `native` method has a
 #                        C++ symbol JNI can actually resolve
 #   make check        -- style and test together, the one to run before a commit
-#   make hooks        -- install the git hooks from tools/hooks/
+#   make hooks        -- install the git hooks from tool/hooks/
 #   make veryclean    -- clean, plus the generated artefacts it leaves
 #   make distclean    -- veryclean, plus anything a release build produced
 #   make help         -- this list
@@ -146,7 +146,7 @@ SHARE  ?= $(PREFIX)/share
 # which is a long way from the cause. project.md records the session that lost
 # to it.
 # The ABI, the kit discovery, the API levels, the SDK/NDK/JDK resolution and
-# the adb plumbing all come from tools/android.mk, included below `all`. The
+# the adb plumbing all come from tool/android.mk, included below `all`. The
 # kit discovery there and the libQt6Core ABI confirmation are this project's
 # own, moved to where the other three Android projects read them too.
 ANDROID_ABI ?= arm64-v8a
@@ -165,7 +165,7 @@ ANDROID_BUILD_DIR ?= build-android-$(ANDROID_ABI)
 # `build-android` is what versions before the split left behind.
 ANDROID_BUILD_DIRS = $(foreach a,$(ANDROID_ABIS),build-android-$(a)) build-android
 
-# What android-install and android-run in tools/android.mk reach for, and
+# What android-install and android-run in tool/android.mk reach for, and
 # what the `android` rule below verifies before naming.
 ANDROID_ARTIFACT = $(ANDROID_BUILD_DIR)/hydra-$(VERSION)-$(ANDROID_ABI)-debug.apk
 
@@ -240,7 +240,7 @@ all:
 # The shared Android vocabulary and everything it needs. Included AFTER
 # `all`, because `include` is where make first sees a target and pulling it
 # in above would make android-check the default goal.
-include tools/android.mk
+include tool/android.mk
 
 # **Run against a copy, not the tracked sample.** The app saves its tree on
 # exit, so pointing it at `sample-tree.txt` means merely starting the browser
@@ -374,7 +374,7 @@ deb-check: deb
 #
 # Refuses without a keystore rather than producing a debug-signed bundle
 # under a message announcing a release -- which is the failure beerssh paid
-# for, and the reason tools/android.mk verifies signatures at all.
+# for, and the reason tool/android.mk verifies signatures at all.
 #
 # Depends on android-build rather than on a qmake step of its own: qmake
 # runs inside that rule, so there is nothing else to hang this off without
@@ -500,7 +500,7 @@ clean:
 #   while the prose beside them stayed true. Nothing compiles a table of
 #   filenames, so nothing else can notice.
 style-docs:
-	python3 tools/style_gate.py docs
+	python3 tool/style_gate.py docs
 	@# The shared gate checks backticked paths in table rows, which covers
 	@# most of what this target used to do by hand, and checks repeated
 	@# headings at every level rather than just `###`. What it cannot read is
@@ -525,10 +525,10 @@ help:
 style: style-source style-docs jni
 
 jni:
-	@python3 tools/jni_check.py
+	@python3 tool/jni_check.py
 
 style-source:
-	python3 tools/style_gate.py check
+	python3 tool/style_gate.py check
 
 # `check` is everything that must pass before committing; `test` is the suite
 # alone. GNU's meaning of check, and what most of these projects already did.
@@ -568,5 +568,5 @@ distclean: veryclean
 # a fresh clone.
 hooks:
 	@test -d .git || { echo "hooks: not a git repository" >&2; exit 1; }
-	@install -m 0755 tools/hooks/commit-msg .git/hooks/commit-msg
-	@echo "hooks: commit-msg installed from tools/hooks/"
+	@install -m 0755 tool/hooks/commit-msg .git/hooks/commit-msg
+	@echo "hooks: commit-msg installed from tool/hooks/"

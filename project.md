@@ -190,7 +190,7 @@ The hook cannot tell the two apart. It spares exactly two literal names,
 not enough to write about the feature. This is the same false-positive class its
 own comments already record, one step further out. Nothing was changed on either
 side: the messages are accurate, and widening a gate copied from
-`~/.claude/tools/commit-msg` is a convention change to raise rather than make in
+`~/.claude/tool/commit-msg` is a convention change to raise rather than make in
 passing. It will refuse the commit if one of those five is ever amended.
 
 **Eight more appeared to fail it, and none of them did.** The hook holds body
@@ -258,7 +258,7 @@ was done first because it is what makes the first one checkable:
 
 ### The gate can now read C++, so the 854 are a work list
 
-`tools/style_gate.py` gained a C/C++ literal scanner, spread from the source
+`tool/style_gate.py` gained a C/C++ literal scanner, spread from the source
 the way the tokenize change was. Turning `ascii_only` on in this tree today
 reports **exactly 854 findings, all of them real** — 434 in `.cpp`, 420 in
 `.h`, and not one false positive on `☰`, `▶ Watch` or `⬇ Download`. Nothing
@@ -6854,7 +6854,7 @@ built, packaged, signed and passed the APK content checks written earlier
 today -- which verified that our Java classes were in the dex and that the
 library was present, both true and neither sufficient.
 
-So `tools/jni_check.py` compares them at rest: every `native` method's expected
+So `tool/jni_check.py` compares them at rest: every `native` method's expected
 symbol against the symbols `src/*.cpp` defines, in either direction. It is pure
 text, needs no SDK, NDK or device, and runs with the other gates -- `make style`
 and CI's cheap job, in milliseconds. It refuses to pass when it finds no native
@@ -7587,7 +7587,7 @@ from the include graph -- which is what the earlier plan recorded here was
 going to use, and would have been wrong wherever a header is implemented in a
 file it does not name.
 
-`tools/objsets.py` asks fmake once, rewrites the answer into the object names
+`tool/objsets.py` asks fmake once, rewrites the answer into the object names
 `test/Makefile` uses, and writes `test/objsets.mk`: 73 programs, 3655
 objects, 50 apiece. It is committed, so an ordinary build needs `make` and
 nothing else; fmake is needed only to regenerate it.
@@ -7713,7 +7713,7 @@ touching either:
   qmake build measured 142s standalone, 347s under load and 82s idle, and a
   four-fold difference was briefly attributed to a build-system property it had
   nothing to do with.
-- **A new source file means `python3 tools/objsets.py` before `make test`.** The
+- **A new source file means `python3 tool/objsets.py` before `make test`.** The
   link sets are generated, so a `.cpp` that gains a dependency -- or a new file
   that some test now needs -- links against a stale set and fails with undefined
   references in a test nobody touched. It happened twice in one session, on

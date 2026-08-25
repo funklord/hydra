@@ -19,7 +19,7 @@ core.*
 *.moc
 moc_*.cpp
 # CPython's bytecode cache, written beside whatever it imported -- so running
-# tools/objsets.py or the style gate leaves one in tools/. Untracked and
+# tool/objsets.py or the style gate leaves one in tool/. Untracked and
 # unignored, it appeared in every `git status` in this tree, which is exactly
 # the kind of line a blanket `git add` sweeps into somebody's commit.
 __pycache__/

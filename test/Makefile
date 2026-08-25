@@ -20,7 +20,7 @@
 # against exactly that.
 #
 # The archive was standing in for a computation: which objects does this binary
-# actually need. `tools/objsets.py` asks fmake to perform it -- compile, read
+# actually need. `tool/objsets.py` asks fmake to perform it -- compile, read
 # the symbol tables, close transitively over undefined symbols, which is what
 # the linker does when picking archive members -- and writes the answer to
 # `objsets.mk`. Each binary now links its own closure and relinks only when
@@ -274,7 +274,7 @@ clean:
 
 # Recompute the link sets. Needs fmake; nothing else here does.
 objsets:
-	@python3 ../tools/objsets.py
+	@python3 ../tool/objsets.py
 
 help:
 	@echo "make -C tests [offline|live|all|clean] -j2"
