@@ -5766,7 +5766,45 @@ that had skipped part of startup. The driver now does what `main` does -- the
 palette as well as the icons -- and a light window full of the desktop's dark
 icons was the tell.
 
-That last one is the general lesson. **A driver is only a picture of the
+**Five, on the machine these trees moved to: Qt could not see the disk.**
+The toolbar was drawing words again, and startup said `no icon theme found`.
+Everything above was still correct and none of it applied. `XDG_DATA_DIRS`
+named `/opt/trinity/share:/usr/local/share:/usr/share`, `QStandardPaths`
+resolved that to three real icon directories, Trinity's own kdeglobals said
+`Theme=crystalsvg`, and `/opt/trinity/share/icons/crystalsvg` held
+`go-previous.png` at four sizes. Every part was present and correct.
+
+`QIcon::themeSearchPaths()` returned `:/icons` and nothing else.
+
+Qt6 populates that list from a platform-theme plugin and ships only Plasma's
+and GTK's, so on a desktop that loads neither it holds just the resource path
+compiled into the binary. Every system directory was invisible -- which meant
+the *existence* check in `detect_icon_theme`, the one added because a
+configured-but-absent theme fails silently, was itself asking about
+directories it could not look in. It rejected a theme that was installed, and
+reported the same "nothing found" as a machine with no themes at all. The
+paths are seeded from `QStandardPaths` before anything is looked for now, and
+startup says `icon theme: crystalsvg`.
+
+Note what changed underneath: the sections above name
+`~/.config/gtk-3.0/settings.ini` and `breeze-dark`, and on this machine that
+file does not exist and breeze is not installed. Neither statement was wrong
+when it was written -- they describe the machine these trees were moved from.
+**A finding about a machine is not a finding about the software**, and this
+document had no way to say which it was holding.
+
+And a sixth, found while fixing the fifth and not the cause of anything here:
+**installed is not usable, one theme further on.** `Adwaita` is present on
+almost every machine, ships an `index.theme`, a cursor set and a symbolic
+directory, and carries none of the ordinary action icons a toolbar asks for.
+It sits ahead of `oxygen` in the fallback list, so on a machine with no
+desktop configuration the old code would have chosen it and drawn nothing --
+`hicolor`'s trap from *Three*, one name over, in the half of the code that
+picks rather than the half that inherits. Candidates are now loaded and asked
+for a real icon, first that answers wins. Measured here: of the four installed
+candidates, `Adwaita` and `hicolor` draw nothing.
+
+The general lesson from *Four*. **A driver is only a picture of the
 application to the extent that it starts the same way**, and every one of these
 drivers builds its own `main_window` by hand.
 

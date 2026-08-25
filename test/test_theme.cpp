@@ -16,6 +16,8 @@
 #include <QDir>
 
 #include <QApplication>
+#include <QIcon>
+#include <QStandardPaths>
 #include <QBrush>
 #include <QPalette>
 #include <cstdio>
@@ -191,6 +193,93 @@ int main(int argc, char **argv) {
 		      "and nothing at all gives nothing, not a guess");
 
 		QDir(dir).removeRecursively();
+	}
+
+	section("finding a theme Qt cannot see by itself");
+	{
+		// **Qt6 fills `themeSearchPaths()` from a platform-theme plugin and
+		// ships only Plasma's and GTK's.** On a desktop that loads neither the
+		// list holds `:/icons` and nothing else, so every system directory is
+		// invisible: a theme that is installed, configured and perfectly good
+		// cannot be found, validated or loaded. Measured on the machine this
+		// was written on -- Trinity, `Theme=crystalsvg` in its own kdeglobals,
+		// the theme present with `go-previous` at four sizes -- and the
+		// toolbar drew words.
+		const QStringList before = QIcon::themeSearchPaths();
+		theme::seed_icon_search_paths();
+		const QStringList after = QIcon::themeSearchPaths();
+		check(after.size() >= before.size(),
+		      "seeding never takes a search path away");
+		for (const QString &p : before)
+			check(after.contains(p),
+			      QString("and keeps what Qt had already (%1)").arg(p));
+		bool has_system = false;
+		for (const QString &p : QStandardPaths::locateAll(
+		         QStandardPaths::GenericDataLocation, "icons",
+		         QStandardPaths::LocateDirectory))
+			if (after.contains(p))
+				has_system = true;
+		check(has_system,
+		      QString("the system icon directories are searchable (%1)")
+		          .arg(after.join(", ").left(90)));
+
+		theme::seed_icon_search_paths();
+		check(QIcon::themeSearchPaths() == after,
+		      "and calling it twice changes nothing");
+
+		// Every candidate names a theme that is really there.
+		const QStringList found = theme::detect_icon_themes();
+		bool all_present = true;
+		for (const QString &t : found) {
+			bool here = false;
+			for (const QString &dir : QIcon::themeSearchPaths())
+				if (QFile::exists(dir + "/" + t + "/index.theme"))
+					here = true;
+			if (!here)
+				all_present = false;
+		}
+		check(all_present,
+		      QString("every candidate is installed (%1)")
+		          .arg(found.join(", ")));
+
+		// **The invariant that broke, and the reason this loops rather than
+		// taking the first hit.** Being installed is not being able to draw:
+		// Adwaita ships an index.theme, a cursor set and symbolic icons, and
+		// carries none of the ordinary action icons a toolbar asks for. It
+		// passes every test but drawing, exactly as hicolor does -- so
+		// whatever is settled on must answer for a real icon, or the startup
+		// line reports success over an empty toolbar.
+		const QString chosen = theme::apply_icon_theme(Qt::ColorScheme::Light);
+		if (chosen.isEmpty()) {
+			std::printf("  --    no icon theme on this machine; the choice "
+			             "cannot be checked here\n");
+		} else {
+			const QIcon probe = QIcon::fromTheme("go-previous");
+			check(!probe.isNull() && !probe.availableSizes().isEmpty(),
+			      QString("what it settled on can actually draw (%1)").arg(chosen));
+			check(QIcon::themeName() == chosen,
+			      "and is what it left set on QIcon");
+
+			// How many of the installed candidates would have drawn nothing.
+			// On this machine the configured theme comes first and works, so
+			// the loop never has to skip -- which is worth saying out loud,
+			// because it means the probing is hardening for a machine with no
+			// desktop configuration (where the list starts at breeze,
+			// Adwaita) rather than what fixed the toolbar here.
+			QStringList useless;
+			for (const QString &t : found) {
+				QIcon::setThemeName(t);
+				const QIcon p = QIcon::fromTheme("go-previous");
+				if (p.isNull() || p.availableSizes().isEmpty())
+					useless << t;
+			}
+			QIcon::setThemeName(chosen);
+			std::printf("  --    installed candidates that draw nothing: %s\n",
+			             useless.isEmpty() ? "none"
+			                                : qPrintable(useless.join(", ")));
+			check(!useless.contains(chosen),
+			      "and the one chosen is not among the ones that cannot draw");
+		}
 	}
 
 	section("the two colours this tree writes by hand");

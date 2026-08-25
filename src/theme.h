@@ -65,9 +65,31 @@ Qt::ColorScheme detect_system();
 // parsing can be tested without a desktop. The default list is the real one.
 QString icon_theme_from(const QStringList &sources);
 
-// Ask the real sources, and confirm the answer names a theme that is installed
-// -- an icon theme that is configured but absent leaves every lookup null just
-// as surely as no configuration at all.
+// Make Qt able to see the icon themes on this machine at all.
+//
+// **Qt6 populates `QIcon::themeSearchPaths()` from a platform-theme plugin**,
+// and ships only Plasma's and GTK's. On a desktop that loads neither -- Trinity
+// here -- the list comes back holding nothing but `:/icons`, the resource path
+// built into the binary. Every system directory is invisible, so a theme that
+// is installed and correctly configured cannot be found, cannot be validated,
+// and cannot be loaded. `XDG_DATA_DIRS` is set correctly the whole time, and
+// `QStandardPaths` answers correctly the whole time; only QIcon's own list is
+// empty, which is why this reads as the icon *names* being wrong.
+//
+// Idempotent, and safe to call before or after Qt has decided for itself: the
+// standard locations are appended, never substituted.
+void seed_icon_search_paths();
+
+// Ask the real sources, in the order they should be believed, and keep only
+// answers that name a theme actually present on disk -- an icon theme that is
+// configured but absent leaves every lookup null just as surely as no
+// configuration at all.
+//
+// A list rather than one name, because *present* is not *usable*: see
+// `apply_icon_theme`.
+QStringList detect_icon_themes();
+
+// The first of those, which is the best guess without loading anything.
 QString detect_icon_theme();
 
 // Set it on QIcon, unless Qt already found one that works. Call once, before any
@@ -78,6 +100,11 @@ QString detect_icon_theme();
 // and `breeze-dark`'s icons are drawn pale to sit on dark chrome, so following
 // the desktop's icon setting there would put pale icons on a pale toolbar. The
 // variant is matched to the window rather than to the desktop.
+// Each candidate is loaded and then *asked for an icon*, and the first that
+// answers wins. Existence is not enough and the difference is not theoretical:
+// Adwaita on this machine ships `index.theme`, a cursor set and a symbolic
+// directory, and carries none of the ordinary action icons a toolbar asks for.
+// It passes every test but drawing, exactly as `hicolor` does.
 QString apply_icon_theme(Qt::ColorScheme scheme);
 
 // What a choice resolves to right now.

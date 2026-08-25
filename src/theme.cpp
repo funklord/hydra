@@ -5,6 +5,7 @@
 #include <QIcon>
 #include <QFile>
 #include <QDir>
+#include <QStandardPaths>
 
 #include <QApplication>
 #include <QStyle>
@@ -270,12 +271,46 @@ QString theme::icon_theme_from(const QStringList &sources) {
 	return QString();
 }
 
+static QStringList detect_icon_theme_list();
+
+void theme::seed_icon_search_paths() {
+	QStringList paths = QIcon::themeSearchPaths();
+	// `locateAll` is the same set `XDG_DATA_DIRS` describes, already filtered
+	// to directories that exist, and it includes the user's own
+	// `~/.local/share/icons` ahead of the system ones.
+	for (const QString &dir : QStandardPaths::locateAll(
+	         QStandardPaths::GenericDataLocation, QStringLiteral("icons"),
+	         QStandardPaths::LocateDirectory))
+		if (!paths.contains(dir))
+			paths << dir;
+	// The old per-user location, which predates XDG and is still where several
+	// theme installers put things.
+	const QString dot_icons = QDir::homePath() + QStringLiteral("/.icons");
+	if (!paths.contains(dot_icons) && QFile::exists(dot_icons))
+		paths << dot_icons;
+	if (paths != QIcon::themeSearchPaths())
+		QIcon::setThemeSearchPaths(paths);
+}
+
+QStringList theme::detect_icon_themes() {
+	// Before anything is looked for, or the search below has nowhere to look.
+	seed_icon_search_paths();
+	return detect_icon_theme_list();
+}
+
 QString theme::detect_icon_theme() {
+	return detect_icon_themes().value(0);
+}
+
+// Every candidate that is actually present, best first. Kept as a list
+// because being installed does not mean being able to draw: the caller loads
+// each in turn and asks for an icon.
+static QStringList detect_icon_theme_list() {
 	const QString home = QDir::homePath();
 	const QString cfg = qEnvironmentVariableIsSet("XDG_CONFIG_HOME")
 	                        ? QString::fromLocal8Bit(qgetenv("XDG_CONFIG_HOME"))
 	                        : home + "/.config";
-	const QString named = icon_theme_from({
+	const QString named = theme::icon_theme_from({
 		cfg + "/gtk-4.0/settings.ini",
 		cfg + "/gtk-3.0/settings.ini",
 		home + "/.gtkrc-2.0",
@@ -285,21 +320,31 @@ QString theme::detect_icon_theme() {
 		home + "/.kde/share/config/kdeglobals",
 	});
 
-	// Named or not, the answer has to exist on disk. A theme that is configured
-	// but not installed leaves every lookup null exactly as an unset one does,
-	// and that is a failure worth stepping past rather than reporting.
 	QStringList tries;
 	if (!named.isEmpty())
 		tries << named;
-	// Ordinary fallbacks, in the order most desktops would rank them.
+	// Ordinary fallbacks, in the order most desktops would rank them. They are
+	// tried after whatever the desktop asked for, and each is still only a
+	// candidate: `Adwaita` in particular is present on most machines and
+	// carries none of the icons wanted here.
 	tries << "breeze" << "Adwaita" << "oxygen" << "hicolor";
+
+	// Named or not, a candidate has to exist on disk. A theme that is
+	// configured but not installed leaves every lookup null exactly as an unset
+	// one does, and that is a failure worth stepping past rather than
+	// reporting.
+	QStringList present;
 	for (const QString &t : tries) {
+		if (present.contains(t))
+			continue;
 		for (const QString &dir : QIcon::themeSearchPaths()) {
-			if (QFile::exists(dir + "/" + t + "/index.theme"))
-				return t;
+			if (QFile::exists(dir + "/" + t + "/index.theme")) {
+				present << t;
+				break;
+			}
 		}
 	}
-	return QString();
+	return present;
 }
 
 // Can the current theme draw the sort of icon a toolbar asks for? `hicolor` is
@@ -329,6 +374,11 @@ static QString variant_for(const QString &name, Qt::ColorScheme scheme) {
 }
 
 QString theme::apply_icon_theme(Qt::ColorScheme scheme) {
+	// **First, so that anything below can see the disk at all.** Without this
+	// the search list holds only `:/icons` on a desktop Qt has no plugin for,
+	// and every check downstream is asking about directories it cannot look in.
+	seed_icon_search_paths();
+
 	// If a platform theme already answered *with something that works*, it
 	// knows better than this does.
 	//
@@ -340,13 +390,28 @@ QString theme::apply_icon_theme(Qt::ColorScheme scheme) {
 	// reads as the icon *names* being wrong rather than the theme.
 	if (theme_is_usable())
 		return QIcon::themeName();
-	const QString detected = detect_icon_theme();
-	if (detected.isEmpty())
-		return QString();
-	const QString t = variant_for(detected, scheme);
-	QIcon::setThemeName(t);
+
 	// So a theme that inherits (breeze-dark -> breeze) still resolves anything
-	// it does not carry itself.
+	// it does not carry itself. Set before the probing below, since a
+	// candidate's usability depends on what it can fall back to.
 	QIcon::setFallbackThemeName(QStringLiteral("hicolor"));
-	return t;
+
+	// **Present is not usable, and only loading it can tell the two apart.**
+	// Each candidate is set and then asked for an ordinary toolbar icon; the
+	// first that answers is the one. Adwaita is why this loops rather than
+	// taking the first that exists: it is installed nearly everywhere, ships
+	// an `index.theme`, and carries cursors and symbolic icons only -- so the
+	// old code chose it over the `oxygen` sitting beside it and drew nothing.
+	for (const QString &candidate : detect_icon_theme_list()) {
+		const QString t = variant_for(candidate, scheme);
+		QIcon::setThemeName(t);
+		if (theme_is_usable())
+			return t;
+	}
+
+	// Nothing worked. Leave no half-chosen theme behind: a name that draws
+	// nothing is worse than no name, because the next thing to ask
+	// `themeName()` would believe it.
+	QIcon::setThemeName(QString());
+	return QString();
 }
