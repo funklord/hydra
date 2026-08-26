@@ -50,6 +50,15 @@ public class HydraWebView {
 
     /** Called from C++ when a page load starts, so the shell can follow along. */
     public static native void onUrlChanged(long id, String url);
+    /**
+     * Whether Back and Forward have anywhere to go.
+     *
+     * Pushed rather than asked for. A WebView may only be touched on the
+     * thread that made it, so a synchronous query from the Qt thread would
+     * have to block on Android's UI thread -- which is the shape of deadlock
+     * this app has already met once, from Qt's accessibility bridge.
+     */
+    public static native void onNavState(long id, boolean back, boolean forward);
 
     /**
      * Asks the shared request_filter about one request. Called on the WebView's
@@ -208,9 +217,18 @@ public class HydraWebView {
                 });
                 w.setWebViewClient(new WebViewClient() {
                     @Override
+                    public void doUpdateVisitedHistory(WebView v, String url,
+                                                        boolean isReload) {
+                        // The callback Android provides for exactly this: the
+                        // back/forward list has changed.
+                        onNavState(id, v.canGoBack(), v.canGoForward());
+                    }
+
+                    @Override
                     public void onPageStarted(WebView v, String url, android.graphics.Bitmap f) {
                         PAGE_URL = url;
                         onUrlChanged(id, url);
+                        onNavState(id, v.canGoBack(), v.canGoForward());
                         // As early as a plain WebView allows. It is not before the
                         // page's own inline scripts -- androidx.webkit's
                         // addDocumentStartJavaScript is what that would take --

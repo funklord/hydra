@@ -101,6 +101,12 @@ Java_se_vibes_hydra_HydraWebView_onUrlChanged(JNIEnv *env, jclass,
 	android_view::report_url(id, s);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onNavState(JNIEnv *, jclass, jlong id,
+                                             jboolean back, jboolean forward) {
+	android_view::report_nav_state(id, back == JNI_TRUE, forward == JNI_TRUE);
+}
+
 // Called from Java on the WebView's network thread, once per request. Returning
 // true makes the Java side answer with an empty response, which is how a
 // WebView blocks: there is no "cancel this request" to call.
@@ -352,6 +358,23 @@ void android_view::report_url(qint64 id, const QString &url) {
 		if (android_view *v = s_views.value(id))
 			v->on_url_from_java(url);
 	}, Qt::QueuedConnection);
+}
+
+void android_view::report_nav_state(qint64 id, bool back, bool forward) {
+	// Onto the Qt thread, like report_url: this arrives on Android's UI thread.
+	QMetaObject::invokeMethod(qApp, [id, back, forward] {
+		if (android_view *v = s_views.value(id))
+			v->on_nav_state_from_java(back, forward);
+	}, Qt::QueuedConnection);
+}
+
+void android_view::on_nav_state_from_java(bool back, bool forward) {
+	if (m_can_back == back && m_can_forward == forward)
+		return;
+	m_can_back    = back;
+	m_can_forward = forward;
+	// The seam already had the signal for this, wired to `update_navigation`.
+	emit history_changed();
 }
 
 void android_view::on_url_from_java(const QString &url) {

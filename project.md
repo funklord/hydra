@@ -4015,9 +4015,25 @@ row goes bold with the live count moving to `1 / 4`; the sample tree seeded on
 first run is intact; a tab created in an earlier session had persisted through
 a crash and a relaunch. Back and Forward both work -- wikipedia.org to
 example.com and back again, confirmed by the address bar each time. Note that
-`can_go_back()` is not overridden by `android_view` and so inherits
-`web_view_backend`'s `return true`, which means those two buttons are always
+`can_go_back()` was not overridden by `android_view` and so inherited
+`web_view_backend`'s `return true`, which meant those two buttons were always
 enabled rather than reflecting the page; they were nonetheless correct here.
+
+**Fixed by pushing the state rather than asking for it.** A WebView may only
+be touched on the thread that made it, so a synchronous `canGoBack()` from the
+Qt thread would have to block on Android's UI thread -- which is the shape of
+deadlock this tree has already met once, from Qt's accessibility bridge, and
+not one to walk into deliberately. Java reports instead, from
+`doUpdateVisitedHistory` (Android's own "the back/forward list changed"
+callback) and from `onPageStarted`, through a new `onNavState` native method
+that marshals onto the Qt thread exactly as `onUrlChanged` does. The backend
+caches the two booleans and emits `history_changed`, which the seam already
+had and which the shell already wires to `update_navigation`.
+
+**Compile-verified for arm64 and not yet driven on the device**, because the
+phone was in use by another session when this was written. The desktop is
+unaffected by construction: `hydra.pro` excludes `android_*.cpp` off Android,
+and `make` plus `test_seam` (74 checks) pass.
 
 Two details that run settles. The toolbar's **Key button falls back to its
 word** on Android, exactly as designed: there is no desktop icon theme,

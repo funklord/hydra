@@ -87,6 +87,7 @@ public:
 	// Called from JNI, on Android's UI thread. Static because JNI has nowhere
 	// to put a `this`; the id is how it finds its way back.
 	static void report_url(qint64 id, const QString &url);
+	static void report_nav_state(qint64 id, bool back, bool forward);
 
 	// Called from JNI, on the WebView's *network* thread -- not the UI thread and
 	// not Qt's. It consults the shared filter and touches nothing else, which is
@@ -139,6 +140,14 @@ public:
 	// The shell says something is over the page. Ored with `m_blocked`, which
 	// is the same condition arriving from a QDialog.
 	void set_obscured(bool on) override;
+
+	// **Answered from what Java last pushed, not asked for on demand.** The
+	// base class returns true for both, which left Back and Forward
+	// permanently enabled on Android whatever the page could actually do.
+	// Asking the WebView directly would mean blocking the Qt thread on
+	// Android's UI thread, which is how this tree met its first deadlock.
+	bool can_go_back() const override { return m_can_back; }
+	bool can_go_forward() const override { return m_can_forward; }
 	QUrl url() const override { return m_url; }
 	void load(const QUrl &url) override;
 	void back() override;
@@ -170,6 +179,7 @@ private:
 	void refresh();
 	void sync_geometry();
 	void on_url_from_java(const QString &url);
+	void on_nav_state_from_java(bool back, bool forward);
 
 	static QHash<qint64, android_view *> s_views;
 	static request_filter *s_filter;   // one per process; see should_block()
@@ -178,6 +188,8 @@ private:
 	bool   m_native = false;   // false when there is no WebView to talk to
 	bool   m_blocked = false;  // a modal dialog is over the window
 	bool   m_obscured = false; // the shell says something else is (the drawer)
+	bool   m_can_back = false;
+	bool   m_can_forward = false;
 
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;
