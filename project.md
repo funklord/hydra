@@ -3942,6 +3942,20 @@ is specific enough to search for. **The consequence is worth stating plainly:
 on a phone with any accessibility service running, this application cannot open
 a menu.**
 
+**Corroborated from another application, independently.** The beerssh session
+was testing its own first Android build on this same phone and saw an abort in
+the same Qt subsystem on its first launch after install: SIGABRT, "JNI
+CallVoidMethodV called with pending exception", through
+`QtNativeAccessibility.populateNode` under
+`QtAccessibilityDelegate.notifyValueChanged`. It did not reproduce across five
+cold starts, and it was found before this one and without knowing of it.
+
+Two different signatures, two different Qt applications, one phone, one
+accessibility service, one subsystem -- and this side has the deterministic
+trigger the other lacked. That is worth more than either finding alone, and it
+is the reason to report it upstream rather than work around it: **the same
+lock-ordering fault showing two faces is a Qt bug, not two application bugs.**
+
 **The tab drawer does not open.** In portrait the tree becomes an overlay
 behind the button left of the address bar, and the empty page says so. Tapping
 that button does nothing visible -- the status tip appears, the button takes
