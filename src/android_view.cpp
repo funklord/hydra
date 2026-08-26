@@ -126,6 +126,18 @@ Java_se_vibes_hydra_HydraWebView_shouldBlock(JNIEnv *env, jclass,
 	           ? JNI_TRUE : JNI_FALSE;
 }
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_se_vibes_hydra_HydraWebView_allowThirdPartyCookies(JNIEnv *env, jclass,
+                                                                      jstring page_url) {
+	QString host;
+	if (page_url) {
+		const char *utf = env->GetStringUTFChars(page_url, nullptr);
+		host = QString::fromUtf8(utf);
+		env->ReleaseStringUTFChars(page_url, utf);
+	}
+	return android_view::allow_third_party_cookies(host) ? JNI_TRUE : JNI_FALSE;
+}
+
 
 namespace {
 
@@ -352,6 +364,15 @@ bool android_view::should_block(const QString &url, const QString &accept,
 	return d.block;
 }
 
+bool android_view::allow_third_party_cookies(const QString &page_url) {
+	// No filter yet means the first navigation is racing startup. Answering
+	// "allowed" would hand a page the permissive case by accident; the shell's
+	// own default for the feature is to block, so match it.
+	if (!s_filter)
+		return false;
+	return s_filter->allow_cookie(QUrl(page_url).host(), true);
+}
+
 void android_view::report_url(qint64 id, const QString &url) {
 	// Onto the Qt thread: this arrives on Android's UI thread.
 	QMetaObject::invokeMethod(qApp, [id, url] {
@@ -387,6 +408,7 @@ void android_view::on_url_from_java(const QString &url) {
 android_view::android_view(request_filter *filter, QWidget *parent)
     : web_view_backend(nullptr) {
 	s_filter = filter;
+
 	m_widget = new QLabel(parent);
 	m_widget->setObjectName("android_placeholder");
 	m_widget->setWordWrap(true);

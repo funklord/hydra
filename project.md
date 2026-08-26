@@ -5293,6 +5293,74 @@ site that is *not* in their vault. Making the pairing durable turned a
 once-ever, human-gated path into one that runs on every build, and the first
 time it did, it failed.
 
+## Android's cookies: one real gap, and one that was imagined
+
+Two things looked wrong on the phone after the desktop gained a persistent
+profile. Only one of them was.
+
+**The real one: the third-party cookie rule could not reach Android.** Nothing
+in `HydraWebView` had ever touched `CookieManager`. First-party cookies worked
+anyway, because `setAcceptCookie` defaults to true — but
+`setAcceptThirdPartyCookies` defaults to **false** for anything targeting
+Lollipop or newer, so the phone blocked every third-party cookie outright no
+matter what the shield said. The desktop meanwhile hands
+`QWebEngineProfile::cookieStore()` a filter that calls
+`request_filter::allow_cookie(host, third_party)` for every cookie, so a
+per-site allow is honoured there. The same switch, in the same dialog, did one
+thing on one backend and nothing on the other — and sign-in flows that bounce
+through an identity provider are exactly what the blocked case breaks.
+
+It is answered by the same filter now, through a `allowThirdPartyCookies`
+native call beside the existing `shouldBlock`, applied per navigation in
+`onPageStarted` because the policy is per site. The answer is coarser than the
+desktop's and cannot be otherwise: Qt asks per cookie, Android offers one
+boolean per WebView, so the most this can express is "third-party cookies, on
+this page, yes or no". The first-party half is not asked at all, because
+Android has no hook for it and refusing every cookie when first-party ones are
+disallowed would break pages far past what the setting says.
+
+**The imagined one: cookies did not need flushing, and the code that flushed
+them is gone.** The reasoning was good and the conclusion was wrong.
+`CookieManager.flush()` is documented as what forces the write, Android kills
+backgrounded apps without running anything, and the desktop had just been
+fixed for a bug with exactly that symptom — so a flush went in on
+`onPageFinished` and on `ApplicationInactive`, and it was measured rather than
+assumed.
+
+The measurement, over `adb reverse` to a local two-page server: set a cookie,
+`am force-stop` the app (SIGKILL, no clean shutdown), relaunch, ask the server
+whether the cookie came back.
+
+    REQ /set        cookie=[]
+    REQ /favicon.ico cookie=[hydraprobe=alive]
+    REQ /show       cookie=[hydraprobe=alive]     <- after the kill
+
+It survived. Then the control, which is the half that settled it — the same
+test against a build with both flushes removed and nothing else changed:
+
+    REQ /show       cookie=[hydraprobe=alive]     <- also survived
+
+Chromium's WebView commits the cookie to its SQLite store on its own, promptly
+enough that a kill eight seconds later loses nothing. The flush bought nothing
+measurable, so it is not in the tree. Recorded here because the argument for
+adding it is genuinely persuasive and somebody will make it again.
+
+**A note on the first run of that experiment, which said the opposite.** It
+reported no cookie database anywhere in the app's data, which read as "cookies
+never persist at all". What actually happened is that the phone's screen locked
+part-way through, the app went to the background before the page finished, and
+`onPageFinished` never ran. The tell was in the server log and was not read at
+the time: the successful runs show a `/favicon.ico` request after the page, and
+that first one does not. A probe interrupted by a lock screen is not a
+measurement of the thing it was pointed at.
+
+**Not verified end to end: the third-party fix itself.** Demonstrating it needs
+two distinct hostnames the phone can reach — cookies ignore the port, so a
+second port on `127.0.0.1` is the same site — and a per-site allow set through
+the shield on the device. It rests on reading Android's documented default and
+on the JNI symbol being exported and reached, which was checked; it does not
+rest on a round trip.
+
 ## Android: media, downloads and the platform's autofill
 
 Back to Android, and the parts of it that are not the web view: what happens

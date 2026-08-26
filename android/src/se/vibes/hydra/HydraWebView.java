@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.graphics.Color;
 import android.net.Uri;
 import android.view.ViewGroup;
+import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -67,6 +68,15 @@ public class HydraWebView {
      * engine, which documents itself as safe for that.
      */
     public static native boolean shouldBlock(String url, String accept, String pageUrl);
+
+    /**
+     * Whether the page at pageUrl may set or send third-party cookies.
+     *
+     * The same per-site policy the desktop applies, answered by the same
+     * request_filter, so the two backends cannot drift apart on a setting the
+     * shield offers for both.
+     */
+    public static native boolean allowThirdPartyCookies(String pageUrl);
 
     /** The method list for one bridge, as JSON. Called from the page. */
     public static native String bridgeDescribe(long id, String name);
@@ -182,6 +192,21 @@ public class HydraWebView {
                 WebView w = new WebView(a);
                 w.getSettings().setJavaScriptEnabled(true);
                 w.getSettings().setDomStorageEnabled(true);
+                // **Cookies, which nothing here had ever configured.**
+                // setAcceptCookie defaults to true, so first-party cookies did
+                // work; it is stated anyway, because the default is what this
+                // app has just been burned by on the desktop -- the whole
+                // browser was off the record for months by inheriting one.
+                //
+                // The third-party half is the part that was actually broken.
+                // It defaults to FALSE for anything targeting Lollipop or
+                // newer, so Android blocked every third-party cookie outright
+                // no matter what the shield said -- and a per-site "allow"
+                // that the desktop honours did nothing at all on the phone.
+                // Sign-in flows that bounce through an identity provider are
+                // exactly what that breaks. It is set per navigation, from the
+                // policy, in onPageStarted below.
+                CookieManager.getInstance().setAcceptCookie(true);
                 w.setBackgroundColor(Color.WHITE);
                 // Software layer, deliberately. This view is composited on top
                 // of Qt's own hardware surface, and with the default hardware
@@ -228,6 +253,14 @@ public class HydraWebView {
                     @Override
                     public void onPageStarted(WebView v, String url, android.graphics.Bitmap f) {
                         PAGE_URL = url;
+                        // Per navigation, because the policy is per site. This
+                        // runs after the main document request has gone out and
+                        // before its subresources, which is where third-party
+                        // cookies actually appear -- so it lands in time for
+                        // everything the setting is about. Android offers no
+                        // earlier hook that knows the url.
+                        CookieManager.getInstance()
+                          .setAcceptThirdPartyCookies(v, allowThirdPartyCookies(url));
                         onUrlChanged(id, url);
                         onNavState(id, v.canGoBack(), v.canGoForward());
                         // As early as a plain WebView allows. It is not before the

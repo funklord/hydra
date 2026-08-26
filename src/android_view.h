@@ -112,6 +112,21 @@ public:
 	static bool should_block(const QString &url, const QString &accept,
 	                          const QString &page_url);
 
+	// **Whether this page may set or send a third-party cookie.** The same
+	// per-site policy the desktop applies, reached the same way -- through the
+	// one shared filter, statically, for the reason above.
+	//
+	// It answers a coarser question than the desktop's, and cannot do better.
+	// Qt hands `qtwebengine_factory` a filter callback per cookie, carrying the
+	// first-party url and a third-party flag, so the desktop decides each one.
+	// Android's `CookieManager` offers a single boolean per WebView, so the
+	// most this can express is "third-party cookies, on this page, yes or no".
+	// The first-party half of the policy is not asked at all here: Android has
+	// no hook for it, and pretending otherwise by refusing all cookies when
+	// first-party ones are disallowed would break the page far past what the
+	// setting says.
+	static bool allow_third_party_cookies(const QString &page_url);
+
 	// Called from JNI on a binder thread, for one view. The Android side hops to
 	// the Qt thread first, so these run where the bridges live.
 	static QString describe_bridge(qint64 id, const QString &name);
