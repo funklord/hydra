@@ -3890,6 +3890,31 @@ page.
 
 ## Android: it builds, and there is an APK
 
+**This section is out of date and is kept for its history, not its claims.**
+It describes `android_view` as a placeholder that draws "the web view is not
+written yet", and `set_script_bridge` as deliberately doing nothing. Neither is
+true any more: `src/android_view.cpp` is 576 lines of JNI against a real
+`se/vibes/hydra/HydraWebView`, with url-change callbacks, per-request blocking
+through `shouldBlock`, navigation interception, and a bridge that registers
+(`m_bridges.add`). Three Java classes sit beside it. Read what follows as the
+record of the first build, and the paragraph below as what is measured now.
+
+**Run on hardware, 2026-08-26.** A Galaxy Z Fold3 (SM-F926B, Android 15, SDK
+35, arm64-v8a) over adb: `hydra-0.1-arm64-v8a-debug.apk` installed, launched,
+and loaded `example.com` typed into its own address bar. The page rendered.
+logcat shows `com.google.android.webview` loading and chromium starting its
+network stack — the Android side of the seam doing the job Qt WebEngine does on
+the desktop. No fatals, no ANR, 217 MB PSS with one page open, and the status
+bar reading `1 / 4 live`.
+
+Two things were visible in the screenshot and are worth knowing. The toolbar's
+**Key button falls back to its word** on Android, exactly as designed: there is
+no desktop icon theme, `QIcon::fromTheme` returns null for `dialog-password`
+and `password`, and the fallback is `SP_CustomBase`, which means "no icon, keep
+the text". The arrows and reload *do* draw, because those name a
+`QStyle::SP_` fallback the platform style provides — and reload turns blue the
+moment a page loads, so the enabled/disabled work carries across.
+
 Not a port — a **placeholder behind the seam**, which is a smaller thing that
 proves a larger one. The seam has claimed since step 3.5 that adding a platform
 is "one new backend pair plus a different two lines in `main()`". That claim is
