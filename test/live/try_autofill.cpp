@@ -119,6 +119,7 @@ int main(int argc, char *argv[]) {
 	// already, for the screenshots that turned out to be of the harness -- and
 	// it surfaced here as a key with no icon rather than as anything about
 	// startup.
+	theme::install_icon_style();
 	theme::apply_icon_theme(theme::resolve(settings_store::appearance()));
 
 	const QString out = qEnvironmentVariableIsSet("HYDRA_TEST_OUT")

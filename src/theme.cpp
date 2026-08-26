@@ -4,6 +4,10 @@
 #include <QRegularExpression>
 #include <QIcon>
 #include <QFile>
+#include <QProxyStyle>
+#include <QStyleOption>
+#include <QPixmap>
+#include <QImage>
 #include <QDir>
 #include <QStandardPaths>
 
@@ -269,6 +273,54 @@ QString theme::icon_theme_from(const QStringList &sources) {
 		}
 	}
 	return QString();
+}
+
+namespace {
+
+// Qt's disabled rendering, with the lift halved. See theme.h.
+class icon_style : public QProxyStyle {
+public:
+	QPixmap generatedIconPixmap(QIcon::Mode mode, const QPixmap &pixmap,
+		                             const QStyleOption *opt) const override {
+		if (mode != QIcon::Disabled || pixmap.isNull())
+			return QProxyStyle::generatedIconPixmap(mode, pixmap, opt);
+
+		// Toward the background the icon actually sits on, taken from the
+		// option where there is one: a toolbar and a menu are not always
+		// painted in the same colour.
+		const QColor bg = opt ? opt->palette.color(QPalette::Window)
+			                       : QApplication::palette().color(QPalette::Window);
+		const double target = qGray(bg.rgb());
+		// Half of the 0.40 Qt applies. Enough that a disabled control is
+		// plainly paler than a live one, not so much that the shape goes.
+		constexpr double lift = 0.20;
+
+		QImage img = pixmap.toImage().convertToFormat(QImage::Format_ARGB32);
+		for (int y = 0; y < img.height(); ++y) {
+			QRgb *row = reinterpret_cast<QRgb *>(img.scanLine(y));
+			for (int x = 0; x < img.width(); ++x) {
+				const int a = qAlpha(row[x]);
+				if (!a)
+					continue;
+				// Fully desaturated, which is the part that says "off".
+				const double g = qGray(row[x]);
+				const int v = int(qBound(0.0, g + (target - g) * lift, 255.0));
+				row[x] = qRgba(v, v, v, a);
+			}
+		}
+		QPixmap out = QPixmap::fromImage(img);
+		// Or the icon is drawn at the wrong size on a scaled display.
+		out.setDevicePixelRatio(pixmap.devicePixelRatio());
+		return out;
+	}
+};
+
+}  // namespace
+
+void theme::install_icon_style() {
+	// Owned by QApplication once set, and set before any widget exists so
+	// nothing is left holding the previous style.
+	QApplication::setStyle(new icon_style);
 }
 
 static QStringList detect_icon_theme_list();

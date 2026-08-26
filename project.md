@@ -4548,6 +4548,34 @@ monochrome set: the key, the drawer's list glyph and the media badge. Asked to
 darken "the other toolbar icons", the honest answer is that most of them were
 never pale -- they were switched off.
 
+**And how a disabled icon is drawn, which is the style's job.** `QIcon` asks
+the current style to generate the disabled pixmap, so there is no per-icon
+place to change it -- a `QProxyStyle` is how the question is reached at all.
+
+Qt's default desaturates and then lifts the result toward the background.
+Measured per icon rather than off a screenshot, which cannot compare an icon
+with itself: `go-previous` has a normal mean of 137.9 and Qt hands back 180.2,
+giving away 40% of the remaining contrast on top of every trace of colour. On
+this toolbar that is most of what the arrows ever look like, since there is
+usually nowhere to go back to.
+
+**The desaturation is kept and the lift is halved**, to 0.20. Colour is the
+honest signal that a control is unavailable and costs nothing to read; the
+lift is what removes the shape. `go-previous` now comes back at 157.7 --
+plainly lighter than its own enabled 137.9, so the signal is intact, and no
+longer a smudge.
+
+A screenshot suggested for a moment that the new disabled arrow was *darker*
+than the enabled reload, which would have inverted the whole thing. It was
+comparing two different icons: `view-refresh` is a lighter drawing than
+`go-previous`. **The only comparison that means anything is an icon against
+itself**, which is why the numbers above come from rendering both modes of one
+icon rather than from cropping a window.
+
+`shell_fixture` and `try_autofill` install the style too, for the reason the
+fixture already applies the palette and the icon theme: a driver that skips it
+photographs arrows faded further than the application fades them.
+
 **Weighted for the background it is drawn on.** crystalsvg's key is a pale
 outline: measured off the rendered window, its darkest pixel was 142 against a
 toolbar around 240, and in the greyed state 181. Legible once you know it is

@@ -65,6 +65,25 @@ Qt::ColorScheme detect_system();
 // parsing can be tested without a desktop. The default list is the real one.
 QString icon_theme_from(const QStringList &sources);
 
+// How a *disabled* icon is drawn, which is Qt's job and which Qt overdoes here.
+//
+// The default transform desaturates the pixmap and then lifts it toward the
+// background. Measured on this toolbar: reload's blue disc goes from a darkest
+// pixel of 106 to 160 against a background of 240 -- 40% of the remaining
+// contrast given away, on top of losing all of its colour. The result reads as
+// a smudge rather than as a button that is switched off, and the arrows spend
+// most of their life in that state because there is usually nowhere to go back
+// to.
+//
+// **The desaturation is kept and the lift is halved.** Colour is the honest
+// signal that a control is unavailable, and it costs nothing to read; the lift
+// is what removes the shape. Installing a style is how this is reached at all:
+// `QIcon` asks the current style to generate the disabled pixmap, so there is
+// no per-icon place to put it.
+//
+// Call before any widget is built.
+void install_icon_style();
+
 // Make Qt able to see the icon themes on this machine at all.
 //
 // **Qt6 populates `QIcon::themeSearchPaths()` from a platform-theme plugin**,

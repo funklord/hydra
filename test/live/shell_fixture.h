@@ -127,6 +127,10 @@ struct fixture {
 		// `main()` does it: `QApplication::setPalette` repaints what already
 		// exists, so the result is the same and the ordering does not have to be
 		// smuggled into the member-initialiser list.
+		// And how a *disabled* icon is drawn, which is the style's job and
+		// which `main` overrides. A driver without it photographs arrows faded
+		// further than the application fades them.
+		theme::install_icon_style();
 		theme::apply(settings_store::appearance());
 		// **And the icon theme, which is the other half.** Applying the palette
 		// alone gave a dark window wearing the light theme's icons: on this desktop
