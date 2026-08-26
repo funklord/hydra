@@ -3956,6 +3956,25 @@ trigger the other lacked. That is worth more than either finding alone, and it
 is the reason to report it upstream rather than work around it: **the same
 lock-ordering fault showing two faces is a Qt bug, not two application bugs.**
 
+**The obvious mitigation does not work, measured rather than assumed.**
+`QAccessible::setActive(false)` is public API and was the one lever on our
+side: turn Qt's accessibility bridge off, lose the abort. It would have cost
+screen-reader support, which is a poor trade and one for the copyright holder
+rather than a session to make -- so it was measured first.
+
+It makes no difference. Built with `setActive(false)` before any widget,
+confirmed by the app's own log (`isActive=0`), then the deterministic
+procedure three times: **crashed on all three, with the identical abort.**
+Qt's Java `QtAccessibilityDelegate` is installed by the Activity whatever the
+C++ flag says, so `QtAndroidAccessibility::runInObjectContext()` still runs and
+still takes the lock.
+
+That is worth knowing precisely because it is the first thing anybody will
+reach for. **There is no trade to make**: the option that looked like it cost
+accessibility support does not buy anything, so the question of whether to pay
+never arises. What remains is an upstream report, and the pair of findings from
+two applications is what makes that report worth filing.
+
 **The tab drawer does not open** -- fixed, and the cause was not the drawer.
 
 Instrumented, the drawer turned out to be working perfectly. On the tap the log
