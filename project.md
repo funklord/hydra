@@ -3888,6 +3888,57 @@ out which pane the search box searches. Search takes the full sidebar width,
 Sort sits under it, and the toolbar is left with the things that act on the
 page.
 
+## A page could not download anything, and never said so
+
+Clicking a download in a page did nothing at all. Not an error, not a status
+message -- nothing, which is indistinguishable from a page that ignored the
+click. The cause is one line that was never written: **nothing was connected
+to `QWebEngineProfile::downloadRequested`.** Chromium asks the application
+what to do with a download, and Qt cancels a request nobody accepts. Every
+page-initiated download in this browser's life had been silently cancelled.
+
+The factory's own class comment had been promising it since step 6 -- *"The
+download handler attaches here too"* -- so this was a known gap that stopped
+being visible once it was written down.
+
+**The engine keeps the transfer**, which is the design decision worth stating.
+`download_manager` fetches a url itself, and that is right for the things it
+was built for: a magnet link, or a stream the media dialog found -- things the
+page never had in its hands. A download a page starts is the opposite case. It
+may be a `blob:` the page assembled in memory, which exists nowhere but that
+renderer, or a url that means nothing without the session's cookies and
+headers. Refetching either from outside the engine gets a login page or an
+error. So the engine downloads and the shell only reports.
+
+The seam gains `set_download_handler`, called when a transfer starts and again
+when it ends with a flag saying whether it succeeded. **Reported both times on
+purpose**: a download that fails silently is the exact shape this feature
+existed to fix, and a start message alone would replace one silence with a
+half-truth.
+
+The destination is `QStandardPaths::DownloadLocation` and the name is
+Chromium's suggestion, put through a check for a free one -- `report (1).txt`
+beside `report.txt`, numbered rather than timestamped so the order is legible,
+and the extension kept where there is one. Writing the suggested name blind is
+how a second download destroys the first. A leading dot is treated as the
+whole name rather than an extension, so `.bashrc` numbers as `.bashrc (1)`
+instead of growing a suffix in front of itself.
+
+**Driven end to end against a real engine**, on a local server serving both
+shapes:
+
+    report.txt          224 bytes   Content-Disposition: attachment
+    made-in-page.txt     26 bytes   blob: built by the page's own script
+
+Both landed in `~/Downloads` with the right contents. Run a second time
+without clearing, both numbered rather than overwrote. The blob case is the
+one that matters most and the one a url-refetching design could never have
+served: it proves the transfer is the engine's.
+
+Android is not wired and says so at the seam rather than accepting the handler
+and dropping it. Its path is the platform `DownloadManager` in
+`android_downloads`, fed by the WebView's own `setDownloadListener`.
+
 ## OAuth popups, and the opener that was never wired
 
 Signing in to claude.ai with Google produced a blank tab and no session. The

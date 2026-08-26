@@ -211,6 +211,11 @@ public:
 		m_external = fn;
 		android_view::set_external_handler(fn);
 	}
+	// Not wired: Android's downloads go through the platform `DownloadManager`
+	// in `android_downloads`, which the WebView's own `setDownloadListener`
+	// would feed. Taking the handler and never calling it would be worse than
+	// saying so here.
+	void set_download_handler(download_note) override {}
 
 private:
 	request_filter      *m_filter = nullptr;

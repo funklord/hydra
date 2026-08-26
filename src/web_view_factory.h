@@ -36,4 +36,24 @@ public:
 	// `shouldOverrideUrlLoading` would satisfy the same interface per view.
 	using external_url_handler = std::function<void(const QUrl &url)>;
 	virtual void set_external_url_handler(external_url_handler fn) = 0;
+
+	// A page asked to download something, and the engine is doing it.
+	//
+	// **Not routed through `download_manager`, deliberately.** That manager
+	// fetches a url itself, which is right for a magnet link or a stream the
+	// media dialog found -- things the page never had. A download a page
+	// starts is the opposite case: it may be a `blob:` the page built in
+	// memory, or a url that only means anything with the session's cookies
+	// and headers attached. Refetching it from outside the engine gets a
+	// login screen or nothing at all. So the engine keeps the transfer and
+	// this only reports it.
+	//
+	// `path` is where the file is being written, chosen before the engine is
+	// told to proceed. Called once when the transfer starts and again when it
+	// ends, with `ok` saying which -- a download that fails silently is the
+	// shape this whole feature existed to fix.
+	using download_note =
+	  std::function<void(const QUrl &url, const QString &path, bool finished,
+	                      bool ok)>;
+	virtual void set_download_handler(download_note fn) = 0;
 };

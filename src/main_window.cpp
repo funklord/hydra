@@ -514,6 +514,27 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// is simply the first thing that fits, and the shell still never names a
 	// transport.
 	if (factory) {
+		// **A download a page started.** Reported rather than driven: the
+		// engine keeps the transfer, because it may be a `blob:` the page
+		// built or a url that only resolves with the session's cookies. All
+		// the shell does is say where it went and whether it arrived, which
+		// is the whole of what was missing -- an unaccepted download is
+		// cancelled by Qt without a word, so every one of these used to look
+		// like a click that did nothing.
+		factory->set_download_handler([this](const QUrl &url, const QString &path,
+		                                      bool finished, bool ok) {
+			const QString name = QFileInfo(path).fileName();
+			if (!finished) {
+				m_status->showMessage(QString("Downloading %1…").arg(name), 6000);
+				return;
+			}
+			m_status->showMessage(
+			  ok ? QString("Saved %1 to %2")
+			           .arg(name, QFileInfo(path).absolutePath())
+			     : QString("Download of %1 failed").arg(
+			           name.isEmpty() ? url.toString() : name), 12000);
+		});
+
 		factory->set_external_url_handler([this](const QUrl &url) {
 			if (renders_as_page(url))
 				return;
