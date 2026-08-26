@@ -1649,12 +1649,18 @@ never run, because KeePassXC itself is not installed.~~ **All of it runs now.**
 KeePassXC is installed, and the handshake, association, a stored pairing
 restored and accepted, and `get-logins` against a real vault are measured — see
 "The KeePassXC bridge finally met KeePassXC" and "A pairing that survives a
-restart". Also not done from §13: the key icon and entry-picker UI (a single
-match fills automatically; multiple matches are deliberately left alone rather
-than guessed at), `set-login` on new-credential submit, `generate-password`,
-storing the association key encrypted at rest via Secret Service — it is in
-memory only, so pairing does not survive a restart — and the optional
-direct-`.kdbx` fallback, which §13.4 recommends against anyway.
+restart". Also not done from §13: `set-login` on new-credential submit, and
+the optional direct-`.kdbx` fallback, which §13.4 recommends against anyway.
+
+**This list used to be longer and was wrong.** It named the key icon, the
+entry-picker UI, `generate-password` and storing the association key via
+Secret Service as outstanding -- while pointing, in the same sentence, at the
+sections describing two of them working. All four are built:
+`QInputDialog::getItem` is the picker, `credential_store` is the Secret
+Service half, Tools -> Passwords carries Generate Password, and the key has
+had an icon for some time and is permanent now. **A list of what is left to do
+is the part of a document that rots first**, because finishing something
+changes it and nothing points back here.
 
 ## When our own blocking breaks the page (partly done)
 
@@ -4473,29 +4479,68 @@ why. The script keeps its `length > 1` guard as belt and braces: it should never
 fire now, and if it does, filling the first of several is a guess about which
 account someone wanted.
 
-### The key, which §13.2 asked for as an icon and gets as a word
+### The key (§13.2), which is permanent now
 
-It appears when a page has a login form, and **before the gate runs** rather than
-after — which is the whole design. A key that showed up only when a fill
-succeeded would be absent from exactly the pages where someone needs to know
-why nothing happened. Four states, each a different thing to do next: hidden,
-`Key` (this page has a form), `Key ✓` (filled, click to do it again) and
-`Key ✕` with the refusal in its tooltip. Clicking re-runs the whole gate rather
-than re-opening a cached answer, because caching the answer means holding
-credentials past the fill that asked for them.
 
-**A word, not an icon**, and that is a deliberate deviation from §13.2's
-wording: this toolbar is made of text actions — Media, Shield — and the icon set
-is the app's own mark at seven sizes, not a symbol library. Inventing one glyph
-for one affordance would make it the odd one out.
+It is always on the toolbar, and **before the gate runs** rather than after --
+which is the whole design. A key that showed up only when a fill succeeded
+would be absent from exactly the pages where somebody needs to know why nothing
+happened. Clicking re-runs the whole gate rather than re-opening a cached
+answer, because caching the answer means holding credentials past the fill that
+asked for them.
+
+**It used to appear only when a page raised a form, and that was wrong for a
+reason the earlier design missed.** A control that appears unasked reads as a
+notification; one that is always in the same place can be *looked for*. Hidden
+until needed, the feature was invisible to anyone who had not already met it --
+and its absence said nothing, because absence is also what a browser with no
+password support looks like.
+
+So the four states are now present-and-greyed, `Key` (this page has a form),
+`Key ✓` (filled, click to fill again) and `Key ✕` with the refusal in its
+tooltip. Greyed carries a reason too: either *no login form on this page* or,
+where KeePassXC cannot be reached at all, that -- the platform's answer
+outranks the page's, since "no login form here" would send somebody looking at
+the wrong thing.
+
+**Disabled rather than live-and-explaining**, and the reason is this project's
+usual one. With no fields on the page a fill has nothing to write, so a live
+button would query the vault, offer a picker and then appear to do nothing --
+silence, which is the failure mode §13.2's affordance exists to prevent.
+`blocked_reason` has no case for "no form" and should not grow one: the page
+either has a password field or it does not, and the shell knows that without
+asking anybody.
+
+It also removes a question the implementation would otherwise have had to
+answer. The page script requests a fill automatically when
+`passwordFields().length` is non-zero, and `requested` is emitted inside
+`request_credentials` -- so a *manual* click would raise the same signal as a
+detected form, and a flag meaning "this page has a login" would set itself. The
+disabled state makes the click impossible until a form has been found, so there
+is nothing to tell apart. **The state that could be got wrong stopped existing
+rather than being tracked correctly.**
+
+One function, `reset_key_action`, holds the resting state for both creation and
+every navigation. While the button was hidden the two did not have to agree --
+absent is absent -- and making it permanent turned that into two places
+describing one state in words that could drift.
+
+**An icon, not a word.** This deviated from §13.2 for a while and the note here
+outlived the deviation: the toolbar was text actions, and inventing one glyph
+for one affordance would have made it the odd one out. Answered by not
+inventing one -- `dialog-password` and `password` are standard freedesktop
+names, so the key is the desktop's key, drawn to match the arrows beside it. If
+a theme has neither the icon comes back null and the action keeps its word.
+Measured on crystalsvg: `dialog-password` is absent, `password` resolves at six
+sizes.
 
 **The tooltip is where the reason lives**, not the status bar. A status message
 is gone in six seconds and the empty form is still sitting there; this project
-has already recorded a defect where a message was written into a label something
-else overwrote.
+has already recorded a defect where a message was written into a label
+something else overwrote.
 
-`try_autofill` drives it through the real shell, **8 checks, no KeePassXC
-needed** — autofill is HTTPS-only by default, so a login form served over plain
+`try_autofill` drives it through the real shell, **14 checks, no KeePassXC
+needed** -- autofill is HTTPS-only by default, so a login form served over plain
 http is refused for a reason the shell knows on its own, which makes the whole
 chain observable without a vault or a pairing dialog. Two defects in the driver
 before it worked, both this project's own recurring shapes: it took the first

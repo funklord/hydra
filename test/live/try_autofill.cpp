@@ -153,8 +153,18 @@ int main(int argc, char *argv[]) {
 		std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 		return 1;
 	}
-	check(!key->isVisible(),
-	      "and is hidden, because nothing has asked for a credential yet");
+	// **Present, and greyed.** It used to be hidden until a page raised a
+	// form, which made the feature invisible until the moment it was needed.
+	// A control that appears unasked reads as a notification; one that is
+	// always in the same place can be looked for.
+	check(key->isVisible(),
+	      "and is on the toolbar even though no page has asked for anything");
+	check(!key->isEnabled(),
+	      "greyed, because there is nothing on this page to fill");
+	check(key->toolTip().contains("No login form") ||
+	          key->toolTip().contains("KeePassXC"),
+	      QString("and says which of the two reasons it is (%1)")
+	          .arg(key->toolTip()));
 
 	section("a login form raises it, even though the fill is refused");
 	{
@@ -164,8 +174,10 @@ int main(int argc, char *argv[]) {
 			addr->setText(QString("http://127.0.0.1:%1/login").arg(port));
 			QMetaObject::invokeMethod(addr, "returnPressed");
 		}
-		const bool shown = wait_for([&] { return key->isVisible(); });
-		check(shown, "the key appears once the page's script finds a password field");
+		const bool shown = wait_for([&] { return key->isEnabled(); });
+		check(shown, "the key comes alive once the page's script finds a "
+		              "password field");
+		check(key->isVisible(), "having been there all along");
 
 		// The reason, which is the whole reason the affordance exists. Over
 		// plain HTTP the answer is knowable without a vault: filling a password
@@ -198,9 +210,17 @@ int main(int argc, char *argv[]) {
 			addr->setText("about:blank");
 			QMetaObject::invokeMethod(addr, "returnPressed");
 		}
-		const bool hidden = wait_for([&] { return !key->isVisible(); });
-		check(hidden,
+		const bool down = wait_for([&] { return !key->isEnabled(); });
+		check(down,
 		      "a page with no login form does not inherit the last page's key");
+		check(key->isVisible(),
+		      "though the button itself does not go anywhere");
+		check(key->text() == "Key",
+		      QString("and the tick or cross goes with it (%1)").arg(key->text()));
+		check(key->toolTip().contains("No login form") ||
+		          key->toolTip().contains("KeePassXC"),
+		      QString("as does the reason from the page before (%1)")
+		          .arg(key->toolTip()));
 	}
 
 	note("KeePassXC is not needed for any of the above, and is not exercised by");

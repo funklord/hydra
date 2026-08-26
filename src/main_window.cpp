@@ -220,7 +220,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(m_autofill, &autofill_controller::requested, this, [this] {
 		if (!m_key_action)
 			return;
-		m_key_action->setVisible(true);
+		m_key_action->setEnabled(true);
 		m_key_action->setText("Key");
 		m_key_action->setToolTip("This page has a login form. Click to fill it "
 		                          "from KeePassXC.");
@@ -231,7 +231,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		// readable -- a status message is gone in six seconds and the form is
 		// still sitting there empty.
 		if (m_key_action) {
-			m_key_action->setVisible(true);
+			m_key_action->setEnabled(true);
 			m_key_action->setText("Key ✕");
 			m_key_action->setToolTip(why);
 		}
@@ -262,7 +262,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	        [this](const QString &) {
 		if (!m_key_action)
 			return;
-		m_key_action->setVisible(true);
+		m_key_action->setEnabled(true);
 		m_key_action->setText("Key ✓");
 		m_key_action->setToolTip("Filled from KeePassXC. Click to fill again.");
 	});
@@ -530,7 +530,28 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// tooltip is the only thing that says what the button is.
 	m_key_action->setToolTip("Fill a saved password from KeePassXC");
 	m_key_action->setStatusTip("Ask KeePassXC for this site's logins");
-	m_key_action->setVisible(false);
+	// **Permanent, and disabled until this page has a login to fill.**
+	//
+	// It used to appear only when a page raised a form, which made the feature
+	// invisible until the moment it was needed -- and something that appears
+	// without being asked for is read as a notification rather than as a
+	// control somebody can look for. A button that is always in the same place
+	// can be found, and its enabled state answers "does this page have a login
+	// at all" without anybody having to click.
+	//
+	// Disabled rather than live-and-explaining, because the honest failure
+	// here is silence: with no fields on the page a fill has nothing to write,
+	// so a live button would query the vault, offer a picker, and then appear
+	// to do nothing. `blocked_reason` has no case for it and should not grow
+	// one -- the page either has a form or it does not, and that is knowable
+	// here without asking anybody.
+	//
+	// It also means a click is only possible when there is something to fill,
+	// so the automatic request the page script makes on load
+	// (`passwordFields().length` in `autofill_script.h`) is the only thing that
+	// ever enables it. Nothing has to tell a manual click apart from a
+	// detected form, because the disabled state makes the first impossible.
+	reset_key_action();
 	connect(m_key_action, &QAction::triggered, this, [this] {
 		// Ask again, through the whole gate. Cheaper designs were available --
 		// re-opening the last picker, or caching the entries -- and both mean
@@ -2582,9 +2603,9 @@ void main_window::sync_page_context() {
 		m_cosmetic->set_page_host(u.host());
 	// The key belongs to the page that raised it: a new document has not asked
 	// for anything yet, and a tick left over from the last one would claim a
-	// fill that did not happen here.
-	if (m_key_action)
-		m_key_action->setVisible(false);
+	// fill that did not happen here. The button stays where it is; only what
+	// it says and whether it can be pressed go back to the start.
+	reset_key_action();
 	if (m_autofill) {
 		m_autofill->set_page_origin(
 		  u.adjusted(QUrl::RemovePath | QUrl::RemoveQuery |
@@ -2736,6 +2757,29 @@ void main_window::forget_subtree(node *n) {
 		m_state->remove(n->id);
 	update_status();
 	page_changed();
+}
+
+// The key's resting state: on the toolbar, greyed, saying why.
+//
+// One function so that creation and every navigation cannot drift apart. They
+// did not have to agree while the button was hidden -- absent is absent -- and
+// the moment it became permanent, two places had to describe the same state in
+// the same words.
+void main_window::reset_key_action() {
+	if (!m_key_action)
+		return;
+	m_key_action->setText("Key");
+	// The platform's answer outranks the page's: where KeePassXC cannot be
+	// reached at all, saying "no login form on this page" would send somebody
+	// looking at the wrong thing.
+	if (!keepass_bridge::supported()) {
+		m_key_action->setEnabled(false);
+		m_key_action->setToolTip(keepass_bridge::unavailable_reason());
+		return;
+	}
+	m_key_action->setEnabled(false);
+	m_key_action->setToolTip("No login form on this page. This fills saved "
+	                          "logins from KeePassXC when there is one.");
 }
 
 void main_window::save_tree_soon() {

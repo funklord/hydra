@@ -105,6 +105,9 @@ private slots:
 	void on_tree_activated(const QModelIndex &proxy_index);
 	void open_url_externally(const QUrl &url);
 	void forget_subtree(node *n);
+	// Put the password key back to its resting state: present, greyed, and
+	// saying why. Shared by creation and by every navigation.
+	void reset_key_action();
 	void save_tree_soon();
 	// The imported back/forward records, which live beside the tree file
 	// rather than in it. Both walk the whole tree from the root when called
