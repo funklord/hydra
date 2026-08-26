@@ -34,6 +34,13 @@ public:
 	// swallow the link silently, which is worse than the error page.
 	static void register_url_schemes(const QStringList &schemes);
 
+	// **The profile the app actually uses**, which since it gained a storage
+	// name is no longer `QWebEngineProfile::defaultProfile()`. A live driver
+	// that wants the cookie store must ask here: reaching for the default gets
+	// a profile nothing in the shell has ever loaded a page into, and every
+	// check against it fails while looking like a finding about cookies.
+	QWebEngineProfile *profile() const { return m_profile; }
+
 private:
 	QWebEngineProfile  *m_profile     = nullptr;
 	request_filter     *m_filter      = nullptr;

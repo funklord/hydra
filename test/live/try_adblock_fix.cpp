@@ -103,57 +103,71 @@ int main(int argc, char *argv[]) {
 	if (!server.listen(QHostAddress::LocalHost, 0)) return 1;
 	const quint16 port = server.serverPort();
 
-	policy_engine       policy;
-	request_filter      filter(&policy);
-	qtwebengine_factory factory(&filter);
-	main_window w(&factory, &policy, &filter);
-	w.load_tree(tree);
-	w.resize(900, 600);
-	w.show();
-	spin(1500);
-
-	auto *tree_view = w.findChild<QTreeView *>();
-	emit tree_view->activated(
-	  tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
-	spin(1500);
-
-	QLineEdit *bar = nullptr;
-	for (QLineEdit *e : w.findChildren<QLineEdit *>())
-		if (e->placeholderText() == "Address") bar = e;
-	if (!bar) { std::printf("NO ADDRESS BAR\n"); return 1; }
-	auto go = [&](int ms) {
-		bar->setText(QString("http://127.0.0.1:%1/watch").arg(port));
-		QMetaObject::invokeMethod(bar, "returnPressed");
-		spin(ms);
-	};
-
+	// Hoisted out of the first shell's scope, because both of them want it.
 	const QString host = "127.0.0.1";
 
-	section("a page that checks for a blocker is fixed, not just reported");
-	check(policy.setting_for(host, policy::feature::ads) == policy::setting::unset,
-	      "no rule for this site to begin with");
-	check(!policy.is_allowed(policy::feature::ads, host),
-	      "and ads are blocked by the global default");
-
-	go(6000);
-	check(policy.setting_for(host, policy::feature::ads) == policy::setting::allow,
-	      "after the detector is seen, ads are allowed for this site");
-	check(policy.global_default(policy::feature::ads) == policy::setting::block,
-	      "as a per-site rule — the global default is untouched, so this does "
-	      "not quietly stop blocking everywhere");
-	check(server.page_loads >= 2,
-	      QString("and the page is loaded again so the fix is visible (%1 loads)")
-	          .arg(server.page_loads));
-
-	section("it does not keep doing it");
+	// **One shell at a time, and the braces are the whole point.** The second
+	// section below builds its own engine, filter and factory to get a clean
+	// policy state, and it used to do that while this one was still alive. Two
+	// `qtwebengine_factory`s means two `QWebEngineProfile`s -- and since the
+	// profile gained a storage name so logins survive a restart, two profiles
+	// with the same name are two objects claiming one directory on disk, with
+	// its leveldb locks and its SQLite cookie database. Nothing here would have
+	// reported that; it would have surfaced later as a corrupt store in
+	// somebody's real profile.
+	//
+	// Sequential is exactly what a restart is, and is fine. Concurrent is not.
 	{
-		const int before = server.page_loads;
-		go(5000);
-		// One more load because we asked for one; what must not happen is the
-		// browser reloading on its own after that.
-		check(server.page_loads <= before + 2,
-		      QString("a second visit does not start a reload loop (%1 → %2)")
-		          .arg(before).arg(server.page_loads));
+		policy_engine       policy;
+		request_filter      filter(&policy);
+		qtwebengine_factory factory(&filter);
+		main_window w(&factory, &policy, &filter);
+		w.load_tree(tree);
+		w.resize(900, 600);
+		w.show();
+		spin(1500);
+
+		auto *tree_view = w.findChild<QTreeView *>();
+		emit tree_view->activated(
+		  tree_view->model()->index(0, 0, tree_view->model()->index(0, 0)));
+		spin(1500);
+
+		QLineEdit *bar = nullptr;
+		for (QLineEdit *e : w.findChildren<QLineEdit *>())
+			if (e->placeholderText() == "Address") bar = e;
+		if (!bar) { std::printf("NO ADDRESS BAR\n"); return 1; }
+		auto go = [&](int ms) {
+			bar->setText(QString("http://127.0.0.1:%1/watch").arg(port));
+			QMetaObject::invokeMethod(bar, "returnPressed");
+			spin(ms);
+		};
+
+		section("a page that checks for a blocker is fixed, not just reported");
+		check(policy.setting_for(host, policy::feature::ads) == policy::setting::unset,
+		      "no rule for this site to begin with");
+		check(!policy.is_allowed(policy::feature::ads, host),
+		      "and ads are blocked by the global default");
+
+		go(6000);
+		check(policy.setting_for(host, policy::feature::ads) == policy::setting::allow,
+		      "after the detector is seen, ads are allowed for this site");
+		check(policy.global_default(policy::feature::ads) == policy::setting::block,
+		      "as a per-site rule — the global default is untouched, so this does "
+		      "not quietly stop blocking everywhere");
+		check(server.page_loads >= 2,
+		      QString("and the page is loaded again so the fix is visible (%1 loads)")
+		          .arg(server.page_loads));
+
+		section("it does not keep doing it");
+		{
+			const int before = server.page_loads;
+			go(5000);
+			// One more load because we asked for one; what must not happen is the
+			// browser reloading on its own after that.
+			check(server.page_loads <= before + 2,
+			      QString("a second visit does not start a reload loop (%1 → %2)")
+			          .arg(before).arg(server.page_loads));
+		}
 	}
 
 	section("a choice the user made is not overridden");

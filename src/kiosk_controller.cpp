@@ -39,7 +39,13 @@ kiosk_controller::kiosk_controller(QObject *parent) : QObject(parent) {
 	m_idle_timer->setSingleShot(true);
 	connect(m_idle_timer, &QTimer::timeout, this, [this] {
 		// The single most-used real kiosk feature: walk back to the home URL
-		// after inactivity so an abandoned session does not persist (sec 8.3).
+		// after inactivity (sec 8.3). It resets the navigation and nothing
+		// else: there is no kiosk profile, so pages load into the factory's
+		// persistent one, and the last person's cookies and logins are still
+		// on disk for the next. This used to say an abandoned session does
+		// not persist, which was true only while the whole browser was off
+		// the record by accident. An off-the-record profile for kiosk is the
+		// unbuilt half; see project.md.
 		if (m_view && m_config.home.isValid())
 			m_view->load(m_config.home);
 	});

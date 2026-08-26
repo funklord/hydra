@@ -240,7 +240,14 @@ int main(int argc, char *argv[]) {
 		if (e->placeholderText() == "Address") bar = e;
 	if (!bar) { std::printf("NO ADDRESS BAR\n"); return 1; }
 
-	auto *store = QWebEngineProfile::defaultProfile()->cookieStore();
+	// **The factory's profile, not the default one.** Hydra's profile gained a
+	// storage name so that a login survives a restart, and the moment it did,
+	// `defaultProfile()` stopped being the profile any page here loads into.
+	// Watching the wrong store is not a flake: `cookieAdded` never fires,
+	// `deleteAllCookies()` clears something nobody is using, and every case
+	// below reports the cookie filter broken. A driver that cannot pass is
+	// worse than one that is absent, because its red is read as a finding.
+	auto *store = factory.profile()->cookieStore();
 
 	// One case: clear everything, set the policy, load the page, look. `which`
 	// selects the origin, because the same three cases are asked over plain HTTP

@@ -113,6 +113,25 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 	m_profile->setPersistentCookiesPolicy(
 	  QWebEngineProfile::AllowPersistentCookies);
 	m_profile->setHttpCacheType(QWebEngineProfile::DiskHttpCache);
+	// **The policy engine is the only decider, and a persistent profile was
+	// about to quietly take that away.** `QWebEnginePage::permissionRequested`
+	// fires only while a permission's state is `Ask`, and
+	// `qtwebengine_view.cpp` answers every one of those by calling the shell's
+	// decider and then `grant()`. Off the record, a grant died with the
+	// process, so the question came back next time and the engine stored
+	// nothing the shield did not know about.
+	//
+	// A named profile's default is to write that grant to disk. The engine
+	// would then stop asking: a site the user later blocks in the shield keeps
+	// the camera it was once given, `HYDRA_PERM_DEBUG` prints nothing, and
+	// there is no screen anywhere in this app that lists or clears what
+	// Chromium decided to remember. Two authorities, one of them invisible.
+	//
+	// `AskEveryTime` is not a new policy -- it is the behaviour that has always
+	// been here, now that it has to be asked for rather than inherited from a
+	// profile that could not remember anything.
+	m_profile->setPersistentPermissionsPolicy(
+	  QWebEngineProfile::PersistentPermissionsPolicy::AskEveryTime);
 
 	// **A page asking to save something.** Nothing was connected to this, so
 	// Chromium asked and got no answer, and Qt cancels an unaccepted request --

@@ -3890,29 +3890,29 @@ page.
 
 ## The profile forgot everything, and nothing meant it to
 
-**Measured, not inferred.** `qtwebengine_factory` takes
-`QWebEngineProfile::defaultProfile()` and nothing anywhere calls
+**Measured, not inferred.** `qtwebengine_factory` took
+`QWebEngineProfile::defaultProfile()` and nothing anywhere called
 `setPersistentStoragePath`, `setStorageName`, `setPersistentCookiesPolicy` or
 `setHttpCacheType`. In Qt 6.8 the default profile is off-the-record. The only
-directory any run has ever produced is
-`~/.local/share/Hydra/QtWebEngine/OffTheRecord/`; there is no `Default` beside
-it.
+directory any run had ever produced was
+`~/.local/share/Hydra/QtWebEngine/OffTheRecord/`; there was no `Default`
+beside it.
 
-So nothing a site stores survives quitting: cookies, localStorage, IndexedDB,
-and the HTTP cache, which is memory-only. **Log in, quit, come back, and you
-are logged out**, with nothing said about why.
+So nothing a site stored survived quitting: cookies, localStorage, IndexedDB,
+and the HTTP cache, which was memory-only. **Log in, quit, come back, and you
+were logged out**, with nothing said about why.
 
-It bites harder here than it would in most browsers, because this one
+It bit harder here than it would in most browsers, because this one
 deliberately persists the tab tree *and* each tab's history. A restored tab
-reloads a site you were signed into and shows you signed out -- the tree
-remembers and the session does not. It also contradicts a stated design: the
+reloaded a site you were signed into and showed you signed out -- the tree
+remembered and the session did not. It also contradicted a stated design: the
 consent-banner work says "answering has to stick, which is why this touches
 cookie policy... a consent choice is itself recorded in a cookie". The choice
-cannot stick in a profile that forgets.
+could not stick in a profile that forgets.
 
-**And the document has it exactly backwards.** §"Not done from §8" lists the
+**And the document had it exactly backwards.** §"Not done from §8" lists the
 off-the-record profile as an unbuilt *kiosk* feature -- something to add when
-a kiosk needs to forget. The whole browser has been off-the-record the entire
+a kiosk needs to forget. The whole browser had been off-the-record the entire
 time, by inheriting a Qt default nobody chose. That is the fourth time this
 file has contradicted itself about work it records elsewhere, and the first
 time the contradiction was in the direction of a feature being *accidentally
@@ -3920,11 +3920,32 @@ present* rather than accidentally missing.
 
 **Fixed, by the holder's instruction.** The factory constructs
 `QWebEngineProfile("hydra")` instead of taking the default. A profile with a
-storage name is persistent, and Qt puts it under
-`AppDataLocation/QtWebEngine/<name>` -- beside the tree file and the state
-directory rather than somewhere else on the disk. The cookie policy and cache
-type are set explicitly rather than left to a default, because the default is
-exactly what was wrong before and a reader deserves to see the intent.
+storage name is persistent. The cookie policy and cache type are set
+explicitly rather than left to a default, because the default is exactly what
+was wrong before and a reader deserves to see the intent.
+
+**A named profile has two homes, and this section claimed one.** Qt derives
+them from different `QStandardPaths` roots through separate setters:
+`persistentStoragePath()` is `AppDataLocation/QtWebEngine/<name>`, which for
+this app is `~/.local/share/Hydra/QtWebEngine/hydra` -- beside the tree file
+and the state directory, as this section said -- while `cachePath()` is
+`CacheLocation/QtWebEngine/<name>`, which is `~/.cache/Hydra/QtWebEngine/hydra`
+and nowhere near it. Both were read back off a profile constructed exactly as
+the factory constructs it, with `XDG_DATA_HOME` and `XDG_CACHE_HOME` pointed
+at separate scratch directories so that one root could not be mistaken for the
+other. The sentence that said the profile lives under `AppDataLocation` would
+send somebody clearing this browser's state by hand to a directory holding
+none of the HTTP cache.
+
+**A persistent profile also arrived with a second permission authority, and it
+was refused.** `QWebEnginePage::permissionRequested` -- the only place the
+shield's decider is consulted -- fires only while a permission's state is
+`Ask`, and a named profile's default is to write a grant to disk. The engine
+would then stop asking: a site blocked in the shield afterwards would keep the
+camera it was once given, and no screen in this app lists or clears what
+Chromium chose to remember. `AskEveryTime` is set explicitly. That is not a new
+policy but the behaviour that was always here, now that it has to be asked for
+rather than inherited from a profile that could not remember anything.
 
 **Owning it is safe for a reason worth naming.** A `QWebEngineProfile` must
 outlive every page using it, and `main()` declares the factory *before* the
@@ -3941,13 +3962,18 @@ cookie and reported on each request whether it came back:
     REQUEST cookie_present=True
 
 and the cookie is in the on-disk SQLite `Cookies` database in the new profile
-directory, beside `History`, `Favicons` and the caches. The old
+directory, beside `History`, `Favicons` and `Local Storage`. The old
 `OffTheRecord/` directory is left where it is; nothing reads it now.
 
-Still open, and deliberately not decided here: **kiosk mode probably does want
-to forget.** The note above lists an off-the-record profile as an unbuilt
-kiosk feature, and that is still true as a *kiosk* feature -- it just is not
-the whole browser's business. Wiring one for kiosk is its own piece of work.
+Still open, and sharper than it was: **kiosk mode now leaks.** The note above
+lists an off-the-record profile as an unbuilt kiosk feature, and that is still
+true as a *kiosk* feature -- it just is not the whole browser's business. What
+changed is the cost of not having it. While the whole browser forgot
+everything it was a nice-to-have; now `kiosk_controller` has no profile of its
+own and shares the factory's persistent one, so the idle timer resets the
+*navigation* and nothing else, and the previous person's cookies and logins
+are on disk for whoever touches the screen next. Wiring one for kiosk is its
+own piece of work.
 
 ## A page could not download anything, and never said so
 
