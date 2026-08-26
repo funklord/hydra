@@ -86,7 +86,33 @@ QString free_path(const QString &dir, const QString &suggested) {
 qtwebengine_factory::qtwebengine_factory(request_filter *filter)
   : m_filter(filter) {
 	// One shared profile for every view (architecture doc sec 6).
-	m_profile = QWebEngineProfile::defaultProfile();
+	// **A named profile, because the default one forgets everything.**
+	//
+	// `QWebEngineProfile::defaultProfile()` is off-the-record in Qt 6: cookies,
+	// localStorage, IndexedDB and the http cache all live in memory and die
+	// with the process. Nothing here ever asked for that -- it was inherited by
+	// taking the default -- and the cost was invisible in the way this project
+	// keeps meeting: log in, quit, come back, and you are logged out, with
+	// nothing said. It contradicted the tree, which persists tabs and their
+	// history, so a restored tab reloaded a site you were signed into and
+	// showed you signed out. It also contradicted the consent blocker, whose
+	// whole design rests on an answer sticking, and an answer is a cookie.
+	//
+	// Constructing one with a storage name makes it persistent. The name is
+	// the directory: Qt puts it under `AppDataLocation/QtWebEngine/<name>`,
+	// which for this app is beside the tree file and the state directory
+	// rather than somewhere else on the disk.
+	//
+	// Owned here, and safe to own: `main()` declares the factory *before* the
+	// window, so the window and every page in it are destroyed first. A
+	// profile outliving its pages is the requirement, and declaration order is
+	// what satisfies it -- that comment in `main()` is load-bearing.
+	m_profile = new QWebEngineProfile(QStringLiteral("hydra"));
+	// Stated rather than left to the default, because the default is the thing
+	// that was wrong before and a reader deserves to see the intent.
+	m_profile->setPersistentCookiesPolicy(
+	  QWebEngineProfile::AllowPersistentCookies);
+	m_profile->setHttpCacheType(QWebEngineProfile::DiskHttpCache);
 
 	// **A page asking to save something.** Nothing was connected to this, so
 	// Chromium asked and got no answer, and Qt cancels an unaccepted request --
@@ -160,13 +186,18 @@ void qtwebengine_factory::set_download_handler(download_note fn) {
 
 
 qtwebengine_factory::~qtwebengine_factory() {
-	// The profile outlives us (it is Qt's default one), so take our hooks back
-	// off it before the interceptor goes away.
+	// Hooks off first: the interceptor is about to be deleted and the profile
+	// must not be left holding a pointer to it for even one statement.
 	if (m_profile) {
 		m_profile->setUrlRequestInterceptor(nullptr);
 		m_profile->cookieStore()->setCookieFilter(nullptr);
 	}
 	delete m_interceptor;
+	// **Ours now, so we delete it** -- it used to be Qt's default profile,
+	// which must not be deleted. Reaching here means the window and every page
+	// went first, which `main()`'s declaration order guarantees.
+	delete m_profile;
+	m_profile = nullptr;
 }
 
 web_view_backend *qtwebengine_factory::create_view(QWidget *parent) {

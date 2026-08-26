@@ -3888,7 +3888,7 @@ out which pane the search box searches. Search takes the full sidebar width,
 Sort sits under it, and the toolbar is left with the things that act on the
 page.
 
-## Open: the profile is off-the-record, and nothing meant it to be
+## The profile forgot everything, and nothing meant it to
 
 **Measured, not inferred.** `qtwebengine_factory` takes
 `QWebEngineProfile::defaultProfile()` and nothing anywhere calls
@@ -3918,11 +3918,36 @@ file has contradicted itself about work it records elsewhere, and the first
 time the contradiction was in the direction of a feature being *accidentally
 present* rather than accidentally missing.
 
-**Flagged rather than fixed.** Whether this browser keeps cookies between runs
-is a decision about what it is for, not a defect with an obvious answer: a
-kiosk wants to forget and a daily browser does not, and both are things this
-project has said it wants to be. The holder decides. What is not in doubt is
-that nobody decided it so far.
+**Fixed, by the holder's instruction.** The factory constructs
+`QWebEngineProfile("hydra")` instead of taking the default. A profile with a
+storage name is persistent, and Qt puts it under
+`AppDataLocation/QtWebEngine/<name>` -- beside the tree file and the state
+directory rather than somewhere else on the disk. The cookie policy and cache
+type are set explicitly rather than left to a default, because the default is
+exactly what was wrong before and a reader deserves to see the intent.
+
+**Owning it is safe for a reason worth naming.** A `QWebEngineProfile` must
+outlive every page using it, and `main()` declares the factory *before* the
+window, so the window and all its pages are destroyed first. That comment in
+`main()` about declaration order is load-bearing: the destructor now deletes
+the profile, which would have been a crash under any other order and was
+forbidden before, when the profile was Qt's own.
+
+**Verified by restarting, not by reading.** A local server set a persistent
+cookie and reported on each request whether it came back:
+
+    REQUEST cookie_present=False    <- first visit, cookie set
+    REQUEST cookie_present=True     <- second process, after a full quit
+    REQUEST cookie_present=True
+
+and the cookie is in the on-disk SQLite `Cookies` database in the new profile
+directory, beside `History`, `Favicons` and the caches. The old
+`OffTheRecord/` directory is left where it is; nothing reads it now.
+
+Still open, and deliberately not decided here: **kiosk mode probably does want
+to forget.** The note above lists an off-the-record profile as an unbuilt
+kiosk feature, and that is still true as a *kiosk* feature -- it just is not
+the whole browser's business. Wiring one for kiosk is its own piece of work.
 
 ## A page could not download anything, and never said so
 
