@@ -67,6 +67,18 @@ class request_filter;
 //     androidx.webkit is the real answer and is a dependency decision, not a
 //     line of code.
 //
+// **The per-site settings are applied here too, and one of them is not.**
+// `apply_settings()` maps four of `view_settings`' five fields onto
+// `WebSettings` calls that mean what the desktop's `QWebEngineSettings`
+// attributes mean, and the fifth -- scrollbars -- onto the View's own
+// scrollbar flags. What is *not* set is `setSupportMultipleWindows`: it routes
+// `window.open` to a `WebChromeClient.onCreateWindow` this class does not
+// implement, and an unhandled one drops the request silently, so switching it
+// on would make "popups allowed" mean "popups discarded". Left off, an allowed
+// `window.open` navigates this same WebView -- not a new tab under the page
+// that asked, but visibly something. `HydraWebView.applySettings` carries the
+// detail.
+//
 // **File inputs open the system picker**, through Qt's own `QFileDialog` -- on
 // Android that is the document picker, and what comes back is a `content:` url
 // the WebView can read because the picker granted *this* app access to it. No
@@ -154,12 +166,25 @@ public:
 	void forward() override;
 	void reload() override;
 
-	void apply_settings(const view_settings &s) override { Q_UNUSED(s) }
+	// Both of these were `Q_UNUSED` stubs, which is the worst shape a setting
+	// can have: the dialog offered the toggle, the shell recorded it, and the
+	// page carried on exactly as before with nothing said anywhere. They are
+	// real now, over JNI, and what each `view_settings` field maps to is
+	// written down beside the definitions and in `HydraWebView.applySettings`
+	// -- including the one that is deliberately still not honoured.
+	void apply_settings(const view_settings &s) override;
 	void set_permission_decider(permission_decider fn) override { m_decider = std::move(fn); }
 	void set_navigation_decider(navigation_decider fn) override {
 		m_navigation_decider = std::move(fn);
 	}
-	void set_zoom_factor(double factor) override { Q_UNUSED(factor) }
+	void set_zoom_factor(double factor) override;
+	// Answered from what was last asked for, not read back from the WebView --
+	// `getScale()` is UI-thread only, so asking would block the Qt thread on
+	// Android's UI thread. Overridden rather than left to the base class,
+	// which answers 1.0: the shell steps zoom *relative* to this, so a backend
+	// that always said 1.0 would move one step and then stay there whichever
+	// way the user pressed.
+	double zoom_factor() const override { return m_zoom; }
 
 	void inject_script(const QString &name, const QString &source,
 	                    bool subframes = false) override;
@@ -190,6 +215,7 @@ private:
 	bool   m_obscured = false; // the shell says something else is (the drawer)
 	bool   m_can_back = false;
 	bool   m_can_forward = false;
+	double m_zoom = 1.0;       // what set_zoom_factor() was last asked for
 
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;

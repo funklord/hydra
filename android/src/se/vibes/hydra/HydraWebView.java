@@ -8,6 +8,7 @@ import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -349,6 +350,121 @@ public class HydraWebView {
                                    : android.view.View.GONE);
             }
         });
+    }
+
+    /**
+     * The shell's per-site content policy, applied to this WebView.
+     *
+     * The same five booleans go to both backends, so the meaning of each is
+     * the desktop's -- qtwebengine_view::apply_settings sets the matching
+     * QWebEngineSettings attribute for four of them, and this must not drift
+     * from that or one browser would enforce a different rule from the other
+     * under one name in the settings dialog.
+     *
+     * Posted, like everything else here. WebSettings belongs to the WebView
+     * and may only be touched on the thread that made it; asking it anything
+     * would mean blocking the Qt thread on Android's UI thread, which is the
+     * deadlock this app has already met once.
+     */
+    public static void applySettings(final long id, final boolean javascript,
+                                     final boolean images, final boolean autoplay,
+                                     final boolean popups, final boolean scrollbars) {
+        onUi(new Runnable() { @Override public void run() {
+            WebView w = VIEWS.get(id);
+            if (w == null)
+                return;
+            WebSettings s = w.getSettings();
+            // Turning this off also stops the bridge shim and every content
+            // script, exactly as it does on the desktop: those are page
+            // javascript, and a page with javascript off has none.
+            s.setJavaScriptEnabled(javascript);
+            // Both, and in this order. setBlockNetworkImage covers network
+            // images alone; setLoadsImagesAutomatically covers every image,
+            // which is what the desktop's AutoLoadImages means. Re-enabling
+            // the second is documented to fetch what was blocked, so the
+            // unblock has to already be in place when it runs or the images
+            // stay missing until the next load -- the shape of bug that
+            // reads as "the setting does nothing" from the other side of the
+            // screen.
+            s.setBlockNetworkImage(!images);
+            s.setLoadsImagesAutomatically(images);
+            // Inverted, and the inversion is the whole difference: the shell
+            // asks whether autoplay is allowed, Android asks whether a
+            // gesture is required.
+            s.setMediaPlaybackRequiresUserGesture(!autoplay);
+            // The counterpart of QWebEngineSettings::JavascriptCanOpenWindows.
+            //
+            // setSupportMultipleWindows is deliberately NOT set alongside it,
+            // and this is the one thing in this method left undone on
+            // purpose. With it on, window.open stops being a navigation and
+            // becomes a WebChromeClient.onCreateWindow callback; this class
+            // implements none, and an unhandled onCreateWindow drops the
+            // request without a word. "Popups allowed" would then mean
+            // "popups silently discarded" -- a setting that does the
+            // opposite of what it says, which is worse than the gap it would
+            // close. Left off, an allowed window.open loads in this same
+            // WebView: not the desktop's new tab under the page that asked,
+            // but the navigation does happen, and it goes through
+            // shouldOverrideUrlLoading so the shell's navigation decider
+            // still sees it. The real fix is new_window_requested wired
+            // through to the shell from onCreateWindow, which is a piece of
+            // work rather than a flag.
+            s.setJavaScriptCanOpenWindowsAutomatically(popups);
+            // On the View rather than on WebSettings, because Android has no
+            // WebSettings equivalent of ShowScrollBars. Same meaning as Qt's:
+            // the indicator goes away and the page still scrolls, which is
+            // what kiosk mode is asking for (architecture doc sec 8).
+            w.setVerticalScrollBarEnabled(scrollbars);
+            w.setHorizontalScrollBarEnabled(scrollbars);
+        } });
+    }
+
+    /**
+     * Page zoom, as a percentage, where 100 is unzoomed.
+     *
+     * **setInitialScale and not setTextZoom.** The desktop's set_zoom_factor
+     * is QWebEngineView::setZoomFactor, which scales the whole page -- text,
+     * images and layout boxes alike -- while setTextZoom scales text and
+     * leaves everything else where it was. Picking that one would make the
+     * same Ctrl+= mean two different things depending on which backend was
+     * built, which is exactly what the seam exists to prevent.
+     *
+     * What does not carry over is reflow, and web_view_backend.h calls this
+     * "reflow zoom": Qt re-lays the page out at the new scale, whereas
+     * Android's initial scale is a viewport scale, so a zoomed page here can
+     * need sideways scrolling where the desktop's would have rewrapped. A
+     * platform difference, stated rather than papered over.
+     *
+     * **100 becomes 0, and no other value is taken literally.** 0 is
+     * Android's "use the default". The scale is otherwise in device pixels,
+     * so a literal setInitialScale(100) means one CSS pixel per device pixel
+     * and draws the page at a third of its size on a 3x phone -- so every
+     * other value is taken relative to the display density, which is what the
+     * default scale is built from.
+     *
+     * **Unverified: whether this takes effect on a page already loaded.**
+     * Android documents setInitialScale as the *initial* scale and says
+     * nothing about a page that is already up; the desktop's setZoomFactor
+     * rescales immediately. So Zoom In may do nothing here until the next
+     * navigation, and that has not been driven on a device -- an attempt to
+     * reach the View menu over adb kept leaving the app instead. Written down
+     * rather than assumed either way: someone with the phone in their hand
+     * settles it in ten seconds, and if it is true the answer is to reload, or
+     * to move to WebSettingsCompat once androidx.webkit is a dependency.
+     */
+    public static void setZoomFactor(final long id, final int percent) {
+        onUi(new Runnable() { @Override public void run() {
+            WebView w = VIEWS.get(id);
+            if (w == null)
+                return;
+            if (percent == 100) {
+                w.setInitialScale(0);
+                return;
+            }
+            float density = w.getResources().getDisplayMetrics().density;
+            int base = Math.round(density * 100f);
+            w.setInitialScale(Math.max(1, Math.round(base * percent / 100f)));
+        } });
     }
 
     public static void back(final long id) { nav(id, -1); }

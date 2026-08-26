@@ -1427,6 +1427,37 @@ shape:
   `apply_settings(view_settings)`, `save_state`/`restore_state`, a permission
   decider, and a `url_changed` signal. `view_settings` is plain bools, so
   a reduced Android backend applies what it supports and ignores the rest.
+  That last clause was doing more work than it should have: `apply_settings`
+  and `set_zoom_factor` were `Q_UNUSED` stubs on Android, so the settings
+  dialog offered five toggles and a zoom control, the shell recorded every
+  answer, and the page carried on exactly as before with nothing said
+  anywhere. That is the worst shape a setting can have — a control that
+  looks connected. Both are real now, over JNI: four of the five map onto
+  `WebSettings` calls meaning what the desktop's `QWebEngineSettings`
+  attributes mean, and `scrollbars` onto the View's own scrollbar flags.
+  The mapping is written beside each call in `HydraWebView.applySettings`
+  rather than only here, because a mapping recorded away from the code that
+  implements it is one that drifts.
+
+  One field is still not honoured, and deliberately: `setSupportMultipleWindows`
+  would route `window.open` to a `WebChromeClient.onCreateWindow` this class
+  does not implement, and an unhandled one drops the request without a word,
+  so switching it on would make "popups allowed" mean "popups silently
+  discarded". Left off, an allowed `window.open` navigates the same WebView —
+  not the desktop's new tab under the page that asked, but it happens, and it
+  still goes through the navigation decider. Wiring `new_window_requested`
+  through from `onCreateWindow` is the real answer and is a piece of work
+  rather than a flag.
+
+  Zoom has a platform difference worth stating rather than papering over.
+  Android's `setInitialScale` is a viewport scale in device pixels, so 100 is
+  not the identity — a literal 100 draws the page at a third of its size on a
+  3x phone — and only the density-relative value means "unzoomed". What could
+  not be settled from here is whether it re-scales a page that is already
+  loaded; the desktop's `setZoomFactor` does, Android documents an *initial*
+  scale and says nothing about the rest, and driving the View menu over adb
+  kept leaving the app instead of opening it. Recorded as open, in the Java
+  where somebody with the phone in their hand will find it.
 - `web_view_factory` — makes views and owns whatever profile-wide machinery
   sits behind them.
 - `request_filter` — the platform-neutral half of interception. Deciding what

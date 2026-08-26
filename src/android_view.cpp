@@ -562,6 +562,46 @@ void android_view::reload() {
 		QJniObject::callStaticMethod<void>(k_cls, "reload", "(J)V", jlong(m_id));
 }
 
+// The whole struct in one JNI call rather than five setters. These arrive
+// together from the shell's policy lookup, and each one would otherwise cost
+// its own hop to Android's UI thread -- which is where a WebView's settings
+// may be touched and nowhere else.
+//
+// Four of the five map onto a `WebSettings` call meaning what the desktop's
+// `QWebEngineSettings` attribute means, and `scrollbars` onto the View's own
+// scrollbar flags. `HydraWebView.applySettings` names each mapping beside the
+// call that makes it, because a mapping recorded only here would drift from
+// the code that implements it.
+//
+// **Posted, never waited on.** Nothing here needs an answer, so there is no
+// reason to block the Qt thread on Android's UI thread -- the deadlock this
+// file already met once.
+void android_view::apply_settings(const view_settings &s) {
+	if (!m_native)
+		return;
+	QJniObject::callStaticMethod<void>(
+	  k_cls, "applySettings", "(JZZZZZ)V", jlong(m_id),
+	  jboolean(s.javascript), jboolean(s.images), jboolean(s.autoplay),
+	  jboolean(s.popups), jboolean(s.scrollbars));
+}
+
+void android_view::set_zoom_factor(double factor) {
+	// **Not remembered when there is no WebView.** `zoom_factor()` is
+	// documented to answer 1.0 from a backend that cannot scale, and a
+	// placeholder QLabel cannot; storing it anyway would have the shell report
+	// a zoom percentage for a page that is not on the screen.
+	if (!m_native)
+		return;
+	m_zoom = factor;
+	// Percent, because that is the unit Android's `setInitialScale` takes.
+	// **Not simply `factor * 100` on the far side**, and `HydraWebView.
+	// setZoomFactor` is where that is explained: Android's scale is in device
+	// pixels, so a literal 100 draws a page at a third of its size on a 3x
+	// phone.
+	QJniObject::callStaticMethod<void>(k_cls, "setZoomFactor", "(JI)V",
+	                                    jlong(m_id), jint(qRound(factor * 100)));
+}
+
 void android_view::inject_script(const QString &name, const QString &source,
                                   bool subframes) {
 	// `subframes` is not honoured and cannot be: evaluateJavascript runs in the
