@@ -167,7 +167,7 @@ ANDROID_BUILD_DIRS = $(foreach a,$(ANDROID_ABIS),build-android-$(a)) build-andro
 
 # What android-install and android-run in tool/android.mk reach for, and
 # what the `android` rule below verifies before naming.
-ANDROID_ARTIFACT = $(ANDROID_BUILD_DIR)/hydra-$(VERSION)-$(ANDROID_ABI)-debug.apk
+ANDROID_ARTIFACT = $(ANDROID_BUILD_DIR)/hydra-$(VERSION)-$(ANDROID_ABI).apk
 
 # **-Os, and -Og under DEBUG.** Both live in `hydra.pro`, which subtracts
 # qmake's own -O2 and -O0 before adding them: two -O flags on one command line
