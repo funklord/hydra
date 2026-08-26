@@ -1390,6 +1390,7 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Password manager | `keepass_protocol.{h,cpp}`, `keepass_bridge.{h,cpp}`, `box_crypto.{h,cpp}` | KeePassXC-Browser client; no vault, no master password |
 | Pairing at rest | `credential_store.{h,cpp}` | the association key in the session's Secret Service, libsecret optional; without it the pairing does not survive a restart and the app says so |
 | Autofill | `autofill_controller.{h,cpp}`, `autofill_script.h` | QWebChannel bridge, origin gate, policy-governed |
+| Passkeys | `webauth_dialog.{h,cpp}` | WebAuthn's state machine as a dialog; engine-neutral, driven from `qtwebengine_view` |
 | Consent banners | `consent_blocker.{h,cpp}`, `site_rules.{h,cpp}`, `consent_dialog.{h,cpp}` | answers "accept cookies?" dialogs; rules as data, shareable later |
 | Anti-adblock notice | `antiadblock_watch.{h,cpp}` | says so when a page is checking for a blocker, and names the lever |
 | Shared rule store | `site_rules.{h,cpp}` | consent-banner and detector rules as one file, with provenance; the unit a future exchange would move |
@@ -5292,6 +5293,98 @@ been found by a human sitting through a dialog and then thinking to ask about a
 site that is *not* in their vault. Making the pairing durable turned a
 once-ever, human-gated path into one that runs on every build, and the first
 time it did, it failed.
+
+## The page requests nothing was listening to
+
+Four `QWebEnginePage` signals had nothing connected. Qt does not treat that as
+an error -- it proceeds with a default, which for every one of these is some
+flavour of "no" -- so each was a feature that silently did nothing, and none of
+them could be told apart from a page that had simply not asked.
+
+**Passkeys were the one that mattered**, because signing in is what this whole
+run of work has been about. Unhandled, `webAuthUxRequested` leaves a passkey
+sign-in waiting forever with no window and nothing said.
+`webauth_dialog.{h,cpp}` is the state machine as a dialog, and it names no
+engine type: it declares its own `pin_reason`, `pin_error` and `failure`
+enums and answers with plain signals, while `qtwebengine_view.cpp` maps Qt's
+enums onto them arm by arm rather than by cast, so a member Qt adds later is a
+compiler warning instead of a silent mis-map.
+
+This is the one request here *not* answered while its signal runs, and that is
+the API's shape rather than a choice -- Qt hands over a `QObject` carrying a
+state machine, so the request and the dialog are both held in a `QPointer`.
+Three departures from Qt's own simplebrowser example, each for a reason:
+
+- the dialog is parented to the **view**, not the window, so closing a tab
+  cannot leave a dialog whose lambdas point at a deleted backend;
+- tearing it down **disconnects before hiding**, because the dialog reports a
+  closed window as a cancellation, and telling the engine to withdraw a request
+  it has just completed would throw the sign-in away at the last step;
+- it uses `deleteLater()` rather than `delete`, because the teardown runs from
+  `stateChanged` and the state can change inside `cancel()`, which is itself
+  called from one of the dialog's own handlers. Qt's example deletes outright
+  and gets away with it only while Chromium answers asynchronously.
+
+`remainingAttempts` is shown only after a key has actually refused a PIN. On a
+first prompt a zero would tell somebody their key was one mistake from locking
+before they had made any.
+
+**`registerProtocolHandlerRequested` and `fileSystemAccessRequested` now ask**,
+with "Not now" as both the default and the escape. The file-system prompt says
+read or change, file or folder, and the path -- and for a folder adds that it
+covers everything put there afterwards, which is the part of that grant people
+do not expect. Both share a re-entry guard with printing, because a page can
+ask in a loop and each question runs a nested event loop the page keeps running
+underneath. Qt's example puts a `Q_UNREACHABLE()` on an unhandled flag
+combination; that is deliberately not copied, since it turns an engine that
+grows a third flag into a browser that aborts.
+
+**Clipboard read and pointer lock fall through the permission mapping**, and
+did so silently. `policy::feature` has no member for `ClipboardReadWrite`,
+`MouseLock`, `DesktopVideoCapture`, `DesktopAudioVideoCapture` or
+`LocalFontsAccess`, and none was invented -- adding one is a change to the
+enum, the INI encoding, the settings page and the shield, which is its own
+piece of work rather than something to take in passing. Each is named as its
+own `case`, so a new Qt member warns rather than joining the refused pile, and
+the refusal is now reported under `HYDRA_PERM_DEBUG` by the enum's *key* rather
+than its number:
+
+    permission: http://localhost:8731/ asked for ClipboardReadWrite -> denied, no policy feature covers it
+
+That probe is known to be capable of a negative as well as a positive: the
+first attempt failed with `NotAllowedError: Document is not focused` and
+produced no line at all, so an absent line and a refusal line are
+distinguishable. **Still open, and a decision rather than a task:** whether
+clipboard read and pointer lock deserve real policy features. Denying is the
+least surprising interim answer, because a prompt with nowhere to record its
+answer would ask again on every call, and pointer lock is requested on every
+entry to a game or a map.
+
+**The passkey dialog has never been seen driven by the engine, and the reason
+is worth recording.** With no authenticator present Chromium simply waits --
+the `create()` promise stays pending, `webAuthUxRequested` never fires, and
+there is nothing to see on a machine with no security key. Driving it with a
+DevTools virtual authenticator **segfaults**, before any UX state is delivered,
+at a virtual dispatch through a bad pointer inside `libQt6WebEngineCore.so.6`
+with nothing from the hydra image on the stack.
+
+That is not ours, and it was proved rather than assumed: swapping in the
+committed `qtwebengine_view.{h,cpp}`, in which nothing connects
+`webAuthUxRequested` at all, and rebuilding gives an identical crash at an
+identical program counter and return address. A pre-existing Qt 6.8.2 fault on
+the virtual-authenticator path. Whether a real security key takes the same
+route is unknown.
+
+What *is* verified is the dialog itself, driven offscreen by a scratch driver
+through all four states: accept disabled until an account is picked, the
+account list gone rather than stacked when the PIN question arrives, accept off
+below the minimum length and off while the confirmation differs, the old PIN
+not left in the box, retry present for a soft block and absent for a hard one,
+Cancel becoming Close, and an unknown failure still producing a sentence.
+`registerProtocolHandler` was verified on screen against a real page.
+`fileSystemAccessRequested` is compiled and reviewed but unrun -- reaching it
+needs `showDirectoryPicker()`, which opens a native file dialog first, and
+there is no tool on this machine to accept one.
 
 ## One Hydra per profile, because two stopped being harmless
 

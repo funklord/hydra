@@ -12,6 +12,11 @@
 #include <QAuthenticator>
 #include <QWebEngineCertificateError>
 #include <QWebEngineClientCertificateSelection>
+#include <QWebEngineFileSystemAccessRequest>
+#include <QWebEngineRegisterProtocolHandlerRequest>
+#include <QMessageBox>
+#include <QMetaEnum>
+#include <QPushButton>
 #include <QSslCertificate>
 #include <QWebEngineHistory>
 #include <QWebEngineNewWindowRequest>
@@ -55,6 +60,99 @@ const char *k_channel_bootstrap = R"JS(
   start();
 })();
 )JS";
+
+// --- the engine's passkey vocabulary, translated to this project's ----------
+//
+// Three switches that look like busywork and are the seam (architecture doc
+// sec 19.2): `webauth_dialog` compiles on Android, where Qt WebEngine does not
+// exist, so it cannot name a single one of these types. Each arm is written out
+// rather than cast from the underlying value, because the two enumerations are
+// only accidentally in the same order and a `static_cast` between them would go
+// on compiling after Qt inserted a member.
+//
+// Every one of them ends with a fallback rather than relying on the switch
+// being exhaustive: Qt's failure list has grown between releases, and a value
+// this build has never seen has to arrive as `unknown` -- which the dialog
+// turns into a sentence -- rather than as an uninitialised enum.
+
+webauth_dialog::pin_reason to_pin_reason(
+	      QWebEngineWebAuthUxRequest::PinEntryReason reason) {
+	using PR = QWebEngineWebAuthUxRequest::PinEntryReason;
+	switch (reason) {
+		case PR::Set:       return webauth_dialog::pin_reason::set;
+		case PR::Change:    return webauth_dialog::pin_reason::change;
+		case PR::Challenge: break;
+	}
+	return webauth_dialog::pin_reason::challenge;
+}
+
+webauth_dialog::pin_error to_pin_error(
+	      QWebEngineWebAuthUxRequest::PinEntryError error) {
+	using PE = QWebEngineWebAuthUxRequest::PinEntryError;
+	switch (error) {
+		case PE::InternalUvLocked:   return webauth_dialog::pin_error::uv_locked;
+		case PE::WrongPin:           return webauth_dialog::pin_error::wrong_pin;
+		case PE::TooShort:           return webauth_dialog::pin_error::too_short;
+		case PE::InvalidCharacters:
+			return webauth_dialog::pin_error::invalid_characters;
+		case PE::SameAsCurrentPin:
+			return webauth_dialog::pin_error::same_as_current;
+		case PE::NoError:            break;
+	}
+	return webauth_dialog::pin_error::none;
+}
+
+webauth_dialog::failure to_failure(
+	      QWebEngineWebAuthUxRequest::RequestFailureReason reason) {
+	using FR = QWebEngineWebAuthUxRequest::RequestFailureReason;
+	switch (reason) {
+		case FR::Timeout:
+			return webauth_dialog::failure::timeout;
+		case FR::KeyNotRegistered:
+			return webauth_dialog::failure::key_not_registered;
+		case FR::KeyAlreadyRegistered:
+			return webauth_dialog::failure::key_already_registered;
+		case FR::SoftPinBlock:
+			return webauth_dialog::failure::soft_pin_block;
+		case FR::HardPinBlock:
+			return webauth_dialog::failure::hard_pin_block;
+		case FR::AuthenticatorRemovedDuringPinEntry:
+			return webauth_dialog::failure::removed_during_pin_entry;
+		case FR::AuthenticatorMissingResidentKeys:
+			return webauth_dialog::failure::no_resident_keys;
+		case FR::AuthenticatorMissingUserVerification:
+			return webauth_dialog::failure::no_user_verification;
+		case FR::AuthenticatorMissingLargeBlob:
+			return webauth_dialog::failure::no_large_blob;
+		case FR::NoCommonAlgorithms:
+			return webauth_dialog::failure::no_common_algorithms;
+		case FR::StorageFull:
+			return webauth_dialog::failure::storage_full;
+		case FR::UserConsentDenied:
+			return webauth_dialog::failure::consent_denied;
+		case FR::WinUserCancelled:
+			return webauth_dialog::failure::cancelled_by_system;
+	}
+	return webauth_dialog::failure::unknown;
+}
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+// Qt's own spelling of a permission, for the ones this project's policy model
+// has no word for.
+//
+// **The enum's key, never its number.** 6.8 renumbered this enumeration, and a
+// log line carrying the number was quietly naming a different permission than
+// the reader thought -- which the granted/denied line below already records
+// paying for once. `valueToKey` reads the name out of the meta-object, so it
+// stays right through a renumbering and answers for a member added after this
+// was written.
+const char *permission_type_name(QWebEnginePermission::PermissionType type) {
+	const QMetaEnum spelled =
+		QMetaEnum::fromType<QWebEnginePermission::PermissionType>();
+	const char *key = spelled.valueToKey(static_cast<int>(type));
+	return key ? key : "an unnamed permission";
+}
+#endif
 
 }  // namespace
 
@@ -302,10 +400,41 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 			case PT::MediaVideoCapture:
 			case PT::MediaAudioVideoCapture: pf = policy::feature::camera;        break;
 			case PT::Notifications:          pf = policy::feature::notifications; break;
+			// **Nothing in `policy::feature` covers these, so they are refused
+			// without the shield ever being asked** -- clipboard reading,
+			// pointer lock, desktop capture, the local font list. That was
+			// already true and is now written down: the arms are named
+			// individually rather than swept into `default`, so a permission
+			// the engine adds later shows up as a compiler warning about an
+			// unhandled value instead of silently joining the refused pile.
+			//
+			// **No policy feature is invented here.** A control in the shield
+			// that nothing else in the program honours is the mistake
+			// `policy.h` records against `extractor_dom`: a permission is a
+			// promise about what the browser will do, and one for a capability
+			// that is not wired anywhere is a promise nobody is keeping. Adding
+			// two is a decision about the policy model, its INI file and its
+			// settings page, not something to take in passing here.
+			//
+			// **Refusing is also the least surprising answer available**, given
+			// that. A prompt with nowhere to record its answer would ask again
+			// on every call -- and pointer lock is requested on every entry to
+			// a game or a map, so that is a dialog per click. What was actually
+			// missing is that the refusal was invisible from inside the
+			// browser; the debug line below is what fixes that, and it is the
+			// same line the answered permissions get.
+			case PT::ClipboardReadWrite:
+			case PT::MouseLock:
+			case PT::DesktopVideoCapture:
+			case PT::DesktopAudioVideoCapture:
+			case PT::LocalFontsAccess:
+			case PT::Unsupported:
 			default:
-				// Nothing the policy model covers -- clipboard, local fonts,
-				// desktop capture, pointer lock. Refused rather than prompted,
-				// which is the same answer the old path gave.
+				if (qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG"))
+					qWarning("permission: %s asked for %s -> denied, "
+					          "no policy feature covers it",
+					          qPrintable(origin.toString()),
+					          permission_type_name(perm.permissionType()));
 				perm.deny();
 				return;
 		}
@@ -343,7 +472,15 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 			case QWebEnginePage::Notifications:
 				pf = policy::feature::notifications; break;
 			default:
-				// Nothing the policy model covers: refuse rather than prompt.
+				// Nothing the policy model covers -- pointer lock and desktop
+				// capture, this enumeration having no clipboard member at all.
+				// Refused rather than prompted, for the reasons written out
+				// against the 6.8 branch above.
+				//
+				// **No debug line here, deliberately.** The branch cannot be
+				// compiled on the Qt this tree builds against, so anything
+				// added to it would ship unverified; the reasoning lives once,
+				// where it can be built and read.
 				m_page->setFeaturePermission(origin, f,
 				  QWebEnginePage::PermissionDeniedByUser);
 				return;
@@ -367,6 +504,269 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 		        : QWebEnginePage::PermissionDeniedByUser);
 	});
 #endif
+
+	// **A page offering to handle a scheme itself** -- `registerProtocolHandler`,
+	// which is how a webmail asks to take every `mailto:` link on the machine.
+	// Nothing was connected, and Qt's answer to an unconnected one is to reject
+	// it and say nothing: the site's "make this your mail handler" button did
+	// nothing whatsoever, which is the same silent-nothing this seam already
+	// records for fullscreen, window and print requests.
+	//
+	// **Answered while the signal runs**, like the certificate selection above.
+	// The request holds a shared pointer to its controller and would survive
+	// being stored, but the engine is waiting on it and the page will have moved
+	// on; a modal question inside the slot is what Qt's own simplebrowser does.
+	//
+	// **Refusing stays the default**, and is what escape and the window's close
+	// button answer. A scheme handler is a standing grant covering a whole class
+	// of link, given once and used afterwards without asking.
+	connect(m_page, &QWebEnginePage::registerProtocolHandlerRequested, this,
+	         [this](QWebEngineRegisterProtocolHandlerRequest request) {
+		// A page can ask in a loop, and each question runs a nested event loop
+		// that the page keeps running underneath. One at a time, or a site can
+		// stack modal windows over a window nobody can reach.
+		if (m_prompting || !m_view) {
+			request.reject();
+			return;
+		}
+		const QString host = request.origin().host();
+		QMessageBox box(m_view);
+		box.setWindowTitle("Send links to this site?");
+		box.setObjectName("protocol_handler_box");
+		box.setIcon(QMessageBox::Question);
+		box.setTextFormat(Qt::RichText);
+		box.setText(QString("<b>%1</b> wants to open every <b>%2:</b> link.")
+		                .arg(host.isEmpty() ? QStringLiteral("This site")
+		                                     : host.toHtmlEscaped(),
+		                      request.scheme().toHtmlEscaped()));
+		box.setInformativeText("Allowing this means links of that kind open at "
+		                        "the site instead of in whatever opens them now.");
+		QPushButton *allow = box.addButton("&Allow", QMessageBox::AcceptRole);
+		QPushButton *refuse = box.addButton("&Not now", QMessageBox::RejectRole);
+		box.setDefaultButton(refuse);
+		box.setEscapeButton(refuse);
+		m_prompting = true;
+		box.exec();
+		m_prompting = false;
+		if (box.clickedButton() == allow)
+			request.accept();
+		else
+			request.reject();
+	});
+
+	// **A page asking to read or write a real file or folder** -- the File
+	// System Access API, which is what an in-browser editor uses to open a file
+	// from the disk and save back over it. Unconnected, Qt refuses, silently:
+	// `showOpenFilePicker()` rejects its promise and the site reports whatever
+	// it reports, with nothing from the browser to say a decision was made.
+	//
+	// Answered while the signal runs, for the same reason as the request above.
+	connect(m_page, &QWebEnginePage::fileSystemAccessRequested, this,
+	         [this](QWebEngineFileSystemAccessRequest request) {
+		if (m_prompting || !m_view) {
+			request.reject();
+			return;
+		}
+		using fsa = QWebEngineFileSystemAccessRequest;
+		const fsa::AccessFlags flags = request.accessFlags();
+		const bool may_read  = flags.testFlag(fsa::Read);
+		const bool may_write = flags.testFlag(fsa::Write);
+		// **No `Q_UNREACHABLE` on a combination this build does not know**,
+		// which is what Qt's example does here: that turns an engine which
+		// grows a third flag into a browser that aborts. A word that says less
+		// is a better answer than a crash, and the path is still named.
+		QString doing = QStringLiteral("use");
+		if (may_read && may_write)
+			doing = QStringLiteral("read and change");
+		else if (may_write)
+			doing = QStringLiteral("change");
+		else if (may_read)
+			doing = QStringLiteral("read");
+
+		const bool folder = request.handleType() == fsa::Directory;
+		const QUrl where = request.filePath();
+		// A local path where there is one. `toLocalFile` is empty for anything
+		// that is not a `file:` url, and an empty line under a question about
+		// which file is the one thing this box must not show.
+		QString shown = where.toLocalFile();
+		if (shown.isEmpty())
+			shown = where.toString();
+
+		const QString host = request.origin().host();
+		QMessageBox box(m_view);
+		box.setWindowTitle("Give this site access to your files?");
+		box.setObjectName("file_access_box");
+		box.setIcon(QMessageBox::Question);
+		box.setTextFormat(Qt::RichText);
+		box.setText(QString("<b>%1</b> wants to %2 a %3 on this computer.")
+		                .arg(host.isEmpty() ? QStringLiteral("This site")
+		                                     : host.toHtmlEscaped(),
+		                      doing, folder ? QStringLiteral("folder")
+		                                     : QStringLiteral("file")));
+		// **The path is escaped and the break is a tag**, because the box is in
+		// rich text mode: a file called `<b>` would otherwise be shown as
+		// something other than its own name, in the one place the name is the
+		// whole decision.
+		QString detail = shown.toHtmlEscaped();
+		if (folder)
+			detail += "<br><br>A folder is granted whole: everything in it now, "
+			           "and everything put there afterwards.";
+		box.setInformativeText(detail);
+		QPushButton *allow = box.addButton("&Allow", QMessageBox::AcceptRole);
+		QPushButton *refuse = box.addButton("&Don't allow",
+		                                     QMessageBox::RejectRole);
+		box.setDefaultButton(refuse);
+		box.setEscapeButton(refuse);
+		m_prompting = true;
+		box.exec();
+		m_prompting = false;
+		if (box.clickedButton() == allow)
+			request.accept();
+		else
+			request.reject();
+	});
+
+	// **Passkeys.** See `webauth_dialog.h` for what was missing and what it
+	// cost; this is the half that speaks to the engine.
+	//
+	// **The one request here that is not answered while the signal runs**, and
+	// the exception is the API's rather than a choice: Qt hands over a QObject
+	// with a state machine on it, and the conversation takes as long as a person
+	// takes to find a security key. So the object is kept, and every reply is
+	// guarded by a QPointer -- the engine owns it and may destroy it the moment
+	// the request ends, which can happen while the window is still up.
+	connect(m_page, &QWebEnginePage::webAuthUxRequested, this,
+	         [this](QWebEngineWebAuthUxRequest *request) {
+		if (!request || !m_view)
+			return;
+		// A second request arriving while one is outstanding. The engine should
+		// only do that once the first has finished -- but "should" is doing the
+		// work in that sentence, and an outstanding request nobody withdraws
+		// holds the authenticator until it times out. So the old one is
+		// cancelled by name rather than merely forgotten.
+		if (m_webauth_request && m_webauth_request != request)
+			m_webauth_request->cancel();
+		drop_webauth_dialog();
+		m_webauth_request = request;
+
+		// **Parented to the view, not to its window.** Closing a tab deletes
+		// the view and everything under it, this backend included; a dialog
+		// parented to the top level would outlive both and go on calling into a
+		// deleted object. A QDialog is a window whoever its parent is, so
+		// parenting it low costs nothing on screen.
+		auto *dialog = new webauth_dialog(request->relyingPartyId(), m_view);
+		m_webauth_dialog = dialog;
+		connect(dialog, &webauth_dialog::account_chosen, this,
+		         [this](const QString &name) {
+			if (m_webauth_request)
+				m_webauth_request->setSelectedAccount(name);
+		});
+		connect(dialog, &webauth_dialog::pin_entered, this,
+		         [this](const QString &pin) {
+			if (m_webauth_request)
+				m_webauth_request->setPin(pin);
+		});
+		connect(dialog, &webauth_dialog::retry_requested, this, [this] {
+			if (m_webauth_request)
+				m_webauth_request->retry();
+		});
+		connect(dialog, &webauth_dialog::cancelled, this, [this] {
+			if (m_webauth_request)
+				m_webauth_request->cancel();
+		});
+		connect(request, &QWebEngineWebAuthUxRequest::stateChanged, this,
+		         &qtwebengine_view::show_webauth_state);
+
+		// Whatever state it is already in, rather than assuming it starts at
+		// the beginning: the signal is emitted once the engine has something to
+		// ask, so the first question is usually already chosen by the time this
+		// runs and waiting for a `stateChanged` that has been and gone would
+		// leave an empty window.
+		show_webauth_state(request->state());
+	});
+}
+
+// One state, one question. Shows the window as a side effect, because a state
+// worth displaying is a state worth being able to see.
+void qtwebengine_view::show_webauth_state(
+        QWebEngineWebAuthUxRequest::WebAuthUxState state) {
+	using ux = QWebEngineWebAuthUxRequest::WebAuthUxState;
+	if (state == ux::Completed || state == ux::Cancelled) {
+		// The conversation is over, however it ended. The window goes without
+		// answering, and the request pointer goes with it -- the engine is free
+		// to destroy the object now and a stale pointer here would be answered
+		// into.
+		drop_webauth_dialog();
+		m_webauth_request = nullptr;
+		return;
+	}
+	if (!m_webauth_dialog || !m_webauth_request)
+		return;
+	switch (state) {
+		case ux::SelectAccount:
+			m_webauth_dialog->ask_for_account(m_webauth_request->userNames());
+			break;
+		case ux::CollectPin: {
+			const QWebEngineWebAuthPinRequest asked = m_webauth_request->pinRequest();
+			webauth_dialog::pin_prompt prompt;
+			prompt.reason     = to_pin_reason(asked.reason);
+			prompt.error      = to_pin_error(asked.error);
+			prompt.min_length = asked.minPinLength;
+			// **Only after the key has refused a PIN.** That is where Qt's own
+			// example reads this field, and it is the only place it is known to
+			// mean anything: shown on a first prompt, a `remainingAttempts` of
+			// zero would tell somebody their key is one mistake from locking
+			// before they have made any, which is a sentence that stops people
+			// typing.
+			prompt.remaining_attempts =
+				prompt.error == webauth_dialog::pin_error::none
+				  ? -1
+				  : asked.remainingAttempts;
+			m_webauth_dialog->ask_for_pin(prompt);
+			break;
+		}
+		case ux::FinishTokenCollection:
+			m_webauth_dialog->ask_for_touch();
+			break;
+		case ux::RequestFailed:
+			m_webauth_dialog->report_failure(
+			  to_failure(m_webauth_request->requestFailureReason()));
+			break;
+		case ux::NotStarted:
+			// Nothing to ask yet, so nothing on screen. An empty window with a
+			// Cancel button in it is worse than no window: it invites somebody
+			// to cancel a request that has not begun.
+			return;
+		case ux::Cancelled:
+		case ux::Completed:
+			// Answered above; named here so the switch stays exhaustive and a
+			// state added later is a compiler warning rather than a silence.
+			return;
+	}
+	m_webauth_dialog->show();
+	m_webauth_dialog->raise();
+	m_webauth_dialog->activateWindow();
+}
+
+void qtwebengine_view::drop_webauth_dialog() {
+	if (!m_webauth_dialog)
+		return;
+	webauth_dialog *dialog = m_webauth_dialog;
+	m_webauth_dialog = nullptr;
+	// **Disconnected before it is taken down.** The dialog reports a closed
+	// window as a cancellation, which is right when a person closed it and
+	// wrong here: telling the engine to withdraw a request it has just
+	// completed is a sign-in thrown away at the last step.
+	disconnect(dialog, nullptr, this, nullptr);
+	dialog->hide();
+	// **`deleteLater`, not `delete`.** This is reached from `stateChanged`, and
+	// the state can change inside `cancel()` -- which is called from one of the
+	// dialog's own signal handlers. Deleting an object while a signal of its is
+	// still being emitted is a use-after-free. Qt's own example deletes outright
+	// and gets away with it only for as long as Chromium happens to answer
+	// `cancel()` asynchronously, which is not a property this file should be
+	// relying on.
+	dialog->deleteLater();
 }
 
 QWidget *qtwebengine_view::widget() {
