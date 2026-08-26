@@ -1,7 +1,10 @@
 # Build output
 /build/
 /test/build/
-/build-android/
+# Named per ABI -- `build-android-arm64-v8a`, `build-android-x86_64` -- so the
+# bare name never matched anything the build actually produced, and an
+# `android` build left 63 MB of apk showing as untracked.
+/build-android*/
 /build-qmake/
 /test/build-make/
 # fmake's object cache. It grew to 146 MB under src/ from a trial nobody

@@ -163,5 +163,16 @@ android {
 	# A package with no versionCode installs, and then nothing can ever be an
 	# upgrade of it: Android compares that integer and treats absent as zero.
 	ANDROID_VERSION_NAME = $$VERSION
-	ANDROID_VERSION_CODE = 1
+	# **Only a fallback.** `tool/android.mk` derives the real one from VERSION
+	# -- major*10000 + minor*100 + patch, so 0.1 is 100 -- and passes it on the
+	# qmake command line, which is set before this file is read. Assigning
+	# unconditionally here clobbered it: the preflight printed "versionCode
+	# 100" and the built apk carried 1, so the number reported and the number
+	# shipped were different, and the fragment's own warning about a hardcoded
+	# code allowing exactly one upload applied to us while looking fixed.
+	#
+	# Kept for a bare `qmake hydra.pro`, which has no Makefile to ask.
+	isEmpty(ANDROID_VERSION_CODE) {
+		ANDROID_VERSION_CODE = 1
+	}
 }

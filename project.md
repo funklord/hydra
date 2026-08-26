@@ -6035,6 +6035,29 @@ under a name that says what it is.
 Verified with `aapt2` (`versionCode='1' versionName='0.1'`, `native-code:
 'arm64-v8a'`, label Hydra) and `apksigner` (debug key, signature valid).
 
+**And that `versionCode='1'` was the defect, not the fix.** It was read as a
+pass for a long time because it is a number where an empty string used to be.
+`tool/android.mk` derives the real code from VERSION -- major*10000 +
+minor*100 + patch, so 0.1 is 100 -- and prints it in the preflight, which said
+`versionCode 100` while every apk built carried 1. Nothing passed the make
+variable to qmake, and `hydra.pro` assigned `ANDROID_VERSION_CODE = 1`
+unconditionally, so the .pro won.
+
+The fragment's own comment describes the consequence exactly: "a hardcoded
+number allows exactly one upload and blocks every update after it". It was
+describing us.
+
+Found by building and reading the artifact rather than the preflight, which is
+the whole point of reading the artifact: **the two disagreed, and only one of
+them was going to be installed.** The Makefile passes the derived value on the
+qmake command line now and the .pro keeps 1 only as a fallback for a bare
+`qmake hydra.pro`. Rebuilt and re-read: `versionCode='100'`.
+
+A second XML comment refused by a parser on the way, for the same reason as
+`icon/hydra.qrc` an hour earlier: a double hyphen is illegal inside an XML
+comment, and androiddeployqt reports it as "Expected '>', but got ' '" with a
+column and no reason. Both comments now say so in themselves.
+
 **The application id was Qt's example namespace and now is not.** It was
 `org.qtproject.example.hydra`, carried from the template — it installs and runs,
 so it never blocked evaluation, but it collides with every other Qt example app,

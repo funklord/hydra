@@ -7,8 +7,16 @@
      copied wholesale from a template is a pile of permissions nobody chose.
 -->
 <!-- The version attributes below are filled by androiddeployqt from
-     ANDROID_VERSION_CODE / ANDROID_VERSION_NAME in hydra.pro, which take them
-     from the VERSION file. Left as the literal placeholders on purpose:
+     ANDROID_VERSION_CODE / ANDROID_VERSION_NAME in hydra.pro. The name comes
+     from the VERSION file directly; the code is derived from it by
+     tool/android.mk and passed to qmake. For a while it was not passed at
+     all: the .pro assigned 1 unconditionally and won, so this file was
+     filled with a versionCode the build had already computed differently,
+     and the preflight reported the number nobody shipped.
+
+     (No double hyphen anywhere in this comment. XML forbids it, and
+     androiddeployqt rejects the file with "Expected '>', but got ' '",
+     which names a column rather than the reason.) Left as the literal placeholders on purpose:
      written out by hand they drift from the real version, and this manifest
      carried neither attribute at all, which is how the apk came to report an
      empty versionCode, which is an apk that no later build can ever be an
