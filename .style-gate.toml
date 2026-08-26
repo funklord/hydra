@@ -22,7 +22,7 @@ floor = 0.43
 
 exclude = ["attic", "third_party", "vendor", "build", "target",
            "dist", ".pytest_cache", ".claude",
-           "build-android", "evidence", "state", "icon", ".fmake"]
+           "build-android-*", "evidence", "state", "icon", ".fmake"]
 
 # ASCII outside string literals, which is the rule in code-style.md.
 #
