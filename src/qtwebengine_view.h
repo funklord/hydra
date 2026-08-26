@@ -60,4 +60,8 @@ private:
 	permission_decider m_decider;
 	QWebChannel *m_channel = nullptr;
 	bool m_channel_api_injected = false;
+	// A print is on the way to a printer. `printRequested` is a page calling
+	// window.print(), which a page may do in a loop, and Qt warns and drops a
+	// second QWebEngineView::print() while the first is unfinished.
+	bool m_printing = false;
 };

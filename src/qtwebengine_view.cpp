@@ -139,6 +139,20 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 		}
 	});
 
+	// **A page asking to print itself**, which is `window.print()` and every
+	// Print button a site draws in its own chrome. Nothing was connected, and
+	// an unconnected `printRequested` is not an error anywhere -- the click
+	// simply did nothing, which reads as a broken page rather than a browser
+	// that never listened. File > Print worked the whole time, so the gap was
+	// invisible to anyone who tested printing the way the menu offers it.
+	//
+	// Straight to the same `print()` the menu calls, so a page-initiated print
+	// gets the same dialog, the same printer and the same status-bar answer.
+	// The page does not get to choose a printer or skip the dialog: what it
+	// asked for is a print, and which paper it comes out on is the user's.
+	connect(m_page, &QWebEnginePage::printRequested, this,
+	         [this] { print(); });
+
 	// A site asking who you are, by certificate.
 	//
 	// **Answered while the signal runs.** Qt hands over a selection object that
@@ -549,6 +563,11 @@ bool qtwebengine_view::can_print() const {
 void qtwebengine_view::print() {
 	if (!m_view)
 		return;
+	// A page that calls window.print() twice, or calls it while the dialog is
+	// already up, must not get two print runs: Qt drops the second with a
+	// warning and the first one's `printFinished` then answers for both.
+	if (m_printing)
+		return;
 
 	auto *printer = new QPrinter(QPrinter::HighResolution);
 	QPrintDialog dialog(printer, m_view);
@@ -559,8 +578,10 @@ void qtwebengine_view::print() {
 		return;
 	}
 
+	m_printing = true;
 	connect(m_view, &QWebEngineView::printFinished, this,
 	         [this, printer](bool ok) {
+		m_printing = false;
 		delete printer;
 		emit print_finished(ok);
 	}, Qt::SingleShotConnection);
