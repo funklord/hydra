@@ -4030,10 +4030,31 @@ that marshals onto the Qt thread exactly as `onUrlChanged` does. The backend
 caches the two booleans and emits `history_changed`, which the seam already
 had and which the shell already wires to `update_navigation`.
 
-**Compile-verified for arm64 and not yet driven on the device**, because the
-phone was in use by another session when this was written. The desktop is
-unaffected by construction: `hydra.pro` excludes `android_*.cpp` off Android,
-and `make` plus `test_seam` (74 checks) pass.
+**Driven on the device**, with the pushed values logged out of
+`on_nav_state_from_java`:
+
+    after the first page    back=0 forward=0
+    after the second page   back=1 forward=0
+    after pressing Back     back=0 forward=1
+
+which is the whole state machine. The desktop is unaffected by construction:
+`hydra.pro` excludes `android_*.cpp` off Android, and `make` plus `test_seam`
+(74 checks) pass.
+
+**And a separate thing that measurement turned up: you cannot see the
+difference.** The arrows come from `QStyle::SP_ArrowBack` on Android, there
+being no icon theme, and the style draws a near-black triangle. Disabled, the
+proxy style desaturates it and lifts it toward the background -- but on a dark
+theme the background is dark too, so a near-black glyph moves almost nowhere.
+Measured on the toolbar with Back unavailable and Forward available in the same
+screenshot: mean 144.1 and 142.8, a difference of one part in a hundred and
+twenty. The enabled state is now correct and invisible.
+
+That is worth separating from the fix rather than folding into it. The state
+being right is what the shell reasons about; the state being *legible* is a
+contrast problem in the style's own artwork on a dark palette, and it is the
+same shape as the pale key -- an icon the theme gives us that does not carry to
+this background. Not fixed here.
 
 Two details that run settles. The toolbar's **Key button falls back to its
 word** on Android, exactly as designed: there is no desktop icon theme,
