@@ -189,6 +189,20 @@ NEEDS_ENGINE := $(shell grep -lE 'main_window\.h|qtwebengine|QWebEngine|web_view
 ENGINE_BINS  := $(LIVE) $(patsubst %.cpp,$(BUILD_DIR)/%,$(NEEDS_ENGINE))
 $(ENGINE_BINS): LDLIBS += $(ENGINE_LIBS)
 
+# **Where a live driver's browsing profile goes.** `live/live_paths.cpp` puts
+# `QStandardPaths` into test mode, which moves application data, cache and
+# settings under `~/.qttest`; the file says what it cost not to. It is linked
+# into every live driver and into nothing else -- the app under `src/` must
+# keep the real paths, and an offline suite has no profile to move.
+#
+# **Linked rather than called**, because the failure it prevents is silent: a
+# driver that forgot the call would write into the user's own browser profile
+# and report nothing. Adding it here covers the driver somebody writes next
+# month, which a rule in a comment does not.
+LIVE_PATHS_OBJ := $(BUILD_DIR)/live_paths.o
+$(LIVE): EXTRA_OBJS = $(LIVE_PATHS_OBJ)
+$(LIVE): $(LIVE_PATHS_OBJ)
+
 .PHONY: all offline live live-objs clean help objsets
 all: offline live
 offline: $(OFFLINE)
@@ -202,7 +216,8 @@ live: $(LIVE)
 # drivers were fixed by hand each time, after the fact.
 #
 # This is the half that is cheap and catches most of it.
-live-objs: $(patsubst live/%.cpp,$(BUILD_DIR)/%.o,$(LIVE_SRCS))
+live-objs: $(patsubst live/%.cpp,$(BUILD_DIR)/%.o,$(LIVE_SRCS)) \
+            $(LIVE_PATHS_OBJ)
 
 # --- rules -----------------------------------------------------------------
 $(BUILD_DIR)/moc/moc_%.cpp: $(SRC)/%.h | $(BUILD_DIR)/moc
@@ -241,7 +256,7 @@ $(BUILD_DIR)/%.o: live/%.cpp $(TMOC_INC) | $(BUILD_DIR)
 # pass. `$$(OBJS_$$*)` is evaluated on the second, by which point it is.
 .SECONDEXPANSION:
 $(BUILD_DIR)/%: $(BUILD_DIR)/%.o $$(OBJS_$$*)
-	$(CXX) $(LDFLAGS) $< $(OBJS_$*) $(LDLIBS) -o $@
+	$(CXX) $(LDFLAGS) $< $(OBJS_$*) $(EXTRA_OBJS) $(LDLIBS) -o $@
 
 $(BUILD_DIR) $(BUILD_DIR)/app $(BUILD_DIR)/moc $(BUILD_DIR)/tmoc:
 	@mkdir -p $@
@@ -251,6 +266,7 @@ $(BUILD_DIR) $(BUILD_DIR)/app $(BUILD_DIR)/moc $(BUILD_DIR)/tmoc:
 # the thing depending on it already exists -- which is how adding a source once
 # left an archive unchanged and every symbol in it undefined at link time.
 .SECONDARY: $(MOC_SRCS) $(MOC_CPP_SRCS) $(APP_OBJS) $(MOC_OBJS) \
+             $(LIVE_PATHS_OBJ) \
              $(TMOC_INC) $(TMOC_SRCS) $(TMOC_OBJS) \
              $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(OFFLINE_SRCS)) \
              $(patsubst live/%.cpp,$(BUILD_DIR)/%.o,$(LIVE_SRCS))
@@ -266,7 +282,7 @@ $(BUILD_DIR) $(BUILD_DIR)/app $(BUILD_DIR)/moc $(BUILD_DIR)/tmoc:
 clean:
 	@rm -f $(APP_OBJS) $(MOC_OBJS) $(MOC_SRCS) $(MOC_CPP_SRCS) \
 	       $(TMOC_INC) $(TMOC_SRCS) $(TMOC_OBJS) \
-	       $(OFFLINE) $(LIVE) \
+	       $(OFFLINE) $(LIVE) $(LIVE_PATHS_OBJ) \
 	       $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(OFFLINE_SRCS)) \
 	       $(patsubst live/%.cpp,$(BUILD_DIR)/%.o,$(LIVE_SRCS))
 	@find $(BUILD_DIR) -name '*.d' -delete 2>/dev/null || true

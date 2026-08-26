@@ -371,6 +371,17 @@ shipping path.
 Set `HYDRA_TEST_OUT` to choose where screenshots and captures land; it defaults
 to `/tmp/hydra-test/`.
 
+**Their browsing profile is not yours.** `live/live_paths.cpp` is linked into
+every driver by `test/Makefile` and puts `QStandardPaths` into test mode before
+`main()` runs, so application data, cache and settings land under `~/.qttest`
+instead of `~/.local/share/<driver>` and `~/.config`. It has to be there rather
+than in each `main()` because the factory builds a *named*
+`QWebEngineProfile`, which is persistent: without it every run left a cookie
+jar, a history database and a disk cache behind — and `try_settings`,
+`try_watch` and `try_downloads`, which copy `main()`'s `setApplicationName`,
+left them in the profile of the browser you are actually using. Clear the lot
+with `rm -rf ~/.qttest`; nothing shipping reads it.
+
 **What exists.** The ones that assert print `N passed, M failed` and return
 non-zero on failure, so they can be run like suites; the rest are observational
 and report what they saw, which is the honest shape for a driver pointed at a
