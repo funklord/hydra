@@ -3721,6 +3721,18 @@ void main_window::apply_policy(web_view_backend *view, const QString &host) {
 	s.images     = m_policy->is_allowed(F::images, host);
 	s.autoplay   = m_policy->is_allowed(F::autoplay, host);
 	s.popups     = m_policy->is_allowed(F::popups, host);
+	// **Scrollbars are the kiosk's, not the policy's, and this used to hand
+	// them back.** `view_settings` is built fresh here and `scrollbars`
+	// defaults to true, so every re-apply -- and one runs on each navigation
+	// -- restored the bars kiosk mode had turned off. An unattended screen
+	// grew scrollbars the moment it followed a link, which is precisely the
+	// thing kiosk mode exists to prevent and precisely when nobody is watching
+	// it happen.
+	//
+	// Asked rather than remembered: the controller owns the state and can
+	// answer, and a second copy of it here would be a second thing to keep
+	// right.
+	s.scrollbars = !(m_kiosk && m_kiosk->active());
 	view->apply_settings(s);
 }
 
