@@ -238,6 +238,9 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 			request.openIn(view->m_page);
 	});
 
+	connect(m_page, &QWebEnginePage::windowCloseRequested, this,
+	         [this] { emit close_requested(); });
+
 	// One line, because the page already knows: Qt reports the link under the
 	// pointer and an empty string when the pointer leaves it.
 	connect(m_page, &QWebEnginePage::linkHovered, this,

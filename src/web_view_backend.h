@@ -315,6 +315,16 @@ signals:
 
 	// The engine's render process died. Kiosk mode's watchdog reloads on this
 	// so an unattended screen self-heals (architecture doc sec 8.3).
+	// The page asked to close its own window -- `window.close()`.
+	//
+	// **The popup half of the opener work.** A sign-in popup finishes by
+	// closing itself; with nothing connected here it stays open, blank or
+	// reading "you may close this window", and the person cannot tell whether
+	// it worked. Chromium only honours `window.close()` for a window script
+	// opened, so obeying it cannot be used to shut a tab somebody opened
+	// themselves.
+	void close_requested();
+
 	void render_process_gone();
 
 	// The page asked to fill the screen, or to stop. **Nothing handled this at

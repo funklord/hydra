@@ -2110,6 +2110,19 @@ void main_window::open_node(node *n, bool load_now) {
 			if (view == current_view())
 				open_new_window(u, user, adopt);
 		});
+		// `window.close()`. Queued rather than acted on inside the signal: the
+		// view is about to be destroyed with the node, and Chromium is still
+		// on the stack that emitted this.
+		connect(view, &web_view_backend::close_requested, this, [this, view] {
+			const QString id = m_views_by_id.key(view);
+			if (id.isEmpty())
+				return;
+			QMetaObject::invokeMethod(this, [this, id] {
+				if (node *n = m_model->node_by_id(id))
+					m_model->remove_node(n);
+			}, Qt::QueuedConnection);
+		});
+
 		connect(view, &web_view_backend::render_process_gone, this,
 		         [this, view] {
 			if (view == current_view())
