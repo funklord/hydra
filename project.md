@@ -5869,6 +5869,26 @@ that had skipped part of startup. The driver now does what `main` does -- the
 palette as well as the icons -- and a light window full of the desktop's dark
 icons was the tell.
 
+**And the application had no icon at all, for the same reason as the
+generator.** `main.cpp` asks for `:/icon/hydra-16.png`; the resource declared
+`prefix="/icons"`. The rename to singular directory names changed the C++ path
+and left the prefix, so every `addFile` found nothing, `setWindowIcon` was
+handed an empty QIcon, and the window carried no icon anywhere -- taskbar,
+switcher, decoration. `QIcon::addFile` reports a missing resource by returning
+quietly, which is why nothing ever said so.
+
+Proved rather than argued: with the old prefix restored and rebuilt, `xprop`
+reports `_NET_WM_ICON: not found` on the running window; with `/icon`, a 16x16
+icon with data. That is the third thing that one rename broke silently, after
+`objsets.py` and this section's own stale prose. **A rename is a change to
+every string that named the thing, and only the compiler checks some of
+them.**
+
+The prefix is `/icon` rather than `:/icons` for a second reason: `:/icons` is
+Qt's conventional location for an icon *theme* inside resources, and these are
+the app's own marks. Sharing that path with the theme search path would be
+asking for the confusion the section below is about.
+
 **Five, on the machine these trees moved to: Qt could not see the disk.**
 The toolbar was drawing words again, and startup said `no icon theme found`.
 Everything above was still correct and none of it applied. `XDG_DATA_DIRS`

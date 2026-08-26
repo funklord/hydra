@@ -4,7 +4,21 @@
   resampled — is what a tab strip actually gets.
 -->
 <RCC>
-  <qresource prefix="/icons">
+  <!-- `/icon`, matching the directory and what `main.cpp` asks for.
+
+       It was `/icons` while main.cpp said `:/icon/`, so every addFile found
+       nothing and the application had no icon at all. The rename to singular
+       directory names changed the C++ path and left this prefix behind, and
+       QIcon::addFile reports a missing resource by returning quietly.
+
+       Deliberately not `/icons`, which is Qt's conventional place for an icon
+       *theme* inside resources. These are the app's own marks rather than a
+       theme, and the two should not share a path.
+
+       (No double hyphens in here: XML forbids them inside a comment, and rcc
+       refuses the file with a parse error that names a column rather than the
+       reason.) -->
+  <qresource prefix="/icon">
     <file>hydra-16.png</file>
     <file>hydra-24.png</file>
     <file>hydra-32.png</file>
