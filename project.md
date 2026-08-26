@@ -3888,16 +3888,23 @@ out which pane the search box searches. Search takes the full sidebar width,
 Sort sits under it, and the toolbar is left with the things that act on the
 page.
 
-## Android: it builds, and there is an APK
+## Android: it runs, and it browses
 
-**This section is out of date and is kept for its history, not its claims.**
-It describes `android_view` as a placeholder that draws "the web view is not
-written yet", and `set_script_bridge` as deliberately doing nothing. Neither is
-true any more: `src/android_view.cpp` is 576 lines of JNI against a real
-`se/vibes/hydra/HydraWebView`, with url-change callbacks, per-request blocking
-through `shouldBlock`, navigation interception, and a bridge that registers
-(`m_bridges.add`). Three Java classes sit beside it. Read what follows as the
-record of the first build, and the paragraph below as what is measured now.
+**A second platform behind the seam, in use rather than in principle.** The
+seam has claimed since step 3.5 that adding a platform is "one new backend pair
+plus a different two lines in `main()`". That claim has been measured twice
+over: once when the core compiled for `arm64-v8a` unchanged, and again every
+time something desktop-only turned out to need an Android answer rather than an
+exemption.
+
+**What exists now**, verified against the source rather than restated from the
+paragraphs below: `src/android_view.cpp` is a real backend, 21 member functions
+of JNI against `se/vibes/hydra/HydraWebView`, with per-request blocking through
+a native `shouldBlock`, navigation interception via `shouldOverrideUrlLoading`,
+url-change callbacks, and a script bridge that registers. Three more pairs sit
+beside it -- `android_downloads`, `android_intents`, `android_dialogs` -- with a
+Java class each for the first two. The subsections below are the record of how
+each arrived, in order.
 
 **Run on hardware, 2026-08-26.** A Galaxy Z Fold3 (SM-F926B, Android 15, SDK
 35, arm64-v8a) over adb: `hydra-0.1-arm64-v8a-debug.apk` installed, launched,
@@ -3905,33 +3912,62 @@ and loaded `example.com` typed into its own address bar. The page rendered.
 logcat shows `com.google.android.webview` loading and chromium starting its
 network stack — the Android side of the seam doing the job Qt WebEngine does on
 the desktop. No fatals, no ANR, 217 MB PSS with one page open, and the status
-bar reading `1 / 4 live`.
+bar reading `1 / 4 live`. Everything before this had been driven on an
+emulator; this is the first time it has been a phone.
 
-Two things were visible in the screenshot and are worth knowing. The toolbar's
-**Key button falls back to its word** on Android, exactly as designed: there is
-no desktop icon theme, `QIcon::fromTheme` returns null for `dialog-password`
-and `password`, and the fallback is `SP_CustomBase`, which means "no icon, keep
-the text". The arrows and reload *do* draw, because those name a
-`QStyle::SP_` fallback the platform style provides — and reload turns blue the
-moment a page loads, so the enabled/disabled work carries across.
+Two details that run settles. The toolbar's **Key button falls back to its
+word** on Android, exactly as designed: there is no desktop icon theme,
+`QIcon::fromTheme` returns null for `dialog-password` and `password`, and the
+fallback is `SP_CustomBase`, which means "no icon, keep the text". The arrows
+and reload *do* draw, because those name a `QStyle::SP_` fallback the platform
+style provides — and reload turns blue the moment a page loads, so the
+enabled/disabled rendering carries across.
 
-Not a port — a **placeholder behind the seam**, which is a smaller thing that
-proves a larger one. The seam has claimed since step 3.5 that adding a platform
-is "one new backend pair plus a different two lines in `main()`". That claim is
-now measured.
+### How it started, and why the opening used to say otherwise
 
-**The core is genuinely platform-neutral.** Fifty-one translation units compiled
-for `arm64-v8a` with **no errors** and no changes. The only link failure was the
-three `qtwebengine_factory` symbols `main()` names — exactly the file the design
-says should be the only one that knows.
+The first version was **a placeholder behind the seam**, and this section
+opened by describing it in the present tense for a long time after it had
+stopped being true. What that paragraph said:
 
-`android_view` is honest about what it is: it renders a message saying the web
-view is not written yet and shows the address it was asked to open. A stub that
-displayed a blank page would be indistinguishable from a real backend that is
-broken, and this project has lost enough time to things that look like they
-work. `set_script_bridge` does nothing on purpose — on Android that becomes
-`addJavascriptInterface`, and pretending to register a bridge that cannot
-deliver would make every script that waits for one hang rather than fail.
+> `android_view` is honest about what it is: it renders a message saying the
+> web view is not written yet and shows the address it was asked to open. A
+> stub that displayed a blank page would be indistinguishable from a real
+> backend that is broken. `set_script_bridge` does nothing on purpose — on
+> Android that becomes `addJavascriptInterface`, and pretending to register a
+> bridge that cannot deliver would make every script that waits for one hang
+> rather than fail.
+
+Both halves were replaced by the work recorded below -- the WebView renders,
+and `set_script_bridge` calls `m_bridges.add` -- and nobody came back to the
+top. It is kept here, quoted and in the past, because the reasoning was right
+and is the reason the stub was safe to ship: **a stub that says so is worth
+more than one that looks like a broken backend.**
+
+It is also the specific failure this document is most prone to. A section
+opens with a summary written on day one, gains twenty subsections of
+correction underneath, and the summary is the part nobody re-reads. Anyone
+reading only the first screen of this section would have concluded Android was
+a stub, on the day it browsed the web on a phone.
+
+**The core is genuinely platform-neutral.** Fifty-one translation units
+compiled for `arm64-v8a` with **no errors** and no changes. The only link
+failure was the three `qtwebengine_factory` symbols `main()` names — exactly
+the file the design says should be the only one that knows.
+
+#### Open: this heading covers more than Android
+
+Measured while correcting the above: of the 1649 lines under `## Android`,
+**944 in twenty subsections never mention android, adb, apk or a phone.** The
+KeePassXC work, the settings pages, the INI migration, kiosk mode, the crypto
+shim and the reorganizer gate all sit here because that is when they were
+written, not because they are Android's.
+
+Left alone deliberately. They are interleaved with the Android ones rather
+than trailing after them, so there is no line to cut at, and moving 944 lines
+of a chronological record is a decision about how this document is organised
+rather than a correction to something false. **Recorded so it is a question
+somebody answers rather than a shape nobody notices.** The heading is accurate
+for what it claims; it is merely not exhaustive of what it contains.
 
 ### What it took, since none of it was obvious
 
@@ -8689,7 +8725,7 @@ removing it.
 x86_64 and a phone is arm64, so the person most likely to set the variable is
 the one about to be lied to, and `adb install` then fails complaining about the
 package rather than about the architecture. The session recorded above at
-§"Android: it builds, and there is an APK" lost time to exactly that.
+§"Android: it runs, and it browses" lost time to exactly that.
 
 **ANDROID_ABI now selects the kit.** Qt's kit directories are named for the ABI
 in Qt's spelling rather than Android's (`android_armv7` for `armeabi-v7a`), so
