@@ -9,6 +9,8 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QFile>
+#include <QNetworkCookie>
+#include <QTimer>
 #include <QWebEngineProfile>
 #include <QWebEngineView>
 #include <QWebEngineUrlRequestJob>
@@ -201,6 +203,207 @@ void qtwebengine_factory::set_external_url_handler(external_url_handler fn) {
 
 void qtwebengine_factory::set_download_handler(download_note fn) {
 	m_download_note = std::move(fn);
+}
+
+namespace {
+
+// One clear in flight.
+//
+// It has to outlive the call that started it, because not one of the three
+// stores empties synchronously and the three answer in three different ways:
+// `clearHttpCache()` answers with `clearHttpCacheCompleted`, `deleteAllCookies()`
+// answers with one `cookieRemoved` per cookie and no "that was the last one",
+// and `clearAllVisitedLinks()` answers with nothing whatsoever. So this owns
+// the connections, the counting and the two timers, and reports once.
+//
+// **Counting the removals is what makes the report evidence rather than a
+// claim.** "The call returned" says only that Qt accepted the request. A
+// number that came from watching cookies leave is a measurement, and it is the
+// difference between a dialog that says "cleared" and one that says what went.
+class clear_run : public QObject {
+public:
+	clear_run(QWebEngineProfile *profile, web_view_factory::clear_note done)
+		: QObject(profile), m_profile(profile), m_done(std::move(done)) {}
+
+	void start(const web_view_factory::browsing_data &what) {
+		using state = web_view_factory::clear_state;
+
+		// Both timers exist before anything is asked to clear. A removal
+		// notification arriving during `deleteAllCookies()` would otherwise
+		// reach a null settle timer, and the ordering that makes that
+		// impossible is Chromium's rather than ours.
+		m_settle = new QTimer(this);
+		m_settle->setSingleShot(true);
+		connect(m_settle, &QTimer::timeout, this, [this] {
+			m_settled = true;
+			m_cookies_pending = false;
+			m_report.cookies = m_report.cookies_removed > 0
+				? web_view_factory::clear_state::done
+				// Nothing was seen to go. That is the truthful answer whether the
+				// jar was empty or the store never told us, and the two cannot be
+				// told apart from here, so the note says so rather than the state
+				// claiming more than was observed.
+				: web_view_factory::clear_state::unconfirmed;
+			if (m_report.cookies_removed == 0)
+				m_report.notes << QStringLiteral(
+					"Cookies: none were seen to go. Either there were none, or "
+					"the store had none loaded to report on.");
+			maybe_report();
+		});
+
+		// **A deadline, so that a report always arrives.** A clear that never
+		// answers leaves a dialog saying "Clearing..." for ever, which is the
+		// silence this feature was added to remove, wearing a progress
+		// message.
+		auto *deadline = new QTimer(this);
+		deadline->setSingleShot(true);
+		connect(deadline, &QTimer::timeout, this, [this] { report_now(); });
+		deadline->start(k_deadline_ms);
+
+		if (what.visited_links) {
+			// No completion signal and no count anywhere in the Qt API, so
+			// this is `unconfirmed` for ever. Saying `done` would be inventing
+			// a fact about work nobody can observe.
+			m_profile->clearAllVisitedLinks();
+			m_report.visited_links = state::unconfirmed;
+			m_report.notes << QStringLiteral(
+				"Visited links: the engine was told to drop them. Qt reports no "
+				"completion for this one, so it is not confirmed here.");
+		}
+
+		if (what.cache) {
+			m_cache_pending = true;
+			connect(m_profile, &QWebEngineProfile::clearHttpCacheCompleted,
+				       this, [this] {
+				m_cache_pending = false;
+				m_report.cache = state::done;
+				maybe_report();
+			});
+			m_profile->clearHttpCache();
+		}
+
+		if (what.cookies) {
+			m_cookies_pending = true;
+			m_report.cookies_removed = 0;
+			QWebEngineCookieStore *store = m_profile->cookieStore();
+			connect(store, &QWebEngineCookieStore::cookieRemoved, this,
+				       [this](const QNetworkCookie &) {
+				++m_report.cookies_removed;
+				// Each removal pushes the settle window out, so a long jar
+				// does not get cut off part-way through being counted.
+				m_settle->start(k_settle_ms);
+			});
+			// The store only notifies about a jar it has loaded; a profile
+			// whose pages have not been visited this run may not have loaded
+			// one yet, and deleting from it would then be silent and
+			// uncountable.
+			store->loadAllCookies();
+			store->deleteAllCookies();
+		}
+
+		if (m_cookies_pending)
+			m_settle->start(k_settle_ms);
+		else
+			m_settled = true;
+
+		// Nothing asked for, or nothing that waits: answer at once rather than
+		// after the settle window, so a caller is not made to wait on work that
+		// was never started.
+		if (!m_cookies_pending && !m_cache_pending)
+			QTimer::singleShot(0, this, [this] { report_now(); });
+	}
+
+private:
+	// Long enough that a jar of a few hundred cookies is counted in one window
+	// -- the removals arrive in a burst -- and short enough that a person who
+	// pressed a button gets an answer while still looking at it.
+	static constexpr int k_settle_ms   = 500;
+	static constexpr int k_deadline_ms = 10000;
+
+	void maybe_report() {
+		if (m_settled && !m_cache_pending)
+			report_now();
+	}
+
+	void report_now() {
+		if (m_reported)
+			return;
+		m_reported = true;
+		using state = web_view_factory::clear_state;
+		// Whatever was still in flight when the deadline arrived is reported
+		// as unconfirmed, not as done. It may well have finished afterwards;
+		// what is certain is that nobody here saw it.
+		if (m_cache_pending) {
+			m_report.cache = state::unconfirmed;
+			m_report.notes << QStringLiteral(
+				"Cached files: the engine did not report the clear finished "
+				"within ten seconds. It may still be running.");
+		}
+		if (m_cookies_pending) {
+			m_report.cookies = state::unconfirmed;
+			m_report.notes << QStringLiteral(
+				"Cookies: still being removed after ten seconds; the count is "
+				"what had gone by then.");
+		}
+		if (m_done)
+			m_done(m_report);
+		deleteLater();
+	}
+
+	QWebEngineProfile           *m_profile = nullptr;
+	web_view_factory::clear_note m_done;
+	web_view_factory::clear_report m_report;
+	QTimer *m_settle = nullptr;
+	bool m_cache_pending   = false;
+	bool m_cookies_pending = false;
+	bool m_settled         = false;
+	bool m_reported        = false;
+};
+
+}  // namespace
+
+void qtwebengine_factory::clear_browsing_data(const browsing_data &what,
+                                               clear_note done) {
+	if (!m_profile) {
+		clear_report r;
+		r.notes << QStringLiteral("There is no web engine profile to clear.");
+		if (done)
+			done(r);
+		return;
+	}
+
+	// **What this does not clear, said out loud rather than left to be
+	// discovered.** localStorage, IndexedDB and service-worker storage are
+	// where a lot of what people mean by "still logged in" actually lives, and
+	// Qt 6.8 exposes no call that empties them: `QWebEngineProfile` offers
+	// exactly `clearHttpCache`, `clearAllVisitedLinks` and `clearVisitedLinks`,
+	// and `QWebEngineCookieStore` offers `deleteAllCookies` and
+	// `deleteSessionCookies`. Chromium's own BrowsingDataRemover is not
+	// wrapped. Deleting the files instead was rejected: on Linux an unlink
+	// succeeds against a database the engine still has open, so the engine
+	// keeps writing to a file nothing can reach and the directory comes back
+	// inconsistent -- a corrupted profile in exchange for a checkbox.
+	//
+	// So the note names the gap and the directory, because a person who needs
+	// it gone can quit and delete it, and cannot do that without being told.
+	if (what.cookies) {
+		auto *run = new clear_run(m_profile, [this, done](
+		    const clear_report &r) {
+			clear_report out = r;
+			out.notes << QString(
+			  "Site data (localStorage, IndexedDB, service workers) is not "
+			  "cleared: Qt 6.8 has no call for it, and deleting the files "
+			  "under a running engine corrupts the profile. It is in %1.")
+			  .arg(m_profile ? m_profile->persistentStoragePath() : QString());
+			if (done)
+				done(out);
+		});
+		run->start(what);
+		return;
+	}
+
+	auto *run = new clear_run(m_profile, std::move(done));
+	run->start(what);
 }
 
 

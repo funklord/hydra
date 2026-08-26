@@ -39,6 +39,7 @@ class torrent_download_source;
 class policy_engine;
 class filter_list;
 class consent_blocker;
+class web_view_factory;
 class QTreeWidget;
 class QPushButton;
 class QStackedWidget;
@@ -53,7 +54,22 @@ public:
 	                 const QString &filters_path = QString(),
 	                 consent_blocker *consent = nullptr,
 	                 const QString &rules_path = QString(),
-	                 QWidget *parent = nullptr);
+	                 QWidget *parent = nullptr,
+	                 // **After `parent`, which is not where Qt usually puts
+	                 // the last argument**, and deliberately: `parent` is the
+	                 // one argument every existing caller passes positionally,
+	                 // so anywhere else this would have been a shuffle through
+	                 // eleven call sites for one new value. Appended, it costs
+	                 // each of them nothing until they want it.
+	                 //
+	                 // Only ever used to clear browsing data, and taken as the
+	                 // engine-neutral seam type so that this dialog still does
+	                 // not know what engine is behind it (architecture doc
+	                 // sec 19.2). Null is a supported state: the clear controls
+	                 // say there is nothing to clear with rather than
+	                 // disappearing, because a control that vanishes tells
+	                 // nobody why.
+	                 web_view_factory *views = nullptr);
 
 	// Saving belongs to *accepting*, not to a particular button. It hung off the
 	// OK button's signal, so any other route to acceptance -- code calling
@@ -74,6 +90,10 @@ private:
 	void update_layout_mode();
 
 	void build_privacy_page(QWidget *page);
+	// The one destructive control on this dialog, so it is built apart from
+	// the rest of the privacy page and reads that way on screen.
+	void build_clear_section(QVBoxLayout *v, QWidget *page);
+	void clear_browsing_data();
 	void build_appearance_page(QWidget *page);
 	void build_kiosk_page(QWidget *page);
 	void build_filter_page(QWidget *page);
@@ -114,6 +134,12 @@ private:
 	QPushButton             *m_filter_remove = nullptr;
 	QLabel                  *m_filter_note   = nullptr;
 	consent_blocker         *m_consent       = nullptr;
+	web_view_factory        *m_views         = nullptr;   // injected, not owned
+	QCheckBox               *m_clear_cookies = nullptr;
+	QCheckBox               *m_clear_cache   = nullptr;
+	QCheckBox               *m_clear_links   = nullptr;
+	QPushButton             *m_clear_go      = nullptr;
+	QLabel                  *m_clear_note    = nullptr;
 	QString                  m_rules_path;
 	QTreeWidget             *m_rules_view    = nullptr;
 	QPushButton             *m_rules_remove  = nullptr;
@@ -148,6 +174,7 @@ private:
 	QSpinBox             *m_kiosk_idle   = nullptr;
 	QCheckBox            *m_kiosk_dog    = nullptr;
 	QCheckBox            *m_kiosk_escape = nullptr;
+	QCheckBox            *m_kiosk_clear  = nullptr;
 	QList<QComboBox *>    m_feature_combos;
 	QTreeWidget          *m_exceptions      = nullptr;
 	QPushButton          *m_exception_drop  = nullptr;

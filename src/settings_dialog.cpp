@@ -6,6 +6,7 @@
 #include "ollama_provider.h"
 #include "player_launcher.h"
 #include "torrent_download_source.h"
+#include "web_view_factory.h"
 
 #include <QAbstractButton>
 #include <QCheckBox>
@@ -35,6 +36,7 @@
 #include <QMessageBox>
 #include <QGuiApplication>
 #include <QListWidget>
+#include <QPointer>
 #include <QStackedWidget>
 #include "policy_engine.h"
 #include "settings_bundle.h"
@@ -61,6 +63,46 @@ QSettings open_settings() {
 	return QSettings(QSettings::IniFormat, QSettings::UserScope, "hydra", "hydra");
 }
 
+// **The kiosk group was written somewhere else, by nobody's decision.**
+// `kiosk()` and `set_kiosk()` used a default-constructed `QSettings` while
+// every other accessor here went through `open_settings()`. Nothing sets an
+// organisation name, so the default constructor resolves to
+// `<config>/Unknown Organization/Hydra.conf` -- measured on this machine, where
+// that file exists and holds exactly the nine keys `set_kiosk` writes, while
+// `<config>/hydra/hydra.ini` holds every other setting and no `[kiosk]` group
+// at all.
+//
+// Two things about it are worth writing down, because both are the opposite of
+// what the symptom suggests:
+//
+//   * **It worked.** The file is there and reads come back correct. The defect
+//     is the location, not a failure -- so a fix that just moved the accessor
+//     would silently strand a working configuration.
+//   * **`status()` is `AccessError` on that object, before and after a
+//     successful read.** So a migration that gated on the status would refuse
+//     to migrate exactly the case it exists for. It gates on there being keys.
+//
+// Carried over rather than reset, once, on the first read that finds the new
+// location empty. A kiosk configuration is somebody's deployment -- a home url,
+// a design size, possibly `allowEscape=false` on a screen with no keyboard --
+// and losing it silently costs more than a few lines here. The old file is left
+// where it is: it is not ours to delete, it is harmless once nothing reads it,
+// and leaving it means an operator who wants to check the values still can.
+void migrate_kiosk_group(QSettings &to) {
+	if (to.contains("kiosk/home"))
+		return;                    // already here; `set_kiosk` always writes it
+
+	QSettings from;                // the wrong location, spelled the wrong way
+	from.beginGroup("kiosk");
+	const QStringList keys = from.childKeys();
+	if (keys.isEmpty())
+		return;
+	for (const QString &key : keys)
+		to.setValue("kiosk/" + key, from.value(key));
+	from.endGroup();
+	to.sync();
+}
+
 }  // namespace
 
 // --------------------------------------------------------------- the store --
@@ -68,7 +110,8 @@ QSettings open_settings() {
 namespace settings_store {
 
 kiosk_config kiosk() {
-	QSettings st;
+	QSettings st = open_settings();
+	migrate_kiosk_group(st);
 	kiosk_config c;
 	st.beginGroup("kiosk");
 	c.home = QUrl(st.value("home").toString());
@@ -88,12 +131,16 @@ kiosk_config kiosk() {
 	// Defaults to true even though the stored value may say otherwise: see
 	// set_kiosk. Escape is how someone gets out.
 	c.allow_escape = st.value("allowEscape", true).toBool();
+	// Defaults to false, and a stored value is the only thing that turns it on.
+	// It deletes the browser's cookies -- see `kiosk_config` for why that is
+	// asked for rather than assumed.
+	c.clear_between_sessions = st.value("clearBetweenSessions", false).toBool();
 	st.endGroup();
 	return c;
 }
 
 void set_kiosk(const kiosk_config &c) {
-	QSettings st;
+	QSettings st = open_settings();
 	st.beginGroup("kiosk");
 	st.setValue("home", c.home.toString());
 	st.setValue("designWidth", c.design_size.isValid() ? c.design_size.width() : 0);
@@ -104,7 +151,13 @@ void set_kiosk(const kiosk_config &c) {
 	st.setValue("idleReset", c.idle_reset_seconds);
 	st.setValue("watchdog", c.watchdog);
 	st.setValue("allowEscape", c.allow_escape);
+	st.setValue("clearBetweenSessions", c.clear_between_sessions);
 	st.endGroup();
+	// Written through, like every other setter here. The default-constructed
+	// QSettings this used to use was destroyed at the end of the call and
+	// synced on the way out; `open_settings()` returns a value that is too, but
+	// saying it keeps this the same shape as `set_appearance` and friends.
+	st.sync();
 }
 
 theme::choice appearance() {
@@ -285,9 +338,10 @@ settings_dialog::settings_dialog(player_launcher *players,
                                   policy_engine *policy, filter_list *filters,
                                   const QString &filters_path,
                                   consent_blocker *consent,
-                                  const QString &rules_path, QWidget *parent)
+                                  const QString &rules_path, QWidget *parent,
+                                  web_view_factory *views)
   : QDialog(parent), m_policy(policy), m_filters(filters),
-    m_filters_path(filters_path), m_consent(consent),
+    m_filters_path(filters_path), m_consent(consent), m_views(views),
     m_rules_path(rules_path), m_players(players),
     m_downloads(downloads), m_torrents(torrents), m_local_ai(local_ai),
     m_external_ai(external_ai) {
@@ -664,6 +718,38 @@ QWidget *settings_row(const QString &title, const QString &help,
 	return row;
 }
 
+// Turn a clear's report into something a person can read.
+//
+// **Each store gets its own sentence**, because the interesting outcome is a
+// mixed one: cookies counted and gone, the cache still running, visited links
+// asked for and unconfirmable. A single "Done" would flatten all three into
+// the most optimistic of them, which is the summary that makes a report
+// useless.
+QString describe_clear(const web_view_factory::clear_report &r) {
+	using state = web_view_factory::clear_state;
+	auto say = [](const QString &name, state s, const QString &extra) {
+		switch (s) {
+		case state::not_asked:   return QString();
+		case state::done:        return name + ": cleared" + extra + ".";
+		case state::unconfirmed: return name + ": requested, not confirmed"
+					                             + extra + ".";
+		case state::refused:     return name + ": not cleared" + extra + ".";
+		}
+		return QString();
+	};
+
+	QStringList lines;
+	lines << say("Cookies", r.cookies,
+		            r.cookies_removed >= 0
+		              ? QString(" -- %1 removed").arg(r.cookies_removed)
+		              : QString());
+	lines << say("Cached files", r.cache, QString());
+	lines << say("Visited links", r.visited_links, QString());
+	lines.removeAll(QString());
+	lines += r.notes;
+	return lines.join("\n");
+}
+
 }  // namespace
 
 // **Its own page, because it was on the wrong one.** The colour scheme sat at
@@ -709,6 +795,134 @@ void settings_dialog::build_appearance_page(QWidget *page) {
 	v->addStretch(1);
 }
 
+// **The only control on this dialog that does something the moment you press
+// it**, and the divergence is deliberate rather than an oversight.
+//
+// Everything else here is pending until OK, so that Cancel is the undo. That
+// contract cannot be kept for a deletion: there is no undo for a cookie, so
+// "pending until OK" would only mean the user pressed a button and could not
+// tell whether anything had happened. A confirmation before, and a report of
+// what actually went afterwards, are what stand in for Cancel here.
+void settings_dialog::build_clear_section(QVBoxLayout *v, QWidget *page) {
+	v->addWidget(section_heading("Clear browsing data", page));
+
+	v->addWidget(dim_label(
+	  "The settings above decide what sites may store from now on. This is the "
+	  "only thing in Hydra that deletes what they have stored already, and it "
+	  "cannot be undone. Your tabs, their history and the tree are not touched.",
+	  page));
+
+	if (!m_views) {
+		v->addWidget(new QLabel("No web engine was supplied, so there is "
+		                         "nothing here to clear.", page));
+		return;
+	}
+
+	// Cookies and cache are on because they are what "clear browsing data"
+	// means to almost everybody who goes looking for it. Visited links is off
+	// because it is the one whose loss is purely cosmetic to most people and
+	// genuinely wanted by some -- the purple-link trail is a readable list of
+	// where you have been.
+	m_clear_cookies = new QCheckBox(page);
+	m_clear_cookies->setObjectName("clear_cookies");
+	m_clear_cookies->setChecked(true);
+	v->addWidget(settings_row(
+	  "Cookies",
+	  "Every site's cookies, which is every login the browser is holding. "
+	  "Site storage -- localStorage, IndexedDB, service workers -- is not "
+	  "included; the report below says where it is and why.",
+	  m_clear_cookies, page));
+
+	m_clear_cache = new QCheckBox(page);
+	m_clear_cache->setObjectName("clear_cache");
+	m_clear_cache->setChecked(true);
+	v->addWidget(settings_row(
+	  "Cached files",
+	  "Pages, images and scripts kept on disk to make a revisit fast. Costs "
+	  "nothing but a slower reload.",
+	  m_clear_cache, page));
+
+	m_clear_links = new QCheckBox(page);
+	m_clear_links->setObjectName("clear_visited_links");
+	v->addWidget(settings_row(
+	  "Visited links",
+	  "The record that colours a link as already followed. On a shared screen "
+	  "it is a readable list of where the last person went.",
+	  m_clear_links, page));
+
+	m_clear_go = new QPushButton("&Clear now…", page);
+	m_clear_go->setObjectName("clear_now");
+	connect(m_clear_go, &QPushButton::clicked, this,
+	         &settings_dialog::clear_browsing_data);
+	auto *go_row = new QHBoxLayout;
+	go_row->addStretch(1);
+	go_row->addWidget(m_clear_go);
+	v->addLayout(go_row);
+
+	// Starts empty and is only ever filled by a completed clear. A label that
+	// said something before anything had been done would be the blind claim
+	// this whole section is written to avoid.
+	m_clear_note = dim_label(QString(), page);
+	v->addWidget(m_clear_note);
+}
+
+void settings_dialog::clear_browsing_data() {
+	if (!m_views || !m_clear_cookies)
+		return;
+
+	web_view_factory::browsing_data what;
+	what.cookies       = m_clear_cookies->isChecked();
+	what.cache         = m_clear_cache->isChecked();
+	what.visited_links = m_clear_links->isChecked();
+	if (!what.any()) {
+		m_clear_note->setText("Nothing was ticked, so nothing was cleared.");
+		return;
+	}
+
+	// Named one by one rather than "the selected items", because the whole
+	// value of a confirmation is that it repeats the decision back in words.
+	QStringList named;
+	if (what.cookies)
+		named << "cookies, and with them every login";
+	if (what.cache)
+		named << "cached files";
+	if (what.visited_links)
+		named << "the record of which links you have followed";
+
+	QMessageBox box(this);
+	box.setIcon(QMessageBox::Warning);
+	box.setWindowTitle("Clear browsing data");
+	box.setText("This deletes " + named.join(", ") + ".");
+	box.setInformativeText(
+	  "It applies to every site and cannot be undone. Your tabs, their history "
+	  "and the tree are left alone.");
+	box.setStandardButtons(QMessageBox::Yes | QMessageBox::Cancel);
+	box.button(QMessageBox::Yes)->setText("Clear");
+	// Cancel is the default button: the safe answer is the one a stray Return
+	// lands on.
+	box.setDefaultButton(QMessageBox::Cancel);
+	if (box.exec() != QMessageBox::Yes)
+		return;
+
+	m_clear_go->setEnabled(false);
+	m_clear_note->setText("Clearing…");
+
+	// **Guarded, because the answer outlives the window.** None of these
+	// stores empties synchronously, and this dialog is created on the stack
+	// and exec()'d -- pressing Clear and then OK destroys it while the
+	// deletion is still in flight. The factory is not, so the clear itself
+	// finishes either way; what the guard prevents is writing the result into
+	// a label that has been freed.
+	QPointer<settings_dialog> alive(this);
+	m_views->clear_browsing_data(what, [alive](
+	    const web_view_factory::clear_report &r) {
+		if (!alive)
+			return;
+		alive->m_clear_go->setEnabled(true);
+		alive->m_clear_note->setText(describe_clear(r));
+	});
+}
+
 void settings_dialog::build_privacy_page(QWidget *page) {
 	auto *v = new QVBoxLayout(page);
 
@@ -737,6 +951,18 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 		if (!order.contains(QString::fromUtf8(fg.group)))
 			order << QString::fromUtf8(fg.group);
 	order << "Other";
+
+	// Clearing goes directly under the cookie policy, which is where Firefox
+	// puts it and for the reason the table above already gives: the question
+	// "what may a site keep" and the question "get rid of what it kept" arrive
+	// together, and until now this page could only answer the first.
+	//
+	// The name is matched against the table, so it follows the group if the
+	// group is renamed -- and the flag is what stops it *vanishing* if the
+	// group is renamed. A section that silently fails to appear because
+	// somebody edited a string in a table is the same failure the "Other"
+	// sweep below exists to prevent.
+	bool clear_section_placed = false;
 
 	for (const QString &group_name : order) {
 		QList<policy::feature> in_group;
@@ -767,7 +993,13 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 			v->addWidget(settings_row(policy::feature_label(f),
 			                           policy::feature_help(f), combo, page));
 		}
+		if (group_name == "Cookies and site data") {
+			build_clear_section(v, page);
+			clear_section_placed = true;
+		}
 	}
+	if (!clear_section_placed)
+		build_clear_section(v, page);
 
 	// --- Search ------------------------------------------------------------
 	//
@@ -983,6 +1215,7 @@ void settings_dialog::restore_page_defaults(int page) {
 		m_kiosk_idle->setValue(d.idle_reset_seconds);
 		m_kiosk_dog->setChecked(d.watchdog);
 		m_kiosk_escape->setChecked(d.allow_escape);
+		m_kiosk_clear->setChecked(d.clear_between_sessions);
 	} else if (name.startsWith("AI")) {
 		ollama_provider fresh_local;
 		claude_provider fresh_remote;
@@ -1506,6 +1739,20 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 	  "it — not because it is a normal thing to switch on.",
 	  m_kiosk_escape, page));
 
+	m_kiosk_clear = new QCheckBox(page);
+	m_kiosk_clear->setObjectName("kiosk_clear");
+	v->addWidget(settings_row(
+	  "Forget the session between visitors",
+	  "Kiosk shows a tab from the ordinary browser, in the ordinary profile, "
+	  "so without this the last person's cookies and logins are still there "
+	  "for the next one — returning to the home page resets the navigation "
+	  "and nothing else. Switching it on clears cookies, cached files and "
+	  "visited links when kiosk starts, each time it returns home after "
+	  "being left alone, and when it is left. Those are Hydra's own cookies, "
+	  "not a copy: your logins go too, which is why it is off unless you ask "
+	  "for it. It does not apply when a page asks for fullscreen.",
+	  m_kiosk_clear, page));
+
 	v->addStretch(1);
 }
 
@@ -1973,6 +2220,7 @@ void settings_dialog::load_kiosk() {
 	m_kiosk_idle->setValue(c.idle_reset_seconds);
 	m_kiosk_dog->setChecked(c.watchdog);
 	m_kiosk_escape->setChecked(c.allow_escape);
+	m_kiosk_clear->setChecked(c.clear_between_sessions);
 }
 
 void settings_dialog::apply_kiosk() {
@@ -1986,6 +2234,7 @@ void settings_dialog::apply_kiosk() {
 	c.idle_reset_seconds = m_kiosk_idle->value();
 	c.watchdog = m_kiosk_dog->isChecked();
 	c.allow_escape = m_kiosk_escape->isChecked();
+	c.clear_between_sessions = m_kiosk_clear->isChecked();
 	settings_store::set_kiosk(c);
 }
 

@@ -364,6 +364,10 @@ bool android_view::should_block(const QString &url, const QString &accept,
 	return d.block;
 }
 
+bool android_view::any_view_open() {
+	return !s_views.isEmpty();
+}
+
 bool android_view::allow_third_party_cookies(const QString &page_url) {
 	// No filter yet means the first navigation is racing startup. Answering
 	// "allowed" would hand a page the permissive case by accident; the shell's
@@ -664,5 +668,111 @@ bool android_view::restore_state(const QByteArray &blob) {
 
 web_view_backend *android_factory::create_view(QWidget *parent) {
 	return new android_view(m_filter, parent);
+}
+
+namespace {
+
+// The clear in flight, and the caller waiting on it. One at a time: the
+// settings dialog offers a single button and the kiosk controller clears at
+// moments that cannot overlap, so a queue would be machinery for a case that
+// does not arise. A second request while one is live is answered `refused`
+// rather than silently dropped.
+web_view_factory::clear_note g_clear_note;
+web_view_factory::clear_report g_clear_report;
+bool g_clearing = false;
+
+void finish_clear() {
+	if (!g_clearing)
+		return;
+	g_clearing = false;
+	const web_view_factory::clear_report report = g_clear_report;
+	web_view_factory::clear_note note;
+	note.swap(g_clear_note);
+	if (note)
+		note(report);
+}
+
+}  // namespace
+
+// Java answers `removeAllCookies` here, on the UI thread. The boolean is
+// whether anything was removed, which is not a count -- so it decides between
+// `done` and `unconfirmed` and leaves `cookies_removed` alone.
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onCookiesCleared(JNIEnv *, jclass,
+                                                                jboolean removed) {
+	QMetaObject::invokeMethod(qApp, [removed] {
+		g_clear_report.cookies = removed == JNI_TRUE
+		                            ? web_view_factory::clear_state::done
+		                            : web_view_factory::clear_state::unconfirmed;
+		if (removed != JNI_TRUE)
+			g_clear_report.notes
+			  << QStringLiteral("Android reported no cookie was removed; there "
+			                     "may have been none.");
+		finish_clear();
+	});
+}
+
+void android_factory::clear_browsing_data(const browsing_data &what,
+                                            clear_note done) {
+	clear_report report;
+
+	if (g_clearing) {
+		report.notes << QStringLiteral("Another clear is already running.");
+		if (what.cookies)       report.cookies       = clear_state::refused;
+		if (what.cache)         report.cache         = clear_state::refused;
+		if (what.visited_links) report.visited_links = clear_state::refused;
+		if (done)
+			done(report);
+		return;
+	}
+
+	// **Refused, not silently done.** Android has no visited-link store to
+	// empty. `WebView.clearHistory()` is the back/forward list, which is the
+	// shell's own data and is shown in the tab tree -- clearing that here would
+	// delete something the user did not ask about while reporting success for
+	// something that never happened.
+	if (what.visited_links) {
+		report.visited_links = clear_state::refused;
+		report.notes << QStringLiteral(
+		  "Android has no visited-link store; nothing was cleared for that.");
+	}
+
+	if (what.cache) {
+		// No completion signal exists for this one, so it is `unconfirmed`
+		// however well it went. Needs a live WebView: `clearCache` is a method
+		// on the view, not on a manager.
+		const bool have_view = android_view::any_view_open();
+		if (have_view) {
+			QJniObject::callStaticMethod<void>(k_cls, "clearCache", "()V");
+			report.cache = clear_state::unconfirmed;
+			report.notes << QStringLiteral(
+			  "Android confirms nothing about clearing the cache.");
+		} else {
+			report.cache = clear_state::refused;
+			report.notes << QStringLiteral(
+			  "No web view is open, and Android clears the cache through one.");
+		}
+	}
+
+	if (!what.cookies) {
+		if (done)
+			done(report);
+		return;
+	}
+
+	// Site data rides with the cookies, and it is the one thing this backend
+	// does that the desktop cannot: `WebStorage.deleteAllData()` empties
+	// localStorage, IndexedDB and WebSQL for every origin, where Qt 6.8 wraps
+	// no equivalent at all. Said out loud in the report rather than left as a
+	// pleasant surprise, because the two backends otherwise claim to have done
+	// the same thing.
+	report.notes << QStringLiteral(
+	  "Site data was cleared as well -- localStorage, IndexedDB and WebSQL. "
+	  "The desktop build cannot do that.");
+
+	g_clear_report = report;
+	g_clear_note   = std::move(done);
+	g_clearing     = true;
+	QJniObject::callStaticMethod<void>(k_cls, "clearCookiesAndSiteData", "()V");
 }
 #endif   // Q_OS_ANDROID

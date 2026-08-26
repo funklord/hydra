@@ -5294,6 +5294,117 @@ site that is *not* in their vault. Making the pairing durable turned a
 once-ever, human-gated path into one that runs on every build, and the first
 time it did, it failed.
 
+## Forgetting: a browser that could not, a kiosk that would not
+
+Making the profile persistent gave this browser a memory and no way to lose
+it. Cookies, the visited-link database and the http cache went to disk and
+stayed there, and the only `forget_*` calls in the tree are about other things
+entirely -- tabs, imported site rules, a KeePass pairing. The policy on the
+privacy page governs what a site may *store* from now on and has never had
+anything to say about what is already stored.
+
+Clearing is a profile-wide operation, so it lands on the factory rather than a
+view -- one page's cookie jar is every page's -- and it crosses the seam as
+plain structs. Two shapes in that API are worth naming, because both exist to
+stop a familiar lie. `clear_state` has **`unconfirmed`** and **`refused`**
+alongside `done`: Qt confirms the cache clear with its own completion signal
+and confirms nothing whatsoever about visited links, and reporting the second
+as success would be exactly the blind claim the call exists to avoid. And
+`cookies_removed` starts at **-1**, not 0, so "there were none" and "nobody
+counted" stay distinguishable. The whole thing is a callback rather than a
+return value because none of these stores empties synchronously.
+
+**The checkbox says "Cookies" and not "cookies and site data", and that is a
+finding rather than a wording choice.** Qt 6.8 exposes `clearHttpCache`,
+`clearAllVisitedLinks`, `clearVisitedLinks` and `visitedLinksContainsUrl` on
+the profile, and `deleteAllCookies`/`deleteSessionCookies` on the cookie store.
+**There is no call that clears localStorage, IndexedDB or service-worker
+storage** -- Chromium's `BrowsingDataRemover` is not wrapped. Every report
+therefore carries a note naming what was *not* cleared and where it lives. Two
+ways round it were considered and rejected in the code: deleting those
+directories before the profile is constructed duplicates Qt's path derivation,
+which this document already records as subtle enough to have two roots; and
+deleting them from a running engine is worse, because on Linux an unlink
+succeeds against an open LevelDB and the engine carries on writing to a file
+nothing can reach -- a corrupted profile in exchange for a checkbox.
+
+Clearing is the one control on the settings dialog that acts immediately
+rather than on OK. There is no undo for a cookie, and "pending until OK" would
+leave somebody unable to tell whether anything had happened. The completion
+lambda is held through a `QPointer` to the dialog, because the dialog is
+stack-allocated and `exec()`d -- pressing Clear and then OK destroys it
+mid-deletion.
+
+**Android forgets more than the desktop, and the report says so.**
+`WebStorage.deleteAllData()` covers localStorage, IndexedDB and WebSQL for
+every origin, which is precisely the gap Qt leaves, so it goes with the cookie
+clear and the note points it out rather than leaving it a pleasant surprise.
+`removeAllCookies` answers whether anything went but never how many, so the
+count stays -1 there too. The cache has no completion callback at all and is
+`unconfirmed` however well it goes, and is `refused` outright when no view is
+open, because Android clears it through a view rather than a manager. Visited
+links are **refused**: Android has no visited-link store, and
+`WebView.clearHistory()` is the back/forward list -- which is the shell's own
+data, shown in the tab tree. Mapping one onto the other would delete something
+nobody asked about while reporting success for something that never happened.
+
+### Kiosk clears the shared profile rather than getting its own
+
+The idle timer walked home and left the last person's logins on disk. The fix
+is not a second profile, and the reason is that kiosk **borrows** a view the
+shell already has: `enter()` takes a backend and hands it back, the tab's
+history and tree entry come with it, and a blank home means "whatever tab you
+were on". A profile of its own means a view of its own, which means the thing
+on screen is no longer that tab -- a different feature wearing the same name,
+plus a second profile lifetime to answer for against `main()`'s declaration
+order.
+
+So it clears the shared stores, at three moments: **entering**, because the
+operator's logins must not be handed to the public; **the idle timer**, which
+is the only signal a kiosk gets that somebody walked away -- and navigation is
+issued first, so the screen does not sit on a stranger's page while the store
+empties; and **leaving**, because the public's session must not be handed back.
+
+**It is off by default, and the default is load-bearing.** Page-requested
+fullscreen routes through the same `toggle_kiosk()`, and that path now clears
+the flag explicitly alongside the ones it already clears for `allow_escape`
+and the watchdog. Without that line the leak fix becomes a data-loss bug for
+anyone who turns it on: a video going fullscreen is not consent to be signed
+out of every site.
+
+### The kiosk settings were in a different file, under an error
+
+`settings_store::kiosk()` used a default-constructed `QSettings` while every
+other accessor goes through `open_settings()`. With no organisation name ever
+set, that resolves to `~/.config/Unknown Organization/Hydra.conf` -- which
+exists on this machine, dated 20 August, holding exactly the nine keys
+`set_kiosk` writes, while `~/.config/hydra/hydra.ini` has every other group and
+no `[kiosk]`.
+
+Two things the probe corrected before anything was changed. **It worked**: the
+defect is the location, not a failure, so moving the accessor without more
+would have stranded a working configuration. And **`status()` returns
+`AccessError` even on a successful read**, so a migration gated on the status
+would have refused exactly the case it exists for. The migration gates on
+finding keys instead.
+
+It carries the values over once, on the first read that finds no `kiosk/home`
+in `hydra.ini`, and **leaves the old file alone** -- a kiosk config is
+somebody's deployment, possibly `allowEscape=false` on a screen with no
+keyboard, and losing it silently costs more than the few lines. The old file is
+not ours to delete and is harmless once nothing reads it.
+
+**What is verified**: the factory path, against a real engine with a scratch
+profile -- 16 checks, the measurement being the `Cookie:` header a local server
+was sent, present before the clear and absent after, with the on-disk cookie
+database and the http cache both shrinking. Two instrument faults were caught
+before that result was believed: the first version pointed data and cache at
+one directory, so "the cache" was the whole profile, and it asked
+`visitedLinksContainsUrl` after reloading the page, which re-registers the
+visit and would have reported a failure of its own making. **What is not**: the
+button-to-factory wiring end to end, kiosk clearing in a live session, and the
+Android implementation, which is compiled on the device build and never run.
+
 ## The page requests nothing was listening to
 
 Four `QWebEnginePage` signals had nothing connected. Qt does not treat that as

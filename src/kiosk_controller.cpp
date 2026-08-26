@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "kiosk_controller.h"
 #include "web_view_backend.h"
+#include "web_view_factory.h"
 
 #include <QApplication>
+#include <QDebug>
 #include <QEvent>
 #include <QGraphicsProxyWidget>
 #include <QGraphicsScene>
@@ -39,15 +41,22 @@ kiosk_controller::kiosk_controller(QObject *parent) : QObject(parent) {
 	m_idle_timer->setSingleShot(true);
 	connect(m_idle_timer, &QTimer::timeout, this, [this] {
 		// The single most-used real kiosk feature: walk back to the home URL
-		// after inactivity (sec 8.3). It resets the navigation and nothing
-		// else: there is no kiosk profile, so pages load into the factory's
-		// persistent one, and the last person's cookies and logins are still
-		// on disk for the next. This used to say an abandoned session does
-		// not persist, which was true only while the whole browser was off
-		// the record by accident. An off-the-record profile for kiosk is the
-		// unbuilt half; see project.md.
+		// after inactivity (sec 8.3).
+		//
+		// **Walking back used to be all it did.** Pages load into the
+		// factory's persistent profile, so the last person's cookies and
+		// logins stayed on disk for whoever touched the screen next; the
+		// navigation reset and the session did not. Idle is precisely the
+		// moment a session ends -- it is the only signal a kiosk gets that
+		// somebody has walked away -- so it is where the forgetting belongs.
+		//
+		// The navigation is issued first and the clear runs beside it. An
+		// unattended screen must not sit on a stranger's page while a cookie
+		// store empties, and what is being deleted is what was there before
+		// this navigation started.
 		if (m_view && m_config.home.isValid())
 			m_view->load(m_config.home);
+		forget_session("idle");
 	});
 }
 
@@ -101,6 +110,12 @@ bool kiosk_controller::enter(web_view_backend *view, QWidget *restore_to) {
 	if (m_config.home.isEmpty())
 		m_config.home = view->url();
 
+	// **Before the screen goes public, not after.** Whoever set the kiosk up
+	// was signed in to their own accounts a moment ago, in the same profile
+	// the kiosk is about to present, and handing that to the first passer-by
+	// is the same leak as leaving the last visitor's session for the next one.
+	forget_session("entering");
+
 	m_stage->showFullScreen();
 	set_cursor_hidden(m_config.hide_cursor);
 	reset_idle_timer();
@@ -108,6 +123,56 @@ bool kiosk_controller::enter(web_view_backend *view, QWidget *restore_to) {
 
 	emit entered();
 	return true;
+}
+
+// Empty the shared profile's browsing stores, if this kiosk was configured to.
+//
+// **The shared profile, cleared, rather than a profile of kiosk's own** -- the
+// choice is recorded here because the other one is the obvious idea. A separate
+// off-the-record profile would forget by construction and cost nothing to the
+// rest of the browser, and it is wrong for what this class is: kiosk borrows a
+// view the shell already has, with that tab's history and the tree entry behind
+// it (`enter()` takes a `web_view_backend *` and hands it back), and a home of
+// "blank = whatever tab you were on" only means anything if it is that tab.
+// Giving kiosk its own profile means giving it its own view, which means the
+// presented page is not the tab any more -- a different feature with the same
+// name, and one that would have to answer for a second profile's lifetime
+// against `main()`'s declaration order.
+//
+// What it costs instead is honesty about the deletion being real and shared,
+// which is why `clear_between_sessions` defaults to off and says so on the
+// settings page.
+void kiosk_controller::forget_session(const char *why) {
+	if (!m_config.clear_between_sessions)
+		return;
+	if (!m_factory) {
+		// Configured to forget with nothing able to do it. Loud, because the
+		// whole point of the setting is that somebody is relying on it.
+		qWarning("kiosk: asked to clear browsing data on %s, but no view "
+		          "factory was supplied -- nothing was cleared", why);
+		return;
+	}
+
+	// Visited links go too: on a public screen the purple-link trail is a
+	// readable list of where the last person went, and it is the cheapest of
+	// the three to drop.
+	web_view_factory::browsing_data what;
+	what.cookies       = true;
+	what.cache         = true;
+	what.visited_links = true;
+
+	const QString when = QString::fromUtf8(why);
+	m_factory->clear_browsing_data(what, [when](
+	    const web_view_factory::clear_report &r) {
+		// Nobody is watching a kiosk, so the report goes to the log. It is
+		// still worth making: an operator who suspects the screen is not
+		// forgetting has something to read, and a refusal or an unconfirmed
+		// store is exactly what they would be looking for.
+		qInfo("kiosk: cleared on %s -- cookies removed %d",
+		       qUtf8Printable(when), r.cookies_removed);
+		for (const QString &note : r.notes)
+			qInfo("kiosk: %s", qUtf8Printable(note));
+	});
 }
 
 void kiosk_controller::exit() {
@@ -139,6 +204,12 @@ void kiosk_controller::exit() {
 	m_stage      = nullptr;
 	m_view       = nullptr;
 	m_restore_to = nullptr;
+
+	// The other end of the same fence. Entering protects the public from the
+	// operator's session; leaving protects the operator from the public's, and
+	// stops a stranger's cookies sitting on the disk of a machine that has gone
+	// back to being somebody's browser.
+	forget_session("leaving");
 
 	emit left();
 }

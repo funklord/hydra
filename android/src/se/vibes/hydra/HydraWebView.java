@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.WebStorage;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -77,6 +78,13 @@ public class HydraWebView {
      * shield offers for both.
      */
     public static native boolean allowThirdPartyCookies(String pageUrl);
+
+    /**
+     * Android has finished removing cookies. `removed` is whether any went --
+     * Android offers no count, which is why the C++ side leaves its counter at
+     * "nobody looked" rather than filling in a number it does not have.
+     */
+    public static native void onCookiesCleared(boolean removed);
 
     /** The method list for one bridge, as JSON. Called from the page. */
     public static native String bridgeDescribe(long id, String name);
@@ -497,6 +505,48 @@ public class HydraWebView {
             float density = w.getResources().getDisplayMetrics().density;
             int base = Math.round(density * 100f);
             w.setInitialScale(Math.max(1, Math.round(base * percent / 100f)));
+        } });
+    }
+
+    /**
+     * Empty the cookie jar and every origin's site data.
+     *
+     * `WebStorage.deleteAllData()` goes with the cookies deliberately: it
+     * covers localStorage, IndexedDB and WebSQL, which is more than the
+     * desktop backend can clear at all, and leaving it out would mean a user
+     * who cleared cookies on the phone kept the half of their identity that
+     * lives in localStorage without being told.
+     *
+     * The flush is here and not in the general path: this is the one moment
+     * when the on-disk jar must agree with memory immediately, because the
+     * next thing the user does may be to close the app and check.
+     */
+    public static void clearCookiesAndSiteData() {
+        onUi(new Runnable() { @Override public void run() {
+            WebStorage.getInstance().deleteAllData();
+            CookieManager.getInstance().removeAllCookies(
+              new ValueCallback<Boolean>() {
+                @Override public void onReceiveValue(Boolean removed) {
+                    CookieManager.getInstance().flush();
+                    onCookiesCleared(removed != null && removed.booleanValue());
+                }
+            });
+        } });
+    }
+
+    /**
+     * Empty the http cache of every open WebView.
+     *
+     * `clearCache(true)` is a method on a view rather than on a manager, so
+     * with no view open there is nothing to call it on -- the C++ side checks
+     * that first and reports the request refused instead of pretending. There
+     * is no completion callback of any kind, which is why the report says
+     * `unconfirmed` however well this goes.
+     */
+    public static void clearCache() {
+        onUi(new Runnable() { @Override public void run() {
+            for (WebView w : VIEWS.values())
+                w.clearCache(true);
         } });
     }
 

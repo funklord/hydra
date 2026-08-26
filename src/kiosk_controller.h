@@ -16,6 +16,7 @@ class QTimer;
 class QGraphicsScene;
 class QGraphicsView;
 class QGraphicsProxyWidget;
+class web_view_factory;
 
 // How pixels get from the page to the screen (architecture doc sec 8.1).
 enum class scale_mode {
@@ -37,6 +38,17 @@ struct kiosk_config {
 	int  idle_reset_seconds = 0;      // 0 = off
 	bool watchdog = true;             // reload if the render process dies
 	bool allow_escape = true;         // false = locked down; Esc will not exit
+
+	// **Off by default, and the default is the decision.** Turning it on
+	// empties the browser's cookies and cached files -- the *shared* ones,
+	// because there is one profile and kiosk borrows a tab from it -- when a
+	// session starts, when the idle timer walks back to the home page, and
+	// when kiosk is left. That is what a public screen needs and it is also
+	// destructive to whoever set the screen up, so it is asked for rather than
+	// assumed. It must stay off on the path where a *page* asks for
+	// fullscreen: that route goes through the same controller, and a video
+	// going fullscreen is not consent to be logged out of everything.
+	bool clear_between_sessions = false;
 };
 
 // Kiosk mode: a presentation mode plus a policy preset, not a new engine
@@ -72,6 +84,17 @@ public:
 	const kiosk_config &config() const { return m_config; }
 	void set_config(const kiosk_config &c);
 
+	// Where `clear_between_sessions` sends its work. The controller never
+	// makes a view -- it borrows one -- so the factory is here only because
+	// the stores it clears are profile-wide and the factory is the one thing
+	// in the shell that owns them (architecture doc sec 19.2 keeps the engine
+	// type out of this header).
+	//
+	// **Without it, clearing says so instead of pretending.** A kiosk
+	// configured to forget and quietly not forgetting is worse than one that
+	// never claimed to.
+	void set_view_factory(web_view_factory *factory) { m_factory = factory; }
+
 	bool active() const { return m_stage != nullptr; }
 	web_view_backend *view() const { return m_view; }
 
@@ -92,8 +115,12 @@ private:
 	void reset_idle_timer();
 	void set_cursor_hidden(bool hidden);
 	void teardown_geometric();
+	// `why` names the moment -- entering, idle, leaving -- so a log line from
+	// an unattended screen says which of the three fired.
+	void forget_session(const char *why);
 
 	kiosk_config m_config;
+	web_view_factory *m_factory = nullptr;   // injected, not owned
 	// QPointer throughout: teardown can be driven by the shell being destroyed
 	// while a session is live, in which case the widgets we borrowed may
 	// already be gone by the time exit() runs.

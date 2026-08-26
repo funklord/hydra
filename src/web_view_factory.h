@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <QString>
+#include <QStringList>
 #include <QUrl>
 
 #include <functional>
@@ -56,4 +58,70 @@ public:
 	  std::function<void(const QUrl &url, const QString &path, bool finished,
 	                      bool ok)>;
 	virtual void set_download_handler(download_note fn) = 0;
+
+	// --- Forgetting ---------------------------------------------------------
+	//
+	// **Nothing in this browser could delete a byte of what it stored**, from
+	// the moment the profile stopped being off the record. Cookies,
+	// localStorage, the visited-link database and the http cache all went to
+	// disk and stayed there, and the only `forget_*` calls in the tree are
+	// about other things entirely -- tabs, imported site rules, a KeePass
+	// pairing. The policy on the privacy page governs what a site may *store*
+	// from now on; it has never had anything to say about what is already
+	// stored.
+	//
+	// This is on the factory rather than on a view for the reason
+	// `set_external_url_handler` is: the stores are profile-wide, one page's
+	// cookie jar is every page's cookie jar, and a view is the wrong thing to
+	// ask.
+
+	// Which stores to empty. One flag each rather than a single "everything"
+	// switch, because they cost very different things: the cache costs a slow
+	// reload, and the cookies cost every login the browser is holding. Nothing
+	// here touches the tab tree or a tab's history, which this browser
+	// deliberately persists and which are not browsing data in this sense.
+	struct browsing_data {
+		bool cookies       = false;
+		bool cache         = false;
+		bool visited_links = false;
+
+		bool any() const { return cookies || cache || visited_links; }
+	};
+
+	// How far one store's clear actually got.
+	//
+	// **`unconfirmed` is the reason this is an enum and not a bool.** A
+	// backend can be certain about some of these and not others -- one call
+	// answers with a completion signal, another answers with nothing at all --
+	// and reporting the second as success would be the blind claim this whole
+	// call exists to stop making. `refused` is its opposite and just as
+	// necessary: a backend that cannot do something has to be able to say so,
+	// because a stub that quietly does nothing is indistinguishable from a
+	// clear that worked.
+	enum class clear_state { not_asked, done, unconfirmed, refused };
+
+	struct clear_report {
+		clear_state cookies       = clear_state::not_asked;
+		clear_state cache         = clear_state::not_asked;
+		clear_state visited_links = clear_state::not_asked;
+
+		// How many cookies were observed to go. -1 where nothing counted them,
+		// which is not the same answer as 0 -- "there were none" and "nobody
+		// looked" have to be tellable apart.
+		int cookies_removed = -1;
+
+		// Everything the caller has to be told and the states above cannot
+		// carry: what was refused and why, and where a store that says `done`
+		// is narrower than its name suggests. Meant to be shown to a person
+		// verbatim.
+		QStringList notes;
+	};
+
+	// Reports when the work has actually finished, not when the call returns.
+	// None of these stores empties synchronously, so a caller that treated the
+	// return as the answer would be saying "cleared" while the deletion was
+	// still in flight.
+	using clear_note = std::function<void(const clear_report &report)>;
+	virtual void clear_browsing_data(const browsing_data &what,
+	                                  clear_note done) = 0;
 };

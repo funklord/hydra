@@ -135,6 +135,12 @@ public:
 	// Everything to run at the start of a page, shim first.
 	static QString injected_scripts(qint64 id);
 
+	// Whether any WebView exists in this process. `android_factory` asks
+	// before clearing the cache, which Android does through a view rather than
+	// through a manager -- so with none open the honest answer is `refused`
+	// and not a quiet success.
+	static bool any_view_open();
+
 	// A navigation the WebView is about to attempt. Returns true when the shell
 	// took it instead -- `magnet:` and anything else that is not a page.
 	//
@@ -257,6 +263,24 @@ public:
 	// would feed. Taking the handler and never calling it would be worse than
 	// saying so here.
 	void set_download_handler(download_note) override {}
+
+	// **What the phone can and cannot forget**, answered honestly rather than
+	// stubbed. Android is better than the desktop on one of these and worse on
+	// another, and the report says which is which instead of averaging them
+	// into a claim that clearing worked.
+	//
+	// Cookies go through `CookieManager.removeAllCookies`, whose callback says
+	// whether anything was removed but never how many -- so `cookies_removed`
+	// stays -1 here, which is the value that means nobody counted rather than
+	// the value that means none. Site data goes with them, which the desktop
+	// cannot do at all: `WebStorage.deleteAllData()` takes localStorage,
+	// IndexedDB and WebSQL for every origin, where Qt 6.8 wraps no equivalent.
+	// The cache is cleared with no completion signal to wait on, so it is
+	// reported `unconfirmed`. Visited links are `refused`: Android exposes no
+	// visited-link store, and `WebView.clearHistory()` is the back/forward
+	// list, which belongs to the shell -- mapping one onto the other would
+	// delete the tab history while claiming to have done something else.
+	void clear_browsing_data(const browsing_data &what, clear_note done) override;
 
 private:
 	request_filter      *m_filter = nullptr;

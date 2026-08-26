@@ -22,6 +22,8 @@ public:
 	web_view_backend *create_view(QWidget *parent) override;
 	void set_external_url_handler(external_url_handler fn) override;
 	void set_download_handler(download_note fn) override;
+	void clear_browsing_data(const browsing_data &what,
+	                          clear_note done) override;
 
 	// Must be called before QApplication exists -- Qt requires custom schemes to
 	// be registered before the engine initialises, and it is a fatal warning

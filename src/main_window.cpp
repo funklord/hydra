@@ -1364,6 +1364,10 @@ void main_window::present_fullscreen(web_view_backend *view, bool on) {
 void main_window::toggle_kiosk() {
 	if (!m_kiosk) {
 		m_kiosk = new kiosk_controller(this);
+		// Forgetting between kiosk sessions is profile-wide work, and the
+		// factory is what owns the profile. Without this the controller can
+		// only warn that it was asked to forget and had nothing to ask.
+		m_kiosk->set_view_factory(m_factory);
 		// Coming back from kiosk: put the view on screen again and resync the
 		// menu check, which also covers Esc exiting without going through here.
 		connect(m_kiosk, &kiosk_controller::left, this, [this] {
@@ -1434,6 +1438,13 @@ void main_window::toggle_kiosk() {
 		c.allow_escape = true;
 		c.watchdog = false;
 		c.idle_reset_seconds = 0;
+		// **Nor the forgetting.** Clearing between sessions is a decision
+		// about an unattended screen somebody set up, and it deletes the
+		// cookies and logins of whoever set it up. A video going fullscreen
+		// is not consent to be signed out of every site -- and this route is
+		// the same controller, so without this line the kiosk leak fix
+		// becomes a data-loss bug for anyone who turned it on.
+		c.clear_between_sessions = false;
 	}
 	// A configured home wins, because someone who set one meant it for exactly
 	// this. With none, the tab you were on is the sensible thing to show and is
@@ -3586,7 +3597,7 @@ void main_window::open_settings() {
 	choose_ai(&ignored);          // make sure the providers exist to configure
 	settings_dialog dlg(m_players, m_downloads, m_torrents, m_local_ai,
 	                     m_external_ai, m_policy, m_filters, m_filters_path,
-	                     m_consent, m_site_rules_path, this);
+	                     m_consent, m_site_rules_path, this, m_factory);
 	dlg.exec();
 	// Global defaults may have moved, and every live view was configured from
 	// the old ones. Re-apply rather than wait for the next navigation, or the
