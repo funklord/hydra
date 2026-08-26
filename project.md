@@ -3915,6 +3915,59 @@ the desktop. No fatals, no ANR, 217 MB PSS with one page open, and the status
 bar reading `1 / 4 live`. Everything before this had been driven on an
 emulator; this is the first time it has been a phone.
 
+### Two defects the phone found, 2026-08-26
+
+Driving tabs and history on a **Galaxy Note 9 (SM-N960F, Android 10, SDK 29)**
+turned up one crash and one dead control. Both are portrait-phone problems, so
+neither had shown on the emulator or the Fold3.
+
+**Any menu aborts the app.** Tapping File or View kills it within a second,
+reproducibly, on every launch:
+
+    Abort message: 'Failed to acquire deadlock protector for
+    QAndroidPlatformOpenGLWindow::eglSurface().
+    ... while already locked by 'QtAndroidAccessibility::runInObjectContext()'.
+
+Every frame of the backtrace is Qt's -- `QRhi` to `QOpenGL` to the Android
+platform plugin to `qFatal`. It is Qt's own deadlock protector firing, not
+hydra's code, and the condition is an **accessibility service being active**:
+this phone runs `com.jamworks.bxactions` with `accessibility_enabled=1`.
+Opening a `QMenu` creates a native window, the render thread asks for the EGL
+surface, and Qt's accessibility bridge is already holding the lock.
+
+Not fixed here, and not obviously fixable from this side: the Qt Android plugin
+exposes no switch for its accessibility bridge that a search of the shipped
+`.so` and jar turns up. Worth reporting upstream with the abort message, which
+is specific enough to search for. **The consequence is worth stating plainly:
+on a phone with any accessibility service running, this application cannot open
+a menu.**
+
+**The tab drawer does not open.** In portrait the tree becomes an overlay
+behind the button left of the address bar, and the empty page says so. Tapping
+that button does nothing visible -- the status tip appears, the button takes
+its focus frame, and no tree arrives. Repeated taps only toggle a state nobody
+can see. A sliver a few pixels wide sits at the left edge, which is the shape
+you would expect from a sidebar parked at x=0 with almost no width.
+
+The code reads as though it should work: `resizeEvent` calls
+`update_layout_mode()` first and then resizes the sidebar to
+`min(width * 0.82, 420)` before moving it, and the narrow-mode placeholder text
+proves `update_layout_mode` ran with `narrow` true. So the fault is somewhere
+between that and what the compositor draws, and it is **not** the button, the
+tap coordinates or the animation, all of which were eliminated by measurement.
+
+Rotating to landscape puts the tree back in the splitter and everything works,
+which is how the rest of this was tested at all.
+
+**What did work, once the tree was reachable.** Tabs open from the tree and the
+row goes bold with the live count moving to `1 / 4`; the sample tree seeded on
+first run is intact; a tab created in an earlier session had persisted through
+a crash and a relaunch. Back and Forward both work -- wikipedia.org to
+example.com and back again, confirmed by the address bar each time. Note that
+`can_go_back()` is not overridden by `android_view` and so inherits
+`web_view_backend`'s `return true`, which means those two buttons are always
+enabled rather than reflecting the page; they were nonetheless correct here.
+
 Two details that run settles. The toolbar's **Key button falls back to its
 word** on Android, exactly as designed: there is no desktop icon theme,
 `QIcon::fromTheme` returns null for `dialog-password` and `password`, and the
