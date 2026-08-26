@@ -477,7 +477,14 @@ void android_view::sync_geometry() {
 	// is perfectly visible, it is just underneath something.
 	QJniObject::callStaticMethod<void>(
 	  k_cls, "setVisible", "(JZ)V", jlong(m_id),
-	  jboolean(m_widget->isVisible() && !m_blocked));
+	  jboolean(m_widget->isVisible() && !m_blocked && !m_obscured));
+}
+
+void android_view::set_obscured(bool on) {
+	if (m_obscured == on)
+		return;
+	m_obscured = on;
+	sync_geometry();
 }
 
 QWidget *android_view::widget() {

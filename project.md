@@ -3956,7 +3956,44 @@ trigger the other lacked. That is worth more than either finding alone, and it
 is the reason to report it upstream rather than work around it: **the same
 lock-ordering fault showing two faces is a Qt bug, not two application bugs.**
 
-**The tab drawer does not open.** In portrait the tree becomes an overlay
+**The tab drawer does not open** -- fixed, and the cause was not the drawer.
+
+Instrumented, the drawer turned out to be working perfectly. On the tap the log
+said `x=0, 337x703, isVisible=1`, parent the main window, animation run and
+finished: correctly positioned, correctly sized, and on screen by every measure
+Qt has. It was **underneath the page**.
+
+`android_view` puts the real `android.webkit.WebView` into the *Activity's*
+view hierarchy -- the Java class says so in its own header comment -- and keeps
+a `QLabel` on the Qt side to hold the geometry. An Android native surface
+composites above everything Qt paints, and `raise()` only reorders Qt siblings,
+so no amount of raising can put a Qt widget over the page.
+
+**The discriminating experiment**, same build and same taps, one variable: with
+no page open the tree appears; with one loaded it does not. That is what turned
+a fortnight of plausible guesses into a diagnosis, and it is the shape worth
+copying -- every Qt-side check said the widget was fine, because every Qt-side
+check was asking the wrong process.
+
+The fix was half-written already. `android_view` had `m_blocked`, which hides
+the native view while a modal `QDialog` is up, under the comment "the widget is
+perfectly visible, it is just underneath something". That is the same sentence
+about the drawer, arriving from the shell instead of from a dialog. So the seam
+gained `set_obscured(bool)` -- a no-op wherever Qt draws the page, which is why
+it defaults to nothing rather than being pure virtual -- and `set_drawer_open`
+calls it. The page is restored on the close animation's `finished`, or it
+reappears over a drawer still in motion and the animation reads as the tree
+vanishing rather than closing.
+
+Verified on the phone: tree over a loaded page, page back when it closes.
+
+**The general rule this leaves**, because it will come back the next time
+anything overlays a page on Android: *a Qt widget cannot be raised above an
+Android native surface, and every Qt-side check will tell you the widget is
+fine.* Geometry, visibility, parent and animation were all correct and all
+irrelevant.
+
+**What it looked like before the diagnosis.** In portrait the tree becomes an overlay
 behind the button left of the address bar, and the empty page says so. Tapping
 that button does nothing visible -- the status tip appears, the button takes
 its focus frame, and no tree arrives. Repeated taps only toggle a state nobody

@@ -1935,6 +1935,25 @@ void main_window::set_drawer_open(bool open, bool animate) {
 	if (!m_drawer_mode || !m_sidebar)
 		return;
 	m_drawer_open = open;
+
+	// **Tell the page it is being covered.** On a backend Qt draws, this is a
+	// no-op and the stacking below is the whole story. On Android the page is
+	// a native View in the Activity, composited above everything Qt paints, so
+	// the drawer slides out underneath it and cannot be seen -- correctly
+	// positioned, correctly sized, `isVisible()` true, and behind the web
+	// view. Measured on an SM-N960F: with no page open the tree appeared, with
+	// one open it did not, and the log said x=0 337x703 visible=1 both times.
+	//
+	// The page comes back only once the drawer has finished sliding away, or
+	// it reappears over a drawer still in motion and the animation reads as
+	// the tree vanishing rather than closing.
+	if (web_view_backend *v = current_view()) {
+		if (open)
+			v->set_obscured(true);
+		else if (!animate)
+			v->set_obscured(false);
+	}
+
 	const int w = m_sidebar->width();
 	const int to = open ? 0 : -w;
 	if (!animate) {
@@ -1948,6 +1967,16 @@ void main_window::set_drawer_open(bool open, bool animate) {
 	m_drawer_anim->setEasingCurve(QEasingCurve::OutCubic);
 	m_drawer_anim->setStartValue(m_sidebar->pos());
 	m_drawer_anim->setEndValue(QPoint(to, m_sidebar->y()));
+	// Restore the page when the close animation ends. `SingleShotConnection`
+	// because a new connection is made on every toggle and they would
+	// otherwise accumulate, each one firing on somebody else's animation.
+	if (!open) {
+		connect(m_drawer_anim, &QPropertyAnimation::finished, this, [this] {
+			web_view_backend *v = m_drawer_open ? nullptr : current_view();
+			if (v)
+				v->set_obscured(false);
+		}, Qt::SingleShotConnection);
+	}
 	m_drawer_anim->start();
 	if (open)
 		m_sidebar->raise();

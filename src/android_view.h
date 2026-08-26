@@ -136,6 +136,9 @@ public:
 	static void choose_file(qint64 id, bool multiple, const QString &accept);
 
 	QWidget *widget() override;
+	// The shell says something is over the page. Ored with `m_blocked`, which
+	// is the same condition arriving from a QDialog.
+	void set_obscured(bool on) override;
 	QUrl url() const override { return m_url; }
 	void load(const QUrl &url) override;
 	void back() override;
@@ -174,6 +177,7 @@ private:
 	qint64 m_id = 0;
 	bool   m_native = false;   // false when there is no WebView to talk to
 	bool   m_blocked = false;  // a modal dialog is over the window
+	bool   m_obscured = false; // the shell says something else is (the drawer)
 
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;

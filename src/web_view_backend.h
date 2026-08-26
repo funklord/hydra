@@ -230,6 +230,22 @@ public:
 		emit find_result(0, 0);
 	}
 
+	// Something in the shell is covering this view; get out of the way.
+	//
+	// **A no-op wherever the page is drawn by Qt**, because Qt's own stacking
+	// already handles it -- which is why it defaults to nothing rather than
+	// being pure virtual. It exists for a backend whose surface is not Qt's.
+	//
+	// On Android the page is a real `android.webkit.WebView` added to the
+	// Activity's view hierarchy, so it composites above everything Qt paints
+	// and `raise()` on a Qt widget cannot reach over it. The tab drawer slid
+	// out *underneath* the page and was invisible: the widget was where it
+	// should be, the right size and `isVisible()`, and none of that mattered.
+	// `android_view` already knew the shape of this problem for modal dialogs
+	// and hid the native view while one was up; the drawer is the same
+	// problem arriving from the shell rather than from a QDialog.
+	virtual void set_obscured(bool) {}
+
 	virtual bool can_go_back() const { return true; }
 	virtual bool can_go_forward() const { return true; }
 
