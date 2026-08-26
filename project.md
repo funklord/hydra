@@ -3954,6 +3954,36 @@ compiled for `arm64-v8a` with **no errors** and no changes. The only link
 failure was the three `qtwebengine_factory` symbols `main()` names — exactly
 the file the design says should be the only one that knows.
 
+#### This heading used to cover more than Android
+
+Measured while correcting the summary above: of the 1649 lines then under
+`## Android`, **944 in twenty subsections never mentioned android, adb, apk or
+a phone.** The KeePassXC work, the settings pages, the INI migration, kiosk
+mode, the crypto shim and the reorganizer gate were all filed here because
+that is when they were written, not because they were Android's.
+
+**Fixed by naming the runs, not by moving them.** This document is a
+chronological record and its `##` headings are milestones in it, so reordering
+the entries to group them by topic would have destroyed the one property that
+makes it readable -- that it says what happened, in the order it happened. The
+non-Android runs are contiguous, so five accurate headings were inserted at
+the points where the subject changes and **not one line of content moved**:
+filtering, KeePassXC, Android's media and downloads, the suites and gates, and
+settings.
+
+The proof is the shape of the diff: **zero deletions, 28 added lines, and all
+8959 original lines consumed in order.** A restructure that moves nothing can
+be checked exactly, which is why it was done that way rather than by cutting
+and pasting nine hundred lines and reading a sample of the result.
+
+Both Android headings now measure 0 lines that are not about Android, by the
+same test that found the 944.
+
+**The core is genuinely platform-neutral.** Fifty-one translation units
+compiled for `arm64-v8a` with **no errors** and no changes. The only link
+failure was the three `qtwebengine_factory` symbols `main()` names — exactly
+the file the design says should be the only one that knows.
+
 #### Open: this heading covers more than Android
 
 Measured while correcting the above: of the 1649 lines under `## Android`,
@@ -4317,6 +4347,12 @@ message matters — the one where no type is supported at all.
 `try_downloads` and `try_capture` are excluded from this comparison on purpose:
 they assert nothing, so they cannot disagree.
 
+## The filter list, and the cosmetic half
+
+Filtering, on both platforms. Recorded here because this is when the work
+happened; it is not Android's, though Android is where some of it was
+driven.
+
 ### The filter list was never enforced
 
 Setting out to test the ad-host predicate turned up something larger: **every
@@ -4410,6 +4446,12 @@ page's own view while the element beside it does not, and on the phone the same
 page comes up with the red block gone and the green one intact —
 `selectors=[".ad-banner"]`, `style_el=present`, `ad=none`, `keep=block`, over the
 same bridge, with no Android code written for it.
+
+## KeePassXC, from bridge to a closed §13
+
+The password work, continuing §"Password manager (step 7, done)" above.
+None of it is platform-specific: the bridge speaks to a vault over a local
+socket and does not care what is drawing the window.
 
 ### The KeePassXC bridge finally met KeePassXC
 
@@ -4811,6 +4853,11 @@ site that is *not* in their vault. Making the pairing durable turned a
 once-ever, human-gated path into one that runs on every build, and the first
 time it did, it failed.
 
+## Android: media, downloads and the platform's autofill
+
+Back to Android, and the parts of it that are not the web view: what happens
+when the screen goes off, where a download lands, and who fills a form.
+
 ### Background audio on Android, and why the browser hands over
 
 The need is ordinary: play something, turn the screen off, read a message, keep
@@ -5027,6 +5074,12 @@ implement. **It is not verified end to end**: the emulator has no autofill
 service configured (`settings get secure autofill_service` is empty), so what can
 be said is that the menu no longer offers something impossible, not that filling
 works. Naming that gap is the point of writing it down.
+
+## What the suites and the gates found
+
+Verification work, in the order it was done. Several of these found the test
+rather than the code, which is the recurring shape in this project and the
+reason they are collected rather than scattered.
 
 ### A parser that said it was tested
 
@@ -5350,6 +5403,11 @@ distinction matters here because the *other* deprecation this project met, the
 WebEngine permission API, was documented as functional and was not: geolocation
 had silently stopped arriving. A deprecation warning says nothing about whether
 the thing still works. Only running it does.
+
+## Settings, gathered into one INI
+
+Continuing §"Settings (arch §11.3, §11.4)" above: what the pages became, and
+the move of every setting into a single file.
 
 ### The settings pages, made browser-shaped
 
