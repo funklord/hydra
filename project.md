@@ -3888,6 +3888,42 @@ out which pane the search box searches. Search takes the full sidebar width,
 Sort sits under it, and the toolbar is left with the things that act on the
 page.
 
+## Open: the profile is off-the-record, and nothing meant it to be
+
+**Measured, not inferred.** `qtwebengine_factory` takes
+`QWebEngineProfile::defaultProfile()` and nothing anywhere calls
+`setPersistentStoragePath`, `setStorageName`, `setPersistentCookiesPolicy` or
+`setHttpCacheType`. In Qt 6.8 the default profile is off-the-record. The only
+directory any run has ever produced is
+`~/.local/share/Hydra/QtWebEngine/OffTheRecord/`; there is no `Default` beside
+it.
+
+So nothing a site stores survives quitting: cookies, localStorage, IndexedDB,
+and the HTTP cache, which is memory-only. **Log in, quit, come back, and you
+are logged out**, with nothing said about why.
+
+It bites harder here than it would in most browsers, because this one
+deliberately persists the tab tree *and* each tab's history. A restored tab
+reloads a site you were signed into and shows you signed out -- the tree
+remembers and the session does not. It also contradicts a stated design: the
+consent-banner work says "answering has to stick, which is why this touches
+cookie policy... a consent choice is itself recorded in a cookie". The choice
+cannot stick in a profile that forgets.
+
+**And the document has it exactly backwards.** §"Not done from §8" lists the
+off-the-record profile as an unbuilt *kiosk* feature -- something to add when
+a kiosk needs to forget. The whole browser has been off-the-record the entire
+time, by inheriting a Qt default nobody chose. That is the fourth time this
+file has contradicted itself about work it records elsewhere, and the first
+time the contradiction was in the direction of a feature being *accidentally
+present* rather than accidentally missing.
+
+**Flagged rather than fixed.** Whether this browser keeps cookies between runs
+is a decision about what it is for, not a defect with an obvious answer: a
+kiosk wants to forget and a daily browser does not, and both are things this
+project has said it wants to be. The holder decides. What is not in doubt is
+that nobody decided it so far.
+
 ## A page could not download anything, and never said so
 
 Clicking a download in a page did nothing at all. Not an error, not a status
@@ -4010,20 +4046,45 @@ Android is untouched: `android_view` never emitted this signal, so it has no
 popup path to break. The Android WebView's analogue is `onCreateWindow` with a
 `WebViewTransport`, and it is not written.
 
-### An unrelated crash the same work uncovered
+### A crash that was the build, and a false proof that it was not
 
-`try_navigate` segfaults, and did so **before this change as well** -- proved
-by stashing the change, rebuilding the driver and running it again, exit 139
-both ways at the identical point. It dies between `section("with no page
-open")` and the header of the next section, with unbuffered output, so it is
-not a check failing but something asynchronous arriving between them. It
-segfaults on a real display as well as offscreen.
+`try_navigate` segfaulted, and this section said it was pre-existing and
+asynchronous. **Both halves were wrong, and the reasoning that produced them
+is the part worth keeping.**
 
-Recorded rather than fixed, and recorded loudly, because it is the safety net
-for exactly the code this section changed: **the driver that covers new-window
-requests has not been able to reach that section for some time, and nothing
-said so.** `make test` does not run the live drivers, so a green suite says
-nothing about it.
+It was a **stale object**. `set_obscured` was added to `web_view_backend.h`
+by the drawer fix; `main_window.o` was compiled against the header with it and
+`qtwebengine_view.o` against one without. The vtable in the linked binary was
+one slot short, so `update_navigation`'s call to `can_go_back()` reached
+`can_go_forward()`, and its call to `can_go_forward()` dispatched one word
+past the end of the vtable -- a zero -- and the program called address 0. It
+died on the first `open_node`, because that is the first virtual dispatch onto
+a backend: with no page open `update_navigation` short-circuits before any
+virtual call.
+
+**The false proof is the lesson.** It was declared pre-existing on an A/B: the
+change stashed, driver rebuilt, same crash; change restored, same crash. That
+looked conclusive and was worthless, because neither arm ever reached a
+consistent build. In the stashed arm the header lost `set_obscured` while
+`main_window.o` still had it -- skewed the other way. `make` had nothing to do
+in between, so both arms relinked the same bad object and reported the same
+address.
+
+An A/B is only evidence if **each arm is internally consistent**. Rebuilding
+is not the same as rebuilding *everything that depends on what changed*, and a
+build system that decides by timestamp cannot tell you which you got. Measured
+afterwards: 192 of 198 objects in `test/build-make` were older than the newest
+header.
+
+From a clean build of the same commit in a private `BUILD_DIR`, the driver
+runs **33 passed, 0 failed**. Nothing in the source was ever wrong.
+
+Two smaller things fell out. The dependency tracking is *not* at fault -- the
+`.d` file does list `web_view_backend.h`, and `make -n` wanted to recompile;
+the tree simply moved under a build that had already finished. And the same
+shape bit again five minutes later, when a header was edited while a
+verification build was running and the link failed on a signal moc had not
+seen. **Do not edit while a build you intend to trust is running.**
 
 ## Android: it runs, and it browses
 
@@ -8702,9 +8763,13 @@ silence this change exists to remove. Allowed script windows open in the
 background, because a page that opens a window while you are reading is not
 entitled to take the page away from you.
 
-`openIn` is deliberately not called. Taking the url and opening it ourselves
+~~`openIn` is deliberately not called. Taking the url and opening it ourselves
 drops the opener relationship, which a page can otherwise use to reach back into
-the window that spawned it.
+the window that spawned it.~~ **Reversed, and see §"OAuth popups, and the opener
+that was never wired" for why.** The reasoning above is sound and the protection
+is real; what it left unsaid is the price, which is that no OAuth sign-in can
+complete anywhere. A window the person asked for gets its opener now, and a
+script-initiated one still does not.
 
 ### A tab that died and did not say so
 
