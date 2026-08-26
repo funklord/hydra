@@ -768,7 +768,12 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// The menu lives in the view; these are the only two entries it cannot
 	// carry out itself -- opening needs an engine and the stacked widget,
 	// suspending needs the state store.
-	connect(m_tree, &tab_tree_view::open_requested, this, &main_window::open_node);
+	// Through a lambda rather than the member directly: `open_node` grew a
+	// second, defaulted argument, and Qt resolves a pointer-to-member
+	// connection on the whole signature -- a default does not make the slot
+	// narrower than the signal.
+	connect(m_tree, &tab_tree_view::open_requested, this,
+	         [this](node *n) { open_node(n); });
 	// A page out of an imported history opens *below* the tab it belongs to,
 	// which is the sub-tab gesture the whole tree is built around (sec 5.5) --
 	// and which leaves the record itself untouched.
@@ -2009,7 +2014,7 @@ web_view_backend *main_window::current_view() const {
 // no page, and an empty tab opens `about:blank` -- already this tree's spelling
 // for "no address yet", the properties dialog having used it as the address
 // placeholder since before this.
-void main_window::open_node(node *n) {
+void main_window::open_node(node *n, bool load_now) {
 	if (!n || n->is_folder())
 		return;
 
@@ -2080,9 +2085,9 @@ void main_window::open_node(node *n) {
 				report_certificate_rejected(u, why);
 		});
 		connect(view, &web_view_backend::new_window_requested, this,
-		         [this, view](const QUrl &u, bool user) {
+		         [this, view](const QUrl &u, bool user, web_view_backend **adopt) {
 			if (view == current_view())
-				open_new_window(u, user);
+				open_new_window(u, user, adopt);
 		});
 		connect(view, &web_view_backend::render_process_gone, this,
 		         [this, view] {
@@ -2177,7 +2182,11 @@ void main_window::open_node(node *n) {
 		});
 
 
-		if (n->type == node_type::suspended_tab && m_state && m_state->has_state(n->id)) {
+		if (!load_now) {
+			// Left empty on purpose: the caller is adopting an engine window
+			// request, which navigates the page itself.
+		} else if (n->type == node_type::suspended_tab && m_state &&
+		            m_state->has_state(n->id)) {
 			// Restore the session blob this node was suspended into.
 			view->restore_state(m_state->load(n->id));
 			m_state->remove(n->id);
@@ -2557,7 +2566,8 @@ void main_window::view_page_source() {
 	                 true);
 }
 
-node *main_window::open_new_window(const QUrl &url, bool user_initiated) {
+node *main_window::open_new_window(const QUrl &url, bool user_initiated,
+                                    web_view_backend **adopt) {
 	if (!url.isValid() || url.isEmpty())
 		return nullptr;
 
@@ -2595,7 +2605,13 @@ node *main_window::open_new_window(const QUrl &url, bool user_initiated) {
 	save_tree_soon();
 
 	if (user_initiated) {
-		open_node(made);
+		// Without loading when the request is being adopted: `openIn` does the
+		// navigation, and doing it here as well would fetch a one-time url
+		// twice -- which for an OAuth popup means spending the state parameter
+		// before the real navigation uses it.
+		open_node(made, /*load_now=*/adopt == nullptr);
+		if (adopt)
+			*adopt = m_views_by_id.value(made->id, nullptr);
 	} else {
 		// Allowed, but not given the foreground: a page that opens a window
 		// while you are reading is not entitled to take the page away from you.

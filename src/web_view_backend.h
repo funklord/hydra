@@ -289,7 +289,23 @@ signals:
 	// refusal -- it is a click that silently does nothing, which is the worst
 	// outcome of the three available. `user_initiated` separates a click from
 	// a script, because those deserve different answers.
-	void new_window_requested(const QUrl &url, bool user_initiated);
+	// A page asked to open a window.
+	//
+	// **`adopt` is an out-parameter and the whole point of this signal.** A
+	// receiver that wants the new window to be a real child of the opener sets
+	// `*adopt` to the backend that should take it over, synchronously, before
+	// the emit returns -- the engine's request object is only valid for the
+	// duration of the call. Leaving it null means "I have handled the url
+	// myself", which is what a receiver that merely files a bookmark does.
+	//
+	// The distinction is not cosmetic. Loading the requested url into a fresh
+	// page is *not* the same as opening the window: `window.opener` is null in
+	// the copy, so the popup has nothing to talk back to. Every OAuth popup
+	// works that way -- Google Identity Services posts the credential to the
+	// opener and never redirects -- which is why signing in to claude.ai with
+	// Google produced a blank tab and no session.
+	void new_window_requested(const QUrl &url, bool user_initiated,
+	                           web_view_backend **adopt);
 
 	// Where the link under the pointer would take you. An empty url means the
 	// pointer left one. **This is the browser's oldest security affordance**:

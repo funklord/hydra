@@ -207,7 +207,13 @@ public:
 	// A page asked for another window. Returns the node it made, or nullptr if
 	// the request was refused -- public so a driver can ask for one without an
 	// engine, since the decision is the part worth checking.
-	node *open_new_window(const QUrl &url, bool user_initiated);
+	// `adopt`, when given, is filled with the backend that should take over
+	// the engine's pending window request -- see `new_window_requested`. The
+	// view is then created *without* loading anything, because the request
+	// carries the navigation and doing it twice would replay a one-time OAuth
+	// url.
+	node *open_new_window(const QUrl &url, bool user_initiated,
+	                       web_view_backend **adopt = nullptr);
 	void view_page_source();
 	void present_fullscreen(web_view_backend *view, bool on);
 	node *open_child_tab(node *parent, const QUrl &url);
@@ -239,7 +245,11 @@ private:
 
 	void sync_page_context();          // refresh the status bar's permanent counts
 	web_view_backend *current_view() const;
-	void open_node(node *n);            // create/restore a live view and show it
+	// `load_now` is false only when something else is about to drive the
+	// navigation: a window request adopted through `openIn` performs its own,
+	// and a page loaded here first would be thrown away or, worse, would spend
+	// a single-use url.
+	void open_node(node *n, bool load_now = true);            // create/restore a live view and show it
 	void suspend_node(node *n);         // serialize + tear down the live view
 	void touch_lru(const QString &id);
 	void enforce_live_cap(const QString &keep_id);

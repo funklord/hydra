@@ -209,7 +209,20 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 
 	connect(m_page, &QWebEnginePage::newWindowRequested, this,
 	         [this](QWebEngineNewWindowRequest &request) {
-		emit new_window_requested(request.requestedUrl(), request.isUserInitiated());
+		// **`openIn`, not "load the url somewhere else".** Handing the request
+		// to a page is what makes Chromium wire the opener, and the opener is
+		// what a popup exists to talk to. Reading `requestedUrl()` and loading
+		// it into a fresh page looks identical in a screenshot and is a
+		// different thing: `window.opener` is null, so a sign-in popup has
+		// nowhere to post its answer and sits there blank.
+		//
+		// The receiver fills this in during the emit, because `request` is
+		// only valid until this lambda returns.
+		web_view_backend *adopt = nullptr;
+		emit new_window_requested(request.requestedUrl(),
+		                           request.isUserInitiated(), &adopt);
+		if (auto *view = qobject_cast<qtwebengine_view *>(adopt))
+			request.openIn(view->m_page);
 	});
 
 	// One line, because the page already knows: Qt reports the link under the
