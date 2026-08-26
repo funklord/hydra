@@ -13,11 +13,15 @@
 // and whether its tooltip says anything -- and "a review UI that is correct and
 // never clicked" is the defect this project has shipped most often.
 #include "main_window.h"
+#include "settings_dialog.h"
+#include "theme.h"
 #include "policy_engine.h"
 #include "request_filter.h"
 #include "qtwebengine_factory.h"
 
 #include <QAction>
+#include <QImage>
+#include <QPixmap>
 #include <QApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -108,6 +112,14 @@ int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
+	// **Start the way `main` starts.** This driver built its own window and
+	// skipped the icon theme, so every `QIcon::fromTheme` came back null and
+	// the toolbar it was asserting about was not the toolbar the application
+	// draws. That is this project's recurring driver defect -- recorded once
+	// already, for the screenshots that turned out to be of the harness -- and
+	// it surfaced here as a key with no icon rather than as anything about
+	// startup.
+	theme::apply_icon_theme(theme::resolve(settings_store::appearance()));
 
 	const QString out = qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
 	                        ? qgetenv("HYDRA_TEST_OUT") : QString("/tmp/hydra-autofill");
@@ -165,6 +177,45 @@ int main(int argc, char *argv[]) {
 	          key->toolTip().contains("KeePassXC"),
 	      QString("and says which of the two reasons it is (%1)")
 	          .arg(key->toolTip()));
+
+	// **Dark enough to see.** The theme's key is drawn as a pale outline --
+	// crystalsvg's measured 142 at its darkest against a toolbar around 240 --
+	// which is legible once you know it is there and easy to miss otherwise.
+	// The shape stays the desktop's; only the weight is adjusted, and only
+	// where it is too light to read.
+	//
+	// Checked on the icon rather than on a screenshot so it holds without a
+	// compositor, and guarded against the vacuous pass: an empty pixmap would
+	// otherwise report a luminance of zero and sail through.
+	{
+		const QPixmap pm = key->icon().pixmap(22, 22);
+		check(!pm.isNull() && !pm.size().isEmpty(),
+		      QString("the key has an icon at all (%1x%2)")
+		          .arg(pm.width()).arg(pm.height()));
+		if (!pm.isNull() && !pm.size().isEmpty()) {
+			const QImage img = pm.toImage().convertToFormat(QImage::Format_ARGB32);
+			double sum = 0.0, weight = 0.0;
+			int darkest = 255;
+			for (int y = 0; y < img.height(); ++y)
+				for (int x = 0; x < img.width(); ++x) {
+					const QRgb px = img.pixel(x, y);
+					const int a = qAlpha(px);
+					if (!a)
+						continue;
+					sum    += double(qGray(px)) * a;
+					weight += a;
+					darkest = qMin(darkest, qGray(px));
+				}
+			const double mean = weight > 0.0 ? sum / weight : 255.0;
+			check(weight > 0.0, "and the icon has pixels drawn in it");
+			// The adjustment targets a mean of 110; allow room for the theme's
+			// own shading and for a theme that was already dark enough.
+			check(weight > 0.0 && mean <= 150.0,
+			      QString("drawn dark enough to read on a light toolbar "
+			               "(mean %1, darkest %2)")
+			          .arg(int(mean)).arg(darkest));
+		}
+	}
 
 	section("a login form raises it, even though the fill is refused");
 	{

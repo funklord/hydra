@@ -73,6 +73,9 @@
 #include <QLineEdit>
 #include <QComboBox>
 #include <QHeaderView>
+#include <QImage>
+#include <QPalette>
+#include <QPixmap>
 #include <QLabel>
 #include <QProgressBar>
 #include <QMenu>
@@ -116,6 +119,80 @@ namespace {
 // icon and keeps its text. That is deliberate: a toolbar with one hand-drawn
 // glyph among borrowed ones looks worse than a toolbar with one word in it, and
 // this is the situation the previous comment here was protecting against.
+// A theme icon brought to a readable weight on this window's background.
+//
+// **crystalsvg's key is drawn as a pale outline**, which sits on a light
+// toolbar at barely any contrast -- legible once you know it is there, easy to
+// miss otherwise, and noticeably fainter than the arrows beside it. The answer
+// is not to draw our own: the shape is the desktop's and should stay that way.
+// Only its weight is adjusted.
+//
+// **Measured rather than hardcoded**, so a theme whose key is already dark is
+// left alone instead of being crushed to black. The mean is taken over what is
+// actually drawn -- weighted by alpha -- because an icon is mostly transparent
+// and counting those pixels would report every icon as dark.
+//
+// Only on a light background. Pale-on-dark is correct, and a scheme-blind
+// darkening would take an icon that reads well on dark chrome and make it
+// disappear.
+QIcon weighted_icon(const QIcon &src, const QPalette &pal) {
+	if (src.isNull())
+		return src;
+	if (pal.color(QPalette::Window).lightness() <= 128)
+		return src;
+	// Dark enough to read against a light toolbar without becoming a black
+	// blot beside icons that are themselves mid-grey.
+	constexpr double target = 110.0;
+
+	QList<QSize> sizes = src.availableSizes();
+	if (sizes.isEmpty())
+		sizes << QSize(16, 16) << QSize(22, 22) << QSize(24, 24) << QSize(32, 32);
+
+	QIcon out;
+	bool adjusted = false;
+	for (const QSize &size : sizes) {
+		QImage img = src.pixmap(size).toImage()
+			               .convertToFormat(QImage::Format_ARGB32);
+		if (img.isNull())
+			continue;
+		double sum = 0.0, weight = 0.0;
+		for (int y = 0; y < img.height(); ++y) {
+			const QRgb *row = reinterpret_cast<const QRgb *>(img.constScanLine(y));
+			for (int x = 0; x < img.width(); ++x) {
+				const int a = qAlpha(row[x]);
+				if (!a)
+					continue;
+				sum    += double(qGray(row[x])) * a;
+				weight += a;
+			}
+		}
+		if (weight <= 0.0 || sum / weight <= target) {
+			out.addPixmap(QPixmap::fromImage(img));
+			continue;
+		}
+		const double factor = target / (sum / weight);
+		for (int y = 0; y < img.height(); ++y) {
+			QRgb *row = reinterpret_cast<QRgb *>(img.scanLine(y));
+			for (int x = 0; x < img.width(); ++x) {
+				const int a = qAlpha(row[x]);
+				if (!a)
+					continue;
+				// Multiplied, not replaced: the glyph's own shading is what
+				// makes it read as a key rather than a silhouette.
+				row[x] = qRgba(int(qRed(row[x]) * factor),
+					                int(qGreen(row[x]) * factor),
+					                int(qBlue(row[x]) * factor), a);
+			}
+		}
+		out.addPixmap(QPixmap::fromImage(img));
+		adjusted = true;
+	}
+	// Nothing needed changing, so hand back the theme's own icon rather than a
+	// re-rendered copy of it -- which would lose any size the theme can draw
+	// that was not in `availableSizes`.
+	return adjusted ? out : src;
+}
+
 QIcon themed_icon(const QStringList &names, QStyle *st,
 	                 QStyle::StandardPixmap fallback) {
 	for (const QString &n : names) {
@@ -524,8 +601,12 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// its word, which is what the whole toolbar did until today. An icon-only
 	// button with nothing behind it would be worse than the text ever was.
 	m_key_action = bar->addAction("Key");
-	m_key_action->setIcon(themed_icon({ "dialog-password", "password" }, style(),
-	                                   QStyle::SP_CustomBase));
+	// Weighted for this window's background: crystalsvg draws its key as a
+	// pale outline that all but disappears on a light toolbar. The shape stays
+	// the desktop's; only the contrast is ours, and only where it is too low.
+	m_key_action->setIcon(weighted_icon(
+	  themed_icon({ "dialog-password", "password" }, style(),
+	               QStyle::SP_CustomBase), palette()));
 	// An icon needs this in a way a word did not: with the label gone, the
 	// tooltip is the only thing that says what the button is.
 	m_key_action->setToolTip("Fill a saved password from KeePassXC");

@@ -4534,6 +4534,40 @@ a theme has neither the icon comes back null and the action keeps its word.
 Measured on crystalsvg: `dialog-password` is absent, `password` resolves at six
 sizes.
 
+**Weighted for the background it is drawn on.** crystalsvg's key is a pale
+outline: measured off the rendered window, its darkest pixel was 142 against a
+toolbar around 240, and in the greyed state 181. Legible once you know it is
+there, easy to miss otherwise, and visibly fainter than the arrows beside it.
+
+The shape stays the desktop's -- inventing a glyph is the thing this section
+already argues against -- and only the weight is adjusted, by multiplying the
+theme's own pixels rather than replacing them, so the shading that makes it
+read as a key survives.
+
+Two things keep that from being a blunt filter. It is **measured, not
+hardcoded**: the mean is taken over what is actually drawn, weighted by alpha,
+and scaled only if it is lighter than the target, so a theme whose key is
+already dark is left exactly as it is. And it is **applied only on a light
+background**, because pale-on-dark is correct and a scheme-blind darkening
+would take an icon that reads well on dark chrome and erase it.
+
+Measured after: darkest pixel 98 enabled, 154 greyed, and the icon's own mean
+109 against a target of 110. `try_autofill` asserts the mean rather than
+eyeballing a screenshot, so it holds without a compositor -- guarded against
+the vacuous pass, since an empty pixmap would report a luminance of zero and
+sail through.
+
+**And that assertion immediately caught the driver rather than the code**,
+which is this tree's recurring defect showing up for the third time.
+`try_autofill` builds its own `main_window` and never applied the icon theme,
+so every `QIcon::fromTheme` in it came back null and the toolbar it had been
+making claims about was not the toolbar the application draws. It had been
+asserting the key's *text* for as long as it existed and never noticed. The
+same fault is recorded above for the screenshots that turned out to be of the
+harness, and `shell_fixture` exists precisely to prevent it -- this driver
+predates it and does not use it. One line, matching `main`, and the icon
+appeared.
+
 **The tooltip is where the reason lives**, not the status bar. A status message
 is gone in six seconds and the empty form is still sitting there; this project
 has already recorded a defect where a message was written into a label
