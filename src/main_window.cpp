@@ -155,7 +155,7 @@ QIcon weighted_icon(const QIcon &src, const QPalette &pal) {
 			               .convertToFormat(QImage::Format_ARGB32);
 		if (img.isNull())
 			continue;
-		double sum = 0.0, weight = 0.0;
+		double sum = 0.0, weight = 0.0, colour = 0.0;
 		for (int y = 0; y < img.height(); ++y) {
 			const QRgb *row = reinterpret_cast<const QRgb *>(img.constScanLine(y));
 			for (int x = 0; x < img.width(); ++x) {
@@ -164,9 +164,32 @@ QIcon weighted_icon(const QIcon &src, const QPalette &pal) {
 					continue;
 				sum    += double(qGray(row[x])) * a;
 				weight += a;
+				// How far from grey. `max - min` rather than a saturation in
+				// HSL, which reports a near-white pixel as highly saturated
+				// and would call every pale glyph coloured.
+				const int hi = qMax(qMax(qRed(row[x]), qGreen(row[x])),
+					                     qBlue(row[x]));
+				const int lo = qMin(qMin(qRed(row[x]), qGreen(row[x])),
+					                     qBlue(row[x]));
+				colour += double(hi - lo) * a;
 			}
 		}
-		if (weight <= 0.0 || sum / weight <= target) {
+		// **A coloured icon is left alone, because its colour is the
+		// message.** The shield's warning triangle is yellow and the annoyance
+		// faces are yellow; darkening those turns a warning into a murky olive
+		// and says something the icon did not mean.
+		//
+		// It excludes more than expected, and the surprise is worth recording:
+		// crystalsvg's back and forward arrows are **blue discs**, measuring
+		// 114 on this scale. They look grey on the toolbar because they are
+		// usually *disabled* -- with nowhere to go back to -- and Qt draws a
+		// disabled icon by desaturating and lightening it. The pale grey is
+		// the state, not the artwork, which is why darkening the source would
+		// not have touched it. Reload is the same disc and turns vivid blue
+		// the moment a page is loaded.
+		constexpr double colour_limit = 32.0;
+		if (weight <= 0.0 || colour / weight > colour_limit ||
+			    sum / weight <= target) {
 			out.addPixmap(QPixmap::fromImage(img));
 			continue;
 		}
@@ -195,13 +218,22 @@ QIcon weighted_icon(const QIcon &src, const QPalette &pal) {
 
 QIcon themed_icon(const QStringList &names, QStyle *st,
 	                 QStyle::StandardPixmap fallback) {
+	// Weighted on the way out, so every icon on this toolbar gets the same
+	// treatment rather than one of them being adjusted by hand. The palette is
+	// the application's: a toolbar is painted in it, and asking each caller to
+	// pass one would be eleven chances to pass the wrong one.
 	for (const QString &n : names) {
 		const QIcon i = QIcon::fromTheme(n);
 		if (!i.isNull() && !i.availableSizes().isEmpty())
-			return i;
+			return weighted_icon(i, QApplication::palette());
 	}
-	return fallback == QStyle::SP_CustomBase ? QIcon()
-		                                        : st->standardIcon(fallback);
+	// The style's own icon goes through it too. It is usually drawn to suit
+	// the palette already, in which case the measurement leaves it alone --
+	// but "usually" is not a reason to have two rules on one toolbar.
+	return fallback == QStyle::SP_CustomBase
+		         ? QIcon()
+		         : weighted_icon(st->standardIcon(fallback),
+		                          QApplication::palette());
 }
 
 }  // namespace
@@ -601,12 +633,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// its word, which is what the whole toolbar did until today. An icon-only
 	// button with nothing behind it would be worse than the text ever was.
 	m_key_action = bar->addAction("Key");
-	// Weighted for this window's background: crystalsvg draws its key as a
-	// pale outline that all but disappears on a light toolbar. The shape stays
-	// the desktop's; only the contrast is ours, and only where it is too low.
-	m_key_action->setIcon(weighted_icon(
-	  themed_icon({ "dialog-password", "password" }, style(),
-	               QStyle::SP_CustomBase), palette()));
+	m_key_action->setIcon(themed_icon({ "dialog-password", "password" }, style(),
+	                                   QStyle::SP_CustomBase));
 	// An icon needs this in a way a word did not: with the label gone, the
 	// tooltip is the only thing that says what the button is.
 	m_key_action->setToolTip("Fill a saved password from KeePassXC");

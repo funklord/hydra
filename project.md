@@ -4534,6 +4534,20 @@ a theme has neither the icon comes back null and the action keeps its word.
 Measured on crystalsvg: `dialog-password` is absent, `password` resolves at six
 sizes.
 
+**Every toolbar icon goes through the weighting, not just the key**, so there
+is one rule rather than one adjusted glyph. What that turned up is worth more
+than the change: **the back and forward arrows are blue discs**, measuring 114
+on the colour scale where a grey glyph measures 0. They look grey because they
+are usually *disabled* -- there is nowhere to go back to -- and Qt draws a
+disabled icon by desaturating and lightening it. The pale grey is the state,
+not the artwork, so darkening the source would not have touched it; reload is
+the same disc and turns vivid blue the moment a page loads.
+
+So the colour guard excludes them, correctly, and what it adjusts is the
+monochrome set: the key, the drawer's list glyph and the media badge. Asked to
+darken "the other toolbar icons", the honest answer is that most of them were
+never pale -- they were switched off.
+
 **Weighted for the background it is drawn on.** crystalsvg's key is a pale
 outline: measured off the rendered window, its darkest pixel was 142 against a
 toolbar around 240, and in the greyed state 181. Legible once you know it is
