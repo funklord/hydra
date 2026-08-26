@@ -3888,6 +3888,92 @@ out which pane the search box searches. Search takes the full sidebar width,
 Sort sits under it, and the toolbar is left with the things that act on the
 page.
 
+## OAuth popups, and the opener that was never wired
+
+Signing in to claude.ai with Google produced a blank tab and no session. The
+popup was not blocked -- the tree recorded four of them opening as sub-tabs --
+and the url said what the flow needed:
+
+    display=popup   response_mode=form_post   origin=https://claude.ai
+    redirect_uri=gis_transform
+
+That is Google Identity Services' popup flow, which does not redirect back. It
+posts the credential to **`window.opener`**, and `window.opener` was null.
+
+`qtwebengine_view` took `requestedUrl()` out of the engine's
+`QWebEngineNewWindowRequest` and had the shell load that url into a fresh tab.
+That looks identical in a screenshot and is a different thing: Chromium wires
+the opener only when the request itself is handed to a page, with
+`request.openIn(page)`. Loading the url is a copy of the destination, not the
+window that was asked for.
+
+The tree recorded both failure modes side by side, which is what made it
+diagnosable at all. Two of the four popup tabs were titled `Sign In - Google
+Accounts` and two were still titled `accounts.google.com` -- the url standing
+in as the title because no document ever titled itself. **The white page was
+on disk.**
+
+**This reverses a decision the code had made deliberately, and that is the
+part worth arguing rather than the mechanism.** The comment that stood there
+said `openIn` was not called on purpose, because dropping the opener stops a
+page reaching back into the window that spawned it. That is the tabnabbing
+vector and the protection is real. What the comment did not say is the price,
+which is total for one class of site: a popup with no opener cannot answer the
+page that opened it, so every OAuth sign-in renders a blank window and nothing
+completes. A protection whose cost is "this category of site does not work"
+should say so where it is claimed.
+
+The line drawn instead: **only a window the person asked for gets an opener.**
+The shell fills the adopting view in on the `user_initiated` branch and leaves
+it null otherwise, so a script-initiated popup that policy lets through still
+gets the old treatment -- url copied into a fresh page, no opener, nothing to
+reach back through. That keeps the protection exactly where a window nobody
+asked for comes from, and spends it where somebody clicked "sign in".
+
+The residual risk is stated rather than waved away: a popup you opened by
+clicking can reach `window.opener`. Every mainstream browser makes the same
+trade, which is a reason to think it defensible and not a reason to skip
+saying it.
+
+So the seam's `new_window_requested` gains an out-parameter: a receiver that
+wants the window to be real sets `*adopt` to the backend that should take it,
+synchronously, because the engine's request object is only valid for the
+duration of the emit. Filling it in is what `openIn` needs; leaving it null
+still means "I have handled the url myself", which is what a receiver that
+merely files a bookmark does.
+
+`open_node` grew a `load_now` flag for the same reason. An adopted request
+performs its own navigation, and loading the url here as well would fetch a
+one-time OAuth url twice -- spending the state parameter before the real
+navigation used it.
+
+One thing that fell out and is worth knowing: **Qt resolves a
+pointer-to-member connection on the whole signature, so a defaulted argument
+does not make a slot narrower than its signal.** Adding `load_now` broke
+`connect(m_tree, &tab_tree_view::open_requested, this,
+&main_window::open_node)` at compile time, with a static assertion about the
+slot requiring more arguments than the signal provides. A lambda at the call
+site is the fix.
+
+Android is untouched: `android_view` never emitted this signal, so it has no
+popup path to break. The Android WebView's analogue is `onCreateWindow` with a
+`WebViewTransport`, and it is not written.
+
+### An unrelated crash the same work uncovered
+
+`try_navigate` segfaults, and did so **before this change as well** -- proved
+by stashing the change, rebuilding the driver and running it again, exit 139
+both ways at the identical point. It dies between `section("with no page
+open")` and the header of the next section, with unbuffered output, so it is
+not a check failing but something asynchronous arriving between them. It
+segfaults on a real display as well as offscreen.
+
+Recorded rather than fixed, and recorded loudly, because it is the safety net
+for exactly the code this section changed: **the driver that covers new-window
+requests has not been able to reach that section for some time, and nothing
+said so.** `make test` does not run the live drivers, so a green suite says
+nothing about it.
+
 ## Android: it runs, and it browses
 
 **A second platform behind the seam, in use rather than in principle.** The

@@ -188,9 +188,22 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 
 	// The request is answered by the shell rather than here: it becomes a tab
 	// in the tree, which is this browser's whole answer to "another window".
-	// `openIn` is deliberately not called -- taking the url and opening it
-	// ourselves drops the opener relationship, which a page can otherwise use
-	// to reach back into the window that spawned it.
+	//
+	// **This used to say `openIn` was deliberately not called**, on the
+	// grounds that taking the url and opening it ourselves drops the opener
+	// relationship "which a page can otherwise use to reach back into the
+	// window that spawned it". That reasoning is sound and the protection is
+	// real -- it is the tabnabbing vector -- but the cost was not stated and
+	// turned out to be the whole of one class of site: a popup with no opener
+	// cannot answer the page that opened it, so every OAuth sign-in flow
+	// renders a blank window and nothing completes. Measured on a real one.
+	//
+	// So it is called now, and **only where the person asked for the window**.
+	// A script-initiated popup that policy lets through still gets the old
+	// treatment -- the url copied into a fresh page, no opener, nothing to
+	// reach back through -- because that is where a window nobody asked for
+	// comes from. The shell draws that line: it fills the adopting view in
+	// only on the user-initiated branch, and leaves it null otherwise.
 	// **Accepted here, presented by the shell.** The request must be answered
 	// synchronously -- Chromium is waiting on it and a reply that arrives later
 	// answers a request already abandoned, the same shape as the permission and
@@ -209,7 +222,20 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 
 	connect(m_page, &QWebEnginePage::newWindowRequested, this,
 	         [this](QWebEngineNewWindowRequest &request) {
-		emit new_window_requested(request.requestedUrl(), request.isUserInitiated());
+		// **`openIn`, not "load the url somewhere else".** Handing the request
+		// to a page is what makes Chromium wire the opener, and the opener is
+		// what a popup exists to talk to. Reading `requestedUrl()` and loading
+		// it into a fresh page looks identical in a screenshot and is a
+		// different thing: `window.opener` is null, so a sign-in popup has
+		// nowhere to post its answer and sits there blank.
+		//
+		// The receiver fills this in during the emit, because `request` is
+		// only valid until this lambda returns.
+		web_view_backend *adopt = nullptr;
+		emit new_window_requested(request.requestedUrl(),
+		                           request.isUserInitiated(), &adopt);
+		if (auto *view = qobject_cast<qtwebengine_view *>(adopt))
+			request.openIn(view->m_page);
 	});
 
 	// One line, because the page already knows: Qt reports the link under the
