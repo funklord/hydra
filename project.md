@@ -5293,6 +5293,79 @@ site that is *not* in their vault. Making the pairing durable turned a
 once-ever, human-gated path into one that runs on every build, and the first
 time it did, it failed.
 
+## One Hydra per profile, because two stopped being harmless
+
+While the profile was off the record, two copies of this browser did not meet:
+each process allocated its own storage. The named persistent profile put both
+into one directory of leveldb databases and one SQLite `Cookies` file, none of
+which arbitrates between writers. A double-clicked launcher reaches that, and
+so does anyone who starts the app with a copy already open — it happened twice
+by accident in the session that added the profile.
+
+`src/single_instance.{h,cpp}` holds the lock. **`QLockFile` decides who runs
+and `QLocalServer` carries the hand-over**, and the split is the point: the
+socket cannot arbitrate, because its staleness test is "connect, and if that is
+refused, `removeServer()` and listen" — `removeServer()` unlinks
+unconditionally, so two launches milliseconds apart both fail to connect before
+either has listened, both unlink, and both listen. That was measured with a
+probe rather than argued: against a live owner, a second process got
+`removeServer=1` then `listen=1`, two servers where the design permits one. A
+double-clicked launcher is exactly that race. `QSharedMemory` was rejected for
+the opposite failure — on Unix the segment outlives the process, so one `kill
+-9` leaves the browser permanently convinced it is already running — and a
+hand-rolled pid file for reimplementing what `QLockFile` already does, with a
+create/check race to get wrong.
+
+Both are keyed on `AppDataLocation`, the directory that actually holds the
+profile, rather than on a fixed name, so a scratch `XDG_DATA_HOME` is a
+different application by construction. The socket lives in `XDG_RUNTIME_DIR`
+under a hash of that path, because a unix socket path lives in a 108-byte
+`sun_path` that a deep data directory overruns silently.
+
+**A stale lock does not brick the browser, which is the requirement that
+matters and the one such schemes usually fail.** `QLockFile::tryLock` clears a
+lock whose owner is gone, and every branch was measured: a live owner refuses;
+an owner killed with `SIGKILL` is taken immediately, with `setStaleLockTime` at
+30000 *and* at 0, so the age limit is not what saves it; a recycled pid running
+another program is taken, because Qt compares the executable name; and a lock
+naming another host is taken only once older than the age limit, which is the
+one case pid-liveness cannot answer and the reason the limit is stated rather
+than set to zero.
+
+One trap was checked because the whole guard rests on it: Qt writes the
+**executable** name into the lock file, not `applicationName()`. Had it written
+the latter, `Hydra` would never match the `hydra` that `/proc` reports, and
+every live owner would have been declared stale — the guard would have run
+backwards, refusing nothing and permitting exactly what it exists to prevent.
+
+What a second instance does depends on what it was asked for. An http or https
+url is handed over and the running instance opens it; no argument at all is a
+launcher clicked twice, so the running window comes forward; **a tree path is
+refused**, because swapping the open tree under somebody is not what
+`hydra other-tree.txt` means. A hand-over that cannot be delivered exits
+without starting rather than falling back to opening the profile anyway.
+
+**`show()` is deliberately not called on the hand-over, and kiosk mode is
+why.** Entering kiosk hides the main window on purpose — the stage is its own
+fullscreen window — so an unconditional `show()` would put the browser chrome
+back on screen underneath a locked-down kiosk because somebody clicked a link
+in another application. A minimized window is still `isVisible()`, measured on
+this desktop as 1/0 for shown, 1/0 for minimized and 0/1 for hidden, so
+restoring one does not need `show()` either. The only thing it would add is the
+case that must not happen.
+
+A real defect the runs found, and the reason one of the scenarios exists: the
+first version removed the socket in its destructor unconditionally, so a
+*refused* instance unlinked the socket the running one was still listening on.
+The first link click would have worked and every one after it would have been
+told the browser was not answering — and nothing failed at the moment it went
+wrong.
+
+**Android is excluded, in the build and in the source.** The system runs one
+process per application and a launcher tap resumes the task that exists, so
+there is no second process to keep out and links arrive as intents rather than
+as argv. A lock there would guard nothing and be one more thing left behind.
+
 ## Android's cookies: one real gap, and one that was imagined
 
 Two things looked wrong on the phone after the desktop gained a persistent

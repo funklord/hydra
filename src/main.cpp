@@ -15,6 +15,12 @@
 #endif
 #include "policy_engine.h"
 #include "request_filter.h"
+// Desktop only, and excluded from the Android build in `hydra.pro` for the
+// reason the guard block below gives: Android runs one process per
+// application, so there is no second one to keep out.
+#ifndef Q_OS_ANDROID
+#include "single_instance.h"
+#endif
 // The single place that names a concrete backend (architecture doc sec 19.2). The
 // whole point of the seam is that this is the only file that has to know, and
 // that is now measured rather than asserted: the other fifty-one translation
@@ -67,6 +73,72 @@ int main(int argc, char *argv[]) {
 	android_dialogs::install();
 #endif
 	app.setApplicationName("Hydra");
+
+	// **The argument may be a url rather than a tree.** The desktop entry says
+	// `Exec=hydra %U` and claims http, https and text/html, so once this is
+	// installed as the default browser every clicked link arrives as argv[1].
+	// Read as a tree path it names no file, the window comes up empty, and the
+	// link is gone -- which is what a browser that cannot open a link looks
+	// like from the outside.
+	//
+	// Only schemes a page can be at. A path is not a url and `file:` is not
+	// treated as one either: `hydra ./tree.txt` has always meant the tree, and
+	// this must not quietly change what that does.
+	//
+	// Classified here, above everything, because the single-instance guard
+	// below has to know what this process was asked to do before it can decide
+	// what to do about it.
+	QString open_arg;
+	if (argc > 1) {
+		const QUrl candidate = QUrl::fromUserInput(QString::fromLocal8Bit(argv[1]));
+		const QString scheme = candidate.scheme();
+		if (candidate.isValid() && (scheme == "http" || scheme == "https") &&
+		    !QFileInfo::exists(QString::fromLocal8Bit(argv[1])))
+			open_arg = candidate.toString();
+	}
+
+#ifndef Q_OS_ANDROID
+	// **One Hydra per profile directory**, and this is the first thing after
+	// the application name because the application name is what names that
+	// directory -- and because everything below it, the web engine profile
+	// most of all, is what must not happen twice.
+	//
+	// It was harmless until it was not. While the profile was off the record
+	// each process allocated its own storage and two copies simply did not
+	// meet; the named persistent profile put both of them into one directory
+	// of leveldb databases and one SQLite `Cookies` file, none of which
+	// arbitrates between two writers. It happened twice by accident in the
+	// session that added the profile.
+	//
+	// **Android is deliberately not in this.** There the system runs one
+	// process per application and a launcher tap resumes the task it already
+	// has, so a second instance is not something that can be started; a lock
+	// there would guard against nothing and would be one more thing to leave
+	// behind. Links arrive as intents inside the running process rather than
+	// as argv, so there is nothing to hand over either.
+	single_instance guard(
+	  QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
+	if (!guard.acquire()) {
+		// A tree path is the one argument that cannot be handed over. The
+		// running instance already has a tree open and swapping it underneath
+		// somebody is not what `hydra other-tree.txt` means -- so say so and
+		// stop, rather than raising a window showing a different file.
+		if (argc > 1 && open_arg.isEmpty()) {
+			qCritical("hydra is already running (%s); quit it before opening "
+			           "another tree", qPrintable(guard.owner()));
+			return 1;
+		}
+		// Nothing to open means the launcher was used twice, which is a
+		// request to see the window that already exists.
+		if (!guard.hand_over(open_arg)) {
+			qCritical("hydra is already running (%s) and is not answering; "
+			           "refusing to open the same profile twice",
+			           qPrintable(guard.owner()));
+			return 1;
+		}
+		return 0;
+	}
+#endif
 
 	// The colour scheme, before anything is shown: applying it after the first
 	// window is up means a visible flash of the wrong theme, which is the sort
@@ -122,25 +194,6 @@ int main(int argc, char *argv[]) {
 #endif
 
 	main_window w(&factory, &policy, &filter);
-
-	// **The argument may be a url rather than a tree.** The desktop entry says
-	// `Exec=hydra %U` and claims http, https and text/html, so once this is
-	// installed as the default browser every clicked link arrives as argv[1].
-	// Read as a tree path it names no file, the window comes up empty, and the
-	// link is gone -- which is what a browser that cannot open a link looks
-	// like from the outside.
-	//
-	// Only schemes a page can be at. A path is not a url and `file:` is not
-	// treated as one either: `hydra ./tree.txt` has always meant the tree, and
-	// this must not quietly change what that does.
-	QString open_arg;
-	if (argc > 1) {
-		const QUrl candidate = QUrl::fromUserInput(QString::fromLocal8Bit(argv[1]));
-		const QString scheme = candidate.scheme();
-		if (candidate.isValid() && (scheme == "http" || scheme == "https") &&
-		    !QFileInfo::exists(QString::fromLocal8Bit(argv[1])))
-			open_arg = candidate.toString();
-	}
 
 	// Where the tree lives.
 	//
@@ -203,6 +256,47 @@ int main(int argc, char *argv[]) {
 	// dropped when the file replaces the model underneath it.
 	if (!open_arg.isEmpty())
 		w.open_url(QUrl(open_arg));
+
+#ifndef Q_OS_ANDROID
+	// What a second instance's argument does when it arrives. Registered after
+	// the tree is loaded for the same reason the call above is: a tab handed
+	// to an empty model is dropped when the file replaces it.
+	//
+	// The lambda holds the window by reference and may not outlive it. It
+	// cannot: the guard is declared above the window, so the window is
+	// destroyed first, and nothing dispatches a connection after `exec()`
+	// returns. That is the same declaration-order argument the web engine
+	// factory relies on, for the same kind of reason.
+	//
+	// Nothing here is new window API -- raising and activating are QWidget's
+	// own, so a hand-over needs no change to `main_window` at all. Whether the
+	// window actually comes forward is the window manager's decision in the
+	// end; every desktop has some form of focus-stealing prevention and this
+	// asks rather than insists.
+	//
+	// **`show()` is deliberately not called, and kiosk mode is why.** Entering
+	// a kiosk hides this window on purpose -- the stage is its own fullscreen
+	// window -- so showing it here would put the browser's chrome back on
+	// screen underneath a kiosk that had just been locked down, in answer to
+	// somebody clicking a link in another application. A minimized window is
+	// still `isVisible()`, so restoring one does not need it either -- checked
+	// on this desktop rather than read off the documentation, which describes
+	// a minimize as a spontaneous hide event and leaves the question open:
+	// shown 1/0, minimized 1/0, hidden 0/1 for isVisible/isHidden. The only
+	// thing `show()` would add is the case that must not happen. The url still
+	// lands in the tree, because dropping it is what this whole hand-over
+	// exists to stop.
+	guard.on_message([&w](const QString &message) {
+		if (w.isVisible()) {
+			w.setWindowState((w.windowState() & ~Qt::WindowMinimized) |
+			                  Qt::WindowActive);
+			w.raise();
+			w.activateWindow();
+		}
+		if (!message.isEmpty())
+			w.open_url(QUrl(message));
+	});
+#endif
 
 	w.show();
 	return app.exec();

@@ -72,6 +72,13 @@ HEADERS = $$files(src/*.h)
 android {
 	SOURCES -= $$files(src/qtwebengine_*.cpp)
 	HEADERS -= $$files(src/qtwebengine_*.h)
+	# And the single-instance guard, which answers a question Android does not
+	# ask: the system runs one process per application and a launcher tap
+	# resumes the task that exists, so there is no second process to keep out
+	# of the profile directory. `main.cpp` guards the call the same way, so
+	# this is what the build does about it and not the only thing saying so.
+	SOURCES -= src/single_instance.cpp
+	HEADERS -= src/single_instance.h
 } else {
 	# printsupport rides with webenginewidgets rather than sitting in the
 	# unconditional QT line: the only thing that includes it is
