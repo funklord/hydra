@@ -64,7 +64,7 @@ inline bool write_page(const QString &path, const QString &body) {
 	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
 		return false;
 	f.write(QString("<!doctype html><title>%1</title><p>%1</p>\n")
-		            .arg(body).toUtf8());
+	              .arg(body).toUtf8());
 	return true;
 }
 
@@ -118,11 +118,11 @@ struct fixture {
 	// exist to produce, and one taken in the wrong palette is evidence about
 	// nothing. An icon judged legible against a white tree is not judged at all.
 	explicit fixture(const QString &fallback_dir)
-		    : out(qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
-		              ? QString::fromLocal8Bit(qgetenv("HYDRA_TEST_OUT"))
-		              : fallback_dir),
-		      filter(&policy), factory(&filter),
-		      window(&factory, &policy, &filter) {
+	      : out(qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
+	                ? QString::fromLocal8Bit(qgetenv("HYDRA_TEST_OUT"))
+	                : fallback_dir),
+	        filter(&policy), factory(&filter),
+	        window(&factory, &policy, &filter) {
 		// Applied here rather than before the window is built, which is where
 		// `main()` does it: `QApplication::setPalette` repaints what already
 		// exists, so the result is the same and the ordering does not have to be
@@ -149,10 +149,10 @@ struct fixture {
 		QFile tf(tree);
 		if (tf.open(QIODevice::WriteOnly | QIODevice::Truncate))
 			tf.write(QString("- [f0] folder | Work\n"
-				                  "  - [a1] unopened | One | %1\n"
-				                  "  - [a2] unopened | Two | %2\n")
-				             .arg(QUrl::fromLocalFile(one).toString(),
-				                   QUrl::fromLocalFile(two).toString()).toUtf8());
+			                    "  - [a1] unopened | One | %1\n"
+			                    "  - [a2] unopened | Two | %2\n")
+			               .arg(QUrl::fromLocalFile(one).toString(),
+			                     QUrl::fromLocalFile(two).toString()).toUtf8());
 		tf.close();
 
 		window.load_tree(tree);

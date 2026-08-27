@@ -27,7 +27,7 @@ QStringList vendored_candidates() {
 	// to it is the kind of thing that is safe here and is not safe one refactor
 	// later. The conversion happens at the call below either way.
 	for (const char *rel : { "third_party/yt-dlp", "../third_party/yt-dlp",
-			                      "../../third_party/yt-dlp" })
+		                        "../../third_party/yt-dlp" })
 		out << QDir(app).absoluteFilePath(QLatin1String(rel));
 	out << QDir::current().absoluteFilePath("third_party/yt-dlp");
 	return out;

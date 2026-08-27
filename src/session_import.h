@@ -56,14 +56,14 @@ QByteArray mozlz4_decompress(const QByteArray &file, QString *error = nullptr);
 // allocate wildly, and a block that wants to write past it is refused rather
 // than trusted.
 QByteArray lz4_block_decompress(const QByteArray &in, int expected_size,
-	                               QString *error = nullptr);
+                                 QString *error = nullptr);
 
 // The built-in decoder, always compiled and always testable, even on a machine
 // that has liblz4 and therefore does not use it. Keeping it reachable is the
 // point: a fallback nothing exercises is a fallback that has stopped working
 // without anyone finding out, which is this project's most-repeated defect.
 QByteArray lz4_block_builtin(const QByteArray &in, int expected_size,
-	                            QString *error = nullptr);
+                              QString *error = nullptr);
 
 // Which of the two the build is actually using, for the suite to report.
 bool using_system_lz4();

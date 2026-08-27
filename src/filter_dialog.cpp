@@ -15,18 +15,18 @@
 namespace {
 
 const char *k_system_prompt =
-	"You write ad-blocking filter rules in EasyList / uBlock Origin syntax.\n"
-	"You are given the page's URL and a list of requests that were NOT blocked "
-	"but look like advertising or tracking.\n\n"
-	"Reply with one rule per line and nothing else — no prose, no code fences. "
-	"Prefix each line with a short reason and a pipe, like:\n"
-	"  blocks the ad server | ||ads.example.com^\n\n"
-	"Rules:\n"
-	"1. Prefer narrow network rules (||host^) over broad substring matches.\n"
-	"2. Never write a rule matching a bare TLD, and never one matching the "
-	"page's own origin — it would break the page.\n"
-	"3. Cosmetic rules must be domain-scoped (example.com##.ad) and must not "
-	"hide a generic tag such as div or img.\n";
+  "You write ad-blocking filter rules in EasyList / uBlock Origin syntax.\n"
+  "You are given the page's URL and a list of requests that were NOT blocked "
+  "but look like advertising or tracking.\n\n"
+  "Reply with one rule per line and nothing else — no prose, no code fences. "
+  "Prefix each line with a short reason and a pipe, like:\n"
+  "  blocks the ad server | ||ads.example.com^\n\n"
+  "Rules:\n"
+  "1. Prefer narrow network rules (||host^) over broad substring matches.\n"
+  "2. Never write a rule matching a bare TLD, and never one matching the "
+  "page's own origin — it would break the page.\n"
+  "3. Cosmetic rules must be domain-scoped (example.com##.ad) and must not "
+  "hide a generic tag such as div or img.\n";
 
 }  // namespace
 

@@ -46,7 +46,7 @@ QString summary::describe() const {
 }
 
 summary write(const QString &path, const policy_engine *policy_in,
-	             const filter_list *filters) {
+               const filter_list *filters) {
 	summary out;
 	if (path.isEmpty()) {
 		out.error = "No file name given.";
@@ -69,7 +69,7 @@ summary write(const QString &path, const policy_engine *policy_in,
 		for (int i = 0; i < policy::feature_count(); ++i) {
 			const auto feat = static_cast<policy::feature>(i);
 			f.setValue(policy::feature_name(feat),
-				          policy::setting_word(policy_in->global_default(feat)));
+			            policy::setting_word(policy_in->global_default(feat)));
 			++out.defaults;
 		}
 		f.endGroup();
@@ -141,9 +141,9 @@ summary read(const QString &path, policy_engine *policy_out, filter_list *filter
 	}
 	if (format > current_format()) {
 		out.error = QString("That file is from a newer version (format %1, this "
-			                   "build reads %2).")
-			              .arg(format)
-			              .arg(current_format());
+		                     "build reads %2).")
+		                .arg(format)
+		                .arg(current_format());
 		return out;
 	}
 
@@ -171,8 +171,8 @@ summary read(const QString &path, policy_engine *policy_out, filter_list *filter
 			// value as a list and rejoining reads both spellings.
 			const QVariant raw = f.value(pattern);
 			const QString joined = raw.typeId() == QMetaType::QStringList
-				                         ? raw.toStringList().join(',')
-				                         : raw.toString();
+			                           ? raw.toStringList().join(',')
+			                           : raw.toString();
 			const QStringList parts = joined.split(',', Qt::SkipEmptyParts);
 			int applied = 0;
 			for (const QString &part : parts) {
@@ -180,7 +180,7 @@ summary read(const QString &path, policy_engine *policy_out, filter_list *filter
 				if (kv.size() != 2)
 					continue;
 				const policy::feature feat =
-					policy::feature_from_name(kv[0].trimmed());
+				  policy::feature_from_name(kv[0].trimmed());
 				const policy::setting want = policy::setting_from_word(kv[1]);
 				if (feat == policy::feature::count)
 					continue;

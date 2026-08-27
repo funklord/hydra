@@ -10,8 +10,8 @@ QString report::summary() const {
 	if (ok)
 		return QString("%1 nodes, depth %2, no violations").arg(nodes).arg(depth);
 	return QString("%1 nodes, depth %2, %3 violation(s): %4")
-		.arg(nodes).arg(depth).arg(problems.size())
-		.arg(problems.join("; "));
+	  .arg(nodes).arg(depth).arg(problems.size())
+	  .arg(problems.join("; "));
 }
 
 namespace {
@@ -41,7 +41,7 @@ void walk(node *root, report &r) {
 		// here or it does not terminate.
 		if (visited.contains(n)) {
 			r.problems << QString("node '%1' is reachable more than once "
-					"(cycle or shared child)").arg(n->id);
+			    "(cycle or shared child)").arg(n->id);
 			continue;
 		}
 		visited.insert(n);
@@ -57,8 +57,8 @@ void walk(node *root, report &r) {
 
 			if (f.depth > tree_limits::max_depth)
 				r.problems << QString("node '%1' is at depth %2, past the limit "
-						"of %3")
-						.arg(n->id).arg(f.depth).arg(tree_limits::max_depth);
+				    "of %3")
+				    .arg(n->id).arg(f.depth).arg(tree_limits::max_depth);
 
 			// **A tab with children was a violation here** and is not one now:
 			// that is what a sub-tab is (architecture doc sec 5.5). The rule gave
@@ -76,8 +76,8 @@ void walk(node *root, report &r) {
 				continue;
 			if (c->parent != n)
 				r.problems << QString("'%1' is listed under '%2' but its parent "
-						"points elsewhere")
-						.arg(c->id, n->id);
+				    "points elsewhere")
+				    .arg(c->id, n->id);
 			// `order` is the position in this list, written down. It is what
 			// tree-order sorting compares on and what the reorganizer diffs, so
 			// a stored value that disagrees with the list is two answers to one
@@ -92,15 +92,15 @@ void walk(node *root, report &r) {
 			// Three siblings were measured holding order 2.
 			if (c->order != i)
 				r.problems << QString("'%1' is at position %2 under '%3' but "
-						"records order %4")
-						.arg(c->id).arg(i).arg(n->id).arg(c->order);
+				    "records order %4")
+				    .arg(c->id).arg(i).arg(n->id).arg(c->order);
 			// A mirror is a subtree, and half a mirror is the dangerous shape:
 			// the unmarked half would be written to the tree file, resurrecting
 			// somebody else's tabs as though they had been filed.
 			if (!n->mirror.isEmpty() && c->mirror != n->mirror)
 				r.problems << QString("'%1' is inside mirror '%2' but is not "
-						"marked as mirrored")
-						.arg(c->id, n->mirror);
+				    "marked as mirrored")
+				    .arg(c->id, n->mirror);
 			// **And the same shape read the other way**, which is the half
 			// this missed and which cost a tab. A row dragged out of a mirror
 			// with a plain drag was moved without the mark being cleared, so
@@ -117,9 +117,9 @@ void walk(node *root, report &r) {
 			// allowed to be rooted.
 			if (n != root && n->mirror.isEmpty() && !c->mirror.isEmpty())
 				r.problems << QString("'%1' is marked as mirror '%2' but sits "
-						"under '%3', which is not mirrored -- it would be "
-						"dropped by the writer")
-						.arg(c->id, c->mirror, n->id);
+				    "under '%3', which is not mirrored -- it would be "
+				    "dropped by the writer")
+				    .arg(c->id, c->mirror, n->id);
 			stack.append({ c, f.depth + 1 });
 		}
 	}

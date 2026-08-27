@@ -122,9 +122,9 @@ kiosk_config kiosk() {
 	if (w > 0 && h > 0)
 		c.design_size = QSize(w, h);
 	c.scale = static_cast<scale_mode>(
-		qBound(0, st.value("scale", int(scale_mode::reflow)).toInt(), 2));
+	  qBound(0, st.value("scale", int(scale_mode::reflow)).toInt(), 2));
 	c.fit = static_cast<fit_mode>(
-		qBound(0, st.value("fit", int(fit_mode::contain)).toInt(), 3));
+	  qBound(0, st.value("fit", int(fit_mode::contain)).toInt(), 3));
 	c.hide_cursor = st.value("hideCursor", true).toBool();
 	c.idle_reset_seconds = qMax(0, st.value("idleReset", 0).toInt());
 	c.watchdog = st.value("watchdog", true).toBool();
@@ -164,7 +164,7 @@ theme::choice appearance() {
 	// Stored as the word rather than a number, because these files are meant to
 	// be read: "appearance=dark" says what it is where "appearance=2" does not.
 	return theme::from_name(
-		open_settings().value("ui/appearance", "system").toString());
+	  open_settings().value("ui/appearance", "system").toString());
 }
 
 void set_appearance(theme::choice c) {
@@ -208,14 +208,14 @@ ai_choice ai_mode() {
 void set_ai_mode(ai_choice mode) {
 	QSettings s = open_settings();
 	s.setValue("ai/mode", mode == ai_choice::local_only ? "local_only"
-		                   : mode == ai_choice::external  ? "external"
-		                                                  : "automatic");
+	                     : mode == ai_choice::external  ? "external"
+	                                                    : "automatic");
 	s.sync();
 }
 
 void load_into(player_launcher *players, download_manager *downloads,
-	              torrent_download_source *torrents, ollama_provider *local_ai,
-	              claude_provider *external_ai) {
+                torrent_download_source *torrents, ollama_provider *local_ai,
+                claude_provider *external_ai) {
 	QSettings s = open_settings();
 
 	if (players) {
@@ -237,20 +237,20 @@ void load_into(player_launcher *players, download_manager *downloads,
 
 	if (torrents) {
 		torrents->set_connection_limits(
-			s.value("torrent/connections_global", 800).toInt(),
-			s.value("torrent/connections_per_torrent", 200).toInt());
+		  s.value("torrent/connections_global", 800).toInt(),
+		  s.value("torrent/connections_per_torrent", 200).toInt());
 		torrents->set_seed_ratio(s.value("torrent/seed_ratio", 1.0).toDouble());
 		torrents->set_listen_interfaces(
-			s.value("torrent/listen_interfaces").toString());
+		  s.value("torrent/listen_interfaces").toString());
 		torrents->set_sequential(s.value("torrent/sequential", false).toBool());
 	}
 
 	if (local_ai) {
 		local_ai->set_endpoint(QUrl(s.value("ai/ollama_endpoint",
-			                                   "http://localhost:11434").toString()));
+		                                     "http://localhost:11434").toString()));
 		local_ai->set_model(s.value("ai/ollama_model", "llama3").toString());
 		local_ai->set_probe_timeout(
-			s.value("ai/probe_timeout_ms", 2500).toInt());
+		  s.value("ai/probe_timeout_ms", 2500).toInt());
 	}
 	if (external_ai) {
 		const QString model = s.value("ai/claude_model").toString();
@@ -264,8 +264,8 @@ void load_into(player_launcher *players, download_manager *downloads,
 }
 
 void save_from(player_launcher *players, download_manager *downloads,
-	              torrent_download_source *torrents, ollama_provider *local_ai,
-	              claude_provider *external_ai) {
+                torrent_download_source *torrents, ollama_provider *local_ai,
+                claude_provider *external_ai) {
 	QSettings s = open_settings();
 
 	if (players) {
@@ -276,9 +276,9 @@ void save_from(player_launcher *players, download_manager *downloads,
 		s.setValue("downloads/directory", downloads->directory());
 	if (torrents) {
 		s.setValue("torrent/connections_global",
-			          torrents->connection_limit_global());
+		            torrents->connection_limit_global());
 		s.setValue("torrent/connections_per_torrent",
-			          torrents->connection_limit_per_torrent());
+		            torrents->connection_limit_per_torrent());
 		s.setValue("torrent/seed_ratio", torrents->seed_ratio());
 		s.setValue("torrent/listen_interfaces", torrents->listen_interfaces());
 		s.setValue("torrent/sequential", torrents->sequential());
@@ -689,7 +689,7 @@ QWidget *section_heading(const QString &text, QWidget *parent) {
 // edit squeezed to its size hint shows the *end* of a path and nothing else,
 // which is the half nobody needs.
 QWidget *settings_row(const QString &title, const QString &help,
-	                     QWidget *control, QWidget *parent, bool wide = false) {
+                       QWidget *control, QWidget *parent, bool wide = false) {
 	auto *row = new QWidget(parent);
 	auto *h = new QHBoxLayout(row);
 	h->setContentsMargins(0, 6, 0, 6);
@@ -732,7 +732,7 @@ QString describe_clear(const web_view_factory::clear_report &r) {
 		case state::not_asked:   return QString();
 		case state::done:        return name + ": cleared" + extra + ".";
 		case state::unconfirmed: return name + ": requested, not confirmed"
-					                             + extra + ".";
+				                               + extra + ".";
 		case state::refused:     return name + ": not cleared" + extra + ".";
 		}
 		return QString();
@@ -740,9 +740,9 @@ QString describe_clear(const web_view_factory::clear_report &r) {
 
 	QStringList lines;
 	lines << say("Cookies", r.cookies,
-		            r.cookies_removed >= 0
-		              ? QString(" -- %1 removed").arg(r.cookies_removed)
-		              : QString());
+	              r.cookies_removed >= 0
+	                ? QString(" -- %1 removed").arg(r.cookies_removed)
+	                : QString());
 	lines << say("Cached files", r.cache, QString());
 	lines << say("Visited links", r.visited_links, QString());
 	lines.removeAll(QString());

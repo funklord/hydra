@@ -28,12 +28,12 @@ QByteArray random_nonce();
 
 // Authenticated encryption to `their_public` from `our_secret`.
 bool seal(const QByteArray &plain, const QByteArray &nonce,
-	        const QByteArray &their_public, const QByteArray &our_secret,
-	        QByteArray *out);
+          const QByteArray &their_public, const QByteArray &our_secret,
+          QByteArray *out);
 
 bool open(const QByteArray &cipher, const QByteArray &nonce,
-	        const QByteArray &their_public, const QByteArray &our_secret,
-	        QByteArray *out);
+          const QByteArray &their_public, const QByteArray &our_secret,
+          QByteArray *out);
 
 // Random bytes, used for the association id key.
 QByteArray random_bytes(int n);

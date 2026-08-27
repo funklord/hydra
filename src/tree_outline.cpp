@@ -165,10 +165,10 @@ static void write_node(QTextStream &out, node *n, int depth) {
 		out << "\n";
 	} else {
 		out << indent << "- [" << n->id << "] " << type_to_string(n->type)
-			   << " | " << n->title
-			   << " | " << n->url
-			   << " | created=" << n->created.toString(Qt::ISODate)
-			   << " | seen="    << n->last_seen.toString(Qt::ISODate);
+		     << " | " << n->title
+		     << " | " << n->url
+		     << " | created=" << n->created.toString(Qt::ISODate)
+		     << " | seen="    << n->last_seen.toString(Qt::ISODate);
 		// Only when true, so a file full of ordinary tabs does not grow a column
 		// of `named=0`. The reader treats absence as false, which is also what
 		// every file written before this existed says.

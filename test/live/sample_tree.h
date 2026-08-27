@@ -116,7 +116,7 @@ inline QString inert_sample_tree(const QString &out_dir = scratch_dir()) {
 //
 // So the tree it opens should be the one it means to look at.
 inline QString single_tab_tree(const QString &url,
-	                                const QString &out_dir = scratch_dir()) {
+                                  const QString &out_dir = scratch_dir()) {
 	QDir().mkpath(out_dir);
 	const QString dest = QDir(out_dir).filePath("one-tab-tree.txt");
 	QFile f(dest);

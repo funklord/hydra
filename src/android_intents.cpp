@@ -34,11 +34,11 @@ bool open_media(const QUrl &url, const QString &mime, QString *error) {
 	}
 
 	const jboolean ok = QJniObject::callStaticMethod<jboolean>(
-		k_cls, "openMedia",
-		"(Landroid/app/Activity;Ljava/lang/String;Ljava/lang/String;)Z",
-		QNativeInterface::QAndroidApplication::context().object(),
-		QJniObject::fromString(url.toString()).object<jstring>(),
-		QJniObject::fromString(mime).object<jstring>());
+	  k_cls, "openMedia",
+	  "(Landroid/app/Activity;Ljava/lang/String;Ljava/lang/String;)Z",
+	  QNativeInterface::QAndroidApplication::context().object(),
+	  QJniObject::fromString(url.toString()).object<jstring>(),
+	  QJniObject::fromString(mime).object<jstring>());
 
 	// A missing class throws rather than returning, so the exception state is
 	// the answer to "is the Java side even in this APK".
@@ -63,10 +63,10 @@ bool open_externally(const QUrl &url, QString *error) {
 	}
 
 	const jboolean ok = QJniObject::callStaticMethod<jboolean>(
-		k_cls, "openExternally",
-		"(Landroid/app/Activity;Ljava/lang/String;)Z",
-		QNativeInterface::QAndroidApplication::context().object(),
-		QJniObject::fromString(url.toString()).object<jstring>());
+	  k_cls, "openExternally",
+	  "(Landroid/app/Activity;Ljava/lang/String;)Z",
+	  QNativeInterface::QAndroidApplication::context().object(),
+	  QJniObject::fromString(url.toString()).object<jstring>());
 
 	if (QJniEnvironment().checkAndClearExceptions()) {
 		if (error)

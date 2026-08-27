@@ -34,8 +34,8 @@ bool reachable(const QMetaObject *mo, int index) {
 		return false;
 	const QMetaMethod m = mo->method(index);
 	return m.access() == QMetaMethod::Public &&
-		     (m.methodType() == QMetaMethod::Slot ||
-		      m.methodType() == QMetaMethod::Method);
+	       (m.methodType() == QMetaMethod::Slot ||
+	        m.methodType() == QMetaMethod::Method);
 }
 
 // The types a bridge argument may have. Refusing by name beats coercing: a

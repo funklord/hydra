@@ -34,48 +34,48 @@ QString failure_text(webauth_dialog::failure why, const QString &relying_party) 
 	switch (why) {
 		case webauth_dialog::failure::timeout:
 			return QStringLiteral("Nothing answered in time, so the request was "
-				                     "abandoned. Start signing in again to have "
-				                     "another go.");
+			                       "abandoned. Start signing in again to have "
+			                       "another go.");
 		case webauth_dialog::failure::key_not_registered:
 			return QStringLiteral("This security key is not registered with %1. "
-				                     "Try the one you enrolled.").arg(site);
+			                       "Try the one you enrolled.").arg(site);
 		case webauth_dialog::failure::key_already_registered:
 			return QStringLiteral("This security key is already registered with "
-				                     "%1. Use a different one.").arg(site);
+			                       "%1. Use a different one.").arg(site);
 		case webauth_dialog::failure::soft_pin_block:
 			return QStringLiteral("The security key locked itself after too many "
-				                     "wrong PINs. Unplug it, plug it back in, and "
-				                     "try again.");
+			                       "wrong PINs. Unplug it, plug it back in, and "
+			                       "try again.");
 		case webauth_dialog::failure::hard_pin_block:
 			return QStringLiteral("The security key locked itself after too many "
-				                     "wrong PINs and will not unlock. Resetting it "
-				                     "is the only way back, and a reset erases "
-				                     "every passkey on it.");
+			                       "wrong PINs and will not unlock. Resetting it "
+			                       "is the only way back, and a reset erases "
+			                       "every passkey on it.");
 		case webauth_dialog::failure::removed_during_pin_entry:
 			return QStringLiteral("The security key was removed while the PIN was "
-				                     "being entered. Put it back and start signing "
-				                     "in again.");
+			                       "being entered. Put it back and start signing "
+			                       "in again.");
 		case webauth_dialog::failure::no_resident_keys:
 			return QStringLiteral("This security key cannot store a passkey of its "
-				                     "own, which is what %1 asked for.").arg(site);
+			                       "own, which is what %1 asked for.").arg(site);
 		case webauth_dialog::failure::no_user_verification:
 			return QStringLiteral("This security key cannot check that it is you "
-				                     "-- it has no PIN and no fingerprint -- and %1 "
-				                     "asked it to.").arg(site);
+			                       "-- it has no PIN and no fingerprint -- and %1 "
+			                       "asked it to.").arg(site);
 		case webauth_dialog::failure::no_large_blob:
 			return QStringLiteral("This security key does not have the extra "
-				                     "storage %1 asked for.").arg(site);
+			                       "storage %1 asked for.").arg(site);
 		case webauth_dialog::failure::no_common_algorithms:
 			return QStringLiteral("This security key and %1 have no signature "
-				                     "algorithm in common.").arg(site);
+			                       "algorithm in common.").arg(site);
 		case webauth_dialog::failure::storage_full:
 			return QStringLiteral("The security key has no room for another "
-				                     "passkey. Remove one you no longer use.");
+			                       "passkey. Remove one you no longer use.");
 		case webauth_dialog::failure::consent_denied:
 			return QStringLiteral("The request was refused at the security key.");
 		case webauth_dialog::failure::cancelled_by_system:
 			return QStringLiteral("The system's own sign-in window was closed, so "
-				                     "the request was withdrawn.");
+			                       "the request was withdrawn.");
 		case webauth_dialog::failure::unknown:
 			break;
 	}
@@ -84,7 +84,7 @@ QString failure_text(webauth_dialog::failure why, const QString &relying_party) 
 	// because a window with no sentence in it is the failure this whole file
 	// exists to remove.
 	return QStringLiteral("Signing in stopped, for a reason this browser has no "
-		                     "name for.");
+	                       "name for.");
 }
 
 // Which failures a retry can do anything about.
@@ -100,7 +100,7 @@ QString failure_text(webauth_dialog::failure why, const QString &relying_party) 
 // the project that wrote it.
 bool retryable(webauth_dialog::failure why) {
 	return why == webauth_dialog::failure::key_already_registered
-		  || why == webauth_dialog::failure::soft_pin_block;
+	    || why == webauth_dialog::failure::soft_pin_block;
 }
 
 // What the key said about the last PIN, or nothing when it said nothing.
@@ -110,7 +110,7 @@ QString pin_error_text(webauth_dialog::pin_error error) {
 			return QString();
 		case webauth_dialog::pin_error::uv_locked:
 			return QStringLiteral("The key stopped accepting fingerprints after "
-				                     "too many tries. Type its PIN instead.");
+			                       "too many tries. Type its PIN instead.");
 		case webauth_dialog::pin_error::wrong_pin:
 			return QStringLiteral("That PIN was wrong.");
 		case webauth_dialog::pin_error::too_short:

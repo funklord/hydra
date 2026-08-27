@@ -54,7 +54,7 @@ struct summary {
 int current_format();
 
 summary write(const QString &path, const policy_engine *policy,
-	             const filter_list *filters);
+               const filter_list *filters);
 
 // Merges rather than replaces: defaults and preferences are single-valued and
 // are overwritten, while site exceptions and filter rules are added to what is

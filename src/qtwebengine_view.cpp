@@ -76,7 +76,7 @@ const char *k_channel_bootstrap = R"JS(
 // turns into a sentence -- rather than as an uninitialised enum.
 
 webauth_dialog::pin_reason to_pin_reason(
-	      QWebEngineWebAuthUxRequest::PinEntryReason reason) {
+        QWebEngineWebAuthUxRequest::PinEntryReason reason) {
 	using PR = QWebEngineWebAuthUxRequest::PinEntryReason;
 	switch (reason) {
 		case PR::Set:       return webauth_dialog::pin_reason::set;
@@ -87,7 +87,7 @@ webauth_dialog::pin_reason to_pin_reason(
 }
 
 webauth_dialog::pin_error to_pin_error(
-	      QWebEngineWebAuthUxRequest::PinEntryError error) {
+        QWebEngineWebAuthUxRequest::PinEntryError error) {
 	using PE = QWebEngineWebAuthUxRequest::PinEntryError;
 	switch (error) {
 		case PE::InternalUvLocked:   return webauth_dialog::pin_error::uv_locked;
@@ -103,7 +103,7 @@ webauth_dialog::pin_error to_pin_error(
 }
 
 webauth_dialog::failure to_failure(
-	      QWebEngineWebAuthUxRequest::RequestFailureReason reason) {
+        QWebEngineWebAuthUxRequest::RequestFailureReason reason) {
 	using FR = QWebEngineWebAuthUxRequest::RequestFailureReason;
 	switch (reason) {
 		case FR::Timeout:
@@ -148,7 +148,7 @@ webauth_dialog::failure to_failure(
 // was written.
 const char *permission_type_name(QWebEnginePermission::PermissionType type) {
 	const QMetaEnum spelled =
-		QMetaEnum::fromType<QWebEnginePermission::PermissionType>();
+	  QMetaEnum::fromType<QWebEnginePermission::PermissionType>();
 	const char *key = spelled.valueToKey(static_cast<int>(type));
 	return key ? key : "an unnamed permission";
 }

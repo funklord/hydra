@@ -27,7 +27,7 @@ bool keypair(QByteArray *public_key, QByteArray *secret_key) {
 	QByteArray pk(crypto_box_PUBLICKEYBYTES, Qt::Uninitialized);
 	QByteArray sk(crypto_box_SECRETKEYBYTES, Qt::Uninitialized);
 	if (crypto_box_keypair(reinterpret_cast<unsigned char *>(pk.data()),
-		                     reinterpret_cast<unsigned char *>(sk.data())) != 0)
+	                       reinterpret_cast<unsigned char *>(sk.data())) != 0)
 		return false;
 	*public_key = pk;
 	*secret_key = sk;
@@ -47,39 +47,39 @@ QByteArray random_bytes(int n) {
 }
 
 bool seal(const QByteArray &plain, const QByteArray &nonce,
-	        const QByteArray &their_public, const QByteArray &our_secret,
-	        QByteArray *out) {
+          const QByteArray &their_public, const QByteArray &our_secret,
+          QByteArray *out) {
 	if (!ensure_init() || nonce.size() != crypto_box_NONCEBYTES ||
-		  their_public.size() != crypto_box_PUBLICKEYBYTES ||
-		  our_secret.size() != crypto_box_SECRETKEYBYTES)
+	    their_public.size() != crypto_box_PUBLICKEYBYTES ||
+	    our_secret.size() != crypto_box_SECRETKEYBYTES)
 		return false;
 	QByteArray cipher(plain.size() + crypto_box_MACBYTES, Qt::Uninitialized);
 	if (crypto_box_easy(reinterpret_cast<unsigned char *>(cipher.data()),
-		                  reinterpret_cast<const unsigned char *>(plain.constData()),
-		                  static_cast<unsigned long long>(plain.size()),
-		                  reinterpret_cast<const unsigned char *>(nonce.constData()),
-		                  reinterpret_cast<const unsigned char *>(their_public.constData()),
-		                  reinterpret_cast<const unsigned char *>(our_secret.constData())) != 0)
+	                    reinterpret_cast<const unsigned char *>(plain.constData()),
+	                    static_cast<unsigned long long>(plain.size()),
+	                    reinterpret_cast<const unsigned char *>(nonce.constData()),
+	                    reinterpret_cast<const unsigned char *>(their_public.constData()),
+	                    reinterpret_cast<const unsigned char *>(our_secret.constData())) != 0)
 		return false;
 	*out = cipher;
 	return true;
 }
 
 bool open(const QByteArray &cipher, const QByteArray &nonce,
-	        const QByteArray &their_public, const QByteArray &our_secret,
-	        QByteArray *out) {
+          const QByteArray &their_public, const QByteArray &our_secret,
+          QByteArray *out) {
 	if (!ensure_init() || cipher.size() < crypto_box_MACBYTES ||
-		  nonce.size() != crypto_box_NONCEBYTES ||
-		  their_public.size() != crypto_box_PUBLICKEYBYTES ||
-		  our_secret.size() != crypto_box_SECRETKEYBYTES)
+	    nonce.size() != crypto_box_NONCEBYTES ||
+	    their_public.size() != crypto_box_PUBLICKEYBYTES ||
+	    our_secret.size() != crypto_box_SECRETKEYBYTES)
 		return false;
 	QByteArray plain(cipher.size() - crypto_box_MACBYTES, Qt::Uninitialized);
 	if (crypto_box_open_easy(reinterpret_cast<unsigned char *>(plain.data()),
-		                       reinterpret_cast<const unsigned char *>(cipher.constData()),
-		                       static_cast<unsigned long long>(cipher.size()),
-		                       reinterpret_cast<const unsigned char *>(nonce.constData()),
-		                       reinterpret_cast<const unsigned char *>(their_public.constData()),
-		                       reinterpret_cast<const unsigned char *>(our_secret.constData())) != 0)
+	                         reinterpret_cast<const unsigned char *>(cipher.constData()),
+	                         static_cast<unsigned long long>(cipher.size()),
+	                         reinterpret_cast<const unsigned char *>(nonce.constData()),
+	                         reinterpret_cast<const unsigned char *>(their_public.constData()),
+	                         reinterpret_cast<const unsigned char *>(our_secret.constData())) != 0)
 		return false;   // authentication failed -- tampered or wrong key
 	*out = plain;
 	return true;
@@ -92,9 +92,9 @@ bool keypair(QByteArray *, QByteArray *) { return false; }
 QByteArray random_nonce() { return {}; }
 QByteArray random_bytes(int) { return {}; }
 bool seal(const QByteArray &, const QByteArray &, const QByteArray &,
-	        const QByteArray &, QByteArray *) { return false; }
+          const QByteArray &, QByteArray *) { return false; }
 bool open(const QByteArray &, const QByteArray &, const QByteArray &,
-	        const QByteArray &, QByteArray *) { return false; }
+          const QByteArray &, QByteArray *) { return false; }
 
 #endif
 

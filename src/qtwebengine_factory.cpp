@@ -66,7 +66,7 @@ namespace {
 // than timestamped so that a person can see which came first.
 QString free_path(const QString &dir, const QString &suggested) {
 	const QString base = suggested.isEmpty() ? QStringLiteral("download")
-		                                          : suggested;
+	                                            : suggested;
 	QString path = dir + "/" + base;
 	if (!QFile::exists(path))
 		return path;
@@ -223,7 +223,7 @@ namespace {
 class clear_run : public QObject {
 public:
 	clear_run(QWebEngineProfile *profile, web_view_factory::clear_note done)
-		: QObject(profile), m_profile(profile), m_done(std::move(done)) {}
+	  : QObject(profile), m_profile(profile), m_done(std::move(done)) {}
 
 	void start(const web_view_factory::browsing_data &what) {
 		using state = web_view_factory::clear_state;
@@ -238,16 +238,16 @@ public:
 			m_settled = true;
 			m_cookies_pending = false;
 			m_report.cookies = m_report.cookies_removed > 0
-				? web_view_factory::clear_state::done
-				// Nothing was seen to go. That is the truthful answer whether the
-				// jar was empty or the store never told us, and the two cannot be
-				// told apart from here, so the note says so rather than the state
-				// claiming more than was observed.
-				: web_view_factory::clear_state::unconfirmed;
+			  ? web_view_factory::clear_state::done
+			  // Nothing was seen to go. That is the truthful answer whether the
+			  // jar was empty or the store never told us, and the two cannot be
+			  // told apart from here, so the note says so rather than the state
+			  // claiming more than was observed.
+			  : web_view_factory::clear_state::unconfirmed;
 			if (m_report.cookies_removed == 0)
 				m_report.notes << QStringLiteral(
-					"Cookies: none were seen to go. Either there were none, or "
-					"the store had none loaded to report on.");
+				  "Cookies: none were seen to go. Either there were none, or "
+				  "the store had none loaded to report on.");
 			maybe_report();
 		});
 
@@ -267,14 +267,14 @@ public:
 			m_profile->clearAllVisitedLinks();
 			m_report.visited_links = state::unconfirmed;
 			m_report.notes << QStringLiteral(
-				"Visited links: the engine was told to drop them. Qt reports no "
-				"completion for this one, so it is not confirmed here.");
+			  "Visited links: the engine was told to drop them. Qt reports no "
+			  "completion for this one, so it is not confirmed here.");
 		}
 
 		if (what.cache) {
 			m_cache_pending = true;
 			connect(m_profile, &QWebEngineProfile::clearHttpCacheCompleted,
-				       this, [this] {
+			         this, [this] {
 				m_cache_pending = false;
 				m_report.cache = state::done;
 				maybe_report();
@@ -287,7 +287,7 @@ public:
 			m_report.cookies_removed = 0;
 			QWebEngineCookieStore *store = m_profile->cookieStore();
 			connect(store, &QWebEngineCookieStore::cookieRemoved, this,
-				       [this](const QNetworkCookie &) {
+			         [this](const QNetworkCookie &) {
 				++m_report.cookies_removed;
 				// Each removal pushes the settle window out, so a long jar
 				// does not get cut off part-way through being counted.
@@ -336,14 +336,14 @@ private:
 		if (m_cache_pending) {
 			m_report.cache = state::unconfirmed;
 			m_report.notes << QStringLiteral(
-				"Cached files: the engine did not report the clear finished "
-				"within ten seconds. It may still be running.");
+			  "Cached files: the engine did not report the clear finished "
+			  "within ten seconds. It may still be running.");
 		}
 		if (m_cookies_pending) {
 			m_report.cookies = state::unconfirmed;
 			m_report.notes << QStringLiteral(
-				"Cookies: still being removed after ten seconds; the count is "
-				"what had gone by then.");
+			  "Cookies: still being removed after ten seconds; the count is "
+			  "what had gone by then.");
 		}
 		if (m_done)
 			m_done(m_report);

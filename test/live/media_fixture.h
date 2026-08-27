@@ -38,8 +38,8 @@ namespace media_fixture {
 // unbroken anyway.
 // A 1x1 transparent GIF, as hex, so no line here is a continuation.
 inline const char *k_gif =
-	"47494638396101000100800000000000ffffff21"
-	"f90401000000002c00000000010001000002024401003b";
+  "47494638396101000100800000000000ffffff21"
+  "f90401000000002c00000000010001000002024401003b";
 
 inline const char *k_manifest = R"M3U(#EXTM3U
 #EXT-X-VERSION:3

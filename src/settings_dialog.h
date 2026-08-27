@@ -226,12 +226,12 @@ private:
 namespace settings_store {
 
 void load_into(player_launcher *players, download_manager *downloads,
-	              torrent_download_source *torrents, ollama_provider *local_ai,
-	              claude_provider *external_ai);
+                torrent_download_source *torrents, ollama_provider *local_ai,
+                claude_provider *external_ai);
 
 void save_from(player_launcher *players, download_manager *downloads,
-	              torrent_download_source *torrents, ollama_provider *local_ai,
-	              claude_provider *external_ai);
+                torrent_download_source *torrents, ollama_provider *local_ai,
+                claude_provider *external_ai);
 
 // Which backend the user picked. Read straight from storage rather than held
 // on any one object, because it is a preference *about* providers rather than

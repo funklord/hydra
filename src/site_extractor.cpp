@@ -49,17 +49,17 @@ namespace {
 // that instead of leaking a global, which is what the outer one is still for.
 QString wrap(const QString &source) {
 	return QStringLiteral(
-			"(function(){\n"
-			"  var extract;\n"
-			"  var inner = (function(){\n"
-			"    %1\n"
-			"    ;\n"
-			"    return typeof extract !== 'undefined' ? extract : undefined;\n"
-			"  })();\n"
-			"  if (typeof inner === 'function') return inner;\n"
-			"  if (typeof extract === 'function') return extract;\n"
-			"  throw new Error('the script defines no extract() function');\n"
-			"})()").arg(source);
+	    "(function(){\n"
+	    "  var extract;\n"
+	    "  var inner = (function(){\n"
+	    "    %1\n"
+	    "    ;\n"
+	    "    return typeof extract !== 'undefined' ? extract : undefined;\n"
+	    "  })();\n"
+	    "  if (typeof inner === 'function') return inner;\n"
+	    "  if (typeof extract === 'function') return extract;\n"
+	    "  throw new Error('the script defines no extract() function');\n"
+	    "})()").arg(source);
 }
 
 // Does the proposal carry a value that only this page load has?
@@ -117,7 +117,7 @@ bool matches_on_order(const QString &source) {
 	// the first version of this missed because it only allowed a bare
 	// identifier before `.order` and real code writes `r[i]`.
 	static const QRegularExpression compare(
-			R"((\.\s*order\s*[=!]=+\s*[0-9]+)|([0-9]+\s*[=!]=+\s*[\w$\.\[\]'"]*\.\s*order\b))");
+	    R"((\.\s*order\s*[=!]=+\s*[0-9]+)|([0-9]+\s*[=!]=+\s*[\w$\.\[\]'"]*\.\s*order\b))");
 	return compare.match(source).hasMatch();
 }
 
@@ -136,7 +136,7 @@ bool matches_on_order(const QString &source) {
 // thought the note lived.
 bool reads_serves(const QString &source) {
 	static const QRegularExpression access(
-			R"((\.\s*serves\b)|(\[\s*['"]serves['"]\s*\]))");
+	    R"((\.\s*serves\b)|(\[\s*['"]serves['"]\s*\]))");
 	return access.match(source).hasMatch();
 }
 
@@ -213,8 +213,8 @@ QString shape_of(const QUrl &u) {
 }
 
 extraction run(const QString &source, const QUrl &page,
-	              const QList<evidence_request> &evidence, int timeout_ms,
-	              helper_host *helpers) {
+                const QList<evidence_request> &evidence, int timeout_ms,
+                helper_host *helpers) {
 	extraction out;
 	QJSEngine engine;
 	engine.installExtensions(QJSEngine::ConsoleExtension);
@@ -332,8 +332,8 @@ extraction run(const QString &source, const QUrl &page,
 }
 
 extractor_verdict check(const QString &source, const QUrl &page,
-	                       const QList<evidence_request> &evidence,
-	                       helper_host *helpers, const QSet<QString> *manifests) {
+                         const QList<evidence_request> &evidence,
+                         helper_host *helpers, const QSet<QString> *manifests) {
 	extractor_verdict v;
 
 	// --- Read before it is run ------------------------------------------
@@ -351,10 +351,10 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	if (reads_serves(source)) {
 		v.reads_note = true;
 		v.message = "Rejected: the script reads a `serves` value at run time. "
-			          "That is a column of the evidence you were shown, not a "
-			          "field of a request — it is undefined here, and there is "
-			          "nothing to probe on a later visit. Decide from it now and "
-			          "match the address.";
+		            "That is a column of the evidence you were shown, not a "
+		            "field of a request — it is undefined here, and there is "
+		            "nothing to probe on a later visit. Decide from it now and "
+		            "match the address.";
 		return v;
 	}
 
@@ -388,11 +388,11 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	// a variant listed inside a master playlist was never requested by the page
 	// and is still not invented.
 	const bool followable =
-		helpers && helpers->allowlist() && helpers->allowlist()->allows(v.result.url);
+	  helpers && helpers->allowlist() && helpers->allowlist()->allows(v.result.url);
 	if (!seen.contains(normalise(v.result.url)) && !followable) {
 		v.invented = true;
 		v.message  = "Rejected: the script returned a URL this page never "
-			           "requested (" + v.result.url.toString().left(120) + ").";
+		             "requested (" + v.result.url.toString().left(120) + ").";
 		return v;
 	}
 
@@ -405,7 +405,7 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	if (normalise(v.result.url) == normalise(page)) {
 		v.is_page = true;
 		v.message = "Rejected: that is the page's own address, not a stream "
-			          "inside it.";
+		            "inside it.";
 		return v;
 	}
 
@@ -417,17 +417,17 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	if (embeds_a_token(source, evidence)) {
 		v.hardcoded = true;
 		v.message = "Rejected: the script has this visit's ids or tokens written "
-			          "into it, so it answers for this page load and no other. "
-			          "Match a stable part of the address instead.";
+		            "into it, so it answers for this page load and no other. "
+		            "Match a stable part of the address instead.";
 		return v;
 	}
 
 	if (matches_on_order(source)) {
 		v.hardcoded = true;
 		v.message = "Rejected: the script matches on `order`, which is where a "
-			          "request happened to fall in this visit's list. One advert "
-			          "more or one race lost and it is a different number. Match a "
-			          "stable part of the address instead.";
+		            "request happened to fall in this visit's list. One advert "
+		            "more or one race lost and it is a different number. Match a "
+		            "stable part of the address instead.";
 		return v;
 	}
 
@@ -442,9 +442,9 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	if (shape_count.value(shape_of(v.result.url)) > 2) {
 		v.is_segment = true;
 		v.message = QString("Rejected: that address is one of %1 near-identical "
-			                   "requests, which makes it a segment rather than the "
-			                   "stream.")
-			              .arg(shape_count.value(shape_of(v.result.url)));
+		                     "requests, which makes it a segment rather than the "
+		                     "stream.")
+		                .arg(shape_count.value(shape_of(v.result.url)));
 		return v;
 	}
 
@@ -472,9 +472,9 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	if (sightings > 0 && furniture == sightings) {
 		v.is_asset = true;
 		v.message = QString("Rejected: the browser fetched that as a %1, which "
-			                   "makes it part of the page rather than a stream in "
-			                   "it.")
-			              .arg(as);
+		                     "makes it part of the page rather than a stream in "
+		                     "it.")
+		                .arg(as);
 		return v;
 	}
 
@@ -498,7 +498,7 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	// the manifest, not a piece of it, and refusing that would be a rule doing
 	// harm. Missing a piece kept in a subdirectory is the failure this prefers.
 	if (manifests && !manifests->isEmpty() &&
-		   !manifests->contains(normalise(v.result.url))) {
+	     !manifests->contains(normalise(v.result.url))) {
 		const QString dir = directory_of(v.result.url);
 		// Named in the order the page fetched them, not in the set's. A player
 		// asks for the master and then for the variant it chose, so the earlier
@@ -522,9 +522,9 @@ extractor_verdict check(const QString &source, const QUrl &page,
 		if (!named.isEmpty()) {
 			v.is_piece = true;
 			v.message = QString("Rejected: that is one of the parts the stream at "
-				                   "%1 is made of, and the server confirmed that "
-				                   "address is the playlist. Return the playlist.")
-				              .arg(named.left(80));
+			                     "%1 is made of, and the server confirmed that "
+			                     "address is the playlist. Return the playlist.")
+			                .arg(named.left(80));
 			return v;
 		}
 	}
@@ -532,7 +532,7 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	static const QSet<QString> kinds = { "hls", "dash", "direct" };
 	if (!kinds.contains(v.result.kind)) {
 		v.message = QString("Rejected: \"%1\" is not a kind this can act on.")
-			              .arg(v.result.kind.left(40));
+		                .arg(v.result.kind.left(40));
 		return v;
 	}
 
@@ -543,9 +543,9 @@ extractor_verdict check(const QString &source, const QUrl &page,
 	// plain falsehood in the one place the user is deciding whether to trust it.
 	const bool observed_directly = seen.contains(normalise(v.result.url));
 	v.message = observed_directly
-		? QString("Picks a %1 stream the page really requested.").arg(v.result.kind)
-		: QString("Picks a %1 stream reached by following a document the page "
-		           "requested.").arg(v.result.kind);
+	  ? QString("Picks a %1 stream the page really requested.").arg(v.result.kind)
+	  : QString("Picks a %1 stream reached by following a document the page "
+	             "requested.").arg(v.result.kind);
 	return v;
 }
 

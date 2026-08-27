@@ -69,7 +69,7 @@ QString content_type_for(const QString &path) {
 		{"ogg", "audio/ogg"},   {"opus", "audio/opus"}, {"wav", "audio/wav"},
 	};
 	return by_ext.value(QFileInfo(path).suffix().toLower(),
-		                   "application/octet-stream");
+	                     "application/octet-stream");
 }
 
 // Draws a real progress bar in the progress column. A downloads list without
@@ -82,14 +82,14 @@ public:
 	// Rows must be tall enough for the bar's centred text; at the default
 	// height it is clipped top and bottom and reads as a rendering fault.
 	QSize sizeHint(const QStyleOptionViewItem &option,
-		              const QModelIndex &index) const override {
+	                const QModelIndex &index) const override {
 		QSize s = QStyledItemDelegate::sizeHint(option, index);
 		s.setHeight(qMax(s.height(), 22));
 		return s;
 	}
 
 	void paint(QPainter *painter, const QStyleOptionViewItem &option,
-		          const QModelIndex &index) const override {
+	            const QModelIndex &index) const override {
 		const QVariant pct = index.data(role_percent);
 		if (!pct.isValid()) {
 			QStyledItemDelegate::paint(painter, option, index);

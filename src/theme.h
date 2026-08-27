@@ -170,7 +170,7 @@ private slots:
 	// The portal's own notification. A real slot rather than a lambda because
 	// QDBusConnection::connect matches by signature.
 	void portal_changed(const QString &space, const QString &key,
-		                   const QDBusVariant &value);
+	                     const QDBusVariant &value);
 
 private:
 	void reapply();

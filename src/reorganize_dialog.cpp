@@ -19,19 +19,19 @@ namespace {
 // and told the one rule the invariant check will enforce anyway (sec 9.4). Saying
 // it up front turns most violations into non-events instead of repairs.
 const char *k_system_prompt =
-	"You reorganize a browser's tab tree. You are given an outline where every "
-	"line is:\n"
-	"  - [id] type | title | url | tags=a,b\n"
-	"Indentation is two spaces per level. Reply with the SAME outline, "
-	"reordered and re-nested as you see fit, and nothing else — no prose, no "
-	"code fences.\n\n"
-	"Rules:\n"
-	"1. Every tab id in the input must appear exactly once in your output. "
-	"Never drop, duplicate, or invent a tab.\n"
-	"2. You may create new folders (give each a new unique id), rename "
-	"folders, and move anything anywhere.\n"
-	"3. Keep each line's id, type, url and tags byte-identical. Only folder "
-	"titles may be changed.\n";
+  "You reorganize a browser's tab tree. You are given an outline where every "
+  "line is:\n"
+  "  - [id] type | title | url | tags=a,b\n"
+  "Indentation is two spaces per level. Reply with the SAME outline, "
+  "reordered and re-nested as you see fit, and nothing else — no prose, no "
+  "code fences.\n\n"
+  "Rules:\n"
+  "1. Every tab id in the input must appear exactly once in your output. "
+  "Never drop, duplicate, or invent a tab.\n"
+  "2. You may create new folders (give each a new unique id), rename "
+  "folders, and move anything anywhere.\n"
+  "3. Keep each line's id, type, url and tags byte-identical. Only folder "
+  "titles may be changed.\n";
 
 }  // namespace
 

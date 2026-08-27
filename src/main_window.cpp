@@ -152,7 +152,7 @@ QIcon weighted_icon(const QIcon &src, const QPalette &pal) {
 	bool adjusted = false;
 	for (const QSize &size : sizes) {
 		QImage img = src.pixmap(size).toImage()
-			               .convertToFormat(QImage::Format_ARGB32);
+		                 .convertToFormat(QImage::Format_ARGB32);
 		if (img.isNull())
 			continue;
 		double sum = 0.0, weight = 0.0, colour = 0.0;
@@ -168,9 +168,9 @@ QIcon weighted_icon(const QIcon &src, const QPalette &pal) {
 				// HSL, which reports a near-white pixel as highly saturated
 				// and would call every pale glyph coloured.
 				const int hi = qMax(qMax(qRed(row[x]), qGreen(row[x])),
-					                     qBlue(row[x]));
+				                       qBlue(row[x]));
 				const int lo = qMin(qMin(qRed(row[x]), qGreen(row[x])),
-					                     qBlue(row[x]));
+				                       qBlue(row[x]));
 				colour += double(hi - lo) * a;
 			}
 		}
@@ -189,7 +189,7 @@ QIcon weighted_icon(const QIcon &src, const QPalette &pal) {
 		// the moment a page is loaded.
 		constexpr double colour_limit = 32.0;
 		if (weight <= 0.0 || colour / weight > colour_limit ||
-			    sum / weight <= target) {
+		      sum / weight <= target) {
 			out.addPixmap(QPixmap::fromImage(img));
 			continue;
 		}
@@ -203,8 +203,8 @@ QIcon weighted_icon(const QIcon &src, const QPalette &pal) {
 				// Multiplied, not replaced: the glyph's own shading is what
 				// makes it read as a key rather than a silhouette.
 				row[x] = qRgba(int(qRed(row[x]) * factor),
-					                int(qGreen(row[x]) * factor),
-					                int(qBlue(row[x]) * factor), a);
+				                  int(qGreen(row[x]) * factor),
+				                  int(qBlue(row[x]) * factor), a);
 			}
 		}
 		out.addPixmap(QPixmap::fromImage(img));
@@ -217,7 +217,7 @@ QIcon weighted_icon(const QIcon &src, const QPalette &pal) {
 }
 
 QIcon themed_icon(const QStringList &names, QStyle *st,
-	                 QStyle::StandardPixmap fallback) {
+                   QStyle::StandardPixmap fallback) {
 	// Weighted on the way out, so every icon on this toolbar gets the same
 	// treatment rather than one of them being adjusted by hand. The palette is
 	// the application's: a toolbar is painted in it, and asking each caller to
@@ -231,9 +231,9 @@ QIcon themed_icon(const QStringList &names, QStyle *st,
 	// the palette already, in which case the measurement leaves it alone --
 	// but "usually" is not a reason to have two rules on one toolbar.
 	return fallback == QStyle::SP_CustomBase
-		         ? QIcon()
-		         : weighted_icon(st->standardIcon(fallback),
-		                          QApplication::palette());
+	           ? QIcon()
+	           : weighted_icon(st->standardIcon(fallback),
+	                            QApplication::palette());
 }
 
 }  // namespace
@@ -2350,8 +2350,8 @@ namespace {
 // The ladder, in the order a person steps through it. Chromium's own set, so
 // that a page zoomed here looks like the same page zoomed anywhere else.
 constexpr double k_zoom_steps[] = {
-		0.25, 0.33, 0.50, 0.67, 0.75, 0.90, 1.00,
-		1.10, 1.25, 1.50, 1.75, 2.00, 2.50, 3.00, 4.00, 5.00,
+	  0.25, 0.33, 0.50, 0.67, 0.75, 0.90, 1.00,
+	  1.10, 1.25, 1.50, 1.75, 2.00, 2.50, 3.00, 4.00, 5.00,
 };
 constexpr int k_zoom_count = int(sizeof(k_zoom_steps) / sizeof(k_zoom_steps[0]));
 

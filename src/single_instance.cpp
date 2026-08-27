@@ -57,14 +57,14 @@ QString lock_path_for(const QString &dir) {
 // `XDG_DATA_HOME`s share one runtime directory and must not find each other.
 QString socket_path_for(const QString &dir) {
 	const QString runtime = QStandardPaths::writableLocation(
-		QStandardPaths::RuntimeLocation);
+	  QStandardPaths::RuntimeLocation);
 	if (runtime.isEmpty())
 		return QString();
 	const QByteArray key = QDir(dir).absolutePath().toUtf8();
 	const QString digest = QString::fromLatin1(
-		QCryptographicHash::hash(key, QCryptographicHash::Sha1).toHex().left(16));
+	  QCryptographicHash::hash(key, QCryptographicHash::Sha1).toHex().left(16));
 	return QDir(runtime).filePath(
-		QStringLiteral("hydra-%1.socket").arg(digest));
+	  QStringLiteral("hydra-%1.socket").arg(digest));
 }
 
 }  // namespace

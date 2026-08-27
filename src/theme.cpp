@@ -72,14 +72,14 @@ QPalette dark_palette() {
 // 1 = prefer dark, 2 = prefer light, 0 = no preference, -1 = did not answer.
 int portal_scheme() {
 	QDBusInterface iface(QStringLiteral("org.freedesktop.portal.Desktop"),
-			                  QStringLiteral("/org/freedesktop/portal/desktop"),
-			                  QStringLiteral("org.freedesktop.portal.Settings"),
-			                  QDBusConnection::sessionBus());
+	                      QStringLiteral("/org/freedesktop/portal/desktop"),
+	                      QStringLiteral("org.freedesktop.portal.Settings"),
+	                      QDBusConnection::sessionBus());
 	if (!iface.isValid())
 		return -1;
 	const QDBusReply<QDBusVariant> reply =
-		iface.call(QStringLiteral("Read"), QStringLiteral("org.freedesktop.appearance"),
-			          QStringLiteral("color-scheme"));
+	  iface.call(QStringLiteral("Read"), QStringLiteral("org.freedesktop.appearance"),
+	              QStringLiteral("color-scheme"));
 	if (!reply.isValid())
 		return -1;
 	// The portal wraps the value twice: a variant holding a variant.
@@ -116,8 +116,8 @@ Qt::ColorScheme decide(Qt::ColorScheme qt_hint, int portal, const QPalette &curr
 
 Qt::ColorScheme detect_system() {
 	const Qt::ColorScheme hint = QGuiApplication::styleHints()
-		                               ? QGuiApplication::styleHints()->colorScheme()
-		                               : Qt::ColorScheme::Unknown;
+	                                 ? QGuiApplication::styleHints()->colorScheme()
+	                                 : Qt::ColorScheme::Unknown;
 	return decide(hint, portal_scheme(), QGuiApplication::palette());
 }
 
@@ -156,8 +156,8 @@ void set_web_engine_scheme(Qt::ColorScheme scheme) {
 	// Blink's enum: 0 is dark, 1 is light. Appended rather than assigned, so a
 	// flag somebody set in the environment for their own reasons survives.
 	const QByteArray want =
-		"--blink-settings=preferredColorScheme=" +
-		QByteArray(scheme == Qt::ColorScheme::Dark ? "0" : "1");
+	  "--blink-settings=preferredColorScheme=" +
+	  QByteArray(scheme == Qt::ColorScheme::Dark ? "0" : "1");
 	QByteArray flags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
 	if (flags.contains("preferredColorScheme"))
 		return;   // somebody asked for something specific; leave it alone
@@ -187,27 +187,27 @@ watcher::watcher(QObject *parent) : QObject(parent) {
 	// Qt's own signal, for the platforms where Qt does the detecting.
 	if (QStyleHints *h = QGuiApplication::styleHints())
 		connect(h, &QStyleHints::colorSchemeChanged, this,
-			       [this](Qt::ColorScheme) { reapply(); });
+		         [this](Qt::ColorScheme) { reapply(); });
 
 #ifdef HYDRA_HAVE_DBUS
 	// And the portal's, for the desktop where Qt says Unknown -- which is the
 	// case this whole file exists for. Without this, choosing "system" would
 	// follow the desktop once, at startup, and then stop.
 	QDBusConnection::sessionBus().connect(
-		QStringLiteral("org.freedesktop.portal.Desktop"),
-		QStringLiteral("/org/freedesktop/portal/desktop"),
-		QStringLiteral("org.freedesktop.portal.Settings"),
-		QStringLiteral("SettingChanged"), this,
-		SLOT(portal_changed(QString, QString, QDBusVariant)));
+	  QStringLiteral("org.freedesktop.portal.Desktop"),
+	  QStringLiteral("/org/freedesktop/portal/desktop"),
+	  QStringLiteral("org.freedesktop.portal.Settings"),
+	  QStringLiteral("SettingChanged"), this,
+	  SLOT(portal_changed(QString, QString, QDBusVariant)));
 #endif
 }
 
 void watcher::portal_changed(const QString &space, const QString &key,
-	                            const QDBusVariant &value) {
+                              const QDBusVariant &value) {
 	Q_UNUSED(value)
 	// Only the one setting; the portal reports every change on this desktop.
 	if (space == QLatin1String("org.freedesktop.appearance") &&
-		  key == QLatin1String("color-scheme"))
+	    key == QLatin1String("color-scheme"))
 		reapply();
 }
 
@@ -281,7 +281,7 @@ namespace {
 class icon_style : public QProxyStyle {
 public:
 	QPixmap generatedIconPixmap(QIcon::Mode mode, const QPixmap &pixmap,
-		                             const QStyleOption *opt) const override {
+	                               const QStyleOption *opt) const override {
 		if (mode != QIcon::Disabled || pixmap.isNull())
 			return QProxyStyle::generatedIconPixmap(mode, pixmap, opt);
 
@@ -289,7 +289,7 @@ public:
 		// option where there is one: a toolbar and a menu are not always
 		// painted in the same colour.
 		const QColor bg = opt ? opt->palette.color(QPalette::Window)
-			                       : QApplication::palette().color(QPalette::Window);
+		                         : QApplication::palette().color(QPalette::Window);
 		const double target = qGray(bg.rgb());
 		// Half of the 0.40 Qt applies. Enough that a disabled control is
 		// plainly paler than a live one, not so much that the shape goes.
