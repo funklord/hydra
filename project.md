@@ -4329,6 +4329,36 @@ Not yet established: whether another accessibility service reproduces it.
 matters; that is a change to somebody's phone and is theirs to make, not this
 session's.
 
+**Qt knows about the abort, has not fixed it, and recommends a workaround
+that our own evidence says is not sufficient here.** `QTBUG-141579` reports
+the identical message from the identical function -- and with a *different*
+subsystem holding the lock: `QAndroidInputContext::runOnQtThread()` rather
+than `QtAndroidAccessibility::runInObjectContext()`. So the deadlock
+protector aborting is a general fault of the Android plugin with at least two
+triggers, and ours is not the reported one.
+
+Secondhand and marked as such: the tracker itself is a single-page app that
+cannot be read without a browser, so this comes from the Qt forum thread
+about that bug rather than from the issue. What it reports is that the
+regression spans **6.8.3 through at least 6.12.0** -- which brackets the 6.12
+this project builds against, and means upgrading is not today's answer -- that
+the fix is architectural (making the Java/C++ calls asynchronous rather than
+synchronously waiting) and is being landed incrementally, and that the
+workaround Qt developers recommend is **to stop calling `exec()` on Android**
+and use `open()` with signals instead.
+
+That workaround is worth knowing for two opposite reasons. It is the same
+direction as the redesign sketched above, which makes the redesign the
+upstream-sanctioned shape rather than something invented here -- and 21
+`exec()` call sites is exactly the cost already counted. But **it does not
+cover the case measured here.** `site_policy_dialog` is opened with `show()`,
+never `exec()`, and it aborted. Whatever the IME variant is, ours fires on
+creating the window, not on running a nested loop inside it, so replacing
+`exec()` with `open()` would fix the dialogs that use `exec()` and leave the
+shield exactly where it is. Anyone starting that work should test the
+`show()` path first, because it is the one that decides whether the whole
+approach is sufficient or merely partial.
+
 **The one knob Qt offers could not be tested, and both routes to it are
 recorded so the next attempt starts further on.**
 `QT_ANDROID_SURFACE_CONTAINER_TYPE` is the only setting that touches how a
