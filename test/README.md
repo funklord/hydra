@@ -413,6 +413,7 @@ site nobody controls.
 | `try_autofill` | nothing | the key on the toolbar: that it appears for a page with a login form *whether or not* the fill is allowed, carries the reason, answers a click, and goes down on navigation. Needs no KeePassXC — autofill is HTTPS-only, so a login form over plain http is refused for a reason the shell knows on its own |
 | `try_ytdlp` | a site url | yt-dlp resolution driven through the shell's own menus |
 | `try_settings` | nothing | the Settings dialog driven through the real window |
+| `try_forget` | nothing | clearing browsing data end to end: the settings dialog's **Clear now** button, kiosk's `clear_between_sessions` in a live session, and the page-requested-fullscreen path that must clear *nothing*. Measured by whether a local server is still sent a `Cookie:` header |
 
 `try_cookies` needs no server of its own and no network — it stands one up in
 process and serves the page from `127.0.0.1` and a third-party image from
@@ -447,6 +448,39 @@ which produced a convincing false failure first:
   in the build, a *granted* request still ends as `PERMISSION_DENIED` — the same
   code as a refusal. `HYDRA_PERM_DEBUG=1` makes `qtwebengine_view` log what was
   asked and what was answered, which is where that case is checked instead.
+
+`try_forget` is the clearing feature from the button down to the cookie, and
+it exits non-zero on failure. It stands up its own loopback origin with two
+paths — one that hands out a cookie, one that only reports the `Cookie:` header
+it was sent — because the whole point is to measure the browser's claim against
+somebody else's record rather than against a `clear_report`. `shell_fixture`
+cannot be used here: it serves `file://` pages, which Chromium gives an opaque
+origin and no cookie jar at all.
+
+Three things it encodes, and the third is why it exists:
+
+- **It refuses to run unless the profile it is about to empty is under
+  `~/.qttest`.** It reads `persistentStoragePath()` and `cachePath()` off the
+  factory's own profile — the object that is actually about to be cleared —
+  rather than trusting that `live/live_paths.cpp` is still linked in. A driver
+  whose job is deleting cookies is one wrong link rule away from deleting the
+  ones you use.
+- **The modal surfaces are polled for, not guessed at.** Both the settings
+  dialog and its confirmation are `exec()`d, so the timer that drives them has
+  to be armed before the call that blocks; a single shot fired too early finds
+  nothing and leaves the driver stuck in `exec()` with no output, which is a
+  shell timeout rather than a result. Both waits retry on a bounded count and
+  then close whatever is up.
+- **The negative is built so that it could fail.** The last section asserts
+  that a *page* asking for fullscreen clears nothing, with
+  `clear_between_sessions` still switched on in the store — the only difference
+  from the section above it is which route reaches the controller. An assertion
+  that nothing happened passes just as loudly when the code never ran, so the
+  cookie is re-established and seen coming back first, kiosk's own log is
+  required to have reported two clears in the previous section before its
+  silence here counts for anything, and the fullscreen path is asserted to have
+  actually entered kiosk. A guard that was never reached is not a guard that
+  held.
 
 `try_subframe` covers the MSE tap when the player is in an iframe — same origin
 and cross-origin — which is the shape most watch pages have. Offline and
