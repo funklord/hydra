@@ -4301,6 +4301,34 @@ reachable only through one is not reachable at all there -- which includes the
 whole of clear-browsing-data, and is why its Android half stays unverified end
 to end.
 
+**Confirmed by removal, 2026-08-27, which is the control the whole diagnosis
+was missing.** The holder uninstalled `com.jamworks.bxactions`;
+`enabled_accessibility_services` is now empty and `accessibility_enabled` is
+`0`. On the same phone, the same build, the same taps:
+
+    File menu        opens -- "New Tab  Ctrl+T" on screen, process alive
+    annoyed_dialog   opens -- the full report dialog rendered, process alive
+    aborts in logcat 0
+
+Both were reliably fatal an hour earlier. So the condition is established
+rather than inferred: it is **not** that Qt Widgets cannot open a secondary
+window on Android, it is that it cannot while an accessibility service is
+running. Every earlier statement here that reads as the former should be read
+as the latter.
+
+**And that makes the impact sharper, not milder.** The service this was found
+under is a gesture app, which sounds like a minority taste. `TalkBack` is an
+accessibility service too. On the reading now confirmed, this application
+aborts on the first menu for exactly the users who most depend on the platform
+telling them what is on screen -- so the population hit is not "people with an
+unusual launcher" but "people using a screen reader", and a browser that dies
+on its File menu for them is not a browser they can use at all.
+
+Not yet established: whether another accessibility service reproduces it.
+`TalkBack` would be the one to try, since it is stock and it is the case that
+matters; that is a change to somebody's phone and is theirs to make, not this
+session's.
+
 **The one knob Qt offers could not be tested, and both routes to it are
 recorded so the next attempt starts further on.**
 `QT_ANDROID_SURFACE_CONTAINER_TYPE` is the only setting that touches how a
