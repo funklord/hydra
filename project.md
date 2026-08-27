@@ -1563,11 +1563,11 @@ reply parsing to nothing rather than an empty tree (an empty proposal is a
 provider failure, not a request to delete everything); a fenced/prose-wrapped
 reply still parsing; and a move into a node's own subtree refused.
 
-**Not done from §9:** the undo snapshot (§9.4's one-keystroke revert — the
-cherry-pick UI covers accept-time control, but there is no post-apply undo), the
-web-session provider (§9.1 rates it least preferred), and merging on the
-duplicate-URL changes — those are detected and listed, never pre-selected, and
-applying one is currently a no-op.
+**Not done from §9:** the web-session provider (§9.1 rates it least preferred)
+and merging on the duplicate-URL changes — those are detected and listed, never
+pre-selected, and applying one is currently a no-op. The undo snapshot was in
+this list until 2026-08-27 and had been built for some time; see *Reorganizer
+undo* below.
 
 **And the no-op was reachable, which is the part that was a defect rather than
 a gap.** `tree_diff` calls the duplicate kind advisory and its apply arm does
@@ -2238,8 +2238,10 @@ and the design does not currently address it.
 
 ## Reorganizer undo (§9.4, done)
 
-**Tools → Undo Reorganize (Ctrl+Shift+Z)**, enabled only after an accepted
-reorganization. §9.4 asks for "a single undo snapshot [that] makes any accepted
+**Edit → Undo Reorganize (Ctrl+Shift+Z)**, enabled only after an accepted
+reorganization. It was in Tools when this section was written, at the bottom
+below four AI actions; it is first in Edit now, which is where three decades of
+software has put undo, and the code comment records the move. §9.4 asks for "a single undo snapshot [that] makes any accepted
 change one keystroke to revert", and until now accepting was irreversible except
 by rearranging the tree by hand — an odd gap in a feature whose entire design is
 about not losing tabs.
