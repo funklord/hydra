@@ -400,6 +400,8 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 			case PT::MediaVideoCapture:
 			case PT::MediaAudioVideoCapture: pf = policy::feature::camera;        break;
 			case PT::Notifications:          pf = policy::feature::notifications; break;
+			case PT::ClipboardReadWrite:     pf = policy::feature::clipboard_read; break;
+			case PT::MouseLock:              pf = policy::feature::pointer_lock;   break;
 			// **Nothing in `policy::feature` covers these, so they are refused
 			// without the shield ever being asked** -- clipboard reading,
 			// pointer lock, desktop capture, the local font list. That was
@@ -408,23 +410,21 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 			// the engine adds later shows up as a compiler warning about an
 			// unhandled value instead of silently joining the refused pile.
 			//
-			// **No policy feature is invented here.** A control in the shield
-			// that nothing else in the program honours is the mistake
-			// `policy.h` records against `extractor_dom`: a permission is a
-			// promise about what the browser will do, and one for a capability
-			// that is not wired anywhere is a promise nobody is keeping. Adding
-			// two is a decision about the policy model, its INI file and its
-			// settings page, not something to take in passing here.
+			// Clipboard reading and pointer lock have since been given the
+			// features they were missing, and are answered above with the
+			// rest. They earned them on the distinction `policy.h` draws
+			// against `extractor_dom`: that one stays absent because the
+			// *power* does not exist, so a permission for it would promise
+			// something nobody delivers, while these two are real capabilities
+			// the engine asks about and only had nowhere to record an answer.
+			// Both default to block, so the behaviour is what it always was.
 			//
-			// **Refusing is also the least surprising answer available**, given
-			// that. A prompt with nowhere to record its answer would ask again
-			// on every call -- and pointer lock is requested on every entry to
-			// a game or a map, so that is a dialog per click. What was actually
-			// missing is that the refusal was invisible from inside the
-			// browser; the debug line below is what fixes that, and it is the
-			// same line the answered permissions get.
-			case PT::ClipboardReadWrite:
-			case PT::MouseLock:
+			// What remains below genuinely has no home. Desktop capture and
+			// the local font list are refused, and the refusal is at least
+			// visible now: the debug line is the same one the answered
+			// permissions get, and without it "we refused" and "we granted and
+			// the engine could not deliver" looked identical from the page's
+			// side, which cost a diagnosis once already.
 			case PT::DesktopVideoCapture:
 			case PT::DesktopAudioVideoCapture:
 			case PT::LocalFontsAccess:

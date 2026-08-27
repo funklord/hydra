@@ -44,6 +44,24 @@ enum class feature : int {
 	// different question: what the *page* may put in front of you, not what it
 	// may store.
 	cookie_notices,
+	// **Two capabilities the engine has always asked about and this never
+	// answered.** Chromium requests both, `qtwebengine_view` had no
+	// `policy::feature` to map them onto, and so both were denied without the
+	// shield ever being consulted -- a decision made by a `default:` arm.
+	//
+	// They are here rather than left denied because the capability is real,
+	// which is the distinction `extractor_dom` above turns on: that one is
+	// absent because the *power does not exist yet*, so a permission for it
+	// would be a promise nobody keeps. These exist, the engine asks, and the
+	// only thing missing was somewhere to record the answer.
+	//
+	// Both default to block, which is exactly what happened before, so nothing
+	// changes for anyone who does not go looking. What changes is that saying
+	// yes becomes possible: pointer lock is asked for on entering a game or a
+	// map, and a browser that can only ever refuse it is not offering a
+	// setting, it is stating a limitation.
+	clipboard_read,
+	pointer_lock,
 	count
 };
 

@@ -49,6 +49,13 @@ const info k_info[] = {
 		"The \"do you want to accept cookies?\" banner itself. Blocking it means "
 		"Hydra answers it for you, taking the least permissive option the site "
 		"actually offers." },
+	{ "clipboardRead", "Clipboard reading",
+		"Whether a site may read what you have copied. Writing to the "
+		"clipboard is not this: a page can always put something there, and "
+		"only reading tells it what you had." },
+	{ "pointerLock", "Pointer lock",
+		"Whether a site may capture the mouse pointer, which is what a game "
+		"or a map view does to look around. Escape gives it back." },
 };
 
 }  // namespace

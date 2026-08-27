@@ -40,6 +40,11 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	set_global_default(feature::camera,              setting::block);
 	set_global_default(feature::microphone,          setting::block);
 	set_global_default(feature::notifications,       setting::block);
+	// Both were denied by a `default:` arm in the engine backend before they
+	// were features at all, so blocking here changes nothing and only makes
+	// the refusal a decision somebody can see and overrule.
+	set_global_default(feature::clipboard_read,      setting::block);
+	set_global_default(feature::pointer_lock,        setting::block);
 	// Block means "answer it and get it out of the way", which is what almost
 	// everyone wants from a consent banner and is the whole point of the option.
 	set_global_default(feature::cookie_notices,      setting::block);

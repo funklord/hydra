@@ -5528,11 +5528,31 @@ than its number:
 That probe is known to be capable of a negative as well as a positive: the
 first attempt failed with `NotAllowedError: Document is not focused` and
 produced no line at all, so an absent line and a refusal line are
-distinguishable. **Still open, and a decision rather than a task:** whether
-clipboard read and pointer lock deserve real policy features. Denying is the
-least surprising interim answer, because a prompt with nowhere to record its
-answer would ask again on every call, and pointer lock is requested on every
-entry to a game or a map.
+distinguishable.
+
+**They have their features now**, `clipboard_read` and `pointer_lock`, and the
+reason to add them is the distinction `policy.h` already draws against
+`extractor_dom`. That one stays absent because the *power does not exist*: a
+permission for it would be a promise nobody keeps. These two are the opposite
+case -- the capability is real and the engine asks about it on its own; the
+only thing missing was somewhere to record an answer, so the refusal was made
+by a `default:` arm rather than by anybody.
+
+Adding one turned out to cost four edits, because the design had anticipated
+it: the enum entry, a row in `policy.cpp`'s info table, a global default, and
+the mapping in `qtwebengine_view`. The shield and the settings page iterate
+`feature_count()` and pick a new feature up on their own, and rules persist by
+name rather than by position, so nothing on disk depends on where it sits.
+Fifteen features occupied fifteen of the thirty-two slots a `quint64` at two
+bits each allows, so there was room.
+
+**Both default to block, which is exactly what the `default:` arm did**, so
+nothing changes for anyone who does not go looking. What changes is that
+saying yes became possible at all. A browser that can only ever refuse pointer
+lock is not offering a setting, it is stating a limitation -- and the earlier
+argument for leaving it refused (that a prompt with nowhere to record its
+answer would ask on every call) was an argument for giving it somewhere to
+record one, not for keeping the refusal.
 
 **The passkey dialog has never been seen driven by the engine, and the reason
 is worth recording.** With no authenticator present Chromium simply waits --
