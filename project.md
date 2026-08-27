@@ -5433,9 +5433,32 @@ database and the http cache both shrinking. Two instrument faults were caught
 before that result was believed: the first version pointed data and cache at
 one directory, so "the cache" was the whole profile, and it asked
 `visitedLinksContainsUrl` after reloading the page, which re-registers the
-visit and would have reported a failure of its own making. **What is not**: the
-button-to-factory wiring end to end, kiosk clearing in a live session, and the
-Android implementation, which is compiled on the device build and never run.
+visit and would have reported a failure of its own making.
+
+**And since then, the whole path through the shell.** `test/live/try_forget`
+opens the settings dialog the way `open_settings()` does, ticks the boxes,
+presses Clear, answers the confirmation, and then asks the loopback server
+whether it is still sent a `Cookie:` header -- so nothing rests on a status
+label or a report struct, both of which are the program's own account of
+itself. It covers kiosk clearing on entering and on leaving too.
+
+The check worth having is the negative. Entering kiosk by way of a *page*
+asking for fullscreen must not clear, and that route runs through the same
+controller, so its silence has to be shown to be a measurement rather than an
+absence. It is proved by mutation: commenting out the one line in
+`toggle_kiosk` that clears the flag turns exactly two checks red and no others,
+with the controller's own log line appearing where it had been silent.
+
+The driver refuses to run at all unless test mode is on *and* the profile it is
+about to empty reports a path under `~/.qttest` -- read off the object being
+cleared, not off a claim that something else arranged it. A test that deletes
+cookies is not one to point at a directory by accident.
+
+**What is still not verified**: the idle-timer clearing moment, which is the
+third of the three and the only one an unattended screen actually reaches; and
+the Android implementation, which compiles on the device build and has never
+run -- and cannot be reached on the test phone at all, for the reason recorded
+under the Android abort above.
 
 ## A page's own Print button, and the probe that proved nothing
 
