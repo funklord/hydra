@@ -4257,25 +4257,41 @@ observed, one conclusion about *windows in general* had been drawn from them,
 and the generalisation covered a class the evidence never touched. Two samples
 agreeing are one sample when they agree because of a shared property.
 
-**What is actually established**: creating a native *popup* window while Qt's
-accessibility bridge holds the lock aborts the process, whether the popup is a
-`QMenu` or a `Qt::Popup` dialog. **What is not**: whether an ordinary modal
-dialog -- `settings_dialog`, `downloads_dialog`, `annoyed_dialog`, none of
-which set that flag -- does the same. The check for it was set up and could not
-be run: the phone's keyguard re-engaged and does not open without the owner's
-credential. An earlier attempt that appeared to show a normal dialog surviving
-was measuring a lock screen and is not evidence of anything.
+**Settled on an unlocked phone: it is every secondary window.** A plain
+`annoyed_dialog` -- `class annoyed_dialog : public QDialog`, no popup flag in
+the file, opened as `dlg.exec()` from the toolbar -- aborts with the identical
+message and kills the process. Three kinds are now measured rather than
+inferred: a `QMenu`, a `Qt::Popup` dialog, and an ordinary modal dialog.
 
-The consequence is therefore stated at the width the measurement supports:
-**menus and the site-controls popup are unusable on a phone with an
-accessibility service running**, which is already enough to make the shield
-unreachable there. Whether the rest of the chrome goes with them decides
-whether the app is merely awkward or effectively browse-only, and that is one
-tap to settle on an unlocked phone.
+This section briefly carried that conclusion, withdrew it, and has arrived
+back at it, and all three steps were right. The withdrawal was right because
+the two samples then in hand were both popups and agreed for a reason nobody
+had checked -- two witnesses that are one witness. The conclusion is right now
+because a third sample was taken that shares no flag with them. Reaching the
+same answer by generalisation and by measurement are not the same act, and
+only the second licenses acting on it.
 
-It does explain why the Android half of clear-browsing-data is unverified end
-to end: it is reachable only through the settings dialog, and the menu that
-opens it aborts.
+At full width: **on a phone with any accessibility service running, this
+application can browse and can do nothing else.** Settings, the shield,
+downloads, the media list, every password prompt and every confirmation is a
+window of its own, and each aborts the process on the way up. Anything
+reachable only through one is not reachable at all there -- which includes the
+whole of clear-browsing-data, and is why its Android half stays unverified end
+to end.
+
+**The one knob Qt offers could not be tested, and both routes to it are
+recorded so the next attempt starts further on.**
+`QT_ANDROID_SURFACE_CONTAINER_TYPE` is the only setting that touches how a
+secondary window gets its surface. `qputenv` at the top of `main()` changes
+nothing and cannot: Qt for Android starts its Java side first and runs `main()`
+on a later thread, so the container is chosen before that line runs -- borne
+out by the run still logging `SurfaceView` nineteen times and `TextureView`
+never, which is what stops that being read as a negative result. Injecting it
+into the process environment instead, through Android's `wrap.<package>`
+property, is refused by the device, since the property must be declared in the
+property contexts and a shell cannot create it. And
+`android.app.environment_variables`, which older Qt read from the manifest, is
+absent from this Qt's jar. The knob is untried rather than ruled out.
 
 **Corroborated from another application, independently.** The beerssh session
 was testing its own first Android build on this same phone and saw an abort in
