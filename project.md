@@ -4219,9 +4219,28 @@ surface, and Qt's accessibility bridge is already holding the lock.
 Not fixed here, and not obviously fixable from this side: the Qt Android plugin
 exposes no switch for its accessibility bridge that a search of the shipped
 `.so` and jar turns up. Worth reporting upstream with the abort message, which
-is specific enough to search for. **The consequence is worth stating plainly:
-on a phone with any accessibility service running, this application cannot open
-a menu.**
+is specific enough to search for.
+
+**It is not menus. It is every secondary window, and that was measured later
+than the paragraph above was written.** This section originally said the
+consequence was that such a phone "cannot open a menu", because a menu is what
+had been tapped. Trying to reach the settings dialog on 2026-08-27 aborted the
+app on the File menu as described -- and then tapping the **Shield button on
+the toolbar**, which opens a dialog and touches no menu at all, aborted it
+again with the identical message and killed the process a second time. A
+`QMenu` was never the condition; creating a native window while the
+accessibility bridge holds the lock is, and a modal dialog creates one just as
+a popup does.
+
+So the consequence is much larger than first recorded: **on a phone with any
+accessibility service running, this application can browse and can do nothing
+else.** Settings, the shield, downloads, the media list, the password prompts
+-- everything this browser puts in a window of its own -- aborts the process on
+the way up. That also means a feature reachable only from the settings dialog
+is, on such a phone, not reachable at all: the clear-browsing-data work below
+has an Android implementation that no user with an accessibility service
+running can currently invoke, and it could not be verified end to end here for
+exactly that reason.
 
 **Corroborated from another application, independently.** The beerssh session
 was testing its own first Android build on this same phone and saw an abort in
