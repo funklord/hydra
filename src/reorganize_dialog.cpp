@@ -142,6 +142,26 @@ void reorganize_dialog::show_diff() {
 	m_changes->clear();
 	for (const tree_change &c : m_change_list) {
 		auto *item = new QListWidgetItem(c.summary, m_changes);
+		// **A duplicate is a remark, not an offer, and the box said
+		// otherwise.** `tree_diff` calls this kind "advisory only" and its
+		// apply arm does nothing -- deliberately, since merging is destructive
+		// and is not built. Every row was made checkable regardless, so the
+		// duplicate rows could be ticked, and applying them did nothing at
+		// all: not a merge, not a refusal, and not even a line in the count,
+		// which then under-reported what it had done. A control that is
+		// offered and ignored is the shape this tree keeps finding and
+		// removing, and it was here in the one dialog whose whole promise is
+		// that you choose what gets applied.
+		//
+		// Left visible and greyed rather than dropped: the duplicate is worth
+		// knowing about, and hiding it would lose the only place the tree says
+		// so. The check box comes back with the merge.
+		if (c.kind == change_kind::duplicate_url) {
+			item->setFlags(item->flags() & ~Qt::ItemIsUserCheckable);
+			item->setForeground(palette().brush(QPalette::Disabled,
+			                                     QPalette::WindowText));
+			continue;
+		}
 		item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
 		item->setCheckState(c.accepted ? Qt::Checked : Qt::Unchecked);
 	}

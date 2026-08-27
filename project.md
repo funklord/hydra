@@ -1569,6 +1569,27 @@ web-session provider (§9.1 rates it least preferred), and merging on the
 duplicate-URL changes — those are detected and listed, never pre-selected, and
 applying one is currently a no-op.
 
+**And the no-op was reachable, which is the part that was a defect rather than
+a gap.** `tree_diff` calls the duplicate kind advisory and its apply arm does
+nothing, deliberately, because merging is destructive and unbuilt. But
+`reorganize_dialog::show_diff()` made *every* row user-checkable without
+looking at its kind, so a duplicate could be ticked and applied — and applying
+it did nothing at all: no merge, no refusal, and no entry in the count, so the
+"Applied N changes" line then under-reported. A control offered and ignored is
+the shape this tree has spent a day removing, and it was sitting in the one
+dialog whose entire promise is that you choose what gets applied.
+
+Duplicate rows are advisory in the list now — greyed, no check box — rather
+than hidden, because the duplicate is worth knowing about and hiding it would
+lose the only place the tree mentions it. The check box comes back when the
+merge does.
+
+One thing was worth probing rather than assuming, since `on_accept()` reads
+`checkState()` back for every row including the ones it no longer offers: an
+item with no check state ever set answers `Unchecked`, not something that
+would mark a duplicate accepted. Measured, because the failure would have been
+silent and would have applied a destructive change nobody selected.
+
 **Neither provider has been exercised against a live endpoint** — no Ollama and
 no API key in the development environment. The request/response shapes follow
 the documented contracts, but the first real call is unverified.
