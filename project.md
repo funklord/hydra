@@ -5437,6 +5437,37 @@ visit and would have reported a failure of its own making. **What is not**: the
 button-to-factory wiring end to end, kiosk clearing in a live session, and the
 Android implementation, which is compiled on the device build and never run.
 
+## A page's own Print button, and the probe that proved nothing
+
+`QWebEnginePage::printRequested` had nothing connected, so `window.print()`
+and every Print control a site draws in its own chrome did nothing at all --
+no dialog, no message, no error. File > Print worked the whole time, which is
+why it survived: printing was tested the way the menu offers it.
+
+It is connected to the same `print()` the menu action calls, so a
+page-initiated print gets the same dialog, the same printer and the same
+status-bar answer, and it shares printing's re-entry guard because a page may
+call `window.print()` in a loop.
+
+**The first attempt to verify it proved nothing, in a way worth writing down.**
+A probe page calling `window.print()` was opened by passing a `file://` url on
+the command line, no dialog appeared, and that was nearly recorded as a
+negative result. But `main()` accepts only `http` and `https` from argv -- a
+deliberate decision so that `hydra ./tree.txt` keeps meaning the tree -- so the
+page never loaded and the silence was about nothing. The first tool reached for
+to look for the dialog, `xdotool`, is not installed on this machine either,
+which would have produced the same empty answer for a second, independent
+reason. Two ways to be wrong, stacked, both looking exactly like a finding.
+
+Served over http instead, from a scratch profile, it is verified:
+
+    0x560002c "Print Page": ("hydra" "Hydra")  351x199+0+0  +415+891
+
+That is `QPrintDialog` with the title `print()` gives it. The probe is known to
+be capable of seeing windows because the main window appears in the same
+listing -- without that line the absence of a dialog would again have meant
+nothing.
+
 ## The page requests nothing was listening to
 
 Four `QWebEnginePage` signals had nothing connected. Qt does not treat that as
