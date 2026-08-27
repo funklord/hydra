@@ -307,7 +307,7 @@ int main(int argc, char *argv[]) {
 							if (bt->text().remove('&').startsWith("It Broke")) {
 								bt->click(); return;
 							}
-				    b->reject();
+						b->reject();
 						return;
 					}
 		});
