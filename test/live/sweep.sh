@@ -81,8 +81,26 @@ if [ -z "${*:-}" ]; then
 	have=$(printf '%s
 ' $drivers | grep -c .)
 	want=$(ls test/live/try_*.cpp 2>/dev/null | grep -c .)
-	if [ "$want" -gt 0 ] && [ "$have" -lt $((want / 2)) ]; then
+	# **Exact, not half.** This read `-lt $((want / 2))`, which asks whether
+	# somebody forgot to build at all and tolerates losing up to half the
+	# drivers in silence -- a sweep reporting success with nineteen of
+	# thirty-eight missing looks exactly like a sweep that ran them. Every
+	# driver has a source and every source builds one, and skipping is decided
+	# below at run time rather than by not building, so the two counts are
+	# equal whenever the build is whole.
+	#
+	# It is not hypothetical: a stale `objsets.mk` once left every live driver
+	# with undefined symbols at link time, and nothing in `make test` could see
+	# it because that target builds only the offline suites. A threshold guard
+	# would have caught that one -- zero is under half -- and would have said
+	# nothing about the same fault affecting forty per cent of them.
+	if [ "$want" -gt 0 ] && [ "$have" -lt "$want" ]; then
 		echo "only $have driver(s) built in $BIN, against $want source(s)."
+		echo "missing:"
+		for src in test/live/try_*.cpp; do
+			name=$(basename "$src" .cpp)
+			[ -x "$BIN/$name" ] || echo "  $name"
+		done
 		echo "That is not a sweep -- build them with: make drivers"
 		exit 1
 	fi
