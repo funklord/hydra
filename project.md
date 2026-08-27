@@ -3997,6 +3997,28 @@ and the cookie is in the on-disk SQLite `Cookies` database in the new profile
 directory, beside `History`, `Favicons` and `Local Storage`. The old
 `OffTheRecord/` directory is left where it is; nothing reads it now.
 
+**`try_cookies` had to be repointed at the factory's profile, and the size of
+that was overstated when it was fixed.** The driver builds the real shell and
+then took `defaultProfile()`'s cookie store, which after the switch is a
+profile no page here is ever loaded into. The commit that fixed it said every
+case in the only driver exercising the cookie filter would report the filter
+broken. That was a prediction, carried over from the reconnaissance that found
+it, and it was never run -- the fix was made blind and the driver not executed
+until later.
+
+Measured since, by putting `defaultProfile()` back and rebuilding: **8 passed,
+3 failed**, against 12 passed with the fix. The three are the ones that ask
+whether a cookie was *stored* -- "the page's own cookie is stored", "still
+stored", and "stored over TLS" -- which are exactly the checks that have to
+look in a jar. The other nine ask whether a request carried a cookie or was
+refused, and a page can be observed doing that whichever store is being
+watched.
+
+So the fix is load-bearing and the pass means something, which is the point of
+having run the control at all. But the driver is markedly less sensitive to
+which profile it watches than the prediction implied, and a reader who took
+the commit at its word would be surprised by eight green checks on a driver
+pointed at the wrong store.
 Still open, and sharper than it was: **kiosk mode now leaks.** The note above
 lists an off-the-record profile as an unbuilt kiosk feature, and that is still
 true as a *kiosk* feature -- it just is not the whole browser's business. What
