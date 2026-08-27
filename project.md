@@ -5408,6 +5408,26 @@ is the only signal a kiosk gets that somebody walked away -- and navigation is
 issued first, so the screen does not sit on a stranger's page while the store
 empties; and **leaving**, because the public's session must not be handed back.
 
+**The idle moment is driven now, and it turned up something the ordering did
+not promise.** The walk-home request the timer issues arrives at the server
+carrying *no* cookie. Navigation is issued first in program order -- which is
+what that sentence claims, and it is still true -- but the clear reaches the
+cookie store before the request goes out. The effect is welcome, since the
+kiosk's own walk home is then not authenticated as the person who just left,
+and it is a race rather than a guarantee, so it is recorded here and
+deliberately not asserted by the driver. A test that pinned it would be
+pinning the scheduler.
+
+Both halves of what the timer does are checked, because either alone looks
+like a working kiosk: the navigation as a request the server was sent, the
+forgetting as the `Cookie:` header it stops being sent. Telling the three
+clearing moments apart took work of its own, since they call the same function
+on the same stores -- the cookie is re-established only after the entering
+clear has been *seen to finish* by its own log line, every reading is taken
+while kiosk is still up so the leaving clear cannot be the cause, and the log
+slice covering the measurement must name the idle clear and neither of the
+others.
+
 **It is off by default, and the default is load-bearing.** Page-requested
 fullscreen routes through the same `toggle_kiosk()`, and that path now clears
 the flag explicitly alongside the ones it already clears for `allow_escape`
@@ -5610,9 +5630,36 @@ below the minimum length and off while the confirmation differs, the old PIN
 not left in the box, retry present for a soft block and absent for a hard one,
 Cancel becoming Close, and an unknown failure still producing a sentence.
 `registerProtocolHandler` was verified on screen against a real page.
-`fileSystemAccessRequested` is compiled and reviewed but unrun -- reaching it
-needs `showDirectoryPicker()`, which opens a native file dialog first, and
-there is no tool on this machine to accept one.
+**`fileSystemAccessRequested` is driven both ways now**, by
+`test/live/try_files`, and getting there needed three things worth recording.
+Reaching it at all takes a real gesture, so the driver sends an actual
+`QMouseEvent` to the render widget and then *measures* that it worked by
+reading `navigator.userActivation.isActive` back off the page rather than
+assuming the click counted. The chooser Chromium opens first is Qt's own
+`QFileDialog`, so the driver sets `AA_DontUseNativeDialogs` -- on itself, not
+on the browser -- and answers it from `topLevelWidgets()`, then answers the
+prompt behind it. And the refusal case uses a *different* folder from the
+allow case, because Chromium remembers a grant per path and would otherwise
+answer the second question itself.
+
+**The re-entry guard could not be reached, and the driver says so instead of
+passing.** Three findings stack up to that. The obvious test -- two requests
+from one script -- passes whether or not the guard exists, measured: the two
+questions arrive in sequence because the second is only delivered once the
+first is answered. A driver's own sequential code cannot act while a question
+is up either, since a modal `exec()` runs a loop deeper than the driver's
+spin, so anything that must happen during a question happens in a timer. With
+both fixed and a timestamped trace, the answer is unambiguous and is about
+the engine rather than the test: while one of these questions holds the loop,
+nothing from the page reaches the browser at all -- a second click went in
+with the box up and the page did not report seeing it until twelve
+milliseconds *after* the box closed.
+
+So those sections print INCONCLUSIVE and assert nothing about `m_prompting`.
+They still assert the property a user would notice, that two questions never
+appear together, and they will assert the guard itself, unedited, on any
+build where a second request does get through. The guard remains
+reviewed-only code, which is a smaller claim than "tested" and the true one.
 
 ## One Hydra per profile, because two stopped being harmless
 

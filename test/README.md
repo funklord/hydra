@@ -14,8 +14,8 @@ not reference it. Building the app never builds the tests.
 
 ## ⚠️ Build this with a job limit
 
-**Do not run `make -j` with no number.** Each live driver compiles **~61** app sources and links Qt
-WebEngine; there are **21** of them, and unbounded parallelism on a many-core
+**Do not run `make -j` with no number.** Each live driver compiles **~76** app sources and links Qt
+WebEngine; there are **39** of them, and unbounded parallelism on a many-core
 machine will try to hold well over 20 GB. (Both numbers said something smaller
 for a long time, because nothing counts them — `ls src/*.cpp | wc -l` and
 `ls test/live/try_*.cpp | wc -l` do.)
@@ -413,7 +413,8 @@ site nobody controls.
 | `try_autofill` | nothing | the key on the toolbar: that it appears for a page with a login form *whether or not* the fill is allowed, carries the reason, answers a click, and goes down on navigation. Needs no KeePassXC — autofill is HTTPS-only, so a login form over plain http is refused for a reason the shell knows on its own |
 | `try_ytdlp` | a site url | yt-dlp resolution driven through the shell's own menus |
 | `try_settings` | nothing | the Settings dialog driven through the real window |
-| `try_forget` | nothing | clearing browsing data end to end: the settings dialog's **Clear now** button, kiosk's `clear_between_sessions` in a live session, and the page-requested-fullscreen path that must clear *nothing*. Measured by whether a local server is still sent a `Cookie:` header |
+| `try_forget` | nothing | clearing browsing data end to end: the settings dialog's **Clear now** button, kiosk's `clear_between_sessions` in a live session, its idle timer -- the clearing moment an unattended screen actually runs on -- and the page-requested-fullscreen path that must clear *nothing*. Measured by whether a local server is still sent a `Cookie:` header |
+| `try_files` | nothing | the File System Access prompt: a page asking for a folder, driven through a real click and a real file chooser, answered both ways, and measured by what the page's promise was given. Also what could **not** be reached, and the trace that says why |
 
 `try_cookies` needs no server of its own and no network — it stands one up in
 process and serves the page from `127.0.0.1` and a third-party image from
@@ -471,6 +472,17 @@ Three things it encodes, and the third is why it exists:
   nothing and leaves the driver stuck in `exec()` with no output, which is a
   shell timeout rather than a result. Both waits retry on a bounded count and
   then close whatever is up.
+- **The idle timer is attributed rather than assumed.** All three of kiosk's
+  clearing moments call the same function on the same stores, so the idle
+  section works to exclude the other two: the cookie is put back only after the
+  *entering* clear has been seen to finish -- waited for by its own log line,
+  not by a guessed delay -- every reading is taken while kiosk is still up so
+  the leaving clear has not happened, and the log slice covering the
+  measurement must hold `cleared on idle` and neither of the others. Both
+  halves of what the timer does are checked, because a screen that walks home
+  and forgets nothing looks right from in front of it: the navigation is
+  measured as a request for a path used nowhere else in the run, the forgetting
+  as the `Cookie:` header the server stops being sent.
 - **The negative is built so that it could fail.** The last section asserts
   that a *page* asking for fullscreen clears nothing, with
   `clear_between_sessions` still switched on in the store — the only difference
@@ -481,6 +493,33 @@ Three things it encodes, and the third is why it exists:
   silence here counts for anything, and the fullscreen path is asserted to have
   actually entered kiosk. A guard that was never reached is not a guard that
   held.
+
+`try_files` reaches the File System Access prompt, which had been compiled and
+reviewed and never once run -- `showDirectoryPicker()` needs a user gesture and
+then opens a file chooser before our question appears. Offline, self-checking,
+non-zero on failure. Three things it encodes:
+
+- **A real mouse event grants the gesture.** `runJavaScript` grants none, so the
+  driver sends `QMouseEvent`s to the render widget the way `try_extract` clicks
+  a player, and the page reports `navigator.userActivation.isActive` from inside
+  its handler -- so a click that missed is a failure rather than the same
+  silence a broken prompt produces.
+- **`AA_DontUseNativeDialogs`, set by the driver.** The engine's chooser is Qt's
+  own `QFileDialog` and can be answered from `topLevelWidgets()`; a native one
+  is not a `QWidget` and the run would hang in it. Offscreen there is no native
+  dialog to get, but a driver that relied on that would break on a real display.
+- **The re-entry guard could not be entered, and the driver says so.** Two
+  sections try, with the second request parked at the server until a question is
+  actually on screen, a control that proves the route, and a timestamped trace.
+  Both report INCONCLUSIVE and assert nothing about the guard, because the trace
+  shows why: while one of these questions holds the loop, nothing from the page
+  reaches the browser -- not a `fetch`, not the effect of an injected click.
+  Everything the page sent arrived within milliseconds of the question closing.
+  The naive version of the same test is kept as an observation, since it passes
+  whether the guard exists or not; and a driver's own sequential code cannot
+  even watch for this, because a modal `exec()` opens a loop deeper than the one
+  `spin()` is in and nothing in `main()` runs again until the question is
+  answered.
 
 `try_subframe` covers the MSE tap when the player is in an iframe — same origin
 and cross-origin — which is the shape most watch pages have. Offline and

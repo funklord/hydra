@@ -5,11 +5,13 @@
 // nothing.
 //
 // The factory half of this feature was already measured against a real engine.
-// Three things around it were not, and they are what this file is for: the
+// Four things around it were not, and they are what this file is for: the
 // settings dialog's wiring to the factory, kiosk's `clear_between_sessions` in
-// a live session, and the guard in `main_window::toggle_kiosk()` that switches
-// that flag off again when the request came from a *page* asking for
-// fullscreen rather than from an operator setting up a screen.
+// a live session, the idle timer that is the third and least-watched of the
+// three moments that setting clears on, and the guard in
+// `main_window::toggle_kiosk()` that switches that flag off again when the
+// request came from a *page* asking for fullscreen rather than from an
+// operator setting up a screen.
 //
 // **The measurement is the `Cookie:` header a local server was sent**, never a
 // return value, a `clear_report` or the label the dialog writes. Every one of
@@ -43,6 +45,21 @@
 //     (the shell hides its window when it does), because a guard that was
 //     never reached is not a guard that held.
 //
+// ## Which clear was observed is a different question from whether one happened
+//
+// Section 4 is the idle timer, and all three of kiosk's clearing moments call
+// the same function on the same stores, so a section that cannot say which of
+// them it saw says nothing about the timer. Three things keep them apart there,
+// and none of them is a delay chosen by eye:
+//
+//   * the cookie is put back only after the *entering* clear has been seen to
+//     finish -- waited for by its own log line -- so the clear that ran before
+//     the measurement cannot be the one that ends it;
+//   * every reading is taken while kiosk is still up, so the leaving clear has
+//     not happened yet;
+//   * and the log slice covering the measurement is required to hold
+//     `cleared on idle` and neither of the other two.
+//
 // ## How the modal surfaces are driven
 //
 // Both the settings dialog and its confirmation are `exec()`d, so each blocks
@@ -72,6 +89,7 @@
 #include <QCheckBox>
 #include <QDialog>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
 #include <QHostAddress>
@@ -119,6 +137,25 @@ static void spin(int ms) {
 // their absence.
 static QStringList  g_kiosk_log;
 static QtMessageHandler g_previous_handler = nullptr;
+
+// Wait, on a bounded count, for a kiosk line containing `what` to arrive
+// **after** `from`. The index is not decoration: every section leaves its lines
+// behind, so a search over the whole list finds section 2's `cleared on
+// entering` and reports section 4's as having arrived before it was asked for.
+//
+// Polled rather than slept for the reason the modal waits below give, and one
+// more that belongs to this feature: the clear is asynchronous and its report
+// is written from the callback, so a fixed delay is a guess about how long
+// emptying three stores takes on a machine under load. Guessed short it reports
+// an absence that is impatience; guessed long it is time added to every run.
+static bool wait_for_kiosk_line(int from, const QString &what, int ms) {
+	for (int waited = 0; waited < ms; waited += 100) {
+		spin(100);
+		if (!g_kiosk_log.mid(from).filter(what).isEmpty())
+			return true;
+	}
+	return false;
+}
 
 static void capture_kiosk_log(QtMsgType type, const QMessageLogContext &ctx,
                                const QString &msg) {
@@ -213,11 +250,15 @@ private:
 // same url -- and the driver would be reporting on a navigation it did not
 // make.
 static int g_visit = 0;
-static QString visit(local_site *site, QLineEdit *bar, const char *path) {
-	const QString marker = QString("v%1").arg(++g_visit);
-	bar->setText(QString("http://127.0.0.1:%1%2?%3")
-	                 .arg(site->serverPort()).arg(QString(path), marker));
-	QMetaObject::invokeMethod(bar, "returnPressed");
+static QString next_marker() { return QString("v%1").arg(++g_visit); }
+
+static QUrl marked_url(local_site *site, const char *path,
+                        const QString &marker) {
+	return QUrl(QString("http://127.0.0.1:%1%2?%3")
+	                .arg(site->serverPort()).arg(QString(path), marker));
+}
+
+static QString await_request(local_site *site, const QString &marker) {
 	for (int waited = 0; waited < 15000; waited += 100) {
 		spin(100);
 		// `endsWith`, not `contains`: the marker is the whole query and the
@@ -229,11 +270,37 @@ static QString visit(local_site *site, QLineEdit *bar, const char *path) {
 	return QStringLiteral("(no request arrived)");
 }
 
+static QString visit(local_site *site, QLineEdit *bar, const char *path) {
+	const QString marker = next_marker();
+	bar->setText(marked_url(site, path, marker).toString());
+	QMetaObject::invokeMethod(bar, "returnPressed");
+	return await_request(site, marker);
+}
+
+// The same reading, taken by loading the view directly, and it exists for one
+// reason: **the address bar cannot be used while kiosk holds the view.**
+// Entering removes the widget from the stack, so `main_window::current_view()`
+// answers nothing, and `navigate_to_address` deliberately opens a *new tab* in
+// that case. A section that measured cookies through a tab kiosk is not
+// presenting would be reporting on the wrong page, and would look exactly like
+// one that worked.
+static QString visit_view(local_site *site, web_view_backend *view,
+                           const char *path) {
+	const QString marker = next_marker();
+	view->load(marked_url(site, path, marker));
+	return await_request(site, marker);
+}
+
 // Put the cookie back and confirm it comes back, so that a later "it is gone"
 // is a deletion rather than an absence. Answers whether the jar really held it.
 static bool establish_cookie(local_site *site, QLineEdit *bar) {
 	visit(site, bar, "/set");
 	return visit(site, bar, "/check").contains("sess=1");
+}
+
+static bool establish_cookie(local_site *site, web_view_backend *view) {
+	visit_view(site, view, "/set");
+	return visit_view(site, view, "/check").contains("sess=1");
 }
 
 // The dialog the shell opens, found by what it carries rather than by its
@@ -375,7 +442,11 @@ int main(int argc, char *argv[]) {
 	kiosk_config kiosk = settings_store::kiosk();
 	kiosk.clear_between_sessions = true;
 	kiosk.home = QUrl();          // blank home means "whatever tab you were on"
-	kiosk.idle_reset_seconds = 0;  // the idle timer is a third clearing moment
+	// **Off for sections 2 and 3, and section 4 turns it on.** It is the third
+	// clearing moment, and one firing underneath the other two would leave
+	// neither of them attributable -- which is the same reason section 4 has to
+	// work to exclude the other two.
+	kiosk.idle_reset_seconds = 0;
 	settings_store::set_kiosk(kiosk);
 
 	local_site site;
@@ -587,6 +658,158 @@ int main(int argc, char *argv[]) {
 		check(after.contains("sess=1"),
 		      QString("and the cookie survived a page-requested fullscreen "
 		               "(server saw: %1)").arg(after));
+	}
+
+	// ---------------------------- 4. kiosk's idle timer, the third moment --
+	//
+	// Entering and leaving are section 2's. This is the one between them, and it
+	// is the one an unattended screen actually runs on: nobody presses anything
+	// when they walk away, so the timer is the only signal a kiosk gets that a
+	// session has ended, and every other moment needs an operator standing
+	// there. It had never been run.
+	//
+	// **Two halves, and either one alone looks like a working kiosk.** The
+	// controller issues the navigation home first and clears beside it, on the
+	// stated ground that a screen must not sit on a stranger's page while a
+	// store empties. A timer that walks home and forgets nothing looks right
+	// from in front of the screen and leaves the last person's logins on the
+	// disk; one that forgets and does not walk home leaves their page up. So
+	// both are measured -- the navigation as a request the server was sent for
+	// a path used nowhere else in this run, the forgetting as the `Cookie:`
+	// header the same server stops being sent.
+	section("4. kiosk's idle timer, the moment nobody presses anything");
+	{
+		// Long enough that the entering clear and the re-establishment below
+		// finish inside it with room to spare, and the room is asserted rather
+		// than assumed a few lines down. Short enough to be worth waiting for.
+		const int idle_seconds = 20;
+
+		// A home of kiosk's own, on the same server. `/home` is asked for
+		// nowhere else in this driver, so a request for it is the timer's
+		// doing: the only other thing that loads home is the watchdog, and that
+		// wants a dead render process.
+		const QString home_mark = QStringLiteral("idle-home");
+		kiosk_config idle_kiosk = settings_store::kiosk();
+		idle_kiosk.clear_between_sessions = true;
+		idle_kiosk.idle_reset_seconds = idle_seconds;
+		idle_kiosk.home = QUrl(QString("http://127.0.0.1:%1/home?%2")
+		                           .arg(site.serverPort()).arg(home_mark));
+		settings_store::set_kiosk(idle_kiosk);
+
+		auto *view = w.findChild<qtwebengine_view *>();
+		check(view != nullptr, "the presented view is reachable");
+		if (!view) {
+			std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
+			return 1;
+		}
+
+		int home_seen = 0;
+		for (const local_site::request &r : std::as_const(site.seen))
+			if (r.path.endsWith(home_mark))
+				++home_seen;
+		check(home_seen == 0,
+		      "nothing has asked the server for the kiosk home page yet, so a "
+		      "request for it below is new");
+
+		const int log_before = g_kiosk_log.size();
+		QElapsedTimer since_entry;
+		since_entry.start();
+		QMetaObject::invokeMethod(&w, "toggle_kiosk");
+		spin(2000);
+		check(!w.isVisible(), "kiosk was entered (the shell hides for the stage)");
+
+		// **The setting reached the controller by the route it ships on** --
+		// the store, then `toggle_kiosk`. Without this the section could arm
+		// nothing and spend its whole wait measuring a timer that was never
+		// started, which is indistinguishable from one that never fires.
+		auto *controller = w.findChild<kiosk_controller *>();
+		check(controller
+		       && controller->config().idle_reset_seconds == idle_seconds,
+		      QString("the controller is holding the idle reset the store was "
+		               "given (%1 s)").arg(idle_seconds));
+
+		// **Waited for, not slept through, and it is the load-bearing step of
+		// the whole section.** Entering clears too. Until that clear has been
+		// seen to *finish*, a cookie set afterwards might still be inside its
+		// reach, and the deletion measured below would be attributable to
+		// entering rather than to the timer.
+		//
+		// It is also this section's own proof that the log probe can see a
+		// clear: the silence tests further down are worth nothing without a
+		// positive from the same probe in the same section.
+		check(wait_for_kiosk_line(log_before, "cleared on entering", 25000),
+		      "the entering clear ran and finished -- so the probe below can "
+		      "see a clear, and nothing it reports later is this one");
+
+		check(establish_cookie(&site, view),
+		      "the cookie is back, set inside kiosk and after the entering "
+		      "clear finished, so its disappearance can only be later");
+
+		const qint64 spent = since_entry.elapsed();
+		note(QString("%1 ms of the %2 ms idle window spent reaching that point")
+		         .arg(spent).arg(idle_seconds * 1000));
+		check(spent + 5000 < idle_seconds * 1000,
+		      "with at least five seconds of the window still to run, so the "
+		      "clear below is the timer firing and not a race with it");
+
+		// Everything from here is read out of the two slices these mark.
+		const int log_at_mark  = g_kiosk_log.size();
+		const int seen_at_mark = site.seen.size();
+
+		check(wait_for_kiosk_line(log_at_mark, "cleared on idle",
+		                           idle_seconds * 1000 + 20000),
+		      "the idle timer fired and the controller cleared on it");
+
+		const QStringList said = g_kiosk_log.mid(log_at_mark);
+		for (const QString &line : said)
+			note(line);
+		check(said.filter("cleared on entering").isEmpty()
+		       && said.filter("cleared on leaving").isEmpty(),
+		      "and neither of the other two moments cleared in the same "
+		      "window, so what follows has one candidate");
+
+		// Half one: the screen walked back to the home page. Polled, because
+		// the navigation is issued first but the request lands when it lands,
+		// and the clear's report can beat it.
+		int home_requests = 0;
+		QString home_cookie;
+		for (int waited = 0; waited < 15000 && home_requests == 0; waited += 100) {
+			spin(100);
+			for (int i = seen_at_mark; i < site.seen.size(); ++i)
+				if (site.seen[i].path.endsWith(home_mark)) {
+					++home_requests;
+					if (home_cookie.isEmpty())
+						home_cookie = site.seen[i].cookie;
+				}
+		}
+		check(home_requests > 0,
+		      QString("the screen walked back to the kiosk home page, measured "
+		               "as a request the server was sent (%1 of them)")
+		          .arg(home_requests));
+		// **Not a check, and the measurement contradicted the guess**, which is
+		// why it is written down. "The navigation is issued first" is about
+		// what the screen *shows* -- `load()` posts to the render process and
+		// returns -- and it promises nothing about which of two asynchronous
+		// things reaches the wire first. Measured here the clear won: the walk
+		// home went out carrying no cookie, so the kiosk's own request to its
+		// home page is not authenticated as the person who has just left. That
+		// is the better of the two outcomes and it is still a race, so it is
+		// reported rather than asserted; a driver that asserted it would fail
+		// on a slower machine for no defect.
+		if (home_requests > 0)
+			note(QString("that request carried: %1").arg(home_cookie));
+
+		// Half two: the store was emptied. Read while kiosk is still up, which
+		// is what keeps the leaving clear out of it.
+		const QString after = visit_view(&site, view, "/check");
+		check(!after.contains("sess=1"),
+		      QString("and the server is no longer sent the cookie, with kiosk "
+		               "still up and only the idle clear behind us "
+		               "(server saw: %1)").arg(after));
+
+		QMetaObject::invokeMethod(&w, "toggle_kiosk");
+		spin(5000);
+		check(w.isVisible(), "and the window came back when kiosk was left");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
