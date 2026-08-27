@@ -4221,6 +4221,28 @@ exposes no switch for its accessibility bridge that a search of the shipped
 `.so` and jar turns up. Worth reporting upstream with the abort message, which
 is specific enough to search for.
 
+**Re-measured against Qt 6.12's plugin**, since the original search was of an
+older one and a switch could have arrived meanwhile. It has not. The complete
+list of environment variables that plugin reads is sixteen long and none of
+them concerns accessibility: fonts, icon size, mouse handling, an assets cache,
+`QT_ANDROID_NO_EXIT_CALL`, `QT_BLOCK_EVENT_LOOPS_WHEN_SUSPENDED`,
+`QT_QPA_NO_TEXT_HANDLES`, `QT_USE_ANDROID_NATIVE_DIALOGS`,
+`QT_USE_ANDROID_NATIVE_STYLE`, `QT_ANDROID_RASTER_IMAGE_DEPTH` and
+`QT_ANDROID_SURFACE_CONTAINER_TYPE`.
+
+One of those is a lead rather than an answer, and it is worth naming because
+the next person will otherwise start where this did. The abort is not raised
+by the accessibility code -- that path only *warns*, in as many words
+("Could not run accessibility call in object context, accessing main thread
+could lead to deadlock"). It is raised in `QAndroidPlatformOpenGLWindow`, when
+a second native window asks for an EGL surface and cannot take the lock the
+bridge is holding. So anything that changes how a secondary window gets its
+surface is the shape of a workaround, and
+`QT_ANDROID_SURFACE_CONTAINER_TYPE` is the only knob on offer that touches it.
+Untried: it needs a phone that is unlocked, and setting an environment
+variable for an Android app is itself awkward enough to be part of the
+experiment.
+
 **It is wider than a menu, and narrower than was claimed for a few minutes on
 2026-08-27.** Reaching for the settings dialog aborted the app on the File menu
 as described. Tapping the **Shield button on the toolbar** then aborted it
