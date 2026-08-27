@@ -5380,6 +5380,17 @@ links are **refused**: Android has no visited-link store, and
 data, shown in the tab tree. Mapping one onto the other would delete something
 nobody asked about while reporting success for something that never happened.
 
+Both backends put a ten-second deadline under the whole thing, so a report
+always arrives. The Android one needs it more rather than less: its answer
+comes back through a Java callback on the UI thread, and if the Activity has
+gone or the JNI call did not land there is nothing that would ever fire. It
+was written without one, and the second failure is the worse of the two --
+the caller waits for ever *and* the in-flight flag stays set, so every later
+clear is refused as "one is already running". A missed callback would have
+turned the button into one that never worked again. When the deadline fires
+the state is `unconfirmed` and never `done`, because nothing came back and
+saying so is what that state is for.
+
 ### Kiosk clears the shared profile rather than getting its own
 
 The idle timer walked home and left the last person's logins on disk. The fix

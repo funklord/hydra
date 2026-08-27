@@ -681,7 +681,17 @@ web_view_factory::clear_note g_clear_note;
 web_view_factory::clear_report g_clear_report;
 bool g_clearing = false;
 
+// The same ten seconds the desktop backend allows itself, and for the same
+// reason: a clear that never answers leaves the dialog saying "Clearing..."
+// for ever, which is the silence this feature exists to remove wearing a
+// progress message. Android needs it more, not less -- the answer comes back
+// through a Java callback on the UI thread, and if the Activity has gone or
+// the JNI call did not land there is nothing that would ever fire.
+constexpr int k_clear_deadline_ms = 10000;
+
 void finish_clear() {
+	// Whichever of the callback and the deadline arrives second finds this
+	// false and does nothing, so the caller is answered exactly once.
 	if (!g_clearing)
 		return;
 	g_clearing = false;
@@ -773,6 +783,19 @@ void android_factory::clear_browsing_data(const browsing_data &what,
 	g_clear_report = report;
 	g_clear_note   = std::move(done);
 	g_clearing     = true;
+	QTimer::singleShot(k_clear_deadline_ms, qApp, [] {
+		if (!g_clearing)
+			return;
+		// Not `done`: nothing came back, so nothing is known. Saying so is the
+		// whole point of `unconfirmed` -- and leaving `g_clearing` set would
+		// refuse every later clear as "one is already running", which is how a
+		// missed callback turns into a button that never works again.
+		g_clear_report.cookies = web_view_factory::clear_state::unconfirmed;
+		g_clear_report.notes << QStringLiteral(
+		  "Android did not answer within ten seconds; whether the cookies went "
+		  "is unknown.");
+		finish_clear();
+	});
 	QJniObject::callStaticMethod<void>(k_cls, "clearCookiesAndSiteData", "()V");
 }
 #endif   // Q_OS_ANDROID
