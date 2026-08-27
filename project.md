@@ -1638,10 +1638,30 @@ media not offered, all four dangerous-rule rejections, the dry run reporting
 exactly what it matches, first-party and already-blocked requests excluded from
 signals, and `||host^` matching subdomains but not a suffix-only lookalike.
 
-**Not done from §11–§12:** segment assembly and the ffmpeg remux, tee-to-disk
-for scrubbing a live stream, the local proxy that would inject Referer/cookies
-for CDNs that 403 a naked stream URL, a downloads window, the per-site
-auto-detect toggle, and regression re-runs over a known-clean page set.
+**Not done from §11–§12:** the ffmpeg remux, the per-site auto-detect toggle,
+and regression re-runs over a known-clean page set.
+
+**This list named seven things on 2026-08-27 and five of them were built.**
+Checked one at a time against the code rather than against the file names,
+which is the distinction that matters -- `hls_assembler.cpp` existing proves
+nothing on its own, and its header is what settles each of these:
+
+- **segment assembly** -- built; that is what `hls_assembler` is.
+- **tee-to-disk for scrubbing a live stream** -- built, and by the same class.
+  Its header says so outright: segments are written as they arrive, so a live
+  stream becomes a local VOD with full backward seek.
+- **the local proxy injecting headers for CDNs that 403 a naked URL** -- built.
+  `local_proxy.cpp` sets `Referer` and `User-Agent` from the stream context.
+- **a downloads window** -- built, `downloads_dialog`, on Ctrl+J in Tools, and
+  named in this document's own layout table a few hundred lines above.
+
+What survives is the ffmpeg remux, which `hls_assembler`'s header explicitly
+disclaims -- "that is the ffmpeg step sec 11.2 describes and this does not
+do", the reason being that concatenated MPEG-TS is directly playable while
+fMP4 would need its init segment prepended -- the per-site auto-detect toggle,
+which is absent, and the media regression set, which is not `test_replay`:
+that re-scores recorded model replies for the extractor and is a different
+thing wearing a similar description.
 
 ## Password manager (step 7, done)
 
@@ -5342,8 +5362,21 @@ filtered the tree instead of loading anything; and it never activated a tree
 node, so there was no view to navigate at all. Both failed by blaming the
 feature.
 
-**Still not built from §13.2:** `set-login` on new-credential submit, and
-`generate-password`.
+**Everything from §13.2 is built**, and this line said otherwise until
+2026-08-27. `generate-password` runs from `main_window` through
+`autofill_controller::request_generated_password` to the bridge. `set-login`
+on new-credential submit is the longer chain and it is complete end to end:
+the injected script calls `offer_to_save` when the page is submitted,
+`confirm_save` answers the user's decision, and `keepass_bridge::save_login`
+sends the `set-login` message.
+
+Worth saying how that was got wrong, because the first look agreed with the
+line. `set_login_request` and `parse_set_login` exist in the protocol layer
+and nothing in `main_window` or `autofill_controller` calls them, which reads
+exactly like a message implemented and never wired. The call is
+`save_login`, one layer down in the bridge, and the trigger is in
+`autofill_script.h` rather than in C++ at all. Two greps that both looked
+conclusive, and the chain was found only by walking it.
 
 ### A pairing that survives a restart (§13.1, §14)
 
