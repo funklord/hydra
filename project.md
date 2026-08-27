@@ -4221,26 +4221,39 @@ exposes no switch for its accessibility bridge that a search of the shipped
 `.so` and jar turns up. Worth reporting upstream with the abort message, which
 is specific enough to search for.
 
-**It is not menus. It is every secondary window, and that was measured later
-than the paragraph above was written.** This section originally said the
-consequence was that such a phone "cannot open a menu", because a menu is what
-had been tapped. Trying to reach the settings dialog on 2026-08-27 aborted the
-app on the File menu as described -- and then tapping the **Shield button on
-the toolbar**, which opens a dialog and touches no menu at all, aborted it
-again with the identical message and killed the process a second time. A
-`QMenu` was never the condition; creating a native window while the
-accessibility bridge holds the lock is, and a modal dialog creates one just as
-a popup does.
+**It is wider than a menu, and narrower than was claimed for a few minutes on
+2026-08-27.** Reaching for the settings dialog aborted the app on the File menu
+as described. Tapping the **Shield button on the toolbar** then aborted it
+again, with the identical message -- and the Shield opens no menu, so `QMenu`
+is not the condition.
 
-So the consequence is much larger than first recorded: **on a phone with any
-accessibility service running, this application can browse and can do nothing
-else.** Settings, the shield, downloads, the media list, the password prompts
--- everything this browser puts in a window of its own -- aborts the process on
-the way up. That also means a feature reachable only from the settings dialog
-is, on such a phone, not reachable at all: the clear-browsing-data work below
-has an Android implementation that no user with an accessibility service
-running can currently invoke, and it could not be verified end to end here for
-exactly that reason.
+That was written up as "every secondary window", which was wrong, and the way
+it was wrong is worth keeping. Both samples shared a property nobody had
+checked: `site_policy_dialog` sets `setWindowFlags(Qt::Popup)` -- it is the one
+dialog in this tree that does. So a menu and a popup-flagged dialog had been
+observed, one conclusion about *windows in general* had been drawn from them,
+and the generalisation covered a class the evidence never touched. Two samples
+agreeing are one sample when they agree because of a shared property.
+
+**What is actually established**: creating a native *popup* window while Qt's
+accessibility bridge holds the lock aborts the process, whether the popup is a
+`QMenu` or a `Qt::Popup` dialog. **What is not**: whether an ordinary modal
+dialog -- `settings_dialog`, `downloads_dialog`, `annoyed_dialog`, none of
+which set that flag -- does the same. The check for it was set up and could not
+be run: the phone's keyguard re-engaged and does not open without the owner's
+credential. An earlier attempt that appeared to show a normal dialog surviving
+was measuring a lock screen and is not evidence of anything.
+
+The consequence is therefore stated at the width the measurement supports:
+**menus and the site-controls popup are unusable on a phone with an
+accessibility service running**, which is already enough to make the shield
+unreachable there. Whether the rest of the chrome goes with them decides
+whether the app is merely awkward or effectively browse-only, and that is one
+tap to settle on an unlocked phone.
+
+It does explain why the Android half of clear-browsing-data is unverified end
+to end: it is reachable only through the settings dialog, and the menu that
+opens it aborts.
 
 **Corroborated from another application, independently.** The beerssh session
 was testing its own first Android build on this same phone and saw an abort in
