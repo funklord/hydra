@@ -71,6 +71,8 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 		grid->addWidget(new QLabel(policy::feature_label(f), this), i, 0);
 
 		auto *combo = new QComboBox(this);
+		// Text set by `refresh_default_labels()`, because what this entry
+		// means depends on the global default and that changes under us.
 		combo->addItem("Default");
 		combo->addItem("Allow");
 		combo->addItem("Block");
@@ -139,7 +141,42 @@ void site_policy_dialog::repopulate() {
 		                   : m_engine->setting_for(pattern, f);
 		m_combos[i]->setCurrentIndex(setting_to_index(s));
 	}
+	refresh_default_labels();
 	m_populating = false;
+}
+
+// **"Default" on its own does not tell anybody anything.** Every other entry
+// in these boxes states an outcome -- Allow, Block -- and the one that is
+// selected for most sites most of the time stated only that a choice had not
+// been made. Whether that meant the scripts ran was a fact held one dialog
+// away, on the settings page, per feature, and the shield is exactly where
+// somebody is standing when they want to know.
+//
+// It cannot be written once at construction: it is the *global default* that
+// decides, that is editable from this same dialog's third scope and from the
+// settings page, and a label baked in at build time would go stale the moment
+// either changed.
+void site_policy_dialog::refresh_default_labels() {
+	const bool global = (m_scope->currentIndex() == 2);
+	for (int i = 0; i < policy::feature_count() && i < m_combos.size(); ++i) {
+		const feature f = static_cast<feature>(i);
+		const setting d = m_engine->global_default(f);
+		// "allowed"/"blocked" rather than "enabled"/"disabled": the entries
+		// below it say Allow and Block, and one concept wants one word.
+		m_combos[i]->setItemText(0, d == setting::block
+		                                 ? QStringLiteral("Default (blocked)")
+		                                 : QStringLiteral("Default (allowed)"));
+
+		// In the global scope this entry is what a *site* falls back to, so
+		// offering it here is a setting pointing at itself -- the settings
+		// page declines to offer it at all for that reason, and this dialog
+		// used to accept it and quietly turn it into Allow. Greyed rather than
+		// removed, the way the scope entries above are, so the row does not
+		// change shape as the scope changes.
+		if (auto *m = qobject_cast<QStandardItemModel *>(m_combos[i]->model()))
+			if (QStandardItem *it = m->item(0))
+				it->setEnabled(!global);
+	}
 }
 
 void site_policy_dialog::on_scope_changed() {
@@ -153,8 +190,12 @@ void site_policy_dialog::on_feature_changed(int feature_index) {
 	const setting s = index_to_setting(m_combos[feature_index]->currentIndex());
 
 	if (m_scope->currentIndex() == 2) {
-		// Global default: unset is not meaningful, treat it as allow.
+		// Global default: unset is not meaningful, treat it as allow. The
+		// entry is greyed in this scope so it cannot normally be chosen; this
+		// stays as the belt to that braces.
 		m_engine->set_global_default(f, s == setting::unset ? setting::allow : s);
+		// What every site's "Default" resolves to has just moved.
+		refresh_default_labels();
 	} else {
 		// Belt and braces against the case above: a site rule with no site is
 		// not a rule, and storing one is worse than refusing it because it

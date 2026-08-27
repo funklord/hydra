@@ -29,6 +29,9 @@ private slots:
 private:
 	QString current_pattern() const;   // empty string means "global"
 	void    repopulate();
+	// The first entry says what "no rule here" actually does, which depends on
+	// the global default and so cannot be written once at construction.
+	void    refresh_default_labels();
 
 	policy_engine      *m_engine;
 	QString             m_host;
