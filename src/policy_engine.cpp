@@ -45,6 +45,9 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	// the refusal a decision somebody can see and overrule.
 	set_global_default(feature::clipboard_read,      setting::block);
 	set_global_default(feature::pointer_lock,        setting::block);
+	// Allow: the media badge is a headline feature and a browser that noticed
+	// nothing until told to would be the wrong default entirely.
+	set_global_default(feature::media_detect,        setting::allow);
 	// Block means "answer it and get it out of the way", which is what almost
 	// everyone wants from a consent banner and is the whole point of the option.
 	set_global_default(feature::cookie_notices,      setting::block);

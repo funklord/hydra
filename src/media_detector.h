@@ -58,10 +58,21 @@ QString media_mime_for(const QUrl &url);
 //
 // Thread note: on_request() arrives off the UI thread; everything here is
 // guarded by a mutex and the UI reads snapshots.
+class policy_engine;
+
 class media_detector : public QObject, public request_observer {
 	Q_OBJECT
 public:
-	explicit media_detector(QObject *parent = nullptr);
+	// **The policy engine is consulted per request and is not owned.** Reading
+	// it from this thread is what `policy_engine` already documents as safe --
+	// the rule set is mutated only on the UI thread and reads tolerate a stale
+	// snapshot, which is the same licence `request_filter` runs under from the
+	// same callback.
+	//
+	// Optional, so a driver or a test can build a detector with no policy at
+	// all and get the old behaviour: with none, everything is watched.
+	explicit media_detector(policy_engine *policy = nullptr,
+	                         QObject *parent = nullptr);
 
 	void on_request(const request_context &ctx, const request_decision &d) override;
 
@@ -87,6 +98,7 @@ signals:
 	void site_updated(const QString &site_host, int count);
 
 private:
+	policy_engine *m_policy = nullptr;   // not owned; may be null
 	mutable QMutex m_lock;
 	QHash<QString, QList<media_item>> m_by_site;
 };

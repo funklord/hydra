@@ -595,6 +595,51 @@ int main(int argc, char **argv) {
 #endif
 	}
 
+	section("auto-detect media is per site, and refusing means not recording");
+	{
+		// The same request three times, changing only the policy. If the
+		// counts did not differ this would be testing that a url is saveable,
+		// which `test_streamtype` already does and which would pass whatever
+		// the gate did.
+		request_context ctx;
+		ctx.site_host    = "video.test";
+		ctx.request_host = "cdn.test";
+		ctx.url          = QUrl("https://cdn.test/movie.mp4");
+
+		policy_engine policy;
+		{
+			media_detector det(&policy);
+			det.on_request(ctx, request_decision{});
+			check(det.count_for("video.test") == 1,
+			      "allowed by default, so the stream is recorded");
+		}
+		{
+			policy.set_setting("video.test", policy::feature::media_detect,
+			                    policy::setting::block);
+			media_detector det(&policy);
+			det.on_request(ctx, request_decision{});
+			check(det.count_for("video.test") == 0,
+			      "blocked for this site, so nothing is written down at all");
+		}
+		{
+			// Another site must be unaffected -- a per-site rule that turned
+			// the detector off everywhere would pass the check above.
+			request_context other = ctx;
+			other.site_host = "elsewhere.test";
+			media_detector det(&policy);
+			det.on_request(other, request_decision{});
+			check(det.count_for("elsewhere.test") == 1,
+			      "and the rule does not reach a site it was not set on");
+		}
+		{
+			// The default-constructed path a driver or a test uses.
+			media_detector det;
+			det.on_request(ctx, request_decision{});
+			check(det.count_for("video.test") == 1,
+			      "a detector with no policy watches everything, as before");
+		}
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

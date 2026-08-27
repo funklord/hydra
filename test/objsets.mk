@@ -159,7 +159,10 @@ OBJS_test_dlheaders = \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
-	$(BUILD_DIR)/moc/moc_media_detector.o
+	$(BUILD_DIR)/moc/moc_media_detector.o \
+	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/app/policy.o
 
 OBJS_test_empty_state = \
 	$(BUILD_DIR)/app/empty_state.o \
@@ -329,7 +332,10 @@ OBJS_test_seam = \
 	$(BUILD_DIR)/tmoc/moc_fake_sources.o \
 	$(BUILD_DIR)/app/media_detector.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
-	$(BUILD_DIR)/moc/moc_media_detector.o
+	$(BUILD_DIR)/moc/moc_media_detector.o \
+	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/app/policy.o
 
 OBJS_test_send_gate = \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -356,6 +362,7 @@ OBJS_test_settings = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
@@ -368,8 +375,7 @@ OBJS_test_settings = \
 	$(BUILD_DIR)/app/theme.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
-	$(BUILD_DIR)/moc/moc_flow_layout.o \
-	$(BUILD_DIR)/moc/moc_media_detector.o
+	$(BUILD_DIR)/moc/moc_flow_layout.o
 
 OBJS_test_signals = \
 	$(BUILD_DIR)/app/filter_signals.o \

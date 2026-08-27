@@ -62,6 +62,14 @@ enum class feature : int {
 	// setting, it is stating a limitation.
 	clipboard_read,
 	pointer_lock,
+	// **The per-site switch the architecture doc puts here in as many words**
+	// -- "a per-site 'auto-detect media' toggle lives in the PolicyEngine"
+	// (sec 11) -- and which nothing had. The detector rides the same request
+	// stream the blocker does and recorded every saveable resource on every
+	// site, with no way to tell it not to. Allowed by default, because
+	// noticing media is most of what the badge is for; a site turned off stops
+	// being watched rather than being watched silently.
+	media_detect,
 	count
 };
 

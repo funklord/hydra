@@ -56,6 +56,10 @@ const info k_info[] = {
 	{ "pointerLock", "Pointer lock",
 		"Whether a site may capture the mouse pointer, which is what a game "
 		"or a map view does to look around. Escape gives it back." },
+	{ "autoDetectMedia", "Auto-detect media",
+		"Whether to watch this site's requests for video and audio worth "
+		"saving. Turning it off empties the media badge here; it does not "
+		"stop the page playing anything." },
 };
 
 }  // namespace

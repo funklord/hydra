@@ -1638,8 +1638,38 @@ media not offered, all four dangerous-rule rejections, the dry run reporting
 exactly what it matches, first-party and already-blocked requests excluded from
 signals, and `||host^` matching subdomains but not a suffix-only lookalike.
 
-**Not done from §11–§12:** the ffmpeg remux, the per-site auto-detect toggle,
-and regression re-runs over a known-clean page set.
+**Not done from §11–§12:** the ffmpeg remux and regression re-runs over a
+known-clean page set.
+
+**The per-site auto-detect toggle is built**, and the architecture doc had
+already decided where it goes: "a per-site 'auto-detect media' toggle lives in
+the PolicyEngine" (§11). So it is a `policy::feature` like any other, which
+made it four edits and no new UI at all -- the shield and the settings page
+iterate `feature_count()` and picked it up unaided, as they did for clipboard
+reading and pointer lock.
+
+**It refuses at the detector, not at the badge**, and the difference is the
+whole point. Gating the badge would have left `media_detector` recording every
+stream a site served and merely declining to mention them, so turning the
+setting off would have looked like privacy and been bookkeeping. The check sits
+at the top of `on_request`, so a site that is switched off has nothing written
+down about it in the first place.
+
+Allowed by default, because noticing media is most of what the badge is for and
+a browser that saw nothing until told to would be the wrong default. The policy
+engine is consulted from the interceptor thread, which is what `policy_engine`
+already licenses -- the rule set is mutated only on the UI thread and reads
+tolerate a stale snapshot, the same terms `request_filter` runs under from the
+same callback. A detector built without a policy watches everything, so the
+drivers and tests that never set one up are unchanged.
+
+Four cases in `test_settings`, and they are the same request three times with
+only the policy moved: recorded when allowed, nothing recorded when blocked for
+that site, still recorded for a site the rule was not set on -- which is what
+catches a gate that turned the detector off everywhere -- and still recorded
+with no policy at all. Checks that did not differ between those would have been
+testing that a url is saveable, which `test_streamtype` already covers and
+which would pass whatever the gate did.
 
 **This list named seven things on 2026-08-27 and five of them were built.**
 Checked one at a time against the code rather than against the file names,

@@ -41,7 +41,8 @@ QString media_mime_for(const QUrl &url) {
 	return QStringLiteral("video/*");
 }
 
-media_detector::media_detector(QObject *parent) : QObject(parent) {}
+media_detector::media_detector(policy_engine *policy, QObject *parent)
+  : QObject(parent), m_policy(policy) {}
 
 media_kind media_detector::classify(const QUrl &url, bool *saveable) {
 	*saveable = false;
@@ -62,6 +63,19 @@ media_kind media_detector::classify(const QUrl &url, bool *saveable) {
 
 void media_detector::on_request(const request_context &ctx, const request_decision &d) {
 	if (d.block || ctx.site_host.isEmpty())
+		return;
+
+	// **Asked per request, and per site, which is where the switch lives.**
+	// The alternative was to gate at the badge, and that would have been the
+	// wrong shape: the detector would still be recording every stream a site
+	// served and merely declining to mention them, so turning the setting off
+	// would look like privacy and be bookkeeping. Refusing here means nothing
+	// is written down in the first place.
+	//
+	// A detector built without a policy watches everything, which is what a
+	// driver or a test that never set one up already expects.
+	if (m_policy && !m_policy->is_allowed(policy::feature::media_detect,
+	                                       ctx.site_host))
 		return;
 
 	bool saveable = false;

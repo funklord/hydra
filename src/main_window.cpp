@@ -254,7 +254,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// The two interceptor consumers (architecture doc sec 10): both observe the
 	// same request stream the blocker already rides, rather than adding a
 	// second sensor.
-	m_media      = new media_detector(this);
+	m_media      = new media_detector(m_policy, this);
 	m_signals    = new filter_signals(this);
 	m_annoyances = new annoyance_log();
 	m_ex_signals = new extractor_signals(this);
