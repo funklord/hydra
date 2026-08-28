@@ -58,7 +58,9 @@ media_kind media_detector::classify(const QUrl &url, bool *saveable) {
 	for (const char *e : k_direct_ext) {
 		if (ext == QLatin1String(e)) { *saveable = true; return media_kind::direct; }
 	}
-	return media_kind::segment;   // "not saveable"; caller checks the flag
+	// Not `segment`: a caller that asks "is this a segment" must not be told
+	// yes about a stylesheet. See the note on `unknown` in the header.
+	return media_kind::unknown;
 }
 
 void media_detector::on_request(const request_context &ctx, const request_decision &d) {

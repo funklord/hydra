@@ -1638,7 +1638,45 @@ media not offered, all four dangerous-rule rejections, the dry run reporting
 exactly what it matches, first-party and already-blocked requests excluded from
 signals, and `||host^` matching subdomains but not a suffix-only lookalike.
 
-**Not done from §11–§12:** regression re-runs over a known-clean page set.
+**Everything from §11–§12 is built.** The regression set is the last of it, and
+it found a defect on its first run.
+
+**A corpus rather than more single cases, because the direction that rots is
+false positives.** Per-url checks catch a manifest that stops being recognised;
+what they do not catch is the badge filling with things that merely look like
+media, and that is the failure that worsens quietly, since a detector finding
+too much still finds the real stream. The set is one page's whole request
+stream -- a manifest, two of its segments, a direct file, an audio file, and
+eight things a page of that shape also loads: a script, a stylesheet, an SVG, a
+photograph, a font, an API call, a beacon whose *query* mentions mp4, and an
+opaque `.bin` chunk. It asserts the count, then names every row, because a
+count alone lets one new false positive hide one new false negative.
+
+Synthesised deliberately. `evidence/` holds real captures and is gitignored
+precisely because a capture is somebody's browsing with tokens in the query, and
+a regression corpus is a thing that gets committed.
+
+**What it found: every unrecognised request was being credited to the nearest
+manifest.** `classify()` returned `media_kind::segment` for anything it could
+not place -- documented as "not saveable; caller checks the flag" -- and
+`on_request` does check the flag, then asks a second question, "is this a
+segment?", to which the answer was yes for the script, the stylesheet, the
+font, the beacon and the rest. Each took the segment path and incremented the
+nearest manifest's `hits`. On this corpus the manifest reached ten hits from
+two segments.
+
+That matters because `hits` is what decides the primary stream, and the primary
+is what §11.3 hands a player. On a page with one manifest nothing shows; on a
+page with variant manifests under `/hd/` and `/720p/`, which is the ordinary
+shape, the stream chosen was partly decided by how much unrelated traffic
+happened to share a directory prefix with it. Unrecognised requests have their
+own `media_kind::unknown` now, and the arms are named rather than defaulted, so
+the one consumer that had to change was a compiler warning rather than a
+silent "Unknown".
+
+The corpus asserts `hits == 2` and not `>= 2`, which is the shape that let this
+through: the first version of the check passed against a manifest sitting on
+ten.
 
 **The ffmpeg remux is built.** §11.2 asks that "if `ffmpeg` is present the
 manager remuxes to a clean `.mp4`/`.mkv`, degrading to raw-segment save without

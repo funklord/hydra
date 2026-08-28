@@ -387,7 +387,12 @@ OBJS_test_state = \
 
 OBJS_test_streamtype = \
 	$(BUILD_DIR)/app/stream_probe.o \
-	$(BUILD_DIR)/moc/moc_stream_probe.o
+	$(BUILD_DIR)/app/media_detector.o \
+	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/moc/moc_media_detector.o \
+	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/app/policy.o
 
 OBJS_test_theme = \
 	$(BUILD_DIR)/app/tab_tree_model.o \
@@ -546,6 +551,8 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -666,6 +673,8 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -786,6 +795,8 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -906,6 +917,8 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1026,6 +1039,8 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1146,6 +1161,8 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1266,6 +1283,8 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1386,6 +1405,8 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1506,6 +1527,8 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1626,6 +1649,8 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1746,6 +1771,8 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1866,6 +1893,8 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1987,6 +2016,8 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2106,6 +2137,8 @@ OBJS_try_files = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2226,6 +2259,8 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2346,6 +2381,8 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2466,6 +2503,8 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2588,6 +2627,8 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2708,6 +2749,8 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2835,6 +2878,8 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2955,6 +3000,8 @@ OBJS_try_look = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3075,6 +3122,8 @@ OBJS_try_media = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3195,6 +3244,8 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3317,6 +3368,8 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3437,6 +3490,8 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3557,6 +3612,8 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3678,6 +3735,8 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3797,6 +3856,8 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3927,6 +3988,8 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -4074,6 +4137,8 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -4194,6 +4259,8 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -4314,6 +4381,8 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -4434,6 +4503,8 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -4554,6 +4625,8 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \

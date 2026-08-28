@@ -3,6 +3,7 @@
 // through a server that answers the way the measured site does.
 #include "stream_probe.h"
 #include "media_remux.h"
+#include "media_detector.h"
 
 #include <QCoreApplication>
 #include <QEventLoop>
@@ -204,6 +205,98 @@ int main(int argc, char **argv) {
 		      "and the output is last, where ffmpeg expects it");
 		check(a.contains("-y"),
 		      "a stale target from an interrupted run does not stop it");
+	}
+
+	section("a page's whole request stream, scored against what it should find");
+	{
+		// **A corpus rather than more single cases, and the difference is the
+		// false positives.** Per-url checks catch a manifest that stops being
+		// recognised. What they do not catch is the badge filling up with
+		// things that merely look like media -- a `.bin` chunk, an analytics
+		// beacon ending in `.mp4?`, a font. Both directions are failures a
+		// person sees, and only the second one gets worse quietly, because a
+		// detector that finds too much still finds the real stream.
+		//
+		// Synthesised deliberately: `evidence/` holds real captures and is
+		// gitignored precisely because a capture is somebody's browsing, some
+		// of it with tokens in the query. A regression corpus is a thing that
+		// gets committed, so it cannot come from there.
+		struct row { const char *url; bool want; const char *why; };
+		static const row page[] = {
+			// The real media on this imaginary page.
+			{ "https://cdn.test/movie/master.m3u8",     true,  "the manifest" },
+			// **Credited to its manifest, not listed beside it**, which the
+			// corpus got wrong on its first run and the detector had right:
+			// a stream is hundreds of segments and listing them would bury
+			// the thing somebody actually wants. It raises the manifest's
+			// `hits` instead, which is how sec 11.3 knows which stream is the
+			// one playing. Asserted below rather than merely absent here.
+			{ "https://cdn.test/movie/seg-00001.ts",    false, "a segment of it" },
+			{ "https://cdn.test/movie/seg-00002.ts",    false, "and another" },
+			{ "https://cdn.test/trailer.mp4",           true,  "a direct file" },
+			{ "https://cdn.test/theme.m4a",             true,  "audio counts too" },
+			// Everything else a page of that shape loads.
+			{ "https://site.test/app.js",               false, "a script" },
+			{ "https://site.test/style.css",            false, "a stylesheet" },
+			{ "https://site.test/logo.svg",             false, "vector art" },
+			{ "https://site.test/hero.jpg",             false, "a photograph" },
+			{ "https://site.test/font.woff2",           false, "a font" },
+			{ "https://site.test/api/session",          false, "an api call" },
+			{ "https://beacon.test/collect?u=x.mp4",    false,
+				"a beacon whose QUERY mentions mp4 -- the shape that flooded"
+				" badges when extension matching ignored the query" },
+			{ "https://cdn.test/chunk-7.bin",           false,
+				"an opaque chunk: it may be media and nothing here says so" },
+		};
+
+		media_detector det;
+		int expected = 0;
+		for (const row &r : page) {
+			request_context ctx;
+			ctx.site_host    = "site.test";
+			ctx.request_host = QUrl(QString::fromUtf8(r.url)).host();
+			ctx.url          = QUrl(QString::fromUtf8(r.url));
+			det.on_request(ctx, request_decision{});
+			if (r.want)
+				++expected;
+		}
+
+		const int found = det.count_for("site.test");
+		check(found == expected,
+		      QString("the page yields exactly %1 saveable items, not %2")
+		          .arg(expected).arg(found));
+
+		// Naming what surfaced, so a failure says which row moved rather than
+		// only that a count changed. A count alone would let one new false
+		// positive hide one new false negative.
+		QStringList surfaced;
+		for (const media_item &it : det.items_for("site.test"))
+			surfaced << it.url.toString();
+		for (const row &r : page) {
+			const bool here = surfaced.contains(QString::fromUtf8(r.url));
+			check(here == r.want, QString("%1: %2")
+			                          .arg(r.why, here ? "found" : "not found"));
+		}
+
+		// The manifest is what sec 11.3 hands a player, and a corpus that scored
+		// the count right while promoting a segment would still be wrong.
+		check(det.primary_for("site.test").url.toString()
+		        == "https://cdn.test/movie/master.m3u8",
+		      "and the manifest is the primary, not one of its segments");
+
+		// The positive half of the segment rule: absent from the list is only
+		// right if they were counted somewhere. Two segments went in.
+		int manifest_hits = -1;
+		for (const media_item &it : det.items_for("site.test"))
+			if (it.url.toString() == "https://cdn.test/movie/master.m3u8")
+				manifest_hits = it.hits;
+		// Exactly two, not "at least". This corpus feeds two segments and
+		// eleven other things, and it was `>= 2` that let the original
+		// defect through -- the manifest was on ten hits because every
+		// unrecognised request had been credited to it.
+		check(manifest_hits == 2,
+		      QString("the two segments were credited to it, and nothing else "
+		               "was (hits=%1)").arg(manifest_hits));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

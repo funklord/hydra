@@ -17,6 +17,15 @@ enum class media_kind {
 	hls,         // an .m3u8 manifest
 	dash,        // an .mpd manifest
 	segment,     // .ts / .m4s -- betrays a manifest we may not have seen
+	// **Everything else, and it needs its own value.** This used to come back
+	// as `segment` with the saveable flag false, on the reasoning that the
+	// caller checks the flag. `on_request` checks it and then asks a second
+	// question -- "is this a segment?" -- to which the answer was yes for every
+	// script, image, font and beacon on the page. Each of them was credited to
+	// the nearest manifest, and `hits` is what decides which stream is the
+	// primary one, so the stream handed to a player was chosen partly by how
+	// much unrelated traffic happened to share its directory.
+	unknown,
 };
 
 struct media_item {

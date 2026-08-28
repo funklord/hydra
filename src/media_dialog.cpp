@@ -95,6 +95,11 @@ QString kind_label(media_kind k) {
 		case media_kind::dash:    return "DASH stream";
 		case media_kind::direct:  return "File";
 		case media_kind::segment: return "Segment";
+		// Named rather than left to the fallthrough, so that a kind added
+		// later is a warning here instead of quietly becoming "Unknown". It
+		// should not arrive: nothing builds an item for a request classify
+		// could not place.
+		case media_kind::unknown:  return "Unknown";
 	}
 	return "Unknown";
 }
