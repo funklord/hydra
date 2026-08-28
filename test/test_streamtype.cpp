@@ -2,6 +2,7 @@
 // classification, which is pure and where the subtlety is, and one real fetch
 // through a server that answers the way the measured site does.
 #include "stream_probe.h"
+#include "media_remux.h"
 
 #include <QCoreApplication>
 #include <QEventLoop>
@@ -178,6 +179,31 @@ int main(int argc, char **argv) {
 		const probe_result gone = fetch(p, QUrl("http://127.0.0.1:1/nothing"));
 		check(!gone.reached && gone.kind.isEmpty(),
 		      "an unreachable address reports that, rather than a verdict");
+	}
+
+	section("the remux names its output and says what it asks ffmpeg for");
+	{
+		check(media_remux::target_for("/tmp/clip.ts") == "/tmp/clip.mp4",
+		      "a .ts becomes a .mp4");
+		check(media_remux::target_for("/tmp/CLIP.TS") == "/tmp/CLIP.mp4",
+		      "and the extension is matched whatever its case");
+		// The interesting one: an unrecognised name must not be truncated.
+		// Trimming three characters off anything would turn "movie.webm" into
+		// "movie.w" and write beside a file nobody asked about.
+		check(media_remux::target_for("/tmp/movie.webm") == "/tmp/movie.webm.mp4",
+		      "a name this does not recognise gains .mp4 rather than losing what it had");
+		check(!media_remux::target_for("/tmp/a.ts").endsWith(".ts"),
+		      "and the output is never the input, which would truncate it mid-write");
+
+		const QStringList a = media_remux::arguments("/tmp/in.ts", "/tmp/out.mp4");
+		check(a.contains("copy") && a.contains("-c"),
+		      "it rewraps rather than re-encodes");
+		check(a.indexOf("-i") >= 0 && a.at(a.indexOf("-i") + 1) == "/tmp/in.ts",
+		      "the input follows -i");
+		check(a.last() == "/tmp/out.mp4",
+		      "and the output is last, where ffmpeg expects it");
+		check(a.contains("-y"),
+		      "a stale target from an interrupted run does not stop it");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

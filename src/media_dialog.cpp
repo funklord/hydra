@@ -8,6 +8,7 @@
 #include "player_launcher.h"
 #include "local_proxy.h"
 #include "hls_assembler.h"
+#include "media_remux.h"
 
 #include <QDir>
 
@@ -296,8 +297,30 @@ void media_dialog::assemble_then(const media_item &item, bool play_it) {
 	});
 
 	connect(m_assembler, &hls_assembler::completed, this, [this, out, play_it] {
-		m_status->setText(play_it ? "Stream assembled; playback continues locally."
-		                          : QString("Saved assembled stream to %1.").arg(out));
+		if (play_it) {
+			// **Not remuxed, deliberately.** A player already has this file
+			// open and has been reading it since the first segment landed --
+			// that is the tee-to-disk trick above. Rewrapping it now would
+			// replace the file underneath a running player to gain a container
+			// nobody is going to seek around afterwards.
+			m_status->setText("Stream assembled; playback continues locally.");
+			return;
+		}
+
+		// The sec 11.2 step: a saved stream should be a file the rest of the
+		// world accepts, and concatenated MPEG-TS is not that. Optional, so
+		// the message says what happened either way rather than only on
+		// success -- "saved" with no mention of the container would leave
+		// somebody wondering why they have a `.ts`.
+		m_status->setText(QString("Saved %1; rewrapping…").arg(out));
+		auto *remux = new media_remux(this);
+		connect(remux, &media_remux::finished, this,
+		         [this, remux](bool ok, const QString &path, const QString &why) {
+			m_status->setText(ok ? QString("Saved %1.").arg(path)
+			                      : QString("Saved %1 — %2").arg(path, why));
+			remux->deleteLater();
+		});
+		remux->start(out);
 	});
 
 	connect(m_assembler, &hls_assembler::failed, this, [this](const QString &e) {

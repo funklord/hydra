@@ -1638,8 +1638,42 @@ media not offered, all four dangerous-rule rejections, the dry run reporting
 exactly what it matches, first-party and already-blocked requests excluded from
 signals, and `||host^` matching subdomains but not a suffix-only lookalike.
 
-**Not done from §11–§12:** the ffmpeg remux and regression re-runs over a
-known-clean page set.
+**Not done from §11–§12:** regression re-runs over a known-clean page set.
+
+**The ffmpeg remux is built.** §11.2 asks that "if `ffmpeg` is present the
+manager remuxes to a clean `.mp4`/`.mkv`, degrading to raw-segment save without
+it", and `media_remux` is that step: `-c copy`, never a re-encode. The segments
+are already H.264/AAC and the only thing wrong with them is the container, so
+rewrapping takes seconds where transcoding would take minutes and lose a
+generation for nothing. A stream `-c copy` cannot rewrap keeps its `.ts` and
+says so, which is the honest outcome rather than spending somebody's CPU on a
+conversion they did not ask for.
+
+**It runs on save and not on watch**, and that is not an oversight. A player
+already has the assembled file open and has been reading it since the first
+segment landed -- the tee-to-disk trick above -- so rewrapping then would
+replace a file underneath a running player to gain a container nobody is about
+to seek around.
+
+**The exit code does not decide; the artifact does.** ffmpeg can return zero
+having written nothing usable, a truncated input being the ordinary way, so the
+output is asked whether it exists and has bytes before anything is claimed and
+before the input it replaces is deleted. A zero-length stub is removed rather
+than left, since a file that is there and empty is worse than one that is not.
+Removing the raw concatenation is best-effort: failing the save because a
+delete failed would be losing the good outcome over the tidy one.
+
+Verified in two halves, because the halves need different instruments. The
+decisions -- what the output is called, what ffmpeg is told -- are pure and sit
+inline in the header, tested in `test_streamtype`; the one that matters most
+there is that a name the code does not recognise gains `.mp4` rather than
+losing three characters, because trimming blindly would turn `movie.webm` into
+`movie.w` and write beside a file nobody asked about. The behaviour needs a
+process and was probed separately: a real MPEG-TS is rewrapped and the raw file
+removed, and an input ffmpeg cannot read reports failure, keeps the original,
+and leaves no stub. The argument list was also run against a real transport
+stream produced for the purpose, and `ffprobe` confirms the result is genuinely
+an MP4 rather than a file with the right name.
 
 **The per-site auto-detect toggle is built**, and the architecture doc had
 already decided where it goes: "a per-site 'auto-detect media' toggle lives in
