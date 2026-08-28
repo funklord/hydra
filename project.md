@@ -1569,6 +1569,59 @@ pre-selected, and applying one is currently a no-op. The undo snapshot was in
 this list until 2026-08-27 and had been built for some time; see *Reorganizer
 undo* below.
 
+### What a duplicate-URL merge would have to decide, before anybody writes one
+
+Designed ahead of the code because the decision is the work here, and because
+one of the constraints is not obvious until it is looked for.
+
+**The blocking one: today's undo cannot undo a merge.** §9.4's snapshot is
+`tree_snapshot_entry` -- id, parent, title, order, folder -- and its own
+section says why that is enough: "structure is the only thing a reorganization
+changes ... live views and state blobs are keyed by id and were never stored on
+the node". A merge breaks that premise. It deletes a node and it changes
+content on the survivor, and neither url, tags nor history is in the snapshot.
+Worse than losing the undo, the undo would still *appear* to work: restore
+skips an id that is no longer in the model rather than resurrecting it, so
+Undo Reorganize would report success and quietly not bring the tab back. Any
+merge that ships before this is answered is a destructive change with a broken
+revert sitting next to it.
+
+Two ways out, and they are genuinely different features:
+
+- **Extend the snapshot** to carry a deleted leaf whole -- url, tags, history,
+  created, last_seen -- so undo is lossless. That is the honest merge, and it
+  costs a wider snapshot and a restore that can re-create a node rather than
+  only re-parent one.
+- **Do not delete.** Move the duplicate under the survivor, or into a folder,
+  so a "merge" is a *move*. The existing snapshot handles that losslessly and
+  for free, because it is exactly the structural change it was built for. But
+  it does not merge anything: two entries remain, with their tags and histories
+  apart, and the list still shows both.
+
+**If it is the real merge, five things need answers, and only one is obvious.**
+
+- **Tags: union.** The only lossless choice; dropping one side's tags is data
+  loss nobody asked for.
+- **Which id survives.** Ids key the live view and the state blob, so the
+  survivor keeps its open page and the other's is discarded. Preferring one
+  that is currently open, then the earlier `created`, then tree order, loses
+  the least.
+- **History.** The two are different sessions of the same address and cannot
+  be concatenated into one back/forward list meaningfully. Keeping the
+  survivor's discards a real record; keeping the longer one is defensible
+  because history is content and moves independently of the id.
+- **Title.** They differ or there would be nothing to choose. The later
+  `last_seen` is the better guess than the survivor's.
+- **created and last_seen.** Earliest created, latest last_seen -- the merged
+  tab has existed since the first and was seen at the second.
+
+**A recommendation, since one is wanted rather than a menu.** Extend the
+snapshot and build the real merge, with tags unioned, the open node preferred
+as survivor, the longer history kept, and the later title. The cheap version
+is worth naming only to reject: a "merge" that leaves both entries in the list
+is the reorganizer offering a control whose name does not match what it does,
+which is the defect that was just removed from this same dialog.
+
 **And the no-op was reachable, which is the part that was a defect rather than
 a gap.** `tree_diff` calls the duplicate kind advisory and its apply arm does
 nothing, deliberately, because merging is destructive and unbuilt. But
