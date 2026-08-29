@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "qtwebengine_factory.h"
+
+#include "user_agent.h"
 #include "qtwebengine_view.h"
 #include "request_filter.h"
 #include "qtwebengine_interceptor.h"
@@ -134,6 +136,12 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 	// profile that could not remember anything.
 	m_profile->setPersistentPermissionsPolicy(
 	  QWebEngineProfile::PersistentPermissionsPolicy::AskEveryTime);
+
+	// What this browser says it is. The reasoning, the trade and the measured
+	// limitation are all in `user_agent.h`, beside the transformation, rather
+	// than here -- this is the one line that applies it.
+	m_profile->setHttpUserAgent(
+	  user_agent::corrected(m_profile->httpUserAgent()));
 
 	// **A page asking to save something.** Nothing was connected to this, so
 	// Chromium asked and got no answer, and Qt cancels an unaccepted request --

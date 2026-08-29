@@ -6063,6 +6063,55 @@ process per application and a launcher tap resumes the task that exists, so
 there is no second process to keep out and links arrive as intents rather than
 as argv. A lock there would guard nothing and be one more thing left behind.
 
+## A bank turned this browser away, and the user agent is why
+
+Reported 2026-08-29: seb.se answering with "we no longer support the version
+of Google Chrome you are using". Measured rather than guessed -- a local
+server that logs what asks:
+
+    Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)
+    QtWebEngine/6.8.2 Chrome/122.0.6261.171 Safari/537.36
+
+**Two faults in one string.** Chrome 122 shipped in February 2024, so a site
+gating on a version sees a browser years out of date. And `QtWebEngine/6.8.2`
+is a token no real browser sends, so a checker working from a list of known
+browsers has an unknown one -- which is the worse of the two, because a version
+comparison can be generous and a whitelist cannot.
+
+Corrected to what a current Chrome actually says:
+
+    Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)
+    Chrome/140.0.0.0 Safari/537.36
+
+Derived from Qt's own string rather than written out, so the platform stays
+true on whatever this is built for. `Chrome/140.0.0.0` and not
+`Chrome/140.0.6261.171`: replacing only the major left 140 wearing Chromium
+122's build numbers, a combination that has never shipped and is a *worse*
+fingerprint than the honest string. Real Chrome has sent a reduced user agent
+since version 101, freezing everything after the major to zero.
+
+**It is a claim about a version we do not have.** The engine really is
+Chromium 122, so a site needing something only 140 has now fails later instead
+of turning us away up front. That is the worse failure in general and the
+better one here: being refused at the door is unconditional and cannot be
+worked around from inside the page. The number is a named constant because it
+has to be maintained -- nothing in the code can work out what today's Chrome
+is, and left alone for two years it recreates the bug it was written to fix.
+
+**What it does not fix, measured on the same server:** `sec-ch-ua` still says
+`"Chromium";v="122"`. Chromium builds client hints from its real version and Qt
+exposes no override, so a site reading `navigator.userAgentData` rather than
+the string sees through this.
+
+**Not reproduced, and worth being honest about.** The public homepage does not
+show the banner with either user agent -- checked with the probe, which loads
+the page, waits for its scripts and reads `document.body.innerText`. Whatever
+refuses is behind the login, which this session cannot reach. So the fix is
+justified by what the string says rather than by watching the banner
+disappear, and the person who saw it is the one who can confirm. The probe
+deliberately reports one bit and takes no screenshot: the machine it runs on
+had a real banking session on screen at the time.
+
 ## Android's cookies: one real gap, and one that was imagined
 
 Two things looked wrong on the phone after the desktop gained a persistent

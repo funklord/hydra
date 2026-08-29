@@ -8,6 +8,7 @@
 #include "download_manager.h"
 #include "player_launcher.h"
 #include "media_detector.h"
+#include "user_agent.h"
 #include "torrent_download_source.h"
 #include "ollama_provider.h"
 #include "claude_provider.h"
@@ -638,6 +639,44 @@ int main(int argc, char **argv) {
 			check(det.count_for("video.test") == 1,
 			      "a detector with no policy watches everything, as before");
 		}
+	}
+
+	section("the user agent this browser sends");
+	{
+		const QString qt_default =
+		  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+		  "QtWebEngine/6.8.2 Chrome/122.0.6261.171 Safari/537.36";
+		const QString out = user_agent::corrected(qt_default, 140);
+
+		check(!out.contains("QtWebEngine"),
+		      "the token no real browser sends is gone");
+		check(out.contains("Chrome/140.0.0.0"),
+		      "and the version is Chrome's reduced form, not a made-up build");
+		check(!out.contains("6261"),
+		      "the old build numbers do not survive -- 140 wearing 122's "
+		      "numbers is a combination that never shipped");
+		check(out.contains("X11; Linux x86_64"),
+		      "the platform is Qt's own and is left alone");
+		check(out.startsWith("Mozilla/5.0 (") && out.endsWith("Safari/537.36"),
+		      "and the string is still shaped like a user agent");
+		check(!out.contains("  "),
+		      "removing the token leaves no doubled space");
+
+		// Idempotent: the factory derives from whatever the profile reports,
+		// and a string that has already been through here must not be
+		// mangled a second time.
+		check(user_agent::corrected(out, 140) == out,
+		      "running it twice changes nothing");
+
+		// An Android-shaped string keeps its platform, since this project
+		// builds for a phone and a transformation that hardcoded X11 would
+		// quietly lie there.
+		const QString droid =
+		  "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) "
+		  "QtWebEngine/6.8.2 Chrome/122.0.6261.171 Mobile Safari/537.36";
+		const QString dout = user_agent::corrected(droid, 140);
+		check(dout.contains("Linux; Android 10; K") && dout.contains("Mobile"),
+		      "an Android string keeps its platform and its Mobile token");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
