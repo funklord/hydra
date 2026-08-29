@@ -1823,10 +1823,16 @@ void main_window::start_element_picker() {
 }
 
 void main_window::on_about() {
+	// **The address is escaped because this box is rich text.**
+	// `QMessageBox::about` renders HTML, so a bare <nabeel@vibes.se> is an
+	// unknown tag and is dropped silently -- the line would read "Copyright
+	// (C) 2026 Nabeel Sowan" with the address simply gone, which is the half
+	// of it a reader would need to act on.
 	QMessageBox::about(this, "About Hydra",
 	  "<b>Hydra</b><br>"
 	  "A tab-tree browser over an embedded Chromium, with a per-site "
 	  "security policy engine.<br><br>"
+	  "Copyright (C) 2026 Nabeel Sowan &lt;nabeel@vibes.se&gt;<br>"
 	  "Licensed GPL-3.0-or-later.");
 }
 

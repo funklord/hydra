@@ -213,4 +213,6 @@ association key, which lives in the session keyring instead.
 
 ## Licence
 
+Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>
+
 GPL-3.0-or-later — see `LICENSE`.
