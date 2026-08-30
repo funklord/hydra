@@ -10342,6 +10342,75 @@ apk check was exercised against synthetic zips carrying one ABI, two, and none.
 **What is not verified is a real build**: this machine has the kits but no NDK
 or JDK, so `make android` gets as far as the NDK check and stops.
 
+### Audio stopped when the browser was backgrounded
+
+Reported as "the audio stops when the browser isn't in the foreground", and it
+was two problems wearing one symptom. Both are fixed, and the order in which
+they were found is the point.
+
+**A foreground service was the obvious answer and was not the answer.** The
+first measurement said what it was not: Android's audio service showed hydra's
+player going from `state:started` to `state:stopped` seconds after HOME, while
+the process stayed alive at the same pid and the window log said
+`destroySurfaces: appStopped=true`. Nothing had been killed, so this was not the
+out-of-memory problem a foreground service is usually reached for.
+
+The service was built anyway, because an app in the background is not entitled
+to sustained playback without one, and with it running -- `mFgServiceShown=true`
+against the `hydra.playback` channel, the notification on screen -- a video's
+audio still stopped two seconds after backgrounding. **An audio-only stream on
+the same build played on indefinitely.** That pair is the diagnosis: Chromium
+suspends a video whose window has become invisible, and an audio element has
+nothing to suspend. So the service is necessary and was never sufficient, and
+`Player.onWindowVisibilityChanged` in `HydraWebView.java` is the second half --
+it withholds the invisibility while, and only while, a foreground service is
+held.
+
+**Gated on the service on purpose.** Ungated, that override is a browser that
+never stops decoding because it happens to be on a page with a video, which is
+somebody's battery. Gated, the browser keeps playing exactly when it has told
+the system it is playing, with the notification saying so on screen throughout.
+The withheld visibility is handed over the moment the service goes down, or the
+engine would believe its window was still on screen -- the same battery cost
+arriving by the back door.
+
+**Measured with a control that discriminates**, same build, same page, on the
+Note 9:
+
+| | watcher | service | +2s background | +4s |
+|---|---|---|---|---|
+| app op `START_FOREGROUND` allow | reports playing | started | `started` | `started` |
+| app op `START_FOREGROUND` deny | reports playing | `refused` | `stopped` | `stopped` |
+
+Denying the app op leaves everything else identical and makes the service throw
+`SecurityException: foreground not allowed as per app op`, so the only
+thing that varies is whether the service is held.
+
+**The first attempt at that control was vacuous and said so in its own log.**
+The two halves disagreed as hoped, but the log showed the watcher had never
+reported playing in the control run at all -- so the difference could have been
+the script rather than the app op. The cause was a real defect: the watcher only
+sampled on media events, and a cached video autoplays before the script is
+injected, since injection is at `onPageStarted` and not at document start. Its
+`playing` event had already been and gone. The watcher samples immediately on
+injection now, and twice more on a short timer.
+
+**What tells the service to run is Android's observation, not the page's
+claim** -- but by way of the page, which is the compromise this needed.
+`AudioManager.registerAudioPlaybackCallback` is the device's own answer and
+anonymizes what it reports about players the app does not own, so it can say
+"something on this device is playing" and not "this tab is playing". The
+injected watcher asks the document how many media elements are actually
+playing, recomputed rather than counted: a play/pause counter drifts when an
+element is removed mid-play and its `ended` never comes, and it ends up holding
+a notification over a silent browser for ever. It does not see media inside a
+cross-origin iframe, which keeps the old behaviour there.
+
+`PlaybackService.java` is tab-indented while the three Java files beside it are
+space-indented. The global rule is tabs and Java is not in `.style-gate.toml`'s
+`indent_suffixes`, so nothing has ever gated these files; converting the other
+three is a deliberate pass rather than something to do inside a feature.
+
 ## Five defects in the tab tree, reported as "it is unreliable"
 
 Reported from use, in two sentences: sometimes a tab does not update its text,

@@ -27,6 +27,21 @@
     android:versionCode="-- %%INSERT_VERSION_CODE%% --"
     android:versionName="-- %%INSERT_VERSION_NAME%% --">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Background audio. A page playing sound went silent the moment the
+         browser was backgrounded: Android's audio service showed the player
+         moving from started to stopped while the process stayed alive, so
+         nothing had been killed. An app in the background is simply not
+         entitled to sustained playback unless it holds a foreground service,
+         and the media playback type is the one that describes this honestly.
+
+         POST_NOTIFICATIONS is here because a foreground service is required to
+         show a notification and, from API 33, showing one requires the user's
+         permission. Below 33 it is granted by installing; at or above it, a
+         refusal hides the notification without stopping the service, so the
+         sound keeps playing and only the label for it is missing. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Plain HTTP is allowed because this is a browser. Android blocks
          cleartext by default, which is right for an app that talks to its own
          backend and wrong for one whose entire job is loading addresses the
@@ -49,5 +64,11 @@
             </intent-filter>
             <meta-data android:name="android.app.lib_name" android:value="hydra"/>
         </activity>
+        <!-- Not exported: nothing outside this app has any business starting
+             it, and a foreground service another app can start is one another
+             app can use to keep this process alive. -->
+        <service android:name="se.vibes.hydra.PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback"/>
     </application>
 </manifest>

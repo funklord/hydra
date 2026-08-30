@@ -167,6 +167,13 @@ public class HydraWebView {
         public String call(String name, String method, String args) {
             return bridgeCall(id, name, method, args);
         }
+
+        // Not part of the page's API: nothing documents it and no page has a
+        // reason to call it. It is on the same bridge because there is only
+        // one, and a second interface object would be a second thing every
+        // page can see for no gain.
+        @JavascriptInterface
+        public void mediaState(boolean playing) { notePlaying(id, playing); }
     }
 
     /**
@@ -197,7 +204,7 @@ public class HydraWebView {
             @Override public void run() {
                 if (VIEWS.containsKey(id))
                     return;
-                WebView w = new WebView(a);
+                Player w = new Player(a);
                 w.getSettings().setJavaScriptEnabled(true);
                 w.getSettings().setDomStorageEnabled(true);
                 // **Cookies, which nothing here had ever configured.**
@@ -302,6 +309,13 @@ public class HydraWebView {
                         String js = injectedScripts(id);
                         if (js != null && !js.isEmpty())
                             v.evaluateJavascript(js, null);
+                        // A new document has no listeners and no elements, so
+                        // whatever was playing here is not playing now. Said
+                        // before the watcher goes in, so a navigation away from
+                        // a video drops the notification rather than stranding
+                        // it on a page that no longer exists.
+                        notePlaying(id, false);
+                        v.evaluateJavascript(MEDIA_WATCH, null);
                     }
 
                     // Asked about every navigation, and silence is consent: a
@@ -369,6 +383,174 @@ public class HydraWebView {
                 VIEWS.put(id, w);
             }
         });
+    }
+
+    /**
+     * A WebView that can decline to notice it has been hidden.
+     *
+     * **Subclassed for one override, and only one.** A foreground service buys
+     * the right to keep playing; it does not make the WebView want to.
+     * Measured, with the service running and its notification on screen: a
+     * video's audio still went from started to stopped two seconds after the
+     * browser was backgrounded, while an audio-only stream on the same build
+     * played on indefinitely. The difference is neither the service nor the
+     * permission -- Chromium suspends a video whose window has become
+     * invisible, and an audio element has nothing to suspend.
+     * `onWindowVisibilityChanged` is where that is decided, so it is the one
+     * place to decline it.
+     */
+    private static class Player extends WebView {
+        /** A visibility that was withheld, or -1. */
+        private int pending = -1;
+
+        Player(android.content.Context c) { super(c); }
+
+        @Override
+        protected void onWindowVisibilityChanged(int visibility) {
+            // **Only while a foreground service is held.** Without that
+            // condition this is a browser that never stops decoding because it
+            // happens to be on a page with a video, which is somebody's
+            // battery. With it, the browser keeps playing exactly when it has
+            // told the system it is playing, and the notification saying so is
+            // on screen throughout.
+            if (visibility != android.view.View.VISIBLE && SERVICE_UP) {
+                pending = visibility;
+                return;
+            }
+            pending = -1;
+            super.onWindowVisibilityChanged(visibility);
+        }
+
+        /**
+         * Hand over a withheld visibility once the reason for withholding it
+         * has gone.
+         *
+         * Without this, a video that simply ends while the browser is hidden
+         * leaves the engine believing its window is still on screen -- so the
+         * renderer stays at foreground priority until somebody opens the
+         * browser again, which is the battery cost the gate above exists to
+         * avoid, arriving by the back door.
+         */
+        void settle() {
+            if (pending == -1)
+                return;
+            final int v = pending;
+            pending = -1;
+            super.onWindowVisibilityChanged(v);
+        }
+    }
+
+    /**
+     * Which views are making a sound.
+     *
+     * **Why a script and not Android's own answer.** AudioManager will report
+     * playback through registerAudioPlaybackCallback, but what an app receives
+     * about players it does not own is anonymized, and a WebView's audio is not
+     * separable from the browser's by that route -- it would say "something on
+     * this device is playing" and this needs "this tab is playing". The page's
+     * own media elements are the only thing that knows.
+     *
+     * **What it does not see:** media inside a cross-origin iframe, since
+     * onPageStarted fires for the main frame only and the script goes in with
+     * it. A video embedded in a frame therefore keeps the old behaviour rather
+     * than gaining the new one, which is a smaller hole than it sounds -- the
+     * sites this was reported against play in the main document.
+     */
+    private static final java.util.Set<Long> PLAYING = new java.util.HashSet<>();
+    private static boolean SERVICE_UP = false;
+
+    /**
+     * Recomputed rather than counted.
+     *
+     * A play/pause counter drifts: a `pause` arrives for an element that was
+     * already paused, an element is removed mid-play and its `ended` never
+     * comes, and the count ends up permanently above zero holding a
+     * notification over a silent browser. Asking the document how many
+     * elements are actually playing cannot drift, because it is a fact rather
+     * than a running total.
+     *
+     * The listeners are on the capture phase because media events do not
+     * bubble -- `playing` on a `<video>` reaches a document listener only if
+     * that listener is capturing. A bubble-phase listener here would compile,
+     * install, and never fire once.
+     */
+    private static final String MEDIA_WATCH =
+        "(function(){"
+      + "if(window.__hydra_media)return;window.__hydra_media=1;"
+      + "function s(){try{var m=document.querySelectorAll('video,audio'),a=false;"
+      + "for(var i=0;i<m.length;i++){var e=m[i];"
+      + "if(!e.paused&&!e.ended&&!e.muted&&e.readyState>2)a=true;}"
+      + "hydraNative.mediaState(a);}catch(x){}}"
+      + "var ev=['playing','pause','ended','emptied','volumechange'];"
+      + "for(var i=0;i<ev.length;i++)document.addEventListener(ev[i],s,true);"
+      // **Sampled as well as listened for, and this is not belt and braces.**
+      // A cached video autoplays before this script is in -- injection is at
+      // onPageStarted, which is not document-start -- so its `playing` event
+      // has already been and gone and no later event says it is playing. That
+      // is exactly what happened in the first measurement: audio running, and
+      // the watcher reporting nothing until the clip ended. The immediate
+      // sample catches what already started; the two delayed ones catch a
+      // stream that has not reached readyState yet, and cost two timers on a
+      // page load.
+      + "s();setTimeout(s,700);setTimeout(s,3000);"
+      + "})();";
+
+    static void notePlaying(final long id, final boolean on) {
+        onUi(new Runnable() {
+            @Override public void run() {
+                if (on)
+                    PLAYING.add(id);
+                else
+                    PLAYING.remove(id);
+                syncPlaybackService();
+            }
+        });
+    }
+
+    /**
+     * Start the service while anything is playing, stop it when nothing is.
+     *
+     * **The order is what makes this legal.** From API 31 an app in the
+     * background may not start a foreground service at all, so the start has to
+     * happen while the browser is still in front -- which it is, because
+     * playback begins with somebody pressing play. Backgrounding it afterwards
+     * keeps a service that is already running, which is allowed.
+     *
+     * The consequence is a real limit rather than a bug: sound that begins
+     * while the browser is already hidden cannot raise the service, and stopping
+     * for a moment while backgrounded gives up the service until the browser is
+     * looked at again.
+     */
+    private static void syncPlaybackService() {
+        final Activity a = ACTIVITY;
+        if (a == null)
+            return;
+        final boolean want = !PLAYING.isEmpty();
+        if (want == SERVICE_UP)
+            return;
+        final android.content.Intent i =
+            new android.content.Intent(a, PlaybackService.class);
+        try {
+            if (want) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
+                    a.startForegroundService(i);
+                else
+                    a.startService(i);
+            } else {
+                a.stopService(i);
+            }
+            SERVICE_UP = want;
+            if (!want)
+                for (WebView v : VIEWS.values())
+                    if (v instanceof Player)
+                        ((Player) v).settle();
+        } catch (RuntimeException e) {
+            // A start refused because the app was in the background throws
+            // rather than returning, and taking the browser down over a
+            // notification would be a poor trade for the sound it was
+            // protecting. SERVICE_UP is left alone so the next change tries
+            // again.
+        }
     }
 
     // The rest post to the view's own UI thread, which is the one that made it,
@@ -607,6 +789,9 @@ public class HydraWebView {
                 WebView w = VIEWS.remove(id);
                 if (w == null)
                     return;
+                // A closed tab is silent whatever it was doing a moment ago.
+                PLAYING.remove(id);
+                syncPlaybackService();
                 ViewGroup p = (ViewGroup) w.getParent();
                 if (p != null)
                     p.removeView(w);
