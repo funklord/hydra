@@ -10343,6 +10343,48 @@ apk check was exercised against synthetic zips carrying one ABI, two, and none.
 **What is not verified is a real build**: this machine has the kits but no NDK
 or JDK, so `make android` gets as far as the NDK check and stops.
 
+### CI has verified nothing here since 2026-08-14
+
+**The runner is blocked on account billing, and a blocked run is coloured
+exactly like a failed one.** GitHub reports `failure`, `gh run list` renders it
+identically to a real failure, and the annotation is only visible one level in:
+*The job was not started because recent account payments have failed or your
+spending limit needs to be increased*. Nothing was built.
+
+**The method, so this can be re-taken when somebody doubts it**, since the fact
+expires the moment the billing is settled:
+
+    gh run view <id> --json jobs --jq '[.jobs[].steps|length]|add'
+
+Zero means no step ran. Measured 2026-08-31 by binary-searching the run list on
+that number:
+
+    last executed:  31765400314  2026-08-14T02:59:27Z  success  22 steps
+    first blocked:  31789557779  2026-08-14T09:47:40Z            0 steps
+
+No run sits between them, so this tree's last executing run was green -- it has
+no phase of genuine failures to be confused with the block, which a sibling
+does. **113 commits have gone to master since**, verified by `make style` and
+the suite here and by nothing else.
+
+**Duration screens, `steps: 0` decides.** A blocked run finishes in 3 to 6
+seconds where this build's genuine failures took 95 and 389, so a short run is
+worth a second look -- but that gap is measured over two failures in a history
+that has never contained a fast one, and malformed workflow YAML, an
+unauthenticated checkout or a missing action reference each fail in seconds
+with steps attempted. Reading the duration alone would file a real defect as a
+billing block, which is the direction that sends somebody away from something
+true.
+
+**What is specifically unexercised**: `.github/workflows/ci.yml` builds from
+`git archive HEAD`, which is the only thing that checks the vendored submodule
+path from clean, because the working tree has yt-dlp already in place. That
+property has not been tested since 2026-08-14 and cannot be tested here.
+
+The billing is account-level -- it splits on repository visibility, private
+metering Actions minutes where public does not -- so it is not fixable from
+this tree and is with the copyright holder.
+
 ### The licence, removed on the holder's instruction
 
 **This tree declares no licence, deliberately.** Instructed by the copyright
