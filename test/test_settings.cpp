@@ -8,6 +8,7 @@
 #include "download_manager.h"
 #include "player_launcher.h"
 #include "media_detector.h"
+#include "accept_language.h"
 #include "user_agent.h"
 #include "torrent_download_source.h"
 #include "ollama_provider.h"
@@ -639,6 +640,36 @@ int main(int argc, char **argv) {
 			check(det.count_for("video.test") == 1,
 			      "a detector with no policy watches everything, as before");
 		}
+	}
+
+	section("the languages this browser asks for");
+	{
+		// The real thing this machine reports -- duplicated, and carrying
+		// script subtags no browser sends. Using the measured value rather
+		// than a tidy invention is the point: a tidy one would have passed
+		// against a transformation that did nothing.
+		const QStringList measured = { "en-US", "en-Latn-US", "en", "en",
+			                            "en-Latn-US", "en-US" };
+		check(accept_language::header_for(measured) == "en-US,en;q=0.9",
+		      "the messy system list becomes what Chrome sends");
+
+		const QStringList sv = { "sv-SE", "sv", "en-US", "en" };
+		check(accept_language::header_for(sv)
+		        == "sv-SE,sv;q=0.9,en-US;q=0.8,en;q=0.7",
+		      "a Swedish system asks for Swedish first, English after");
+
+		check(accept_language::header_for({ "sv-SE" }) == "sv-SE",
+		      "a single language carries no quality, which is what q=1 means");
+		check(accept_language::header_for({}).isEmpty(),
+		      "and no languages produce no header rather than an empty one");
+
+		// A quality of zero means "not acceptable", so a long list must not
+		// run down into saying it refuses its own languages.
+		const QString many = accept_language::header_for(
+		  { "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l" });
+		check(!many.contains("q=0;") && !many.endsWith("q=0"),
+		      "a long list never reaches q=0, which would refuse a language "
+		      "it had just asked for");
 	}
 
 	section("the user agent this browser sends");

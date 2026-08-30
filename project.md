@@ -6135,6 +6135,40 @@ disappear, and the person who saw it is the one who can confirm. The probe
 deliberately reports one bit and takes no screenshot: the machine it runs on
 had a real banking session on screen at the time.
 
+## It asked for no languages at all
+
+Found while chasing the user-agent problem, by logging every header of a real
+request rather than the one header being looked for. `Accept`,
+`Accept-Encoding`, the `Sec-Fetch-*` set and the client hints were all present.
+`Accept-Language` was absent -- nothing ever called `setHttpAcceptLanguage`
+and Qt supplies no default.
+
+**What that costs is not abstract.** A site with more than one language has
+nothing to negotiate against, so it serves whatever it defaults to -- often
+English, sometimes a guess from the address -- and a Swedish reader on a
+Swedish site gets the wrong one, with no recourse but to hunt for a flag. It is
+also distinctive in its own right: no real browser omits this, so omitting it
+is a fingerprint rather than an absence of one.
+
+**The transformation is a pure function because the input is messier than it
+looks**, and that was measured rather than assumed.
+`QLocale::system().uiLanguages()` answers, on this machine:
+
+    en-US, en-Latn-US, en, en, en-Latn-US, en-US
+
+-- duplicated, and carrying script subtags no browser sends. Chrome sends
+`en-US,en;q=0.9`. So the script is dropped, repeats are removed with the order
+kept, and everything after the first gets a descending quality. Had the tests
+used a tidy invented list, a transformation that did nothing at all would have
+passed them, which is why the measured list is the case in the suite.
+
+Qualities stop at 0.1 and never reach zero, because `q=0` means *not
+acceptable* -- a long enough language list would otherwise end by refusing
+languages it had just asked for.
+
+Verified as a pair rather than a pass: the same full header dump that showed
+nothing before shows `Accept-Language: en-US,en;q=0.9` after.
+
 ## Android's cookies: one real gap, and one that was imagined
 
 Two things looked wrong on the phone after the desktop gained a persistent

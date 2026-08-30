@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "qtwebengine_factory.h"
 
+#include "accept_language.h"
 #include "user_agent.h"
 #include "qtwebengine_view.h"
 #include "request_filter.h"
@@ -142,6 +143,14 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 	// than here -- this is the one line that applies it.
 	m_profile->setHttpUserAgent(
 	  user_agent::corrected(m_profile->httpUserAgent()));
+
+	// **And what languages it asks for, which was nothing at all.** Qt sets no
+	// default and nothing here called for one, so every request went out
+	// without `Accept-Language` -- measured by logging a real request's
+	// headers, where every other one was present. `accept_language.h` has what
+	// that costs and why the transformation is not a join.
+	if (const QString langs = accept_language::system_header(); !langs.isEmpty())
+		m_profile->setHttpAcceptLanguage(langs);
 
 	// **A page asking to save something.** Nothing was connected to this, so
 	// Chromium asked and got no answer, and Qt cancels an unaccepted request --
