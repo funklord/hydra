@@ -629,6 +629,23 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_address = new QLineEdit(this);
 	m_address->setPlaceholderText("Address");
 	m_address->setClearButtonEnabled(true);
+	// **What the on-screen keyboard should do here, which nothing had told
+	// it.** No input-method hints were set anywhere in this application, so on
+	// a phone this box behaved like a message box: the first letter
+	// capitalised, and predictive text composing and correcting as you go.
+	// That is the reported "editing is a bit wonky", and it reaches further
+	// than untidiness -- while an IME is composing, the key that should submit
+	// commits the composition instead, so the address never loads and the box
+	// simply sits there.
+	//
+	// **`ImhUrlCharactersOnly` is deliberately not among these**, tempting as
+	// it looks. This box takes search terms as well as addresses --
+	// `navigate_to_address` decides between them -- and a URL keyboard has no
+	// space bar, so it would trade a wonky address for an unusable search.
+	// `ImhLatinOnly` is out for the same reason: a search is whatever somebody
+	// wants to type.
+	m_address->setInputMethodHints(Qt::ImhNoAutoUppercase |
+	                                Qt::ImhNoPredictiveText);
 	connect(m_address, &QLineEdit::returnPressed, this, &main_window::navigate_to_address);
 	bar->addWidget(m_address);
 

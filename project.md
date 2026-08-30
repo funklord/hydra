@@ -6135,6 +6135,47 @@ disappear, and the person who saw it is the one who can confirm. The probe
 deliberately reports one bit and takes no screenshot: the machine it runs on
 had a real banking session on screen at the time.
 
+## Three things a phone cannot do, reported 2026-08-30
+
+A url could not be loaded from the address bar, editing in it was "a bit
+wonky", and there was no way to reach the tab menu at all. Two causes.
+
+**Nothing in this application had ever set an input-method hint.** Measured:
+`grep setInputMethodHints src/` is empty. So on a phone the address bar behaves
+like a message box -- the first letter capitalised, predictive text composing
+and correcting as you type. That is the wonky editing, and it reaches further
+than untidiness: while an IME is composing, the key that should submit commits
+the composition instead, so the address never loads and the box just sits
+there. `ImhNoAutoUppercase | ImhNoPredictiveText` now.
+
+**`ImhUrlCharactersOnly` is deliberately absent, and the reason is a feature
+this box has.** It takes search terms as well as addresses --
+`navigate_to_address` decides between them, and `looks_like_address` is a
+separate unit because the interesting half is a privacy question. A url
+keyboard has no space bar, so that hint would have traded a wonky address for
+an unusable search. `ImhLatinOnly` is out for the same reason: a search is
+whatever somebody wants to type.
+
+**The tab menu is behind a mouse button a touchscreen does not have.**
+`tab_tree_view` sets `Qt::CustomContextMenu`, so rename, new folder, lock and
+forget all arrive through `customContextMenuRequested` -- which a finger never
+raises, leaving the tree read-only on a phone. Qt's Android plugin can
+synthesise the right button from a long press and is asked to, rather than
+growing a gesture handler here: the menu then stays one code path, the one the
+desktop tests exercise, instead of two that have to be kept in step.
+
+**Both are unverified on a device**, and the reason is worth recording rather
+than glossing: the phone to hand is a Fold that is shut, so hydra launches onto
+the inner display which is off, and driving it blind is not something to do on
+a phone with somebody's maps and messages on it. The hints are a Qt API whose
+effect is on the IME and cannot be seen from this side at all; the long press
+rests on the variable being in the shipped plugin, which was checked, and not
+on watching a menu open.
+
+One thing to look at when it is tried: if a long press already begins a drag in
+the tree, the two want reconciling, and the answer is likely a hold threshold
+rather than dropping either.
+
 ## It asked for no languages at all
 
 Found while chasing the user-agent problem, by logging every header of a real

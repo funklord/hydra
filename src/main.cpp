@@ -41,6 +41,30 @@
 #include <QtGlobal>
 
 int main(int argc, char *argv[]) {
+#ifdef Q_OS_ANDROID
+	// **A touchscreen has no right button, and the tab tree's whole menu is
+	// behind one.** `tab_tree_view` uses `Qt::CustomContextMenu`, so rename,
+	// new folder, lock, forget -- everything done to a tab -- arrives through
+	// `customContextMenuRequested`, which a finger never raises. On a phone
+	// the tree is therefore read-only, which is the reported "no right click
+	// to edit tabs".
+	//
+	// Qt's own Android plugin can synthesise the right button from a long
+	// press, and asking it to is better than growing a second path here: the
+	// menu code stays one code path tested on the desktop, rather than a
+	// gesture handler that has to be kept in step with it.
+	//
+	// Set before `QApplication`, because the platform plugin reads its
+	// environment when it initialises and that happens inside the
+	// constructor.
+	//
+	// **Unverified on a device.** The phone to hand is a Fold that is shut, so
+	// this rests on the plugin exposing the variable -- it is in the shipped
+	// `.so` -- and not on watching a menu open. If a long press instead starts
+	// a drag, these two want reconciling, and the answer is probably a hold
+	// threshold rather than dropping one of them.
+	qputenv("QT_ANDROID_ENABLE_RIGHT_MOUSE_FROM_LONG_PRESS", "1");
+#endif
 	// Desktop Linux only: force the xcb platform plugin unless the environment
 	// has already chosen one, so the X11 behaviour this design relies on
 	// (architecture doc sec 2/sec 14) stays predictable, and a Wayland session runs
