@@ -6103,6 +6103,29 @@ is, and left alone for two years it recreates the bug it was written to fix.
 exposes no override, so a site reading `navigator.userAgentData` rather than
 the string sees through this.
 
+**Two attempts to close that gap are recorded as inconclusive rather than
+failed, which is the honest reading and the useful one.**
+`QTWEBENGINE_CHROMIUM_FLAGS=--enable-features=UACHOverrideBlank` -- the
+Chromium feature that blanks the client hints when the user agent is
+overridden, and whose name is in the shipped library -- changed nothing, and
+neither did `--disable-features=ClientHints`. But the control failed too:
+`--lang=de` produced no observable change either, and this build sends no
+`Accept-Language` at all, so there was nothing to see. **The flag mechanism was
+never shown to reach the engine**, which means those two results say nothing
+about the features and only something about the experiment. Anybody retrying
+should first establish that the environment variable arrives -- a switch with
+an unmistakable effect -- before drawing a conclusion from one that appears to
+do nothing.
+
+The avenue that would certainly work for the *headers* is the one this browser
+already owns: `qtwebengine_interceptor` sees every request and can set them.
+That would align `sec-ch-ua` with the string. It would not touch
+`navigator.userAgentData`, which is a JavaScript surface an interceptor cannot
+reach, so it is half a fix -- and which half matters depends on what the site
+actually reads, which is not known, because the page that refuses is behind a
+login this session cannot reach. Building it now would be adding machinery on
+a guess.
+
 **Not reproduced, and worth being honest about.** The public homepage does not
 show the banner with either user agent -- checked with the probe, which loads
 the page, waits for its scripts and reads `document.body.innerText`. Whatever
