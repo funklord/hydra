@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
 #include "tree_diff.h"   // for the sec 9.4 undo snapshot

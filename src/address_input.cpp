@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "address_input.h"
 
 #include <QHostAddress>

@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "filter_dialog.h"
 #include "ai_provider.h"
 #include "filter_signals.h"

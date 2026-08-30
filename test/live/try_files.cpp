@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 //
 // The File System Access prompt: a page asking to read or change a real file or
 // folder, what the page gets back when the answer is yes and when it is no, and

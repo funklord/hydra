@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "consent_dialog.h"
 
 #include "consent_blocker.h"

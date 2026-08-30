@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 /// @pkg_optional libsecret-1 defines HYDRA_HAVE_SECRET
 #ifdef HYDRA_HAVE_SECRET
 // **Before any Qt header, deliberately.** Qt defines `signals` as a macro for

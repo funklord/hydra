@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "kiosk_controller.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"

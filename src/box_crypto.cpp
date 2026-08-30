@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "box_crypto.h"
 
 /// @pkg_optional libsodium defines HYDRA_HAVE_SODIUM

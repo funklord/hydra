@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "tab_tree_model.h"
 #include "node.h"
 #include "tree_outline.h"

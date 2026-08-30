@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "autofill_controller.h"
 #include "keepass_bridge.h"
 #include "policy_engine.h"

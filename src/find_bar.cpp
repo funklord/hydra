@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "find_bar.h"
 
 #include <QGuiApplication>

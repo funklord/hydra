@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
 // Making the shell's dialogs usable on a phone (architecture doc sec 19).

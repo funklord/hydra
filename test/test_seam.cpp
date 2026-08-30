@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "download_manager.h"
 #include "http_download_source.h"
 #include "fake_sources.h"

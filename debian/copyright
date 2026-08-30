@@ -4,21 +4,18 @@ Source: local
 
 Files: *
 Copyright: 2026 Nabeel Sowan <nabeel@vibes.se>
-License: GPL-3.0-or-later
-
-License: GPL-3.0-or-later
- This program is free software: you can redistribute it and/or modify it
- under the terms of the GNU General Public License as published by the Free
- Software Foundation, either version 3 of the License, or (at your option)
- any later version.
+License: UNDECIDED
+ No licence is declared for this source tree, and that is deliberate rather
+ than an oversight: the copyright holder is developing this browser unlicensed
+ until it is complete, and will settle the terms then. Under copyright law the
+ default in that situation is that no rights are granted, so packages built
+ from this tree are for local use and are not distributable as they stand.
  .
- This program is distributed in the hope that it will be useful, but WITHOUT
- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- more details.
+ The tree carried GPL-3.0-or-later until 2026-08-31 and no longer does. Do not
+ restore it, and do not add any licence here to satisfy a lint warning or to
+ match a sibling project: the grant is the copyright holder's to make, and an
+ absent one leaves every option open while a wrong one cannot be taken back.
  .
- You should have received a copy of the GNU General Public License along
- with this program.  If not, see <https://www.gnu.org/licenses/>.
- .
- On Debian systems, the complete text of the GNU General Public License
- version 3 can be found in "/usr/share/common-licenses/GPL-3".
+ Third-party components keep their own terms and are not affected by the
+ above: yt-dlp, vendored at third_party/yt-dlp, is public domain (Unlicense);
+ Qt is used under its LGPL-3.0-only option, linked dynamically.

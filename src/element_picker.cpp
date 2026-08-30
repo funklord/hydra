@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "element_picker.h"
 
 #include <QJsonArray>

@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
 // A private copy of the committed example tree, for a driver to open.

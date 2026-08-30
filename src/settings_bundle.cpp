@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "settings_bundle.h"
 #include "filter_list.h"
 #include "policy.h"

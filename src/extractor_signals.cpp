@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "extractor_signals.h"
 
 extractor_signals::extractor_signals(QObject *parent) : QObject(parent) {}

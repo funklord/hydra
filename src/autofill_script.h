@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
 // The content script injected into every page (architecture doc sec 13.2). Kept

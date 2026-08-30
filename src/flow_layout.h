@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 //
 // A row of widgets that becomes several rows when one will not fit.
 //

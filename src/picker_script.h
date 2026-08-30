@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
 // The "zap this" overlay (architecture doc sec 12.1), injected through the same

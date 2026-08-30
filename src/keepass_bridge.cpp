@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "keepass_bridge.h"
 #include "box_crypto.h"
 #include "credential_store.h"

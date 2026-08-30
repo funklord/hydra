@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "main_window.h"
 
 #include "auth_dialog.h"
@@ -1875,7 +1874,7 @@ void main_window::on_about() {
 	  "A tab-tree browser over an embedded Chromium, with a per-site "
 	  "security policy engine.<br><br>"
 	  "Copyright (C) 2026 Nabeel Sowan &lt;nabeel@vibes.se&gt;<br>"
-	  "Licensed GPL-3.0-or-later.");
+	  "All rights reserved. No licence is granted.");
 }
 
 void main_window::update_status() {

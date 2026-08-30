@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "media_detector.h"
 #include "policy_engine.h"
 

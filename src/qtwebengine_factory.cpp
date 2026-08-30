@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "qtwebengine_factory.h"
 
 #include "accept_language.h"

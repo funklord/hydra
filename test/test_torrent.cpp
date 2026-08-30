@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 // End-to-end test of torrent_download_source against a real libtorrent swarm:
 // a seeder session inside this process, and the source downloading from it over
 // loopback. No tracker, no DHT -- the seeder connects to us directly.

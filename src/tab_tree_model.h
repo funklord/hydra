@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
 #include "tree_diff.h"   // for tree_change in apply_reorganization()

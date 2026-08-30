@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Clearing browsing data, driven from the button somebody presses down to the
 // cookie a server stops being sent -- and the one path that must clear

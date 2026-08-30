@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "http_download_source.h"
 #include "media_detector.h"
 

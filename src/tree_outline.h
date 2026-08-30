@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
 #include "node.h"   // for node_type in the vocabulary helpers below

@@ -1,4 +1,3 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
 #
 # The test tree, for plain Make. Written to be compared against a
 # CMakeLists.txt beside it, and now the only build it has: `make test` at the

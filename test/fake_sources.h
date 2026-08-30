@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 // Test doubles for the download_source seam.
 #pragma once
 

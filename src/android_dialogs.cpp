@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 // **Guarded here, not only by the build system.** `hydra.pro` drops this file
 // outside `android {}`, and until it also said so itself the file depended on a
 // build file to be correct: anything reading the tree rather than the build --

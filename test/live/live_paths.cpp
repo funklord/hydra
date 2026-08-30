@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Where a live driver's browsing profile lands, decided before anything can
 // ask where it is.

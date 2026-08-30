@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "media_dialog.h"
 
 #include "empty_state.h"

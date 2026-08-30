@@ -3419,8 +3419,9 @@ the AI diff/accept pipeline that already does this twice (tree §9, filters
 validated by having to pick a URL that was actually observed — the same
 "cannot invent" rule that governs reorganization. See arch §11.5.
 
-**yt-dlp is vendored** at `third_party/yt-dlp` (Unlicense, so no friction with
-GPL-3-or-later; shallow submodule, ~15 MB). Three jobs: try it first and skip
+**yt-dlp is vendored** at `third_party/yt-dlp` (Unlicense, so it imposes
+nothing whatever this tree is eventually licensed under; shallow submodule,
+~15 MB). Three jobs: try it first and skip
 the model entirely where it supports a site, since it is free and maintained
 by people tracking site changes; hand its nearest extractor to the model as
 worked reference when it does not; and use it as ground truth where it does.
@@ -10341,6 +10342,59 @@ missing kit and a directory with no qmake each fail with their own message. The
 apk check was exercised against synthetic zips carrying one ABI, two, and none.
 **What is not verified is a real build**: this machine has the kits but no NDK
 or JDK, so `make android` gets as far as the NDK check and stops.
+
+### The licence, removed on the holder's instruction
+
+**This tree declares no licence, deliberately.** Instructed by the copyright
+holder on 2026-08-31: develop the browser under no licence until it is
+complete, and settle the terms then. It carried GPL-3.0-or-later until that
+day. Under copyright law an absent licence grants nothing, so nothing built
+here is distributable as it stands -- which is the intended state while a
+project is being written, not a gap in it.
+
+**Do not restore it and do not add another.** Not to satisfy a lint warning,
+not to match a sibling project, and not because a dependency's terms look like
+they want company. A published grant cannot be taken back from anyone who has
+relied on it, so a wrong one is not something that gets fixed later; an absent
+one leaves every option open. The decision belongs to the copyright holder and
+to nobody else.
+
+**Nothing in the dependencies was forcing the old one**, which is the
+measurement that preceded the instruction. Every Qt module this program uses
+offers LGPL-3.0-only -- read from the SPDX line in the headers actually
+compiled against, `qapplication.h`, `qwebengineview.h`, `qwebchannel.h`,
+`qqmlengine.h`, `qdbusconnection.h` and `qprinter.h`, all six identical -- and
+the binary links 17 Qt libraries dynamically, which is what LGPL relinking
+asks for. The optional pkg-config dependencies are ISC (libsodium), BSD-3
+(libtorrent-rasterbar) and LGPL-2.1+ (libsecret); liblz4 looks copyleft to a
+whole-file grep because its catch-all stanza is GPL-2+, and is not, because
+`lib/*` -- the shared library, as against the CLI in `programs/` -- has its
+own BSD-2 stanza. yt-dlp and ffmpeg are subprocesses rather than links.
+
+Three things would change that answer and are worth knowing before they are
+chosen: a GPL-only Qt module (Qt Charts and Qt Virtual Keyboard are GPL-3-only
+in the open-source offering, and this program uses neither), a static Qt build
+-- plausible on Android, where the APK ships Qt as shared objects today -- and
+redistributing Qt WebEngine itself, which bundles Chromium and carries its
+third-party obligations. The holder has said a commercial Qt licence can be
+bought if it is ever required.
+
+**How it was removed.** The 179 SPDX header lines came out mechanically, under
+a tool that refuses to write unless the file it wrote, with the grant line put
+back at the index it came from, is byte-identical to the file it read -- proved
+against the disk rather than against memory, since reassembling in memory what
+was just removed cannot fail. Its first version did exactly that and was
+tautological. The tool carries its own control, classifying a correct removal
+and an over-eager one before touching a real file and exiting 2 if either comes
+out wrong, because a clean report from a blind check reads like a clean report
+from a working one. `git diff --numstat` then said 179 files at one deletion
+and zero insertions each, independently of anything the tool claimed.
+
+Seven files were edited by hand and carry no such proof, so they are named
+rather than tucked behind the number: `LICENSE` (removed), `debian/copyright`,
+`README.md`, the About box in `src/main_window.cpp`, two claims in
+`doc/architecture.md` that reasoned from this program being GPL-3-or-later, and
+one in this file.
 
 ### Audio stopped when the browser was backgrounded
 

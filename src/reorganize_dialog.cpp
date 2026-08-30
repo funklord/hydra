@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "reorganize_dialog.h"
 #include "ai_provider.h"
 #include "node.h"

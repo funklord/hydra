@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Locking a tab, and the sub-tab that comes of navigating one (sec 5.5).
 //

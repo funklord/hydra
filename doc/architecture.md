@@ -403,7 +403,7 @@ That is a deliberately higher bar than "we support torrents", and it is what dec
    | Embedded by | qBittorrent, Deluge | **rTorrent** |
    | Licence (Debian copyright) | BSD-3-clause | GPL-2+ (some MPL-1.1 parts; OpenSSL exception) |
 
-   **Both are licence-compatible with a GPL-3-or-later application** — rakshasa's is GPL-2-*or-later*, not GPL-2-only, so it can be combined under GPL-3. Licence does not decide this.
+   **Licence does not decide this, and since 2026-08-31 it decides even less.** This tree declares no licence while it is being written, so nothing is distributable as it stands and no compatibility question is live yet. When one is: libtorrent-rasterbar is BSD-3 and composes with anything, while rakshasa's is GPL-2-*or-later* and would impose copyleft on whatever links it — which is a reason to prefer the first that has nothing to do with the merits below, and a reason not to let this choice quietly settle a licensing decision that has been deliberately left open.
 
    **What rakshasa's is actually known for.** Not "running light" in the trivial sense of lacking a GUI — the reputation is *connection scaling and throughput*: holding very large numbers of simultaneous peer connections and sustaining far higher up/down rates than contemporaries, which is why it dominated seedbox use. That is a property of the **library's** networking and disk architecture, not of rTorrent's ncurses front end, so unlike a UI's memory footprint it **does** transfer to an embedder. Nabeel puts the gap at roughly 30× against other clients from direct experience; that specific multiple is unverified here and should be measured rather than repeated, but the directional claim is well attested and the mechanism is plausible.
 
@@ -492,7 +492,7 @@ extract(evidence) -> { url, kind, headers } | null
 
 **Observed is not correct, and each way that has been true is a rule.** Every one was found by a real model returning something no test had thought to forbid, which is why the list grows by measurement rather than by design: the page's own address is the document asked about, not a stream in it; one of a flood of near-identical requests is a segment, because a manifest is fetched once; what the browser fetched as a script or an image is page furniture; and — where §10's probe has positively identified a playlist — an address from that playlist's own directory is one of the parts it names rather than an alternative to it. The last of those is the only one that depends on the content-type tier, so it is the only one that cannot fire when the tier is absent or refused; a tier that could not answer must never cost a proposal its accept.
 
-**yt-dlp, vendored at `third_party/yt-dlp`.** Public domain (Unlicense), so it composes with GPL-3-or-later without friction. It earns its place three times over:
+**yt-dlp, vendored at `third_party/yt-dlp`.** Public domain (Unlicense), so it imposes nothing and composes with whatever this tree is eventually licensed under. It earns its place three times over:
 
 1. **Try it first.** Where it supports a site, use it and skip the model entirely — it is free, correct, and maintained by people who track site changes so we do not have to. That is most of the value.
 2. **Worked reference.** 941 extractor modules are a corpus of *how sites hide streams*, written by people who have solved this thousands of times. Handing the model the nearest one is far better context than asking it to invent an approach.

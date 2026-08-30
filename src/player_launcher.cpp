@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "player_launcher.h"
 #include "media_detector.h"
 #ifdef Q_OS_ANDROID

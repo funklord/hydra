@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "single_instance.h"
 
 #include <QCryptographicHash>

@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 //
 // The message a list shows when it has nothing in it, drawn *in* the list.
 //

@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "extractor_dialog.h"
 #include "ai_provider.h"
 #include "extractor_signals.h"

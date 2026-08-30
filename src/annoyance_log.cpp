@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "annoyance_log.h"
 
 #include <QDir>

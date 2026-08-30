@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "settings_dialog.h"
 #include "claude_provider.h"
 #include "download_manager.h"

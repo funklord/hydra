@@ -215,4 +215,13 @@ association key, which lives in the session keyring instead.
 
 Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>
 
-GPL-3.0-or-later — see `LICENSE`.
+**None, deliberately.** This browser is being developed unlicensed until it is
+complete, and the terms will be settled then. No rights are granted in the
+meantime, which is what an absent licence means rather than an oversight in it.
+
+The tree carried GPL-3.0-or-later until 2026-08-31. Do not restore it and do
+not add another: a licence is the copyright holder's to choose, an absent one
+leaves every option open, and a published grant cannot be taken back.
+
+Vendored and linked components keep their own terms — yt-dlp is public domain
+(Unlicense), and Qt is used under its LGPL-3.0-only option, linked dynamically.

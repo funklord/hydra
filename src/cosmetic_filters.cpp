@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 #include "cosmetic_filters.h"
 #include "filter_list.h"
 
