@@ -6205,19 +6205,31 @@ rather than dropping either.
 Recorded rather than fixed, because both are larger than an evening and
 guessing at them would be worse than saying where to start.
 
-**YouTube shows no video.** The first suspect is four lines from the top of
-`HydraWebView.create`: `setLayerType(LAYER_TYPE_SOFTWARE, null)`. Its comment
-says why -- with the default hardware layer the renderer died immediately, and
-software was the difference between a page and a blank rectangle. But video is
-exactly what a software layer cannot composite: a `SurfaceTexture` or a
-hardware overlay has nowhere to go, so the page lays out, the controls work and
-the picture is absent. That fits the report precisely.
+**YouTube: fixed, and the suspect was right.** The report sharpened to "a lot
+of flaws in its display, of a lot of things, including the video" -- which is
+the signature of a software layer rather than of a video problem, since
+transforms, effects, canvas and video all lose GPU compositing together and
+video loses most, a `SurfaceTexture` having nowhere to composite to.
 
-Which means the two are the same problem seen from opposite ends, and the fix
-is unlikely to be flipping the flag back: the renderer died on hardware for a
-reason that was never diagnosed, only avoided. The thing to establish first is
-whether it still dies -- that measurement was taken on an emulator, and this is
-a phone with a newer WebView.
+`setLayerType(LAYER_TYPE_SOFTWARE, null)` was there for a real reason: with the
+default layer the renderer process died immediately. But that was measured on
+an **emulator**, and it was avoided rather than diagnosed. Re-measured on a
+Galaxy Note 9 against system WebView 151, it does not reproduce: example.com
+renders, `m.youtube.com` renders in full -- logo, chips, thumbnails, titles --
+and a video plays and is visible, with no renderer death in the log through any
+of it. The default is hardware compositing now.
+
+`HYDRA_ANDROID_SOFTWARE_LAYER=1` puts the old behaviour back, in the shape
+`HYDRA_ANDROID_WEBVIEW=0` already uses. That is not hedging: the old finding
+was true once and may be true again on hardware nobody here has, and its
+symptom -- a blank rectangle where the page should be -- is not one a person
+could otherwise work around.
+
+**A second thing was verified in the same screenshot**, which is the value of
+photographing the whole window rather than the part being asked about: the
+keyboard's action key now reads **Go**. It read *Next* two days ago, so the
+`Qt::ImEnterKeyType` change is confirmed on the device rather than merely
+built.
 
 **Audio stops when the browser is not in front.** Nothing in this tree pauses
 the WebView -- there is no `onPause` or `pauseTimers` call anywhere in

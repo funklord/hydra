@@ -216,13 +216,37 @@ public class HydraWebView {
                 // policy, in onPageStarted below.
                 CookieManager.getInstance().setAcceptCookie(true);
                 w.setBackgroundColor(Color.WHITE);
-                // Software layer, deliberately. This view is composited on top
-                // of Qt's own hardware surface, and with the default hardware
-                // layer the renderer process died immediately -- measured, and
-                // isolated by the stock WebView Browser Tester rendering the
-                // same page on the same emulator without a murmur. Slower, and
-                // it is the difference between a page and a blank rectangle.
-                w.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null);
+                // **Hardware compositing, which this used to refuse.**
+                //
+                // It was LAYER_TYPE_SOFTWARE, and the reason was real: on the
+                // *emulator*, with the default layer, the renderer process died
+                // immediately, and software was the difference between a page
+                // and a blank rectangle. What that bought was a WebView with no
+                // GPU compositing, and the bill arrived as "YouTube has a lot of
+                // flaws in its display, including the video that cannot be
+                // seen" -- which is exactly the shape of a software layer:
+                // transforms, effects, canvas and video all degrade together,
+                // and video worst of all, because a SurfaceTexture has nowhere
+                // to composite to.
+                //
+                // Re-measured on a Galaxy Note 9 against system WebView 151:
+                // the renderer does not die. example.com renders, m.youtube.com
+                // renders in full, and a video plays and is visible, with no
+                // renderer death in the log through any of it. The original
+                // finding was true of an emulator and an older WebView, and was
+                // avoided rather than diagnosed; it is not true here.
+                //
+                // **The escape hatch is deliberate.** A finding that was real
+                // once may be real again on hardware nobody here has, and the
+                // symptom -- a blank rectangle where the page should be -- is
+                // one somebody could not otherwise work around.
+                // `HYDRA_ANDROID_SOFTWARE_LAYER=1` puts the old behaviour back,
+                // in the same shape as `HYDRA_ANDROID_WEBVIEW=0` above it.
+                final boolean force_software =
+                  "1".equals(System.getenv("HYDRA_ANDROID_SOFTWARE_LAYER"));
+                w.setLayerType(force_software
+                                 ? android.view.View.LAYER_TYPE_SOFTWARE
+                                 : android.view.View.LAYER_TYPE_NONE, null);
                 // Before any load, so a page cannot start without it.
                 w.addJavascriptInterface(new Native(id), "hydraNative");
                 w.setWebChromeClient(new WebChromeClient() {
