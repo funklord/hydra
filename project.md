@@ -6164,17 +6164,56 @@ synthesise the right button from a long press and is asked to, rather than
 growing a gesture handler here: the menu then stays one code path, the one the
 desktop tests exercise, instead of two that have to be kept in step.
 
-**Both are unverified on a device**, and the reason is worth recording rather
-than glossing: the phone to hand is a Fold that is shut, so hydra launches onto
-the inner display which is off, and driving it blind is not something to do on
-a phone with somebody's maps and messages on it. The hints are a Qt API whose
-effect is on the IME and cannot be seen from this side at all; the long press
-rests on the variable being in the shipped plugin, which was checked, and not
-on watching a menu open.
+**Driven on the Note 9 afterwards, and the hints were not the whole story.**
+The typing came out clean, but the keyboard's action key reads **Next**, not
+Go -- and tapping it moves focus out of the field rather than navigating, so
+the address sits there and the keyboard closes. A return sent afterwards does
+nothing either, the field no longer having focus. Which action an IME offers
+is its own decision and Qt exposes no hint that asks for Go, so the fix stops
+depending on the keyboard: on Android the address bar carries a **Go button**,
+beside the clear cross, which every mobile browser has and which a person can
+see. Verified on the device -- tapping it fetched the page from a local server
+that logged the request.
+
+**And the first attempt to test it failed for a second reason, which turned
+out to be the better find.** `127.0.0.1:8753/typed` did not load even with a
+working Go button, because `looks_like_address` classified it as a *search*.
+See below.
 
 One thing to look at when it is tried: if a long press already begins a drag in
 the tree, the two want reconciling, and the answer is likely a hold threshold
 rather than dropping either.
+
+## A local address with a port and a path was sent to a search engine
+
+Found while testing the Go button, because the test address would not load
+even once the button worked. Measured:
+
+    127.0.0.1:8753               -> address
+    127.0.0.1:8753/typed         -> SEARCH
+    192.168.1.1:631/printers     -> SEARCH
+    localhost:8080/admin         -> address
+    example.com:8080/path        -> address
+
+**The order of two operations, and it is the whole bug.** `looks_like_address`
+stripped the port before removing the path, and `without_port` only strips a
+trailing `:port` when what follows the colon is digits and nothing else. In
+`127.0.0.1:8753/typed` the candidate was `8753/typed`, so nothing was
+stripped, the host came out as `127.0.0.1:8753`, and that is not an address.
+Path first, then port.
+
+**A hostname survived it by accident**, still looking domain-shaped with the
+port attached, so only *bare IPs* fell through -- which is the worst case to
+lose. A router page, a printer at `:631`, a service on a machine at home: those
+are exactly the addresses somebody types with a port and a path, and this file
+exists because sending one to a search engine is a privacy failure rather than
+a missed navigation. Its own header says so: a bare hostname must never end up
+in a search box.
+
+That the accident spared hostnames is also why nothing noticed. The suite
+tested `127.0.0.1:36853` and `localhost:8080`, both of which pass without a
+path, and no case combined a port with a path. Three now do, including the
+bracketed IPv6 form.
 
 ## It asked for no languages at all
 

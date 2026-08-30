@@ -118,7 +118,20 @@ bool looks_like_address(const QString &text) {
 		if (c.isSpace())
 			return false;
 
-	const QString host = without_port(t).split('/').first();
+	// **Path first, then port.** These were the other way round, and the order
+	// is the whole bug: `without_port` only strips a trailing `:port` when what
+	// follows the colon is digits and nothing else, so in `127.0.0.1:8753/admin`
+	// the candidate was `8753/admin`, nothing was stripped, and the host came
+	// out as `127.0.0.1:8753` -- which is not an address, so it was searched
+	// for instead.
+	//
+	// A hostname survived that by accident (`example.com:8080/path` still looks
+	// domain-shaped with the port attached) so only bare IPs fell through, which
+	// is the worst case to lose: `192.168.1.1:631/printers` and every router
+	// admin page are exactly the addresses somebody types with a port and a
+	// path -- and this file exists because sending one of those to a search
+	// engine is a privacy failure, not a missed navigation.
+	const QString host = without_port(t.split('/').first());
 	if (host.isEmpty())
 		return false;
 	if (is_ip_literal(host))

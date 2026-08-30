@@ -646,6 +646,28 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// wants to type.
 	m_address->setInputMethodHints(Qt::ImhNoAutoUppercase |
 	                                Qt::ImhNoPredictiveText);
+#ifdef Q_OS_ANDROID
+	// **A Go button, because the keyboard's own key does not submit.**
+	// Reproduced on a Galaxy Note 9: the action key reads *Next*, not Go, and
+	// tapping it moves focus out of the field instead of navigating -- so the
+	// address sits there, nothing loads, and the keyboard closes. A return
+	// sent afterwards goes nowhere either, the field no longer having focus.
+	//
+	// The hints above fix the typing and cannot fix this: which action key an
+	// IME offers is its own decision, and Qt exposes no hint that asks for Go.
+	// Rather than guess at one, this stops depending on the keyboard at all --
+	// which is what every mobile browser does, and is a control a person can
+	// see.
+	//
+	// Android only. On the desktop Return already works and a button beside
+	// the clear cross would be clutter for a key everybody has.
+	QAction *go = m_address->addAction(
+	  themed_icon({ "go-jump", "media-playback-start" }, style(),
+	               QStyle::SP_ArrowForward),
+	  QLineEdit::TrailingPosition);
+	go->setToolTip("Go to this address");
+	connect(go, &QAction::triggered, this, &main_window::navigate_to_address);
+#endif
 	connect(m_address, &QLineEdit::returnPressed, this, &main_window::navigate_to_address);
 	bar->addWidget(m_address);
 

@@ -66,6 +66,17 @@ int main(int argc, char **argv) {
 		is_address("localhost:8080");
 		is_address("127.0.0.1");
 		is_address("127.0.0.1:36853");
+		// **A port and a path together, which is where this broke.** The port
+		// was stripped before the path, so the candidate port was `8753/admin`
+		// -- not digits, nothing stripped -- and the host came out as
+		// `127.0.0.1:8753`, which is not an address. A hostname survived by
+		// accident, still looking domain-shaped with the port attached, so only
+		// bare IPs fell through: the router page and the printer page, which
+		// are exactly what somebody types with a port and a path, and exactly
+		// what must never reach a search engine.
+		is_address("127.0.0.1:8753/typed");
+		is_address("192.168.1.1:631/printers");
+		is_address("[::1]:8080/status");
 		is_address("192.168.1.1/admin");
 		is_address("[::1]");
 		is_address("[::1]:8080");
