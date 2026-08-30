@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "tab_tree_view.h"
+#include <QMouseEvent>
+#include <QTimer>
 #include <QEvent>
 #include "tree_sort_proxy.h"
 
@@ -84,6 +86,18 @@ tab_tree_view::tab_tree_view(QWidget *parent) : QTreeView(parent) {
 	setContextMenuPolicy(Qt::CustomContextMenu);
 	connect(this, &QWidget::customContextMenuRequested,
 	        this, &tab_tree_view::show_menu);
+
+#ifdef Q_OS_ANDROID
+	// Half a second, which is Android's own long-press threshold, so the
+	// gesture feels like every other hold on the device rather than like a
+	// setting somebody picked here.
+	m_hold = new QTimer(this);
+	m_hold->setSingleShot(true);
+	m_hold->setInterval(500);
+	connect(m_hold, &QTimer::timeout, this, [this] {
+		emit customContextMenuRequested(m_hold_at);
+	});
+#endif
 }
 
 void tab_tree_view::setModel(QAbstractItemModel *m) {
@@ -121,6 +135,38 @@ bool tab_tree_view::eventFilter(QObject *o, QEvent *e) {
 	if (o == viewport() && e->type() == QEvent::Resize && m_empty &&
 	    m_empty->isVisible())
 		m_empty->setGeometry(viewport()->rect());
+
+#ifdef Q_OS_ANDROID
+	if (o == viewport() && m_hold) {
+		switch (e->type()) {
+			case QEvent::MouseButtonPress: {
+				const auto *me = static_cast<QMouseEvent *>(e);
+				if (me->button() == Qt::LeftButton) {
+					m_hold_at = me->pos();
+					m_hold->start();
+				}
+				break;
+			}
+			case QEvent::MouseMove: {
+				// Past a few pixels this is a drag, and the tree's own
+				// drag-and-drop should have it. Qt's start distance is the
+				// right threshold to borrow: below it nothing else treats the
+				// gesture as movement either.
+				const auto *me = static_cast<QMouseEvent *>(e);
+				const int moved = (me->pos() - m_hold_at).manhattanLength();
+				if (moved > QApplication::startDragDistance())
+					m_hold->stop();
+				break;
+			}
+			case QEvent::MouseButtonRelease:
+			case QEvent::TouchCancel:
+				m_hold->stop();
+				break;
+			default:
+				break;
+		}
+	}
+#endif
 	return QTreeView::eventFilter(o, e);
 }
 

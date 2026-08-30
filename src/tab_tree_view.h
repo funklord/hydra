@@ -4,6 +4,9 @@
 #include <QUrl>
 
 #include <QStringList>
+#include <QPoint>
+
+class QTimer;
 #include <QTreeView>
 
 class QLabel;
@@ -63,6 +66,27 @@ public:
 
 protected:
 	bool eventFilter(QObject *o, QEvent *e) override;
+
+#ifdef Q_OS_ANDROID
+	// **The tab menu, on a device with no right button.** Everything done to a
+	// tab -- rename, new folder, lock, forget -- arrives through
+	// `customContextMenuRequested`, which a finger never raises, so the tree
+	// was read-only on a phone.
+	//
+	// Qt's plugin has `QT_ANDROID_ENABLE_RIGHT_MOUSE_FROM_LONG_PRESS` and it
+	// was tried first, on the reasoning that reusing the desktop's path beats
+	// a second one. Reported back: the menu came on a *double tap* rather than
+	// a hold, and appeared where it was not wanted. So it is done here
+	// instead, where it applies to this widget and cannot surprise the page or
+	// the address bar.
+	//
+	// A hold that *moves* is a drag and not a menu, which is why the timer is
+	// cancelled on movement rather than only on release -- the tree's
+	// drag-and-drop has to keep working, and it is the same gesture up to the
+	// point where a finger travels.
+	QTimer *m_hold = nullptr;
+	QPoint  m_hold_at;
+#endif
 
 public:
 

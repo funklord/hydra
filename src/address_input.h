@@ -1,8 +1,36 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <QLineEdit>
+
 class QString;
 class QUrl;
+
+// The address bar itself, which exists as a class for one reason: to tell the
+// on-screen keyboard what its action key should do.
+//
+// **Measured on a Galaxy Note 9: that key reads *Next*.** Tapping it moves
+// focus out of the field rather than navigating, so the address sits there,
+// nothing loads and the keyboard closes -- and a return afterwards does
+// nothing either, the field no longer having focus. Input-method *hints* do
+// not reach this; they describe the text, not the key.
+//
+// What does reach it is `Qt::ImEnterKeyType`. Qt's Android plugin builds the
+// Android `imeOptions` from it -- `imeOptionsFromEnterKeyType` in its jar --
+// and `QWidget` answers it through `inputMethodQuery`, which is why this is a
+// subclass rather than a call. `EnterKeyGo` is the one Android renders as
+// **Go** and delivers as an action the field can act on.
+class address_line : public QLineEdit {
+	Q_OBJECT
+public:
+	using QLineEdit::QLineEdit;
+
+	QVariant inputMethodQuery(Qt::InputMethodQuery query) const override {
+		if (query == Qt::ImEnterKeyType)
+			return int(Qt::EnterKeyGo);
+		return QLineEdit::inputMethodQuery(query);
+	}
+};
 
 // What the address bar does with what somebody typed.
 //

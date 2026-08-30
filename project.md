@@ -6164,6 +6164,22 @@ synthesise the right button from a long press and is asked to, rather than
 growing a gesture handler here: the menu then stays one code path, the one the
 desktop tests exercise, instead of two that have to be kept in step.
 
+**The long press was tried Qt's way first and was wrong.** Reported back: the
+menu came on a *double tap* rather than a hold, and appeared in places it was
+not wanted -- the variable applies to the whole application, so it was not the
+tree's gesture, it was everyone's. It is gone. The hold is explicit now, in
+`tab_tree_view`'s existing viewport filter: half a second, Android's own
+threshold, cancelled if the finger travels more than the drag distance so the
+tree's drag-and-drop keeps the gesture it already had. Scoped to one widget,
+so it cannot surprise the page or the address bar.
+
+**And the Go key is asked for properly rather than worked around.** The button
+below stays, but `Qt::ImEnterKeyType` is what actually reaches the keyboard:
+Qt's Android plugin builds the `imeOptions` from it -- `imeOptionsFromEnterKeyType`
+in its jar -- and a `QWidget` answers it through `inputMethodQuery`, which is
+why `address_line` is a subclass rather than a call. Hints describe the text;
+this describes the key.
+
 **Driven on the Note 9 afterwards, and the hints were not the whole story.**
 The typing came out clean, but the keyboard's action key reads **Next**, not
 Go -- and tapping it moves focus out of the field rather than navigating, so
@@ -6183,6 +6199,33 @@ See below.
 One thing to look at when it is tried: if a long press already begins a drag in
 the tree, the two want reconciling, and the answer is likely a hold threshold
 rather than dropping either.
+
+## Two Android reports not yet acted on, with the likely causes
+
+Recorded rather than fixed, because both are larger than an evening and
+guessing at them would be worse than saying where to start.
+
+**YouTube shows no video.** The first suspect is four lines from the top of
+`HydraWebView.create`: `setLayerType(LAYER_TYPE_SOFTWARE, null)`. Its comment
+says why -- with the default hardware layer the renderer died immediately, and
+software was the difference between a page and a blank rectangle. But video is
+exactly what a software layer cannot composite: a `SurfaceTexture` or a
+hardware overlay has nowhere to go, so the page lays out, the controls work and
+the picture is absent. That fits the report precisely.
+
+Which means the two are the same problem seen from opposite ends, and the fix
+is unlikely to be flipping the flag back: the renderer died on hardware for a
+reason that was never diagnosed, only avoided. The thing to establish first is
+whether it still dies -- that measurement was taken on an emulator, and this is
+a phone with a newer WebView.
+
+**Audio stops when the browser is not in front.** Nothing in this tree pauses
+the WebView -- there is no `onPause` or `pauseTimers` call anywhere in
+`HydraWebView` -- so this is Android doing what it does to a backgrounded
+process rather than hydra choosing it. Playing audio while not visible is not a
+flag; it is a foreground service with a notification, which is a real feature
+with an Android permission behind it and a user-visible ongoing notification.
+Worth deciding deliberately rather than adding because a video stopped.
 
 ## A local address with a port and a path was sent to a search engine
 

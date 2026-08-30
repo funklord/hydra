@@ -626,7 +626,10 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	bar->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	update_navigation();
 
-	m_address = new QLineEdit(this);
+	// An `address_line` rather than a plain `QLineEdit`, so the on-screen
+	// keyboard is asked for a Go key -- see `address_input.h` for why a hint
+	// cannot do it.
+	m_address = new address_line(this);
 	m_address->setPlaceholderText("Address");
 	m_address->setClearButtonEnabled(true);
 	// **What the on-screen keyboard should do here, which nothing had told
