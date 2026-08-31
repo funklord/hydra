@@ -1183,6 +1183,33 @@ int main(int argc, char **argv) {
 		check(tab->parent == folder,
 		      "and the AI reorganizer cannot move it either");
 
+		// **Where the pin is kept, which nothing asserted and which is load
+		// bearing.** `set_locked` writes `pin_url` into `n->url`, because the
+		// pin has to survive a suspend, a restart and a reopen from the
+		// outline -- all of which throw away the live view that knew which
+		// page was showing.
+		//
+		// That makes `url` a field with two meanings: where the tab was
+		// created, and, once locked, the address it is pinned to. Nothing
+		// updates it from navigation, which is why the two can coexist.
+		//
+		// Measured 2026-09-01 with a page that redirects itself: the tree
+		// records `open | SECOND | .../first.html`, a title from the second
+		// page against a url from the first. The obvious repair -- make the
+		// url follow the page, as the title already does -- would overwrite a
+		// locked tab's pin on its next navigation and break the lock
+		// silently. This is here so that repair fails loudly instead.
+		node *pinned = m.add_tab(folder, "Pinned", "https://created-at.test/");
+		check(m.set_locked(pinned, true, "https://pinned-to.test/"),
+		      "a lock can name the address it pins to");
+		check(pinned->url == "https://pinned-to.test/",
+		      QString("and the pin is kept on the node, in url (%1)")
+		          .arg(pinned->url));
+		check(m.set_locked(pinned, false) && !pinned->locked,
+		      "unlocking releases it");
+		check(pinned->url == "https://pinned-to.test/",
+		      "and leaves the address alone, having nothing better to put back");
+
 		const QString saved = dir + "/locked.txt";
 		check(m.save(saved), "the tree saves");
 		tab_tree_model r;

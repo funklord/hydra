@@ -11701,6 +11701,78 @@ Local: 33 suites, 0 failures, and the same assertion counts as before the
 guards — `test_state` 48, `test_theme` 44, `test_tree` 37 — so nothing was
 removed for a normal user.
 
+## One field with two meanings, found by the lens the last bug suggested
+
+`working-practice.md` says to derive the next lens from the last bug rather
+than from a list decided in advance. The last bug in `main_window` was
+`load_finished`: the chrome was updated only for the current view, correctly,
+and the *record* was not updated at all, which is the shape it names as its
+highest-yield — a value with two consumers where only some are wired.
+
+Applied to every per-view signal in `main_window`, there are eleven, ten of
+them guarded on `view == current_view()`. Nine of the guards are right: back
+and forward buttons, the address field, the progress bar, the find bar, the
+status tip for a hovered link — all of those are the chrome of the tab being
+looked at and mean nothing for a tab that is not. `url_changed` is the
+interesting one, and it is already half-unguarded: `apply_policy` runs for
+every view and only the chrome is behind the test.
+
+**What the lens actually found is one field below all of that.** Nothing
+writes a browsed address back to the node. The title does follow the page --
+`set_page_title` exists for exactly that -- and the url does not, so the two
+can disagree.
+
+Measured 2026-09-01, with a page that redirects itself after a second and a
+half so the debounced flush lands after the navigation:
+
+    - [a1] open | SECOND | file:///.../first.html | created=... | seen=...
+
+One row, two pages: the title from the second, the url from the first. The
+tree file is human-readable and hand-editable by design, which is the whole
+reason it is a text outline, so a row that is internally inconsistent is worth
+more than a stale field would be.
+
+**The obvious repair is wrong, and measuring stopped it.** Making the url
+follow the page, as the title already does, would break the tab lock. The pin
+is stored in the same field: `set_locked` does `n->url = pin_url`, because a
+pin has to survive a suspend, a restart and a reopen from the outline, all of
+which throw away the live view that knew which page was showing. A url that
+followed navigation would overwrite the pin on the next page load and the lock
+would fail silently, which is the worst way for a pin to fail.
+
+So the field carries two meanings — where the tab was created, and, once
+locked, the address it is pinned to — and they coexist only because nothing
+updates it. The inconsistency is not a defect in either meaning; it is the
+cost of having both in one place.
+
+**Nothing asserted the pin, so that is what changed here.** `test_model`
+covered the lock's drag refusal, its flags, its copy behaviour and the
+reorganizer, and said nothing about where the pinned address goes. It does
+now: the pin is written to `url`, and it survives unlocking. The comment
+beside it records the measurement and says plainly that the obvious repair
+must fail loudly rather than quietly.
+
+**What is left is a decision and it is the copyright holder's**, because
+separating the two meanings — a `pin` field distinct from `url` — is a change
+to the tree file's format, and every existing tree would have to be read by
+both. The options, with their costs:
+
+- **Leave it.** No format change, and rows stay internally inconsistent.
+  Cheapest, and the inconsistency has been there all along without anybody
+  reporting it.
+- **Give the pin its own field.** Rows become consistent and `url` can follow
+  the page like the title. Costs a format change, a migration read, and a
+  careful look at everything that reads `n->url` — the properties editor, the
+  outline writer, `open_node`, the mirror comparison.
+- **Stop the title following too.** Consistent the other way, and much worse:
+  the title is the row's label, and a tab that never changed its label as it
+  browsed would be unusable.
+
+Worth saying that this matters less than it did a day ago. A live tab's real
+position is now checkpointed into its blob every five seconds, so the url is
+the fallback for a tab whose blob is missing rather than the only record of
+where it was.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -11789,3 +11861,12 @@ carried along as amendments to a list item.
    list which is deliberately "every direct dependency named", and an icon
    theme is a test dependency rather than a build one. Left for whoever owns
    that list.
+
+7. **A node's url means two things at once, and rows can be internally
+   inconsistent.** See *One field with two meanings* above: the title follows
+   the page and the url does not, so a row can carry a title from one page and
+   a url from another — measured. The obvious repair breaks the tab lock,
+   which stores its pin in the same field. Separating them is a tree-file
+   format change and so the copyright holder's; the three options and their
+   costs are in that section. The pin is now asserted in `test_model`, so the
+   repair fails loudly rather than quietly.
