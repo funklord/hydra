@@ -10976,6 +10976,65 @@ four pass.
 Offline: 31 suites, 0 failures. Not run: the ten drivers needing a network, a
 device or a model.
 
+## The suite failed for a second account, and blamed the code
+
+`make test` reported 22 failures across four suites on a checkout owned by
+another user: `test_tree` "it saves", "the folder comes back"; `test_extractor`
+"saves"; `test_settings` "a custom command resolves to an executable";
+`test_seam` "the job completes". Every one of those names code that is correct.
+All four pass unchanged with a `TMPDIR` the runner owns.
+
+Seven suites build a scratch path out of `QDir::tempPath()` and a fixed name --
+`hydra-tree-test`, `hydra-model-test`, `hydra-state-test`, `hydra-asm-test`,
+`hydra-bundle-test`, `hydra-settings-test`, `hydra-extractors.json` -- and
+`test_seam` writes `clip.mp4` into the root of it by that bare name. A
+predictable name in a directory shared with every other account on the machine
+is two faults, not one.
+
+**It reads as a test failure.** `/tmp/hydra-tree-test` had been created on
+14 August by the account that owns the tree, mode `drwxrwxr-x` and group
+`funk`; a second uid cannot write into it, `save` returns false, and the
+assertion that reports it is about trees. The hour goes into
+`tree_outline.cpp`.
+
+**And it destroys somebody else's file.** `test_seam` removes and recreates
+`$TMPDIR/clip.mp4` unconditionally, which under a shared `/tmp` is not this
+suite's file to remove. That half never announces itself at all.
+
+**The correspondence is exact, both directions, which is what establishes the
+cause rather than merely fitting it.** The four suites that failed are the four
+that leave their scratch behind -- `hydra-tree-test`, `hydra-extractors.json`,
+`hydra-settings-test`, `clip.mp4`, all present in `/tmp` owned by the first
+account. The four that passed -- `test_model`, `test_state`, `test_assembler`,
+`test_bundle` -- are the four that clean up after themselves, so there was
+nothing of anybody else's for them to meet. 4 of 4 and 0 of 4; no suite is on
+the wrong side of it.
+
+The fix is `TMPDIR` in `TEST_ENV`, pointed at `$(TESTS_DIR)/tmp`, because
+`QDir::tempPath()` honours it and no suite had to change. Under the build
+directory rather than a per-uid name in `/tmp` so that `clean` covers it:
+twelve stale `/tmp/hydra-*` directories had accumulated here since 14 August,
+which is what a name nobody removes does. Absolute, because a suite is free to
+`chdir` and a relative `TMPDIR` would follow it.
+
+Verified by where the bytes went: after the change `test/build-make/tmp/` holds
+exactly those four, and `/tmp/clip.mp4` still carries its 13:16 timestamp from
+the run before -- untouched by a suite that had rewritten it every time until
+now. Offline: 31 suites, 0 failures.
+
+**This is the fourth of the same shape in a day**, and the other three are in
+`claude-guidelines`' record: a tool taking an operation's refusal, or another
+account's ownership, as a fact about the thing it was inspecting. None of the
+four was reachable from a single account. The configuration was the
+instrument -- a second uid working in trees owned by the first -- and these had
+been sitting here for as long as nobody ran them that way. Worth saying because
+the instrument is cheap and nothing else in the tree had found them.
+
+`test/live/sweep.sh` has the same shape in its `OUT=${HYDRA_SWEEP_OUT:-/tmp/hydra-sweep}`
+and is deliberately left: it is an output directory meant to outlive `clean`,
+and it already takes an override. The other `/tmp/hydra-*` directories on this
+machine came from ad-hoc commands rather than from anything committed.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

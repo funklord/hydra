@@ -206,8 +206,37 @@ SUITES     = $(filter-out $(NEEDS_MORE),$(ALL_SUITES))
 # run rather than risk it.
 # `--mute-audio` because a suite that loads a page should not play it at
 # whoever is sitting at the machine. Chromium's own flag; WebEngine honours it.
+#
+# **TMPDIR because seven suites name a fixed path in the shared one.**
+# `QDir::tempPath()` honours TMPDIR, and the suites build their scratch
+# directories from it: `hydra-tree-test`, `hydra-model-test`,
+# `hydra-state-test`, `hydra-asm-test`, `hydra-bundle-test`,
+# `hydra-settings-test`, `hydra-extractors.json` -- and `test_seam` writes
+# `clip.mp4` into the root by that bare name. Every one of those is a
+# predictable name in a directory shared with every other account on the
+# machine, which costs twice.
+#
+# It reads as a test failure. Measured 2026-08-31 running the suite as a
+# second uid against trees whose `/tmp/hydra-*` a first uid had created and
+# owned: 22 failures across test_tree, test_extractor, test_settings and
+# test_seam, reported as "it saves", "the folder comes back", "the job
+# completes" -- every one of them naming code that was correct. All four pass
+# unchanged with a TMPDIR the runner owns. A gate that names the wrong suspect
+# costs more than one that says nothing, and this named four.
+#
+# And it writes over somebody else's file. `test_seam` removes and recreates
+# `$TMPDIR/clip.mp4` unconditionally; under a shared /tmp that is not this
+# suite's file to destroy. The other seven at least collide inside a name that
+# says hydra.
+#
+# Under the build directory rather than a per-uid name in /tmp, because it is
+# then covered by `clean` -- twelve stale `/tmp/hydra-*` directories had
+# accumulated here since 14 August, which a name nobody removes is how. Absolute
+# because a suite is free to chdir and a relative TMPDIR would follow it.
+TEST_TMP = $(TESTS_DIR)/tmp
 TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test \
-           QTWEBENGINE_CHROMIUM_FLAGS=--mute-audio
+           QTWEBENGINE_CHROMIUM_FLAGS=--mute-audio \
+           TMPDIR=$(CURDIR)/$(TEST_TMP)
 
 # Where a failing suite's whole output is kept. This target used to print the
 # tail line and the first five FAIL lines and throw the rest away, which is fine
@@ -268,6 +297,7 @@ run: all
 test:
 	@for t in $(SUITES); do $(MAKE) --no-print-directory -C test -j$(JOBS) \
 	   build-make/$$t >/dev/null || exit 1; done
+	@mkdir -p $(TEST_TMP)
 	@fail=0; for t in $(SUITES); do \
 	   out=$$($(TEST_ENV) ./$(TESTS_DIR)/$$t 2>&1); \
 	   if [ $$? -eq 0 ]; then printf '  ok   %-16s %s\n' "$$t" "$$(echo "$$out" | tail -1)"; \
@@ -284,6 +314,7 @@ test:
 test-one:
 	@test -n "$(T)" || { echo "usage: make test-one T=test_theme"; exit 2; }
 	@$(MAKE) --no-print-directory -C test -j$(JOBS) build-make/$(T)
+	@mkdir -p $(TEST_TMP)
 	@$(TEST_ENV) ./$(TESTS_DIR)/$(T)
 
 # Separate from `test` because it is a different order of cost: each driver
@@ -298,6 +329,7 @@ drivers:
 # not in git, so it cannot be part of `make test`.
 replay:
 	@$(MAKE) --no-print-directory -C test -j$(JOBS) build-make/test_replay >/dev/null
+	@mkdir -p $(TEST_TMP)
 	@$(TEST_ENV) ./$(TESTS_DIR)/test_replay
 
 # Run them all and summarise. Offscreen by default, so it does not take over a
