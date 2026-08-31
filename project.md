@@ -10343,6 +10343,66 @@ apk check was exercised against synthetic zips carrying one ABI, two, and none.
 **What is not verified is a real build**: this machine has the kits but no NDK
 or JDK, so `make android` gets as far as the NDK check and stops.
 
+### Measuring on the handset, since nothing else can
+
+Android is not reachable from CI -- and since 2026-08-14 nothing is -- so a
+physical phone is the only instrument for anything the emulator cannot show.
+The method is written down because every part of it was arrived at the
+expensive way, and a session that has to re-derive it spends an hour before it
+measures anything.
+
+**Read one bit, not the screen.** The phone in use is the copyright holder's
+daily handset and its screen shows their mail, their maps and their banking, so
+screenshots are not an available instrument here. Almost everything wanted can
+be had as a single bit from `dumpsys` instead. To find where the address bar
+is, tap a candidate and ask whether a text field took focus:
+
+    adb shell input tap 500 170
+    adb shell dumpsys input_method | grep -m1 mInputShown
+
+`mInputShown=true` says the tap landed in an input. That located the bar in
+four tries on a 1080x2220 override resolution without looking at the display.
+
+**A dozing phone reads exactly like a regression.** Time was lost to an app
+that appeared to have stopped responding and had not -- the screen had gone to
+sleep, partly from repeated `force-stop`s. Check the phone is awake before
+believing anything it does:
+
+    adb shell dumpsys power | grep -m1 mWakefulness=     # expect Awake
+    adb shell svc power stayon usb
+
+**`adb shell input text` does not decode anything.** Writing `%3F` for a
+question mark types the three characters, so a url with a query string arrives
+mangled and the address bar sends it to a search engine -- which looks like the
+address bar being broken. Prefer a url with no query string for a fixture.
+
+**Fixtures that work, and the ones that wasted time:**
+
+| | |
+|---|---|
+| `https://www.w3schools.com/html/mov_bbb.mp4` | ~10s, video **with** audio |
+| `https://ice1.somafm.com/groovesalad-128-mp3` | endless audio, for anything needing more than ten seconds |
+| a `test-videos.co.uk` jellyfish clip | **silent** -- video only, so an audio measurement reads as failure |
+| `commondatastorage.googleapis.com/gtv-videos-bucket/...` | 403 now |
+
+The mp4 autoplays only because the profile under test permits autoplay; a
+profile with it blocked needs a tap on the video first, and the difference is
+invisible in the measurement.
+
+**An app op is a control that needs no rebuild.** A foreground service can be
+refused without touching the code, which is what made the background-audio
+control a same-build comparison rather than two builds:
+
+    adb shell cmd appops set se.vibes.hydra START_FOREGROUND deny
+    ... measure ...
+    adb shell cmd appops set se.vibes.hydra START_FOREGROUND allow
+
+The refusal surfaces as `SecurityException: foreground not allowed as per app
+op`, so the log says plainly that the service did not start -- which is what
+turns "these two runs differ" into "they differ by exactly this". Restore it
+afterwards: it is the holder's phone, and a denied op left behind is a setting
+they did not choose.
+
 ### `site_extractor.cpp` is the workspace's lexer fixture, by accident
 
 **Do not reformat this file without knowing what it is used for.** It is the
