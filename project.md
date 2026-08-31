@@ -11866,6 +11866,85 @@ was already decided.
 `try_import` is 25 passed, 0 failed, with two skip lines. No assertion was
 dropped: the counts of what actually ran are unchanged.
 
+## KeePassXC: the socket path, settled before the session that can test it
+
+Reported broken, and to be fixed from the account that has a working KeePassXC
+set up. What follows is the part that could be established without one, so that
+session starts after this work rather than at it.
+
+`try_keepass` scored `1 passed, 0 failed` in the sweep, which is the shape of a
+driver that skipped everything: it needs a running KeePassXC with browser
+integration, and this account has none. Its own header has said since it was
+written that the bridge was *"wired since step 8 and never once run, which in
+this project is the same sentence as probably broken"*.
+
+### What the other end actually does, traced rather than assumed
+
+KeePassXC 2.7.10 is installed here, which is enough to interrogate the protocol
+end without any database. `keepassxc-proxy`, fed one native-messaging frame
+under `strace -e trace=file`, probes in this order:
+
+    <runtime>/org.keepassxc.KeePassXC.BrowserServer
+    <runtime>/app/org.keepassxc.KeePassXC/org.keepassxc.KeePassXC.BrowserServer
+
+where `<runtime>` is Qt's `QStandardPaths::RuntimeLocation` — not the
+`XDG_RUNTIME_DIR` variable, and not `/tmp`.
+
+**So the socket path is probably not what is broken on the working set up.**
+With a valid `XDG_RUNTIME_DIR`, which is what a desktop session has, Qt's
+runtime location *is* that variable, and hydra's path was already KeePassXC's
+first choice. That rules out the most obvious suspect before anybody spends an
+evening on it.
+
+### Two configurations where they did diverge, and both are now fixed
+
+- **No `XDG_RUNTIME_DIR`.** KeePassXC lands on Qt's fallback,
+  `$TMPDIR/runtime-$USER`; hydra answered a bare `/tmp`. Different directories,
+  so the socket could never be found. This is the configuration this account
+  runs in — every launch prints *"XDG_RUNTIME_DIR not set, defaulting to
+  /tmp/runtime-claude"* — which is why the bridge cannot work here at all.
+- **`XDG_RUNTIME_DIR` set but not 0700.** Qt validates the directory's owner
+  and mode and falls back when it fails; reading the variable directly does
+  not. So a wrongly-moded runtime directory sends KeePassXC to the fallback and
+  hydra to the variable.
+
+`socket_path()` asks `QStandardPaths` now, which is the same function KeePassXC
+reaches through, so both cases agree by construction rather than by matching
+two implementations by hand.
+
+**The second one was found by tripping over it.** The first trace of the
+"variable set" case reported the fallback path, which made no sense until the
+scratch directory turned out to be 0775 from `mkdir`. A measurement that
+disagrees with the thing being measured is the instrument's fault first — and
+here the instrument's fault *was* the finding.
+
+`test_autofill` pins it, asserted against `QStandardPaths` rather than a
+literal path: a literal would be the test guessing at the same thing the code
+guesses at, two copies of one assumption agreeing with each other and with
+nothing else.
+
+### What is left, and it needs the other account
+
+Not the path. Everything after it: transport framing, the key exchange, and
+association. `try_keepass` runs the socket, handshake, key exchange and the
+not-associated path unattended, and gates `associate()` behind
+`HYDRA_KEEPASS_INTERACTIVE=1` because pairing shows a dialog a human must
+confirm — by design, since a browser that could grant itself vault access would
+be the defect.
+
+    HYDRA_KEEPASS_INTERACTIVE=1 QT_QPA_PLATFORM=offscreen \
+      ./test/build-make/try_keepass
+
+The driver's notes describe pointing it at a throwaway KeePassXC with its own
+config and database, which is worth preferring over the real vault even from
+the account that owns one.
+
+Unverified and deliberately not guessed at: the `app/org.keepassxc.KeePassXC/`
+variant above is Flatpak's layout. Matching it needs two candidates and a rule
+for choosing between them, and there is no Flatpak KeePassXC here to check
+against. If the working set up is a Flatpak, that is the first thing to try and
+the path is not ruled out after all.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -11963,3 +12042,14 @@ carried along as amendments to a list item.
    format change and so the copyright holder's; the three options and their
    costs are in that section. The pin is now asserted in `test_model`, so the
    repair fails loudly rather than quietly.
+
+8. **KeePassXC support is broken and needs the account that has a working
+   set up.** See *KeePassXC: the socket path, settled before the session that
+   can test it* above. The socket path is fixed and ruled out for an ordinary
+   desktop; what is untested is everything after it — framing, key exchange,
+   association — because the bridge has never met a real KeePassXC. Run
+   `HYDRA_KEEPASS_INTERACTIVE=1 QT_QPA_PLATFORM=offscreen
+   ./test/build-make/try_keepass` from that account, against a throwaway
+   KeePassXC rather than the real vault. If that set up is a Flatpak, try the
+   `app/org.keepassxc.KeePassXC/` socket variant first — it is the one thing
+   about the path still unverified.

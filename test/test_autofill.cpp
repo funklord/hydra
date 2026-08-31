@@ -9,6 +9,7 @@
 // `test/live/try_keepass.cpp`. Everything here is the refusal half, which is
 // the half that matters when it is wrong.
 #include "autofill_controller.h"
+#include "keepass_bridge.h"
 #include "keepass_protocol.h"
 #include "policy_engine.h"
 
@@ -16,6 +17,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -423,6 +425,35 @@ int main(int argc, char **argv) {
 		      "an error reply does not");
 	}
 
+
+	section("where KeePassXC's socket is looked for");
+	{
+		// **Pinned against the algorithm the other end actually uses**, which
+		// was traced rather than assumed: keepassxc-proxy 2.7.10 under
+		// `strace -e trace=file` probes
+		// `<runtime>/org.keepassxc.KeePassXC.BrowserServer` first, where
+		// `<runtime>` is Qt's RuntimeLocation.
+		//
+		// This used to read `XDG_RUNTIME_DIR` directly and fall back to a bare
+		// `/tmp`, which differs from Qt's answer in two configurations: the
+		// variable unset, where Qt uses `$TMPDIR/runtime-$USER`; and the
+		// variable set to a directory that is not 0700, which Qt rejects and
+		// the raw read does not. Either way the socket could not be found.
+		//
+		// Asserted against `QStandardPaths` rather than against a literal,
+		// because a literal here would be this file guessing at the same thing
+		// the code guesses at -- two copies of one assumption, agreeing with
+		// each other and with nothing else.
+		const QString runtime =
+		  QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+		const QString sock = keepass_bridge::socket_path();
+		check(sock == runtime + "/org.keepassxc.KeePassXC.BrowserServer",
+		      QString("the socket is under Qt's runtime directory (%1)").arg(sock));
+		check(!runtime.isEmpty(),
+		      "which Qt always answers, with or without XDG_RUNTIME_DIR");
+		check(sock.endsWith("/org.keepassxc.KeePassXC.BrowserServer"),
+		      "and carries the name KeePassXC publishes");
+	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

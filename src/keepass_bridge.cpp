@@ -4,7 +4,7 @@
 
 #include <QJsonDocument>
 #include <QLocalSocket>
-#include <QProcessEnvironment>
+#include <QStandardPaths>
 #include <QUuid>
 
 namespace {
@@ -49,11 +49,42 @@ QString keepass_bridge::unavailable_reason() {
 #endif
 }
 
+// **Ask Qt where the runtime directory is, because that is what KeePassXC
+// asks.** This is not a guess about the other end; it was traced.
+//
+// keepassxc-proxy 2.7.10 under `strace -e trace=file`, fed one native-messaging
+// frame, probes in this order:
+//
+//     $XDG_RUNTIME_DIR/org.keepassxc.KeePassXC.BrowserServer
+//     $XDG_RUNTIME_DIR/app/org.keepassxc.KeePassXC/org.keepassxc...BrowserServer
+//
+// The first is what this returns, so on an ordinary desktop the two already
+// agree and nothing here changes. Two configurations diverged, and both were
+// measured rather than reasoned about:
+//
+// **No XDG_RUNTIME_DIR.** KeePassXC lands on Qt's fallback,
+// `$TMPDIR/runtime-$USER`; this used to answer a bare `/tmp`. Different
+// directories, so the socket could never be found -- and it is the
+// configuration this account runs in, where `QStandardPaths` prints
+// "XDG_RUNTIME_DIR not set, defaulting to '/tmp/runtime-claude'" on every
+// launch.
+//
+// **XDG_RUNTIME_DIR set but not 0700.** Qt validates the directory's owner and
+// mode and falls back when it fails; reading the variable directly does not.
+// So a wrong-moded runtime directory sent KeePassXC to the fallback and this to
+// the variable. Found by tripping over it: the first trace of the "set" case
+// reported the fallback path, because the scratch directory was 0775.
+//
+// Using Qt's own accessor rather than the variable is what makes both cases
+// agree, since it is the same function KeePassXC reaches through.
+//
+// The `app/` variant is Flatpak's layout and is not tried here. Matching it
+// needs two candidates and a rule for choosing, and there is no Flatpak
+// KeePassXC on this machine to verify against; recorded in project.md instead
+// of guessed at.
 QString keepass_bridge::socket_path() {
-	const QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-	QString dir = env.value("XDG_RUNTIME_DIR");
-	if (dir.isEmpty())
-		dir = "/tmp";
+	const QString dir =
+	  QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
 	return dir + "/org.keepassxc.KeePassXC.BrowserServer";
 }
 
