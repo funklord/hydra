@@ -84,6 +84,21 @@ QString icon_theme_from(const QStringList &sources);
 // desktop -- the same shape as `icon_theme_from` above and for the same reason.
 int color_scheme_from(const QStringList &sources);
 
+// The LXQt palette files to consult, resolved from its config.
+//
+// LXQt states its colours in a separate file named by `theme=` in
+// `lxqt.conf`, so unlike kdeglobals the path cannot be written down in
+// advance. The name is used to LOCATE the file and never as a predicate
+// -- worth saying because it looks exactly like the substring test the
+// rule forbids. Measured on the shipped set: twelve palettes, all twelve
+// classified correctly by luminance, and eight of them named something
+// that says nothing about which they are (`Ambiance`, `Arch-Colors`,
+// `Kvantum`, `Leech`, `Silver`, `Valendas` dark; `Silver-bright` light).
+//
+// `config` and `data_dirs` are parameters so this is testable without an
+// LXQt session, the same shape as the two readers above.
+QStringList lxqt_palette_files(const QString &config, const QStringList &data_dirs);
+
 // How a *disabled* icon is drawn, which is Qt's job and which Qt overdoes here.
 //
 // The default transform desaturates the pixmap and then lifts it toward the

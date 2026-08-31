@@ -126,11 +126,30 @@ Qt::ColorScheme detect_system() {
 		const QString cfg = qEnvironmentVariableIsSet("XDG_CONFIG_HOME")
 		                        ? QString::fromLocal8Bit(qgetenv("XDG_CONFIG_HOME"))
 		                        : home + "/.config";
-		scheme = color_scheme_from({
+		// XDG's own defaults, spelled out because a desktop that sets
+		// neither is exactly the kind this rung exists for.
+		const QString data_home =
+		  qEnvironmentVariableIsSet("XDG_DATA_HOME")
+		    ? QString::fromLocal8Bit(qgetenv("XDG_DATA_HOME"))
+		    : home + "/.local/share";
+		const QString data_dirs_env =
+		  qEnvironmentVariableIsSet("XDG_DATA_DIRS")
+		    ? QString::fromLocal8Bit(qgetenv("XDG_DATA_DIRS"))
+		    : QStringLiteral("/usr/local/share:/usr/share");
+		QStringList data_dirs{data_home};
+		data_dirs << data_dirs_env.split(QLatin1Char(':'), Qt::SkipEmptyParts);
+
+		QStringList sources{
 			cfg + "/kdeglobals",
 			home + "/.trinity/share/config/kdeglobals",
 			home + "/.kde/share/config/kdeglobals",
-		});
+		};
+		// LXQt last, and only because its path has to be resolved through
+		// its config rather than written down: a machine with both
+		// installed is answering about whichever session wrote a scheme,
+		// and the kdeglobals are the ones this desktop actually uses.
+		sources << lxqt_palette_files(cfg + "/lxqt/lxqt.conf", data_dirs);
+		scheme = color_scheme_from(sources);
 	}
 	return decide(hint, scheme, QGuiApplication::palette());
 }
@@ -257,6 +276,26 @@ double luminance_709(int r, int g, int b) {
 	return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+// "#232323" -> a colour, or false. LXQt writes hex; TDE writes decimal
+// triples. Two spellings of the same statement, so both are read rather
+// than one being preferred -- see `harmonization.md`'s dialect table.
+bool parse_hex(const QString &value, int *r, int *g, int *b) {
+	QString s = value.trimmed();
+	if (!s.startsWith(QLatin1Char('#')))
+		return false;
+	s = s.mid(1);
+	if (s.size() != 6)
+		return false;
+	bool ok = false;
+	const uint n = s.toUInt(&ok, 16);
+	if (!ok)
+		return false;
+	*r = int((n >> 16) & 0xff);
+	*g = int((n >> 8) & 0xff);
+	*b = int(n & 0xff);
+	return true;
+}
+
 // "0,42,78" -> a colour, or false. TDE writes plain decimal triples.
 bool parse_triple(const QString &value, int *r, int *g, int *b) {
 	const QStringList parts = value.split(QLatin1Char(','));
@@ -285,20 +324,37 @@ int theme::color_scheme_from(const QStringList &sources) {
 				section = line.mid(1, line.size() - 2);
 				continue;
 			}
-			// Only under [General]. The same keys appear in per-application
-			// sections, and taking whichever came last would answer about some
-			// other program's colours.
-			if (section.compare(QLatin1String("General"), Qt::CaseInsensitive) != 0)
+			// Sections matter in both dialects, and for the same reason: the
+			// same key names appear in per-application sections, and taking
+			// whichever came last would answer about some other program's
+			// colours.
+			const bool general =
+			  section.compare(QLatin1String("General"), Qt::CaseInsensitive) == 0;
+			const bool palette =
+			  section.compare(QLatin1String("Palette"), Qt::CaseInsensitive) == 0;
+			if (!general && !palette)
 				continue;
 			const int eq = line.indexOf(QLatin1Char('='));
 			if (eq < 0)
 				continue;
 			const QString key = line.left(eq).trimmed();
 			const QString val = line.mid(eq + 1).trimmed();
-			if (key.compare(QLatin1String("windowBackground"), Qt::CaseInsensitive) == 0)
-				parse_triple(val, &br, &bg, &bb);
-			else if (key.compare(QLatin1String("windowForeground"), Qt::CaseInsensitive) == 0)
-				parse_triple(val, &fr, &fg, &fb);
+			// TDE and KDE 3: [General], decimal triples.
+			if (general) {
+				if (key.compare(QLatin1String("windowBackground"),
+				                 Qt::CaseInsensitive) == 0)
+					parse_triple(val, &br, &bg, &bb);
+				else if (key.compare(QLatin1String("windowForeground"),
+				                      Qt::CaseInsensitive) == 0)
+					parse_triple(val, &fr, &fg, &fb);
+				continue;
+			}
+			// LXQt: [Palette], #rrggbb.
+			if (key.compare(QLatin1String("window_color"), Qt::CaseInsensitive) == 0)
+				parse_hex(val, &br, &bg, &bb);
+			else if (key.compare(QLatin1String("window_text_color"),
+			                      Qt::CaseInsensitive) == 0)
+				parse_hex(val, &fr, &fg, &fb);
 		}
 		if (br < 0 || fr < 0)
 			continue;   // this file had no answer; try the next
@@ -548,4 +604,42 @@ QString theme::apply_icon_theme(Qt::ColorScheme scheme) {
 	// `themeName()` would believe it.
 	QIcon::setThemeName(QString());
 	return QString();
+}
+
+QStringList theme::lxqt_palette_files(const QString &config,
+                                       const QStringList &data_dirs) {
+	QFile f(config);
+	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+		return {};
+
+	QTextStream in(&f);
+	QString section;
+	QString name;
+	while (!in.atEnd()) {
+		const QString line = in.readLine().trimmed();
+		if (line.startsWith(QLatin1Char('[')) && line.endsWith(QLatin1Char(']'))) {
+			section = line.mid(1, line.size() - 2);
+			continue;
+		}
+		if (section.compare(QLatin1String("General"), Qt::CaseInsensitive) != 0)
+			continue;
+		const int eq = line.indexOf(QLatin1Char('='));
+		if (eq < 0)
+			continue;
+		if (line.left(eq).trimmed().compare(QLatin1String("theme"),
+		                                     Qt::CaseInsensitive) == 0)
+			name = line.mid(eq + 1).trimmed();
+	}
+	if (name.isEmpty())
+		return {};
+	// A name with a separator in it would reach outside the palette
+	// directories, and no legitimate one has: refuse rather than resolve.
+	if (name.contains(QLatin1Char('/')) || name.contains(QLatin1Char('\\')) ||
+	    name.startsWith(QLatin1Char('.')))
+		return {};
+
+	QStringList out;
+	for (const QString &dir : data_dirs)
+		out << dir + "/lxqt/palettes/" + name;
+	return out;
 }

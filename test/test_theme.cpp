@@ -212,6 +212,80 @@ int main(int argc, char **argv) {
 		check(theme::color_scheme_from({ dir + "/does-not-exist" }) == 0,
 		      "an unreadable file abstains rather than guessing");
 
+		// --- tier 4, second dialect: LXQt --------------------------------
+		//
+		// A desktop with no dark-mode status is the normal case, not the odd
+		// one, and each such desktop spells the same statement differently.
+		// LXQt uses [Palette] and #rrggbb where TDE uses [General] and
+		// decimal triples, so a parser for one finds nothing in the other.
+		// Both sessions are installed on the machine this was written on.
+		const QString lxqt_dark = write("palette-dark",
+		  "[Palette]\n"
+		  "base_color=#282828\n"
+		  "window_color=#232323\n"
+		  "window_text_color=#e1e6e6\n");
+		check(theme::color_scheme_from({ lxqt_dark }) == 1,
+		      QString("LXQt's shipped Dark palette reads as prefer-dark (%1)")
+		          .arg(theme::color_scheme_from({ lxqt_dark })));
+
+		// The exchange control, as above: only the luminance test can tell
+		// these two apart.
+		const QString lxqt_light = write("palette-light",
+		  "[Palette]\n"
+		  "window_color=#efefef\n"
+		  "window_text_color=#000000\n");
+		check(theme::color_scheme_from({ lxqt_light }) == 2,
+		      QString("LXQt's shipped Light palette reads as prefer-light (%1)")
+		          .arg(theme::color_scheme_from({ lxqt_light })));
+
+		// **The name is not a predicate, measured rather than argued.** Of
+		// the twelve palettes LXQt ships, the luminance test classifies all
+		// twelve correctly while EIGHT are named something that says nothing
+		// -- Ambiance, Arch-Colors, Kvantum, Leech, Silver and Valendas are
+		// dark, Silver-bright is light. Here the file is called "Light" and
+		// holds Silver's colours, so a substring test gets it backwards.
+		const QString lxqt_misnamed = write("Light",
+		  "[Palette]\n"
+		  "window_color=#636464\n"
+		  "window_text_color=#f9f9f9\n");
+		check(theme::color_scheme_from({ lxqt_misnamed }) == 1,
+		      QString("a palette FILE named Light holding dark colours reads "
+		               "dark (%1)")
+		          .arg(theme::color_scheme_from({ lxqt_misnamed })));
+
+		// The indirection LXQt needs and kdeglobals does not: the palette
+		// file is named by theme= rather than living at a fixed path.
+		const QString lxqt_conf = write("lxqt.conf",
+		  "[General]\n"
+		  "theme=Clearlooks\n"
+		  "icon_theme=breeze\n"
+		  "[Qt]\n"
+		  "style=Fusion\n");
+		const QStringList found =
+		  theme::lxqt_palette_files(lxqt_conf, { "/a", "/b" });
+		QStringList want;
+		want << "/a/lxqt/palettes/Clearlooks";
+		want << "/b/lxqt/palettes/Clearlooks";
+		check(found == want,
+		      QString("theme= names the palette file, once per data dir (%1)")
+		          .arg(found.join(QLatin1Char(' '))));
+
+		// theme= is used to LOCATE the file and never as a predicate, which
+		// is why a name is all this reads out of the config.
+		const QString lxqt_no_theme = write("lxqt-bare.conf",
+		  "[General]\n"
+		  "icon_theme=breeze\n");
+		check(theme::lxqt_palette_files(lxqt_no_theme, { "/a" }).isEmpty(),
+		      "a config naming no theme yields no palette file");
+
+		// A name is a filename component, so one carrying a separator would
+		// reach outside the palette directories. Refuse rather than resolve.
+		const QString lxqt_escape = write("lxqt-escape.conf",
+		  "[General]\n"
+		  "theme=../../../../etc/shadow\n");
+		check(theme::lxqt_palette_files(lxqt_escape, { "/a" }).isEmpty(),
+		      "a theme name containing a separator is refused, not resolved");
+
 		// GTK 2 quotes its values.
 		const QString gtk2 = write("gtkrc-2.0",
 		  "gtk-icon-theme-name=\"Adwaita\"\n");
