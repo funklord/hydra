@@ -11326,16 +11326,48 @@ drawn for. Firefox and the rest ship adaptive icons and fill their slots.
 icon on every device the app can be installed on, with two releases to spare,
 and the PNGs are a default-configuration fallback nothing will ever pick.
 
-*Corrected after the commit that introduced this section, which said 26.* The
-number came from `tool/android.mk`, whose comment states that 26 is what Qt
-declares -- and that comment is now stale: the `gradle.properties` this tree's
-own Android build generates says `qtMinSdkVersion=28`, and `aapt2 dump badging`
-on the built apk agrees. The conclusion never depended on the number, since
-both are at or above 26, but a later reader lowering something to 26 on the
-strength of that line would have been working from a false premise. The
-authoritative source is the built package, which is what `tool/android.mk`'s
-own comment says to read -- advice worth taking before quoting the number
-beside it.
+*Corrected twice, and the second correction is the interesting one.*
+
+The commit that introduced this section said minSdk 26. That was wrong: the
+package declares 28, from `aapt2 dump badging`, which is the source that cannot
+go stale. The number was quoted from `tool/android.mk`'s comment instead of
+from the artifact the comment itself tells the reader to check, six lines
+above.
+
+**The reason given for that correction was then wrong in turn, and it took
+another session to see it.** It read the fragment's `ANDROID_API ?= 26` as
+stale because the build generates `qtMinSdkVersion=28` — treating the two as
+one quantity that ought to agree. They are not. `ANDROID_API` is the NDK level
+**dependencies** are cross-compiled against; `qtMinSdkVersion` is what the
+**app** declares, written by Qt per build. **This tree is the proof they are
+independent**: hydra sets `ANDROID_API` nowhere, takes the fragment default of
+26, and ships an app declaring 28.
+
+Nor is `qtMinSdkVersion` a property of the kit, which is what would have made
+"track what Qt declares" a coherent instruction. Measured across four adopters'
+own generated builds, all on Qt 6.12.0:
+
+| hydra | fuzzypickles | beerssh | bbq-predictor |
+|---|---|---|---|
+| 28 | 28 | 26 | 26 |
+
+So raising the default to 28 would cross-compile dependencies at 28 for two
+trees whose apps declare 26 — precisely the failure the paragraph above it
+describes, arriving as the fix for it. **The value stays 26; only the
+justification changed.** Closed as `claude-guidelines` 147e8af, with the
+corrected fragment synced here as 27797ce.
+
+Nothing above depended on the number: 28 and 26 are both at or above the 26
+adaptive icons arrived in, so the icon conclusion holds either way, and
+`build_icons.py` already cites the package rather than the fragment. What the
+episode cost was a wrong reason published in a commit message, which cannot be
+edited — this is the record that supersedes it.
+
+**The shape worth keeping**: a comment that states a fact *and* a justification
+can be wrong in either half, and the halves fail differently. The number was
+checkable against an artifact in one command. The justification was not
+checkable at all from inside one tree — it took four adopters disagreeing to
+show that the quantity it named was the wrong one.
 
 ### The one number worth having measured (superseded; see below)
 
