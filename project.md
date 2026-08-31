@@ -11321,12 +11321,23 @@ and the "outline" follows from the white, because the artwork's own heavy dark
 linework had a white ground to contrast against instead of the dark it was
 drawn for. Firefox and the rest ship adaptive icons and fill their slots.
 
-**minSdk is 26, which is the exact release adaptive icons arrived in.** So the
-new `mipmap-anydpi-v26/ic_launcher.xml` is not a progressive enhancement, it is
-the icon on every device the app can be installed on, and the PNGs are a
-default-configuration fallback nothing will ever pick.
+**minSdk is 28 and adaptive icons arrived at 26.** So the new
+`mipmap-anydpi-v26/ic_launcher.xml` is not a progressive enhancement, it is the
+icon on every device the app can be installed on, with two releases to spare,
+and the PNGs are a default-configuration fallback nothing will ever pick.
 
-### The one number worth having measured
+*Corrected after the commit that introduced this section, which said 26.* The
+number came from `tool/android.mk`, whose comment states that 26 is what Qt
+declares -- and that comment is now stale: the `gradle.properties` this tree's
+own Android build generates says `qtMinSdkVersion=28`, and `aapt2 dump badging`
+on the built apk agrees. The conclusion never depended on the number, since
+both are at or above 26, but a later reader lowering something to 26 on the
+strength of that line would have been working from a false premise. The
+authoritative source is the built package, which is what `tool/android.mk`'s
+own comment says to read -- advice worth taking before quoting the number
+beside it.
+
+### The one number worth having measured (superseded; see below)
 
 The adaptive canvas is 108dp, the outer 18dp on every edge is always cropped,
 and the launcher's mask is applied inside the central 72dp that remains. 72 is
@@ -11353,6 +11364,65 @@ rather than less.
 No `<monochrome>` layer. The themed icons of API 33 want a flat single-colour
 silhouette, and reducing this drawing to one is redrawing it rather than
 generating it; absent, a themed launcher falls back to the two layers.
+
+### It shipped, and the phone said it was smaller
+
+Installed on the handset, and reported back in three words: the icon became
+smaller. It had. **Everything above this line about sizing and about the plate
+was wrong, and wrong in a way that no amount of rendering masks here would have
+caught, because the mistake was about what a person sees rather than about
+geometry.**
+
+The correction came from measuring the icons it sits beside instead of
+reasoning about the spec. Chrome and Samsung Internet were pulled off the
+device and their adaptive foregrounds unpacked; the drawn extent of each within
+its own 108dp canvas:
+
+| | drawn extent |
+|---|---|
+| Chrome | 52dp |
+| Samsung Internet | 48dp |
+| Hydra, first attempt | 66dp |
+
+**The one that was reported as smaller is the largest of the three.** So the
+drawing was never the problem, and "make the drawing bigger" — the whole of the
+reasoning above — was answering a question nobody had asked.
+
+**What a person sees the size of is the plate, not the drawing.** Chrome's
+white and Samsung's blue fill the mask edge to edge, so each reads as a full
+disc with a logo inside it, and the logo being 48dp costs nothing at all. The
+first attempt put a near-black plate behind a drawing whose own outer rim *is*
+dark linework, so on a dark home screen the icon had no visible boundary
+anywhere: what read as the icon shrank to wherever the bright ink began, which
+is a good deal smaller than the drawing and much smaller than 66dp.
+
+The white plate that was removed was ugly, and it *bounded the icon*. Taking it
+away is what made it smaller — so the third complaint and the first were not
+independent, and satisfying "darker, not white" the obvious way is what
+violated "bigger". Nothing in the earlier section noticed that they were in
+tension.
+
+**The rendering that would have caught it takes one more variable.** Every
+candidate above was rendered on a light grey sheet, where a near-black plate
+has an obvious edge. Rendered on a dark backdrop as well — which is what a home
+screen usually is — the first attempt loses its boundary and the failure is
+immediate and plain. One axis, and it was the axis the complaint was about.
+
+**Settled by the copyright holder from a rendering of five candidates on both
+backdrops**, since it is their phone and their artwork: the drawing at **62dp**
+on **`#4B2E83`**, a violet from the artwork's own mid-tones. That is a clear
+ring of colour on every mask shape, no clipping under any of them, a plate that
+holds an edge on a dark wallpaper, and a drawing still a fifth larger than
+Chrome's. It is the shape Chrome and Samsung both use, arrived at by measuring
+them rather than by copying them.
+
+**The general form, which is the part worth keeping.** A rendering answers the
+question it was set up to ask and silently passes on every question it was not.
+Six background candidates were compared against each other and all six were
+compared on one backdrop, so the sheet could rank them and could not report
+that the whole family was wrong. The check that would have worked was not a
+better rendering of this icon but the cheap external one: unpack what the
+neighbours ship and measure it, before deciding what the number should be.
 
 ### Generated, not hand-placed
 

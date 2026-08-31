@@ -5,8 +5,9 @@
      launcher on API 26 or above prefers it over the PNG and
      masks these two layers to its own shape; without it the
      PNG gets the legacy treatment instead, which shrinks the
-     drawing onto a white plate. minSdk is 26, so this is the
-     icon on every device the app supports.
+     drawing onto a white plate. minSdk is 28 and adaptive
+     icons arrived at 26, so this is the icon on every device
+     the app supports.
 
      No <monochrome>: the themed icons of API 33 want a flat
      single-colour silhouette, and reducing this drawing to

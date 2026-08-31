@@ -46,24 +46,47 @@ ANDROID = {"mdpi": 1.0, "hdpi": 1.5, "xhdpi": 2.0, "xxhdpi": 3.0, "xxxhdpi": 4.0
 #
 # The canvas is 108dp and the outer 18dp on every edge is always cropped, so
 # what anybody sees is the central 72dp, and the launcher's mask is applied
-# inside that. 72 is therefore the arithmetic maximum and is the wrong number
-# here: the drawing is a rounded blob rather than a true circle -- the master
-# is the artwork squashed 9% to fit a square -- so at 72dp a circular mask cuts
-# the tops of the three heads and the outer edge of the wave. Measured by
-# rendering the mask over it at 62, 64, 66, 68 and 70: clipping starts at 68.
+# inside that.
 #
-# 66 is the largest that survives the circular mask, which is the harshest of
-# the shapes a launcher may choose, and it still leaves a hairline of
-# background rather than sitting on the edge. On the squircle and rounded
-# square that Samsung and others use it reads as generously filled.
-FOREGROUND_DP = 66
+# **The number that settles this is not a geometric limit, it is what the
+# icons beside it do.** Pulled from the test handset and measured, the drawn
+# extent of each foreground within its own 108dp canvas:
+#
+#     Chrome              52dp
+#     Samsung Internet    48dp
+#     this, first attempt 66dp
+#
+# The first attempt was *larger than both* and was reported from the phone as
+# smaller than both, which is the whole lesson: on an adaptive icon the thing
+# a person sees the size of is the **plate**, not the drawing. Chrome's white
+# and Samsung's blue fill the mask edge to edge, so the icon reads as a full
+# disc with a logo inside it, and the logo being 48dp costs nothing.
+#
+# So the drawing is sized to sit *within* a plate rather than to reach the
+# mask, and 62 is that: a clear ring of colour all round on every mask shape,
+# no clipping under any of them, and the artwork still a fifth larger than
+# Chrome's. The old reasoning -- push the drawing out until a circular mask
+# starts cutting it, which happens at 68 -- was answering a question nobody
+# had asked.
+FOREGROUND_DP = 62
 
-# **The plate behind it, and the whole reason this is not left transparent.**
-# Taken from the drawing's own darkest ink rather than invented: the linework
-# is around #300c37, and this sits just under it in the same family, so the
-# heavy outline stops reading as an outline and reads as the edge of the
-# artwork. A lighter or contrasting colour puts a ring around every stroke.
-BACKGROUND = "#1B0A28"
+# **The plate, and it is the reason the first attempt failed.**
+#
+# It was #1B0A28, chosen from the drawing's own darkest ink so that the heavy
+# outline would stop reading as an outline. It did, and it took the icon's
+# edge with it: the artwork's outer rim *is* dark linework, so against a dark
+# wallpaper a near-black plate has no visible boundary at all, and what reads
+# as the icon shrinks to wherever the bright ink starts. The white plate it
+# replaced was ugly and did bound the icon, which is why removing it made
+# things worse rather than better.
+#
+# A plate has to be visible against the wallpaper or it is not a plate. This
+# is a violet from the artwork's own mid-tones -- the drawing is full of
+# #7161a7 and #655fa7 -- dark enough to be the "darker, not white" that was
+# asked for, and light enough to hold an edge on a dark home screen. Checked
+# by rendering the candidates on both a dark and a light backdrop, which is
+# the comparison the first attempt never made.
+BACKGROUND = "#4B2E83"
 
 # How hard to push, by size. Uniform settings do not work: at 32 each output
 # pixel averages a few hundred source pixels and takes a firm hand well, while
@@ -115,10 +138,12 @@ def build_android(master):
     something else's white circle, and its own dark linework had a white
     ground to contrast against, which is what reads as an outline.
 
-    The app's minSdk is 26, which is the exact release adaptive icons arrived
-    in, so `mipmap-anydpi-v26/ic_launcher.xml` covers every device this app
-    can be installed on. The PNGs stay as the default-configuration fallback;
-    nothing that can run Hydra will pick them.
+    The app's minSdk is 28 -- read from a built package with `aapt2 dump
+    badging`, which is the only source that cannot be stale -- and adaptive
+    icons arrived at 26. So `mipmap-anydpi-v26/ic_launcher.xml` covers every
+    device this app can be installed on, with two releases to spare. The PNGs
+    stay as the default-configuration fallback; nothing that can run Hydra
+    will pick them.
 
     Two layers, per the adaptive icon contract: a background, which is a flat
     colour here because the artwork is already a complete composition and a
@@ -133,7 +158,7 @@ def build_android(master):
         os.makedirs(d, exist_ok=True)
 
         # The legacy icon: 48dp, the drawing edge to edge, transparent around
-        # it. Unreachable at minSdk 26 and written anyway, because a resource
+        # it. Unreachable at this minSdk and written anyway, because a resource
         # with no default configuration is a resource one aapt version
         # complains about and the cost of keeping it is five small files.
         n = px(48, scale)
@@ -171,8 +196,9 @@ def build_android(master):
                  '     launcher on API 26 or above prefers it over the PNG and\n'
                  '     masks these two layers to its own shape; without it the\n'
                  '     PNG gets the legacy treatment instead, which shrinks the\n'
-                 '     drawing onto a white plate. minSdk is 26, so this is the\n'
-                 '     icon on every device the app supports.\n'
+                 '     drawing onto a white plate. minSdk is 28 and adaptive\n'
+                 '     icons arrived at 26, so this is the icon on every device\n'
+                 '     the app supports.\n'
                  '\n'
                  '     No <monochrome>: the themed icons of API 33 want a flat\n'
                  '     single-colour silhouette, and reducing this drawing to\n'
