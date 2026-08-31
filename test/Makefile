@@ -161,11 +161,25 @@ include objsets.mk
 OBJSETS_FOUND := $(sort $(wildcard test_*.cpp) $(patsubst %,live/%,$(notdir $(wildcard live/try_*.cpp))))
 OBJSETS_HAVE  := $(sort $(patsubst test/%,%,$(OBJSETS_SOURCES)))
 
+#
+# **Except when the goal is the regeneration itself, which the guard used to
+# block.** `$(error)` is evaluated while the makefile is being read, before
+# make has looked at a single target, so it fired for `make objsets` too --
+# the one command that fixes the condition being reported, and the command the
+# message names. Adding one source made the whole test tree unbuildable with
+# no way out through make at all; the way through was to run
+# `python3 ../tool/objsets.py` by hand, which is the target's own recipe and
+# is not written down anywhere a reader would look.
+#
+# A guard whose remedy it refuses to run is worse than no guard, because the
+# reader now has two problems and the second one is invisible.
+ifeq ($(filter objsets,$(MAKECMDGOALS)),)
 ifneq ($(OBJSETS_FOUND),$(OBJSETS_HAVE))
 $(warning objsets.mk was generated from a different set of sources)
 $(warning   only in the tree: $(filter-out $(OBJSETS_HAVE),$(OBJSETS_FOUND)))
 $(warning   only in the file:  $(filter-out $(OBJSETS_FOUND),$(OBJSETS_HAVE)))
 $(error run `make -C test objsets` to regenerate it)
+endif
 endif
 
 # --- the suites ------------------------------------------------------------
