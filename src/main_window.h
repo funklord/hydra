@@ -95,6 +95,12 @@ public:
 	// discards what it is asked to open.
 	void open_url(const QUrl &url);
 
+	// Write everything that must survive the process, and suspend the live
+	// views doing it. Called by `closeEvent` and by a shutdown signal, which
+	// are the two ways this browser ends; see the definition for why one list
+	// serves both. Not a checkpoint -- it tears the views down.
+	void save_everything();
+
 protected:
 	void closeEvent(QCloseEvent *event) override;
 

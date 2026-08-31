@@ -10393,6 +10393,14 @@ tree. Track dirtiness so an idle browser is not rewriting itself on every tick.
 Nothing is implemented. It is written down rather than half-built deliberately:
 an untested signal handler is a way to corrupt the tree, not a safety net.
 
+**Built, with the test that was the condition** -- see *Saving on a signal,
+built* below, which supersedes the last paragraph above and corrects one claim
+in the first: the tree was not lost on a signal, the debounce timer had
+usually just written it. What a signal threw away outright was the view state
+and the tab blobs, which had no writer but `closeEvent`. The signal half is
+done and the atomic writers under it are done; what is still open of the timer
+half is on the list at the end of this file.
+
 ### Dark desktop, light browser -- and it is the desktop, not this tree
 
 `theme.h` already carries a three-tier detector, and on this machine all three
@@ -11035,6 +11043,178 @@ and is deliberately left: it is an output directory meant to outlive `clean`,
 and it already takes an override. The other `/tmp/hydra-*` directories on this
 machine came from ad-hoc commands rather than from anything committed.
 
+## Saving on a signal, built -- and the writers made atomic first
+
+The design was recorded in the section above and deliberately not implemented,
+on the grounds that an untested signal handler is a way to corrupt the tree
+rather than a safety net. Built now, with the test that was the condition.
+
+### What a signalled exit used to lose
+
+`closeEvent` is what suspends every live view into a blob, writes the tree,
+writes the policy and writes the view state. A window that is closed runs it;
+a process that is signalled does not -- so a logout, a shutdown, a Ctrl-C in
+the terminal it was started from, or a session manager reaping the application
+all skipped the entire list.
+
+The tree was the least of it, and the entry above overstated that half: the
+debounce timer (`save_tree_soon` at 1500ms) had usually just written it, so at
+worst a second and a half of structure was lost. **The view state and the tab
+blobs had no second writer at all.** Which folders were open, which tab was in
+front, where the window sat, the sort order, and every live tab's navigation
+history -- all of it existed only in `closeEvent`, and a signal threw the lot
+away. That is the loss the report was actually about.
+
+`save_everything()` is that list, split out of `closeEvent`, which now calls
+it. It suspends the live views, so it is an ending rather than a checkpoint,
+and the comment says so: nothing that means to carry on running may call it.
+
+### The handler cannot do the saving, and that is the whole shape
+
+Only async-signal-safe calls are legal in a handler -- no `QSettings`, no
+model, nothing that allocates. `shutdown_signals` therefore writes one byte to
+a self-pipe and returns; a `QSocketNotifier` wakes the event loop and the real
+save happens on the Qt thread under no restrictions. Qt's own documented
+recipe. The byte is the signal number, so the receiver can say which arrived.
+
+Three details that are easy to leave out and were not:
+
+- **`errno` is saved and restored across the handler.** A signal can land
+  between a failing syscall and the code that reads `errno` to decide what to
+  do about it. A handler that leaves the wrong value there turns a retry into
+  an error return several frames away, with nothing near the fault to suggest
+  a signal was involved.
+- **`SA_RESETHAND`, so the second signal is the default action.** If the save
+  wedges, the next Ctrl-C or the shutdown sequence's SIGKILL ends the process
+  the way it would have without any of this. A shutdown handler that can make
+  a program unkillable is worse than none.
+- **The notifier is disabled before the emission, and only the first byte is
+  reported.** The receiver's job is to save and quit, which may delete the
+  window that owns the object; a second emission would run over a torn-down
+  window.
+
+SIGQUIT is deliberately not taken: its default action is a core dump, and
+somebody sending it has asked for one rather than for a tidy exit.
+
+### The writers had to be atomic first, and two of them were worse than assumed
+
+The timer half of the design cannot be caught -- SIGKILL and a crash are not
+deliverable -- so the cover there is that a write interrupted anywhere leaves
+the previous file rather than half of the new one. Three writers were on the
+path and all three were wrong in a different way:
+
+- **`tree_outline::save` truncated and then wrote**, so the window between
+  emptying the file and finishing the last line was a window the process could
+  die in. What that leaves is a tree file that *parses*, with the tabs from the
+  top of the tree in it and none of the rest -- a loss that reads as a
+  successful load.
+- **It also could not fail.** It returned `true` unconditionally after a
+  successful `open`. `QTextStream` buffers, so every byte landed after the last
+  statement of the function: the stream flushed in its destructor, the file
+  closed in its own, and a full disk was reported to nobody. `commit()` is the
+  first thing in that function that can say whether the bytes arrived.
+- **`policy_engine::save` deleted the file before writing it.** `QFile::remove`
+  then `QSettings::sync`, which is a window with *no policy file at all* --
+  a process killed inside it comes back with every site on its defaults. The
+  intent was to drop keys the previous save wrote and this one does not, which
+  `clear()` expresses without the hole: the erasure is queued inside the
+  QSettings object and `sync()` writes the whole result through one rename.
+  It also stops lying to the QSettings cache, which keys a shared `QConfFile`
+  on the path and was left describing a file that was not there.
+- **`state_store::save` truncated too**, and it matters more there than for the
+  outline: a blob is opaque, so a half-written one is not recognisably damaged.
+  WebEngine is handed whatever the file says and the failure surfaces as a tab
+  that restores wrong.
+
+### How far this is verified, and what is argued rather than measured
+
+`test_shutdown` drives the real handler with a real `raise()`: that nothing is
+emitted before the event loop runs -- which is the assertion separating this
+design from one that saves in the handler -- that the event loop then delivers
+it once, carrying the right number, that the disposition is back to `SIG_DFL`
+afterwards, and that two signals produce one emission. Arming, refusing a
+second instance, and putting the dispositions back on destruction are each
+checked against `sigaction` rather than against the object's own account of
+itself.
+
+It does **not** send a second signal to prove the second one kills. That would
+kill the suite, which is the point; the disposition is inspected instead, which
+answers the same question exactly.
+
+`test_tree` and `test_state` pin what the atomic writers can be held to
+offline: a save reports success, leaves no temporary beside the target, keeps
+the permissions the file had -- the write creates a new inode, so a rewrite
+could otherwise publish a 0600 file to the group -- and a save that cannot
+write reports failure and leaves the previous contents whole, with nothing
+half-written in the directory.
+
+**That the rename itself is atomic is not tested and will not be.** It is
+`rename(2)`'s guarantee; a test here could only demonstrate the kernel keeping
+a promise it makes to everybody, and this tree already declines to write tests
+whose subject is Qt or the platform. What is worth saying plainly is where the
+line falls: the mechanism and its housekeeping are measured, the atomicity is
+inherited.
+
+**The permissions check failed first, and the code was right.** It compared
+`QFile::permissions()` against the `ReadOwner | WriteOwner` that had been set,
+which is not what comes back: on Unix Qt reports the Owner bits *and* the User
+bits for the same three permissions, so two flags in read back as four
+(`0x6600`, not `0x6000`). Settled by measuring rather than by reasoning about
+it -- a five-line probe against Qt6Core showed `-rw-------` surviving the
+commit, so QSaveFile does carry the mode across the new inode. The check now
+reads the mode back and compares that, and additionally asserts the file is
+not group- or world-readable so it is testing something rather than comparing
+a value with itself. This is the tree's own rule paying out: a gate that
+disagrees with code you believe correct is the first suspect.
+
+### Measured against the real browser, not only the fixture
+
+The suite exercises `shutdown_signals` in isolation; what it cannot show is
+that the wiring reaches the files. So the built binary was run offscreen
+against a scratch tree with `XDG_DATA_HOME` pointed away from the real
+profile, and sent a real SIGTERM:
+
+    --- before the signal ---
+    view.ini: absent
+    policy.ini: absent
+    --- after the signal ---
+    exit status: 0
+    process is gone
+    view.ini: WRITTEN
+    policy.ini: WRITTEN
+
+**The before/after is the control, and it needs no second build to be one.**
+Those two files have exactly two writers between them, `closeEvent` and the
+new signal path, and no window was closed. Their absence at the first check is
+therefore not a coincidence of timing -- nothing in the program writes either
+of them while it runs -- so their presence at the second is the signal handler
+and can be nothing else. The tree file was re-read afterwards and still parses,
+with its nine lines.
+
+Offline: 33 suites, 0 failures.
+
+### The guard that refused to run its own remedy
+
+Adding a source made the whole test tree unbuildable, which is the guard in
+`test/Makefile` doing its job -- `objsets.mk` names the tree it was generated
+from and refuses a build against a stale one. But `$(error)` is evaluated while
+the makefile is read, before make looks at a single target, so it fired for
+`make -C test objsets` as well: the command that fixes the condition, and the
+command its own message names.
+
+    Makefile:165: objsets.mk was generated from a different set of sources
+    Makefile:166:   only in the tree: test_shutdown.cpp
+    Makefile:168: *** run `make -C test objsets` to regenerate it.  Stop.
+
+The way through was `python3 ../tool/objsets.py`, which is the target's recipe
+and is written down nowhere a reader would look. The check is now skipped when
+`objsets` is among the goals. A guard whose remedy it refuses to run leaves the
+reader with two problems, and the second one is invisible.
+
+The Android-build refusal recorded above is still in force and still correct;
+`build-android-arm64-v8a` was parked under `build/` for the regeneration and
+put back, which is the documented workaround.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -11104,3 +11284,25 @@ carried along as amendments to a list item.
    What remains genuinely out of reach here is the WebEngine backend and the
    thin adapters around it, which need a page rather than a fixture, and are
    driven through the shell by the live drivers instead.
+
+5. **A crash still costs the view state, because the timer half is only half
+   there.** The signal path covers every catchable exit; SIGKILL and a genuine
+   crash are covered by whatever the periodic writer has already put on disk,
+   and that writer is `save_tree_soon`'s 1500ms debounce, which writes the tree
+   and the histories and nothing else. So a crash keeps the tree to within a
+   second and a half and still loses which folders were open, which tab was in
+   front, where the window sat and the sort order — the same list a signal used
+   to lose, minus the tree.
+
+   The cheap half is obvious and is not done here because it wants deciding
+   rather than typing: `save_view_state()` writes a small ini and could ride
+   the existing debounce, but nothing currently marks the view dirty — folder
+   expansion, the current row and the geometry all change without telling the
+   timer, so it would need either new connections or a slower unconditional
+   tick. The design above asks for dirtiness tracking and says why; an idle
+   browser rewriting itself every tick is the thing to avoid.
+
+   The expensive half is the tab blobs, and it may not be worth it: serialising
+   every live WebEngine view periodically is real work on a timer, against a
+   loss that only a crash produces. Not attempted, and named here so the next
+   pass does not read the signal work as having closed this.

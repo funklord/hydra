@@ -215,6 +215,90 @@ int main(int argc, char **argv) {
 		      "and an answer with no outline at all is refused, not empty");
 	}
 
+	section("saving is atomic, so an interrupted browser keeps its tree");
+	{
+		// The tree is written on a debounce timer while the browser runs, not
+		// only on the way out, so the window between emptying the file and
+		// finishing the last line is a window the process can die in. What
+		// this suite can establish is the mechanism and its housekeeping --
+		// that the write goes through a temporary and a rename, that it
+		// reports failure, and that it leaves nothing behind. That the rename
+		// itself is atomic is rename(2)'s guarantee and not something a test
+		// here can add to.
+		const QString adir = dir + "/atomic";
+		QDir(adir).removeRecursively();
+		QDir().mkpath(adir);
+		const QString apath = adir + "/tree.txt";
+
+		node root;
+		root.id   = "root";
+		root.type = node_type::folder;
+		auto *page  = new node;
+		page->id    = "a1";
+		page->type  = node_type::unopened_tab;
+		page->title = "A page";
+		page->url   = "https://x.example/";
+		page->parent = &root;
+		root.children.push_back(page);
+
+		check(tree_outline::save(apath, &root), "a save reports success");
+		check(QDir(adir).entryList(QDir::Files | QDir::Hidden).size() == 1,
+		      "and leaves exactly one file: no temporary is left beside it");
+
+		// The atomic write creates a new inode, so the mode has to be carried
+		// across it or a rewrite quietly republishes a private tree at
+		// whatever the umask says -- 0644 here, which is the whole of
+		// somebody's browsing on a shared machine.
+		//
+		// **Read the permissions back rather than comparing against the flags
+		// that were set.** On Unix `QFile::permissions()` reports the Owner
+		// bits *and* the User bits for the same three permissions, so setting
+		// `ReadOwner | WriteOwner` reads back as four flags, not two. The
+		// first version of this check compared against the two and failed
+		// against code that was correct; measuring what QSaveFile actually
+		// left on disk (`-rw-------`) is what settled it.
+		QFile::setPermissions(apath, QFile::ReadOwner | QFile::WriteOwner);
+		const QFileDevice::Permissions strict = QFile::permissions(apath);
+		check(!strict.testFlag(QFile::ReadGroup) &&
+		        !strict.testFlag(QFile::ReadOther),
+		      "a tree file can be made private");
+		check(tree_outline::save(apath, &root), "a second save over it succeeds");
+		check(QFile::permissions(apath) == strict,
+		      "and the atomic write keeps the mode, rather than the umask's");
+
+		// The reason atomicity is worth having: what is on disk after a save
+		// that cannot finish must be the tree that was there, never a stump.
+		// A read-only target is the failure this suite can produce on demand.
+		const QByteArray before = [&] {
+			QFile f(apath);
+			f.open(QIODevice::ReadOnly);
+			return f.readAll();
+		}();
+		QFile::setPermissions(apath, QFile::ReadOwner);
+
+		auto *second  = new node;
+		second->id    = "a2";
+		second->type  = node_type::unopened_tab;
+		second->title = "Another";
+		second->url   = "https://y.example/";
+		second->parent = &root;
+		root.children.push_back(second);
+
+		check(!tree_outline::save(apath, &root),
+		      "a save onto a file it cannot write says so");
+		const QByteArray after = [&] {
+			QFile f(apath);
+			f.open(QIODevice::ReadOnly);
+			return f.readAll();
+		}();
+		check(after == before,
+		      "and the tree that was there is still there, whole");
+		check(QDir(adir).entryList(QDir::Files | QDir::Hidden).size() == 1,
+		      "with no half-written temporary left in the directory");
+
+		QFile::setPermissions(apath, QFile::ReadOwner | QFile::WriteOwner);
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

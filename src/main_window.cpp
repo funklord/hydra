@@ -8,6 +8,7 @@
 #include "tree_sort_proxy.h"
 #include "state_store.h"
 #include "tab_history.h"
+#include "shutdown_signals.h"
 #include "policy_engine.h"
 #include "site_policy_dialog.h"
 #include "web_view_backend.h"
@@ -575,6 +576,24 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_save_timer->setSingleShot(true);
 	m_save_timer->setInterval(1500);   // debounce structural saves
 	connect(m_save_timer, &QTimer::timeout, this, &main_window::flush_tree);
+
+	// A logout, a shutdown or a Ctrl-C ends the process without ever closing
+	// the window, so `closeEvent` -- the only thing that writes the view state
+	// and the tab blobs -- never ran for any of them. See shutdown_signals.h
+	// for why the handler cannot do the saving itself.
+	//
+	// Quit rather than close: `save_everything()` has already done what
+	// `closeEvent` would do, and calling `close()` here would run the whole
+	// list a second time over views it has just suspended.
+	auto *shutdown = new shutdown_signals(this);
+	connect(shutdown, &shutdown_signals::received, this, [this](int signo) {
+		qInfo("caught signal %d; saving before exit", signo);
+		save_everything();
+		QCoreApplication::quit();
+	});
+	if (!shutdown->armed())
+		qWarning("shutdown signals not installed; a signalled exit will lose "
+		          "the view state and any unsaved tabs");
 
 	// --- Layout: menu bar, toolbar, splitter, status bar -----------------
 	// No QMainWindow, so each piece of window furniture is an ordinary child
@@ -3920,7 +3939,18 @@ void main_window::restore_view_state() {
 	}
 }
 
-void main_window::closeEvent(QCloseEvent *event) {
+// Everything that has to be on disk before this process stops existing.
+//
+// Split out of `closeEvent` because closing the window is no longer the only
+// way the browser ends. A signalled exit -- a logout, a shutdown, a Ctrl-C --
+// never delivers a close event, so for as long as this was the body of one it
+// was also the list of things a signalled exit threw away: not just the tree,
+// which the debounce timer had usually just written, but the view state and
+// every live tab's suspended blob, neither of which anything else writes.
+//
+// It suspends the live views, so it is the *end*, not a checkpoint. Nothing
+// that means to carry on running may call it.
+void main_window::save_everything() {
 	// Leave kiosk first, so the presented view is back in the stack and can be
 	// suspended with the rest.
 	if (m_kiosk && m_kiosk->active())
@@ -3937,5 +3967,9 @@ void main_window::closeEvent(QCloseEvent *event) {
 	if (!m_policy_path.isEmpty())
 		m_policy->save(m_policy_path);
 	save_view_state();
+}
+
+void main_window::closeEvent(QCloseEvent *event) {
+	save_everything();
 	QWidget::closeEvent(event);
 }

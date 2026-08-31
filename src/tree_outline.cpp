@@ -2,6 +2,7 @@
 #include "node.h"
 
 #include <QFile>
+#include <QSaveFile>
 #include <QTextStream>
 #include <QVector>
 
@@ -181,14 +182,34 @@ static void write_node(QTextStream &out, node *n, int depth) {
 		write_node(out, c, depth + 1);
 }
 
+// **Atomic, because this file is now written while the browser is running.**
+// `main_window` flushes the tree on a debounce timer rather than only on the
+// way out, so the moment between truncating and finishing the last line is a
+// moment the process can be killed in -- and what is left then is a tree file
+// that parses, with the tabs from the top of the tree in it and none of the
+// rest. A stale tree is a tree; a half-written one is a loss that reads as a
+// successful load.
+//
+// The second fault was quieter and is the reason this used to return true
+// unconditionally. `QTextStream` buffers, so every write here landed after the
+// last statement of the function: the stream flushed in its destructor, the
+// file closed in its own, and a full disk or a failed write was discovered by
+// nobody. `commit()` is the first thing in this file that can report that the
+// bytes actually arrived.
+//
+// The stream is scoped so that it flushes into the temporary file *before*
+// commit() renames it over the target. Left to the end of the function the
+// order reverses, and commit() would publish a file missing its tail.
 bool save(const QString &path, node *root) {
-	QFile f(path);
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate))
+	QSaveFile f(path);
+	if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
 		return false;
-	QTextStream out(&f);
-	for (node *c : root->children)
-		write_node(out, c, 0);
-	return true;
+	{
+		QTextStream out(&f);
+		for (node *c : root->children)
+			write_node(out, c, 0);
+	}
+	return f.commit();
 }
 
 }  // namespace tree_outline

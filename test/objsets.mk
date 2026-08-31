@@ -50,6 +50,7 @@ OBJSETS_SOURCES = \
 	test/test_send_gate.cpp \
 	test/test_session.cpp \
 	test/test_settings.cpp \
+	test/test_shutdown.cpp \
 	test/test_signals.cpp \
 	test/test_state.cpp \
 	test/test_streamtype.cpp \
@@ -377,6 +378,10 @@ OBJS_test_settings = \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o
 
+OBJS_test_shutdown = \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o
+
 OBJS_test_signals = \
 	$(BUILD_DIR)/app/filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o
@@ -502,6 +507,8 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -625,6 +632,8 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -760,6 +769,8 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -874,6 +885,8 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -997,6 +1010,8 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -1133,6 +1148,8 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -1240,6 +1257,8 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -1366,6 +1385,8 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -1486,6 +1507,8 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -1611,6 +1634,8 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -1735,6 +1760,8 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -1856,6 +1883,8 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -1990,6 +2019,8 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/app/downloads_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
@@ -2101,6 +2132,8 @@ OBJS_try_files = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -2226,6 +2259,8 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -2350,6 +2385,8 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -2482,6 +2519,8 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/app/credential_store.o \
 	$(BUILD_DIR)/app/downloads_dialog.o \
 	$(BUILD_DIR)/app/extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -2595,6 +2634,8 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -2721,6 +2762,8 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -2863,6 +2906,8 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -2986,6 +3031,8 @@ OBJS_try_look = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -3097,6 +3144,8 @@ OBJS_try_media = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -3222,6 +3271,8 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -3356,6 +3407,8 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -3477,6 +3530,8 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -3588,6 +3643,8 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -3739,6 +3796,8 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/downloads_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/tab_history.o \
@@ -3837,6 +3896,8 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -3970,6 +4031,8 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -4119,6 +4182,8 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -4245,6 +4310,8 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -4368,6 +4435,8 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -4489,6 +4558,8 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
@@ -4612,6 +4683,8 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \

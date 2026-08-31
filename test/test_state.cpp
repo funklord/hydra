@@ -201,6 +201,37 @@ int main(int argc, char **argv) {
 		      "writing an empty record leaves no file to find");
 	}
 
+	section("a blob is written atomically, so a killed browser keeps the old one");
+	{
+		// A suspended tab's blob is opaque: WebEngine is handed whatever the
+		// file says. So a half-written one is not recognisably damaged the way
+		// a truncated outline is -- it comes back as a tab that restores wrong,
+		// with nothing to say why. The write goes through a temporary and a
+		// rename for that reason.
+		state_store s(dir + "/atomic");
+		const QByteArray first("the-first-blob");
+		check(s.save("z1", first), "a blob saves");
+		check(s.load("z1") == first, "and reads back");
+
+		const QDir sdir(dir + "/atomic");
+		const int files = sdir.entryList(QDir::Files | QDir::Hidden).size();
+		check(files == 1,
+		      QString("with no temporary left beside it (%1 file(s))").arg(files));
+
+		// The failure this suite can produce on demand. What matters is not
+		// that it fails -- the old code failed here too -- but what is on disk
+		// afterwards: the blob that was there, not a stump of the new one.
+		const QString blob_path = sdir.filePath(sdir.entryList(QDir::Files).first());
+		QFile::setPermissions(blob_path, QFile::ReadOwner);
+		check(!s.save("z1", QByteArray("a-longer-second-blob")),
+		      "a save it cannot write reports failure");
+		QFile::setPermissions(blob_path, QFile::ReadOwner | QFile::WriteOwner);
+		check(s.load("z1") == first,
+		      "and the blob that was there is still whole");
+		check(sdir.entryList(QDir::Files | QDir::Hidden).size() == 1,
+		      "with nothing half-written left behind");
+	}
+
 	QDir(dir).removeRecursively();
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

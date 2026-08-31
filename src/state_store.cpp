@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFile>
 #include <QRegularExpression>
+#include <QSaveFile>
 
 namespace {
 
@@ -63,11 +64,22 @@ QByteArray state_store::load(const QString &id) const {
 	return f.readAll();
 }
 
+// Atomic for the same reason `tree_outline::save` is, and it matters more
+// here: a page's serialised state is opaque, so a half-written blob is not
+// recognisably damaged the way a truncated outline is. WebEngine is handed
+// whatever the file says and the failure surfaces as a tab that restores
+// wrong, or not at all, with nothing to say why.
+//
+// The destructor discards an uncommitted write, so the early return on a
+// short write leaves the previous blob in place rather than a stump of the
+// new one. That is the whole reason to check the count.
 bool state_store::save(const QString &id, const QByteArray &blob) {
-	QFile f(path_for(id));
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+	QSaveFile f(path_for(id));
+	if (!f.open(QIODevice::WriteOnly))
 		return false;
-	return f.write(blob) == blob.size();
+	if (f.write(blob) != blob.size())
+		return false;
+	return f.commit();
 }
 
 bool state_store::has_history(const QString &id) const {
@@ -87,10 +99,12 @@ bool state_store::save_history(const QString &id, const QByteArray &bytes) {
 	// every caller would then have to re-check what the file said.
 	if (bytes.isEmpty())
 		return QFile::remove(path_for(id, k_history_ext));
-	QFile f(path_for(id, k_history_ext));
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+	QSaveFile f(path_for(id, k_history_ext));
+	if (!f.open(QIODevice::WriteOnly))
 		return false;
-	return f.write(bytes) == bytes.size();
+	if (f.write(bytes) != bytes.size())
+		return false;
+	return f.commit();
 }
 
 bool state_store::remove(const QString &id) {

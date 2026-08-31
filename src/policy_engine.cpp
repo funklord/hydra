@@ -240,8 +240,23 @@ bool policy_engine::load(const QString &path) {
 }
 
 bool policy_engine::save(const QString &path) const {
-	QFile::remove(path);
+	// **`clear()` rather than removing the file, which is the same intent
+	// without the hole.** Both exist to drop keys the previous save wrote and
+	// this one does not -- a rule the user deleted, or the JSON this file used
+	// to be -- since `setValue` alone only adds and overwrites. The difference
+	// is when the old contents stop existing: `QFile::remove` unlinks them
+	// immediately, so from there until `sync()` the machine has no policy file
+	// at all, and a process killed inside that window comes back with every
+	// site on its defaults. `clear()` queues the same erasure inside the
+	// QSettings object, and `sync()` then writes the whole result through
+	// QSaveFile in one rename -- the old policy is never gone until the new
+	// one is there.
+	//
+	// It also stops lying to the QSettings cache, which keys a shared
+	// QConfFile on the path: removing the file behind its back left the
+	// cached object describing a file that was not there.
 	QSettings f(path, QSettings::IniFormat);
+	f.clear();
 	f.setValue("hydra/format", 1);
 	f.setValue("hydra/kind", "policy");
 
