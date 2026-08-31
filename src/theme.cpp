@@ -117,7 +117,22 @@ Qt::ColorScheme detect_system() {
 	const Qt::ColorScheme hint = QGuiApplication::styleHints()
 	                                 ? QGuiApplication::styleHints()->colorScheme()
 	                                 : Qt::ColorScheme::Unknown;
-	return decide(hint, portal_scheme(), QGuiApplication::palette());
+	// The portal first, then what the desktop wrote down. -1 is "the portal did
+	// not answer" and 0 is "it answered no preference"; neither is a preference,
+	// so both fall through to tier 4 rather than only the first.
+	int scheme = portal_scheme();
+	if (scheme < 1) {
+		const QString home = QDir::homePath();
+		const QString cfg = qEnvironmentVariableIsSet("XDG_CONFIG_HOME")
+		                        ? QString::fromLocal8Bit(qgetenv("XDG_CONFIG_HOME"))
+		                        : home + "/.config";
+		scheme = color_scheme_from({
+			cfg + "/kdeglobals",
+			home + "/.trinity/share/config/kdeglobals",
+			home + "/.kde/share/config/kdeglobals",
+		});
+	}
+	return decide(hint, scheme, QGuiApplication::palette());
 }
 
 Qt::ColorScheme resolve(choice c) {
@@ -233,6 +248,74 @@ void watcher::reapply() {
 // Both spellings that matter: an INI-ish `key=value` as GTK 3 and kdeglobals
 // write it, and GTK 2's quoted `gtk-icon-theme-name="Breeze"`. The value is
 // taken from the first file that names one, so order is authority.
+namespace {
+
+// Rec.709 relative luminance, which is the comparison `harmonization.md`
+// specifies -- deliberately the same question the palette rung asks, pointed at
+// the source that has the answer, rather than a second heuristic to trust.
+double luminance_709(int r, int g, int b) {
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// "0,42,78" -> a colour, or false. TDE writes plain decimal triples.
+bool parse_triple(const QString &value, int *r, int *g, int *b) {
+	const QStringList parts = value.split(QLatin1Char(','));
+	if (parts.size() != 3)
+		return false;
+	bool ok0 = false, ok1 = false, ok2 = false;
+	*r = parts.at(0).trimmed().toInt(&ok0);
+	*g = parts.at(1).trimmed().toInt(&ok1);
+	*b = parts.at(2).trimmed().toInt(&ok2);
+	return ok0 && ok1 && ok2;
+}
+
+}  // namespace
+
+int theme::color_scheme_from(const QStringList &sources) {
+	for (const QString &path : sources) {
+		QFile f(path);
+		if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+			continue;
+		QTextStream in(&f);
+		QString section;
+		int br = -1, bg = -1, bb = -1, fr = -1, fg = -1, fb = -1;
+		while (!in.atEnd()) {
+			const QString line = in.readLine().trimmed();
+			if (line.startsWith(QLatin1Char('[')) && line.endsWith(QLatin1Char(']'))) {
+				section = line.mid(1, line.size() - 2);
+				continue;
+			}
+			// Only under [General]. The same keys appear in per-application
+			// sections, and taking whichever came last would answer about some
+			// other program's colours.
+			if (section.compare(QLatin1String("General"), Qt::CaseInsensitive) != 0)
+				continue;
+			const int eq = line.indexOf(QLatin1Char('='));
+			if (eq < 0)
+				continue;
+			const QString key = line.left(eq).trimmed();
+			const QString val = line.mid(eq + 1).trimmed();
+			if (key.compare(QLatin1String("windowBackground"), Qt::CaseInsensitive) == 0)
+				parse_triple(val, &br, &bg, &bb);
+			else if (key.compare(QLatin1String("windowForeground"), Qt::CaseInsensitive) == 0)
+				parse_triple(val, &fr, &fg, &fb);
+		}
+		if (br < 0 || fr < 0)
+			continue;   // this file had no answer; try the next
+		const double back = luminance_709(br, bg, bb);
+		const double fore = luminance_709(fr, fg, fb);
+		if (back < fore)
+			return 1;   // prefer dark
+		if (back > fore)
+			return 2;   // prefer light
+		return 0;       // identical, which says nothing
+	}
+	// **Abstain rather than guess.** The two errors are not symmetric: a wrong
+	// light answer is merely plain, while a wrong dark one is unreadable text on
+	// a pale background. No readable file means no opinion.
+	return 0;
+}
+
 QString theme::icon_theme_from(const QStringList &sources) {
 	static const QRegularExpression re(
 	    // Custom delimiter: the pattern contains `)"`, which closes a plain

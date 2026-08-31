@@ -64,6 +64,26 @@ Qt::ColorScheme detect_system();
 // parsing can be tested without a desktop. The default list is the real one.
 QString icon_theme_from(const QStringList &sources);
 
+// Tier 4: the colour scheme the desktop wrote down, in the portal's own
+// vocabulary -- 1 prefer dark, 2 prefer light, 0 no preference.
+//
+// **Tiers 1 to 3 do not fail visibly on this desktop, which is what makes this
+// worth a rung of its own.** Trinity exposes no Qt 6 platform theme and runs no
+// XDG portal, so `QStyleHints::colorScheme()` answers Unknown and the portal
+// cannot be asked; and with nothing integrated Qt hands us its **default light
+// palette**, so the palette rung above reports light and is not malfunctioning
+// -- there is simply no dark palette anywhere for it to find. A three-tier
+// detector believes it is covered and is not. Settled across the workspace in
+// `harmonization.md`, since every GUI here has the same exposure.
+//
+// **The colours decide, never the scheme name.** This desktop's is
+// `DarkBlue.kcsrc`, which contains "Dark" by luck; plenty of dark schemes do
+// not, and a name is not a predicate about luminance.
+//
+// `sources` are files to consult in order, so this can be tested without a
+// desktop -- the same shape as `icon_theme_from` above and for the same reason.
+int color_scheme_from(const QStringList &sources);
+
 // How a *disabled* icon is drawn, which is Qt's job and which Qt overdoes here.
 //
 // The default transform desaturates the pixmap and then lifts it toward the

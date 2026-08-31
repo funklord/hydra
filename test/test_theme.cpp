@@ -167,6 +167,51 @@ int main(int argc, char **argv) {
 		      QString("a GTK settings.ini is read past its [Settings] header (%1)")
 		          .arg(theme::icon_theme_from({ gtk3 })));
 
+		// --- tier 4: the colour scheme the desktop wrote down ---------------
+		//
+		// **Both directions, from the same parser.** A fixture that only proves
+		// "dark in, dark out" cannot tell a working comparison from a function
+		// that returns 1. The light file is the same layout with the two
+		// colours exchanged, so the only thing that can distinguish them is the
+		// luminance test itself.
+		const QString tde_dark = write("kdeglobals-dark",
+		  "[General]\n"
+		  "colorScheme=DarkBlue.kcsrc\n"
+		  "windowBackground=0,42,78\n"
+		  "windowForeground=220,220,220\n");
+		check(theme::color_scheme_from({ tde_dark }) == 1,
+		      QString("Trinity's real dark scheme reads as prefer-dark (%1)")
+		          .arg(theme::color_scheme_from({ tde_dark })));
+
+		const QString tde_light = write("kdeglobals-light",
+		  "[General]\n"
+		  "colorScheme=DarkBlue.kcsrc\n"     // the name still says Dark
+		  "windowBackground=220,220,220\n"
+		  "windowForeground=0,42,78\n");
+		check(theme::color_scheme_from({ tde_light }) == 2,
+		      QString("a light scheme reads as prefer-light even though the "
+		               "scheme is still named DarkBlue (%1)")
+		          .arg(theme::color_scheme_from({ tde_light })));
+
+		// **The keys are only meaningful under [General].** kdeglobals carries
+		// per-application sections with the same key names, and a parser that
+		// took whichever came last would answer about somebody else's window.
+		const QString tde_other = write("kdeglobals-other",
+		  "[General]\n"
+		  "windowBackground=220,220,220\n"
+		  "windowForeground=0,0,0\n"
+		  "[konqueror]\n"
+		  "windowBackground=0,0,0\n"
+		  "windowForeground=255,255,255\n");
+		check(theme::color_scheme_from({ tde_other }) == 2,
+		      QString("a later section does not override [General] (%1)")
+		          .arg(theme::color_scheme_from({ tde_other })));
+
+		// **Abstain rather than guess**: a wrong light answer is plain, a wrong
+		// dark one is unreadable text on pale. No file, no opinion.
+		check(theme::color_scheme_from({ dir + "/does-not-exist" }) == 0,
+		      "an unreadable file abstains rather than guessing");
+
 		// GTK 2 quotes its values.
 		const QString gtk2 = write("gtkrc-2.0",
 		  "gtk-icon-theme-name=\"Adwaita\"\n");

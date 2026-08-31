@@ -10377,7 +10377,24 @@ than guess when the file cannot be read, because the errors are not symmetric
 -- this file already records that a wrong light guess is merely plain while a
 wrong dark guess is unreadable text.
 
-**Signalled rather than fixed here**, on the copyright holder's instruction:
+**Implemented as tier 4, after the workspace settled the rule.**
+`theme::color_scheme_from(sources)` reads `windowBackground` against
+`windowForeground` under `[General]` and returns the portal's own vocabulary,
+so `decide()` did not change at all -- the missing piece was a source for its
+middle argument, exactly as this entry predicted. Measured against the real
+file: background luminance 35.7 against foreground 220.0, which is 1, prefer
+dark.
+
+**The test carries both directions and the reason it has to.** A fixture that
+only shows dark-in-dark-out cannot separate a working comparison from a
+function that returns 1, so the light case is the same file with the two
+colours exchanged and the scheme still named `DarkBlue.kcsrc` -- the only thing
+that can tell them apart is the luminance test. A third case proves a later
+`[konqueror]` section does not override `[General]`, and a fourth that an
+unreadable file abstains.
+
+**Signalled first, then implemented here**, on the copyright holder's
+instruction:
 the cause is the desktop, so every Qt GUI in the workspace fails identically
 and a per-tree fix is the same work done many times with many results. Open
 alongside it, and bigger than detection: whether a program should follow the
