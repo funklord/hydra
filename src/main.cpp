@@ -217,22 +217,20 @@ int main(int argc, char *argv[]) {
 	// working directory worth the name there, it is `/` and nothing in it is
 	// writable -- and it was solved separately for that platform. One path now,
 	// because two answers to one question is how they drift.
-	QString tree_path;
-	if (argc > 1 && open_arg.isEmpty())
-		tree_path = QString::fromLocal8Bit(argv[1]);
-
-	if (tree_path.isEmpty()) {
+	// **A function, because it is now wanted in two places**: when no argument
+	// names a tree, and when the argument turned out not to be one.
+	const auto default_tree = [] {
 		const QString dir =
 		  QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 		QDir().mkpath(dir);
-		tree_path = QDir(dir).filePath("tree.txt");
+		const QString path = QDir(dir).filePath("tree.txt");
 
 		// First run gets the example, so the app opens with something in it
 		// rather than an empty pane that looks like a failure. Preference
 		// order: a checkout being worked in, then the copy the build puts
 		// beside the binary, then the one compiled in -- which is
 		// the only one an installed or packaged copy has.
-		if (!QFileInfo::exists(tree_path)) {
+		if (!QFileInfo::exists(path)) {
 			QStringList seeds;
 			seeds << QStringLiteral("sample-tree.txt")
 			      << QDir(QCoreApplication::applicationDirPath())
@@ -242,15 +240,39 @@ int main(int argc, char *argv[]) {
 				QFile seed(from);
 				if (!seed.open(QIODevice::ReadOnly))
 					continue;
-				QFile out(tree_path);
+				QFile out(path);
 				if (out.open(QIODevice::WriteOnly))
 					out.write(seed.readAll());
 				break;
 			}
 		}
-	}
+		return path;
+	};
 
-	w.load_tree(tree_path);
+	QString tree_path;
+	if (argc > 1 && open_arg.isEmpty())
+		tree_path = QString::fromLocal8Bit(argv[1]);
+	if (tree_path.isEmpty())
+		tree_path = default_tree();
+
+	// **A refused argument must not cost the session everything it saves.**
+	// `load_tree` declines a path whose directory does not exist -- which is
+	// what a url handed over as an argument looks like -- and every writer in
+	// the window is guarded on the paths it would have set, so without this the
+	// browser would come up working and persist nothing at all: no tree, no
+	// view state, no tab histories, and no hint beyond one line on stderr.
+	// Silently saving nothing is a worse failure than the litter this replaced.
+	//
+	// Falling back to the personal tree, loudly. It is the file the same
+	// command with no argument would have opened, so the browser is the one
+	// the person already has rather than an empty imitation of it.
+	if (!w.load_tree(tree_path)) {
+		const QString fallback = default_tree();
+		if (fallback != tree_path) {
+			qCritical("tree: opening %s instead", qPrintable(fallback));
+			w.load_tree(fallback);
+		}
+	}
 	// After the tree, so the tab lands in a loaded tree rather than being
 	// dropped when the file replaces the model underneath it.
 	if (!open_arg.isEmpty())

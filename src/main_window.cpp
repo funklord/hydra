@@ -1993,8 +1993,42 @@ main_window::~main_window() {
 }
 
 bool main_window::load_tree(const QString &path) {
-	m_tree_path = path;
+	// **The directory has to exist already, and refusing is the fix for a bug
+	// rather than fussiness.**
+	//
+	// Everything this window persists is derived from the tree's own
+	// directory -- the state store, the view state, the policy, the filters --
+	// and `state_store` creates its directory with `mkpath`, which builds
+	// every missing component. So an argument that is not a real path becomes
+	// a directory tree rooted wherever the browser happened to be started.
+	//
+	// Measured twice in this repository, by two different accounts and neither
+	// noticed at the time: `hydra file:///tmp/x/page.html` left a directory
+	// literally named `file:` in the checkout, holding `tmp/x/` and an empty
+	// `state/` beneath it. `QFileInfo("file:///tmp/x/page.html").absolutePath()`
+	// is the *relative* path `file:/tmp/x`, because a url is not a path and
+	// nothing here had said so.
+	//
+	// A tree path naming a directory that does not exist is a typo, a url, or
+	// something else that was never a tree. Creating it silently is what turned
+	// both incidents into junk in a git repository instead of one line on
+	// stderr. Nothing is assigned before this returns, so every writer below
+	// stays guarded by the `isEmpty()` checks it already has and the refusal
+	// leaves no trace anywhere.
+	//
+	// Whether a `file:` url should be opened as a page rather than read as a
+	// tree is a separate question, deliberately decided in `main.cpp` and not
+	// answered here.
 	const QString dir = QFileInfo(path).absolutePath();
+	if (!QFileInfo(dir).isDir()) {
+		qCritical("tree: %s is not in an existing directory (%s); refusing to "
+		           "create one, because an argument that is not a path is how "
+		           "a url became a directory tree here twice",
+		           qPrintable(path), qPrintable(dir));
+		return false;
+	}
+
+	m_tree_path = path;
 	delete m_state;
 	m_state = new state_store(dir + "/state");
 
