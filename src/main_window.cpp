@@ -64,6 +64,7 @@
 #include <QSplitter>
 #include <QPropertyAnimation>
 #include <QResizeEvent>
+#include <QItemSelectionModel>
 #include <QTreeView>
 #include <QSettings>
 #include <QStackedWidget>
@@ -577,6 +578,23 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_save_timer->setInterval(1500);   // debounce structural saves
 	connect(m_save_timer, &QTimer::timeout, this, &main_window::flush_tree);
 
+	// **The view's own debounce, and deliberately not the tree's.** The two
+	// are wired the same way and to the same purpose -- see the comment on
+	// `structure_changed` below, which this follows -- but they must not share
+	// a timer. `flush_tree` writes the whole outline and every tab's history;
+	// hanging the view state off it would rewrite a ten-thousand-node file
+	// every time somebody dragged a window edge, and dragging an edge is the
+	// most frequent thing on this list by a wide margin.
+	//
+	// Longer than the tree's, because what feeds it is a gesture rather than
+	// an edit: a resize or a drag through the tree emits continuously and
+	// stops when the hand stops, and the point of the interval is to be past
+	// the end of the gesture rather than inside it.
+	m_view_timer = new QTimer(this);
+	m_view_timer->setSingleShot(true);
+	m_view_timer->setInterval(2500);
+	connect(m_view_timer, &QTimer::timeout, this, &main_window::save_view_state);
+
 	// A logout, a shutdown or a Ctrl-C ends the process without ever closing
 	// the window, so `closeEvent` -- the only thing that writes the view state
 	// and the tab blobs -- never ran for any of them. See shutdown_signals.h
@@ -801,6 +819,18 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// survived only until the next launch would be worse than a refusal.
 	connect(m_model, &tab_tree_model::structure_changed, this,
 	        &main_window::save_tree_soon);
+	// And the same for the view state, which the model cannot see. Opening a
+	// folder and moving the current row change nothing in the tree file, so
+	// `structure_changed` never fires for them and until now nothing but
+	// `closeEvent` ever wrote them down.
+	connect(m_tree, &QTreeView::expanded,  this, &main_window::save_view_soon);
+	connect(m_tree, &QTreeView::collapsed, this, &main_window::save_view_soon);
+	// After `setModel`, which is what creates the selection model: connecting
+	// above it reads a null pointer, and Qt's connect on one is a runtime
+	// warning rather than a compile error.
+	if (QItemSelectionModel *sel = m_tree->selectionModel())
+		connect(sel, &QItemSelectionModel::currentChanged,
+		        this, &main_window::save_view_soon);
 	// Locking the tab that is showing changes what Back and Forward may do, and
 	// the toolbar has no other reason to look again. Cheap enough to run for
 	// every structural change rather than adding a signal that means "a lock
@@ -916,6 +946,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_sort_box->addItem("Recently seen");
 	connect(m_sort_box, &QComboBox::currentIndexChanged,
 	         this, &main_window::on_sort_mode_changed);
+	connect(m_sort_box, &QComboBox::currentIndexChanged,
+	         this, &main_window::save_view_soon);
 	sort_row->addWidget(m_sort_box, 1);
 	side->addLayout(sort_row);
 
@@ -1990,8 +2022,18 @@ bool main_window::load_tree(const QString &path) {
 	return ok;
 }
 
+// **Both of these, because `saveGeometry` records size and position.** Keeping
+// only the resize would remember a window that had been dragged to another
+// corner as still being in the old one, which looks less like a missing feature
+// than like the restore being broken.
+void main_window::moveEvent(QMoveEvent *event) {
+	QWidget::moveEvent(event);
+	save_view_soon();
+}
+
 void main_window::resizeEvent(QResizeEvent *event) {
 	QWidget::resizeEvent(event);
+	save_view_soon();
 	update_layout_mode();
 	if (m_drawer_mode && m_sidebar) {
 		// Keep the drawer the right size and where it belongs, whichever state
@@ -3055,6 +3097,16 @@ void main_window::reset_key_action() {
 void main_window::save_tree_soon() {
 	if (!m_tree_path.isEmpty() && m_save_timer)
 		m_save_timer->start();
+}
+
+// The same shape as `save_tree_soon`, for the file beside the tree. Every
+// caller is a place the *view* changed and the tree did not -- a folder
+// opened, the current row moved, the sort changed, the window resized -- none
+// of which the structural signal can see, because none of them touches the
+// model.
+void main_window::save_view_soon() {
+	if (!m_view_path.isEmpty() && m_view_timer)
+		m_view_timer->start();
 }
 
 // The row itself, where `selected_parent` answers "where would a new child go".

@@ -11215,6 +11215,96 @@ The Android-build refusal recorded above is still in force and still correct;
 `build-android-arm64-v8a` was parked under `build/` for the regeneration and
 put back, which is the documented workaround.
 
+## The timer half, and a question that had already been answered
+
+Left on the list one commit earlier as wanting "deciding rather than typing":
+the view state had no periodic writer, so a crash still lost which folders
+were open, which tab was in front, where the window sat and the sort order.
+The choice recorded there was between marking the view dirty through new
+connections and a slower unconditional tick.
+
+**That was a wrongly-deferred question, and this tree had already decided
+it.** `save_tree_soon` is the same shape with a different source, and the
+comment above its connection says so outright -- *"One place to persist,
+however the change was made -- a drag, a rename, a new folder."* A signal per
+change point, a single-shot timer, one flush. There was nothing to decide;
+the answer was fifteen lines above the code that needed it.
+
+Worth recording because the failure mode is the one `working-practice.md`
+names as invisible: a deferral looks exactly like diligence, and nobody comes
+back to take a decision that was already taken somewhere else. The search that
+would have caught it is the one that file describes -- not the name, the
+shape: something else in this tree choosing between the same two answers,
+whatever it happens to be called.
+
+### Two timers, not one
+
+`save_view_soon()` starts `m_view_timer`, and the deliberate part is that it is
+not `m_save_timer`. `flush_tree` writes the whole outline and every tab's
+history; hanging the view state off it would rewrite a ten-thousand-node file
+every time somebody dragged a window edge, and dragging an edge is by a wide
+margin the most frequent thing on the list of what changes the view.
+
+2500ms against the tree's 1500ms, because what feeds it is a gesture rather
+than an edit. A resize or a drag through the tree emits continuously and stops
+when the hand stops, so the interval wants to be past the end of the gesture
+rather than inside it.
+
+Four sources, none of which the model can see -- which is why
+`structure_changed` never covered them: `expanded` and `collapsed` on the
+tree, `currentChanged` on its selection model, `currentIndexChanged` on the
+sort box, and both `resizeEvent` and `moveEvent`. **Both** of the last two,
+because `saveGeometry` records position as well as size: keeping only the
+resize would remember a window dragged to another corner as still being in the
+old one, which reads less like a missing feature than like the restore being
+broken.
+
+The selection-model connection is made after `setModel`, which is what creates
+that model. Above it the pointer is null and Qt's connect on one is a runtime
+warning rather than a compile error -- the kind that is only ever read by
+somebody already looking for it.
+
+### Measured against SIGKILL, which is the case that made this necessary
+
+The signal handler is no help here by construction, so the demonstration is
+the exit it cannot catch. The built binary, offscreen, against a scratch tree
+with `XDG_DATA_HOME` pointed away from the real profile:
+
+    --- 1s in: before the 2500ms debounce could have fired ---
+    view.ini: absent
+    --- 8s in: the debounce has had every chance, and nothing was signalled ---
+    view.ini: WRITTEN while the process is still running
+    --- idle for 6s more ---
+    unchanged: the timer is single-shot, not a tick
+    --- SIGKILL: uncatchable, so nothing saves on the way out ---
+    exit status: 137
+    view.ini: SURVIVED
+    tree.txt lines: 9  (intact)
+    stray temporaries beside them: none
+
+Four properties, and each line is one of them. **Absent at one second** is what
+makes it a debounce rather than an eager write. **Present at eight** with
+nothing signalled and no window closed is the timer, and can be nothing else:
+until this change `view.ini` had exactly two writers, `closeEvent` and the
+signal path, and this run performed neither. **Unchanged after six idle
+seconds** is the design's own condition -- an idle browser must not rewrite
+itself on every tick -- and is the assertion a periodic writer would fail.
+**Surviving a 137** is the whole point.
+
+No second build was needed for the control, for the same reason as the SIGTERM
+measurement above: the file has no writer that runs while the program is up,
+so its absence at the first check is not a coincidence of timing.
+
+### What is left, and it is only the blobs
+
+A crash now keeps the tree to within a second and a half and the view state to
+within two and a half. What it still loses is the live tabs' navigation
+history, since a blob is only written when a view is suspended. That is
+deliberately not built: serialising every live WebEngine view on a timer is
+real work against a loss only a crash produces, and it wants a measurement of
+what that costs on a window full of tabs before anybody commits to it. It
+stays on the list as the one remaining piece.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -11285,24 +11375,18 @@ carried along as amendments to a list item.
    thin adapters around it, which need a page rather than a fixture, and are
    driven through the shell by the live drivers instead.
 
-5. **A crash still costs the view state, because the timer half is only half
-   there.** The signal path covers every catchable exit; SIGKILL and a genuine
-   crash are covered by whatever the periodic writer has already put on disk,
-   and that writer is `save_tree_soon`'s 1500ms debounce, which writes the tree
-   and the histories and nothing else. So a crash keeps the tree to within a
-   second and a half and still loses which folders were open, which tab was in
-   front, where the window sat and the sort order — the same list a signal used
-   to lose, minus the tree.
+5. **A crash still costs the live tabs' navigation history, and only that.**
+   The rest of the timer half is done — see *The timer half* above. The tree is
+   covered to within `save_tree_soon`'s 1500ms and the view state to within
+   `save_view_soon`'s 2500ms, both measured against a real SIGKILL.
 
-   The cheap half is obvious and is not done here because it wants deciding
-   rather than typing: `save_view_state()` writes a small ini and could ride
-   the existing debounce, but nothing currently marks the view dirty — folder
-   expansion, the current row and the geometry all change without telling the
-   timer, so it would need either new connections or a slower unconditional
-   tick. The design above asks for dirtiness tracking and says why; an idle
-   browser rewriting itself every tick is the thing to avoid.
+   What is left is the blobs. A tab's history reaches disk only when its view
+   is suspended, which happens on the way out and nowhere else, so a crash
+   returns every live tab to its current url with no past behind it.
 
-   The expensive half is the tab blobs, and it may not be worth it: serialising
-   every live WebEngine view periodically is real work on a timer, against a
-   loss that only a crash produces. Not attempted, and named here so the next
-   pass does not read the signal work as having closed this.
+   Not attempted, and the reason is a cost nobody has measured rather than a
+   design question: serialising every live WebEngine view on a timer is real
+   work, repeated, against a loss that only a crash produces. The measurement
+   that would settle it is what one `save_state()` costs on a window full of
+   tabs — if it is cheap the debounce already exists to hang it on, and if it
+   is not then the answer is probably to write only the view that is in front.

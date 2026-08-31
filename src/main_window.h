@@ -112,6 +112,7 @@ protected:
 	void save_view_state() const;
 	void restore_view_state();
 	void resizeEvent(QResizeEvent *event) override;
+	void moveEvent(QMoveEvent *event) override;
 	bool event(QEvent *e) override;   // routes status tips to the status bar
 
 private slots:
@@ -122,6 +123,9 @@ private slots:
 	// saying why. Shared by creation and by every navigation.
 	void reset_key_action();
 	void save_tree_soon();
+	// The view state's equivalent, on a timer of its own. See the definition
+	// for why it is not the same timer as the tree's.
+	void save_view_soon();
 	// The imported back/forward records, which live beside the tree file
 	// rather than in it. Both walk the whole tree from the root when called
 	// with no argument.
@@ -376,6 +380,7 @@ private:
 	QAction            *m_undo_action   = nullptr;
 	tree_snapshot       m_undo;
 	QTimer             *m_save_timer    = nullptr;
+	QTimer             *m_view_timer    = nullptr;
 	QString             m_tree_path;
 	QString             m_policy_path;
 
