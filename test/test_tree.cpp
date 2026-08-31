@@ -15,6 +15,8 @@
 #include <QDir>
 #include <QFile>
 #include <cstdio>
+#include <unistd.h>   // geteuid, for the checks root cannot fail
+
 
 static int g_pass = 0, g_fail = 0;
 static void check(bool ok, const QString &w) {
@@ -269,34 +271,49 @@ int main(int argc, char **argv) {
 		// The reason atomicity is worth having: what is on disk after a save
 		// that cannot finish must be the tree that was there, never a stump.
 		// A read-only target is the failure this suite can produce on demand.
-		const QByteArray before = [&] {
-			QFile f(apath);
-			f.open(QIODevice::ReadOnly);
-			return f.readAll();
-		}();
-		QFile::setPermissions(apath, QFile::ReadOwner);
+		//
+		// **Except as root, for whom the permission bits are advice.** uid 0
+		// writes a 0400 file without complaint, so the save succeeds, and the
+		// two assertions below then fail against code that is correct. That is
+		// what CI reported: the workflow's build job runs in a `debian:trixie`
+		// container, which is root, and these were red there while green on
+		// every developer machine. Skipped rather than adapted, because the
+		// premise genuinely does not hold and a check that cannot fail is
+		// worse than one that says it did not run. CI runs the suite as an
+		// ordinary user now, so this is the belt to that braces.
+		if (::geteuid() == 0) {
+			std::printf("  --    running as root: a read-only file is still "
+			             "writable, so the failed-save checks are skipped\n");
+		} else {
+			const QByteArray before = [&] {
+				QFile f(apath);
+				f.open(QIODevice::ReadOnly);
+				return f.readAll();
+			}();
+			QFile::setPermissions(apath, QFile::ReadOwner);
 
-		auto *second  = new node;
-		second->id    = "a2";
-		second->type  = node_type::unopened_tab;
-		second->title = "Another";
-		second->url   = "https://y.example/";
-		second->parent = &root;
-		root.children.push_back(second);
+			auto *second  = new node;
+			second->id    = "a2";
+			second->type  = node_type::unopened_tab;
+			second->title = "Another";
+			second->url   = "https://y.example/";
+			second->parent = &root;
+			root.children.push_back(second);
 
-		check(!tree_outline::save(apath, &root),
-		      "a save onto a file it cannot write says so");
-		const QByteArray after = [&] {
-			QFile f(apath);
-			f.open(QIODevice::ReadOnly);
-			return f.readAll();
-		}();
-		check(after == before,
-		      "and the tree that was there is still there, whole");
-		check(QDir(adir).entryList(QDir::Files | QDir::Hidden).size() == 1,
-		      "with no half-written temporary left in the directory");
+			check(!tree_outline::save(apath, &root),
+			      "a save onto a file it cannot write says so");
+			const QByteArray after = [&] {
+				QFile f(apath);
+				f.open(QIODevice::ReadOnly);
+				return f.readAll();
+			}();
+			check(after == before,
+			      "and the tree that was there is still there, whole");
+			check(QDir(adir).entryList(QDir::Files | QDir::Hidden).size() == 1,
+			      "with no half-written temporary left in the directory");
 
-		QFile::setPermissions(apath, QFile::ReadOwner | QFile::WriteOwner);
+			QFile::setPermissions(apath, QFile::ReadOwner | QFile::WriteOwner);
+		}
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

@@ -323,15 +323,28 @@ int main(int argc, char **argv) {
 		for (const QString &p : before)
 			check(after.contains(p),
 			      QString("and keeps what Qt had already (%1)").arg(p));
+		// **Only where the system has any, which a bare container does not.**
+		// The assertion is that seeding keeps the system's icon directories
+		// reachable; on a machine with none there is nothing to keep, and the
+		// check as written failed against correct code. Found by CI once it
+		// started running again: the build job is a `debian:trixie` container
+		// with no icon theme installed, so `locateAll` returns an empty list
+		// and a loop over it can only leave `has_system` false.
+		const QStringList system_icons = QStandardPaths::locateAll(
+		  QStandardPaths::GenericDataLocation, "icons",
+		  QStandardPaths::LocateDirectory);
 		bool has_system = false;
-		for (const QString &p : QStandardPaths::locateAll(
-		         QStandardPaths::GenericDataLocation, "icons",
-		         QStandardPaths::LocateDirectory))
+		for (const QString &p : system_icons)
 			if (after.contains(p))
 				has_system = true;
-		check(has_system,
-		      QString("the system icon directories are searchable (%1)")
-		          .arg(after.join(", ").left(90)));
+		if (system_icons.isEmpty()) {
+			std::printf("  --    no system icon directories on this machine, so "
+			             "there are none to keep searchable\n");
+		} else {
+			check(has_system,
+			      QString("the system icon directories are searchable (%1)")
+			          .arg(after.join(", ").left(90)));
+		}
 
 		theme::seed_icon_search_paths();
 		check(QIcon::themeSearchPaths() == after,

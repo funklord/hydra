@@ -156,8 +156,29 @@ jobs:
           done
           echo "links all four optional libraries"
 
+      # **As an ordinary user, because root cannot fail to write a file.**
+      #
+      # A container job runs as root, and for uid 0 the permission bits are
+      # advice: a 0400 file opens for writing without complaint. Every
+      # assertion in the suite of the form "this save should fail" therefore
+      # could not fail, and three of them were red here while green on every
+      # developer machine -- the tests were wrong about the environment, not
+      # about the code.
+      #
+      # Skipping them under root was the other available answer and is also in
+      # the suite, for anyone who runs it as root by hand. This is the better
+      # half of the pair: it makes the checks run rather than excusing them,
+      # and it is how the application is actually used. A green run that
+      # silently disabled a class of assertion is the vacuous pass this file's
+      # header says every job here must refuse.
+      #
+      # The build above ran as root, so the tree it produced has to change
+      # hands before the suite can write its own build directory into it.
       - name: Run the offline suites
-        run: make test JOBS=2
+        run: |
+          useradd -m ci
+          chown -R ci:ci .
+          su ci -c "cd '$PWD' && make test JOBS=2"
 
       # **The live drivers, compiled but not linked.** Linking them means
       # thirty-five Qt WebEngine links, and running them wants a display, so

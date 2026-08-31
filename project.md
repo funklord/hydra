@@ -11594,6 +11594,113 @@ while a literal `file:` prefix is a url and always was one.
 Not changed here. Recorded, with the option, its cost, and whose decision it
 is.
 
+### The url no longer becomes a directory
+
+`load_tree` refuses a path whose directory does not already exist, and says so.
+Everything the window persists is derived from that directory — the state
+store, the view state, the policy, the filters — and `state_store` creates its
+own with `mkpath`, which builds every missing component. So an argument that
+was never a path became a directory tree rooted wherever the browser was
+started. Nothing is assigned before the refusal returns, so every writer stays
+guarded by the `isEmpty()` checks it already had and the refusal leaves no
+trace at all.
+
+**A refused argument must not cost the session everything it saves**, which is
+the second half and was nearly missed. With only the refusal in place the
+browser comes up working and persists nothing — no tree, no view state, no tab
+histories — with one line on stderr as the only sign. Silently saving nothing
+is a worse failure than the litter it replaced. `main.cpp` falls back to the
+personal tree in app data, loudly: the same file the same command with no
+argument would have opened.
+
+Measured from a scratch directory standing in for the repository:
+
+    --- starting: hydra 'file:///.../page.html', cwd = .../cwd ---
+    --- what appeared in the working directory ---
+      nothing: the working directory is untouched
+    --- did the browser still get a usable tree? ---
+      yes: .../data/Hydra/tree.txt (9 lines)
+    --- what it said ---
+      tree: file:///.../page.html is not in an existing directory
+      (.../cwd/file:/.../litterrun); refusing to create one, because an
+      argument that is not a path is how a url became a directory tree twice
+    --- after a clean exit, working directory again ---
+      still nothing
+
+The message prints the derived directory, which is the part worth keeping: the
+absurdity of `.../cwd/file:/tmp/...` is the diagnosis, and a reader who sees it
+does not have to work out what happened.
+
+**The design question is untouched.** Whether a `file:` url should be opened as
+a page rather than read as a tree reverses a deliberate recorded decision and
+is still the copyright holder's. What is fixed here is the half that was wrong
+on any answer to it.
+
+The twenty live drivers all call `load_tree`, and all of them were checked:
+every one reaches it through `scratch_dir`, `inert_sample_tree`,
+`single_tab_tree` or its own `out`, and every one of those calls `mkpath` on
+the directory first. The refusal cannot fire for them.
+
+## CI came back, and the first thing it found was three tests wrong about root
+
+CI had verified nothing since 2026-08-14 and the reason was recorded as
+account billing, not fixable from any tree. That cleared at some point on
+2026-08-31: runs before 19:29 that day exit in four seconds having executed
+nothing, and runs after it take five and a half minutes and execute
+everything. Nobody in this tree noticed, because nobody was looking at a thing
+that had been broken for a fortnight.
+
+What it found, on the first real runs in seventeen days, was **three
+assertions that were wrong about the environment rather than about the code**,
+all of them green on every developer machine:
+
+    FAIL test_state   a save it cannot write reports failure
+    FAIL test_state   and the blob that was there is still whole
+    FAIL test_tree    a save onto a file it cannot write says so
+    FAIL test_tree    and the tree that was there is still there, whole
+    FAIL test_theme   the system icon directories are searchable (:/icons)
+
+**The first four are root.** The build job runs in a `debian:trixie`
+container, which is uid 0, and for root the permission bits are advice: a 0400
+file opens for writing without complaint. Those four assertions make a file
+read-only and require the save to fail — a premise that is simply false there,
+so the save succeeded and the checks failed against correct code. They are
+this session's own, added with the atomic writers.
+
+**The fifth is an empty list.** `test_theme` asserted that seeding keeps the
+system's icon directories searchable, by looping over
+`QStandardPaths::locateAll(GenericDataLocation, "icons")` and setting a flag.
+The container has no icon theme installed, so that list is empty, and a loop
+over an empty list can only leave the flag false. On a machine with no system
+icon directories there is nothing to keep searchable and the assertion has
+nothing to say.
+
+### Fixed on both sides, and the pair is the point
+
+The suites now skip those checks when `geteuid()` is 0, or when there are no
+icon directories to find, and print a line saying so. A check that cannot fail
+is worse than one that says it did not run.
+
+**And CI runs the suite as an ordinary user**, which is the better half: it
+makes the checks run rather than excusing them. `useradd`, `chown` the tree the
+root build produced, and `su ci -c "make test"`. Skipping under root is then
+the belt to that braces, for anyone who runs the suite as root by hand.
+
+Doing only the skip would have left CI green having quietly disabled a class of
+assertion — which is the vacuous pass the workflow file's own header says every
+job in it must refuse. Doing only the user change would have left the suite
+wrong for anyone running it as root.
+
+Not done: installing an icon theme in the container, which would make the fifth
+check run rather than skip. It is one word in the apt list, but that list is
+deliberately "every direct dependency named" and an icon theme is a test
+dependency rather than a build one, so it is left for whoever owns that
+decision. CI will print the skip line, which is how anybody notices.
+
+Local: 33 suites, 0 failures, and the same assertion counts as before the
+guards — `test_state` 48, `test_theme` 44, `test_tree` 37 — so nothing was
+removed for a normal user.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -11664,13 +11771,21 @@ carried along as amendments to a list item.
    thin adapters around it, which need a page rather than a fixture, and are
    driven through the shell by the live drivers instead.
 
-5. **`hydra file:///page.html` cannot open the file and leaves a directory
-   behind.** See the section above. Two halves: the littering is a defect on
-   any reading and is fixable without touching anything that was decided;
-   whether a `file:` url should open as a page reverses a deliberate recorded
-   choice and is the copyright holder's. The desktop entry claims `text/html`
-   and passes `%U`, so this is the advertised case rather than a contrived one.
+5. **Whether a `file:` url should open as a page is still open, and is the
+   copyright holder's.** The littering half is fixed — see *The url no longer
+   becomes a directory* above — so what remains is only the question the fix
+   deliberately did not answer: `main.cpp` classifies `file:` as a tree path,
+   on the recorded grounds that `hydra ./tree.txt` has always meant the tree.
+   The cost of leaving it is that the desktop entry claims `text/html` and
+   passes `%U`, so a file manager handing over `file:///home/me/doc.html` gets
+   a browser that says it cannot use the argument and opens the personal tree
+   instead. The distinction that would preserve the recorded intent exactly is
+   the scheme rather than the path: `./tree.txt` has none, `file:` always did.
 
-   The crash-save work that used to be item 5 is finished — tree, view state
-   and blobs all reach disk on their own timers, each measured against a real
-   SIGKILL.
+6. **CI skips one check for want of an icon theme.** `test_theme`'s
+   system-icon-directory assertion has nothing to look at in the
+   `debian:trixie` container and says so rather than failing. Installing
+   `hicolor-icon-theme` would make it run; that is one word in a dependency
+   list which is deliberately "every direct dependency named", and an icon
+   theme is a test dependency rather than a build one. Left for whoever owns
+   that list.

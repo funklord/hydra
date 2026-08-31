@@ -11,6 +11,7 @@
 #include <QDir>
 #include <QFile>
 #include <cstdio>
+#include <unistd.h>   // geteuid, for the checks root cannot fail
 
 static int g_pass = 0, g_fail = 0;
 static void check(bool ok, const QString &w) {
@@ -221,15 +222,27 @@ int main(int argc, char **argv) {
 		// The failure this suite can produce on demand. What matters is not
 		// that it fails -- the old code failed here too -- but what is on disk
 		// afterwards: the blob that was there, not a stump of the new one.
-		const QString blob_path = sdir.filePath(sdir.entryList(QDir::Files).first());
-		QFile::setPermissions(blob_path, QFile::ReadOwner);
-		check(!s.save("z1", QByteArray("a-longer-second-blob")),
-		      "a save it cannot write reports failure");
-		QFile::setPermissions(blob_path, QFile::ReadOwner | QFile::WriteOwner);
-		check(s.load("z1") == first,
-		      "and the blob that was there is still whole");
-		check(sdir.entryList(QDir::Files | QDir::Hidden).size() == 1,
-		      "with nothing half-written left behind");
+		//
+		// **Except as root, for whom the permission bits are advice.** uid 0
+		// writes a 0400 file without complaint, so the save succeeds and these
+		// assertions fail against correct code. CI reported exactly that: its
+		// build job runs in a `debian:trixie` container, which is root. Skipped
+		// rather than adapted, because the premise does not hold there and a
+		// check that cannot fail is worse than one that says it did not run.
+		if (::geteuid() == 0) {
+			std::printf("  --    running as root: a read-only file is still "
+			             "writable, so the failed-save checks are skipped\n");
+		} else {
+			const QString blob_path = sdir.filePath(sdir.entryList(QDir::Files).first());
+			QFile::setPermissions(blob_path, QFile::ReadOwner);
+			check(!s.save("z1", QByteArray("a-longer-second-blob")),
+			      "a save it cannot write reports failure");
+			QFile::setPermissions(blob_path, QFile::ReadOwner | QFile::WriteOwner);
+			check(s.load("z1") == first,
+			      "and the blob that was there is still whole");
+			check(sdir.entryList(QDir::Files | QDir::Hidden).size() == 1,
+			      "with nothing half-written left behind");
+		}
 	}
 
 	QDir(dir).removeRecursively();
