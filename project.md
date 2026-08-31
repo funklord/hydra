@@ -10343,6 +10343,41 @@ apk check was exercised against synthetic zips carrying one ABI, two, and none.
 **What is not verified is a real build**: this machine has the kits but no NDK
 or JDK, so `make android` gets as far as the NDK check and stops.
 
+### `BIN=` on the sweep's command line does nothing, and starts a real sweep
+
+**Measured by doing it.** `test/live/sweep.sh` reads
+`BIN=${HYDRA_SWEEP_BIN:-test/build-make}`, so an assignment of `BIN` on the
+command line is overwritten by the script's own line before it is used. It does
+not error and it does not warn: it runs the full live sweep against the default
+build, which is minutes of real browser drivers, when what was intended was a
+scratch build of one of them. The name that works is `HYDRA_SWEEP_BIN`, and
+`HYDRA_SWEEP_OUT` is its counterpart for the output directory.
+
+What stopped it was a `timeout -s KILL 25` wrapped round the invocation on
+general principle, not anything in the script -- `SWEEP_TIMEOUT` defaults to
+300 seconds **per driver**, so the outer bound on a sweep nobody meant to start
+is the driver count times five minutes.
+
+**The shape is worth more than the instance**: a variable whose name is the one
+the script uses internally is not an override, and assigning it looks exactly
+like configuring the thing. Read where a script gets its defaults before
+setting one, and prefer the prefixed name where a script offers both.
+
+### Android SDK levels, and the one path the test device cannot reach
+
+`android/AndroidManifest.xml` builds at **targetSdk 36, minSdk 28**, and the
+handset available for testing is a Note 9 at **SDK 29**. That gap is fine for
+almost everything and matters in one place.
+
+`POST_NOTIFICATIONS` became a runtime permission at API 33. Below it the
+permission is granted by installing, which is the case on the test device, so
+every measurement of the playback service's notification here was taken on the
+half of the world where it cannot be refused. On a phone at 33 or above a
+refusal hides the notification **without** stopping the service -- the sound
+keeps playing and only the label for it is missing -- and nothing in this tree
+has ever exercised that path. It is not a defect and it is not verified; it is
+the difference between the device we have and the one the manifest targets.
+
 ### Measuring on the handset, since nothing else can
 
 Android is not reachable from CI -- and since 2026-08-14 nothing is -- so a
