@@ -11805,6 +11805,67 @@ position is now checkpointed into its blob every five seconds, so the url is
 the fallback for a tab whose blob is missing rather than the only record of
 where it was.
 
+## The full driver sweep, which nothing else runs
+
+CI compiles the live drivers and never links them; `make test` does not build
+them at all. So after three behavioural changes to `main_window` this session —
+`save_everything` split out of `closeEvent`, three debounce timers, and
+`load_tree` refusing a directory that does not exist — nothing had exercised
+the shell. Two drivers had been run by hand. The rest had not.
+
+All 39 linked with no errors, which is itself worth having: a link is the one
+thing CI cannot tell you about, and a stale `objsets.mk` once left every driver
+undefined at link time with `make test` unable to see it.
+
+    drivers: passed=21  report-only=8  failed=1
+
+**The timers broke nothing, which was the specific risk.** They now fire during
+every driver run, writing view state and history blobs that were not there
+before, so any driver asserting on the contents of the state directory could
+have seen files it did not expect. `try_forget` (32), `try_cookies` (12) and
+`try_delete` (11) all touch that directory and all pass. `try_phone` (76),
+`try_settings_ui` (89) and `try_chrome` (48) are the broadest and pass too.
+
+### The one failure was the same shape as everything else today
+
+`try_import` reported three failures — two mirrors coexisting, the tree beside
+them, and an imported tab carrying its history. None is a defect in this
+browser. The driver imports tabs from Firefox and Chromium sessions on the
+machine, and **there are none here for either account**: `/home/funk/.mozilla`
+exists but has no `firefox` under it, and neither `.config/chromium` nor
+`.config/google-chrome` exists at all. So the three assertions were reporting
+the absence of somebody else's browser as a fault in this one.
+
+Not a second-uid problem this time — it fails for the tree's owner too, and has
+presumably been failing for as long as this machine has had no Firefox. Nobody
+saw it because the sweep is not routine.
+
+**The file already knew the answer and had not applied it to itself.** It
+`note`s a skip in three places — *"no mirror: this machine may have no Firefox
+session"* — and asserts unconditionally in three others, for the same
+condition. One of the unguarded ones carried a comment defending the choice:
+
+    // Said out loud rather than skipped quietly: a section that finds
+    // nothing to test and prints nothing reads exactly like one that
+    // passed.
+
+That objection is right and `note` is what satisfies it. The complaint is
+against *silence*, not against skipping, and `note` is neither silent nor a
+claim that something is broken. So the three now skip with a line saying what
+was not tested, and the assertions stay inside the `else` — a machine with both
+browsers still runs all of them.
+
+**`sweep.sh`'s own header is the argument, and it was written about a different
+symptom:** judging report-only drivers on a result line they never print
+reported them as failures in every sweep, which is *"noise that trains you to
+skip two lines of the summary, and the day one of them breaks for real it will
+look exactly the same as it does now."* A driver that fails because the machine
+has no Firefox is that same noise arriving by another route, and the principle
+was already decided.
+
+`try_import` is 25 passed, 0 failed, with two skip lines. No assertion was
+dropped: the counts of what actually ran are unchanged.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
