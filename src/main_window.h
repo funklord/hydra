@@ -97,6 +97,14 @@ public:
 
 protected:
 	void closeEvent(QCloseEvent *event) override;
+
+	// **The view's own state, which nothing used to persist.** `closeEvent`
+	// wrote the model and the policy and stopped there, so which folders were
+	// open, which tab was in front and where the window sat were all discarded
+	// every time -- and `load_tree` then called `expandAll()`, which would have
+	// flattened them even if they had been kept.
+	void save_view_state() const;
+	void restore_view_state();
 	void resizeEvent(QResizeEvent *event) override;
 	bool event(QEvent *e) override;   // routes status tips to the status bar
 
@@ -288,6 +296,7 @@ private:
 
 	QLineEdit       *m_address  = nullptr;
 	QComboBox       *m_sort_box = nullptr;
+	QString          m_view_path;   // view.ini, beside the tree and the policy
 	QLineEdit       *m_search   = nullptr;
 
 	QStatusBar      *m_status     = nullptr;

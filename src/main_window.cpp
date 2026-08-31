@@ -64,6 +64,7 @@
 #include <QPropertyAnimation>
 #include <QResizeEvent>
 #include <QTreeView>
+#include <QSettings>
 #include <QStackedWidget>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -1918,6 +1919,10 @@ bool main_window::load_tree(const QString &path) {
 	// .ini, and the loader reads a policy.json left by an older build once --
 	// the first save writes the new file and the old one simply stops being
 	// consulted. Nobody has to migrate anything by hand.
+	// The view's own state, beside the policy and for the same reason: it is
+	// this window's, it is readable, and somebody who wants it forgotten can
+	// delete a file rather than hunt through a store they cannot see.
+	m_view_path = dir + "/view.ini";
 	m_policy_path = dir + "/policy.ini";
 	m_policy->load(m_policy_path);   // no-op if the file doesn't exist yet
 
@@ -1962,7 +1967,7 @@ bool main_window::load_tree(const QString &path) {
 	// from this, so restoring it later would flash a row that claimed no past
 	// and then quietly gained one.
 	restore_histories();
-	m_tree->expandAll();
+	restore_view_state();
 	return ok;
 }
 
@@ -3818,6 +3823,103 @@ void main_window::on_policy_changed() {
 	}
 }
 
+namespace {
+
+// The folders somebody has open, by node id.
+//
+// **Ids, not row numbers.** A row number is a position in a tree that reorders
+// itself -- sorting changes it, and so does anything that adds a sibling -- so
+// a saved row would restore the wrong folder as soon as the shape moved. An id
+// is "short, opaque, stable for the node's lifetime" by `node.h`'s own
+// promise, which is exactly the property this needs.
+void collect_open_folders(const tab_tree_model *model,
+                           const QSortFilterProxyModel *proxy,
+                           const QTreeView *view, node *n, QStringList &out) {
+	for (node *c : n->children) {
+		if (!c->is_folder())
+			continue;
+		// Through the proxy, because the view knows nothing else. `isExpanded`
+		// takes the index the *view* uses, and handing it a source index is the
+		// kind of mistake that reads as "no folders were open" rather than as
+		// an error.
+		const QModelIndex idx = proxy->mapFromSource(model->index_for_node(c));
+		if (idx.isValid() && view->isExpanded(idx))
+			out << c->id;
+		collect_open_folders(model, proxy, view, c, out);
+	}
+}
+
+}  // namespace
+
+void main_window::save_view_state() const {
+	if (m_view_path.isEmpty() || !m_model || !m_tree || !m_proxy)
+		return;
+	QSettings v(m_view_path, QSettings::IniFormat);
+	QStringList open;
+	collect_open_folders(m_model, m_proxy, m_tree, m_model->root(), open);
+	v.setValue("open_folders", open.join(QLatin1Char(',')));
+	if (node *n = selected_node())
+		v.setValue("current", n->id);
+	else
+		v.remove("current");
+	// Base64 because saveGeometry is binary and this file is meant to be
+	// readable and hand-editable like the policy beside it; a raw blob in an
+	// ini is neither.
+	v.setValue("geometry", QString::fromLatin1(saveGeometry().toBase64()));
+	if (m_sort_box)
+		v.setValue("sort", m_sort_box->currentIndex());
+}
+
+void main_window::restore_view_state() {
+	// **No file means first run, and first run keeps the old behaviour.**
+	// Everything expanded is the right thing to show somebody who has never
+	// arranged anything; it is only wrong as an answer to somebody who has.
+	if (m_view_path.isEmpty() || !QFileInfo::exists(m_view_path)) {
+		m_tree->expandAll();
+		return;
+	}
+	QSettings v(m_view_path, QSettings::IniFormat);
+
+	const QByteArray geom =
+	  QByteArray::fromBase64(v.value("geometry").toString().toLatin1());
+	if (!geom.isEmpty())
+		restoreGeometry(geom);
+	if (m_sort_box) {
+		const int sort = v.value("sort", -1).toInt();
+		if (sort >= 0 && sort < m_sort_box->count())
+			m_sort_box->setCurrentIndex(sort);
+	}
+
+	// Collapse first, then open what was open. Without the collapse this would
+	// only ever add folders: a run that starts from an expanded tree and is
+	// told to open three would leave every other folder open too, and the
+	// setting would look like it did nothing.
+	m_tree->collapseAll();
+	const QStringList open =
+	  v.value("open_folders").toString().split(QLatin1Char(','), Qt::SkipEmptyParts);
+	for (const QString &id : open) {
+		node *n = m_model->node_by_id(id);
+		if (!n)
+			continue;   // a folder deleted since; not an error
+		const QModelIndex idx = m_proxy->mapFromSource(m_model->index_for_node(n));
+		if (idx.isValid())
+			m_tree->setExpanded(idx, true);
+	}
+
+	// And the tab that was in front. Activated rather than merely selected: a
+	// selection highlights a row, and what was asked for is the page back.
+	const QString current = v.value("current").toString();
+	if (node *n = current.isEmpty() ? nullptr : m_model->node_by_id(current)) {
+		const QModelIndex idx = m_proxy->mapFromSource(m_model->index_for_node(n));
+		if (idx.isValid()) {
+			m_tree->setCurrentIndex(idx);
+			m_tree->scrollTo(idx);
+			if (!n->is_folder())
+				on_tree_activated(idx);
+		}
+	}
+}
+
 void main_window::closeEvent(QCloseEvent *event) {
 	// Leave kiosk first, so the presented view is back in the stack and can be
 	// suspended with the rest.
@@ -3834,5 +3936,6 @@ void main_window::closeEvent(QCloseEvent *event) {
 		m_model->save(m_tree_path);
 	if (!m_policy_path.isEmpty())
 		m_policy->save(m_policy_path);
+	save_view_state();
 	QWidget::closeEvent(event);
 }

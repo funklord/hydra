@@ -69,12 +69,23 @@ function say(what, result) {
 navigator.geolocation.getCurrentPosition(
   function () { say('geo', 'position'); },
   function (e) { say('geo', 'error-' + e.code); });
-navigator.mediaDevices.getUserMedia({ audio: true })
-  .then(function () { say('mic', 'stream'); })
-  .catch(function (e) { say('mic', e.name); });
-navigator.mediaDevices.getUserMedia({ video: true })
-  .then(function () { say('cam', 'stream'); })
-  .catch(function (e) { say('cam', e.name); });
+// The tracks are stopped the instant they arrive. A granted case opens a real
+// microphone and a real camera on somebody's machine, and a test that leaves
+// either running past the assertion it needed them for is a test that turns a
+// light on and walks away. Nothing is read from the stream; only the number of
+// tracks is reported, never a device label -- a label names somebody's
+// hardware and the assertion does not need it.
+function media(kind, want) {
+  navigator.mediaDevices.getUserMedia(want)
+    .then(function (s) {
+      var n = s.getTracks().length;
+      s.getTracks().forEach(function (t) { t.stop(); });
+      say(kind, 'stream-' + n);
+    })
+    .catch(function (e) { say(kind, e.name); });
+}
+media('mic', { audio: true });
+media('cam', { video: true });
 Notification.requestPermission().then(function (p) { say('notify', p); });
 </script></body></html>)HTML";
 
@@ -139,16 +150,17 @@ int main(int argc, char *argv[]) {
 	// so re-asking on the same port would be answered from that memory and the
 	// page would never reach our decider a second time. Same host throughout, so
 	// the per-host policy still applies to all three.
-	origin servers[3];
-	quint16 ports[3];
-	for (int i = 0; i < 3; ++i) {
+	origin servers[4];
+	quint16 ports[4];
+	for (int i = 0; i < 4; ++i) {
 		if (!servers[i].listen(QHostAddress::LocalHost, 0)) {
 			std::printf("could not listen\n");
 			return 1;
 		}
 		ports[i] = servers[i].serverPort();
 	}
-	std::printf("origins on 127.0.0.1: %u %u %u\n", ports[0], ports[1], ports[2]);
+	std::printf("origins on 127.0.0.1: %u %u %u %u\n",
+	             ports[0], ports[1], ports[2], ports[3]);
 
 	policy_engine       policy;
 	request_filter      filter(&policy);
@@ -264,6 +276,31 @@ int main(int argc, char *argv[]) {
 	      "end-to-end outcome the engine can actually deliver");
 	check(refused("cam"),
 	      "while the camera is still refused");
+
+	// 4. Camera and microphone *granted*, which nothing here used to do.
+	//    Every earlier case grants something else and re-asserts that these two
+	//    stay refused, so the mapping was proved and the delivery was not: a
+	//    decider that answered GRANTED while the engine handed the page nothing
+	//    would have passed every assertion above. That is the shape of the
+	//    complaint this was written for -- a page reporting no camera support --
+	//    and it is the one arrangement that can tell the two apart.
+	policy.set_setting("127.0.0.1", policy::feature::camera,
+	                    policy::setting::allow);
+	policy.set_setting("127.0.0.1", policy::feature::microphone,
+	                    policy::setting::allow);
+	run_case(3, "camera and microphone allowed for this host");
+	check(answered("camera", "GRANTED") && answered("microphone", "GRANTED"),
+	      "the decider grants both");
+	// **The relationship, not the value.** Whether a real device answers is a
+	// property of the machine -- `NotFoundError` is the honest reply where there
+	// is no webcam, and asserting on 'stream' would fail on a headless box for a
+	// reason that has nothing to do with this browser. What must change is that
+	// the page stops being *refused*: NotAllowedError and AbortError are the two
+	// spellings of that, and neither may survive the grant.
+	check(!refused("mic"),
+	      QString("the microphone is no longer refused (%1)").arg(got("mic")));
+	check(!refused("cam"),
+	      QString("the camera is no longer refused (%1)").arg(got("cam")));
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

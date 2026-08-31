@@ -10343,6 +10343,66 @@ apk check was exercised against synthetic zips carrying one ABI, two, and none.
 **What is not verified is a real build**: this machine has the kits but no NDK
 or JDK, so `make android` gets as far as the NDK check and stops.
 
+### The window remembered nothing about itself
+
+Reported as three symptoms -- folders opening and closing on their own, things
+moving, and the tab you were on not coming back -- and they are one gap.
+`closeEvent` wrote the model and the policy and stopped: no open-folder set, no
+current tab, no sort selection, no geometry. `node` has no `expanded` field and
+nothing anywhere held a current-tab id. The model was saved; the **view** never
+was. `load_tree` then called `expandAll()`, so even a saved arrangement would
+have been flattened on the way in.
+
+`view.ini` now sits beside `policy.ini`, for the same reason that one is a file
+somebody can read: an arrangement of somebody's own windows is theirs to
+inspect and delete.
+
+**Folders are recorded by id, not by row.** A row number is a position in a
+tree that reorders itself -- sorting moves it, and so does any new sibling --
+so a saved row restores the wrong folder as soon as the shape changes. An id is
+"short, opaque, stable for the node's lifetime" by `node.h`'s own promise,
+which is exactly the property needed.
+
+**Two things that would each have made it look like it did nothing.** The
+restore collapses before it expands: without that it could only ever add
+folders, so a tree that started expanded would stay expanded and the setting
+would appear inert. And `isExpanded` takes the index the *view* uses, so every
+lookup goes through the sort proxy -- handing it a source index reads as "no
+folders were open" rather than as an error.
+
+**No file means first run, and first run keeps the old behaviour**: everything
+expanded, which is the right thing to show somebody who has never arranged
+anything and only wrong as an answer to somebody who has.
+
+### `objsets.mk` cannot be regenerated, and that is why it went stale
+
+**Every live driver has been unlinkable since the `address_line` commit.**
+`moc_address_input.o` is in no object set, so the link fails with `undefined
+reference to vtable for address_line`. `make test` cannot see it -- it does not
+build the live drivers -- and this is the third instance of that class in this
+tree.
+
+**The regeneration is blocked by something else, measured twice.**
+`tool/objsets.py` refuses while an Android build is present, which is its own
+documented guard and is worked around by moving the directory aside. With it
+aside it still fails:
+
+    fmake produced no link set for: test_bridge test_empty_state test_extloop
+                                    test_probe_ui test_settings
+
+and the tool correctly refuses to write a partial file. The comfortable
+explanation was that a killed concurrent run had corrupted fmake's object
+cache; that was tested by clearing `.fmake` entirely and running again, and the
+same five targets failed identically. So it is not the cache. All five sources
+exist, and none of them references `main_window`, so it is not this session's
+edits either. It is a real fault between `objsets.py` and fmake, and it is
+almost certainly why the file was stale to begin with -- a generator nobody can
+run stops being run.
+
+**fmake is a sibling project, so this is signalled rather than fixed from
+here.** What it needs from this end is the five target names and the
+observation that they fail from a cleared cache.
+
 ### `BIN=` on the sweep's command line does nothing, and starts a real sweep
 
 **Measured by doing it.** `test/live/sweep.sh` reads
