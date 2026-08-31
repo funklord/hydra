@@ -9,6 +9,11 @@
 #include <QLabel>
 #include <QFrame>
 #include <QFont>
+#include <QtGlobal>
+#include <QList>
+
+#include <cstring>
+#include <iterator>
 
 using policy::feature;
 using policy::setting;
@@ -29,6 +34,73 @@ setting index_to_setting(int i) {
 		case 2:  return setting::block;
 		default: return setting::unset;
 	}
+}
+
+}  // namespace
+
+namespace {
+
+struct shield_row { policy::feature f; const char *group; };
+
+// **The order this panel is read in, which the enum was never meant to
+// supply.** It used to draw one row per feature in declaration order, so
+// fifteen controls arrived as a flat wall with the camera three rows from the
+// referer header and no indication that any of them were related.
+//
+// The last group is a request rather than a taxonomy, and it is worth being
+// accurate about why it exists. These three are *rule-driven*: what they reach
+// depends on data that may be thin or absent, where everything above them is
+// enforced directly by the engine or by this program. Measured rather than
+// assumed -- `ads` consults a built-in host check and then a filter list that
+// is empty until somebody imports one, and `cookie_notices` runs from
+// `site_rules::defaults()` plus whatever has been added since. `popups` is the
+// exception in the group: it is enforced outright in `main_window`, needs no
+// list, and sits here because it belongs with the other two in a reader's mind
+// rather than in the implementation's.
+const shield_row k_shield_layout[] = {
+	{ policy::feature::javascript,          "Content" },
+	{ policy::feature::images,              "Content" },
+	{ policy::feature::autoplay,            "Content" },
+	{ policy::feature::media_detect,        "Content" },
+
+	{ policy::feature::camera,              "Camera, microphone and screen" },
+	{ policy::feature::microphone,          "Camera, microphone and screen" },
+	{ policy::feature::geolocation,         "Camera, microphone and screen" },
+	{ policy::feature::notifications,       "Camera, microphone and screen" },
+	{ policy::feature::clipboard_read,      "Camera, microphone and screen" },
+	{ policy::feature::pointer_lock,        "Camera, microphone and screen" },
+
+	{ policy::feature::cookies,             "Cookies and site data" },
+	{ policy::feature::third_party_cookies, "Cookies and site data" },
+
+	{ policy::feature::referer,             "Sent with requests" },
+	{ policy::feature::autofill,            "Sent with requests" },
+	{ policy::feature::extractor_fetch,     "Sent with requests" },
+
+	{ policy::feature::ads,                 "Blocking that needs rules" },
+	{ policy::feature::popups,              "Blocking that needs rules" },
+	{ policy::feature::cookie_notices,      "Blocking that needs rules" },
+};
+
+// **A hand-written list under a name that quantifies is a claim that ages.**
+// `settings_dialog`'s equivalent table is missing four features today, and
+// nothing reports it -- a feature added to the enum simply stops appearing in
+// that dialog, silently, because no assertion can fail about a row nobody
+// wrote. This one is checked against the enum at construction: every feature
+// exactly once, or the panel is wrong and says so where somebody will see it.
+bool layout_covers_every_feature() {
+	const int n = policy::feature_count();
+	QList<int> seen(n, 0);
+	for (const shield_row &r : k_shield_layout) {
+		const int i = static_cast<int>(r.f);
+		if (i < 0 || i >= n)
+			return false;
+		++seen[i];
+	}
+	for (int i = 0; i < n; ++i)
+		if (seen[i] != 1)
+			return false;
+	return static_cast<int>(std::size(k_shield_layout)) == n;
 }
 
 }  // namespace
@@ -65,9 +137,32 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 	grid->setHorizontalSpacing(12);
 	grid->setVerticalSpacing(4);
 	m_combos.resize(policy::feature_count());
-	for (int i = 0; i < policy::feature_count(); ++i) {
-		const feature f = static_cast<feature>(i);
-		grid->addWidget(new QLabel(policy::feature_label(f), this), i, 0);
+
+	// Checked here rather than trusted: the cost of the table being short by one
+	// is a control that silently cannot be reached from the shield, which is
+	// exactly the failure that is invisible from inside the dialog.
+	if (!layout_covers_every_feature())
+		qWarning("site_policy_dialog: the shield layout does not cover every "
+		          "policy feature exactly once -- a control is missing from "
+		          "this panel");
+
+	int row = 0;
+	const char *open_group = nullptr;
+	for (const shield_row &r : k_shield_layout) {
+		if (!open_group || std::strcmp(open_group, r.group) != 0) {
+			auto *head = new QLabel(r.group, this);
+			QFont f = head->font();
+			f.setBold(true);
+			head->setFont(f);
+			// Air above every heading but the first, so the groups read as
+			// groups rather than as a list with some bold entries in it.
+			if (open_group)
+				grid->setRowMinimumHeight(row++, 10);
+			grid->addWidget(head, row++, 0, 1, 2);
+			open_group = r.group;
+		}
+		const int i = static_cast<int>(r.f);
+		grid->addWidget(new QLabel(policy::feature_label(r.f), this), row, 0);
 
 		auto *combo = new QComboBox(this);
 		// Text set by `refresh_default_labels()`, because what this entry
@@ -78,7 +173,8 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 		connect(combo, &QComboBox::currentIndexChanged,
 		         this, [this, i](int) { on_feature_changed(i); });
 		m_combos[i] = combo;
-		grid->addWidget(combo, i, 1);
+		grid->addWidget(combo, row, 1);
+		++row;
 	}
 	outer->addLayout(grid);
 }

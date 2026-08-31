@@ -10343,6 +10343,32 @@ apk check was exercised against synthetic zips carrying one ABI, two, and none.
 **What is not verified is a real build**: this machine has the kits but no NDK
 or JDK, so `make android` gets as far as the NDK check and stops.
 
+### The shield was a wall of eighteen controls in enum order
+
+It drew one row per feature in declaration order, so the panel opened as a flat
+list with the camera three rows above the referer header and nothing saying any
+of them were related. It has a layout table now, in the order somebody reads it
+rather than the order the enum happens to declare.
+
+**The last group is a request, and it is worth being accurate about what is in
+it.** "Blocking that needs rules" holds `ads`, `popups` and `cookie_notices`,
+and only two of the three earn the name on the implementation: `ads` consults a
+built-in host check and then a filter list that is empty until somebody imports
+one, and `cookie_notices` runs from `site_rules::defaults()` plus what has been
+added since -- while `popups` is enforced outright in `main_window` and needs no
+list at all. It sits there because it belongs with the other two in a reader's
+mind, which is a good enough reason for a panel and not a good enough reason to
+let the comment imply otherwise.
+
+**The table is checked against the enum at construction**, every feature
+exactly once, and warns where somebody will see it if not. That guard is not
+hypothetical: `settings_dialog`'s equivalent table -- written the same way, by
+hand, with no check -- is missing `extractor_fetch`, `clipboard_read`,
+`pointer_lock` and `media_detect` today, so four controls cannot be reached
+from the settings page at all. Nothing reported it, because no assertion can
+fail about a row nobody wrote. That is the whole argument for the guard, and
+the four missing rows are a separate defect still open.
+
 ### The window remembered nothing about itself
 
 Reported as three symptoms -- folders opening and closing on their own, things
