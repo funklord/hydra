@@ -126,30 +126,18 @@ Qt::ColorScheme detect_system() {
 		const QString cfg = qEnvironmentVariableIsSet("XDG_CONFIG_HOME")
 		                        ? QString::fromLocal8Bit(qgetenv("XDG_CONFIG_HOME"))
 		                        : home + "/.config";
-		// XDG's own defaults, spelled out because a desktop that sets
-		// neither is exactly the kind this rung exists for.
-		const QString data_home =
-		  qEnvironmentVariableIsSet("XDG_DATA_HOME")
-		    ? QString::fromLocal8Bit(qgetenv("XDG_DATA_HOME"))
-		    : home + "/.local/share";
-		const QString data_dirs_env =
-		  qEnvironmentVariableIsSet("XDG_DATA_DIRS")
-		    ? QString::fromLocal8Bit(qgetenv("XDG_DATA_DIRS"))
-		    : QStringLiteral("/usr/local/share:/usr/share");
-		QStringList data_dirs{data_home};
-		data_dirs << data_dirs_env.split(QLatin1Char(':'), Qt::SkipEmptyParts);
-
-		QStringList sources{
+		scheme = color_scheme_from({
 			cfg + "/kdeglobals",
 			home + "/.trinity/share/config/kdeglobals",
 			home + "/.kde/share/config/kdeglobals",
-		};
-		// LXQt last, and only because its path has to be resolved through
-		// its config rather than written down: a machine with both
-		// installed is answering about whichever session wrote a scheme,
-		// and the kdeglobals are the ones this desktop actually uses.
-		sources << lxqt_palette_files(cfg + "/lxqt/lxqt.conf", data_dirs);
-		scheme = color_scheme_from(sources);
+			// LXQt writes the APPLIED palette into its own config, under
+			// [Palette]. The files under <data>/lxqt/palettes/ are the
+			// library its "Load Palette" dialog reads from, and nothing
+			// records which one is active -- so consulting them answers
+			// about a palette that may not be in use. A fixed path, like
+			// the three above it.
+			cfg + "/lxqt/lxqt.conf",
+		});
 	}
 	return decide(hint, scheme, QGuiApplication::palette());
 }
@@ -606,40 +594,3 @@ QString theme::apply_icon_theme(Qt::ColorScheme scheme) {
 	return QString();
 }
 
-QStringList theme::lxqt_palette_files(const QString &config,
-                                       const QStringList &data_dirs) {
-	QFile f(config);
-	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
-		return {};
-
-	QTextStream in(&f);
-	QString section;
-	QString name;
-	while (!in.atEnd()) {
-		const QString line = in.readLine().trimmed();
-		if (line.startsWith(QLatin1Char('[')) && line.endsWith(QLatin1Char(']'))) {
-			section = line.mid(1, line.size() - 2);
-			continue;
-		}
-		if (section.compare(QLatin1String("General"), Qt::CaseInsensitive) != 0)
-			continue;
-		const int eq = line.indexOf(QLatin1Char('='));
-		if (eq < 0)
-			continue;
-		if (line.left(eq).trimmed().compare(QLatin1String("theme"),
-		                                     Qt::CaseInsensitive) == 0)
-			name = line.mid(eq + 1).trimmed();
-	}
-	if (name.isEmpty())
-		return {};
-	// A name with a separator in it would reach outside the palette
-	// directories, and no legitimate one has: refuse rather than resolve.
-	if (name.contains(QLatin1Char('/')) || name.contains(QLatin1Char('\\')) ||
-	    name.startsWith(QLatin1Char('.')))
-		return {};
-
-	QStringList out;
-	for (const QString &dir : data_dirs)
-		out << dir + "/lxqt/palettes/" + name;
-	return out;
-}

@@ -253,38 +253,29 @@ int main(int argc, char **argv) {
 		               "dark (%1)")
 		          .arg(theme::color_scheme_from({ lxqt_misnamed })));
 
-		// The indirection LXQt needs and kdeglobals does not: the palette
-		// file is named by theme= rather than living at a fixed path.
+		// **The applied palette lives in lxqt.conf, not in the library.**
+		// This first read <data>/lxqt/palettes/<theme=>, which is wrong
+		// twice: the library file is loaded only when palette_override is
+		// on, so it can describe a palette nobody is using; and LXQt
+		// title-cases the name before building that path, so seven of the
+		// twelve themes installed here -- ambiance, dark, frost, kvantum,
+		// light, silver, system -- did not resolve at all. The shipped
+		// /etc/xdg/lxqt/lxqt.conf says theme=frost, so the DEFAULT install
+		// silently found nothing, which is the failure this rung removes.
 		const QString lxqt_conf = write("lxqt.conf",
 		  "[General]\n"
-		  "theme=Clearlooks\n"
-		  "icon_theme=breeze\n"
+		  "theme=frost\n"           // lowercase, and deliberately so
+		  "icon_theme=oxygen\n"
+		  "[Palette]\n"
+		  "window_color=#232323\n"
+		  "window_text_color=#e1e6e6\n"
 		  "[Qt]\n"
 		  "style=Fusion\n");
-		const QStringList found =
-		  theme::lxqt_palette_files(lxqt_conf, { "/a", "/b" });
-		QStringList want;
-		want << "/a/lxqt/palettes/Clearlooks";
-		want << "/b/lxqt/palettes/Clearlooks";
-		check(found == want,
-		      QString("theme= names the palette file, once per data dir (%1)")
-		          .arg(found.join(QLatin1Char(' '))));
+		check(theme::color_scheme_from({ lxqt_conf }) == 1,
+		      QString("the applied palette is read from lxqt.conf itself, "
+		               "whatever theme= says (%1)")
+		          .arg(theme::color_scheme_from({ lxqt_conf })));
 
-		// theme= is used to LOCATE the file and never as a predicate, which
-		// is why a name is all this reads out of the config.
-		const QString lxqt_no_theme = write("lxqt-bare.conf",
-		  "[General]\n"
-		  "icon_theme=breeze\n");
-		check(theme::lxqt_palette_files(lxqt_no_theme, { "/a" }).isEmpty(),
-		      "a config naming no theme yields no palette file");
-
-		// A name is a filename component, so one carrying a separator would
-		// reach outside the palette directories. Refuse rather than resolve.
-		const QString lxqt_escape = write("lxqt-escape.conf",
-		  "[General]\n"
-		  "theme=../../../../etc/shadow\n");
-		check(theme::lxqt_palette_files(lxqt_escape, { "/a" }).isEmpty(),
-		      "a theme name containing a separator is refused, not resolved");
 
 		// GTK 2 quotes its values.
 		const QString gtk2 = write("gtkrc-2.0",
