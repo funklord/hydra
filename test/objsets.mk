@@ -15,7 +15,7 @@
 # two of them here was 23 targets quietly missing. If this file is
 # wrong, start with whether this is the fmake you meant.
 #
-#     /tmp/claude-1000/-home-funk-src-hydra/9628fa8e-571e-4c5c-87ab-f870f325e6c1/scratchpad/fmake-head/fmake  (mtime 2026-08-25 17:48)
+#     /usr/bin/fmake  (mtime 2026-08-04 16:20)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -519,6 +519,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -641,6 +642,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -774,6 +776,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -887,6 +890,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -1009,6 +1013,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -1142,6 +1147,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -1251,6 +1257,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -1376,6 +1383,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -1495,6 +1503,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -1619,6 +1628,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -1741,6 +1751,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -1862,6 +1873,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -1991,6 +2003,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -2105,6 +2118,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -2229,6 +2243,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -2351,6 +2366,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -2482,6 +2498,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -2595,6 +2612,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -2720,6 +2738,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -2860,6 +2879,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -2982,6 +3002,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -3092,6 +3113,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -3217,6 +3239,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -3349,6 +3372,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -3469,6 +3493,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -3580,6 +3605,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -3725,6 +3751,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -3827,6 +3854,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -3958,6 +3986,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -4105,6 +4134,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -4229,6 +4259,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -4351,6 +4382,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -4473,6 +4505,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
@@ -4595,6 +4628,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
