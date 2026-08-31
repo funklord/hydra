@@ -11305,6 +11305,96 @@ real work against a loss only a crash produces, and it wants a measurement of
 what that costs on a window full of tabs before anybody commits to it. It
 stays on the list as the one remaining piece.
 
+## The Android launcher icon was small, outlined and on a white plate
+
+Reported from a phone, against Firefox and the other browsers sitting beside
+it: Hydra's icon is smaller than theirs, carries more outline, and sits on
+white. **Three complaints, one cause, and the cause is a file that was not
+there.**
+
+`android/res/` held only `mipmap-*/ic_launcher.png` — a *legacy* icon. Every
+Android from 8 (API 26) onwards puts a legacy icon through its legacy
+treatment: shrink the bitmap, drop it on a white plate, mask the plate to
+whatever shape the launcher uses. So the drawing was scaled down inside
+somebody else's white circle, which is the "small" and the "white" directly —
+and the "outline" follows from the white, because the artwork's own heavy dark
+linework had a white ground to contrast against instead of the dark it was
+drawn for. Firefox and the rest ship adaptive icons and fill their slots.
+
+**minSdk is 26, which is the exact release adaptive icons arrived in.** So the
+new `mipmap-anydpi-v26/ic_launcher.xml` is not a progressive enhancement, it is
+the icon on every device the app can be installed on, and the PNGs are a
+default-configuration fallback nothing will ever pick.
+
+### The one number worth having measured
+
+The adaptive canvas is 108dp, the outer 18dp on every edge is always cropped,
+and the launcher's mask is applied inside the central 72dp that remains. 72 is
+therefore the arithmetic maximum, and it is the wrong answer: the drawing is a
+rounded blob rather than a true circle — `hydra-master.png` is the artwork
+squashed 9% into a square, which `build_icons.py` has always said — so a
+*circular* mask at 72dp cuts the tops of the three heads and the outer edge of
+the wave.
+
+Rendered at 62, 64, 66, 68 and 70dp under circle, squircle and rounded-square
+masks and looked at. Clipping starts at 68. **66dp** is the largest that
+survives the circular mask, which is the harshest shape a launcher may pick,
+and it still leaves a hairline of background rather than sitting on the edge.
+Against the legacy treatment it is a large increase, which is the complaint.
+
+The background is `#1B0A28`, taken from the drawing's own darkest ink rather
+than invented — the linework is around `#300c37` and this sits just under it in
+the same family. That is what answers the third complaint without touching the
+artwork: the outline stops reading as an outline and reads as the edge of the
+drawing. Six candidates were rendered, including a near-black and a deep teal;
+both of those put a rim of contrast around every stroke, which is more outline
+rather than less.
+
+No `<monochrome>` layer. The themed icons of API 33 want a flat single-colour
+silhouette, and reducing this drawing to one is redrawing it rather than
+generating it; absent, a themed launcher falls back to the two layers.
+
+### Generated, not hand-placed
+
+It is in `icon/build_icons.py`, which already owns every other size from the
+same master. A second generator is a second thing to forget, and until now
+nobody could regenerate the Android set from the artwork at all.
+
+**That the Android PNGs did not come from this script is measurable, and it is
+how the risk of rewriting them was settled.** Regenerating the desktop set
+reproduced `hydra-16` through `hydra-512` byte for byte — same code, same
+library — while the five `ic_launcher.png` came out different. Composited over
+a flat ground, the largest visible difference is **2 of 255 at mdpi and 4 at
+xxxhdpi**: the same drawing, differing only by encoder rounding from whatever
+produced them originally. The 254 that a raw channel comparison reports is
+noise in the RGB of fully transparent pixels, where the values mean nothing.
+They are rewritten rather than left, because the alternative is a generator
+that owns every icon in the tree except five it cannot explain.
+
+### Verified by the packager, not by looking at it
+
+Looking at renders settles the size and the colour. It cannot settle whether
+Android will use the file at all, and that is the part the whole change turns
+on. `aapt2` was given the real `android/res/` and the real manifest with the
+version placeholders filled the way androiddeployqt fills them:
+
+    application-icon-160:'res/mipmap-anydpi-v26/ic_launcher.xml'
+    application-icon-240:'res/mipmap-anydpi-v26/ic_launcher.xml'
+    application-icon-320:'res/mipmap-anydpi-v26/ic_launcher.xml'
+    application-icon-480:'res/mipmap-anydpi-v26/ic_launcher.xml'
+
+At every density the application icon resolves to the adaptive XML and not to
+the PNG, which is the platform's own resolver answering the question rather
+than this file asserting it. The compiled resource table carries
+`color/ic_launcher_background` as `#ff1b0a28`, and the stored XML tree shows
+`<background>` pointing at that resource and `<foreground>` at
+`mipmap/ic_launcher_foreground`.
+
+**Not verified: how it looks on a real launcher.** Nothing here was installed
+on a device, and the renders are this tree's own arithmetic about a mask rather
+than Android drawing one. The thing that would close it is the phone the report
+came from.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
