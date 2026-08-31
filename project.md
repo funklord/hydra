@@ -10343,6 +10343,33 @@ apk check was exercised against synthetic zips carrying one ABI, two, and none.
 **What is not verified is a real build**: this machine has the kits but no NDK
 or JDK, so `make android` gets as far as the NDK check and stops.
 
+### `site_extractor.cpp` is the workspace's lexer fixture, by accident
+
+**Do not reformat this file without knowing what it is used for.** It is the
+only file in this workspace where two candidate implementations of the style
+gate's C lexer visibly disagree, and it decided both of the 2026-08-30 lexer
+questions: it chose the correct restore for a closing brace that had been
+discarding the braceless bodies open around it, and it rejected the wrong fix
+for a lambda's opening brace eating one it does not own.
+
+**Why this file and not another**, measured rather than assumed: it carries 21
+braceless `if`/`for`/`while` bodies, 4 lambdas with brace bodies, and 39
+aligned continuations spelled tabs-then-spaces, in 612 lines. Both faults turn
+on brace bookkeeping across exactly that combination, and nothing else here
+holds all three densely enough for the two implementations to diverge. It
+conforms under the current gate.
+
+That makes it a discriminating fixture in the sense `evidence.md` means:
+agreement between two implementations is evidence only where a case exists that
+would separate them, and this is that case. Reflowing it -- adding braces to
+the braceless bodies, or converting the aligned continuations -- would destroy
+the property silently, because the file would still conform and nothing would
+report a loss. The next person to tidy it will not know, which is why this is
+written down rather than left in a session.
+
+**The lexer fix itself is `fd6ba14`**, and the lambda fault is recorded as open
+rather than fixed: the obvious patch trades it for a different false finding.
+
 ### CI has verified nothing here since 2026-08-14
 
 **The runner is blocked on account billing, and a blocked run is coloured
@@ -10469,6 +10496,14 @@ the system it is playing, with the notification saying so on screen throughout.
 The withheld visibility is handed over the moment the service goes down, or the
 engine would believe its window was still on screen -- the same battery cost
 arriving by the back door.
+
+**One instrument cost an hour and is worth naming.**
+`dumpsys activity services se.vibes.hydra` lists the Chromium sandbox service
+and not this one, so a package-scoped grep reported the service absent while it
+was running and its notification was on screen. An unscoped
+`dumpsys activity services | grep PlaybackService` finds it. The probe was
+validated the only way that works -- run it while the service is definitely up
+and confirm it says so -- before its silence was read as an answer.
 
 **Measured with a control that discriminates**, same build, same page, on the
 Note 9:
