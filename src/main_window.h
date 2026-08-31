@@ -126,6 +126,11 @@ private slots:
 	// The view state's equivalent, on a timer of its own. See the definition
 	// for why it is not the same timer as the tree's.
 	void save_view_soon();
+	// And the tabs' navigation histories, which are the third thing a crash
+	// used to take. `flush_blobs` writes only the tabs that have navigated
+	// since it last ran, which is what `m_blobs_dirty` is for.
+	void save_blobs_soon(const QString &id);
+	void flush_blobs();
 	// The imported back/forward records, which live beside the tree file
 	// rather than in it. Both walk the whole tree from the root when called
 	// with no argument.
@@ -381,6 +386,12 @@ private:
 	tree_snapshot       m_undo;
 	QTimer             *m_save_timer    = nullptr;
 	QTimer             *m_view_timer    = nullptr;
+	QTimer             *m_blob_timer    = nullptr;
+	// Node ids whose history has moved since the last blob flush. Ids rather
+	// than views, because a view can be suspended between the navigation and
+	// the timer firing, and an id survives that -- suspending writes the blob
+	// itself, so the entry is simply found to have no live view and dropped.
+	QSet<QString>       m_blobs_dirty;
 	QString             m_tree_path;
 	QString             m_policy_path;
 

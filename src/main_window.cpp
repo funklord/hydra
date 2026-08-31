@@ -595,6 +595,37 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_view_timer->setInterval(2500);
 	connect(m_view_timer, &QTimer::timeout, this, &main_window::save_view_state);
 
+	// **And the third thing a crash used to take: the tabs' own pasts.**
+	// A blob reached disk only when its view was suspended, which happens on
+	// the way out and nowhere else, so a crash returned every live tab to its
+	// current url with nothing behind it.
+	//
+	// 5000ms, the longest of the three, and the two reasons pull the same way.
+	// It is the most expensive writer -- measured below -- and it is the only
+	// one whose loss window is bounded by a crash alone, since every ordinary
+	// exit writes the blobs through `save_everything`. What feeds it is also a
+	// discrete event rather than a gesture: a page load, of which a redirect
+	// chain delivers several, and five seconds coalesces the burst.
+	//
+	// **Measured before it was built, which is what settled that it could be.**
+	// `save_state()` is `QDataStream << *history()` and nothing else, so it was
+	// timed on its own against Qt WebEngine, offscreen, on this machine:
+	//
+	//     history depth   1     4     12     30 entries
+	//     per view       21    80    131    346 us
+	//     blob          778  3220   9756  24624 bytes
+	//
+	// About 10us and 815 bytes per history entry over a small fixed cost. The
+	// worst arrangement anybody is likely to have -- twenty tabs each thirty
+	// pages deep -- is 6.9ms and 492kB, which is under one frame at 60Hz and
+	// only after a load has settled. The open question was whether this was
+	// affordable at all; it is, by a wide margin, and the number is here so
+	// that nobody has to ask again.
+	m_blob_timer = new QTimer(this);
+	m_blob_timer->setSingleShot(true);
+	m_blob_timer->setInterval(5000);
+	connect(m_blob_timer, &QTimer::timeout, this, &main_window::flush_blobs);
+
 	// A logout, a shutdown or a Ctrl-C ends the process without ever closing
 	// the window, so `closeEvent` -- the only thing that writes the view state
 	// and the tab blobs -- never ran for any of them. See shutdown_signals.h
@@ -2278,6 +2309,17 @@ void main_window::open_node(node *n, bool load_now) {
 		connect(view, &web_view_backend::load_finished, this, [this, view](bool ok) {
 			if (view == current_view())
 				on_load_finished(ok);
+			// **Every view, not only the current one**, which is the whole
+			// reason this is not inside the branch above. A background tab
+			// finishing a load has moved its history exactly as much as the
+			// one in front, and its past is worth the same. The chrome only
+			// needs updating for the tab being looked at; the record does not
+			// care which tab is visible.
+			//
+			// A failed load still counts: a navigation that ends in an error
+			// page is a history entry, and Chromium records it as one.
+			Q_UNUSED(ok)
+			save_blobs_soon(m_views_by_id.key(view));
 		});
 
 		// Feature permissions (geo/cam/mic/notifications) answered from policy.
@@ -3107,6 +3149,38 @@ void main_window::save_tree_soon() {
 void main_window::save_view_soon() {
 	if (!m_view_path.isEmpty() && m_view_timer)
 		m_view_timer->start();
+}
+
+void main_window::save_blobs_soon(const QString &id) {
+	if (id.isEmpty() || !m_state || !m_blob_timer)
+		return;
+	m_blobs_dirty.insert(id);
+	m_blob_timer->start();
+}
+
+// Write the history of every tab that has navigated since this last ran.
+//
+// **Only those, which is the difference between this and `save_everything`.**
+// That one serialises every live view because it is about to destroy them all;
+// this runs while the browser is in use, and rewriting twenty unchanged blobs
+// because one tab followed a link is work with nothing to show for it. The
+// dirty set is what makes the cost proportional to what actually happened.
+//
+// And it does not suspend anything. `suspend_node` writes a blob too, but as
+// the first step of tearing the view down; this is the same write with none of
+// the rest of it, which is what a checkpoint has to be.
+void main_window::flush_blobs() {
+	if (!m_state)
+		return;
+	const QSet<QString> ids = m_blobs_dirty;
+	m_blobs_dirty.clear();
+	for (const QString &id : ids) {
+		// A tab suspended between the navigation and this firing has already
+		// had its blob written by `suspend_node`, and has no live view to ask.
+		// Not an error, and the commonest way an id here goes stale.
+		if (web_view_backend *view = m_views_by_id.value(id, nullptr))
+			m_state->save(id, view->save_state());
+	}
 }
 
 // The row itself, where `selected_parent` answers "where would a new child go".

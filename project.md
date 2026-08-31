@@ -11465,6 +11465,135 @@ on a device, and the renders are this tree's own arithmetic about a mask rather
 than Android drawing one. The thing that would close it is the phone the report
 came from.
 
+## The blobs, measured first and then built
+
+The last of the three things a crash took. A tab's navigation history reached
+disk only when its view was suspended, which happens on the way out, so a
+crash returned every live tab to its current url with nothing behind it.
+
+It was left unbuilt with a stated reason: the cost was unmeasured, and
+serialising every live WebEngine view on a timer is real work repeated against
+a loss only a crash produces. So the cost was measured before anything was
+written.
+
+### What one save_state() costs
+
+`qtwebengine_view::save_state()` is `QDataStream << *m_view->history()` and
+nothing else, so it can be timed without the shell, without the project's
+sources, and without a driver — which also avoided regenerating `objsets.mk`
+in a tree another session was editing at the time. Sixty lines against Qt
+WebEngine directly, offscreen, on this machine:
+
+| history depth | 1 | 4 | 12 | 30 entries |
+|---|---|---|---|---|
+| per view | 21us | 80us | 131us | 346us |
+| blob | 778 | 3220 | 9756 | 24624 bytes |
+
+About **10us and 815 bytes per history entry** over a small fixed cost, near
+enough linear across a thirty-fold range. The worst arrangement anybody is
+likely to have — twenty tabs each thirty pages deep — is **6.9ms and 492kB**,
+which is under one frame at 60Hz and only after a load has settled.
+
+So the question that had blocked it is answered, and answered generously: it
+is affordable by a wide margin. **The measurement is in the code**, on
+`m_blob_timer`, so the next person to wonder does not have to build the
+harness again.
+
+### What was built
+
+`flush_blobs()` writes the history of every tab that has navigated since it
+last ran, on a 5000ms debounce — the longest of the three timers, for two
+reasons pulling the same way. It is the most expensive writer, and it is the
+only one whose loss window is bounded by a crash alone, since every ordinary
+exit goes through `save_everything`. What feeds it is also a discrete event
+rather than a gesture: a page load, of which a redirect chain delivers
+several, and five seconds coalesces the burst.
+
+**Only the tabs that moved**, which is the whole difference between this and
+`save_everything`. That one serialises every live view because it is about to
+destroy them all; this runs while the browser is in use, and rewriting twenty
+unchanged blobs because one tab followed a link is work with nothing to show
+for it. `m_blobs_dirty` holds node ids rather than views, because a view can
+be suspended between the navigation and the timer firing — and suspending
+writes the blob itself, so a stale id is found to have no live view and
+dropped rather than being an error.
+
+The trigger is `load_finished` on **every** view, not only the current one. A
+background tab finishing a load has moved its history exactly as much as the
+one in front. The existing connection updated the chrome and was correctly
+guarded on being current; the record is not.
+
+### Verified against the exit that cannot be caught
+
+    --- 4s in: the 5000ms debounce has not fired yet ---
+      blobs on disk: 0
+    --- 12s in: it has, and nothing has exited ---
+      blobs on disk: 1
+        a1.blob  1102 bytes
+    --- SIGKILL: uncatchable, nothing saves on the way out ---
+      exit status: 137
+      blobs SURVIVED: 1
+
+Zero at four seconds is what makes it a debounce rather than an eager write.
+One at twelve, with no window closed and no signal sent, is the checkpoint and
+can be nothing else — before this, a blob had exactly one writer and it was
+`suspend_node`. Surviving a 137 is the point. No stray temporaries, which is
+the atomic writer underneath doing its job.
+
+**The first version of that probe measured nothing and said so**, which is
+worth recording because it looked like a failure of the feature. It passed a
+`file://` url as the argument, and reported no blobs — correctly, because
+`load_tree()` is what creates the state store and a url argument never reaches
+it. There was nowhere for a blob to go. The fix was to hand the browser a tree
+with one tab and a `view.ini` naming it current, which is how the application
+opens a tab on its own account.
+
+Offline: 33 suites, 0 failures. The three timers now stand at 1500ms for the
+tree, 2500ms for the view state and 5000ms for the blobs.
+
+## `hydra file:///page.html` builds a directory named after the url
+
+Found while writing the probe above, and it is not a test artifact: the
+browser created `file:/tmp/claude-1001/.../scratchpad/blobrun/` **under the
+working directory**, complete with a `state/` directory and a `view.ini`. The
+repository already contained a `file:` directory from 26 August with the same
+shape underneath it, from a session running as another uid — so this has
+happened at least twice and neither time was noticed.
+
+**The cause is a decision that is written down and deliberate.** `main.cpp`
+classifies argv[1], and takes only `http` and `https` as a page to open:
+
+    // A path is not a url and `file:` is not treated as one either:
+    // `hydra ./tree.txt` has always meant the tree, and this must not
+    // quietly change what that does.
+
+So a `file:` url falls through to `tree_path`. `load_tree()` then derives the
+state directory from it with `QFileInfo(path).absolutePath()`, which for
+`file:///tmp/x/page.html` is the *relative* path `file:/tmp/x`, and
+`state_store`'s constructor calls `mkpath` on it. The url has become a
+directory tree rooted wherever the browser happened to be started.
+
+**Two separable things, and only one of them is a design question.**
+
+The littering is a defect on any reading. Whatever argv[1] turns out to mean,
+deriving a directory from it and creating it unconditionally is wrong: a tree
+path naming a directory that does not exist is a typo or a url, and silently
+building it is what turned both incidents into junk in a git repository rather
+than an error message.
+
+Whether `file:` should open as a page is the design question, and it belongs
+to the copyright holder because the current answer is deliberate. The cost of
+the present behaviour is larger than it looks: the desktop entry is
+`Exec=hydra %U` and claims `text/html`, and `%U` means urls — so a file
+manager handing over `file:///home/me/doc.html` gets a browser that cannot
+open a local html file, comes up empty, and leaves a directory behind. The
+distinction that would preserve the recorded intent exactly is the scheme
+rather than the path: `hydra ./tree.txt` has no scheme and would be untouched,
+while a literal `file:` prefix is a url and always was one.
+
+Not changed here. Recorded, with the option, its cost, and whose decision it
+is.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -11535,18 +11664,13 @@ carried along as amendments to a list item.
    thin adapters around it, which need a page rather than a fixture, and are
    driven through the shell by the live drivers instead.
 
-5. **A crash still costs the live tabs' navigation history, and only that.**
-   The rest of the timer half is done — see *The timer half* above. The tree is
-   covered to within `save_tree_soon`'s 1500ms and the view state to within
-   `save_view_soon`'s 2500ms, both measured against a real SIGKILL.
+5. **`hydra file:///page.html` cannot open the file and leaves a directory
+   behind.** See the section above. Two halves: the littering is a defect on
+   any reading and is fixable without touching anything that was decided;
+   whether a `file:` url should open as a page reverses a deliberate recorded
+   choice and is the copyright holder's. The desktop entry claims `text/html`
+   and passes `%U`, so this is the advertised case rather than a contrived one.
 
-   What is left is the blobs. A tab's history reaches disk only when its view
-   is suspended, which happens on the way out and nowhere else, so a crash
-   returns every live tab to its current url with no past behind it.
-
-   Not attempted, and the reason is a cost nobody has measured rather than a
-   design question: serialising every live WebEngine view on a timer is real
-   work, repeated, against a loss that only a crash produces. The measurement
-   that would settle it is what one `save_state()` costs on a window full of
-   tabs — if it is cheap the debounce already exists to hang it on, and if it
-   is not then the answer is probably to write only the view that is in front.
+   The crash-save work that used to be item 5 is finished — tree, view state
+   and blobs all reach disk on their own timers, each measured against a real
+   SIGKILL.
