@@ -10343,6 +10343,48 @@ apk check was exercised against synthetic zips carrying one ABI, two, and none.
 **What is not verified is a real build**: this machine has the kits but no NDK
 or JDK, so `make android` gets as far as the NDK check and stops.
 
+### Dark desktop, light browser -- and it is the desktop, not this tree
+
+`theme.h` already carries a three-tier detector, and on this machine all three
+tiers abstain. Measured 2026-08-31:
+
+    XDG_CURRENT_DESKTOP=TDE          Trinity, the KDE 3 fork
+    QT_QPA_PLATFORMTHEME             unset -- no Qt 6 platform-theme plugin
+    org.freedesktop.portal.Desktop   not provided by any .service file
+    gsettings color-scheme           'default', i.e. no preference
+
+`QStyleHints::colorScheme()` returns `Unknown`, the portal cannot be asked at
+all, and with no platform theme Qt hands the program its **default light
+palette** -- so the third tier reads light and is not malfunctioning, it is
+reading Qt's fallback rather than the desktop. That tier was written to catch
+"a dark GTK or Qt theme with no portal", and this is the case it cannot see:
+there is no dark palette anywhere for it to find.
+
+**The desktop does state its colours**, in `~/.trinity/share/config/kdeglobals`
+(and `~/.kde/share/config/kdeglobals`, same format, for KDE 3):
+
+    colorScheme=DarkBlue.kcsrc
+    windowBackground=0,42,78
+    windowForeground=220,220,220
+
+**The fix does not touch `decide()`.** That function is pure over (Qt hint,
+portal int, palette), and what is missing is a *source* for the middle
+argument, not new logic -- a reader returning the portal's own vocabulary, 1
+prefer dark, 2 prefer light, 0 no preference. Two things a naive version gets
+wrong: compare the colours rather than the scheme name, since `DarkBlue.kcsrc`
+happens to contain "Dark" and plenty of dark schemes do not; and abstain rather
+than guess when the file cannot be read, because the errors are not symmetric
+-- this file already records that a wrong light guess is merely plain while a
+wrong dark guess is unreadable text.
+
+**Signalled rather than fixed here**, on the copyright holder's instruction:
+the cause is the desktop, so every Qt GUI in the workspace fails identically
+and a per-tree fix is the same work done many times with many results. Open
+alongside it, and bigger than detection: whether a program should follow the
+desktop's *hue* at all -- this scheme is dark blue rather than neutral dark,
+and adopting `0,42,78` as a window colour is a different question from knowing
+the desktop is dark.
+
 ### The shield was a wall of eighteen controls in enum order
 
 It drew one row per feature in declaration order, so the panel opened as a flat
