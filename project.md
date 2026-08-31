@@ -10343,6 +10343,56 @@ apk check was exercised against synthetic zips carrying one ABI, two, and none.
 **What is not verified is a real build**: this machine has the kits but no NDK
 or JDK, so `make android` gets as far as the NDK check and stops.
 
+### Logged out of corporate SSO on every restart
+
+Reported against Teams, and specifically not against other logins, which is the
+clue rather than an aside. `qtwebengine_factory.cpp` sets
+`AllowPersistentCookies`, and Qt's three policies differ exactly here:
+`NoPersistentCookies` keeps everything in memory, `ForcePersistentCookies`
+saves session and persistent cookies to disk, and **`AllowPersistentCookies`
+saves only the cookies that carry an expiry -- session cookies live in memory
+and die with the process.**
+
+Corporate SSO issues its authentication as a **session** cookie by design, so
+this browser discards precisely the cookie Teams needs while keeping every
+ordinary login. Other browsers appear to behave differently because "continue
+where you left off" restores session cookies, which is `ForcePersistentCookies`
+behaviour under another name.
+
+**Not changed, because it is a privacy decision rather than a defect.** The
+policy is per *profile* in Qt, so flipping it makes every site's session
+cookies outlive the browser -- and a session cookie surviving a restart is a
+deliberate weakening of something sites rely on, which sits oddly in a browser
+whose posture is a per-site policy engine. Three options, put to the copyright
+holder and unanswered at the time of writing: flip it globally, one line;
+flip it and expose the old behaviour as a setting; or make it per-site through
+the policy engine, which **cannot be done with this enum** since Qt has no
+per-site form of it and would need real design.
+
+### Saving state on a signal and on a timer, designed and not built
+
+Asked for after the view-state work, because `closeEvent` is the only writer
+and a browser that is killed or crashes loses the tree as well as the view. The
+copyright holder clarified that "kill" means SIGTERM rather than SIGKILL, which
+splits the problem in two and makes most of it tractable.
+
+**SIGTERM, SIGINT and SIGHUP are catchable, and a handler still must not
+save.** Only async-signal-safe calls are legal there, so `QSettings`, the
+model and anything allocating are all out. The shape that works is Qt's own:
+write a byte to a self-pipe in the handler, wake a `QSocketNotifier`, and do
+the real save on the Qt thread. Getting this wrong produces a deadlock or a
+half-written file at exactly the moment the system is shutting the program
+down, which is the worst time to find out.
+
+**SIGKILL and a crash cannot be caught, so a timer is the only cover** -- and
+the timer is what makes atomicity mandatory rather than nice. Write to a
+temporary file and rename over the target: an interrupted save that truncates
+`tree.txt` is worse than a stale one, because the stale file is at least a
+tree. Track dirtiness so an idle browser is not rewriting itself on every tick.
+
+Nothing is implemented. It is written down rather than half-built deliberately:
+an untested signal handler is a way to corrupt the tree, not a safety net.
+
 ### Dark desktop, light browser -- and it is the desktop, not this tree
 
 `theme.h` already carries a three-tier detector, and on this machine all three
