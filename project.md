@@ -12303,6 +12303,26 @@ still *parses* afterwards. A half-written outline is a smaller tree, and a
 half-written `extractors.json` is a syntax error, so "the set that was there is
 intact" is checked by loading it rather than by comparing bytes.
 
+**A fourth time, and this one was the original commit's.** `policy_engine::save`
+was changed this morning too — from removing the file before rewriting it to
+clearing the QSettings object — and nothing pinned that either. It is the
+change with the most to lose: `QFile::remove` was not only a hole, it was also
+**how stale keys were dropped**, since `setValue` alone adds and overwrites but
+never deletes. Swapping the mechanism kept the hole shut and could quietly have
+lost the behaviour the hole was paying for, and the failure would be a rule the
+user deleted returning at the next launch.
+
+`test_bundle` checks it now: two site rules saved, one dropped by writing a
+policy that never had it, and the dropped one asserted gone from the reloaded
+file while the other stays. It passes, so the swap kept the behaviour — but
+that was worth establishing rather than assuming, and until now it rested on
+nothing.
+
+**Five writers were changed this session and all five are pinned**: the outline
+in `test_tree`, the blobs in `test_state`, the policy in `test_bundle`, the
+filter list in `test_settings`, the extractors in `test_extractor`. The count
+is the point — it is the number that made three of the four gaps visible.
+
 ### The gate's blind spot, met in passing
 
 Reindenting the new scope in `filter_list.cpp` left the loop's closing brace one

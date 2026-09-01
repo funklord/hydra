@@ -14,6 +14,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QSettings>
 #include <cstdio>
 
@@ -349,6 +350,56 @@ int main(int argc, char **argv) {
 
 	if (!qEnvironmentVariableIsSet("HYDRA_KEEP_BUNDLE"))
 		QDir(dir).removeRecursively();
+	section("a rule dropped from the policy does not come back on the next save");
+	{
+		// **This is what `save()` clearing the object is for, and nothing
+		// tested it.** The writer used to `QFile::remove` the file before
+		// asking QSettings to write it, which dropped keys the previous save
+		// had made -- a rule the user deleted -- because `setValue` alone only
+		// adds and overwrites. Removing the file first also left a window with
+		// no policy file at all, which is why it became `clear()` instead.
+		//
+		// Swapping the mechanism kept the hole shut and could have lost the
+		// behaviour the hole was paying for. A deleted rule silently returning
+		// on the next launch is the failure that would follow, so it is
+		// checked rather than assumed.
+		const QString path = dir + "/drop-policy.ini";
+		QFile::remove(path);
+
+		policy_engine first;
+		first.set_setting("keep.example", policy::feature::javascript,
+		                   policy::setting::block);
+		first.set_setting("gone.example", policy::feature::popups,
+		                   policy::setting::block);
+		check(first.save(path), "a policy with two site rules saves");
+
+		policy_engine reread;
+		check(reread.load(path), "and loads again");
+		check(reread.setting_for("gone.example", policy::feature::popups)
+		        == policy::setting::block,
+		      "with the rule that is about to be dropped still in it");
+
+		// Drop one by writing a policy that never had it.
+		policy_engine second;
+		second.set_setting("keep.example", policy::feature::javascript,
+		                    policy::setting::block);
+		check(second.save(path), "a policy without it saves over the first");
+
+		policy_engine after;
+		check(after.load(path), "and loads");
+		check(after.setting_for("keep.example", policy::feature::javascript)
+		        == policy::setting::block,
+		      "the rule that stayed is still there");
+		check(after.setting_for("gone.example", policy::feature::popups)
+		        != policy::setting::block,
+		      "and the dropped rule did not survive the write");
+
+		// The file is never absent: it exists before and after, which is the
+		// property `QFile::remove` gave up and `clear()` keeps.
+		check(QFileInfo::exists(path),
+		      "and the policy file exists throughout, never removed to be rewritten");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }
