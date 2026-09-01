@@ -12256,6 +12256,54 @@ is not the one being measured.
 Not attempted here: the real-capture runs item 1 is actually about. They need
 `evidence/`, which is not in this checkout, and a site visit.
 
+### Two more writers with the fault the atomicity pass was for
+
+The atomicity work earlier in this session made `tree_outline::save`,
+`state_store::save` and `policy_engine::save` survive an interrupted write,
+because the debounce timers mean those files are now written while the browser
+is running. It scoped itself to "the persistent-state writers that `closeEvent`
+and `flush_tree` touch" and named those three.
+
+**`load_tree` derives five persisted paths, not three.** The other two are
+`filters-ai.txt` and the learned extractors, and both had the identical fault.
+`site-rules.ini` and `annoyances.ini` are safe by a different route: they go
+through `QSettings`, which writes via `QSaveFile` internally.
+
+`filter_list::save` was `tree_outline::save` character for character before the
+fix — truncate, a buffered `QTextStream`, and an unconditional `return true` so
+that a full disk reported success. `site_extractor::save` is the same shape
+with the write's return value discarded rather than a stream's.
+
+Neither is small data. The filter list is the rules this browser and its model
+have authored, kept in a separate file from any imported EasyList *precisely*
+because they cannot be re-fetched; the extractors are what it has learned about
+sites it has visited. A half-written filter list parses and is a smaller set of
+rules; a half-written `extractors.json` does not parse and is none of them.
+
+**What made this findable is that the earlier fix wrote down its own scope.**
+The entry said which three writers it covered, so the question "which writers
+are there" had an answer to be compared against — five. A fix that had not
+named its boundary would have left nothing to notice.
+
+That is the second time today the same thing happened in the same shape: the
+`test_settings` leak audit was fixed and the identical fault two lines below it
+was not, and both were found by re-reading the fix rather than the code. A fix
+that names what it covered is checkable; one that does not is only trustworthy.
+
+### The gate's blind spot, met in passing
+
+Reindenting the new scope in `filter_list.cpp` left the loop's closing brace one
+tab short, and `make style-source` passed. It says so itself, in the line it
+prints on success: *"indentation except under-indentation, which is not
+checked"*. The converter it compares against never adds indentation, so a line
+with too few tabs is invisible to it.
+
+Recorded because it is the first time that documented gap has actually let
+something through here, and because the message was what made it obvious —
+the gate saying what it does not check is what turned a green run into a reason
+to look. It was found by reading the diff, which is the only instrument that
+covers it.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

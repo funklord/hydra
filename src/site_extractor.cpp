@@ -3,6 +3,7 @@
 
 #include <QElapsedTimer>
 #include <QFile>
+#include <QSaveFile>
 #include <QJSEngine>
 #include <QJSValue>
 #include <QJsonDocument>
@@ -604,9 +605,16 @@ bool extractor_store::save(const QString &path) const {
 		o.insert("note", it.value().note);
 		root.insert(it.key(), o);
 	}
-	QFile f(path);
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+	// Atomic for the reason `tree_outline::save` is: these are the extractors
+	// this browser has learned, and a half-written json file is not a smaller
+	// set of them, it is a parse error that loses all of them. The write's
+	// result was also discarded before an unconditional `return true`, so a
+	// full disk reported success.
+	QSaveFile f(path);
+	if (!f.open(QIODevice::WriteOnly))
 		return false;
-	f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-	return true;
+	const QByteArray json = QJsonDocument(root).toJson(QJsonDocument::Indented);
+	if (f.write(json) != json.size())
+		return false;   // the destructor discards; the previous set stays
+	return f.commit();
 }

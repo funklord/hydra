@@ -4,6 +4,7 @@
 #include <QWriteLocker>
 
 #include <QFile>
+#include <QSaveFile>
 #include <QTextStream>
 #include <QUrl>
 
@@ -249,17 +250,34 @@ bool filter_list::load(const QString &path) {
 	return true;
 }
 
+// **Atomic, and able to fail -- the same two faults `tree_outline::save` had.**
+// This file is the user's and the model's own filter rules, kept apart from
+// any imported EasyList precisely because they are expensive to recreate, and
+// it is written from the same persistence path as the tree. A truncate-then-
+// write leaves a half-list that parses, with the rules from the top of the set
+// in it and none of the rest.
+//
+// The second fault was quieter: `QTextStream` buffers, so every write landed
+// after the last statement of the function and the unconditional `return true`
+// reported success before any of it reached the disk. `commit()` is the first
+// thing here that can say the bytes arrived.
+//
+// The stream is scoped so it flushes into the temporary before `commit()`
+// renames it; left to the end of the function the order reverses and commit
+// publishes a file missing its tail.
 bool filter_list::save(const QString &path) const {
-	QFile f(path);
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate))
+	QSaveFile f(path);
+	if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
 		return false;
-	QTextStream out(&f);
-	out << "! Hydra AI/user-authored filters — kept apart from imported\n"
-	    << "! EasyList so upstream updates never clobber these (arch §12.5).\n";
-	for (const filter_rule &r : m_rules) {
-		if (!r.note.isEmpty())
-			out << "! " << r.note << "\n";
-		out << r.text << "\n";
+	{
+		QTextStream out(&f);
+		out << "! Hydra AI/user-authored filters — kept apart from imported\n"
+		    << "! EasyList so upstream updates never clobber these (arch §12.5).\n";
+		for (const filter_rule &r : m_rules) {
+			if (!r.note.isEmpty())
+				out << "! " << r.note << "\n";
+			out << r.text << "\n";
+		}
 	}
-	return true;
+	return f.commit();
 }
