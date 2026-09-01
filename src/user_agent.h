@@ -85,4 +85,69 @@ inline QString corrected(const QString &qt_default,
 	return ua;
 }
 
+
+// **The other channel, which the string above does not reach.**
+//
+// Chromium builds `sec-ch-ua` and `navigator.userAgentData` from its own build
+// identity, and neither Qt nor Android's WebView exposes an override. On the
+// desktop that costs a version number. On Android it costs the whole disguise:
+// the brand list says
+//
+//     "Chromium";v="152", "Not?A_Brand";v="24", "Android WebView";v="152"
+//
+// -- measured on the handset, with the corrected string already in place. A site
+// reading the brands rather than the string sees `Android WebView` stated
+// outright, and `teams.microsoft.com` answers "your browser version isn't
+// supported" to a string that says Chrome 140.
+//
+// This shim rewrites the JavaScript half in the page's own world, turning the
+// `Android WebView` brand into `Google Chrome` -- which, with `Chromium` and the
+// deliberately-nonsensical `Not?A_Brand` already present, is exactly the triple
+// real Chrome on Android sends.
+//
+// **What it cannot do is the header.** `sec-ch-ua` is written by the network
+// stack before any script runs, so a site checking server-side still sees the
+// WebView. It is a fix for client-side sniffing only, and which of the two a
+// given site does is answered by trying it rather than by assuming.
+//
+// Written as getters over the real object rather than a flat copy, so anything
+// not being corrected -- `mobile`, `platform`, fields added later -- keeps
+// coming from the platform and stays true.
+inline QString client_hints_shim() {
+	return QStringLiteral(R"JS(
+(function () {
+  var real = navigator.userAgentData;
+  if (!real || !real.brands) return;
+  function fix(list) {
+    return (list || []).map(function (b) {
+      return b.brand === 'Android WebView'
+        ? { brand: 'Google Chrome', version: b.version }
+        : { brand: b.brand, version: b.version };
+    });
+  }
+  var shim = {
+    get brands()   { return fix(real.brands); },
+    get mobile()   { return real.mobile; },
+    get platform() { return real.platform; },
+    toJSON: function () {
+      return { brands: fix(real.brands), mobile: real.mobile,
+                platform: real.platform };
+    },
+    getHighEntropyValues: function (hints) {
+      return real.getHighEntropyValues(hints).then(function (v) {
+        if (v && v.brands) v.brands = fix(v.brands);
+        if (v && v.fullVersionList) v.fullVersionList = fix(v.fullVersionList);
+        return v;
+      });
+    }
+  };
+  try {
+    Object.defineProperty(navigator, 'userAgentData', {
+      configurable: true, get: function () { return shim; }
+    });
+  } catch (e) { /* a page that froze navigator keeps what it has */ }
+})();
+)JS");
+}
+
 }  // namespace user_agent

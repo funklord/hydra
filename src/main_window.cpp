@@ -17,6 +17,7 @@
 #include "web_view_factory.h"
 #include "address_input.h"
 #include "scheme_rules.h"
+#include "user_agent.h"
 #include "kiosk_controller.h"
 #include "reorganize_dialog.h"
 #include "ollama_provider.h"
@@ -2272,6 +2273,20 @@ void main_window::open_node(node *n, bool load_now) {
 		view->set_script_bridge(m_mse, mse_tap::bridge_name());
 		view->inject_script("hydra-mse-relay", mse_tap::relay_source());
 		view->inject_main_world_script("hydra-mse-hook", mse_tap::hook_source());
+
+#ifdef Q_OS_ANDROID
+		// **Android only, because only Android has something to hide here.** The
+		// desktop's brand list says `Chromium`, which is true and is what a site
+		// expects from a Chromium-based browser; the WebView's says
+		// `Android WebView`, which is read as "not a browser" -- measured on the
+		// handset, where Teams refused a corrected user-agent string of
+		// Chrome/140 while the brands still named the WebView.
+		//
+		// Main world rather than isolated, necessarily: the point is to replace
+		// an object the page itself will read.
+		view->inject_main_world_script("hydra-client-hints",
+		                                user_agent::client_hints_shim());
+#endif
 
 		// The page's own name for itself, which the tree had no way to hear.
 		// `set_page_title` refuses it on a tab somebody has named, so this can

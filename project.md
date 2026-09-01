@@ -13398,7 +13398,60 @@ entry point either posts or waits with a deadline. Worth saying explicitly so
 the next person does not wrap it in `on_qt_thread` for symmetry and reintroduce
 the deadlock recorded above.
 
-### What is verified, and what is a hypothesis
+### Measured on the handset: the fix works, and it was not the cause
+
+Both halves were put on the phone and measured, and then Teams was asked again.
+
+**The string is right.** With the corrected build installed, a page served over
+`adb reverse` reports the header and `navigator.userAgent` as
+
+    Mozilla/5.0 (Linux; Android 15; SM-F926B) AppleWebKit/537.36
+    (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36
+
+-- no `wv`, no `Version/4.0`, no `Build/`, and the platform and model intact.
+Exactly what Chrome on Android sends.
+
+**The client hints still name the WebView**, as predicted:
+
+    sec-ch-ua: "Chromium";v="152", "Not?A_Brand";v="24", "Android WebView";v="152"
+
+So a shim was added -- `user_agent::client_hints_shim`, a main-world script that
+turns the `Android WebView` brand into `Google Chrome` -- and it works: the page
+then reads `Chromium 152 | Not?A_Brand 24 | Google Chrome 152`. The header is
+untouched, because the network stack writes it before any script runs.
+
+**Teams refused anyway**, with both fixes in place: *"Your browser version isn't
+supported. Quickest solution? Download Microsoft Teams"*.
+
+### And the actual reason, which is neither
+
+Asked directly, from a machine with no phone involved, with two user agents and
+nothing else different:
+
+    our mobile UA -> https://teams.microsoft.com/v2/unsupported-browser#isMobile=true
+    desktop UA    -> https://teams.microsoft.com/v2/
+
+**`#isMobile=true`.** It is a server-side redirect keyed on the `Mobile` token in
+the user-agent string, and it has nothing to do with WebViews, client hints or
+this browser. Chrome on Android gets the same page. Teams' web app does not serve
+mobile browsers at all -- Microsoft wants the native app -- and no amount of
+looking more like Chrome will change that, because looking exactly like Chrome on
+Android is precisely what earns the redirect.
+
+**Which makes the missing feature a different one: "request desktop site".** Every
+mobile browser has it, this one does not, and it is the only thing that will open
+Teams on a phone. It is also the general answer to a class of sites rather than a
+special case for one.
+
+**Both fixes stay, and neither is validated by an observed failure.** The string
+correction is right on its own terms -- `wv` and `Version/4.0` are documented as
+"not a browser", the desktop precedent is exactly this shape, and dropping
+`Build/` removes a device fingerprint no site needs. The client-hints shim is the
+same argument one channel along, and is the weaker of the two: nothing measured
+here was fixed by it, and it is a spoof rather than a correction. It is written
+down as such so that removing it later needs no archaeology.
+
+### What was verified along the way
 
 Verified offline: seven new checks in `test_settings` over a real WebView
 string -- the three markers gone, the platform and model kept, the result shaped
@@ -13406,20 +13459,9 @@ like Chrome on Android, no doubled space or orphaned bracket, and idempotent.
 `make jni` reports 13 native methods, every one resolvable. Both builds are
 clean.
 
-**Not verified: that this is why Teams refuses.** The handset went off adb
-before the string could be measured from the device or the fix tried against the
-site. That the WebView markers get browsers turned away is documented behaviour
-and the desktop precedent is exactly this shape -- but Teams may also be
-gating on something else, and "the user agent was wrong and is now right" is a
-different claim from "Teams works". The measurement to make when the phone is
-back is the one that was set up and never ran: a page reporting
-`navigator.userAgent`, `navigator.userAgentData.brands` and the `User-Agent`
-header, before and after.
-
-Note also the limit the desktop already records: `sec-ch-ua` is built by
-Chromium from its real version and cannot be overridden, so a site reading
-`navigator.userAgentData` rather than the string still sees through this. If
-Teams does that, this fix will not move it.
+Verified offline before the phone came back: seven checks in `test_settings`
+over a real WebView string, `make jni` at 13 native methods all resolvable, and
+both builds clean. What the device then added is in the section above.
 
 ## What is next (in order)
 
