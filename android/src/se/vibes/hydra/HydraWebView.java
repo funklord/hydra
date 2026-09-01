@@ -794,6 +794,18 @@ public class HydraWebView {
      * A reload follows because the user agent is read when a page is fetched:
      * without it the toggle appears to do nothing until the next navigation,
      * which is the shape of bug that gets reported as "the setting is broken".
+     *
+     * **And it reloads what was asked for, not what was arrived at.** The whole
+     * reason to want this is a site that redirected because of the old string:
+     * teams.microsoft.com sends a mobile user agent to
+     * /v2/unsupported-browser, so by the time the toggle is used the tab is
+     * sitting on the refusal, and a plain reload fetches the refusal again with
+     * nothing appearing to change. getOriginalUrl is the url before the
+     * redirects, which is exactly the one to ask for a second time -- and with
+     * the desktop string in place it will not redirect.
+     *
+     * Falls back to reload() when there was no redirect, when the WebView has
+     * no original url to give, or when the two are the same.
      */
     public static void setDesktopSite(final long id, final boolean on) {
         onUi(new Runnable() { @Override public void run() {
@@ -805,7 +817,12 @@ public class HydraWebView {
             String ua = on ? desktopUserAgent(base) : base;
             if (ua != null && !ua.isEmpty())
                 s.setUserAgentString(ua);
-            w.reload();
+            String original = w.getOriginalUrl();
+            String now = w.getUrl();
+            if (original != null && !original.isEmpty() && !original.equals(now))
+                w.loadUrl(original);
+            else
+                w.reload();
         } });
     }
 

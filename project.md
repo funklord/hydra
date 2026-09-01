@@ -13523,13 +13523,30 @@ With the toggle on, the local page reports
 Teams", and the Microsoft sign-in appears, which is the web app's entry point.
 Fifteen page nodes where there had been one.
 
-**One thing that catches people and caught this run.** Turning the toggle on
-reloads, and by then the tab is sitting on `/v2/unsupported-browser`, so the
-reload fetches the refusal again and nothing appears to change. The site has to
-be navigated to afresh. That is arguably a defect -- a "request desktop site"
-that requires retyping the address is doing half the job -- and the fix is to
-reload the *original* url rather than the current one, which needs the redirect
-chain's head. Left as a known rough edge rather than guessed at.
+### It reloads what was asked for, not what was arrived at
+
+The first version reloaded the current url, and that made the feature useless in
+exactly the case it exists for. By the time anybody reaches for "request desktop
+site" the redirect has already happened and the tab is sitting on
+`/v2/unsupported-browser` -- so the reload fetched the refusal again and nothing
+appeared to change. A toggle that then requires retyping the address is doing
+half the job.
+
+Android's WebView answers this directly: `getOriginalUrl()` is the url as
+requested, before redirects. Fetching that instead is one condition --
+
+    String original = w.getOriginalUrl();
+    if (original != null && !original.isEmpty() && !original.equals(w.getUrl()))
+        w.loadUrl(original);
+    else
+        w.reload();
+
+-- falling back to a plain reload where there was no redirect, where the WebView
+has no original to give, or where the two are the same.
+
+Verified as the sequence a person actually performs: navigate to
+`teams.microsoft.com`, be refused, open View, tick Request Desktop Site, and the
+Microsoft sign-in appears. No retyping, no second navigation.
 
 **Not established: that a Teams meeting works.** Sign-in was not attempted -- it
 is the copyright holder's account. What is established is that the door opens,
