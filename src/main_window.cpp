@@ -1533,7 +1533,7 @@ void main_window::toggle_kiosk() {
 			else if (web_view_backend *v = current_view())
 				m_stack->setCurrentWidget(v->widget());
 			sync_page_context();
-	update_navigation();
+			update_navigation();
 			update_status();
 		});
 	}
@@ -1742,10 +1742,10 @@ void main_window::report_annoyance() {
 	case annoyed_dialog::action::consent: open_site_rules();        break;
 	case annoyed_dialog::action::recorded:
 		m_status->showMessage(
-			  QString("Recorded. %1 report%2 filed against %3.")
-			      .arg(m_annoyances ? m_annoyances->count_for(host) : 0)
-			      .arg((m_annoyances && m_annoyances->count_for(host) == 1) ? "" : "s")
-			      .arg(host), 6000);
+		    QString("Recorded. %1 report%2 filed against %3.")
+		        .arg(m_annoyances ? m_annoyances->count_for(host) : 0)
+		        .arg((m_annoyances && m_annoyances->count_for(host) == 1) ? "" : "s")
+		        .arg(host), 6000);
 		break;
 	}
 }

@@ -242,70 +242,70 @@ int main(int argc, char **argv) {
 		if (!cdn.listen(QHostAddress::LocalHost, 0)) {
 			check(false, "could not listen");
 		} else {
-		const QString base =
+			const QString base =
 			QString("http://127.0.0.1:%1/v4/db/abc/").arg(cdn.serverPort());
-		const QUrl cdn_page("https://site.example/watch/9");
+			const QUrl cdn_page("https://site.example/watch/9");
 
-		extractor_signals ev;
-		auto add = [&](const QString &u) {
-			request_context c;
-			c.url = QUrl(u);
-			c.site_host = "site.example";
-			c.request_host = c.url.host();
-			c.kind = resource_kind::other;
-			ev.on_request(c, request_decision{});
-		};
-		add(cdn_page.toString());
-		add(base + "cf-master.1774687168.txt?k=UCp");
-		add(base + "init-f1-v1-a1.woff?k=UCp");
-		// Two only: three of a shape is a flood and the segment rule would refuse
-		// the init segment's neighbours for reasons that are not this rule's.
-		add(base + "seg-1-f1-v1-a1.woff2?k=UCp");
-		add(base + "seg-2-f1-v1-a1.woff2?k=UCp");
+			extractor_signals ev;
+			auto add = [&](const QString &u) {
+				request_context c;
+				c.url = QUrl(u);
+				c.site_host = "site.example";
+				c.request_host = c.url.host();
+				c.kind = resource_kind::other;
+				ev.on_request(c, request_decision{});
+			};
+			add(cdn_page.toString());
+			add(base + "cf-master.1774687168.txt?k=UCp");
+			add(base + "init-f1-v1-a1.woff?k=UCp");
+			// Two only: three of a shape is a flood and the segment rule would refuse
+			// the init segment's neighbours for reasons that are not this rule's.
+			add(base + "seg-1-f1-v1-a1.woff2?k=UCp");
+			add(base + "seg-2-f1-v1-a1.woff2?k=UCp");
 
-		extractor_store store;
-		stub_provider prov;
-		prov.reply = "extract = function (page, requests) {\n"
+			extractor_store store;
+			stub_provider prov;
+			prov.reply = "extract = function (page, requests) {\n"
 			            "  for (var i = 0; i < requests.length; i++)\n"
 			            "    if (requests[i].url.indexOf('init-') !== -1)\n"
 			            "      return { url: requests[i].url, kind: 'direct' };\n"
 			            "  return null;\n"
 			            "};";
-		extractor_dialog dlg(&ev, &store, &prov, "site.example", cdn_page);
-		dlg.show();
+			extractor_dialog dlg(&ev, &store, &prov, "site.example", cdn_page);
+			dlg.show();
 
-		QPushButton *send = button(&dlg, "Send");
-		QElapsedTimer waited;
-		waited.start();
-		while (send && !send->isEnabled() && waited.elapsed() < 15000)
-			spin(50);
-		check(send && send->isEnabled(), "the probes finish and Send is offered");
+			QPushButton *send = button(&dlg, "Send");
+			QElapsedTimer waited;
+			waited.start();
+			while (send && !send->isEnabled() && waited.elapsed() < 15000)
+				spin(50);
+			check(send && send->isEnabled(), "the probes finish and Send is offered");
 
-		QPlainTextEdit *payload = dlg.findChild<QPlainTextEdit *>("payload");
-		check(payload && payload->toPlainText().contains("HLS"),
+			QPlainTextEdit *payload = dlg.findChild<QPlainTextEdit *>("payload");
+			check(payload && payload->toPlainText().contains("HLS"),
 			    "the playlist was identified despite its .txt extension");
 
-		send->click();
-		wait_for([&] { return judged(&dlg); });
+			send->click();
+			wait_for([&] { return judged(&dlg); });
 
-		QPushButton *apply = button(&dlg, "Use This");
-		check(apply && !apply->isEnabled(),
+			QPushButton *apply = button(&dlg, "Use This");
+			check(apply && !apply->isEnabled(),
 			    "a proposal returning the init segment cannot be accepted");
-		QLabel *verdict = dlg.findChild<QLabel *>("verdict");
-		check(verdict && verdict->text().contains("cf-master"),
+			QLabel *verdict = dlg.findChild<QLabel *>("verdict");
+			check(verdict && verdict->text().contains("cf-master"),
 			    "and the reason points at the playlist instead");
 
-		// The same dialog, the same probes, the answer that is right: this must
-		// not have become a rule that refuses everything on a stream host.
-		prov.reply = "extract = function (page, requests) {\n"
+			// The same dialog, the same probes, the answer that is right: this must
+			// not have become a rule that refuses everything on a stream host.
+			prov.reply = "extract = function (page, requests) {\n"
 			            "  for (var i = 0; i < requests.length; i++)\n"
 			            "    if (requests[i].url.indexOf('cf-master') !== -1)\n"
 			            "      return { url: requests[i].url, kind: 'hls' };\n"
 			            "  return null;\n"
 			            "};";
-		send->click();
-		wait_for([&] { return apply && apply->isEnabled(); });
-		check(apply && apply->isEnabled(), "while the playlist itself is accepted");
+			send->click();
+			wait_for([&] { return apply && apply->isEnabled(); });
+			check(apply && apply->isEnabled(), "while the playlist itself is accepted");
 		}
 	}
 

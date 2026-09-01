@@ -510,11 +510,11 @@ settings_dialog::settings_dialog(player_launcher *players,
 			if (auto *area = qobject_cast<QScrollArea *>(
 			        m_categories->parentWidget()))
 				Q_UNUSED(area)
-			for (QWidget *p = w->parentWidget(); p; p = p->parentWidget())
-				if (auto *sa = qobject_cast<QScrollArea *>(p)) {
-					sa->ensureWidgetVisible(w);
-					break;
-				}
+				for (QWidget *p = w->parentWidget(); p; p = p->parentWidget())
+					if (auto *sa = qobject_cast<QScrollArea *>(p)) {
+						sa->ensureWidgetVisible(w);
+						break;
+					}
 		}
 	});
 	connect(m_results, &QListWidget::itemClicked, m_results,
@@ -731,7 +731,7 @@ QString describe_clear(const web_view_factory::clear_report &r) {
 		case state::not_asked:   return QString();
 		case state::done:        return name + ": cleared" + extra + ".";
 		case state::unconfirmed: return name + ": requested, not confirmed"
-				                               + extra + ".";
+			                                 + extra + ".";
 		case state::refused:     return name + ": not cleared" + extra + ".";
 		}
 		return QString();

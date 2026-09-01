@@ -734,9 +734,9 @@ void qtwebengine_view::show_webauth_state(
 			// before they have made any, which is a sentence that stops people
 			// typing.
 			prompt.remaining_attempts =
-				prompt.error == webauth_dialog::pin_error::none
-				  ? -1
-				  : asked.remainingAttempts;
+			  prompt.error == webauth_dialog::pin_error::none
+			    ? -1
+			    : asked.remainingAttempts;
 			m_webauth_dialog->ask_for_pin(prompt);
 			break;
 		}

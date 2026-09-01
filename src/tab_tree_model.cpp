@@ -259,7 +259,7 @@ QVariant tab_tree_model::data(const QModelIndex &index, int role) const {
 		case Qt::DecorationRole: {
 			QStyle *s = QApplication::style();
 			const QIcon base = s->standardIcon(n->is_folder() ? QStyle::SP_DirIcon
-				                                                 : QStyle::SP_FileIcon);
+			                                                   : QStyle::SP_FileIcon);
 			return n->locked ? with_padlock(base) : base;
 		}
 		case Qt::FontRole: {

@@ -186,7 +186,7 @@ int main(int argc, char *argv[]) {
 			const QModelIndex first = tree->model()->index(0, 0);
 			const QModelIndex kid   = tree->model()->index(0, 0, first);
 			std::printf("opening tab: %s\n",
-					         qPrintable(kid.data().toString()));
+			             qPrintable(kid.data().toString()));
 			emit tree->activated(kid);
 			break;
 		}
@@ -199,7 +199,7 @@ int main(int argc, char *argv[]) {
 		case 5: {
 			QString err;
 			const int id = dm->enqueue(QUrl(http_base + "trailer.mp4"),
-					                        QString(), &err);
+			                            QString(), &err);
 			std::printf("http download queued: id=%d %s\n", id, qPrintable(err));
 			break;
 		}
@@ -241,8 +241,8 @@ int main(int argc, char *argv[]) {
 			grab("Hydra", "15-shell.png");
 			for (const download_job &j : dm->jobs())
 				std::printf("job %d [%s] %s  %lld/%lld  %s\n", j.id,
-					           qPrintable(j.source_id), qPrintable(j.path),
-					           j.received, j.total, qPrintable(j.detail));
+				             qPrintable(j.source_id), qPrintable(j.path),
+				             j.received, j.total, qPrintable(j.detail));
 			break;
 		case 22:
 			std::printf("done\n");

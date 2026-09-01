@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
 		case 2:
 			screen("02-settings-player.png");
 			std::printf("settings open: %s\n",
-				           find_settings() ? "yes" : "NO");
+			             find_settings() ? "yes" : "NO");
 			break;
 		// A tab switch and its screenshot must not share a tick: import runs
 		// as a subprocess and would capture the frame before the repaint.

@@ -172,7 +172,7 @@ int main(int argc, char *argv[]) {
 			const QModelIndex first = tree->model()->index(0, 0);
 			const QModelIndex kid   = tree->model()->index(0, 0, first);
 			std::printf("opening tab: %s\n",
-					         qPrintable(kid.data().toString()));
+			             qPrintable(kid.data().toString()));
 			emit tree->activated(kid);
 			break;
 		}
@@ -185,7 +185,7 @@ int main(int argc, char *argv[]) {
 		case 5: {
 			QString err;
 			const int id = dm->enqueue(QUrl("http://127.0.0.1:8830/trailer.mp4"),
-					                        QString(), &err);
+			                            QString(), &err);
 			std::printf("http download queued: id=%d %s\n", id, qPrintable(err));
 			break;
 		}
@@ -245,8 +245,8 @@ int main(int argc, char *argv[]) {
 			// Press Watch once, while it is genuinely still downloading.
 			if (!watched && tj->received > 1200000 && !tj->complete()) {
 				std::printf("torrent at %lld/%lld — Watch enabled: %s\n",
-						         tj->received, tj->total,
-						         watch && watch->isEnabled() ? "yes" : "NO");
+				             tj->received, tj->total,
+				             watch && watch->isEnabled() ? "yes" : "NO");
 				grab("Downloads", "21-before-watch.png");
 				if (watch && watch->isEnabled()) {
 					watch->click();
@@ -261,11 +261,11 @@ int main(int argc, char *argv[]) {
 				p2.waitForFinished(3000);
 				const QString out = QString::fromUtf8(p2.readAllStandardOutput()).trimmed();
 				std::printf("player process: %s\n",
-						         out.isEmpty() ? "NONE" : qPrintable(out.left(140)));
+				             out.isEmpty() ? "NONE" : qPrintable(out.left(140)));
 				for (const download_job &j : dm->jobs())
 					std::printf("job %d [%s] %lld/%lld %s\n", j.id,
-							         qPrintable(j.source_id), j.received, j.total,
-							         qPrintable(j.detail));
+					             qPrintable(j.source_id), j.received, j.total,
+					             qPrintable(j.detail));
 			} else if (watched && after > 40) {
 				std::printf("done\n");
 				qApp->quit();
