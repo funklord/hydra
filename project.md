@@ -13132,6 +13132,24 @@ dump shows whichever surface is on top, and a Qt dialog over a native WebView is
 not something it reports.** It is an excellent instrument for driving the shell
 and a useless one for deciding whether a dialog is visible.
 
+### It is Hydra's dialog, not Android's, and that was looked at and kept
+
+The first remark on seeing it was that it is not an Android system prompt. It is
+not, and cannot be. There are two gates and they answer different questions: the
+OS asks once whether *this application* may use the camera -- already granted on
+that handset, which is why it did not appear -- and Hydra asks per *site*, which
+is a question Android's permission says nothing about. Every browser does this
+with its own UI for the same reason.
+
+**What was genuinely open is whether it should look native, and the answer is
+no.** Put to the copyright holder with three options -- leave it, restyle the Qt
+dialog to look Material on Android, or drive a real Java `AlertDialog` through
+JNI -- and it was left as it is. So a later session finding a desktop-looking
+dialog on a phone should know it has been seen and kept: it matches every other
+Hydra dialog there (authentication, certificates, downloads), it is already sized
+to the screen by `android_dialogs`, it refuses on dismissal and it defaults to
+Block. Reopening it needs a new reason, not a fresh opinion about how it looks.
+
 ### What that settles, and what it does not
 
 Settled: a permission prompt raised over a live page appears, is answerable, and
