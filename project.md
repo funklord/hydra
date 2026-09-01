@@ -12818,12 +12818,34 @@ refusal, which is the direction that costs a repeated tap rather than a camera.
 It is worth revisiting if it turns out to annoy anybody in practice, and it is
 the kind of thing only use will settle.
 
-**What genuinely still needs the handset is one question, not three.** The dialog
-is a Qt widget and the page under it is a native `WebView` in its own surface;
-whether a widget dialog composites above that is unknown, and guessing has been
-wrong here before. Until it is seen, camera and microphone on Android are *worse*
-than they were -- they used to refuse instantly, and now they wait for a dialog
-that may be behind the page.
+**And the compositing question is already answered -- by this project, some time
+ago.** The paragraph that stood here said it was the one thing still unknown and
+that camera and microphone on Android were therefore *worse* than they had been.
+That was wrong, and wrong in the direction of having reasoned about the platform
+instead of reading the file.
+
+`android_view`'s event filter says it outright: *"Any dialog at all, modal or not:
+while one is up the native view has to be out of the way, because it is drawn over
+everything Qt renders."* The hazard was found on a phone -- tapping "Media (1)"
+and watching nothing happen, because the button depressed behind a WebView
+composited above Qt's surface -- and the fix counts visible top-level `QDialog`s
+and hides the native view while any is up. `permission_dialog` is a `QDialog`, so
+it was covered the moment it existed, exactly as `android_dialogs` covers its
+size.
+
+Worth noting *why* that fix is generic, because it is the reason this one is free:
+the first attempt used `QEvent::WindowBlocked`, which only a **modal** dialog
+sends, and the downloads dialog is shown rather than exec'd -- so the page drew
+through the middle of it. Counting dialogs needs no assumption about modality, and
+so needs no update per dialog.
+
+**What is left for the handset is confirmation, not investigation.** Both
+mechanisms that would have to work are generic, both are documented as generic,
+and both were written against a defect found on the device. That is a good reason
+to expect it to work and not a substitute for having seen it. The specific thing
+to look for is a permission prompt raised over a live page rather than during a
+load -- `auth_dialog` was observed on the phone, but HTTP authentication happens
+before a page paints, so it does not exercise the same moment.
 
 
 ## What is next (in order)
@@ -12837,14 +12859,15 @@ carried along as amendments to a list item.
    and both answers reach the engine — 19 of 19 in `try_permissions`, offscreen.
    Three things are left, in this order.
 
-   **Put the prompt in front of the handset.** The dialog is a Qt widget; the
-   page under it is a native `WebView` in its own surface. Whether a widget
-   dialog composites above that is unknown, and guessing has been wrong here
-   before. Until it is seen, camera and microphone on Android are *worse* than
-   they were: they used to refuse instantly and now they wait for a dialog that
-   may be behind the page. Note the handset is the copyright holder's daily
-   phone — no screenshots; read the one bit from `dumpsys` or logcat, and put
-   back every app-op and grant that gets changed.
+   **Put the prompt in front of the handset — to confirm, not to investigate.**
+   Both mechanisms it depends on are generic and already written: `android_dialogs`
+   sizes any `QDialog` to the screen, and `android_view`'s filter hides the native
+   `WebView` while any dialog is visible, because the WebView is composited above
+   everything Qt renders. Neither needed a line for this prompt. What has not been
+   seen is a prompt raised over a *live page* rather than during a load, which is
+   the one moment `auth_dialog` never exercised. Note the handset is the copyright
+   holder's daily phone — no screenshots; read the one bit from `dumpsys` or
+   logcat, and put back every app-op and grant that gets changed.
 
    **Then a notification presenter, or notifications stay blocked for ever.**
    Nothing in this tree installs one, so a granted notification permission
