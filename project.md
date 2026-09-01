@@ -12061,6 +12061,58 @@ doing nothing.
 Counts: `test_settings` 133, `test_model` 228, `test_seam` 75, `test_extractor`
 152 — each up by the assertions that pin the population. 33 suites, 0 failures.
 
+### The third member, searched for rather than stumbled on
+
+The previous entry named three ways a check reports success by doing nothing
+and had systematically searched for two of them. Naming a family and searching
+two thirds of it is the shape this session keeps finding in other people's
+work, so: `check(` lexically inside a `for` or `while` body, across every
+offline suite. **Twenty loops.**
+
+**Seventeen are sound and it is worth saying why**, because the result is
+mostly a compliment to the code rather than a list of faults. Most iterate a
+literal array written two lines above — `pages`, `rows`, `fetched`,
+`assembled`, a `QStringList{...}` — or a fixed count, and cannot be empty.
+`test_settings`'s native-player loop already prints *"(no native-stream player
+installed to check)"* when it finds none. `test_model`'s second loop asserts
+`check(loose != nullptr, "there is a tab outside that folder to move")` before
+using what it found. Two more belong to suites that need a corpus or a network
+and never run here at all.
+
+**One was real, and it is the largest silent block found this session.**
+
+    node *mine = nullptr;
+    for (node *c : m.root()->children)
+        if (c->mirror.isEmpty() && c->is_folder()) { mine = c; break; }
+    if (mine && keeper) {
+        ... eight checks ...
+    }
+
+Eight assertions — that a mirrored tab can be dragged into the tree, that it
+stops being the other browser's, that its id is re-minted out of the mirror's
+namespace so it cannot collide, that its history survives — all conditional on
+a search that nothing verified. A loop that finds nothing leaves `mine` null,
+the block is skipped whole, and the section reports *nothing at all*: not a
+failure, not a skip, not even a green line to be suspicious of.
+
+`keeper` was already safe, and by the right mechanism: the assertion two lines
+up pins the mirror to exactly one child, so `first()` has something to return.
+That is the difference between the two — one was proven in passing by a check
+written for another purpose, and the other was not proven at all.
+
+**And the file already knew.** Ten lines further down, the same section does it
+correctly. So this was never a missing idea, only a missing line — which is
+also why it survived: nothing about the code looks wrong, and the failure it
+guards against produces no output to notice.
+
+`test_model` 229, up from 228. 33 suites, 0 failures.
+
+**The family is now closed**: flag set in a loop and checked after; negative
+assertion over a haystack that may be empty; check inside a loop that may not
+run. Searched mechanically, 55 sites triaged, 8 real, all fixed. What the
+search cost was worth paying once — the shapes are simple enough to grep for,
+and none of the eight would have been found by reading, because every one of
+them looks correct.
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

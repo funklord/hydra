@@ -824,6 +824,17 @@ int main(int argc, char **argv) {
 		node *mine = nullptr;
 		for (node *c : m.root()->children)
 			if (c->mirror.isEmpty() && c->is_folder()) { mine = c; break; }
+		// **Eight assertions hang on this and nothing said so.** `mine` comes
+		// from a loop, and a loop that finds nothing leaves it null -- at which
+		// point the block below is skipped whole and the section reports
+		// nothing at all, not even a green line to be suspicious of. `keeper`
+		// is already safe: the assertion above pins the mirror to exactly one
+		// child, so `first()` has something to return.
+		//
+		// The same file does this correctly ten lines further down, with
+		// `check(loose != nullptr, ...)` before the block that needs it.
+		check(mine != nullptr,
+		      "there is a folder of the user's own to drag the mirrored tab into");
 		if (mine && keeper) {
 			keeper->history.entries
 			  << history_entry{ "https://elsewhere.test/old", "Where it had been" };
