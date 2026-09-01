@@ -507,14 +507,23 @@ settings_dialog::settings_dialog(player_launcher *players,
 		// asked.
 		if (auto *w = it->data(Qt::UserRole + 1).value<QWidget *>()) {
 			w->setFocus(Qt::OtherFocusReason);
-			if (auto *area = qobject_cast<QScrollArea *>(
-			        m_categories->parentWidget()))
-				Q_UNUSED(area)
-				for (QWidget *p = w->parentWidget(); p; p = p->parentWidget())
-					if (auto *sa = qobject_cast<QScrollArea *>(p)) {
-						sa->ensureWidgetVisible(w);
-						break;
-					}
+			// **The scroll area is found by walking up from the widget**, not
+			// by casting the category list's parent -- which is a different
+			// widget and was never what needed scrolling.
+			//
+			// That cast used to sit above this loop as an `if` whose only
+			// guarded statement was `Q_UNUSED` on its own result, so the loop
+			// ran either way and the condition decided nothing. Harmless, and
+			// invisible until an indentation pass lined the loop up under it
+			// and the compiler pointed out that the shape was a lie
+			// (-Wmisleading-indentation). Removed rather than re-indented:
+			// re-indenting would have preserved a condition that has no effect
+			// and no meaning.
+			for (QWidget *p = w->parentWidget(); p; p = p->parentWidget())
+				if (auto *sa = qobject_cast<QScrollArea *>(p)) {
+					sa->ensureWidgetVisible(w);
+					break;
+				}
 		}
 	});
 	connect(m_results, &QListWidget::itemClicked, m_results,
