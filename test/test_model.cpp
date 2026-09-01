@@ -1224,6 +1224,11 @@ int main(int argc, char **argv) {
 		f.open(QIODevice::ReadOnly);
 		const QString text = QString::fromUtf8(f.readAll());
 		f.close();
+		// A file that would not open reads as empty, and an empty string
+		// contains no "locked=0" either. Say the outline is there first.
+		check(!text.isEmpty(),
+		      QString("the saved outline is there to search (%1 bytes)")
+		          .arg(text.size()));
 		check(!text.contains("locked=0"),
 		      "with no marker on the nodes that are not locked");
 

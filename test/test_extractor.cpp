@@ -781,6 +781,11 @@ int main(int argc, char **argv) {
 
 		int kept = 0;
 		const QString shown = extractor_dialog::summarise(long_ev, &kept);
+		// An empty payload contains no long address either, so say there is a
+		// payload before saying what is not in it.
+		check(!shown.isEmpty(),
+		      QString("there is a payload to search (%1 chars, %2 kept)")
+		          .arg(shown.size()).arg(kept));
 		check(!shown.contains(big), "the full address never reaches the payload");
 
 		// A model returning precisely what it was shown is judged an inventor.
@@ -929,6 +934,9 @@ int main(int argc, char **argv) {
 	{
 		int kept = 0;
 		const QString with = extractor_dialog::summarise(ev, &kept);
+		check(!with.isEmpty(),
+		      QString("there is a payload to search (%1 chars, %2 kept)")
+		          .arg(with.size()).arg(kept));
 		check(!with.contains("application/vnd.apple.mpegurl"),
 		      "the served type is no longer printed in the rows at all");
 		// **The url is last and nothing follows it.** This is the whole point of
@@ -936,14 +944,22 @@ int main(int argc, char **argv) {
 		// five wrote `url.includes('->')` and matched nothing, and the two that
 		// worked did so through an extension fallback that only works on a site
 		// which does not disguise its manifest.
+		// **A check inside a loop that may not run asserts nothing at all**, and
+		// says so no more loudly than a section that passed. `examined` is what
+		// makes the difference visible: without it, a payload with no
+		// four-column row leaves this section silent and green.
+		bool examined = false;
 		for (const QString &row : with.split('\n')) {
 			const QStringList cols = row.split(" | ");
 			if (cols.size() < 4)
 				continue;
+			examined = true;
 			check(cols.last().startsWith("http"),
 			      "every evidence row ends with its url and nothing after it");
 			break;
 		}
+		check(examined,
+		      "and there was a four-column row to examine in the first place");
 		check(!with.contains("->"),
 		      "and no arrow anywhere, so a url cannot be tested for one");
 		// The comparison that used to sit here -- summarise() with and without a

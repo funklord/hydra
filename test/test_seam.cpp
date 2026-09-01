@@ -418,6 +418,11 @@ static void test_resume_against_a_server_that_ignores_range(const QString &tmp) 
 	QFile check_file(tmp + "/clip.mp4");
 	check_file.open(QIODevice::ReadOnly);
 	const QByteArray head = check_file.read(16);
+	// Sixteen bytes or the question was not asked: a read that returned
+	// nothing contains no stale 'x' either, and would report the file correct
+	// precisely when it could not be examined.
+	check(head.size() == 16,
+	      QString("there are bytes to inspect (%1)").arg(head.size()));
 	check(!head.contains('x'),
 	      "and it is the server's bytes from the first one, not the stale ones");
 }

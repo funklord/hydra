@@ -12003,6 +12003,64 @@ this, because a loop that never runs cannot make them pass.
 132 assertions in `test_settings`, up from 131: the leak check gained its
 precondition and the fallback check kept its meaning.
 
+### Running the lens as a search, and the one it caught next door
+
+The previous pass fixed two checks that could not fail and wrote down the
+generalisation: *a negative assertion is satisfied by an absent population and
+by a correct one alike, and the two are indistinguishable from the result
+line.* Written down, that is a search rather than an observation.
+
+Run over the suites, `check(!<haystack>.contains(...))` matches 24 sites.
+Fifteen have a companion assertion on the same haystack a few lines away, which
+proves the population exists; nine do not. Of those nine, four are the regex
+being coarse — `test_autofill` asserts `create.value(...)` three times before
+asking what `create` does *not* contain, and `test_theme`'s `useless` list is
+expected to be empty and prints "none" when it is.
+
+Five were real, and they share a shape worth naming: **read something, then
+assert what is not in it.** An unopened file, a failed call and a correct
+result are one and the same to `contains`.
+
+- `test_settings` — the audit that a stored secret never reaches the settings
+  file on disk. `f.open()` was unchecked, so a file that would not open read as
+  empty and the audit passed. **This is two lines below the leak check the
+  previous pass fixed**, which is the part worth admitting: the shape was
+  named, the instance beside it was not looked at, and the fix stopped one line
+  short of the more important half. A secret-leak audit is the last assertion
+  that should be allowed to pass by default.
+- `test_model` — the outline round trip, asserting no `locked=0` marker is
+  written. An empty read contains no marker either.
+- `test_seam` — the resumed download, asserting the first sixteen bytes are the
+  server's rather than the stale ones. A read that returned nothing contains no
+  stale byte, and would report the file correct precisely when it could not be
+  examined.
+- `test_extractor`, twice — the evidence payload, asserting a long address and a
+  served content type never reach it. An empty payload contains neither.
+
+Each gained one assertion that the thing being searched exists, with its size
+in the message so the log says what was searched rather than that something was.
+
+**And a variant the first search did not look for.** In the same section:
+
+    for (const QString &row : with.split('\n')) {
+        if (cols.size() < 4) continue;
+        check(cols.last().startsWith("http"), ...);
+        break;
+    }
+
+A `check` inside a loop that may not run asserts nothing at all, and reports it
+no more loudly than a section that passed — there is not even a green line to
+be suspicious of. A payload with no four-column row leaves the section silent.
+`examined` is now set in the loop and asserted after it.
+
+So the family has three members, and only the first is obvious: a flag set in a
+loop and checked after, a negative assertion over a haystack that may be empty,
+and a check inside a loop that may not execute. All three report success by
+doing nothing.
+
+Counts: `test_settings` 133, `test_model` 228, `test_seam` 75, `test_extractor`
+152 — each up by the assertions that pin the population. 33 suites, 0 failures.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

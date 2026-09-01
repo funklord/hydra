@@ -253,8 +253,17 @@ int main(int argc, char **argv) {
 
 		// And not anywhere in the file, under any key spelling.
 		QFile f(probe.fileName());
-		f.open(QIODevice::ReadOnly);
+		const bool opened = f.open(QIODevice::ReadOnly);
 		const QByteArray raw = f.readAll();
+		// **The same trap as the loop above, two lines below it, and missed on
+		// the pass that fixed that one.** An unopened file reads as empty, and
+		// an empty haystack satisfies "does not contain" exactly as readily as
+		// a clean one. This is the audit that a secret never reached the disk,
+		// so it is the last assertion in the file that should be allowed to
+		// pass by default.
+		check(opened && !raw.isEmpty(),
+		      QString("the settings file is there to search (%1 bytes)")
+		          .arg(raw.size()));
 		check(!raw.contains(secret.toUtf8()),
 		      QString("nor present anywhere in %1").arg(probe.fileName()));
 
