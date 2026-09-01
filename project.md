@@ -3946,7 +3946,7 @@ looking would have.
 
 ## The loop on a third site: 2 of 5, and for the wrong reason
 
-The measurement item 1 existed for. Everything before it was dramafren, where
+The measurement the extractor-loop item existed for. Everything before it was dramafren, where
 both winning runs matched `/cf-master.` — that site's own fragment — so "the loop
 finds the stream" meant "the loop finds this stream". A fresh capture of kisskh
 (89 requests, episode 24 of drama 10826) and five runs of `qwen2.5-coder:14b`
@@ -12257,7 +12257,8 @@ different reasons, and the second is general:
   `...cf-master.1774687168.txt?k=UCpS63&kx=17` — so an end-anchored extension
   fallback fails on precisely the urls it exists to catch.
 
-That second point bears directly on item 1, which records that kisskh scored
+That second point bears directly on the extractor-loop item, which records
+that kisskh scored
 2 of 5 "purely on an `.m3u8` fallback". If the fallback the model writes is
 end-anchored, it works only where the url has no query string, and its
 successes are a property of the site rather than of the loop.
@@ -12269,7 +12270,8 @@ was still rejected. So "both clauses present" and "accepted" are not the same
 property, and a change that only increases the first would move a number that
 is not the one being measured.
 
-Not attempted here: the real-capture runs item 1 is actually about. They need
+Not attempted here: the real-capture runs the extractor-loop item is actually
+about. They need
 `evidence/`, which is not in this checkout, and a site visit.
 
 ### Two more writers with the fault the atomicity pass was for
@@ -12795,7 +12797,39 @@ Rewritten after a session that closed most of what used to be on it. What is
 listed here is open; what closed is recorded in the sections above rather than
 carried along as amendments to a list item.
 
-1. **The loop works on a disguised manifest; make it work on a noisy capture.**
+1. **Finish the permissions work: it is proved on the desktop and unproved on
+   the phone.** `ask` exists, the decider is asynchronous, the prompt appears
+   and both answers reach the engine — 19 of 19 in `try_permissions`, offscreen.
+   Three things are left, in this order.
+
+   **Put the prompt in front of the handset.** The dialog is a Qt widget; the
+   page under it is a native `WebView` in its own surface. Whether a widget
+   dialog composites above that is unknown, and guessing has been wrong here
+   before. Until it is seen, camera and microphone on Android are *worse* than
+   they were: they used to refuse instantly and now they wait for a dialog that
+   may be behind the page. Note the handset is the copyright holder's daily
+   phone — no screenshots; read the one bit from `dumpsys` or logcat, and put
+   back every app-op and grant that gets changed.
+
+   **Then a notification presenter, or notifications stay blocked for ever.**
+   Nothing in this tree installs one, so a granted notification permission
+   resolves the page's promise and silently drops every notification. That is
+   why the default did not move with the others, and it is a real gap rather
+   than a deliberate refusal.
+
+   **Then screen sharing, which is still refused on both platforms.**
+   `DesktopVideoCapture` falls to the deny branch, there is no `screen_share`
+   feature in the policy model and no source picker, so a Teams or Meet call
+   can be joined and nothing can be presented. It needs a feature, a picker
+   naming what is about to be shared, and the same `ask` treatment as the rest.
+
+   Clipboard reading is deliberately not on this list. It stays blocked because
+   the engine gates it behind `JavascriptCanAccessClipboard` and
+   `JavascriptCanPaste`, which this project leaves off; the default moves if and
+   when those do, and not before.
+
+
+2. **The loop works on a disguised manifest; make it work on a noisy capture.**
    Three runs in five on dramafren now return `url.includes('cf-master')` — a
    stable fragment, no tokens, the master manifest on a site with no `.m3u8`
    anywhere. That is the case the whole content-type tier exists for and the
@@ -12866,19 +12900,19 @@ carried along as amendments to a list item.
    stream to be found. The line that used to sit here saying otherwise was
    stale.
 
-2. **Nothing has needed the helper tier's DOM half, and two captures is two.**
+3. **Nothing has needed the helper tier's DOM half, and two captures is two.**
    The decision is made and recorded -- the permission is gone and the design
    stays, in arch §11.5.1 and in the section above. What keeps this on the list
    is that "nothing has needed it" rests on two measured sites, both of which
    had the stream in the request log. A third site that computes its address in
    page JS would reopen it, and there is no way to know without meeting one.
 
-3. **An indicator for the AI batch jobs.** Recorded, not designed — see
+4. **An indicator for the AI batch jobs.** Recorded, not designed — see
    *Wanted: an indicator for the AI batch jobs* above for the requirement and
    the four questions that have to be answered before any of it is built. It
    comes after the browser is a browser, on the holder's instruction.
 
-4. **Android's remaining gap is the platform's autofill, and only the runtime
+5. **Android's remaining gap is the platform's autofill, and only the runtime
    half is now unverified.** The four code-level preconditions are checked and
    met — see *Two searches that found the code correct* above — and the test
    handset has an autofill service configured, so the emulator's excuse is
@@ -12897,7 +12931,7 @@ carried along as amendments to a list item.
    the browser's side of the arrangement is verified. Only the fill itself is
    open.
 
-5. **What is left untested now needs a network or a device.** The sweep through
+6. **What is left untested now needs a network or a device.** The sweep through
    never-tested files is finished — see the sections above; four of nine were
    wrong. The line that used to sit here said the remaining dialogs were covered
    only incidentally and that a unit test for one would be testing Qt. That is
@@ -12910,7 +12944,7 @@ carried along as amendments to a list item.
    thin adapters around it, which need a page rather than a fixture, and are
    driven through the shell by the live drivers instead.
 
-6. **Whether a `file:` url should open as a page is still open, and is the
+7. **Whether a `file:` url should open as a page is still open, and is the
    copyright holder's.** The littering half is fixed — see *The url no longer
    becomes a directory* above — so what remains is only the question the fix
    deliberately did not answer: `main.cpp` classifies `file:` as a tree path,
@@ -12921,7 +12955,7 @@ carried along as amendments to a list item.
    instead. The distinction that would preserve the recorded intent exactly is
    the scheme rather than the path: `./tree.txt` has none, `file:` always did.
 
-7. **CI skips one check for want of an icon theme.** `test_theme`'s
+8. **CI skips one check for want of an icon theme.** `test_theme`'s
    system-icon-directory assertion has nothing to look at in the
    `debian:trixie` container and says so rather than failing. Installing
    `hicolor-icon-theme` would make it run; that is one word in a dependency
@@ -12929,7 +12963,7 @@ carried along as amendments to a list item.
    theme is a test dependency rather than a build one. Left for whoever owns
    that list.
 
-8. **A node's url means two things at once, and rows can be internally
+9. **A node's url means two things at once, and rows can be internally
    inconsistent.** See *One field with two meanings* above: the title follows
    the page and the url does not, so a row can carry a title from one page and
    a url from another — measured. The obvious repair breaks the tab lock,
@@ -12938,7 +12972,7 @@ carried along as amendments to a list item.
    costs are in that section. The pin is now asserted in `test_model`, so the
    repair fails loudly rather than quietly.
 
-9. **KeePassXC support is broken and needs the account that has a working
+10. **KeePassXC support is broken and needs the account that has a working
    set up.** See *KeePassXC: the socket path, settled before the session that
    can test it* above. The socket path is fixed and ruled out for an ordinary
    desktop; what is untested is everything after it — framing, key exchange,
