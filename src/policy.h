@@ -72,6 +72,15 @@ enum class feature : int {
 	// screen or window, so a permission without a picker beside it would still
 	// have delivered nothing.
 	screen_share,
+	// **"Always ask as a desktop for this site."** The View menu already has a
+	// per-tab toggle, and that is the right shape for a one-off; this is the
+	// standing version, for a site that will never serve a phone. Teams is the
+	// measured case -- it redirects a mobile user agent server-side, every
+	// visit -- and re-ticking a menu item on every visit is not an answer.
+	//
+	// Off by default, because it is a deliberate lie about the machine rather
+	// than a correction, and one nobody should be telling on their behalf.
+	desktop_site,
 	// **The per-site switch the architecture doc puts here in as many words**
 	// -- "a per-site 'auto-detect media' toggle lives in the PolicyEngine"
 	// (sec 11) -- and which nothing had. The detector rides the same request

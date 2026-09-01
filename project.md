@@ -13614,6 +13614,50 @@ different reason above. Two lessons kept rather than one: a dump that returns
 fewer nodes than the last one is suspect before the code is, and a hand test from
 somebody looking at the screen outranks any of this.
 
+## The standing answer: request desktop site as a site rule
+
+The View menu's toggle is per tab and forgotten, which is right for a one-off
+and wrong for a site that will *never* serve a phone. Teams is that site --
+it redirects a mobile user agent server-side, on every visit -- and re-ticking a
+menu item each time is not an answer. Asked for, and added.
+
+`desktop_site` is the twentieth policy feature. Off by default, because it is a
+deliberate lie about the machine rather than a correction, and not one to tell on
+somebody's behalf. It sits in the shield's **Content** group rather than with the
+capabilities: it changes what the site is *told* about the browser, which decides
+what it serves, and that is a content question rather than a permission.
+
+### Applied on arrival, and why it costs a round trip
+
+It is not part of `view_settings`. That struct carries things the engine can be
+told at any moment; this one changes the user agent, which is read when a page is
+*fetched*, so it can only take effect on a load.
+
+So `apply_policy` sets it when a view arrives somewhere, and the first visit to
+such a site loads as a phone, is noticed, and reloads. One extra round trip, then
+the page that was wanted. That is the honest cost of a switch that has to be
+decided before the request it affects, and the alternative -- deciding during
+`allowNavigation` -- cannot work: the UI thread is blocked inside that call
+waiting on the Qt thread, so anything posted from there runs *after* the load has
+already started.
+
+**The reload does not loop**, because `set_desktop_site` returns early when the
+value has not changed: after the second load the view already agrees with the
+policy. The View menu's toggle writes the same state through the same path, so a
+site rule and a one-off cannot disagree about what a view is currently doing.
+
+### The guard earned itself again
+
+`site_policy_dialog` asserts its hand-written layout covers every policy feature
+exactly once, and `try_phone` refuses to run when it does not. That is the second
+feature in a day whose omission from that panel cost a minute instead of a
+release. `settings_dialog` still has no such guard and still needs its row added
+by hand, which is recorded above and remains true.
+
+Six checks in `test_settings`, `try_phone` at 101, both gates clean. Built and
+signed; not yet installed, because the handset went off adb again before it could
+be.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

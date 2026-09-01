@@ -69,6 +69,9 @@ const shield_row k_shield_layout[] = {
 	{ policy::feature::images,              "Content" },
 	{ policy::feature::autoplay,            "Content" },
 	{ policy::feature::media_detect,        "Content" },
+	// With Content rather than with the capabilities: it changes what the site
+	// is told about the browser, which decides what it serves.
+	{ policy::feature::desktop_site,        "Content" },
 
 	{ policy::feature::camera,              "Camera, microphone and screen" },
 	{ policy::feature::microphone,          "Camera, microphone and screen" },

@@ -98,6 +98,9 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	// people's messages, a password manager left open. Answering it in advance
 	// for every site is not something anybody can sensibly do.
 	set_global_default(feature::screen_share,        setting::ask);
+	// Blocked, meaning "ask as a phone", which is what this browser honestly is.
+	// A site that needs otherwise is a per-site decision somebody makes.
+	set_global_default(feature::desktop_site,        setting::block);
 	// **Notifications are blocked here and raised by whoever can deliver them.**
 	//
 	// Chromium treats a missing notification presenter as success: the page's

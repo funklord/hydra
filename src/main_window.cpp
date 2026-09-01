@@ -4199,6 +4199,25 @@ void main_window::apply_policy(web_view_backend *view, const QString &host) {
 	// right.
 	s.scrollbars = !(m_kiosk && m_kiosk->active());
 	view->apply_settings(s);
+
+	// **"Always ask as a desktop for this site", applied on arrival.**
+	//
+	// Not part of `view_settings`, because it is not a setting the engine
+	// carries: it changes the user agent, which is read when a page is fetched,
+	// so it can only take effect on a load. Setting it here means the first
+	// visit to such a site loads as a phone, the backend notices the mismatch
+	// and reloads -- costing one extra round trip and then landing on the page
+	// that was wanted. That is the honest cost of a switch that has to be
+	// decided before the request it affects.
+	//
+	// It is a no-op unless the value actually changes, which is what stops the
+	// reload from looping: after the second load the view already agrees with
+	// the policy and nothing further happens. The per-tab toggle in the View
+	// menu writes the same state, so a site rule and a one-off use the same
+	// path and cannot disagree about what the view is currently doing.
+	const bool want_desktop = m_policy->is_allowed(F::desktop_site, host);
+	if (view->desktop_site() != want_desktop)
+		view->set_desktop_site(want_desktop);
 }
 
 void main_window::open_site_controls() {

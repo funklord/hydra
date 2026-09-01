@@ -526,6 +526,9 @@ int main(int argc, char **argv) {
 		      "no feature defaults to ask without a prompt that can answer it");
 		check(askable == 7,
 		      "seven features can be asked about; the rest are decided in advance");
+		check(!policy::can_ask(policy::feature::desktop_site),
+		      "requesting a desktop site is not one of them — it is answered in "
+		      "advance for a site, not asked about when a page loads");
 		check(QString::fromLatin1(policy::ask_phrase(policy::feature::camera)) ==
 		        "use your camera",
 		      "and the prompt says what happens, not which switch it is");
@@ -567,6 +570,31 @@ int main(int argc, char **argv) {
 		                           policy::feature::screen_share) ==
 		        policy::setting::ask,
 		      "and reads back from one");
+	}
+
+	// The twentieth feature, and the second one added since the shield's layout
+	// grew a guard. That guard is why this one cost a minute rather than a
+	// release: `try_phone` refuses to run when the panel does not cover every
+	// feature exactly once.
+	section("request desktop site is a per-site rule");
+	{
+		policy_engine e;
+		check(policy::feature_from_name("desktopSite") == policy::feature::desktop_site,
+		      "it round-trips through the machine name that files store");
+		check(e.global_default(policy::feature::desktop_site) == policy::setting::block,
+		      "off by default — it is a deliberate lie about the machine, not a "
+		      "correction, and not one to tell on somebody's behalf");
+		e.set_setting("teams.microsoft.com", policy::feature::desktop_site,
+		               policy::setting::allow);
+		check(e.is_allowed(policy::feature::desktop_site, "teams.microsoft.com"),
+		      "a site that refuses phones can be given the standing answer");
+		check(!e.is_allowed(policy::feature::desktop_site, "example.com"),
+		      "without telling every other site the same thing");
+
+		const quint64 bits = policy::with_setting(0, policy::feature::desktop_site,
+		                                            policy::setting::allow);
+		check(policy::settings_to_line(bits).contains("desktopSite:allow"),
+		      "and it writes to a rule line, so the answer survives a restart");
 	}
 
 	// `ask` has to survive the file. It very nearly did not: the engine kept a

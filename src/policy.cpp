@@ -97,6 +97,13 @@ const info k_info[] = {
 		"a separate question, asked every time, and it is the answer to that one "
 		"the page actually receives.",
 		"share your screen or a window" },
+	{ "desktopSite", "Request desktop site",
+		"Tell this site the browser is a desktop one. Some sites refuse a phone "
+		"outright whatever it is running -- Teams sends a mobile browser to a "
+		"\"not supported\" page before it serves anything -- and this is the "
+		"only thing that opens them. The View menu has the same switch for one "
+		"tab; this is the standing answer for a site.",
+		nullptr },
 	{ "autoDetectMedia", "Auto-detect media",
 		"Whether to watch this site's requests for video and audio worth "
 		"saving. Turning it off empties the media badge here; it does not "

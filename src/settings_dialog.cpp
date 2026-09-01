@@ -315,6 +315,7 @@ const feature_group k_privacy_layout[] = {
 	{ policy::feature::images,              "Content" },
 	{ policy::feature::autoplay,            "Content" },
 	{ policy::feature::popups,              "Content" },
+	{ policy::feature::desktop_site,        "Content" },
 	{ policy::feature::ads,                 "Content" },
 	{ policy::feature::cookies,             "Cookies and site data" },
 	{ policy::feature::third_party_cookies, "Cookies and site data" },
