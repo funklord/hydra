@@ -27,6 +27,7 @@
 #include "annoyance_log.h"
 #include "annoyed_dialog.h"
 #include "auth_dialog.h"
+#include "permission_dialog.h"
 #include "extractor_dialog.h"
 #include "extractor_signals.h"
 #include "filter_dialog.h"
@@ -404,6 +405,31 @@ int main(int argc, char *argv[]) {
 		proxy.show();
 		QApplication::processEvents();
 		measure(&proxy, "auth-proxy");
+	}
+	// The permission prompt, which is the newest thing here and the one most
+	// likely to be met on a phone: a video call asking for a camera is a mobile
+	// situation before it is a desktop one.
+	//
+	// Two of them, because the two shapes differ. The camera carries a second
+	// sentence about the capability and the site is encrypted; the microphone on
+	// a plain connection carries the not-encrypted warning instead. Between them
+	// they cover every optional paragraph the dialog can grow, which is what the
+	// height checks below actually test -- a dialog handed the whole screen puts
+	// the spare height into whatever will take it, and a word-wrapped label
+	// will.
+	{
+		permission_dialog cam("meet.example", policy::feature::camera, true,
+		                       &f.window);
+		cam.show();
+		QApplication::processEvents();
+		measure(&cam, "permission-camera");
+	}
+	{
+		permission_dialog mic("call.example", policy::feature::microphone, false,
+		                       &f.window);
+		mic.show();
+		QApplication::processEvents();
+		measure(&mic, "permission-microphone");
 	}
 	{
 		// Two offers rather than one: the list is the part that has to fit, and

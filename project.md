@@ -12784,11 +12784,46 @@ grep looking only for `error:` found nothing and printed "compile done". A gate
 over an output that cannot contain what it is looking for passes exactly as
 loudly as a real one.
 
-**Still not verified: that any of this has been seen on Android.** The desktop
-prompt is now proven; the handset is not. The risk worth naming rather than
-assuming away is that the dialog is a Qt widget and the page underneath it is a
-native `WebView` in its own surface, and whether a widget dialog composites above
-that is exactly the kind of thing this project has been wrong about before.
+### The phone half, as far as it can be taken without the phone
+
+The handset was not plugged in -- `lsusb` shows no device and adb has none -- so
+the device check could not be run at all. Two thirds of the Android question turn
+out not to need it.
+
+**Sizing needs no change, and that is a property of `android_dialogs` rather
+than luck.** It is an application-wide event filter on `QDialog`, not a list of
+dialogs, so the prompt was adapted the moment it existed. The rule it applies --
+a dialog fills the available screen, minimum size cleared -- is what stops a
+desktop layout putting its buttons off the right edge.
+
+**And it is measured at phone geometry, with pictures.** `try_phone` grew two
+cases, camera and microphone, chosen because between them they cover every
+optional paragraph the dialog can grow: the camera carries the capability
+sentence on an encrypted origin, the microphone carries the not-encrypted warning
+instead. 88 of 88 at 360x640 -- both shrink to the width (floors 281 and 270),
+open with something focused, Tab reaches all three controls, no button is off
+screen, no label is cut, and no paragraph is absorbing spare height. That last
+one is the check that exists because the proxy prompt once came up with an inch
+of nothing between every line, and it was found by looking at the picture rather
+than by any assertion.
+
+Looked at here too, for the same reason. Both read correctly and wrap correctly.
+The spare height goes between the checkbox and the buttons, which puts them at
+the bottom edge where a thumb is -- the same `addStretch(1)` `auth_dialog` needed.
+
+**One thing the picture shows that no check asserts: Allow sits left of Block.**
+That falls out of the button roles, and it is the reverse of what a browser
+usually does. Left as it is, deliberately: the position a mis-tap lands on is the
+refusal, which is the direction that costs a repeated tap rather than a camera.
+It is worth revisiting if it turns out to annoy anybody in practice, and it is
+the kind of thing only use will settle.
+
+**What genuinely still needs the handset is one question, not three.** The dialog
+is a Qt widget and the page under it is a native `WebView` in its own surface;
+whether a widget dialog composites above that is unknown, and guessing has been
+wrong here before. Until it is seen, camera and microphone on Android are *worse*
+than they were -- they used to refuse instantly, and now they wait for a dialog
+that may be behind the page.
 
 
 ## What is next (in order)
