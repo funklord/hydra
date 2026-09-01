@@ -13552,6 +13552,68 @@ Microsoft sign-in appears. No retyping, no second navigation.
 is the copyright holder's account. What is established is that the door opens,
 which is the thing that was shut.
 
+## Back closed the browser, and menus had no way out
+
+Reported from the phone: *"menus like shield can't be closed without pressing
+back that closes hydra"*, and separately that tapping outside a menu should
+dismiss it, *"like the tab menu where this doesn't work"*.
+
+**Nothing in this project handled the Back button at all.** No `Qt::Key_Back`,
+no `keyPressEvent` for it, nothing. Qt's default for an unhandled Back is to
+finish the activity, so the only button Android users reach for reflexively
+closed the whole browser -- from anywhere, including with a menu open, which is
+how it was found. It is also why a browser's Back never went back: the history
+button in the toolbar worked, the hardware one quit.
+
+`main_window::handle_back` answers it in the order every mobile browser uses,
+each step the least destructive thing still available:
+
+1. a `Qt::Popup` -- any menu, any combo drop-down -- is closed;
+2. a modal dialog is **rejected**, because Back is a way out and not a way of
+   agreeing, which is the answer every dialog here already treats as safe;
+3. the tab drawer is closed;
+4. the page goes back in history;
+5. and only then is it left unconsumed, so Android does what it does at the root
+   of a browser.
+
+**Installed on the application, not on the window.** A popup takes the keyboard
+grab while it is up, so a filter on `main_window` would never have seen the one
+press that matters most.
+
+### Tapping beside the drawer
+
+The menus were half the report and the drawer was the other half. A `QMenu` gets
+outside-dismissal from Qt for nothing -- `Qt::Popup` grabs the mouse and closes
+on a press outside -- but the tab drawer is an ordinary widget slid into place by
+an animation, so nothing dismissed it and the only way out was the button it came
+from.
+
+A press that lands on this window and not on the drawer now closes it, and is
+consumed. That is the bargain a scrim makes everywhere else: while the drawer is
+open the rest of the window is a way of closing it rather than a set of controls,
+so the first tap closes and does not also press what was underneath.
+
+### A note on measuring this, because it wasted an hour
+
+The scripted harness -- `adb shell input tap` against coordinates read from
+`uiautomator dump` -- stopped working partway through, and did so *silently*:
+taps landed nowhere, dumps came back stale or empty, and the reasonable reading
+of that was "the build broke navigation". An A/B against the previous apk showed
+the same nothing, which should have been the clue and was instead read as the
+regression being older.
+
+It was neither. The copyright holder tested by hand and reported camera and
+microphone working in both modes, on the build the harness said could not load a
+page at all. **The instrument had failed, not the program**, and every conclusion
+drawn from it in that window was worthless.
+
+Qt's accessibility bridge is the weak point -- `Qt A11Y: Could not run
+accessibility call in object context, no valid surface` appears in logcat around
+the failures -- and it is the same instrument this file already warns about for a
+different reason above. Two lessons kept rather than one: a dump that returns
+fewer nodes than the last one is suspect before the code is, and a hand test from
+somebody looking at the screen outranks any of this.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

@@ -291,6 +291,27 @@ private:
 	void update_layout_mode();
 	void set_drawer_open(bool open, bool animate = true);
 
+	// Android's Back button, answered the way a browser has to answer it.
+	//
+	// **Nothing handled it, and Qt's default is to finish the activity** -- so
+	// Back closed the whole browser, from anywhere, including with a menu open.
+	// Reported from the phone as menus that cannot be dismissed without losing
+	// the app.
+	//
+	// Returns true when it was consumed. The order is the one every mobile
+	// browser uses and each step is the least destructive thing still available:
+	// close what is in front of the page, then close the drawer, then go back in
+	// history, and only then let Android have it.
+	bool handle_back();
+
+protected:
+	// Installed on the application on Android, so it sees the Back key even
+	// while a popup holds the grab -- which is exactly the case that was
+	// broken, and a filter on this window alone would never have seen it.
+	bool eventFilter(QObject *watched, QEvent *event) override;
+
+public:
+
 	static constexpr int k_drawer_threshold = 620;   // logical px
 
 	static constexpr int k_max_live_views = 4;

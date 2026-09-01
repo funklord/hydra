@@ -64,6 +64,8 @@
 #include "node.h"
 
 #include <QApplication>
+#include <QKeyEvent>
+#include <QMouseEvent>
 #include <QSplitter>
 #include <QPropertyAnimation>
 #include <QResizeEvent>
@@ -1044,6 +1046,18 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	outer->addWidget(m_status);
 
 	setWindowTitle("Hydra");
+
+#ifdef Q_OS_ANDROID
+	// **The Back button, which nothing was answering.** Qt's default for an
+	// unhandled `Qt::Key_Back` is to finish the activity, so Back closed the
+	// browser from anywhere -- including with a menu open, which is how it was
+	// reported: menus that could not be dismissed without losing the app.
+	//
+	// On the application rather than on this window, because a popup takes the
+	// keyboard grab while it is up and a filter installed here would never see
+	// the one press that matters most.
+	qApp->installEventFilter(this);
+#endif
 	resize(1180, 760);
 #ifdef Q_OS_ANDROID
 	// Nothing text-shaped gets focus at startup. Qt gives it to the first
@@ -2176,6 +2190,81 @@ void main_window::update_layout_mode() {
 		m_splitter->setSizes({280, qMax(400, width() - 280)});
 		m_drawer_open = false;
 	}
+}
+
+bool main_window::eventFilter(QObject *watched, QEvent *event) {
+#ifdef Q_OS_ANDROID
+	// **Press only.** Consuming the release as well is not needed and would be
+	// one more thing to get wrong; Qt raises the activity's back handling from
+	// the press, so refusing that is enough to keep the browser open.
+	if (event->type() == QEvent::KeyPress) {
+		auto *key = static_cast<QKeyEvent *>(event);
+		if (key->key() == Qt::Key_Back && handle_back())
+			return true;
+	}
+
+	// **Tapping beside the drawer closes it**, which is what every drawer does
+	// and what this one did not. A `QMenu` gets this from Qt for nothing --
+	// `Qt::Popup` grabs the mouse and closes itself on a press outside -- but
+	// the tab drawer is an ordinary widget slid into place, so nothing was
+	// dismissing it and the only way out was the button it came from.
+	//
+	// The press is consumed, so the first tap closes the drawer and does not
+	// also press whatever was under it. That is the same bargain a scrim makes
+	// everywhere else: while the drawer is open the rest of the window is a way
+	// of closing it rather than a set of controls.
+	if (event->type() == QEvent::MouseButtonPress && m_drawer_open && m_sidebar) {
+		auto *mouse = static_cast<QMouseEvent *>(event);
+		const QPoint global = mouse->globalPosition().toPoint();
+		QWidget *hit = QApplication::widgetAt(global);
+		const bool in_drawer = hit && (hit == m_sidebar || m_sidebar->isAncestorOf(hit));
+		// Only presses that land on this window: a press in a dialog or a menu
+		// over the top is that widget's business, not the drawer's.
+		const bool ours = hit && (hit == this || isAncestorOf(hit));
+		if (ours && !in_drawer) {
+			set_drawer_open(false);
+			return true;
+		}
+	}
+#endif
+	return QWidget::eventFilter(watched, event);
+}
+
+bool main_window::handle_back() {
+	// **A popup first, because it is the thing in front of everything else.**
+	// `activePopupWidget` is any `Qt::Popup` -- every menu, every combo-box
+	// drop-down. Closing it is what Back means while one is open, and it was
+	// closing the browser instead.
+	if (QWidget *popup = QApplication::activePopupWidget()) {
+		popup->close();
+		return true;
+	}
+	// Then a dialog. Rejected rather than accepted: Back is a way out, not a
+	// way of agreeing to something, and every dialog in this project treats a
+	// dismissal as the safe answer.
+	if (QWidget *modal = QApplication::activeModalWidget()) {
+		if (auto *dlg = qobject_cast<QDialog *>(modal))
+			dlg->reject();
+		else
+			modal->close();
+		return true;
+	}
+	// The tab drawer, which is over the page in the same sense.
+	if (m_drawer_open) {
+		set_drawer_open(false);
+		return true;
+	}
+	// Then the page's own history, which is what Back means to somebody
+	// browsing and is the reason the button exists.
+	if (web_view_backend *v = current_view()) {
+		if (v->can_go_back()) {
+			go_back();
+			return true;
+		}
+	}
+	// Nothing left to undo. Not consumed, so Android does what it does with an
+	// unhandled Back -- which at the root of a browser is the right thing.
+	return false;
 }
 
 void main_window::set_drawer_open(bool open, bool animate) {
