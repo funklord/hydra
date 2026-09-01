@@ -13878,6 +13878,106 @@ should not have needed learning twice in a day: **check what is in the foregroun
 before sending input to somebody's phone.** The earlier version of this was
 tapping BankID's idle screen.
 
+## The shield outgrew the screen, and a control that changed nothing
+
+Two defects in the panel that had just gained its twentieth row, both of them
+made by the additions rather than found beside them.
+
+### A control that did nothing on the desktop
+
+`set_desktop_site` is a no-op outside Android -- the base class ignores it and
+answers false -- because the desktop's user agent already says X11 Linux. The
+View menu's toggle was disabled there deliberately. **The shield's row and the
+settings page's row were not**, so on a desktop somebody could set "Request
+desktop site" to allow and nothing whatever would happen.
+
+That is the shape this file has argued against twice before, most explicitly
+about `extractor_dom`: a control for a capability nothing delivers is a promise
+nobody is keeping. Both rows are greyed on the desktop now, with the reason on
+them -- *"Only meaningful on a phone. This build already asks as a desktop."*
+
+Left visible rather than removed, so the panel is the same shape on both
+platforms and a `policy.ini` written on one reads sensibly on the other.
+
+### And the panel no longer fits a phone
+
+`try_phone` had been printing a note for a while and it was worth reading:
+
+    site-controls will not go below 814 tall against a 640 screen
+
+Twenty rows, five headings, a title and a scope selector. `android_dialogs`
+hands the dialog the screen, the grid is squeezed below its own minimum, and it
+*did* still fit -- with the last row flush against the bottom edge and no margin
+at all. Two rows were added to it in one afternoon; the next would have pushed a
+control off the screen with nothing to say so, because "every button is on
+screen" and "no label is cut" both pass right up until they do not.
+
+The rows are in a `QScrollArea` now. The floor went from **814x331 to 161x215**,
+the note is gone, and the rendered capture shows the rows with room to breathe
+rather than compressed against each other.
+
+A scroll area rather than a smaller font or two columns: this panel is a list of
+decisions somebody reads down, and both alternatives make it harder to read in
+order to avoid scrolling -- the wrong trade on the surface where these decisions
+are actually made.
+
+## Six failures, four wrong diagnoses, and a load average nobody looked at
+
+`try_files` came back 25 of 31 in a sweep, having been 31 of 31 twice before, and
+the failing checks read as broken input:
+
+    FAIL  a synthetic press and release reached the page's click handler
+    FAIL  and Chromium counted it as a user gesture ... (userActivation.isActive: (none))
+
+Nothing about that says "a stopwatch ran out", which is what it was.
+
+What followed is worth recording in full, because the mistake was not any one of
+the wrong answers -- it was the method.
+
+1. **A recent change broke it.** Reverted the uncommitted work; still failed.
+2. **The machine is busy.** Written into a comment in the driver *before* it was
+   checked. The next sweep failed with nothing of mine running, which appeared to
+   refute it.
+3. **A noisy neighbour.** A bisection: alone 31 of 31, after `try_delete` 31,
+   after `try_cookies` 31, immediately after `try_downloads` 25, with a
+   ten-second gap 25, with thirty seconds 31. `try_downloads` runs a real
+   torrent, so its teardown was blamed and `sweep.sh` was given a thirty-second
+   pause after it.
+4. **The next sweep failed anyway**, so the pause was pure cost and came out.
+   Then the budgets: three `wait_report` ceilings said ten seconds while
+   `same-gesture` -- the same check, later in the same file, on the same round
+   trip -- already said thirty. Raised to match. The sweep went 25 to 29.
+
+Then `try_files` failed **standalone** with the new budgets, having passed
+standalone three times an hour earlier, and `try_navigate` failed too.
+
+    $ uptime
+    load average: 25.24, 22.37, 19.97
+
+**This machine is shared, and other sessions had been compiling throughout.**
+Several `cc1plus`, one of them root's, and unrelated work besides. Every timing
+measurement above was taken against a load that was changing underneath it and
+that nobody had looked at. The bisection table is not evidence of anything: each
+row was one run at an unknown load, and the differences between them are as
+likely to be the other sessions as the drivers.
+
+**What survives, and why.** The wait budgets stay at thirty seconds -- not
+because the bisection said so, but because `wait_report` is a wait-*until*, so
+the ceiling costs nothing when the page answers promptly, and three of them
+disagreeing with a fourth in the same file about the same kind of round trip was
+worth fixing on its own terms. The `sweep.sh` pause is gone: it rested entirely
+on a contaminated measurement and did not work.
+
+**The lesson is not about `try_files`.** It is that six timing experiments were
+run and three conclusions written down without once checking whether the machine
+was quiet, on a box this file already documents as shared. `uptime` is one word
+and it would have come first if any of the four hypotheses had been about the
+environment rather than about the code.
+
+**Still open**: whether `try_files` is reliable on an idle machine with the new
+budgets. It cannot be answered here until the load drops, and no further
+conclusion should be drawn from a run taken while it has not.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

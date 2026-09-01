@@ -4,6 +4,7 @@
 
 #include <QVBoxLayout>
 #include <QGridLayout>
+#include <QScrollArea>
 #include <QComboBox>
 #include <QStandardItemModel>
 #include <QLabel>
@@ -196,13 +197,50 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 			if (auto *m = qobject_cast<QStandardItemModel *>(combo->model()))
 				if (QStandardItem *it = m->item(3))
 					it->setEnabled(false);
+		// **A control that changes nothing is worse than one that is not there,
+		// and this is one on the desktop.** `set_desktop_site` is a no-op
+		// outside Android: the desktop's user agent already says X11 Linux, so
+		// the request is satisfied before anybody asks it. Left visible so the
+		// panel is the same shape on both platforms and a policy file written
+		// on one reads sensibly on the other, but greyed and with the reason on
+		// it, rather than accepting an answer nothing acts on.
+#ifndef Q_OS_ANDROID
+		if (r.f == policy::feature::desktop_site) {
+			combo->setEnabled(false);
+			combo->setToolTip("Only meaningful on a phone. This build already "
+			                   "asks as a desktop.");
+		}
+#endif
 		connect(combo, &QComboBox::currentIndexChanged,
 		         this, [this, i](int) { on_feature_changed(i); });
 		m_combos[i] = combo;
 		grid->addWidget(combo, row, 1);
 		++row;
 	}
-	outer->addLayout(grid);
+	// **The rows scroll, because there are twenty of them and a phone has 640
+	// pixels.** Measured: the layout asks for 814 tall, `android_dialogs` hands
+	// the dialog the screen and the grid is squeezed below its own minimum. It
+	// still fits today, with the last row flush against the bottom edge and no
+	// margin at all -- two features were added to this panel in one afternoon,
+	// and the next one would push a control off the screen silently.
+	//
+	// A scroll area rather than a smaller font or a second column: the panel is
+	// a list of decisions somebody reads down, and both alternatives make it
+	// harder to read in order to avoid scrolling, which is the wrong trade on
+	// the surface where these decisions are actually made.
+	//
+	// `setWidgetResizable` so the rows follow the width -- without it the
+	// viewport keeps the grid at its own width and a narrow phone gets a
+	// horizontal scrollbar under a vertical one.
+	auto *rows = new QWidget(this);
+	rows->setLayout(grid);
+	auto *scroll = new QScrollArea(this);
+	scroll->setObjectName("shield_scroll");
+	scroll->setWidget(rows);
+	scroll->setWidgetResizable(true);
+	scroll->setFrameShape(QFrame::NoFrame);
+	scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	outer->addWidget(scroll, 1);
 }
 
 void site_policy_dialog::set_host(const QString &host) {

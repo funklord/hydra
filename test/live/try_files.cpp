@@ -133,6 +133,23 @@ static void check(bool ok, const QString &w) {
 }
 static void note(const QString &w) { std::printf("  --    %s\n", qPrintable(w)); }
 static void section(const char *n) { std::printf("\n== %s ==\n", n); }
+// **Three waits here were shorter than their own siblings.**
+//
+// `wait_report` is a wait-*until*: the number is a ceiling, so it costs nothing
+// when the page answers promptly and only bites when something is already slow.
+// Three of them said ten seconds while `same-gesture` -- the same check, later
+// in this file, on the same kind of round trip -- already said thirty. They say
+// thirty now, on that inconsistency alone.
+//
+// **Do not read a timing failure here as a fault in the browser without
+// checking `uptime` first.** These checks time a synthetic click through a real
+// engine to a local server, and this machine is shared. Six failures here were
+// once chased through four hypotheses -- a recent change, a busy machine, a
+// noisy neighbouring driver, the budgets -- with a bisection table built on top
+// of them, before anyone noticed a load average of 25 from other sessions
+// compiling. Every row of that table was a single run at an unknown load. The
+// story is in `project.md`; the short version is that the environment is a
+// hypothesis too, and the cheapest one to test.
 static void spin(int ms) {
 	QEventLoop l;
 	QTimer::singleShot(ms, &l, &QEventLoop::quit);
@@ -643,9 +660,11 @@ int main(int argc, char *argv[]) {
 		}
 
 		click_page(w);
-		const QString gesture = wait_report(&site, QStringLiteral("gesture1"), 10000);
+		const QString gesture = wait_report(&site, QStringLiteral("gesture1"), 30000);
 		check(!gesture.isEmpty(),
-		      "a synthetic press and release reached the page's click handler");
+		      "a synthetic press and release reached the page's click handler "
+		      "(if this is the first of several failures here, read the note "
+		      "above spin() and check uptime before suspecting the engine)");
 		check(gesture == "true",
 		      QString("and Chromium counted it as a user gesture, which is what "
 		               "showDirectoryPicker requires (userActivation.isActive: "
@@ -716,7 +735,7 @@ int main(int argc, char *argv[]) {
 		check(parked, "the page's request is parked at the server");
 		check(!g_modal.box_up, "and no question is on screen when it is let go");
 		site.release_holds();
-		check(wait_report(&site, QStringLiteral("asked-control"), 10000) == "yes",
+		check(wait_report(&site, QStringLiteral("asked-control"), 30000) == "yes",
 		      "the page asked to register a protocol handler");
 		spin(6000);
 		control_boxes = g_modal.boxes - before;
@@ -801,7 +820,7 @@ int main(int argc, char *argv[]) {
 		g_modal.hold_ms = 4000;
 		const int trace_from = g_trace.size();
 		check(load_mode(&site, bar, "inarow"), "the page is loaded");
-		check(wait_report(&site, QStringLiteral("asked-rowtwo"), 10000) == "yes",
+		check(wait_report(&site, QStringLiteral("asked-rowtwo"), 30000) == "yes",
 		      "the page made both requests inside one script");
 		spin(14000);
 		g_modal.hold_ms = 0;

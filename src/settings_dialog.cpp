@@ -1083,6 +1083,15 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 			// pressing OK without touching anything.
 			const int at = combo->findData(int(cur));
 			combo->setCurrentIndex(at >= 0 ? at : 0);
+			// Greyed on the desktop for the reason the shield gives: the
+			// desktop already asks as a desktop, so this changes nothing there.
+#ifndef Q_OS_ANDROID
+			if (f == policy::feature::desktop_site) {
+				combo->setEnabled(false);
+				combo->setToolTip("Only meaningful on a phone. This build "
+				                   "already asks as a desktop.");
+			}
+#endif
 			combo->setObjectName(QString("feature_%1").arg(policy::feature_name(f)));
 			m_feature_combos[int(f)] = combo;
 			v->addWidget(settings_row(policy::feature_label(f),
