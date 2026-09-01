@@ -12282,11 +12282,32 @@ carried along as amendments to a list item.
 
    **Corrected by the section above, and the correction matters.** kisskh's
    payload does carry its manifest, annotated, and the probe budget is not the
-   problem — so "spend more probe budget" is off this list. What is on it: ask
-   the model for *both* a note-driven match and a manifest-extension fallback in
-   the same script. kisskh scored 2 of 5 under the older arrangement purely on
-   an `.m3u8` fallback, and the legend that won dramafren 3 of 5 stopped it
-   writing that clause at all. One script can hold both.
+   problem — so "spend more probe budget" is off this list.
+
+   **Asking the model for both clauses is not on this list either, because the
+   commit that wrote this paragraph also did it.** `7515847` changed the prompt
+   and added these lines together: rule 3 has read *"Write two tests, not one"*
+   since 4 August, naming the note-driven match first and the manifest-extension
+   fallback second, and the paragraph beneath it already tells the model that a
+   master playlist is routinely disguised with an innocuous extension **and a
+   query string**. The reasoning stands — kisskh scored 2 of 5 under the older
+   arrangement purely on an `.m3u8` fallback, and the legend that won dramafren
+   3 of 5 stopped it writing that clause at all, so one script has to hold both
+   — but it is a description of what the prompt says, not of work outstanding.
+   It has sat here as a plan for a month.
+
+   **What the first measurement of it shows is that the instruction is not
+   reliably obeyed.** Eight runs on the synthetic set — see *The live model suite*
+   above, and note that the set does not transfer — produced four accepts, and
+   of the three runs whose script was kept, two wrote both clauses and one wrote
+   only the note-driven match. So the prompt asks for two tests and gets two
+   about two thirds of the time. That is the gap now, and it is a compliance
+   question rather than an instruction one: the sentence is already there.
+
+   One observation too small to be a finding, recorded so it is not
+   rediscovered: of those three kept scripts the only one with an end-anchored
+   `\.(m3u8|mpd)$` fallback was the only one rejected, and its sibling clause
+   `/master\.txt/` could not match `cf-master.1774687168.txt` either. n is 3.
 
    The retry is measured but not yet answered: of five runs, three never
    answered inside fifteen minutes on a loaded machine, one retry came back
