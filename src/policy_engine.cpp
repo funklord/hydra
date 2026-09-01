@@ -71,13 +71,18 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	// exists to remove, pointed the other way. `ask` until there is something
 	// to show.
 	set_global_default(feature::pointer_lock,        setting::ask);
-	// **Notifications stay blocked because nothing would arrive.** No
-	// `QWebEngineProfile::setNotificationPresenter` is installed anywhere in
-	// this tree, so a granted notification permission resolves the page's
-	// promise and then silently drops every notification it sends. Prompting
-	// for that would be asking somebody to grant a capability the browser
-	// cannot honour, which is worse than refusing it. This default moves when
-	// a presenter exists, not before.
+	// **Notifications are blocked here and raised by whoever can deliver them.**
+	//
+	// Chromium treats a missing notification presenter as success: the page's
+	// notification resolves and goes nowhere. So the honest default depends on
+	// something this class cannot see, and must not guess -- the desktop build
+	// installs `qtwebengine_notifications` against the session bus and lifts
+	// this to `ask` in `main()` when that succeeds, while the Android build has
+	// no presenter and leaves it exactly here.
+	//
+	// Blocked is therefore the floor rather than the answer, and it is the right
+	// floor: prompting somebody to grant a capability the browser cannot honour
+	// is worse than refusing it, because the refusal is at least true.
 	set_global_default(feature::notifications,       setting::block);
 	// Allow: the media badge is a headline feature and a browser that noticed
 	// nothing until told to would be the wrong default entirely.

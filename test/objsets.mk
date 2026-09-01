@@ -88,6 +88,7 @@ OBJSETS_SOURCES = \
 	test/live/try_menus.cpp \
 	test/live/try_mse.cpp \
 	test/live/try_navigate.cpp \
+	test/live/try_notify.cpp \
 	test/live/try_pagetools.cpp \
 	test/live/try_permissions.cpp \
 	test/live/try_phone.cpp \
@@ -361,6 +362,7 @@ OBJS_test_settings = \
 	$(BUILD_DIR)/app/cosmetic_filters.o \
 	$(BUILD_DIR)/app/download_manager.o \
 	$(BUILD_DIR)/app/torrent_download_source.o \
+	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
@@ -374,7 +376,6 @@ OBJS_test_settings = \
 	$(BUILD_DIR)/app/settings_bundle.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/app/theme.o \
-	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o
 
@@ -3501,6 +3502,135 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
+OBJS_try_notify = \
+	$(BUILD_DIR)/app/main_window.o \
+	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/app/request_filter.o \
+	$(BUILD_DIR)/app/qtwebengine_factory.o \
+	$(BUILD_DIR)/app/qtwebengine_notifications.o \
+	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/moc/moc_qtwebengine_notifications.o \
+	$(BUILD_DIR)/app/qtwebengine_view.o \
+	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
+	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/webauth_dialog.o \
+	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
+	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
+	$(BUILD_DIR)/moc/moc_web_view_backend.o \
+	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/auth_dialog.o \
+	$(BUILD_DIR)/app/cert_dialog.o \
+	$(BUILD_DIR)/app/extractor_helpers.o \
+	$(BUILD_DIR)/app/local_proxy.o \
+	$(BUILD_DIR)/moc/moc_main_window.o \
+	$(BUILD_DIR)/app/state_store.o \
+	$(BUILD_DIR)/moc/moc_media_dialog.o \
+	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/annoyance_log.o \
+	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
+	$(BUILD_DIR)/app/tab_tree_view.o \
+	$(BUILD_DIR)/app/annoyed_dialog.o \
+	$(BUILD_DIR)/app/capture_source.o \
+	$(BUILD_DIR)/moc/moc_capture_source.o \
+	$(BUILD_DIR)/app/consent_dialog.o \
+	$(BUILD_DIR)/moc/moc_element_picker.o \
+	$(BUILD_DIR)/app/element_picker.o \
+	$(BUILD_DIR)/app/filter_signals.o \
+	$(BUILD_DIR)/app/keepass_bridge.o \
+	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
+	$(BUILD_DIR)/moc/moc_media_detector.o \
+	$(BUILD_DIR)/app/media_detector.o \
+	$(BUILD_DIR)/app/session_import.o \
+	$(BUILD_DIR)/moc/moc_session_mirror.o \
+	$(BUILD_DIR)/app/session_mirror.o \
+	$(BUILD_DIR)/app/settings_dialog.o \
+	$(BUILD_DIR)/app/site_extractor.o \
+	$(BUILD_DIR)/app/tab_tree_model.o \
+	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
+	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
+	$(BUILD_DIR)/app/ytdlp_resolver.o \
+	$(BUILD_DIR)/app/claude_provider.o \
+	$(BUILD_DIR)/app/consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/app/network_fetcher.o \
+	$(BUILD_DIR)/app/ollama_provider.o \
+	$(BUILD_DIR)/app/player_launcher.o \
+	$(BUILD_DIR)/app/tree_sort_proxy.o \
+	$(BUILD_DIR)/app/cosmetic_filters.o \
+	$(BUILD_DIR)/app/credential_store.o \
+	$(BUILD_DIR)/app/download_manager.o \
+	$(BUILD_DIR)/moc/moc_download_manager.o \
+	$(BUILD_DIR)/app/downloads_dialog.o \
+	$(BUILD_DIR)/app/extractor_dialog.o \
+	$(BUILD_DIR)/app/kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_shutdown_signals.o \
+	$(BUILD_DIR)/app/shutdown_signals.o \
+	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
+	$(BUILD_DIR)/app/antiadblock_watch.o \
+	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
+	$(BUILD_DIR)/app/reorganize_dialog.o \
+	$(BUILD_DIR)/app/tab_history.o \
+	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
+	$(BUILD_DIR)/app/site_policy_dialog.o \
+	$(BUILD_DIR)/app/autofill_controller.o \
+	$(BUILD_DIR)/moc/moc_autofill_controller.o \
+	$(BUILD_DIR)/app/http_download_source.o \
+	$(BUILD_DIR)/app/torrent_download_source.o \
+	$(BUILD_DIR)/app/mse_tap.o \
+	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/find_bar.o \
+	$(BUILD_DIR)/moc/moc_find_bar.o \
+	$(BUILD_DIR)/moc/moc_auth_dialog.o \
+	$(BUILD_DIR)/moc/moc_cert_dialog.o \
+	$(BUILD_DIR)/moc/moc_address_input.o \
+	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
+	$(BUILD_DIR)/moc/moc_consent_dialog.o \
+	$(BUILD_DIR)/moc/moc_settings_dialog.o \
+	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
+	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
+	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_http_download_source.o \
+	$(BUILD_DIR)/moc/moc_ai_provider.o \
+	$(BUILD_DIR)/app/tree_serializer.o \
+	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
+	$(BUILD_DIR)/app/tree_diff.o \
+	$(BUILD_DIR)/app/tree_outline.o \
+	$(BUILD_DIR)/moc/moc_extractor_signals.o \
+	$(BUILD_DIR)/app/stream_probe.o \
+	$(BUILD_DIR)/moc/moc_stream_probe.o \
+	$(BUILD_DIR)/app/empty_state.o \
+	$(BUILD_DIR)/app/flow_layout.o \
+	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
+	$(BUILD_DIR)/moc/moc_flow_layout.o \
+	$(BUILD_DIR)/moc/moc_empty_state.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
+	$(BUILD_DIR)/moc/moc_ollama_provider.o \
+	$(BUILD_DIR)/moc/moc_network_fetcher.o \
+	$(BUILD_DIR)/moc/moc_claude_provider.o \
+	$(BUILD_DIR)/app/settings_bundle.o \
+	$(BUILD_DIR)/app/theme.o \
+	$(BUILD_DIR)/moc/moc_theme.o \
+	$(BUILD_DIR)/app/box_crypto.o \
+	$(BUILD_DIR)/app/keepass_protocol.o \
+	$(BUILD_DIR)/moc/moc_filter_signals.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_hls_assembler.o \
+	$(BUILD_DIR)/app/hls_assembler.o \
+	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/moc/moc_local_proxy.o \
+	$(BUILD_DIR)/moc/moc_extractor_helpers.o
+
 OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/main_window.o \
 	$(BUILD_DIR)/app/policy_engine.o \
@@ -3769,6 +3899,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/extractor_dialog.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/qtwebengine_factory.o \
 	$(BUILD_DIR)/app/theme.o \
@@ -3782,6 +3913,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
 	$(BUILD_DIR)/moc/moc_extractor_signals.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
@@ -3852,7 +3984,6 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
-	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
@@ -3866,7 +3997,6 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
-	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \

@@ -245,6 +245,16 @@ $(BUILD_DIR)/%.moc: %.cpp | $(BUILD_DIR)
 	@$(MOC_GUARD)
 	@$(MOC) $< -o $@
 
+# **And the live drivers, which were scanned for `Q_OBJECT` and then had no way
+# to be moc'd.** `TMOC_CPP` globs `live/*.cpp` alongside `test_*.cpp`, and the
+# object rules further down have a `live/` variant beside the plain one -- so the
+# intent was there and this rule was the piece missing. The first driver to
+# declare a `Q_OBJECT` in `live/` stopped with "no rule to make target
+# build-make/try_notify.moc", which is at least a loud way to find out.
+$(BUILD_DIR)/%.moc: live/%.cpp | $(BUILD_DIR)
+	@$(MOC_GUARD)
+	@$(MOC) $< -o $@
+
 $(BUILD_DIR)/tmoc/moc_%.cpp: %.h | $(BUILD_DIR)/tmoc
 	@$(MOC_GUARD)
 	@$(MOC) $< -o $@

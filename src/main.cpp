@@ -28,6 +28,7 @@
 #include "android_view.h"
 #else
 #include "qtwebengine_factory.h"
+#include "qtwebengine_notifications.h"
 #endif
 #include "torrent_download_source.h"
 
@@ -190,6 +191,25 @@ int main(int argc, char *argv[]) {
 	android_factory factory(&filter);
 #else
 	qtwebengine_factory factory(&filter);
+
+	// **Notifications may be asked about only if they can be delivered.**
+	//
+	// Chromium treats a missing presenter as success: the page's notification
+	// resolves and goes nowhere. So granting the permission without one puts a
+	// prompt in front of somebody for a capability that then does nothing, and
+	// the settings page calls it allowed. That is why `policy_engine` defaults
+	// this to block while every other real capability moved to `ask`, and this
+	// is the line that lifts it once there is somewhere for a notification to
+	// go -- a working `org.freedesktop.Notifications` on the session bus,
+	// established by asking it rather than by looking up its name.
+	//
+	// **Before the policy file is read**, which is the whole reason it is here
+	// and not later. `main_window`'s constructor loads `policy.ini` immediately
+	// below, so anything saved -- including a deliberate block -- overwrites
+	// this. It raises a default, it does not overrule a decision.
+	if (qtwebengine_notifications::install(factory.profile()))
+		policy.set_global_default(policy::feature::notifications,
+		                           policy::setting::ask);
 #endif
 
 	main_window w(&factory, &policy, &filter);

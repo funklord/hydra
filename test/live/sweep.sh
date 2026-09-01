@@ -146,26 +146,35 @@ skip_reason() {
 			[ -n "${SWEEP_ONSCREEN:-}" ] || \
 				echo "hands a url to another application; offscreen has no desktop services"
 			;;
-		# **Conditional, because most of this driver is worth running.** Four of
-		# its eleven checks are about the camera and they cannot pass on a
-		# machine that has none: the engine answers NotFoundError before our
-		# decider is ever consulted, so the assertion that we refused the camera
-		# has no way to tell our refusal from the device's absence. The
-		# microphone check passing with NotAllowedError beside it is what shows
-		# the difference is the hardware rather than the code.
+		# **The camera skip moved into the driver, where it belongs.** This used
+		# to sit here, keyed on `/dev/video*`, because four of the driver's
+		# checks asserted on a camera and could not pass without one -- the
+		# engine answers NotFoundError before our decider is consulted, so the
+		# assertion that we refused the camera cannot tell our refusal from the
+		# device's absence.
 		#
-		# Skipping it outright would have cost the seven that do work, and they
-		# are the ones worth having -- geolocation, notifications, and that a
-		# grant is per-feature rather than global, which is the permission
-		# decider's whole contract. So the skip is keyed on the device: a
-		# machine with a camera runs the lot.
+		# The driver now decides that for itself, from the decider's own log
+		# rather than from a device node: it asks whether a camera request
+		# reaches our code at all, and prints a `--   skipped:` line when it does
+		# not. That is the better place for it, because the question is about
+		# what the engine did rather than about what is plugged in, and because
+		# skipping the whole driver here cost the checks that do work --
+		# geolocation, notifications, the prompt, and that a grant is per-feature
+		# rather than global, which is the decider's whole contract.
 		#
 		# Accepting NotFoundError as success was the other option and is worse
 		# than either. It would make the check incapable of failing, which is
 		# the shape this script has twice been caught reporting already.
-		try_permissions)
-			ls /dev/video* >/dev/null 2>&1 || \
-				echo "four checks need a camera; this machine has no /dev/video*"
+		#
+		# **Needs a session bus of its own.** The driver stands up a stub
+		# `org.freedesktop.Notifications` and would otherwise either find the
+		# name owned by the desktop's real daemon -- in which case it stops
+		# rather than taking it away -- or find no bus at all. `dbus-run-session`
+		# gives it a private one, and its absence is a skip rather than a
+		# failure about somebody's machine.
+		try_notify)
+			command -v dbus-run-session >/dev/null 2>&1 || \
+				echo "needs dbus-run-session for a private session bus"
 			;;
 		# Waits on a local model to return a proposal. With none running it
 		# reaches the timeout and is killed, which costs the sweep five minutes
@@ -182,12 +191,21 @@ for d in $drivers; do
 		continue
 	fi
 	log="$OUT/$d.log"
+	# A private session bus where the driver needs one, and nothing otherwise.
+	# Kept out of the environment of every other driver deliberately: a bus that
+	# exists only for one process is not the desktop's, and handing it to a
+	# driver that talks to the colour-scheme portal would quietly change what
+	# that driver measures.
+	prefix=""
+	case "$d" in
+		try_notify) prefix="dbus-run-session --" ;;
+	esac
 	if [ -n "${SWEEP_ONSCREEN:-}" ]; then
-		HYDRA_TEST_OUT="$OUT/$d.out" timeout "${SWEEP_TIMEOUT:-300}" "$BIN/$d" \
-			>"$log" 2>&1
+		HYDRA_TEST_OUT="$OUT/$d.out" timeout "${SWEEP_TIMEOUT:-300}" \
+			$prefix "$BIN/$d" >"$log" 2>&1
 	else
 		QT_QPA_PLATFORM=offscreen HYDRA_TEST_OUT="$OUT/$d.out" \
-			timeout "${SWEEP_TIMEOUT:-300}" "$BIN/$d" >"$log" 2>&1
+			timeout "${SWEEP_TIMEOUT:-300}" $prefix "$BIN/$d" >"$log" 2>&1
 	fi
 	rc=$?
 	last=$(grep -E 'passed,' "$log" | tail -1)

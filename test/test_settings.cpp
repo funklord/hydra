@@ -461,8 +461,9 @@ int main(int argc, char **argv) {
 		// ones: a prompt for a capability the browser cannot actually deliver
 		// would be asking somebody to grant nothing.
 		check(e.global_default(policy::feature::notifications) == policy::setting::block,
-		      "notifications stay blocked — no presenter is installed, so a grant "
-		      "would resolve the promise and drop every notification");
+		      "notifications are blocked by the engine alone — whether they can "
+		      "be delivered is not something this class can see, so it holds the "
+		      "floor and main() lifts it where a presenter installs");
 		check(e.global_default(policy::feature::clipboard_read) == policy::setting::block,
 		      "clipboard reading stays blocked — the engine gates it behind "
 		      "settings this project does not enable, so the request never arrives");

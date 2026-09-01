@@ -12848,6 +12848,101 @@ load -- `auth_dialog` was observed on the phone, but HTTP authentication happens
 before a page paints, so it does not exercise the same moment.
 
 
+## Notifications, which were granted and then thrown away
+
+The permission audit found this and could not fix it in the same breath, so the
+default stayed at `block` with a note. This is the note discharged.
+
+**Chromium treats a missing notification presenter as success.** A page calls
+`new Notification(...)`, the promise resolves, and the notification goes
+nowhere -- no error, nothing in a log, and the settings page showing the
+capability as allowed the whole time. Nothing in this tree installed one:
+`grep` found neither `setNotificationPresenter` nor `QWebEngineNotification`.
+So a site could be granted notifications, believe it had them, and put nothing
+on anybody's screen.
+
+`qtwebengine_notifications` is the presenter, over freedesktop's
+`org.freedesktop.Notifications` -- the same bus this project already talks to
+for the colour scheme. The name puts it in the `qtwebengine_*` family that
+`hydra.pro` drops from the Android build, which is correct rather than
+convenient: there is no such service on a phone.
+
+### The default is raised by whoever can deliver, not by the policy engine
+
+`policy_engine` cannot see whether a notification will arrive, and must not
+guess. So it holds `block` as a floor, and `main()` lifts it to `ask` when
+`qtwebengine_notifications::install` succeeds -- which happens **before**
+`main_window` reads `policy.ini`, so anything saved, including a deliberate
+block, overwrites it. It raises a default; it does not overrule a decision.
+
+The Android build has no presenter and so leaves the floor exactly where it is.
+
+### Three mistakes in it, all found by running it
+
+**The service was called to check whether it was there, and that was wrong
+twice.** The first version sent `GetServerInformation` and waited, on the
+argument that a registered name is not the same as something that will answer.
+The argument is true; the trade is not. It is a blocking call on the startup
+path, so a wedged notification daemon would hold the browser's launch for the
+timeout -- and a blocking call cannot be answered by a service in the same
+thread, which is exactly how a test stands one up. `try_notify` failed at that
+line before it could test anything.
+
+What makes the weaker check sufficient is that the strong one already happens
+later and cannot be skipped: `present()` checks the `Notify` reply, so a name
+nothing answers on costs one notification rather than a browser that will not
+start. Activatable names count too -- a daemon started on demand is not
+registered until something sends to it.
+
+**`Notify` was called synchronously, which would have handed the GUI thread to
+the desktop's notification daemon**, once per notification. It is an async call
+with a watcher now. That was the second thing the test could not get past, and
+it presented as the presenter silently not working -- which is precisely what a
+failed notification is indistinguishable from, and why the error is now printed
+under `HYDRA_NOTIFY_DEBUG`.
+
+**And the third was the test's own.** The stub exported its slots under
+`local.fake_notifier`, which is what a class name gets by default, so the call
+came back `UnknownInterface`. One `Q_CLASSINFO("D-Bus Interface", ...)`. Worth
+recording because the diagnosis came from the debug line added for the previous
+mistake: *"No such interface 'org.freedesktop.Notifications' at object path
+'/org/freedesktop/Notifications'"* named the fault exactly, in a place where the
+observable behaviour was otherwise a notification nobody saw.
+
+### What the stub proves
+
+`try_notify` stands up a stub `org.freedesktop.Notifications` on a private bus
+and drives a real page through the shell. 11 of 11: the presenter installs, the
+page is granted permission, exactly one `Notify` arrives, and it carries the
+page's title as the summary, its body as the body, `Hydra` as the application,
+the `desktop-entry` hint, and the `default` action that a web notification means
+by being clicked. The page is told `show` -- and only after the service has taken
+it, because saying so on a call that then failed is the one lie that matters
+here. Then `ActionInvoked` reaches the page as `onclick` and `NotificationClosed`
+as `onclose`.
+
+The stub is the point rather than a compromise: what is under test is the
+arguments and the round trip, not anybody's daemon. It runs under
+`dbus-run-session`, which also stops it taking a name a real daemon owns -- and
+it refuses rather than taking it if one does.
+
+**The site's own icon is deliberately not sent.** `icon()` gives a `QImage` and
+the hint that carries one is a marshalled `(iiibiiay)`; that is a page-supplied
+image travelling into a system service, and it is not worth writing that path
+for decoration when the title already names the site.
+
+### Two more build-system gaps, in the same place as the last one
+
+`test/Makefile` scanned `live/*.cpp` for `Q_OBJECT` and had no rule to moc one:
+the `.moc` rules covered `src/` and the test root, and the object rules below
+them have a `live/` variant that the `.moc` rules never got. The intent was
+there and the rule was missing, so the first driver to want a `Q_OBJECT` in
+`live/` stopped with "no rule to make target build-make/try_notify.moc". Added.
+
+That is the second dependency gap this session in the same file, after the moc
+objects that recorded no headers. Both were invisible until something new
+crossed them.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
