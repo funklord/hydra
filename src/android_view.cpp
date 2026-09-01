@@ -298,10 +298,22 @@ void android_view::request_capture(qint64 id, const QString &origin,
 	// below goes through it, because a `PermissionRequest` that is never
 	// answered leaves the page's promise pending for ever -- which looks to a
 	// user exactly like a camera that is slow to start.
-	auto answer = [token](bool granted) {
+	// Behind the same switch the desktop's permission handler uses, and for the
+	// same reason it gives: without it "we refused" and "we granted and the
+	// engine could not deliver" look identical from the page's side. Off by
+	// default because the origin is in the message, and logcat is not a private
+	// place to put the address of every page that asks for a camera.
+	const bool debug = qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG");
+	auto answer = [token, debug](bool granted) {
+		if (debug)
+			qWarning("capture: token %lld -> %s", (long long)token,
+			          granted ? "granted" : "denied");
 		QJniObject::callStaticMethod<void>(k_cls, "onCaptureDecision", "(JZ)V",
 		                                    jlong(token), jboolean(granted));
 	};
+	if (debug)
+		qWarning("capture: asked for %s%s by %s", video ? "video " : "",
+		          audio ? "audio" : "", qPrintable(origin));
 
 	android_view *v = s_views.value(id, nullptr);
 	// **Refused when nobody is listening, which is the opposite of
@@ -310,6 +322,9 @@ void android_view::request_capture(qint64 id, const QString &origin,
 	// must not hand a page the camera. The safe direction is not a property of
 	// the pattern, it is a property of what is being asked for.
 	if (!v || !v->m_decider) {
+		if (debug)
+			qWarning("capture: no view (%d) or no decider (%d)", v == nullptr,
+			          v && !v->m_decider);
 		answer(false);
 		return;
 	}

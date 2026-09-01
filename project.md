@@ -12492,6 +12492,64 @@ screen sharing is still refused on both platforms — `DesktopVideoCapture` fall
 to the deny branch and there is no source picker — and the session-cookie policy
 recorded against Teams by name still discards the SSO cookie on exit.
 
+## Wanted: an indicator for the AI batch jobs
+
+Asked for 2026-09-01, and recorded rather than built: the browser has to work
+before the AI features get harder, and this is the AI side. Written down now
+because a requirement that lives only in a conversation is one nobody can act
+on later.
+
+**What was asked for**, in the holder's terms:
+
+- a **tiny display** showing progress and a log for AI batch jobs;
+- which can **expand**, rarely, to ask a question;
+- **stop** and **kill** buttons;
+- a **slider that reduces CPU load and memory use dynamically** — while a job
+  is running, not only for the next one.
+
+### What already exists to build it on, rather than beside
+
+Nothing runs AI work as a *job* today, and the provider interface reports no
+progress at all. But two shapes in the tree already answer parts of this, and
+the useful move is to copy them rather than invent:
+
+- **`download_manager` and `downloads_dialog`** are the nearest thing to a job
+  model: a queue, per-job state with a `terminal()` predicate, progress, and a
+  dialog listing them. An AI batch queue is the same shape with a different
+  worker.
+- **`m_confirm_action`** — the toolbar's "Still working?" item — is already the
+  rare-question pattern: hidden until there is something to ask, shown when
+  there is, and answered in one gesture. Whatever asks the batch's questions
+  should behave the way that already does rather than inventing a second idiom
+  for the same thing.
+
+The obvious home for the tiny display is the status bar, which already carries
+transient state; expanding it to a panel is the same move `downloads_dialog`
+makes from its own indicator.
+
+### Open questions, which is why this is a record and not a design
+
+- **What "stop" and "kill" each mean.** The likely reading is that stop lets
+  the item in flight finish and then halts, while kill abandons it immediately
+  including the request already sent to the model. Two buttons only earn their
+  place if they differ, so the difference has to be stated before either is
+  built.
+- **What the slider actually moves.** Concurrency and pacing are ours to
+  control. **Memory largely is not**: with a local model the resident cost is
+  the model itself -- a 14B holds about 10 GB before any of our work starts --
+  so a slider that genuinely lowers memory has to be allowed to unload or
+  downgrade the model, which is a much bigger lever than throttling a queue.
+  Whether that is in scope changes the design completely.
+- **Whether a batch survives a restart.** The tab tree and its histories now
+  do; a queue of AI work is a different question, and a job that silently
+  resumes on the next launch is a surprise rather than a feature.
+- **Whether the questions reuse `m_confirm_action`** or get their own
+  affordance. Reusing it keeps one idiom; separating it avoids one control
+  meaning two things.
+
+Not started. The permissions work comes first, on the holder's instruction:
+the browser has to be a browser before the harder half is worth building.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -12576,7 +12634,12 @@ carried along as amendments to a list item.
    had the stream in the request log. A third site that computes its address in
    page JS would reopen it, and there is no way to know without meeting one.
 
-3. **Android's remaining gap is the platform's autofill, and only the runtime
+3. **An indicator for the AI batch jobs.** Recorded, not designed — see
+   *Wanted: an indicator for the AI batch jobs* above for the requirement and
+   the four questions that have to be answered before any of it is built. It
+   comes after the browser is a browser, on the holder's instruction.
+
+4. **Android's remaining gap is the platform's autofill, and only the runtime
    half is now unverified.** The four code-level preconditions are checked and
    met — see *Two searches that found the code correct* above — and the test
    handset has an autofill service configured, so the emulator's excuse is
@@ -12595,7 +12658,7 @@ carried along as amendments to a list item.
    the browser's side of the arrangement is verified. Only the fill itself is
    open.
 
-4. **What is left untested now needs a network or a device.** The sweep through
+5. **What is left untested now needs a network or a device.** The sweep through
    never-tested files is finished — see the sections above; four of nine were
    wrong. The line that used to sit here said the remaining dialogs were covered
    only incidentally and that a unit test for one would be testing Qt. That is
@@ -12608,7 +12671,7 @@ carried along as amendments to a list item.
    thin adapters around it, which need a page rather than a fixture, and are
    driven through the shell by the live drivers instead.
 
-5. **Whether a `file:` url should open as a page is still open, and is the
+6. **Whether a `file:` url should open as a page is still open, and is the
    copyright holder's.** The littering half is fixed — see *The url no longer
    becomes a directory* above — so what remains is only the question the fix
    deliberately did not answer: `main.cpp` classifies `file:` as a tree path,
@@ -12619,7 +12682,7 @@ carried along as amendments to a list item.
    instead. The distinction that would preserve the recorded intent exactly is
    the scheme rather than the path: `./tree.txt` has none, `file:` always did.
 
-6. **CI skips one check for want of an icon theme.** `test_theme`'s
+7. **CI skips one check for want of an icon theme.** `test_theme`'s
    system-icon-directory assertion has nothing to look at in the
    `debian:trixie` container and says so rather than failing. Installing
    `hicolor-icon-theme` would make it run; that is one word in a dependency
@@ -12627,7 +12690,7 @@ carried along as amendments to a list item.
    theme is a test dependency rather than a build one. Left for whoever owns
    that list.
 
-7. **A node's url means two things at once, and rows can be internally
+8. **A node's url means two things at once, and rows can be internally
    inconsistent.** See *One field with two meanings* above: the title follows
    the page and the url does not, so a row can carry a title from one page and
    a url from another — measured. The obvious repair breaks the tab lock,
@@ -12636,7 +12699,7 @@ carried along as amendments to a list item.
    costs are in that section. The pin is now asserted in `test_model`, so the
    repair fails loudly rather than quietly.
 
-8. **KeePassXC support is broken and needs the account that has a working
+9. **KeePassXC support is broken and needs the account that has a working
    set up.** See *KeePassXC: the socket path, settled before the session that
    can test it* above. The socket path is fixed and ruled out for an ordinary
    desktop; what is untested is everything after it — framing, key exchange,
