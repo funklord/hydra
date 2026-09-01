@@ -113,6 +113,11 @@ permission_dialog::permission_dialog(const QString &host, policy::feature f,
 	// tries again; a wrongly granted one is a camera that is on.
 	auto *block = buttons->addButton("&Block", QDialogButtonBox::RejectRole);
 	auto *allow = buttons->addButton("&Allow", QDialogButtonBox::AcceptRole);
+	// Named so a driver can find and press them. An unnamed button in a modal
+	// dialog is a permission decision no test can ever make, which would leave
+	// the whole prompt path resting on somebody having clicked it by hand once.
+	block->setObjectName("permission_block");
+	allow->setObjectName("permission_allow");
 	block->setDefault(true);
 	block->setFocus();
 	column->addWidget(buttons);

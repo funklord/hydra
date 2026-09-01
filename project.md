@@ -12715,12 +12715,79 @@ that deliberately did not move, the strictness of `is_allowed` against `ask`, th
 one-table invariant above, and a save/load round-trip proving `ask` survives the
 file as both a global default and a site rule.
 
-**Not verified: that any of this has been seen on a screen.** No prompt has been
-put in front of a person on either platform. On Android specifically there is a
-risk worth naming rather than assuming away — the dialog is a Qt widget and the
-page underneath it is a native `WebView` in its own surface, and whether a
-widget dialog composites above that is exactly the kind of thing this project
-has been wrong about before. It needs the handset.
+`try_permissions` now covers the prompt end to end and passes 19 of 19 offscreen.
+Two cases were added, and the driver had to be repaired to take them.
+
+- **A dialog really appears, and pressing Allow reaches the engine as a grant.**
+  Geolocation set to `ask`, the button pressed by object name, and the decider's
+  own log shows `GRANTED` — the answer made the round trip out to a widget and
+  back into Chromium, which is the thing the asynchronous decider exists to make
+  possible and the thing a bool could not do.
+- **Dismissing refuses**, and the page sees `NotAllowedError` for it.
+- **The run-scoped memory works.** Geolocation is left on `ask` for the second
+  case and produces no second dialog; the prompt count rises by exactly one, for
+  the microphone. That count is the assertion that a page cannot nag.
+- **Remember unticked leaves the site rule alone**: `effective_setting` is still
+  `ask` after the grant.
+
+The buttons carry object names for this. An unnamed button in a modal dialog is
+a decision no test can ever make, which would have left the whole path resting on
+somebody having clicked it by hand once.
+
+### Two things the driver was wrong about, found by running it
+
+**It asserted on a camera this machine does not have.** There is no `/dev/video*`
+here, so the page fails at device enumeration and Chromium never requests the
+camera permission at all — the decider is never consulted and the page reports
+`NotFoundError`. Four checks failed on that, and had been failing before any of
+this work: nothing in the output distinguished "no camera on this box" from "the
+permission plumbing is broken", which is the more expensive of the two to
+misread. The camera checks are now conditional on `camera_reachable`, derived
+from the decider's own log rather than by looking for a device — the question is
+not "is there a webcam" but "does a camera request reach our code here" — and a
+`--   skipped:` line says so when it does not.
+
+The same fact bit the new case: it was written against the camera, where it would
+have passed trivially and tested nothing, since no request means no dialog to
+dismiss. It uses the microphone, which this machine does ask about —
+`NotReadableError` is a device that exists and will not open, as against
+`NotFoundError` for one that is not there.
+
+**And case 1 could no longer be called "the defaults".** It ran without setting
+anything, and three of its four features now default to `ask` — so it would have
+put four modal dialogs on the screen and hung the sweep, unattended, with nothing
+to say why. It sets `block` explicitly and keeps testing what it was written to
+test. The prompt-answering watcher is armed for every case rather than only the
+two that expect one, and the cases that expect none assert the count is zero, so
+an unexpected dialog fails a check instead of hanging a sweep.
+
+### A build bug this surfaced: moc objects tracked no headers
+
+`test/Makefile` compiled its two moc object rules without `-MMD -MP`, alone among
+the rules around them. A moc object therefore recorded nothing about the headers
+it had read, and `moc_qtwebengine_view` reads `web_view_backend.h` transitively
+through `qtwebengine_view.h`. When the decider's signature changed there, nothing
+knew to rebuild it, and the stale object kept a vtable entry for a function that
+no longer existed.
+
+It surfaced as an undefined reference, which is the lucky outcome. A signature
+change that stayed link-compatible would have produced an object disagreeing with
+the rest of the program about a virtual call, with no error at all. Both rules
+now emit dependencies.
+
+**Also worth recording: the first check of that build reported success and was
+worthless.** `make -C test try_permissions` is not a target — the real one is
+`build-make/try_permissions` — and make said "No rule to make target" while the
+grep looking only for `error:` found nothing and printed "compile done". A gate
+over an output that cannot contain what it is looking for passes exactly as
+loudly as a real one.
+
+**Still not verified: that any of this has been seen on Android.** The desktop
+prompt is now proven; the handset is not. The risk worth naming rather than
+assuming away is that the dialog is a Qt widget and the page underneath it is a
+native `WebView` in its own surface, and whether a widget dialog composites above
+that is exactly the kind of thing this project has been wrong about before.
+
 
 ## What is next (in order)
 

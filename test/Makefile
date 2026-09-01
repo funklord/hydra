@@ -249,11 +249,22 @@ $(BUILD_DIR)/tmoc/moc_%.cpp: %.h | $(BUILD_DIR)/tmoc
 	@$(MOC_GUARD)
 	@$(MOC) $< -o $@
 
+# **`-MMD -MP` here too, which was missing and cost a link error.** These two
+# rules were the only ones on this page compiling without dependency output, so
+# a moc object recorded nothing about the headers it had read. A moc'd class
+# picks up its base class's declarations transitively -- `moc_qtwebengine_view`
+# reads `web_view_backend.h` through `qtwebengine_view.h` -- and when the
+# permission decider's signature changed there, nothing knew to rebuild it. The
+# stale object kept a vtable entry for a function that no longer existed.
+#
+# It surfaced as an undefined reference, which is the lucky outcome. A signature
+# change that stays link-compatible would have produced an object disagreeing
+# with the rest of the program about a virtual call, and no error at all.
 $(BUILD_DIR)/tmoc/%.o: $(BUILD_DIR)/tmoc/%.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 $(BUILD_DIR)/moc/%.o: $(BUILD_DIR)/moc/%.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 $(BUILD_DIR)/app/%.o: $(SRC)/%.cpp $(MOC_CPP_SRCS) | $(BUILD_DIR)/app
 	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@

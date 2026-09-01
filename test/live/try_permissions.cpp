@@ -34,6 +34,8 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTimer>
+#include <QDialog>
+#include <QPushButton>
 #include <QTreeView>
 #include <QUrlQuery>
 #include <cstdio>
@@ -53,6 +55,12 @@ static int g_pass = 0, g_fail = 0;
 static void check(bool ok, const QString &w) {
 	if (ok) { ++g_pass; std::printf("  ok    %s\n", qPrintable(w)); }
 	else    { ++g_fail; std::printf("  FAIL  %s\n", qPrintable(w)); }
+}
+// Not a pass and not a failure. Counted as neither, so a run that could not
+// exercise something says so rather than quietly reporting a smaller number of
+// passes -- which reads as everything being fine.
+static void skipped(const QString &w) {
+	std::printf("  --    skipped: %s\n", qPrintable(w));
 }
 static void spin(int ms) {
 	QEventLoop l;
@@ -150,17 +158,17 @@ int main(int argc, char *argv[]) {
 	// so re-asking on the same port would be answered from that memory and the
 	// page would never reach our decider a second time. Same host throughout, so
 	// the per-host policy still applies to all three.
-	origin servers[4];
-	quint16 ports[4];
-	for (int i = 0; i < 4; ++i) {
+	origin servers[6];
+	quint16 ports[6];
+	for (int i = 0; i < 6; ++i) {
 		if (!servers[i].listen(QHostAddress::LocalHost, 0)) {
 			std::printf("could not listen\n");
 			return 1;
 		}
 		ports[i] = servers[i].serverPort();
 	}
-	std::printf("origins on 127.0.0.1: %u %u %u %u\n",
-	             ports[0], ports[1], ports[2], ports[3]);
+	std::printf("origins on 127.0.0.1: %u %u %u %u %u %u\n",
+	             ports[0], ports[1], ports[2], ports[3], ports[4], ports[5]);
 
 	policy_engine       policy;
 	request_filter      filter(&policy);
@@ -234,15 +242,87 @@ int main(int argc, char *argv[]) {
 		return v == "NotAllowedError" || v == "AbortError";
 	};
 
-	// 1. The sec 7.2 defaults: every one of these is block.
-	run_case(0, "defaults: geo, camera, microphone, notifications all blocked");
+	// Somebody to press the button, since `ask` puts a modal dialog in the way
+	// and nothing in a sweep is holding a mouse.
+	//
+	// **A watcher rather than a one-shot.** The prompt appears an unpredictable
+	// time after the navigation -- the page has to load and call `getUserMedia`
+	// first -- and a single shot timed to guess that is a flake waiting to
+	// happen, in the one test that hangs for ever when it misses. This polls
+	// instead. It is bounded by the driver: it spawns nothing, it acts at most
+	// once per dialog, and it dies with the run.
+	//
+	// It is armed for every case, not only the two that expect a prompt, and
+	// `prompts_seen` is asserted to be zero for the ones that do not. A dialog
+	// nobody expected would otherwise hang the sweep unattended, which is the
+	// exact failure this driver is now written to make impossible.
+	int prompts_seen = 0;
+	const char *press_button = nullptr;   // null means dismiss, which refuses
+	QTimer watcher;
+	watcher.setInterval(150);
+	QObject::connect(&watcher, &QTimer::timeout, [&] {
+		for (QWidget *tl : QApplication::topLevelWidgets()) {
+			if (tl->objectName() != "permission_dialog" || !tl->isVisible())
+				continue;
+			++prompts_seen;
+			if (press_button) {
+				if (auto *b = tl->findChild<QPushButton *>(press_button))
+					b->click();
+				else
+					qobject_cast<QDialog *>(tl)->reject();
+			} else {
+				qobject_cast<QDialog *>(tl)->reject();
+			}
+			return;
+		}
+	});
+	watcher.start();
+
+	// 1. Explicitly blocked, which is no longer the same thing as the defaults.
+	//
+	// **This case used to say "the sec 7.2 defaults" and run without setting
+	// anything.** Three of these four now default to `ask`, so leaving it that
+	// way would have put four modal dialogs on the screen and hung the driver
+	// for ever -- in the sweep, unattended, with nothing to say why. Set here,
+	// so the case keeps testing what it was written to test: that a refusal
+	// travels from the decider to the page.
+	policy.set_setting("127.0.0.1", policy::feature::geolocation,
+	                    policy::setting::block);
+	policy.set_setting("127.0.0.1", policy::feature::camera,
+	                    policy::setting::block);
+	policy.set_setting("127.0.0.1", policy::feature::microphone,
+	                    policy::setting::block);
+	policy.set_setting("127.0.0.1", policy::feature::notifications,
+	                    policy::setting::block);
+	run_case(0, "explicitly blocked: geo, camera, microphone, notifications");
+	// **Whether this machine can exercise the camera at all**, decided once and
+	// consulted by every camera assertion below.
+	//
+	// With no `/dev/video*` the page fails at device enumeration and Chromium
+	// never requests the permission -- so the decider is never consulted, the
+	// page reports `NotFoundError`, and every check about the camera fails for a
+	// reason that has nothing to do with this browser. Four of them did exactly
+	// that, and nothing in the output distinguished "no camera here" from "the
+	// permission plumbing is broken". Now it does.
+	//
+	// Derived from the decider's own log rather than by looking for a device:
+	// the question is not "is there a webcam" but "does a camera request reach
+	// our code here", and the log is what answers that.
+	const bool camera_reachable = answered("camera", "denied");
+
 	check(answered("notifications", "denied") && answered("geolocation", "denied") &&
-	       answered("microphone", "denied") && answered("camera", "denied"),
-	      "all four are refused by our decider");
+	       answered("microphone", "denied"),
+	      "geolocation, microphone and notifications are refused by our decider");
 	check(got("geo") == "error-1",
 	      "geolocation is refused (PERMISSION_DENIED, not merely unavailable)");
 	check(refused("mic"), QString("the microphone is refused (%1)").arg(got("mic")));
-	check(refused("cam"), QString("the camera is refused (%1)").arg(got("cam")));
+	if (camera_reachable)
+		check(refused("cam"), QString("the camera is refused (%1)").arg(got("cam")));
+	else
+		skipped(QString("every camera check -- no camera request reaches the "
+		                 "decider on this machine, so the page fails at device "
+		                 "enumeration (%1) before any permission is asked")
+		          .arg(got("cam")));
 	check(got("notify") == "denied", "notifications are refused");
 
 	// 2. Grant geolocation for this host alone. This is the row that isolates
@@ -252,7 +332,8 @@ int main(int argc, char *argv[]) {
 	                    policy::setting::allow);
 	run_case(1, "geolocation allowed for this host");
 	check(answered("geolocation", "GRANTED"), "geolocation is now granted by our decider");
-	check(answered("microphone", "denied") && answered("camera", "denied"),
+	check(answered("microphone", "denied") &&
+	       (!camera_reachable || answered("camera", "denied")),
 	      "while microphone and camera are still refused, so the grant is "
 	      "per-feature and the enum mapping is right");
 	check(refused("mic"),
@@ -274,8 +355,8 @@ int main(int argc, char *argv[]) {
 	check(got("notify") == "granted",
 	      "and the page really is told granted — the one feature here whose "
 	      "end-to-end outcome the engine can actually deliver");
-	check(refused("cam"),
-	      "while the camera is still refused");
+	if (camera_reachable)
+		check(refused("cam"), "while the camera is still refused");
 
 	// 4. Camera and microphone *granted*, which nothing here used to do.
 	//    Every earlier case grants something else and re-asserts that these two
@@ -289,7 +370,8 @@ int main(int argc, char *argv[]) {
 	policy.set_setting("127.0.0.1", policy::feature::microphone,
 	                    policy::setting::allow);
 	run_case(3, "camera and microphone allowed for this host");
-	check(answered("camera", "GRANTED") && answered("microphone", "GRANTED"),
+	check(answered("microphone", "GRANTED") &&
+	       (!camera_reachable || answered("camera", "GRANTED")),
 	      "the decider grants both");
 	// **The relationship, not the value.** Whether a real device answers is a
 	// property of the machine -- `NotFoundError` is the honest reply where there
@@ -299,8 +381,68 @@ int main(int argc, char *argv[]) {
 	// spellings of that, and neither may survive the grant.
 	check(!refused("mic"),
 	      QString("the microphone is no longer refused (%1)").arg(got("mic")));
-	check(!refused("cam"),
-	      QString("the camera is no longer refused (%1)").arg(got("cam")));
+	if (camera_reachable)
+		check(!refused("cam"),
+		      QString("the camera is no longer refused (%1)").arg(got("cam")));
+
+	check(prompts_seen == 0,
+	      "nothing has been prompted for yet: every case above sets allow or "
+	      "block, and a prompt appearing under one of those would mean the "
+	      "engine reached the dialog past a decision already taken");
+
+	// 5. `ask`, which is the whole reason the decider became asynchronous and
+	//    is the one path nothing here could previously reach. A bool decider
+	//    had nowhere to put "wait, a person is being asked".
+	//
+	//    Only geolocation moves: camera, microphone and notifications were left
+	//    on `allow` by the cases above, so exactly one dialog can appear and
+	//    the count below means what it says.
+	press_button = "permission_allow";
+	policy.set_setting("127.0.0.1", policy::feature::geolocation,
+	                    policy::setting::ask);
+	run_case(4, "geolocation set to ask, and the person presses Allow");
+	check(prompts_seen == 1, "a prompt was put on the screen");
+	check(answered("geolocation", "GRANTED"),
+	      "and pressing Allow reaches the engine as a grant -- the answer "
+	      "survived the round trip out to a dialog and back");
+	check(policy.effective_setting(policy::feature::geolocation, "127.0.0.1") ==
+	        policy::setting::ask,
+	      "with Remember unticked the site rule is untouched: the answer was "
+	      "for this run, not for ever");
+
+	// 6. Dismissal refuses, and the run-scoped memory means the question just
+	//    answered is not asked again.
+	//
+	//    **The microphone, not the camera.** The obvious choice was the camera
+	//    and it silently tested nothing: with no `/dev/video*` the request never
+	//    reaches the decider, so no dialog appears, and "the prompt was
+	//    dismissed and the page was refused" passes trivially for the wrong
+	//    reason. The microphone is asked for on this machine -- `NotReadableError`
+	//    rather than `NotFoundError` is the device existing and refusing to open
+	//    -- so it is the one that actually exercises the path.
+	//
+	//    Geolocation is deliberately left on `ask` here. It was answered in case
+	//    5 and the shell remembers that for the run, so it must produce no second
+	//    dialog -- which is what stops a page calling `getUserMedia` in a loop
+	//    from putting prompts on the screen as fast as they are dismissed. Only
+	//    the microphone is newly `ask`, so `prompts_seen` rising by exactly one
+	//    is the assertion that the memory worked.
+	press_button = nullptr;
+	policy.set_setting("127.0.0.1", policy::feature::microphone,
+	                    policy::setting::ask);
+	run_case(5, "microphone set to ask, and the person dismisses the dialog");
+	check(prompts_seen == 2,
+	      "exactly one more prompt: the microphone asked, and the geolocation "
+	      "answered a moment ago was not asked again");
+	check(answered("microphone", "denied"),
+	      "dismissing is a refusal, not a deferral -- a prompt that treated "
+	      "Escape as 'ask me again shortly' is how a page nags somebody into "
+	      "agreeing");
+	check(refused("mic"),
+	      QString("and the page is refused the microphone (%1)").arg(got("mic")));
+	check(answered("geolocation", "GRANTED"),
+	      "while geolocation is still granted, from the run's memory rather "
+	      "than from a rule on disk");
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;
