@@ -14,6 +14,7 @@
 #include "android_view.h"
 #include "request_filter.h"
 #include "scheme_rules.h"
+#include "user_agent.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -288,6 +289,22 @@ Java_se_vibes_hydra_HydraWebView_requestCapture(JNIEnv *env, jclass, jlong id,
 	QMetaObject::invokeMethod(qApp, [vid, o, wantv, wanta, tok] {
 		android_view::request_capture(vid, o, wantv, wanta, tok);
 	}, Qt::QueuedConnection);
+}
+
+// The user agent, corrected by the same function the desktop uses.
+//
+// **No thread hop, and that is not an oversight.** `user_agent::corrected` is a
+// pure function of the string it is given -- it touches no view, no shell and no
+// Qt object -- so it can answer on whatever thread Java asks from. Every other
+// entry point here either posts or waits with a deadline; this one needs
+// neither, which is the cheapest kind of correct.
+extern "C" JNIEXPORT jstring JNICALL
+Java_se_vibes_hydra_HydraWebView_correctedUserAgent(JNIEnv *env, jclass,
+                                                                  jstring offered) {
+	const QString in = from_java(env, offered);
+	if (in.isEmpty())
+		return env->NewStringUTF("");
+	return env->NewStringUTF(user_agent::corrected(in).toUtf8().constData());
 }
 
 extern "C" JNIEXPORT jstring JNICALL

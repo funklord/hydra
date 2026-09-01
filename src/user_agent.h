@@ -49,6 +49,31 @@ inline QString corrected(const QString &qt_default,
 	// why this is a remove rather than a required match.
 	ua.remove(QRegularExpression(QStringLiteral("QtWebEngine/[0-9.]+ ")));
 
+	// **Android's System WebView names itself three times, and every one of
+	// them gets a browser turned away.** Its default string is shaped like
+	//
+	//     Mozilla/5.0 (Linux; Android 15; SM-F926B Build/AP3A...; wv)
+	//     AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0
+	//     Chrome/131.0.6778.200 Mobile Safari/537.36
+	//
+	// `wv` is the documented marker for "this is a WebView, not a browser", and
+	// `Version/4.0` is the other half of it -- a frozen number left over from
+	// the stock browser, which no Chrome has sent since. A site working from a
+	// list of known browsers has an unknown one in front of it, exactly as the
+	// `QtWebEngine` token did on the desktop, and Teams answers "your browser
+	// isn't supported".
+	//
+	// `Build/...` goes with them. Real Chrome on Android does not send the
+	// device's build fingerprint, so keeping it would both mark the string as
+	// not-Chrome and hand every site a needlessly precise device identifier.
+	//
+	// All three are removals, so a desktop string passes through untouched and
+	// a string that has already been here is unchanged -- the same property the
+	// token removal above relies on.
+	ua.remove(QRegularExpression(QStringLiteral(" Build/[^;)]+")));
+	ua.remove(QStringLiteral("; wv"));
+	ua.remove(QRegularExpression(QStringLiteral("Version/[0-9.]+ ")));
+
 	// **The whole version, not just the major.** Replacing only the major left
 	// `Chrome/140.0.6261.171` -- 140 wearing Chromium 122's build numbers, a
 	// combination that has never shipped and is a worse fingerprint than the

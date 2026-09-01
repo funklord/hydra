@@ -112,6 +112,18 @@ public class HydraWebView {
     /** Everything to run at the start of a page: the shim, then the scripts. */
     public static native String injectedScripts(long id);
 
+    /**
+     * The user agent this browser should send, derived from the one the
+     * System WebView offers.
+     *
+     * Native rather than done here, and the reason is not tidiness: the
+     * desktop already corrects its own string with a tested C++ function, and
+     * a second copy of those rules written in Java would drift from it. The
+     * transformation is a pure function of the string, so this is the one
+     * native call in this class that needs no thread hop at all.
+     */
+    public static native String correctedUserAgent(String offered);
+
     /** True when the shell took a navigation instead -- magnet: and the like. */
     public static native boolean takeExternalUrl(String url);
 
@@ -263,6 +275,19 @@ public class HydraWebView {
                 Player w = new Player(a);
                 w.getSettings().setJavaScriptEnabled(true);
                 w.getSettings().setDomStorageEnabled(true);
+                // **What this browser says it is.** The WebView's own default
+                // announces itself three times -- `wv`, `Version/4.0`, and the
+                // device build fingerprint -- and a site working from a list of
+                // known browsers reads that as something that is not one.
+                // teams.microsoft.com answers "your browser isn't supported".
+                //
+                // Derived from what the platform offers rather than written
+                // out, for the reason the desktop gives: the platform half has
+                // to stay true, and a hardcoded string is wrong on the next
+                // device.
+                final String ua = correctedUserAgent(w.getSettings().getUserAgentString());
+                if (ua != null && !ua.isEmpty())
+                    w.getSettings().setUserAgentString(ua);
                 // **Cookies, which nothing here had ever configured.**
                 // setAcceptCookie defaults to true, so first-party cookies did
                 // work; it is stated anyway, because the default is what this

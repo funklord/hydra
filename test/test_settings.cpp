@@ -903,6 +903,37 @@ int main(int argc, char **argv) {
 		const QString dout = user_agent::corrected(droid, 140);
 		check(dout.contains("Linux; Android 10; K") && dout.contains("Mobile"),
 		      "an Android string keeps its platform and its Mobile token");
+
+		// **The System WebView's own string, which is a different shape and the
+		// one the phone actually sends.** The Qt-flavoured Android string above
+		// never reaches a page on Android: there is no Qt WebEngine there, so
+		// what a site sees is this. Teams answered "your browser isn't
+		// supported" to it.
+		const QString wv =
+		  "Mozilla/5.0 (Linux; Android 15; SM-F926B Build/AP3A.240905.015.A2; wv) "
+		  "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 "
+		  "Chrome/131.0.6778.200 Mobile Safari/537.36";
+		const QString wout = user_agent::corrected(wv, 140);
+
+		check(!wout.contains("; wv"),
+		      "the wv marker is gone — it is the documented way to say 'this is "
+		      "not a browser', and it is read that way");
+		check(!wout.contains("Version/4.0"),
+		      "and so is Version/4.0, a number frozen since the stock browser "
+		      "that no Chrome has sent since");
+		check(!wout.contains("Build/"),
+		      "the device build fingerprint goes too — real Chrome does not "
+		      "send it, and it identifies the handset more precisely than any "
+		      "site needs");
+		check(wout.contains("Linux; Android 15; SM-F926B"),
+		      "while the platform and the model survive, because that part is "
+		      "true and Chrome sends it");
+		check(wout.contains("Chrome/140.0.0.0") && wout.contains("Mobile Safari/537.36"),
+		      "and what is left is shaped exactly like Chrome on Android");
+		check(!wout.contains("  ") && !wout.contains(" )"),
+		      "with no doubled space or orphaned bracket where the tokens were");
+		check(user_agent::corrected(wout, 140) == wout,
+		      "and running it twice changes nothing, as on the desktop");
 	}
 
 	section("the filter list is written atomically");

@@ -13346,6 +13346,81 @@ reveals *where you are* in the middle of the three that move you around. It is
 first now. Verified on the device by the accessibility tree, which reads the
 toolbar left to right: the button is at x=5 and Back has moved to x=74.
 
+## Teams refused the phone, and the user agent is why again
+
+Reported from the handset: `teams.microsoft.com` answers **"your browser isn't
+supported"**.
+
+This is the second time a site has turned this browser away over what it calls
+itself, and the first time is written up above -- a Swedish bank, refusing the
+`QtWebEngine/` token and a Chrome version years old. The desktop was fixed then,
+in `user_agent::corrected`, applied from `qtwebengine_factory`.
+
+**Android never got it.** Nothing in the port calls
+`WebSettings.setUserAgentString`, so the System WebView sends its own default,
+which names itself three times:
+
+    Mozilla/5.0 (Linux; Android 15; SM-F926B Build/AP3A.240905.015.A2; wv)
+    AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0
+    Chrome/131.0.6778.200 Mobile Safari/537.36
+
+- **`wv`** is Android's documented marker for "this is a WebView embedded in an
+  application, not a browser". Sites read it that way on purpose.
+- **`Version/4.0`** is the other half of the same signal: a number frozen since
+  the stock Android browser, which no Chrome has sent since.
+- **`Build/...`** is the device's build fingerprint. Real Chrome on Android does
+  not send it, so it marks the string as not-Chrome *and* identifies the handset
+  more precisely than any site needs.
+
+Corrected, the same three rules plus the existing version replacement give
+exactly what Chrome on Android sends:
+
+    Mozilla/5.0 (Linux; Android 15; SM-F926B) AppleWebKit/537.36
+    (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36
+
+### One function, called from Java
+
+Every new rule is a **removal**, so a desktop string passes through untouched
+and the idempotency the factory relies on -- it derives from whatever the
+profile reports, which may already have been through here -- still holds. The
+existing tests did not move.
+
+The correction is not reimplemented in Java. `HydraWebView` declares a native
+`correctedUserAgent(String)` and calls it with what the WebView offers; the JNI
+side hands it straight to `user_agent::corrected`. A second copy of these rules
+in Java would drift from the tested one, which is the failure this file keeps
+recording under other names.
+
+**It is also the one native entry point that needs no thread hop.** The
+transformation is a pure function of the string -- no view, no shell, no Qt
+object -- so it answers on whatever thread Java asks from, while every other
+entry point either posts or waits with a deadline. Worth saying explicitly so
+the next person does not wrap it in `on_qt_thread` for symmetry and reintroduce
+the deadlock recorded above.
+
+### What is verified, and what is a hypothesis
+
+Verified offline: seven new checks in `test_settings` over a real WebView
+string -- the three markers gone, the platform and model kept, the result shaped
+like Chrome on Android, no doubled space or orphaned bracket, and idempotent.
+`make jni` reports 13 native methods, every one resolvable. Both builds are
+clean.
+
+**Not verified: that this is why Teams refuses.** The handset went off adb
+before the string could be measured from the device or the fix tried against the
+site. That the WebView markers get browsers turned away is documented behaviour
+and the desktop precedent is exactly this shape -- but Teams may also be
+gating on something else, and "the user agent was wrong and is now right" is a
+different claim from "Teams works". The measurement to make when the phone is
+back is the one that was set up and never ran: a page reporting
+`navigator.userAgent`, `navigator.userAgentData.brands` and the `User-Agent`
+header, before and after.
+
+Note also the limit the desktop already records: `sec-ch-ua` is built by
+Chromium from its real version and cannot be overridden, so a site reading
+`navigator.userAgentData` rather than the string still sees through this. If
+Teams does that, this fix will not move it.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
