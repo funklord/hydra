@@ -12409,6 +12409,89 @@ gates over empty file lists, and it applies to the person writing the search as
 much as to the tool. A search that returns nothing should be made to prove it
 looked — here, by naming a file it must have found.
 
+## getUserMedia on Android: three things, none of them sufficient alone
+
+Asked for so that Teams web meetings can work. What was missing on Android was
+not one thing with a switch, and that is the part worth recording: a page
+calling `getUserMedia` was refused three separate times over, and fixing any one
+of them would have changed nothing observable.
+
+- **The manifest declared no capture permission.** Only `INTERNET`,
+  `POST_NOTIFICATIONS` and the two foreground-service ones.
+- **The `WebChromeClient` did not override `onPermissionRequest`.** Its only
+  override was `onShowFileChooser`, so Android's default ran, and the default
+  denies. This is the one with no diagnostic: the page sees a rejected promise
+  and nothing anywhere says why.
+- **Nothing asked for the runtime grant.** No `requestPermissions`, no
+  `checkSelfPermission`, which is mandatory from API 23 against a minSdk of 28.
+
+All three are in now, and the desktop needed none of them: `policy` has had
+`camera` and `microphone` all along and `qtwebengine_view` maps
+`MediaAudioCapture` and `MediaVideoCapture` onto them, so a call there was
+already answerable. Android had the same `permission_decider` set on every
+view and never once asked it.
+
+### Two refusals, in the right order, and one deliberate inversion
+
+`android_view::request_capture` puts the site policy first — the same engine
+the desktop asks, so the shield governs Android identically — and the operating
+system's grant second. Either is final. A user who denied this application the
+camera has said something no per-site rule may override, and a site the shield
+blocks does not get to raise an OS dialog to argue about it.
+
+The OS questions are asked one after the other rather than together, because
+each is a dialog and two at once is a stack of them in front of somebody trying
+to join a call.
+
+**And it refuses when nothing is listening, which is the opposite of
+`allow_navigation` directly above it.** That one returns *true* for a view whose
+shell never set a decider, on the recorded grounds that a refusal nobody asked
+for is a browser that will not browse. Both are right. The safe direction is not
+a property of the pattern; it is a property of what is being asked for, and a
+missing decider must not hand a page the camera.
+
+### The asynchronous part, which is why nothing returns a value
+
+Every other JNI entry point in that file goes through `on_qt_thread`, which is
+a `BlockingQueuedConnection` — it holds the calling binder thread until the Qt
+thread answers. That is right for a question with an immediate answer and wrong
+here, because the answer may wait on a dialog: holding a binder thread while one
+is on screen is how an application stops responding.
+
+So `requestCapture` posts and returns. Java parks the `PermissionRequest` under
+a token, C++ answers by calling `onCaptureDecision` back, and the request is
+granted or denied then. A `PermissionRequest` may be answered later, which is
+what makes the design possible at all. Every early return in `request_capture`
+goes through one `answer` lambda, because a request that is never answered
+leaves the page's promise pending for ever — indistinguishable, to a user, from
+a camera that is slow to start.
+
+Granting names the resources the page asked for rather than everything it might
+have, so a request for audio alone cannot come back holding the camera because
+the policy happened to allow both.
+
+### What is verified, and what is not
+
+Verified against the artifact rather than the build log: `aapt2 dump badging`
+reports `CAMERA`, `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS` in the package, and
+both hardware features as **`uses-feature-not-required`**. That last one is not
+cosmetic — declaring `CAMERA` makes Android imply a *required* camera feature,
+which would quietly make the browser uninstallable on a device without one, and
+`required="false"` is what prevents it.
+
+`make jni` reports 12 native methods, every one resolvable, which is what
+catches a JNI signature that does not match its Java declaration. The arm64
+build is clean; the desktop build does not compile these files at all, so it
+could not have caught a fault here.
+
+**Not verified: that a Teams meeting connects.** Nothing here has met a real
+call. Three necessary conditions were missing and are now present; whether they
+are sufficient is a different claim and needs an account, a meeting and the
+handset. Two known risks sit beyond them and are unaffected by this work:
+screen sharing is still refused on both platforms — `DesktopVideoCapture` falls
+to the deny branch and there is no source picker — and the session-cookie policy
+recorded against Teams by name still discards the SSO cookie on exit.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

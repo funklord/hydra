@@ -42,6 +42,28 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Camera and microphone, for a page that calls getUserMedia: a video
+         call in the browser is the case, and Teams web is the one asked for.
+
+         A WebView cannot capture without these however the page is answered,
+         and it cannot capture with them alone either: the WebChromeClient has
+         to answer onPermissionRequest, and the app has to hold the runtime
+         grant. Three separate things, none of which is sufficient, which is
+         why adding a line here on its own changes nothing.
+
+         MODIFY_AUDIO_SETTINGS is what lets the engine route capture and
+         playback sensibly during a call rather than fighting whatever the
+         last app left the stream on.
+
+         Declared, never demanded. android:required="false" on the features
+         below so a device without a camera can still install a browser; a
+         browser that a tablet refuses because it has no front camera would be
+         a worse outcome than one where a video call cannot start. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
     <!-- Plain HTTP is allowed because this is a browser. Android blocks
          cleartext by default, which is right for an app that talks to its own
          backend and wrong for one whose entire job is loading addresses the

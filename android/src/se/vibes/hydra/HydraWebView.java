@@ -12,6 +12,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.ValueCallback;
+import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -36,6 +37,23 @@ import java.util.Map;
 public class HydraWebView {
 
     private static final Map<Long, WebView> VIEWS = new HashMap<>();
+    /**
+     * getUserMedia requests waiting on an answer.
+     *
+     * A PermissionRequest is answered by calling grant() or deny() on it, and
+     * that need not happen inside onPermissionRequest -- which is what makes
+     * this workable, because the answer needs two things that are not
+     * available synchronously: the shell's own site policy, which lives on
+     * the Qt thread, and the Android runtime grant, which may put a dialog in
+     * front of the user.
+     *
+     * So the request is parked here under a token, the question goes to C++,
+     * and onCaptureDecision() comes back to finish it. The token is a counter
+     * rather than the view id because one view can have more than one request
+     * outstanding.
+     */
+    private static final Map<Long, PermissionRequest> PENDING = new HashMap<>();
+    private static long NEXT_TOKEN = 1;
 
     /**
      * Kept so every later call can be posted to the same UI-thread queue that
@@ -113,6 +131,45 @@ public class HydraWebView {
                                                  boolean userGesture);
 
     /** A page's file input was used. The answer arrives later, via deliverFiles. */
+    /**
+     * Asks the shell whether this origin may capture, and answers later.
+     *
+     * Two questions behind one call: the site policy, which is the same
+     * engine the desktop asks and which lives on the Qt thread, and the
+     * Android runtime grant, which may show a dialog. Neither can be answered
+     * from here and both must be, so nothing is returned -- the answer
+     * arrives at onCaptureDecision() with the token this was given.
+     */
+    public static native void requestCapture(long id, String origin,
+                                            boolean video, boolean audio,
+                                            long token);
+
+    /**
+     * The answer to a requestCapture, from C++ on the UI thread.
+     *
+     * Granting names the resources the page asked for rather than everything
+     * it might have: a request for audio alone must not come back holding the
+     * camera because the policy happened to allow both.
+     *
+     * A token with nothing parked under it is not an error. The view can be
+     * torn down between the question and the answer, and a page that has gone
+     * away has no request left to grant.
+     */
+    public static void onCaptureDecision(final long token, final boolean granted) {
+        onUi(new Runnable() {
+            @Override public void run() {
+                PermissionRequest req = PENDING.remove(token);
+                if (req == null)
+                    return;
+                if (!granted) {
+                    req.deny();
+                    return;
+                }
+                req.grant(req.getResources());
+            }
+        });
+    }
+
     public static native void chooseFile(long id, boolean multiple, String accept);
 
     /**
@@ -256,6 +313,40 @@ public class HydraWebView {
                 // Before any load, so a page cannot start without it.
                 w.addJavascriptInterface(new Native(id), "hydraNative");
                 w.setWebChromeClient(new WebChromeClient() {
+                    /**
+                     * A page asked for the camera or the microphone.
+                     *
+                     * **The default implementation denies, silently**, which is why this
+                     * override is not optional: without it no getUserMedia on Android can
+                     * succeed whatever the manifest declares or the user has granted. It is
+                     * the one of the three requirements with no diagnostic at all -- the
+                     * page just sees a rejected promise.
+                     *
+                     * Only the two capture resources are considered. Anything else -- a
+                     * protected media id, say -- is denied here rather than passed on,
+                     * because nothing in this browser has a policy for it, and granting
+                     * what you cannot describe is how a permission model stops meaning
+                     * anything.
+                     */
+                    @Override
+                    public void onPermissionRequest(final PermissionRequest req) {
+                        boolean video = false, audio = false;
+                        for (String r : req.getResources()) {
+                            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r))
+                                video = true;
+                            else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r))
+                                audio = true;
+                        }
+                        if (!video && !audio) {
+                            req.deny();
+                            return;
+                        }
+                        final long token = NEXT_TOKEN++;
+                        PENDING.put(token, req);
+                        final String origin = req.getOrigin() != null
+                                ? req.getOrigin().toString() : "";
+                        requestCapture(id, origin, video, audio, token);
+                    }
                     // Returning true means "I will answer, later". Returning
                     // false would let the WebView fall back to nothing at all --
                     // a plain WebView has no picker of its own.

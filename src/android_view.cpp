@@ -23,6 +23,7 @@
 #include <QLabel>
 #include <QJniEnvironment>
 #include <QJniObject>
+#include <QPermissions>
 #include <QGuiApplication>
 #include <QResizeEvent>
 #include <QTimer>
@@ -236,6 +237,24 @@ Java_se_vibes_hydra_HydraWebView_allowNavigation(JNIEnv *env, jclass, jlong id,
 	           : JNI_TRUE;
 }
 
+// **Queued, not blocking, unlike every other entry point here.** Answering may
+// put an Android permission dialog in front of the user, and `on_qt_thread`
+// holds the calling binder thread until its answer arrives -- which for a
+// dialog is until somebody taps it. The Java side was written to be answered
+// later for exactly this reason, so nothing waits.
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_requestCapture(JNIEnv *env, jclass, jlong id,
+                                                 jstring origin, jboolean video,
+                                                 jboolean audio, jlong token) {
+	const QString o     = from_java(env, origin);
+	const bool    wantv = video == JNI_TRUE;
+	const bool    wanta = audio == JNI_TRUE;
+	const qint64  vid = id, tok = token;
+	QMetaObject::invokeMethod(qApp, [vid, o, wantv, wanta, tok] {
+		android_view::request_capture(vid, o, wantv, wanta, tok);
+	}, Qt::QueuedConnection);
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_se_vibes_hydra_HydraWebView_injectedScripts(JNIEnv *env, jclass,
                                                                jlong id) {
@@ -271,6 +290,63 @@ bool android_view::allow_navigation(qint64 id, const QString &url,
 	// Always the main frame: the Java side asks about nothing else, because a
 	// subframe navigating itself is not the page going anywhere.
 	return v->m_navigation_decider(QUrl(url), true, user_initiated);
+}
+
+void android_view::request_capture(qint64 id, const QString &origin,
+                                    bool video, bool audio, qint64 token) {
+	// One place that answers, however the question ends. Every early return
+	// below goes through it, because a `PermissionRequest` that is never
+	// answered leaves the page's promise pending for ever -- which looks to a
+	// user exactly like a camera that is slow to start.
+	auto answer = [token](bool granted) {
+		QJniObject::callStaticMethod<void>(k_cls, "onCaptureDecision", "(JZ)V",
+		                                    jlong(token), jboolean(granted));
+	};
+
+	android_view *v = s_views.value(id, nullptr);
+	// **Refused when nobody is listening, which is the opposite of
+	// `allow_navigation` above and deliberately so.** A missing navigation
+	// decider must not stop the browser browsing; a missing permission decider
+	// must not hand a page the camera. The safe direction is not a property of
+	// the pattern, it is a property of what is being asked for.
+	if (!v || !v->m_decider) {
+		answer(false);
+		return;
+	}
+
+	const QUrl o(origin);
+	if (video && !v->m_decider(o, policy::feature::camera)) {
+		answer(false);
+		return;
+	}
+	if (audio && !v->m_decider(o, policy::feature::microphone)) {
+		answer(false);
+		return;
+	}
+
+	// The site policy said yes; the operating system is a separate question
+	// with a separate answer. A user who denied this application the camera
+	// has said something no per-site rule may override.
+	//
+	// Asked one after the other rather than together: each is a dialog, and
+	// two at once is a stack of them in front of somebody trying to join a
+	// call.
+	auto then_audio = [answer, audio](bool ok) {
+		if (!ok)     { answer(false); return; }
+		if (!audio)  { answer(true);  return; }
+		qApp->requestPermission(QMicrophonePermission{}, qApp,
+		                         [answer](const QPermission &p) {
+			answer(p.status() == Qt::PermissionStatus::Granted);
+		});
+	};
+	if (!video) {
+		then_audio(true);
+		return;
+	}
+	qApp->requestPermission(QCameraPermission{}, qApp,
+	                         [then_audio](const QPermission &p) {
+		then_audio(p.status() == Qt::PermissionStatus::Granted);
+	});
 }
 
 void android_view::choose_file(qint64 id, bool multiple, const QString &accept) {

@@ -159,6 +159,17 @@ public:
 	                              bool user_initiated);
 	static void set_external_handler(std::function<void(const QUrl &)> fn);
 
+	// A page called getUserMedia. Two refusals stand between it and the
+	// camera, and they are not the same refusal: this browser's own site
+	// policy, which is the engine the desktop asks through the same
+	// `permission_decider`, and the operating system's grant, which a user
+	// may have withheld from the application entirely. Either one is final.
+	//
+	// Answers through `HydraWebView.onCaptureDecision`, not by returning,
+	// because the second question can put a dialog on the screen.
+	static void request_capture(qint64 id, const QString &origin,
+	                             bool video, bool audio, qint64 token);
+
 	// A page asked for a file. Runs on the Qt thread, shows Qt's file dialog --
 	// which on Android *is* the system document picker -- and hands the chosen
 	// urls back to Java, which is the only place that may answer the WebView.
