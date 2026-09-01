@@ -13738,6 +13738,32 @@ reads, in order:
 
 which is the sentence that moves a complaint about a page off this browser.
 
+### Checked the way a person reaches it, not the way a developer does
+
+Everything else in `try_permissions` reads the decider's own debug log, which is
+a developer's instrument: an environment variable on the desktop, unreachable on
+a phone. What somebody using the browser has is the report button, so the driver
+now presses it and reads what came out.
+
+Off disk rather than out of the dialog. `report_annoyance` files before it opens
+anything -- deliberately, so that closing the dialog does not lose the report --
+which makes the file the record and the dialog a view of it. Reading the file
+also proves the evidence survives the INI, which is where a list of lines with
+commas in them is exactly the sort of thing that quietly turns into one string.
+
+The driver's six cases set different policies as they go, so the report it files
+carries the whole history:
+
+    21:42:45  Microphone: ask
+    21:42:45  Notifications: allow
+    21:42:45  Location: ask
+    21:42:40  Microphone: allow
+    ...
+
+Eighteen entries, most recent first, named with the labels the settings page
+uses rather than an engine enum somebody would have to look up. `try_permissions`
+is at 23.
+
 **The desktop deliberately adds nothing here.** There is no application-level
 gate on Linux, so the outcome is the shield's answer and a second line saying so
 would be noise -- and this file has enough entries about controls that repeat

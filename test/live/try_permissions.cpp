@@ -23,6 +23,8 @@
 // checked, never "did it fail".
 #include "main_window.h"
 #include "policy_engine.h"
+#include <QToolBar>
+#include "annoyance_log.h"
 #include "request_filter.h"
 #include "qtwebengine_factory.h"
 
@@ -443,6 +445,71 @@ int main(int argc, char *argv[]) {
 	check(answered("geolocation", "GRANTED"),
 	      "while geolocation is still granted, from the run's memory rather "
 	      "than from a rule on disk");
+
+	// 7. **The evidence a person can actually reach.**
+	//
+	//    Everything above reads the decider's own debug log, which is a
+	//    developer's instrument: it needs an environment variable on the desktop
+	//    and is unreachable on a phone. What somebody using the browser has is
+	//    the "something got through here" button, and the claim worth testing is
+	//    that pressing it captures what the page asked for -- because that is
+	//    the whole reason capability requests became a signal.
+	//
+	//    Read off disk rather than out of the dialog: `report_annoyance` files
+	//    before it opens anything, deliberately, so the file is the record and
+	//    the dialog is a view of it. Checking the file also proves the evidence
+	//    survives the INI, which is where a QStringList of lines with commas in
+	//    them could quietly go wrong.
+	std::printf("\n== what the page asked for, as a person can see it ==\n");
+	{
+		// Close the report as soon as it appears; the filing has already
+		// happened by then.
+		QTimer watcher;
+		watcher.setInterval(150);
+		QObject::connect(&watcher, &QTimer::timeout, [] {
+			for (QWidget *tl : QApplication::topLevelWidgets())
+				if (tl->isVisible() && tl->objectName() == "annoyed_dialog")
+					if (auto *d = qobject_cast<QDialog *>(tl)) { d->reject(); return; }
+		});
+		watcher.start();
+
+		QAction *annoyed = nullptr;
+		for (QToolBar *bar : w.findChildren<QToolBar *>())
+			for (QAction *a : bar->actions())
+				if (a->toolTip().contains("got through here"))
+					annoyed = a;
+		check(annoyed != nullptr, "the report button is on the toolbar");
+		if (annoyed) {
+			annoyed->trigger();
+			spin(1500);
+			watcher.stop();
+
+			annoyance_log log;
+			const bool loaded = log.load(out + "/annoyances.ini");
+			check(loaded, "pressing it files a report");
+			QStringList caps;
+			if (loaded && log.count_for("127.0.0.1") > 0)
+				caps = log.for_host("127.0.0.1").first().capabilities;
+			check(!caps.isEmpty(),
+			      QString("and the report carries what this page asked for (%1 "
+			               "entr%2)").arg(caps.size())
+			        .arg(caps.size() == 1 ? "y" : "ies"));
+			// The cases above asked for geolocation, the microphone and
+			// notifications on this host, so at least one of them must be named.
+			// Not all three: the camera never reaches the decider on a machine
+			// with no camera, which case 1 already established.
+			bool named = false;
+			for (const QString &c : caps)
+				if (c.contains("Location") || c.contains("Microphone") ||
+				    c.contains("Notifications"))
+					named = true;
+			check(named,
+			      "naming a capability by the label the settings page uses, not "
+			      "an engine enum somebody has to look up");
+			for (const QString &c : caps)
+				std::printf("  saw  %s\n", qPrintable(c));
+		}
+	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;
