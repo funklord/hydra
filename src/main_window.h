@@ -371,6 +371,7 @@ public:
 	annoyance_log      *m_annoyances    = nullptr;
 	QString             m_annoyances_path;
 	QAction            *m_annoyed_action = nullptr;
+	QAction            *m_annoyed_menu_action = nullptr;
 	QAction            *m_confirm_action = nullptr;
 	// Rule texts added by the last accepted proposal, and where. Held until
 	// somebody says whether the page still works, because that is the only

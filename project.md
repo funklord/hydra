@@ -14055,6 +14055,32 @@ controls, nothing cut.
 because clicking outside already works there, and the button is harmless on a
 desktop where the popup also closes by clicking away.
 
+## The report button nobody could find
+
+Asked to press "Something got through here" on the handset, the answer came back:
+
+> i don't know where something got through here button is
+
+It had been on the toolbar since it existed, two taps away, between the KeePassXC
+key and the shield. **The only thing that ever said what it does was a tooltip**,
+and a phone has no hover -- so on the handset it was an unlabelled icon between
+two other unlabelled icons.
+
+This is worth more than the fix. The button exists so that complaining costs one
+click; a feature whose entire value is being easy to reach was, on the platform
+being tested, unreachable. Nothing in the code was wrong and every test passed:
+`try_phone` measures that the toolbar's buttons are on screen and not cut, which
+they were.
+
+It is now also **Tools ▸ Something Got Through Here…**, carrying the tooltip's
+words as its label, because those are the words somebody goes hunting for. Same
+`QAction` target, so there is one command and one enabled state.
+
+**The general shape, since this project has three more of these**: an icon whose
+meaning lives only in a tooltip is desktop-only by construction. The KeePassXC
+key, the shield and the drawer button are all in the same position, and the
+shield and settings at least have menu entries. The key does not.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

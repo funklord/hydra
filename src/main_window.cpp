@@ -1478,6 +1478,27 @@ QMenuBar *main_window::build_menu_bar() {
 	                                          &main_window::open_site_rules);
 	banners->setStatusTip("Teach a rule from a consent banner nothing matched");
 
+	// **"Something got through here", by name, where somebody can find it.**
+	//
+	// It has been on the toolbar since it existed, and on a desktop that is
+	// enough: hover it and the tooltip says what it is. A phone has no hover, so
+	// on the handset it was an unlabelled icon between two other unlabelled
+	// icons, and the tooltip -- the only thing that ever said what it does --
+	// was unreachable.
+	//
+	// Reported in the plainest way there is: asked to press it, the answer came
+	// back "i don't know where something got through here button is". The button
+	// was two taps away the whole time and might as well not have existed.
+	//
+	// The same QAction as the toolbar's, so there is one enabled state and one
+	// command; the menu entry carries the tooltip's words as its label, which is
+	// what somebody is looking for when they go hunting.
+	m_annoyed_menu_action =
+	  tools_menu->addAction("Something Got Through &Here…", this,
+	                         [this] { report_annoyance(); });
+	m_annoyed_menu_action->setStatusTip(
+	  "Record what this page was doing, and pick a tool if one fits");
+
 	tools_menu->addSeparator();
 	tools_menu->addAction("S&ite Controls…", this, &main_window::open_site_controls);
 	QAction *prefs = tools_menu->addAction("&Settings…", QKeySequence::Preferences,
