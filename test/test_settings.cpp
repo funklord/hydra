@@ -22,6 +22,7 @@
 #include <QSettings>
 #include <QTimer>
 #include <cstdio>
+#include <unistd.h>   // geteuid, for the check root cannot fail
 
 static int g_pass = 0, g_fail = 0;
 static void check(bool ok, const QString &w) {
@@ -741,6 +742,55 @@ int main(int argc, char **argv) {
 		const QString dout = user_agent::corrected(droid, 140);
 		check(dout.contains("Linux; Android 10; K") && dout.contains("Mobile"),
 		      "an Android string keeps its platform and its Mobile token");
+	}
+
+	section("the filter list is written atomically");
+	{
+		// Pinned for the same reason test_tree pins the outline: this file is
+		// written from the same persistence path, so an interrupted save must
+		// leave the previous rules rather than a prefix of the new ones. The
+		// writer used to truncate first and return true unconditionally.
+		const QString dir = QDir::tempPath() + "/hydra-filters-atomic";
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString path = dir + "/filters-ai.txt";
+
+		filter_list fl;
+		filter_rule r;
+		r.text = "||ads.example^";
+		r.note = "a rule to write";
+		fl.add(r);
+		check(fl.save(path), "a save reports success");
+		check(QDir(dir).entryList(QDir::Files | QDir::Hidden).size() == 1,
+		      "and leaves exactly one file: no temporary beside it");
+		const QByteArray before = [&] {
+			QFile f(path); f.open(QIODevice::ReadOnly); return f.readAll();
+		}();
+		check(!before.isEmpty(),
+		      QString("with the rules in it (%1 bytes)").arg(before.size()));
+
+		// Root ignores the permission bits, so the failure this provokes
+		// cannot happen for uid 0 -- the same skip test_tree and test_state
+		// carry, and the reason CI runs the suite as an ordinary user.
+		if (::geteuid() == 0) {
+			std::printf("  --    (running as root: a read-only file is still "
+			             "writable, so the failed-save check is skipped)\n");
+		} else {
+			QFile::setPermissions(path, QFile::ReadOwner);
+			filter_list more;
+			filter_rule r2;
+			r2.text = "||other.example^";
+			more.add(r2);
+			check(!more.save(path), "a save it cannot write says so");
+			QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner);
+			const QByteArray after = [&] {
+				QFile f(path); f.open(QIODevice::ReadOnly); return f.readAll();
+			}();
+			check(after == before, "and the rules that were there are intact");
+			check(QDir(dir).entryList(QDir::Files | QDir::Hidden).size() == 1,
+			      "with nothing half-written left behind");
+		}
+		QDir(dir).removeRecursively();
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

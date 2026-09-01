@@ -12290,6 +12290,19 @@ That is the second time today the same thing happened in the same shape: the
 was not, and both were found by re-reading the fix rather than the code. A fix
 that names what it covered is checkable; one that does not is only trustworthy.
 
+**And it happened a third time in the fix itself.** The three writers made
+atomic this morning each gained assertions pinning the property — reports
+success, leaves no temporary, a save that cannot write leaves the previous
+contents — and these two gained none. `test_settings` covers the filter list
+now and `test_extractor` the learned extractors, both in suites that already
+linked the writer so neither needed an `objsets` regeneration. Both carry the
+`geteuid() == 0` skip the earlier ones do, for the reason CI made plain.
+
+The extractor's version asserts something the outline's cannot: that the file
+still *parses* afterwards. A half-written outline is a smaller tree, and a
+half-written `extractors.json` is a syntax error, so "the set that was there is
+intact" is checked by loading it rather than by comparing bytes.
+
 ### The gate's blind spot, met in passing
 
 Reindenting the new scope in `filter_list.cpp` left the loop's closing brace one

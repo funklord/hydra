@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <cstdio>
+#include <unistd.h>   // geteuid, for the check root cannot fail
 
 static int g_pass = 0, g_fail = 0;
 static void check(bool ok, const QString &w) {
@@ -1027,6 +1028,47 @@ int main(int argc, char **argv) {
 		check(extractor_dialog::strip_fences("```\nextract = 2;\n```")
 		          == "extract = 2;",
 		      "including one with no language tag");
+	}
+
+	section("the learned extractors are written atomically");
+	{
+		// The same pinning test_tree gives the outline. A half-written
+		// extractors.json is worse than a half-written outline: it does not
+		// parse, so an interrupted save costs every extractor rather than the
+		// tail of the set. The writer used to truncate first, discard the
+		// write's result and return true unconditionally.
+		const QString dir = QDir::tempPath() + "/hydra-extractors-atomic";
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString path = dir + "/extractors.json";
+
+		extractor_store store;
+		store.set_for("example.test", "extract = function(){};", "a note");
+		check(store.save(path), "a save reports success");
+		check(QDir(dir).entryList(QDir::Files | QDir::Hidden).size() == 1,
+		      "and leaves exactly one file: no temporary beside it");
+
+		extractor_store back;
+		check(back.load(path) && back.has("example.test"),
+		      "and it round-trips, so the file is a whole document");
+
+		if (::geteuid() == 0) {
+			std::printf("  --    (running as root: a read-only file is still "
+			             "writable, so the failed-save check is skipped)\n");
+		} else {
+			QFile::setPermissions(path, QFile::ReadOwner);
+			extractor_store more;
+			more.set_for("other.test", "extract = function(){ return null; };", "");
+			check(!more.save(path), "a save it cannot write says so");
+			QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner);
+			extractor_store still;
+			check(still.load(path) && still.has("example.test") &&
+			        !still.has("other.test"),
+			      "and the set that was there is intact, not replaced");
+			check(QDir(dir).entryList(QDir::Files | QDir::Hidden).size() == 1,
+			      "with nothing half-written left behind");
+		}
+		QDir(dir).removeRecursively();
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
