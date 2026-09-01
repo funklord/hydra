@@ -12113,6 +12113,78 @@ run. Searched mechanically, 55 sites triaged, 8 real, all fixed. What the
 search cost was worth paying once — the shapes are simple enough to grep for,
 and none of the eight would have been found by reading, because every one of
 them looks correct.
+## Two searches that found the code correct
+
+Both are negative results and both are recorded, because this session's whole
+theme is that a search which found nothing must be distinguishable from one
+that was never run. Neither changed a line; the value is that nobody needs to
+run them again.
+
+### The vacuous-success lens, pointed at the software
+
+The three shapes that produced eight fixes in the suites were pointed at
+`src/`, where the same fault would be far worse — a function that reports
+success without doing the work is a silent data loss rather than a weak test.
+
+**Unchecked `open()`: none.** Every file open in the software checks its
+result. The unchecked one that started this whole line of enquiry was in a
+test, auditing whether a secret reached the disk.
+
+**A `bool` that cannot fail: none.** Two candidates matched the search and both
+are correct on reading — `flow_layout::hasHeightForWidth` returning `true` is
+what that Qt override is for, and `torrent_download_source::available()` sits
+inside `#ifdef HYDRA_HAVE_LIBTORRENT` with an `#else` returning `false` that a
+regex cannot see.
+
+So `tree_outline::save` returning `true` unconditionally — found this morning,
+and the reason the lens existed — was **the exception in the software rather
+than the pattern**. The vacuous-success problem lived in the tests and the
+tooling, which is worth knowing precisely because it is the opposite of what
+the first instance suggested.
+
+### Android autofill: the code-level preconditions, all four met
+
+§19's remaining gap was recorded as *"Autofill on Android is the system
+service's job rather than this browser's… what is not established is that
+filling works"*, blocked on an emulator with no autofill service. That is now
+narrower on both sides.
+
+**The device can test it.** The handset reports
+`com.google.android.gms/.autofill.service.AutofillService` configured, with
+keepass2android and Samsung Pass also installed. The emulator's excuse is gone.
+
+**And nothing in this browser prevents it**, which is checkable without a device
+and was not checked before:
+
+- The WebView is constructed with the **Activity** context — `new Player(a)`,
+  with a comment saying the activity is handed in rather than fetched. A
+  WebView built on the application context does not participate in autofill,
+  and this is the commonest way an app breaks it without meaning to.
+- It is added with `addContentView`, so it is a real View in the activity's
+  content hierarchy where the autofill framework traverses. Not a texture, not
+  an offscreen surface.
+- Nothing disables it. `autofill` does not appear anywhere in `android/` or in
+  the `android_*` sources, so no `IMPORTANT_FOR_AUTOFILL_NO` is set on the view
+  or inherited deliberately.
+- minSdk 28 is above the 26 autofill arrived in.
+
+So the claim in §19 is now supported structurally rather than assumed, and what
+remains open is only whether a fill actually happens — which no amount of
+reading can settle.
+
+**The measurement that would settle it needs no credentials and no
+screenshot**, which matters because this handset is the copyright holder's
+daily phone and its screen is not an available instrument: open a local html
+login form, tap the username field, and read `adb shell dumpsys autofill` for
+whether a session was started against the WebView's view structure. That is the
+single-bit method the handset notes already prescribe, and it answers the real
+question — whether the WebView exposes its fields to the framework — without
+touching a stored password.
+
+Not run here. The phone reported `mWakefulness=Dozing`, and this file records
+that a dozing phone reads exactly like a regression, so any result taken now
+would be untrustworthy.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -12162,13 +12234,24 @@ carried along as amendments to a list item.
    had the stream in the request log. A third site that computes its address in
    page JS would reopen it, and there is no way to know without meeting one.
 
-3. **Android's remaining gap is the platform's autofill, and it is unverified.**
+3. **Android's remaining gap is the platform's autofill, and only the runtime
+   half is now unverified.** The four code-level preconditions are checked and
+   met — see *Two searches that found the code correct* above — and the test
+   handset has an autofill service configured, so the emulator's excuse is
+   gone. What is left is one measurement, needing no credentials and no
+   screenshot: open a local html login form, tap the username field, and read
+   `adb shell dumpsys autofill` for whether a session started against the
+   WebView's view structure. Wake the phone first; a dozing one reads as a
+   regression.
+
    §19's list is otherwise done — System WebView, drawer, request filter, script
    bridges, external links, file picker, player handoff, downloads that a file
    manager can see. Autofill on Android is the system service's job rather than
    this browser's, and the menu no longer offers a KeePassXC pairing that cannot
-   exist there. What is *not* established is that filling works: the emulator has
-   no autofill service configured, so that claim needs a device that does.
+   exist there. The line that used to close this item — that the claim "needs a
+   device that does" have an autofill service — is answered: there is one, and
+   the browser's side of the arrangement is verified. Only the fill itself is
+   open.
 
 4. **What is left untested now needs a network or a device.** The sweep through
    never-tested files is finished — see the sections above; four of nine were
