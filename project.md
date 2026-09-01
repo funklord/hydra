@@ -13714,6 +13714,33 @@ video=true audio=true` and then `decision token=1 GRANTED`.
 Six checks in `test_annoyance`, including that the evidence survives disk and
 that forgetting a site forgets it. `try_phone` still 101, both gates clean.
 
+## The settings page has the guard its twin had
+
+`site_policy_dialog` has checked its layout against the enum for a while, and in
+one day it caught two features whose rows had been forgotten. Its own comment
+named the gap beside it: *"`settings_dialog`'s equivalent table is missing four
+features today, and nothing reports it -- a feature added to the enum simply
+stops appearing in that dialog, silently, because no assertion can fail about a
+row nobody wrote."*
+
+That is now checked too, and the check has a shape the shield's does not need:
+this page is **deliberately** shorter than the enum, so a plain "every feature
+exactly once" would be permanently wrong. Instead there is a named exclusion
+list, and every feature must be in exactly one of the two places.
+
+    const policy::feature k_not_on_this_page[] = {
+        policy::feature::extractor_fetch,   // belongs with the extractor's page
+        policy::feature::media_detect,      // a per-site judgement; shield only
+    };
+
+The point of the list is that leaving a feature off becomes a decision somebody
+wrote a reason for, rather than the silence that cost this table four rows.
+
+**Proved both ways.** A gate that has only ever passed is not evidence it can
+fail -- so a row was removed on purpose, and `try_phone` printed *"the privacy
+layout does not account for every policy feature exactly once"*; restored, it is
+silent again. Both states observed rather than one assumed.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

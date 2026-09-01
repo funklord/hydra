@@ -345,6 +345,50 @@ const feature_group k_privacy_layout[] = {
 	{ policy::feature::autofill,            "Passwords" },
 };
 
+// **Deliberately not on this page, each for a stated reason.**
+//
+// The list exists so that leaving a feature off is a decision somebody wrote
+// down, rather than the silence that has already cost this table four missing
+// rows. A feature added to the enum and put in neither place now says so.
+const policy::feature k_not_on_this_page[] = {
+	// Belongs with the extractor's own settings, where the tier it governs is
+	// explained; a bare "Extractor may fetch" here means nothing to anybody who
+	// has not read that page.
+	policy::feature::extractor_fetch,
+	// A per-site judgement about one site's traffic, which is what the shield is
+	// for. A global default for it would be a switch that turns the media badge
+	// off everywhere, and that is not a thing anybody has asked for.
+	policy::feature::media_detect,
+};
+
+// Every feature either has a row here or is excused above -- exactly one of the
+// two, exactly once.
+//
+// `site_policy_dialog` has had this check for a while and it has now caught two
+// features in a day. This page had no equivalent, and the comment beside that
+// one said so: a feature added to the enum simply stopped appearing here,
+// silently, because no assertion can fail about a row nobody wrote.
+bool privacy_layout_is_complete() {
+	const int n = policy::feature_count();
+	QList<int> seen(n, 0);
+	for (const feature_group &fg : k_privacy_layout) {
+		const int i = static_cast<int>(fg.f);
+		if (i < 0 || i >= n)
+			return false;
+		++seen[i];
+	}
+	for (policy::feature f : k_not_on_this_page) {
+		const int i = static_cast<int>(f);
+		if (i < 0 || i >= n)
+			return false;
+		++seen[i];
+	}
+	for (int i = 0; i < n; ++i)
+		if (seen[i] != 1)
+			return false;
+	return true;
+}
+
 }  // namespace
 
 settings_dialog::settings_dialog(player_launcher *players,
@@ -989,6 +1033,14 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	// somebody edited a string in a table is the same failure the "Other"
 	// sweep below exists to prevent.
 	bool clear_section_placed = false;
+
+	// Checked rather than trusted, for the reason the shield's twin gives: the
+	// cost of the table being short by one is a setting that silently cannot be
+	// reached from this page, which is invisible from inside it.
+	if (!privacy_layout_is_complete())
+		qWarning("settings_dialog: the privacy layout does not account for every "
+		          "policy feature exactly once -- a setting is missing from this "
+		          "page, or is listed both here and as excluded");
 
 	for (const QString &group_name : order) {
 		QList<policy::feature> in_group;
