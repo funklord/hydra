@@ -13020,17 +13020,28 @@ carried along as amendments to a list item.
    holder's daily phone — no screenshots; read the one bit from `dumpsys` or
    logcat, and put back every app-op and grant that gets changed.
 
-   **Then a notification presenter, or notifications stay blocked for ever.**
-   Nothing in this tree installs one, so a granted notification permission
-   resolves the page's promise and silently drops every notification. That is
-   why the default did not move with the others, and it is a real gap rather
-   than a deliberate refusal.
+   The notification presenter that was the second item here is built -- see
+   *Notifications, which were granted and then thrown away* -- so notifications
+   now ask on the desktop and stay blocked on Android, which has no service to
+   present with.
 
    **Then screen sharing, which is still refused on both platforms.**
    `DesktopVideoCapture` falls to the deny branch, there is no `screen_share`
    feature in the policy model and no source picker, so a Teams or Meet call
    can be joined and nothing can be presented. It needs a feature, a picker
    naming what is about to be shared, and the same `ask` treatment as the rest.
+
+   The engine side is ready and was checked rather than assumed:
+   `QWebEngineDesktopMediaRequest` exists in this Qt and offers exactly what a
+   picker needs -- `screensModel()`, `windowsModel()`, `selectScreen(index)`,
+   `selectWindow(index)` and `cancel()`. Both models are `QAbstractListModel`,
+   so the dialog itself is engine-neutral and can be measured by `try_phone`
+   against fakes, the way the permission prompt is. The seam to add is a
+   chooser callback on `web_view_backend`, installed by the shell beside
+   `set_authenticator`, rather than a dialog opened from inside the view.
+
+   Two bits per feature into a `quint64` leaves room: 18 features use 36 of 64,
+   and rules persist by name, so a nineteenth can sit wherever it reads best.
 
    Clipboard reading is deliberately not on this list. It stays blocked because
    the engine gates it behind `JavascriptCanAccessClipboard` and
