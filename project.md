@@ -14017,6 +14017,44 @@ environment rather than about the code.
 budgets. It cannot be answered here until the load drops, and no further
 conclusion should be drawn from a run taken while it has not.
 
+## Popups that would not close, and a panel with no way out
+
+Two reports from the phone, one cause:
+
+> drop down lists don't close when tapping outside them
+>
+> no button to close shield menu
+
+**A `Qt::Popup` dismisses itself on a press outside its own rectangle** -- that is
+how every combo-box drop-down and every menu is closed with a click elsewhere,
+and Qt does it without being asked. On Android that grab does not produce the
+press it needs, so a drop-down stayed open until something else was tapped, and
+the shield -- which is itself a popup, and therefore has never carried a close
+button -- had no exit at all except the hardware Back.
+
+The Back button had only just learned to close popups, hours earlier. Before
+that the panel was a genuine dead end, and the report is the plainest possible
+description of one.
+
+`main_window`'s Android filter now closes the innermost popup on an outside
+press. Innermost matters: a drop-down inside the shield closes first and the
+shield closes on the next tap, which is the order somebody expects, rather than
+both vanishing at once.
+
+### And a Done button, because "tap outside" is not an affordance
+
+Even fixed, "press somewhere else" is a thing you have to already know. The
+shield now carries a **Done** button, placed *outside* the scroll area so it
+stays put while the rows move under it -- a close button that scrolls away is the
+same defect wearing a button.
+
+`try_phone` measures it: floor 215x194, every button on screen, 22 focusable
+controls, nothing cut.
+
+**Both of these are desktop-neutral.** The filter is inside `#ifdef Q_OS_ANDROID`
+because clicking outside already works there, and the button is harmless on a
+desktop where the popup also closes by clicking away.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

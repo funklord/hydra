@@ -2204,6 +2204,30 @@ bool main_window::eventFilter(QObject *watched, QEvent *event) {
 			return true;
 	}
 
+	// **A tap outside a popup closes it**, which Qt does for itself on a desktop
+	// and does not do here.
+	//
+	// A `Qt::Popup` grabs the mouse and dismisses itself on a press outside its
+	// own rectangle -- that is how every combo-box drop-down and every menu is
+	// closed with a click elsewhere. On Android that grab does not produce the
+	// press this needs, so drop-downs stayed open until something else was
+	// tapped and the shield had no way out at all short of the Back button.
+	// Reported from the phone as exactly that, twice: "drop down lists don't
+	// close when tapping outside them" and "no button to close shield menu".
+	//
+	// `activePopupWidget` is the innermost one, so a drop-down inside the shield
+	// closes first and the shield closes on the next tap -- the order somebody
+	// expects, rather than both vanishing together.
+	if (event->type() == QEvent::MouseButtonPress) {
+		if (QWidget *popup = QApplication::activePopupWidget()) {
+			auto *mouse = static_cast<QMouseEvent *>(event);
+			if (!popup->geometry().contains(mouse->globalPosition().toPoint())) {
+				popup->close();
+				return true;
+			}
+		}
+	}
+
 	// **Tapping beside the drawer closes it**, which is what every drawer does
 	// and what this one did not. A `QMenu` gets this from Qt for nothing --
 	// `Qt::Popup` grabs the mouse and closes itself on a press outside -- but

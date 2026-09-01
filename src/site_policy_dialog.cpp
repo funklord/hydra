@@ -4,6 +4,7 @@
 
 #include <QVBoxLayout>
 #include <QGridLayout>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QComboBox>
 #include <QStandardItemModel>
@@ -241,6 +242,26 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 	scroll->setFrameShape(QFrame::NoFrame);
 	scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	outer->addWidget(scroll, 1);
+
+	// **A way out that can be seen.**
+	//
+	// This is a `Qt::Popup`, and on a desktop that is enough: clicking anywhere
+	// else dismisses it, which is what a popup is for and why it has never
+	// carried a button. On a phone it was a trap -- the outside tap did not
+	// reach it (fixed in `main_window`'s filter, but only for builds that have
+	// the fix) and the hardware Back was the only exit, which is not a thing a
+	// panel should require somebody to know.
+	//
+	// Reported as "no button to close shield menu", which is the plainest
+	// possible description of a dead end.
+	//
+	// Outside the scroll area, so it stays put while the rows move under it: a
+	// close button that scrolls away is the same defect wearing a button.
+	auto *done = new QPushButton("Done", this);
+	done->setObjectName("shield_done");
+	done->setDefault(true);
+	connect(done, &QPushButton::clicked, this, &QWidget::close);
+	outer->addWidget(done);
 }
 
 void site_policy_dialog::set_host(const QString &host) {
