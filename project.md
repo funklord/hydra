@@ -10369,12 +10369,18 @@ flip it and expose the old behaviour as a setting; or make it per-site through
 the policy engine, which **cannot be done with this enum** since Qt has no
 per-site form of it and would need real design.
 
-### Saving state on a signal and on a timer, designed and not built
+### Saving state on a signal and on a timer, designed and then built
 
-Asked for after the view-state work, because `closeEvent` is the only writer
-and a browser that is killed or crashes loses the tree as well as the view. The
-copyright holder clarified that "kill" means SIGTERM rather than SIGKILL, which
-splits the problem in two and makes most of it tractable.
+Asked for after the view-state work, because `closeEvent` was the only writer of
+the view state and the tab blobs and a browser that is killed or crashes lost
+them. The tree was the exception and this entry originally overstated it: the
+debounce timer had usually just written that. The copyright holder clarified
+that "kill" means SIGTERM rather than SIGKILL, which splits the problem in two
+and makes most of it tractable.
+
+**The design below was written before any of it existed, and every part of it
+survived contact with the implementation** -- which is the reason to leave it
+standing rather than replace it with an account of the code.
 
 **SIGTERM, SIGINT and SIGHUP are catchable, and a handler still must not
 save.** Only async-signal-safe calls are legal there, so `QSettings`, the
@@ -10390,16 +10396,20 @@ temporary file and rename over the target: an interrupted save that truncates
 `tree.txt` is worse than a stale one, because the stale file is at least a
 tree. Track dirtiness so an idle browser is not rewriting itself on every tick.
 
-Nothing is implemented. It is written down rather than half-built deliberately:
-an untested signal handler is a way to corrupt the tree, not a safety net.
+**All of it is implemented**, and the condition this entry set for building it
+-- that an untested signal handler is a way to corrupt the tree rather than a
+safety net -- was met before it was: see *Saving on a signal, built* and *The
+blobs, measured first and then built* below. Signal handling, the atomic
+writers, the view-state timer and the blob checkpoint are all in, each verified
+against a real SIGKILL.
 
-**Built, with the test that was the condition** -- see *Saving on a signal,
-built* below, which supersedes the last paragraph above and corrects one claim
-in the first: the tree was not lost on a signal, the debounce timer had
-usually just written it. What a signal threw away outright was the view state
-and the tab blobs, which had no writer but `closeEvent`. The signal half is
-done and the atomic writers under it are done; what is still open of the timer
-half is on the list at the end of this file.
+Two things the design got right and one it did not. The self-pipe shape and the
+insistence on atomicity were both correct and both load-bearing -- the atomic
+writers turned up three faults worse than this entry assumed, including a
+`save` that could never report failure and a policy write that deleted the file
+before rewriting it. What it did not anticipate is that the cost it feared was
+never measured: serialising a tab's history is 10us and 815 bytes per entry, so
+the timer half it treated as the expensive half is the cheap one.
 
 ### Dark desktop, light browser -- and it is the desktop, not this tree
 
@@ -11369,34 +11379,32 @@ checkable against an artifact in one command. The justification was not
 checkable at all from inside one tree — it took four adopters disagreeing to
 show that the quantity it named was the wrong one.
 
-### The one number worth having measured (superseded; see below)
+### The geometry, and the number it did not settle
 
 The adaptive canvas is 108dp, the outer 18dp on every edge is always cropped,
-and the launcher's mask is applied inside the central 72dp that remains. 72 is
-therefore the arithmetic maximum, and it is the wrong answer: the drawing is a
-rounded blob rather than a true circle — `hydra-master.png` is the artwork
-squashed 9% into a square, which `build_icons.py` has always said — so a
-*circular* mask at 72dp cuts the tops of the three heads and the outer edge of
-the wave.
+and the launcher's mask is applied inside the central 72dp that remains. The
+drawing is a rounded blob rather than a true circle — `hydra-master.png` is the
+artwork squashed 9% into a square, which `build_icons.py` has always said — so
+a *circular* mask cuts the tops of the three heads and the outer edge of the
+wave once the art is large enough. Rendered at 62, 64, 66, 68 and 70dp under
+circle, squircle and rounded-square masks: **clipping starts at 68.**
 
-Rendered at 62, 64, 66, 68 and 70dp under circle, squircle and rounded-square
-masks and looked at. Clipping starts at 68. **66dp** is the largest that
-survives the circular mask, which is the harshest shape a launcher may pick,
-and it still leaves a hairline of background rather than sitting on the edge.
-Against the legacy treatment it is a large increase, which is the complaint.
+That measurement is correct and is still the reason the art is not drawn at
+72dp. **The conclusion drawn from it was wrong**, and this section used to
+carry it: that 66dp — the largest that survives the circular mask — was
+therefore the right size, and that a plate taken from the drawing's own darkest
+ink answered the complaint about outlines.
 
-The background is `#1B0A28`, taken from the drawing's own darkest ink rather
-than invented — the linework is around `#300c37` and this sits just under it in
-the same family. That is what answers the third complaint without touching the
-artwork: the outline stops reading as an outline and reads as the edge of the
-drawing. Six candidates were rendered, including a near-black and a deep teal;
-both of those put a rim of contrast around every stroke, which is more outline
-rather than less.
+Both were rendered, compared against each other, and shipped. The phone
+reported the result as smaller than before. What the comparison could not show
+is in the section below, which supersedes the reasoning here rather than
+extending it: the size a person perceives is set by the plate, not by the
+drawing, and every candidate had been judged on a single light backdrop.
 
-No `<monochrome>` layer. The themed icons of API 33 want a flat single-colour
-silhouette, and reducing this drawing to one is redrawing it rather than
-generating it; absent, a themed launcher falls back to the two layers.
-
+No `<monochrome>` layer, which is unaffected by any of that. The themed icons
+of API 33 want a flat single-colour silhouette, and reducing this drawing to
+one is redrawing it rather than generating it; absent, a themed launcher falls
+back to the two layers.
 ### It shipped, and the phone said it was smaller
 
 Installed on the handset, and reported back in three words: the icon became
@@ -12283,16 +12291,21 @@ carried along as amendments to a list item.
    The retry is measured but not yet answered: of five runs, three never
    answered inside fifteen minutes on a loaded machine, one retry came back
    still refused and one timed out. That is a one-run result wearing a five-run
-   coat, and it wants an idle machine.
+   coat, and it wants an idle machine — **not a model, which was never the
+   blocker.** Ollama serves `qwen2.5-coder:14b` here and has throughout, so the
+   part of this item deferred for want of one never needed to be;
+   `test_live_model` runs, and the eight runs in *The live model suite, run for
+   the first time* above are the first this tree has taken.
 
-   **A local model is available and always was** — Ollama serves
-   `qwen2.5-coder:14b` here — so the part of this item that was deferred for
-   want of one never needed to be. `test_live_model` runs; see *The live model
-   suite, run for the first time* above. What that cannot supply is the real
-   captures this item is about: `evidence/` is not in this checkout, and the
-   synthetic set the suite falls back to does not transfer. The transferable
-   finding from those runs is that an end-anchored `\.(m3u8|mpd)$` fallback is
-   defeated by a query string, which is what a real manifest url carries.
+   What those runs cannot supply is the real captures this item is about:
+   `evidence/` is not in this checkout and the synthetic set does not transfer.
+   What they did supply transfers, because it is about regular expressions
+   rather than about the corpus — an end-anchored `\.(m3u8|mpd)$` fallback is
+   defeated by a query string, which is what a real manifest url carries. So
+   the 2 of 5 kisskh scored "purely on an `.m3u8` fallback" is a property of
+   that site's urls rather than of the loop, and the plan above to have the
+   model write both clauses needs the fallback unanchored to be worth
+   anything.
 
    Site 2 is kisskh (`kisskh.co`, player CDN `kisscloud.online`), and it *is*
    recorded — `evidence/README.md` names the site, the episode and the exact
