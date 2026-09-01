@@ -125,6 +125,28 @@ public:
 	                      QAbstractListModel *windows, capture_answer answer)>;
 	virtual void set_capture_chooser(capture_chooser fn) = 0;
 
+	// What became of a capability request, after the shield had its say.
+	//
+	// **The shield's answer is not the outcome, and the difference is the whole
+	// diagnosis.** `filter_signals` already records what this browser decided,
+	// which separates "we refused" from "we allowed"; it cannot separate "we
+	// allowed and the operating system refused" from "everyone allowed and the
+	// page is still complaining". Those are different faults with different
+	// owners, and a report that cannot tell them apart sends somebody looking in
+	// the wrong place.
+	//
+	// A note rather than a return value: it arrives late, possibly after a
+	// dialog, and there is nothing to give it back to.
+	using capability_note =
+	  std::function<void(const QUrl &origin, policy::feature f,
+	                      const QString &outcome)>;
+	virtual void set_capability_note(capability_note fn) { m_capability_note = std::move(fn); }
+
+protected:
+	capability_note m_capability_note;
+
+public:
+
 	// Ask this tab's pages to treat it as a desktop browser, and reload.
 	//
 	// **Per tab, not per site, because that is what it is for.** A site that

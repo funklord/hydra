@@ -13719,6 +13719,30 @@ report is empty and the tools on offer do not fit. Now the report says the page
 asked, and what it was told. A request granted and a page still complaining is a
 different fault from a request refused, and the two were indistinguishable.
 
+### The system's answer, which the shield's does not imply
+
+The first version recorded only what *this browser* decided, and that separates
+"we refused" from "we allowed" and nothing else. It cannot separate **"we allowed
+and Android refused"** from **"everyone allowed and the page is still saying it
+has no camera"** -- and those are different faults with different owners. A report
+that cannot tell them apart sends somebody looking in the wrong place.
+
+So `web_view_backend` grew a `capability_note`: not a return value, because the
+outcome arrives late and possibly after a dialog, and there is nothing to give it
+back to. Android's capture and geolocation paths call it with what the operating
+system said, and the shell writes it into the same per-site record. A report now
+reads, in order:
+
+    20:35:07  Camera: allow
+    20:35:07  Camera: the system granted it
+
+which is the sentence that moves a complaint about a page off this browser.
+
+**The desktop deliberately adds nothing here.** There is no application-level
+gate on Linux, so the outcome is the shield's answer and a second line saying so
+would be noise -- and this file has enough entries about controls that repeat
+themselves.
+
 **What stays in logcat is the half below the shell**: the raw resource list
 Android hands over, and whether `onPermissionRequest` fired at all. A request for
 something the Java side does not name, and no request whatsoever, look identical

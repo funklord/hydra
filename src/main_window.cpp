@@ -2586,6 +2586,18 @@ void main_window::open_node(node *n, bool load_now) {
 			answer(dlg.is_screen(), dlg.chosen_row());
 		});
 
+		// The rest of the story, from below the shield. The decider above
+		// records what this browser decided; this records what happened next,
+		// so a report can say "we allowed it and the system did too" -- which
+		// is the sentence that moves a complaint about a page off this browser.
+		view->set_capability_note(
+		  [this](const QUrl &origin, policy::feature f, const QString &outcome) {
+			if (m_signals)
+				m_signals->note_capability(origin.host(),
+				                            policy::feature_label(f),
+				                            origin.toString(), outcome);
+		});
+
 		// **Asked, rather than declined on the person's behalf.** Nothing
 		// answered this, so a site wanting HTTP authentication simply failed
 		// to load and said nothing about why. The dialog runs inside the

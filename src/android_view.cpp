@@ -418,6 +418,9 @@ void android_view::request_capture(qint64 id, const QString &origin,
 
 	const QUrl o(origin);
 	const permission_decider decider = v->m_decider;
+	// Copied out with the decider, and for the same reason: the answer may
+	// arrive after a dialog, by which time the view could be gone.
+	const capability_note note = v->m_capability_note;
 
 	// The operating system is a separate question from the site policy, with a
 	// separate answer, and it is asked second. A user who denied this
@@ -427,13 +430,25 @@ void android_view::request_capture(qint64 id, const QString &origin,
 	//
 	// Asked one after the other rather than together: each is a dialog, and two
 	// at once is a stack of them in front of somebody trying to join a call.
-	std::function<void()> os_stage = [answer, video, audio] {
-		auto then_audio = [answer, audio](bool ok) {
+	std::function<void()> os_stage = [answer, video, audio, note, o] {
+		// **The operating system's answer, written down where a person can read
+		// it.** The shield's answer is already recorded; without this one a
+		// report cannot separate "Android refused" from "everything allowed and
+		// the page is still saying it has no camera", which are different faults
+		// with different owners.
+		auto say = [note, o](policy::feature f, bool ok) {
+			if (note)
+				note(o, f, ok ? QStringLiteral("the system granted it")
+				               : QStringLiteral("the system refused it"));
+		};
+		auto then_audio = [answer, audio, say](bool ok) {
 			if (!ok)     { answer(false); return; }
 			if (!audio)  { answer(true);  return; }
 			qApp->requestPermission(QMicrophonePermission{}, qApp,
-			                         [answer](const QPermission &p) {
-				answer(p.status() == Qt::PermissionStatus::Granted);
+			                         [answer, say](const QPermission &p) {
+				const bool got = p.status() == Qt::PermissionStatus::Granted;
+				say(policy::feature::microphone, got);
+				answer(got);
 			});
 		};
 		if (!video) {
@@ -441,8 +456,10 @@ void android_view::request_capture(qint64 id, const QString &origin,
 			return;
 		}
 		qApp->requestPermission(QCameraPermission{}, qApp,
-		                         [then_audio](const QPermission &p) {
-			then_audio(p.status() == Qt::PermissionStatus::Granted);
+		                         [then_audio, say](const QPermission &p) {
+			const bool got = p.status() == Qt::PermissionStatus::Granted;
+			say(policy::feature::camera, got);
+			then_audio(got);
 		});
 	};
 
@@ -497,10 +514,12 @@ void android_view::request_geolocation(qint64 id, const QString &origin,
 		return;
 	}
 
+	const QUrl o(origin);
+	const capability_note note = v->m_capability_note;
 	// The shield first, then Android. Asking the operating system for a
 	// permission the shield was going to refuse spends a dialog on nothing.
-	v->m_decider(QUrl(origin), policy::feature::geolocation,
-	              [answer, debug](bool granted) {
+	v->m_decider(o, policy::feature::geolocation,
+	              [answer, debug, note, o](bool granted) {
 		if (!granted) {
 			answer(false);
 			return;
@@ -512,10 +531,14 @@ void android_view::request_geolocation(qint64 id, const QString &origin,
 		// will say so, and this is the layer that would have to grow an option
 		// for it rather than the one that assumes.
 		qApp->requestPermission(QLocationPermission{}, qApp,
-		                         [answer, debug](const QPermission &p) {
+		                         [answer, debug, note, o](const QPermission &p) {
 			const bool ok = p.status() == Qt::PermissionStatus::Granted;
 			if (debug)
 				qWarning("geolocation: the OS %s", ok ? "granted" : "refused");
+			if (note)
+				note(o, policy::feature::geolocation,
+				      ok ? QStringLiteral("the system granted it")
+				         : QStringLiteral("the system refused it"));
 			answer(ok);
 		});
 	});
