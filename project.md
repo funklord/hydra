@@ -13185,6 +13185,81 @@ migrate on read, or to distinguish an explicit choice from an inherited one in
 the file itself. It is a decision about a file people are told they can hand-edit,
 and so the copyright holder's.
 
+## The camera prompt was the wrong question, and is gone
+
+Corrected on instruction, the same day it was built, and worth recording as a
+mistake rather than quietly editing away.
+
+**The ask was for the capability dialog, not a per-site one.** The original
+request was *"code to throw up the capability activation dialogs for camera/mic
+-- that is why I didn't edit them for the app"*: the application's Android
+permissions had been left ungranted deliberately, so that Hydra would ask for
+them. That code was written and works. What was built on top of it -- a per-site
+`ask` prompt in front of it -- answers a different question, and the answer to
+that one already exists:
+
+> Per site we already have the shield menu.
+
+Which is right, and is the part that should have been obvious. A menu somebody
+opens on purpose already carries the per-site decision. A prompt raising the same
+question as an interruption, mid-call, is not a second layer of safety; it is the
+same question asked in the worse place.
+
+So `camera` and `microphone` default to `allow` again. That does **not** mean any
+site may have them: on Android the operating system's own permission is still in
+front, which is the consent that belongs in front of a person here, and on either
+platform a site is blocked from the shield menu. `setting::ask` stays in the model
+and both settings surfaces offer it, so restoring a prompt is one word in a file
+-- it is simply not the default, and not the shape of the answer.
+
+**How the mistake happened is worth keeping.** The audit found a real defect: a
+blocked camera reached the page as `NotAllowedError` and reached the person as
+nothing. That finding was correct. The repair chosen for it was not -- it treated
+"nobody was told" as "nobody was asked", and reached for a prompt, when what the
+silence actually hid was the shield refusing before the operating system was ever
+consulted. Fixing the visibility of a refusal and inventing a new place to ask for
+consent are different jobs, and only the first was needed.
+
+**Geolocation still asks**, and that is not an oversight: nothing carries the
+question for it the way the OS permission carries camera and microphone.
+
+### And the desktop loses a gate, which is the cost
+
+On Android the OS permission stands where the prompt used to. On the desktop
+there is no such thing, so a page that asks for the camera now gets it with
+nothing in front of the person. That is a real loosening and is recorded as one
+rather than left to be discovered. Setting `camera=ask` in `policy.ini` restores
+a prompt there for anybody who wants it; making that the desktop default again is
+a decision, not a fix.
+
+### Proved on the handset, and the upgrade problem proved itself first
+
+The run that confirmed it also demonstrated, unprompted, the file problem
+recorded in *The prompt, seen on the handset*.
+
+First attempt with the new build: `load = painted`, `asking = now`, and
+`camera = NotAllowedError` **in the same tenth of a second**. No dialog at all.
+The phone's saved `policy.ini` still said `camera=block`, written by a build that
+predates any of this, and it correctly beat the new `allow` default -- so the
+shield refused before Android was ever asked. Exactly the failure a person
+upgrading would meet, found by meeting it.
+
+With that one line changed to `allow` and the application's `CAMERA` grant
+revoked, the second run reads:
+
+    load   = painted
+    asking = now            <- 3.8 seconds
+    camera = stream-1
+
+and the permission afterwards reads:
+
+    android.permission.CAMERA: granted=true, flags=[ USER_SET|... ]
+
+`USER_SET` was not there before and appears only when a person answers the system
+dialog. That flag, the gap, and the revocation together are the evidence that
+**Android's own capability dialog appeared and was answered** -- with no per-site
+prompt in front of it. Which is what was asked for in the first place.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

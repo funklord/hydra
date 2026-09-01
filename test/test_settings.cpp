@@ -448,12 +448,22 @@ int main(int argc, char **argv) {
 	section("ask: the setting that puts the question to a person");
 	{
 		policy_engine e;
-		check(e.global_default(policy::feature::camera) == policy::setting::ask,
-		      "camera asks by default rather than refusing in silence");
-		check(e.global_default(policy::feature::microphone) == policy::setting::ask,
-		      "and so does the microphone");
+		// **Camera and microphone do not prompt, and that is the instruction.**
+		// Per-site control is the shield menu, which somebody opens on purpose;
+		// a per-site prompt asks the same question again as an interruption.
+		// The consent that belongs in front of a person is the application's,
+		// and on Android that is the OS runtime permission the capture path
+		// requests -- which the shield refusing first was preventing from ever
+		// being seen.
+		check(e.global_default(policy::feature::camera) == policy::setting::allow,
+		      "the shield does not stand in front of the camera; on Android the "
+		      "OS permission does, and the shield menu is where a site is "
+		      "blocked");
+		check(e.global_default(policy::feature::microphone) == policy::setting::allow,
+		      "and the same for the microphone");
 		check(e.global_default(policy::feature::geolocation) == policy::setting::ask,
-		      "and location");
+		      "location still asks — it has no application-level gate behind it "
+		      "to carry the question instead");
 		check(e.global_default(policy::feature::pointer_lock) == policy::setting::ask,
 		      "and pointer lock");
 		check(e.global_default(policy::feature::screen_share) == policy::setting::ask,
@@ -474,6 +484,13 @@ int main(int argc, char **argv) {
 		// **The one that would have been silently wrong.** `is_allowed` read
 		// `!= block` before `ask` existed, which would have made "consult the
 		// person" mean "yes" to every caller that cannot consult anybody.
+		// **Set explicitly rather than leaned on a default.** This read the
+		// camera's default, which was `ask` when it was written and is `allow`
+		// now -- so the check began passing for a reason that had nothing to do
+		// with what it is about, and then failed for the same reason. What it
+		// tests is what `ask` *means* to a caller that cannot prompt, and that
+		// is true of any feature.
+		e.set_setting("example.com", policy::feature::camera, policy::setting::ask);
 		check(!e.is_allowed(policy::feature::camera, "example.com"),
 		      "a feature set to ask is not allowed — the callers that cannot "
 		      "prompt must read it as a refusal, not a grant");

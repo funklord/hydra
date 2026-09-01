@@ -47,8 +47,30 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	// is granted, the question is merely put to the person it belongs to, once
 	// per site, refused by default if the dialog is dismissed.
 	set_global_default(feature::geolocation,         setting::ask);
-	set_global_default(feature::camera,              setting::ask);
-	set_global_default(feature::microphone,          setting::ask);
+	// **Camera and microphone do not prompt per site, on instruction.** They
+	// briefly did, and that was the wrong shape: per-site control already exists
+	// and is a menu somebody opens deliberately -- the shield -- so a second
+	// per-site question, raised as an interruption mid-call, asks again what the
+	// shield already answers.
+	//
+	// The consent that belongs in front of a person here is the *application's*:
+	// may Hydra use the camera at all. That is the operating system's dialog,
+	// Android's runtime permission, and `android_view::request_capture` already
+	// requests it -- which is what the shield refusing first was preventing from
+	// ever being seen.
+	//
+	// So `allow` means "the shield does not stand in the way", not "any site may
+	// have it": on Android the OS gate is still in front, and on either platform
+	// a site can be blocked from the shield menu, which is where that decision
+	// was always meant to live.
+	//
+	// **The desktop has no equivalent gate**, so this is a real loosening there
+	// and is recorded as one: a desktop page that asks for the camera now gets
+	// it without anything in front of the person. `setting::ask` remains in the
+	// model and is offered by both settings surfaces, so restoring a prompt for
+	// either feature is one word in `policy.ini`.
+	set_global_default(feature::camera,              setting::allow);
+	set_global_default(feature::microphone,          setting::allow);
 	// Both were denied by a `default:` arm in the engine backend before they
 	// were features at all, so blocking here changed nothing and only made
 	// the refusal a decision somebody can see and overrule.
