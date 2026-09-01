@@ -13095,6 +13095,78 @@ that will hand out a screen. What is proven is every part up to the engine call
 `selectScreen` or `selectWindow` on the right model, and every other path
 cancels.
 
+## The prompt, seen on the handset
+
+Confirmed on 2026-09-01 on the SM-F926B, Android 15, over a **live page** -- the
+one moment `auth_dialog` never exercised, since HTTP authentication happens
+before a page paints.
+
+The method, because it is reusable and nothing about it needs a screenshot. A
+page served from this machine through `adb reverse tcp:8099 tcp:8099`, so the
+phone fetches `http://127.0.0.1:8099/` -- a loopback address, which Chromium
+treats as a secure origin, which `getUserMedia` requires. The page reports each
+step back to the server by `fetch`, and asks for the camera **four seconds after
+`load`**, so that the request provably arrives at a page that has already
+painted. The server log is the transcript:
+
+    load   = painted
+    asking = now
+    camera = stream-1
+
+The gap between the second and third lines is the prompt: the promise stayed
+pending, which nothing but a waiting decider can cause. The third line is the
+answer -- a real camera, one track, opened and stopped by the page immediately.
+
+**The confirmation that it was visible came from the copyright holder, not from
+an instrument, and the instruments were misleading.** `uiautomator dump` reads
+the accessibility tree, and Qt's Android bridge does expose the whole shell
+through it -- before a page was open it listed every menu, button and the
+address bar with exact bounds, which is how the address bar was found and driven
+without a screenshot. But with a page open the dump returned only the WebView's
+own content, no shell and no dialog, and the reasonable-looking conclusion from
+that is that the dialog was composited underneath. It was not. It was on screen
+and it was answered by hand while the dump said otherwise.
+
+Worth writing down for whoever reaches for the same tool: **the accessibility
+dump shows whichever surface is on top, and a Qt dialog over a native WebView is
+not something it reports.** It is an excellent instrument for driving the shell
+and a useless one for deciding whether a dialog is visible.
+
+### What that settles, and what it does not
+
+Settled: a permission prompt raised over a live page appears, is answerable, and
+its answer reaches the engine -- which is the last thing the Android permission
+work was waiting on. The two mechanisms it depends on, `android_dialogs`'s
+sizing and `android_view`'s hiding of the native view while any `QDialog` is up,
+both did their job without a line written for this dialog.
+
+Not settled by this run: the microphone, which was left at `block` on the device
+so that exactly one prompt could appear and the pending promise would mean one
+thing. And `getDisplayMedia`, which Android has no answer for at all.
+
+### The upgrade problem this exposed, which is not about Android
+
+**A saved `policy.ini` pins every default that was current when it was written**,
+and the file on the handset said `camera=block` -- from a build that predates
+`ask`. Loading it correctly beat the new default, so the prompt could not fire
+until the file was edited. That is the rule working as designed: a stored setting
+is a decision and must win.
+
+The trouble is that it is not a decision. `policy_engine::save` writes **every**
+feature explicitly, defaults included, so the file cannot distinguish "the person
+chose block" from "block was the default the day this file was written". Anyone
+who has run any previous build therefore has every future default change silently
+pinned to the old value, for ever, with nothing to say so.
+
+This was found by having to edit the phone's file to make the test run at all --
+which is the same discovery a user would make by never seeing a prompt. It is not
+fixed here and it is not obviously the policy engine's to fix alone: the options
+are to write only settings that differ from the default (which changes the file
+format and loses the record of what was current), to record a format version and
+migrate on read, or to distinguish an explicit choice from an inherited one in
+the file itself. It is a decision about a file people are told they can hand-edit,
+and so the copyright holder's.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -13107,16 +13179,13 @@ carried along as amendments to a list item.
    has a feature, a picker and a wired-up engine signal. The sections above
    record each. Two things cannot be checked from here.
 
-   **Put the prompt in front of the handset — to confirm, not to investigate.**
-   Both mechanisms it depends on are generic and already written:
-   `android_dialogs` sizes any `QDialog` to the screen, and `android_view`'s
-   filter hides the native `WebView` while any dialog is visible, because the
-   WebView is composited above everything Qt renders. Neither needed a line for
-   this prompt. What has not been seen is a prompt raised over a *live page*
-   rather than during a load, which is the one moment `auth_dialog` never
-   exercised. Note the handset is the copyright holder's daily phone — no
-   screenshots; read the one bit from `dumpsys` or logcat, and put back every
-   app-op and grant that gets changed.
+   The handset half is **done** — see *The prompt, seen on the handset*. A prompt
+   raised over a live page appears, is answerable, and its answer reaches the
+   engine; a real camera opened and stopped. What that run exposed instead is an
+   upgrade problem in the policy file, recorded in that section and left as the
+   copyright holder's: a saved `policy.ini` pins every default that was current
+   when it was written, so no future default change reaches anybody who has run
+   a previous build.
 
    **And meet a real `getDisplayMedia`.** Everything up to the engine call is
    proven against fakes -- the shield is consulted, the picker shown, the answer
