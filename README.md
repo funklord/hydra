@@ -66,10 +66,22 @@ not do them, or does something adjacent that is not the same thing.
 - **A filter-evolution loop**: passive signals from pages you visited become
   proposed rules, dry-run validated against real requests, then shown as a diff
   you accept or reject.
-- **Nineteen per-site capabilities**, not the usual handful — javascript,
-  cookies, third-party cookies, ads, popups, images, autoplay, location, camera,
+- **Twenty per-site capabilities**, not the usual handful — javascript, cookies,
+  third-party cookies, ads, popups, images, autoplay, location, camera,
   microphone, notifications, referer, autofill, extractor-fetch, cookie notices,
-  clipboard reading, pointer lock, screen sharing and media auto-detection.
+  clipboard reading, pointer lock, screen sharing, request-desktop-site and
+  media auto-detection.
+- **"Request desktop site" is a site rule as well as a tab toggle.** Some sites
+  refuse a phone whatever it is running — Teams redirects a mobile user agent to
+  a "not supported" page before serving anything, server-side, and Chrome on
+  Android gets the same treatment. The View menu has the one-off; the shield has
+  the standing answer, so a site that will never serve a phone is dealt with once.
+- **The browser records what a page asked it for.** Every capability request and
+  what it was answered — including what the operating system then said — is kept
+  per site, rides into a report, and is shown in the dialog. "It says I have no
+  camera" produces no ad-shaped request and no cosmetic leak, so it was the one
+  complaint the evidence could not speak to; now a request granted with the page
+  still complaining is visibly a different fault from one refused.
 - **Packed two bits per feature into one integer**, with precedence: exact host
   beats `*.domain` beats the global default.
 - **The same request filter serves both engines.** The policy you set applies
@@ -181,8 +193,13 @@ work, and most of them were got wrong here first and are written up in
   appears. There is a real presenter over `org.freedesktop.Notifications`, the
   call is asynchronous so a slow daemon cannot hold the GUI thread, and a page
   closing its own notification reaches the service.
-- **The user agent is corrected**, because a bank turned this browser away over a
-  token no real browser sends.
+- **The user agent is corrected on both platforms**, because sites turn browsers
+  away over what they call themselves. A bank refused the desktop over a token no
+  real browser sends; Android's System WebView announces itself three times — the
+  `wv` marker, a `Version/4.0` frozen since the stock browser, and the device's
+  build fingerprint — and all three are removed, leaving exactly what Chrome on
+  Android sends. What cannot be corrected is `sec-ch-ua`, which Chromium builds
+  from its own identity and neither Qt nor the WebView will override.
 - **`Accept-Language` is sent at all** — Qt sets no default and nothing asked for
   one, so every request went out without it until that was measured.
 - **Light and dark follow the desktop**, read from the portal rather than
@@ -208,9 +225,12 @@ work, and most of them were got wrong here first and are written up in
 
 Kept here rather than left for you to discover.
 
-- **Android geolocation cannot work.** No location permission is declared or
-  requested, and the WebView's geolocation prompt is not handled — so the
-  setting promises something the platform will not deliver.
+- **Android geolocation is built but unproven.** It was three missing pieces —
+  no permission declared, none requested, and the WebView's prompt callback not
+  handled, which is worse than it sounds: the base implementation never invokes
+  the callback, so the page is told it was denied by a person who was never
+  asked. All three are done and the permissions are in the apk; what has not
+  happened is a page asking for a position on a real handset.
 - **Android has no screen sharing**, and the desktop's has never met a real
   `getDisplayMedia` — everything up to the engine call is tested against fakes.
 - **The desktop has no application-level camera gate.** Android's OS permission
@@ -220,6 +240,9 @@ Kept here rather than left for you to discover.
   returns a usable extractor roughly three times in five on a clean media host
   and once in five on a noisy one. `project.md` has the numbers and the failures.
 - **The platform's own autofill service on Android** is unimplemented.
+- **Android's Back button was answered only recently**, and the drawer only
+  learned to close on an outside tap at the same time. Both are on the phone and
+  neither has had long enough to be trusted.
 - **A saved `policy.ini` pins the defaults that were current when it was
   written**, so a default changed later does not reach an existing profile.
 
