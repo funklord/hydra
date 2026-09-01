@@ -42,6 +42,7 @@ public:
 	bool can_print() const override;
 	void apply_settings(const view_settings &s) override;
 	void set_permission_decider(permission_decider fn) override;
+	void set_capture_chooser(capture_chooser fn) override;
 	void set_authenticator(authenticator fn) override;
 	void set_navigation_decider(navigation_decider fn) override;
 	void set_proxy_authenticator(proxy_authenticator fn) override;
@@ -79,6 +80,7 @@ private:
 	// without a downcast. Owned by the view, like m_page.
 	navigating_page *m_nav_page = nullptr;
 	permission_decider m_decider;
+	capture_chooser    m_capture_chooser;
 	QWebChannel *m_channel = nullptr;
 	bool m_channel_api_injected = false;
 	// A print is on the way to a printer. `printRequested` is a page calling

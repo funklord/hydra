@@ -72,6 +72,10 @@ const shield_row k_shield_layout[] = {
 
 	{ policy::feature::camera,              "Camera, microphone and screen" },
 	{ policy::feature::microphone,          "Camera, microphone and screen" },
+	// Third in this group rather than appended to it: the heading has said
+	// "and screen" since before there was a feature for it, and a reader
+	// looking for screen sharing looks next to the camera.
+	{ policy::feature::screen_share,        "Camera, microphone and screen" },
 	{ policy::feature::geolocation,         "Camera, microphone and screen" },
 	{ policy::feature::notifications,       "Camera, microphone and screen" },
 	{ policy::feature::clipboard_read,      "Camera, microphone and screen" },

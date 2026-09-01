@@ -205,6 +205,12 @@ public:
 	// -- including the one that is deliberately still not honoured.
 	void apply_settings(const view_settings &s) override;
 	void set_permission_decider(permission_decider fn) override { m_decider = std::move(fn); }
+	// **Accepted and never called, which is honest rather than lazy.** Android's
+	// WebView has no `getDisplayMedia` to answer, so there is nothing to choose
+	// between; storing it keeps the shell's wiring identical on both platforms
+	// instead of making `main_window` know which backend it has. If the platform
+	// grows the capability, the seam is already here.
+	void set_capture_chooser(capture_chooser fn) override { m_capture_chooser = std::move(fn); }
 	void set_navigation_decider(navigation_decider fn) override {
 		m_navigation_decider = std::move(fn);
 	}
@@ -251,6 +257,7 @@ private:
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;
 	permission_decider m_decider;
+	capture_chooser    m_capture_chooser;
 	navigation_decider m_navigation_decider;
 	bridge_invoker m_bridges;
 	QStringList    m_script_names;   // named, so a test can see what was asked for

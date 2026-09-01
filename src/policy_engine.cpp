@@ -71,6 +71,11 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	// exists to remove, pointed the other way. `ask` until there is something
 	// to show.
 	set_global_default(feature::pointer_lock,        setting::ask);
+	// Asks, like the camera, and for a stronger version of the same reason: a
+	// shared screen carries whatever else is on it -- other windows, other
+	// people's messages, a password manager left open. Answering it in advance
+	// for every site is not something anybody can sensibly do.
+	set_global_default(feature::screen_share,        setting::ask);
 	// **Notifications are blocked here and raised by whoever can deliver them.**
 	//
 	// Chromium treats a missing notification presenter as success: the page's

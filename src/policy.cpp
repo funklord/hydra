@@ -91,6 +91,12 @@ const info k_info[] = {
 		"Whether a site may capture the mouse pointer, which is what a game "
 		"or a map view does to look around. Escape gives it back.",
 		"take over your mouse pointer" },
+	{ "screenShare", "Screen sharing",
+		"Whether a site may capture a screen or a window to send to the people "
+		"you are talking to. Allowing it does not choose what to share: that is "
+		"a separate question, asked every time, and it is the answer to that one "
+		"the page actually receives.",
+		"share your screen or a window" },
 	{ "autoDetectMedia", "Auto-detect media",
 		"Whether to watch this site's requests for video and audio worth "
 		"saving. Turning it off empties the media badge here; it does not "

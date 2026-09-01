@@ -10,6 +10,8 @@
 
 #include <functional>
 
+class QAbstractListModel;
+
 class QWidget;
 
 // Per-page toggles the shell derives from the policy engine and hands down.
@@ -100,6 +102,28 @@ public:
 
 	virtual void apply_settings(const view_settings &s) = 0;
 	virtual void set_permission_decider(permission_decider fn) = 0;
+
+	// Which screen or window a page may capture, chosen by the person.
+	//
+	// **A second question, after the permission.** The shield answers whether a
+	// site may share at all, and that answer can be remembered; this answers
+	// what to share *now*, and must not be. A site allowed to present last week
+	// has not been allowed to present whatever is open today.
+	//
+	// The models are the engine's, and both are Core types -- so the dialog the
+	// shell puts up is engine-neutral and can be built against fakes, which is
+	// how it is measured at phone geometry without a compositor willing to hand
+	// out a screen capture.
+	//
+	// `row < 0` means nothing was chosen, which is what closing the dialog
+	// gives. Asynchronous for the same reason the decider is: the answer waits
+	// for a person.
+	using capture_answer =
+	  std::function<void(bool is_screen, int row)>;
+	using capture_chooser =
+	  std::function<void(const QUrl &origin, QAbstractListModel *screens,
+	                      QAbstractListModel *windows, capture_answer answer)>;
+	virtual void set_capture_chooser(capture_chooser fn) = 0;
 
 	// A site asking for a username and password. **Answered while the callback
 	// runs**, which is why this is a decider rather than a signal: Qt hands

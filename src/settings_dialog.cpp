@@ -323,6 +323,23 @@ const feature_group k_privacy_layout[] = {
 	{ policy::feature::camera,              "Permissions" },
 	{ policy::feature::microphone,          "Permissions" },
 	{ policy::feature::notifications,       "Permissions" },
+	// **Three capabilities that had no row here at all.**
+	//
+	// This table is hand-written and shorter than the enum, and nothing reports
+	// the difference -- a feature added and forgotten simply stops appearing on
+	// this page, silently, because no assertion can fail about a row nobody
+	// wrote. `site_policy_dialog`'s equivalent has a guard that says so, and it
+	// is what caught `screen_share` missing from that one.
+	//
+	// Two of these mattered less while they were permanently blocked. They do
+	// not any more: `pointer_lock` now asks, and a capability that asks and
+	// cannot be configured from the settings page is one whose prompt somebody
+	// will want to stop and cannot. `clipboard_read` is still blocked for a
+	// reason of its own -- the engine gates it -- and belongs here beside them
+	// rather than being the one that stays hidden.
+	{ policy::feature::clipboard_read,      "Permissions" },
+	{ policy::feature::pointer_lock,        "Permissions" },
+	{ policy::feature::screen_share,        "Permissions" },
 	{ policy::feature::referer,             "Sent with requests" },
 	{ policy::feature::autofill,            "Passwords" },
 };

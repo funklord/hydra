@@ -5,6 +5,8 @@
 #include <QWebEngineView>
 #include <QWebEnginePage>
 #include <QWebEnginePermission>
+#include <QAbstractItemModel>
+#include <QWebEngineDesktopMediaRequest>
 #include <QWebEngineProfile>
 #include <QWebEngineFindTextResult>
 #include <QWebEngineFullScreenRequest>
@@ -520,6 +522,87 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	});
 #endif
 
+	// **Sharing a screen, which was refused and said nothing.**
+	//
+	// `getDisplayMedia` arrives here, not through `permissionRequested`: Qt
+	// splits it out because a yes/no is not a sufficient answer -- the page has
+	// to be told *which* surface, and an unanswered request leaves the promise
+	// pending for ever rather than rejected. Nothing was connected, so a meeting
+	// could be joined and the Present button did nothing at all.
+	//
+	// Two questions in order, and they are different in kind. The shield answers
+	// whether this site may share, which is about a site and can be remembered;
+	// the picker answers what to share, which is about this moment and is asked
+	// every time. Granting the first must not be allowed to imply the second --
+	// a site allowed to present last week has not been allowed to present
+	// whatever is open today.
+	connect(m_page, &QWebEnginePage::desktopMediaRequested, this,
+	         [this](const QWebEngineDesktopMediaRequest &request) {
+		const QUrl origin = m_page ? m_page->url() : QUrl();
+		const bool debug = qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG");
+
+		// **Cancelled on every path that is not a choice**, including the ones
+		// that look like nothing happening: no chooser installed, a refusal from
+		// the shield, an empty picker. `cancel()` is what rejects the page's
+		// promise; without it the page waits, which reads to somebody trying to
+		// present as the browser having frozen rather than having refused.
+		auto give_up = [request, debug](const char *why) {
+			if (debug)
+				qWarning("capture: not sharing (%s)", why);
+			request.cancel();
+		};
+
+		if (!m_decider) {
+			give_up("no permission decider");
+			return;
+		}
+		// **Copied out before the question is asked, rather than reached through
+		// `this` after it is answered.** The decider may put a dialog on the
+		// screen and return much later, and the 6.8 permission branch above
+		// avoids `this` for exactly this reason -- it captures the request
+		// itself, which is a value. A `std::function` is a value too, so the
+		// same discipline costs one copy here and removes the question of
+		// whether the view is still alive when somebody finally answers.
+		const capture_chooser chooser = m_capture_chooser;
+		m_decider(origin, policy::feature::screen_share,
+		           [request, origin, debug, give_up, chooser](bool granted) {
+			if (!granted) {
+				give_up("the shield refused this site");
+				return;
+			}
+			if (!chooser) {
+				give_up("no chooser installed");
+				return;
+			}
+			chooser(
+			  origin, request.screensModel(), request.windowsModel(),
+			  [request, debug, give_up](bool is_screen, int row) {
+				if (row < 0) {
+					give_up("nothing was chosen");
+					return;
+				}
+				QAbstractListModel *model =
+				  is_screen ? request.screensModel() : request.windowsModel();
+				const QModelIndex at = model->index(row, 0);
+				if (!at.isValid()) {
+					// The list changed under the dialog -- a window closed while
+					// somebody was reading. Refused rather than shifted along by
+					// one, because the row that took its place is a different
+					// surface and nobody chose it.
+					give_up("the chosen row is gone");
+					return;
+				}
+				if (debug)
+					qWarning("capture: sharing %s row %d",
+					          is_screen ? "screen" : "window", row);
+				if (is_screen)
+					request.selectScreen(at);
+				else
+					request.selectWindow(at);
+			});
+		});
+	});
+
 	// **A page offering to handle a scheme itself** -- `registerProtocolHandler`,
 	// which is how a webmail asks to take every `mailto:` link on the machine.
 	// Nothing was connected, and Qt's answer to an unconnected one is to reject
@@ -827,6 +910,10 @@ void qtwebengine_view::apply_settings(const view_settings &s) {
 
 void qtwebengine_view::set_permission_decider(permission_decider fn) {
 	m_decider = std::move(fn);
+}
+
+void qtwebengine_view::set_capture_chooser(capture_chooser fn) {
+	m_capture_chooser = std::move(fn);
 }
 
 

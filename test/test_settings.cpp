@@ -456,6 +456,9 @@ int main(int argc, char **argv) {
 		      "and location");
 		check(e.global_default(policy::feature::pointer_lock) == policy::setting::ask,
 		      "and pointer lock");
+		check(e.global_default(policy::feature::screen_share) == policy::setting::ask,
+		      "and screen sharing, which nobody could sensibly answer in advance "
+		      "for every site — a shared screen carries whatever else is on it");
 
 		// Not everything moved, and the two that did not are the interesting
 		// ones: a prompt for a capability the browser cannot actually deliver
@@ -504,13 +507,49 @@ int main(int argc, char **argv) {
 		      "can_ask and ask_phrase agree for every feature — one table, not two");
 		check(all_defaults_answerable,
 		      "no feature defaults to ask without a prompt that can answer it");
-		check(askable == 6,
-		      "six features can be asked about; the rest are decided in advance");
+		check(askable == 7,
+		      "seven features can be asked about; the rest are decided in advance");
 		check(QString::fromLatin1(policy::ask_phrase(policy::feature::camera)) ==
 		        "use your camera",
 		      "and the prompt says what happens, not which switch it is");
 		check(policy::ask_phrase(policy::feature::javascript) == nullptr,
 		      "a setting nobody is interrupted for has no sentence");
+	}
+
+	// The nineteenth feature. Two bits each into a quint64 leaves room for 32,
+	// so the packing needed nothing -- but a feature added to the enum and
+	// forgotten in the words table is a control with a blank label, and one
+	// forgotten in `settings_to_line` is a rule that cannot be written down.
+	section("screen sharing is a feature like the others");
+	{
+		policy_engine e;
+		check(policy::feature_from_name("screenShare") == policy::feature::screen_share,
+		      "it round-trips through its machine name, which is what files store");
+		check(QString::fromLatin1(policy::feature_label(policy::feature::screen_share)) ==
+		        "Screen sharing",
+		      "it has a label for the settings page");
+		check(policy::can_ask(policy::feature::screen_share),
+		      "and a sentence to ask with, so `ask` is a real answer for it");
+
+		// A grant is not a choice of surface, and the model must not confuse
+		// them: the picker is asked every time and nothing about it is stored.
+		// So a site rule can say allow, and that is all it says.
+		e.set_setting("meet.example", policy::feature::screen_share,
+		               policy::setting::allow);
+		check(e.is_allowed(policy::feature::screen_share, "meet.example"),
+		      "a site can be allowed to share");
+		check(!e.is_allowed(policy::feature::screen_share, "elsewhere.example"),
+		      "without allowing every other site");
+
+		const quint64 bits = policy::with_setting(0, policy::feature::screen_share,
+		                                            policy::setting::ask);
+		check(policy::settings_to_line(bits).contains("screenShare:ask"),
+		      QString("and it writes to a rule line (%1)")
+		        .arg(policy::settings_to_line(bits)));
+		check(policy::get_setting(policy::settings_from_line("screenShare:ask"),
+		                           policy::feature::screen_share) ==
+		        policy::setting::ask,
+		      "and reads back from one");
 	}
 
 	// `ask` has to survive the file. It very nearly did not: the engine kept a

@@ -12999,55 +12999,137 @@ Two changes, and the second is the one that matters:
 `try_settings_ui` 89 of 89. The `try_permissions` skip was also removed from the
 sweep's own list, since the driver now decides about the camera itself.
 
+## Screen sharing, which was refused with no way to say otherwise
+
+The last of the three permission follow-ups, and the one that needed more than
+a setting. `DesktopVideoCapture` fell to the same `default:` arm that clipboard
+reading and pointer lock used to, so a Teams or Meet call could be joined and
+the Present button did nothing at all -- silently, which is how it went
+unnoticed.
+
+### Two questions, and they are different in kind
+
+**Granting the permission is not choosing what to share, and the two must not be
+collapsed.** "May this site present" is a decision about a *site*, and the
+prompt offers to remember it. "Send *that* window, now" is a decision about this
+moment, and nothing about it is stored. A meeting allowed to present last week
+has not been allowed to present whatever happens to be open today.
+
+So the order is: `screen_share` goes through the shield exactly like the camera,
+and only if that says yes does `screen_picker` ask what. That is also why this
+one arrived later than the other two capabilities that got features in the same
+place -- for them, "yes" was a sufficient answer.
+
+`getDisplayMedia` arrives on `QWebEnginePage::desktopMediaRequested` rather than
+through `permissionRequested`, and Qt splits it out for the same reason: a
+yes/no cannot carry a surface. An unanswered request leaves the page's promise
+pending rather than rejected, so **every path that is not a choice calls
+`cancel()`** -- no chooser, a refusal, an empty picker, a row that vanished
+while the dialog was open. A page left waiting reads to somebody trying to
+present as the browser having frozen, not as having refused.
+
+### The picker is engine-neutral, which is what makes it testable
+
+Qt hands over two `QAbstractListModel`s and takes back an index into one. Those
+are Core types, so `screen_picker` never mentions the engine and can be built
+against `QStringListModel` fakes. A picker that could only be exercised inside a
+real `getDisplayMedia` would not be exercised at all -- there is no compositor
+here that will hand out a screen capture.
+
+Its three decisions, each the less convenient one:
+
+- **Share is dead until something is picked.** A picker whose button works
+  before a choice has been made will eventually send the wrong surface to a
+  meeting, and nothing about the dialog would have warned anybody.
+- **The two lists are one choice**, so selecting in either clears the other.
+  Allowing both to hold a selection means the dialog has to guess, and the guess
+  picks a surface to broadcast.
+- **`chosen_row()` is the answer on every path**, cleared on `rejected` rather
+  than on the Cancel button -- Escape and the window's close button never touch
+  a button. Making the row itself the answer means the caller has no result code
+  to remember to check.
+
+It says what is at stake once, because people know it in the abstract and forget
+it while joining a meeting: everything on what you pick is sent, including
+anything that appears on it later.
+
+### What running it found
+
+**A guard caught the feature missing from a dialog.** `site_policy_dialog`
+asserts that its hand-written layout covers every policy feature exactly once,
+and it does -- `try_phone` died on "the shield layout does not cover every policy
+feature exactly once" the first time the driver ran. That assertion is the
+reason the omission cost a minute rather than a release.
+
+**`settings_dialog` has the same kind of table and no such guard**, and it was
+already missing four features -- which its sibling's comment says in as many
+words. Three of them are now added under Permissions: `screen_share`, and
+`pointer_lock` and `clipboard_read`, which mattered less while they were
+permanently blocked and matter now that pointer lock *asks*. A capability that
+asks and cannot be configured from the settings page is one whose prompt
+somebody will want to stop and cannot. The remaining two, `extractor_fetch` and
+`media_detect`, are not permissions and are left where they were.
+
+**And the picture showed two things no assertion did.** A long window title
+scrolled sideways instead of eliding, so reading it on a 360-pixel screen meant
+dragging a scrollbar; and after a rejection the dialog still showed a
+highlighted row beside a live Share button while `chosen_row()` was -1 -- an
+object contradicting itself, harmless while the shell builds a fresh picker per
+request and wrong for whoever reuses one next.
+
+### What the fakes prove, and what they cannot
+
+`test_settings` is at 165, with the new feature round-tripping through its
+machine name, carrying a label and a sentence, allowing per-site without
+allowing everywhere, and writing and reading back through a rule line -- the two
+places a nineteenth feature silently falls out of.
+
+`try_phone` is at 101. The picker fits 360x640 with a layout floor of 188,
+opens focused, reaches all four controls by Tab, cuts no label and stretches no
+paragraph -- and its selection logic is checked there too, because the offline
+suites run on a `QCoreApplication` and cannot build a widget at all.
+
+**Not verified: a real `getDisplayMedia`.** Nothing here has met a compositor
+that will hand out a screen. What is proven is every part up to the engine call
+-- the shield is consulted, the picker is shown, the answer is turned into a
+`selectScreen` or `selectWindow` on the right model, and every other path
+cancels.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
 listed here is open; what closed is recorded in the sections above rather than
 carried along as amendments to a list item.
 
-1. **Finish the permissions work: it is proved on the desktop and unproved on
-   the phone.** `ask` exists, the decider is asynchronous, the prompt appears
-   and both answers reach the engine — 19 of 19 in `try_permissions`, offscreen.
-   Three things are left, in this order.
+1. **The permissions work is built and wants a real device for the last two
+   claims.** `ask` exists, the decider is asynchronous, the prompt appears and
+   both answers reach the engine; notifications are presented; screen sharing
+   has a feature, a picker and a wired-up engine signal. The sections above
+   record each. Two things cannot be checked from here.
 
    **Put the prompt in front of the handset — to confirm, not to investigate.**
-   Both mechanisms it depends on are generic and already written: `android_dialogs`
-   sizes any `QDialog` to the screen, and `android_view`'s filter hides the native
-   `WebView` while any dialog is visible, because the WebView is composited above
-   everything Qt renders. Neither needed a line for this prompt. What has not been
-   seen is a prompt raised over a *live page* rather than during a load, which is
-   the one moment `auth_dialog` never exercised. Note the handset is the copyright
-   holder's daily phone — no screenshots; read the one bit from `dumpsys` or
-   logcat, and put back every app-op and grant that gets changed.
+   Both mechanisms it depends on are generic and already written:
+   `android_dialogs` sizes any `QDialog` to the screen, and `android_view`'s
+   filter hides the native `WebView` while any dialog is visible, because the
+   WebView is composited above everything Qt renders. Neither needed a line for
+   this prompt. What has not been seen is a prompt raised over a *live page*
+   rather than during a load, which is the one moment `auth_dialog` never
+   exercised. Note the handset is the copyright holder's daily phone — no
+   screenshots; read the one bit from `dumpsys` or logcat, and put back every
+   app-op and grant that gets changed.
 
-   The notification presenter that was the second item here is built -- see
-   *Notifications, which were granted and then thrown away* -- so notifications
-   now ask on the desktop and stay blocked on Android, which has no service to
-   present with.
+   **And meet a real `getDisplayMedia`.** Everything up to the engine call is
+   proven against fakes -- the shield is consulted, the picker shown, the answer
+   turned into a `selectScreen` or `selectWindow` on the right model, and every
+   other path cancels -- but nothing here has a compositor that will hand out a
+   screen capture, so the last hop is unmeasured. A meeting on the desktop is
+   the test.
 
-   **Then screen sharing, which is still refused on both platforms.**
-   `DesktopVideoCapture` falls to the deny branch, there is no `screen_share`
-   feature in the policy model and no source picker, so a Teams or Meet call
-   can be joined and nothing can be presented. It needs a feature, a picker
-   naming what is about to be shared, and the same `ask` treatment as the rest.
-
-   The engine side is ready and was checked rather than assumed:
-   `QWebEngineDesktopMediaRequest` exists in this Qt and offers exactly what a
-   picker needs -- `screensModel()`, `windowsModel()`, `selectScreen(index)`,
-   `selectWindow(index)` and `cancel()`. Both models are `QAbstractListModel`,
-   so the dialog itself is engine-neutral and can be measured by `try_phone`
-   against fakes, the way the permission prompt is. The seam to add is a
-   chooser callback on `web_view_backend`, installed by the shell beside
-   `set_authenticator`, rather than a dialog opened from inside the view.
-
-   Two bits per feature into a `quint64` leaves room: 18 features use 36 of 64,
-   and rules persist by name, so a nineteenth can sit wherever it reads best.
-
-   Clipboard reading is deliberately not on this list. It stays blocked because
-   the engine gates it behind `JavascriptCanAccessClipboard` and
-   `JavascriptCanPaste`, which this project leaves off; the default moves if and
-   when those do, and not before.
-
+   Two capabilities stay blocked on purpose and are not outstanding work.
+   Clipboard reading is gated by the engine behind `JavascriptCanAccessClipboard`
+   and `JavascriptCanPaste`, which this project leaves off, so the request never
+   arrives; its default moves if and when those do. Notifications stay blocked on
+   Android, which has no service to present with.
 
 2. **The loop works on a disguised manifest; make it work on a noisy capture.**
    Three runs in five on dramafren now return `url.includes('cf-master')` — a

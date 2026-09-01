@@ -28,6 +28,9 @@
 #include "annoyed_dialog.h"
 #include "auth_dialog.h"
 #include "permission_dialog.h"
+#include <QListView>
+#include <QStringListModel>
+#include "screen_picker.h"
 #include "extractor_dialog.h"
 #include "extractor_signals.h"
 #include "filter_dialog.h"
@@ -430,6 +433,64 @@ int main(int argc, char *argv[]) {
 		mic.show();
 		QApplication::processEvents();
 		measure(&mic, "permission-microphone");
+	}
+
+	// The screen picker, against fake models.
+	//
+	// **Fakes rather than the engine's models, and that is what makes it
+	// testable at all.** Qt hands over two `QAbstractListModel`s and takes back
+	// an index into one; those are Core types, so the dialog never needs a
+	// compositor willing to hand out a screen capture. A picker that could only
+	// be exercised inside a real `getDisplayMedia` would not be exercised.
+	{
+		QStringListModel screens({"Screen 1 (built-in, 1920x1080)",
+		                           "Screen 2 (external)"});
+		QStringListModel windows({"Hydra — a tab that is open",
+		                           "A terminal",
+		                           "Something with a very long window title that "
+		                           "a narrow phone screen has to do something "
+		                           "sensible with"});
+		screen_picker dlg("meet.example", &screens, &windows, &f.window);
+		dlg.show();
+		QApplication::processEvents();
+
+		// Behaviour, while the dialog is in hand. These are cheap here and have
+		// nowhere better to live: the offline suites run on a QCoreApplication
+		// and cannot build a widget at all.
+		auto *share = dlg.findChild<QPushButton *>("screen_picker_share");
+		auto *screen_list = dlg.findChild<QListView *>("screen_picker_screens");
+		auto *window_list = dlg.findChild<QListView *>("screen_picker_windows");
+		shell::check(share && !share->isEnabled(),
+		             "screen picker: Share is dead until something is picked — a "
+		             "default would eventually send the wrong surface to a meeting");
+		shell::check(dlg.chosen_row() < 0,
+		             "and nothing is chosen to begin with");
+
+		if (screen_list && window_list && share) {
+			window_list->setCurrentIndex(window_list->model()->index(1, 0));
+			QApplication::processEvents();
+			shell::check(!dlg.is_screen() && dlg.chosen_row() == 1,
+			             "picking a window is reported as that window");
+			shell::check(share->isEnabled(), "and Share comes alive");
+
+			screen_list->setCurrentIndex(screen_list->model()->index(0, 0));
+			QApplication::processEvents();
+			shell::check(dlg.is_screen() && dlg.chosen_row() == 0,
+			             "then picking a screen replaces it");
+			shell::check(!window_list->selectionModel()->hasSelection(),
+			             "and the window is deselected — the two lists are one "
+			             "choice, and a dialog holding both would have to guess "
+			             "which surface to broadcast");
+
+			dlg.reject();
+			QApplication::processEvents();
+			shell::check(dlg.chosen_row() < 0,
+			             "closing it chooses nothing, whichever way it is closed");
+			dlg.show();
+			QApplication::processEvents();
+		}
+
+		measure(&dlg, "screen-picker");
 	}
 	{
 		// Two offers rather than one: the list is the part that has to fit, and

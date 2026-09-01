@@ -61,6 +61,17 @@ enum class feature : int {
 	// setting, it is stating a limitation.
 	clipboard_read,
 	pointer_lock,
+	// **Sharing a screen or a window, which was refused with no way to say
+	// otherwise.** `DesktopVideoCapture` fell to the same `default:` arm the two
+	// above used to, so a meeting could be joined and nothing could be
+	// presented -- and the refusal was silent, which is how it went unnoticed.
+	//
+	// It earns a feature on the same test those two did: the capability is real
+	// and the engine asks for it. What made this one later than they were is
+	// that answering "yes" is not enough -- the page must also be told *which*
+	// screen or window, so a permission without a picker beside it would still
+	// have delivered nothing.
+	screen_share,
 	// **The per-site switch the architecture doc puts here in as many words**
 	// -- "a per-site 'auto-detect media' toggle lives in the PolicyEngine"
 	// (sec 11) -- and which nothing had. The detector rides the same request

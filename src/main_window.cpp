@@ -2,6 +2,7 @@
 
 #include "auth_dialog.h"
 #include "permission_dialog.h"
+#include "screen_picker.h"
 #include "cert_dialog.h"
 #include "find_bar.h"
 #include "tab_tree_model.h"
@@ -2412,6 +2413,26 @@ void main_window::open_node(node *n, bool load_now) {
 				m_session_permissions.insert(key, grant);
 			}
 			answer(grant);
+		});
+
+		// What to share, once the shield has said the site may share at all.
+		//
+		// **Nothing is remembered here, and that is the design rather than an
+		// omission.** The permission above offers to stick to a site; this
+		// deliberately does not, because "may this site present" and "send
+		// *that* window, now" are different decisions and only the first is
+		// about the site. A meeting allowed to present last week has not been
+		// allowed to present whatever happens to be open today.
+		view->set_capture_chooser(
+		  [this](const QUrl &origin, QAbstractListModel *screens,
+		          QAbstractListModel *windows,
+		          web_view_backend::capture_answer answer) {
+			screen_picker dlg(origin.host(), screens, windows, this);
+			dlg.exec();
+			// `chosen_row()` is the answer on every path -- it is cleared on
+			// `rejected`, so Escape and the close button need no special case
+			// here and there is no result code to remember to check.
+			answer(dlg.is_screen(), dlg.chosen_row());
 		});
 
 		// **Asked, rather than declined on the person's behalf.** Nothing

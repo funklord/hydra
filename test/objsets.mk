@@ -471,6 +471,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -530,6 +531,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -598,6 +600,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -657,6 +660,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -743,6 +747,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -795,6 +800,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
@@ -857,6 +863,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -913,6 +920,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -984,6 +992,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -1040,6 +1049,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -1130,6 +1140,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -1178,6 +1189,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
@@ -1233,6 +1245,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -1292,6 +1305,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -1366,6 +1380,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -1422,6 +1437,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
@@ -1487,6 +1503,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -1546,6 +1563,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -1618,6 +1636,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -1675,6 +1694,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -1746,6 +1766,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -1802,6 +1823,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -1870,6 +1892,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -1928,6 +1951,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -2009,6 +2033,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -2062,6 +2087,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -2122,6 +2148,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -2181,6 +2208,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -2251,6 +2279,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -2310,6 +2339,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -2379,6 +2409,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -2437,6 +2468,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -2523,6 +2555,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -2573,6 +2606,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
@@ -2632,6 +2666,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -2691,6 +2726,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -2767,6 +2803,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
 	$(BUILD_DIR)/moc/moc_capture_source.o \
@@ -2821,6 +2858,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -2919,6 +2957,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
 	$(BUILD_DIR)/moc/moc_capture_source.o \
@@ -2966,6 +3005,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
@@ -3046,6 +3086,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
 	$(BUILD_DIR)/moc/moc_capture_source.o \
@@ -3093,6 +3134,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
@@ -3152,6 +3194,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -3208,6 +3251,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -3284,6 +3328,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
 	$(BUILD_DIR)/moc/moc_capture_source.o \
@@ -3338,6 +3383,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -3425,6 +3471,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -3475,6 +3522,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
@@ -3532,6 +3580,7 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -3591,6 +3640,7 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -3677,6 +3727,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -3729,6 +3780,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
@@ -3786,6 +3838,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -3845,6 +3898,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -3891,6 +3945,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/main_window.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/app/filter_signals.o \
 	$(BUILD_DIR)/app/request_filter.o \
@@ -3908,6 +3963,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
@@ -4048,6 +4104,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
 	$(BUILD_DIR)/moc/moc_capture_source.o \
@@ -4102,6 +4159,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -4180,6 +4238,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -4238,6 +4297,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -4333,6 +4393,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -4390,6 +4451,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -4465,6 +4527,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -4519,6 +4582,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -4592,6 +4656,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -4646,6 +4711,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -4717,6 +4783,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -4773,6 +4840,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
@@ -4844,6 +4912,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
+	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -4900,6 +4969,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_screen_picker.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \

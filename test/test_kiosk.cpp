@@ -54,6 +54,7 @@ public:
 	void reload() override {}
 	void apply_settings(const view_settings &s) override { settings_applied++; last = s; }
 	void set_permission_decider(permission_decider) override {}
+	void set_capture_chooser(capture_chooser) override {}
 	void set_zoom_factor(double f) override { zooms << f; }
 	void inject_script(const QString &, const QString &, bool) override {}
 	void inject_main_world_script(const QString &, const QString &) override {}
