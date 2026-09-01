@@ -36,7 +36,10 @@ int main(int argc, char *argv[]) {
 	request_filter      filter(&policy);
 	qtwebengine_factory factory(&filter);
 	main_window w(&factory, &policy, &filter);
-	w.load_tree(shell::inert_sample_tree());
+	// A local page: this driver activates a row to have a tab open, not
+	// to load anything in particular, and the committed example's first
+	// row is `doc.qt.io`. See `local_page_tree` in sample_tree.h.
+	w.load_tree(shell::local_page_tree());
 	w.resize(1100, 760);
 	w.show();
 	QDir().mkpath(outdir);

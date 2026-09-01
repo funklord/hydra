@@ -9,10 +9,12 @@
 #include <QApplication>
 #include <QPlatformSurfaceEvent>
 #include <QDir>
+#include <QFile>
 #include <QElapsedTimer>
 #include <QProcess>
 #include <QTimer>
 #include <QTreeView>
+#include <QUrl>
 #include <cstdio>
 
 // Where screenshots and captures land. Set HYDRA_TEST_OUT to move it.
@@ -53,7 +55,18 @@ int main(int argc, char *argv[]) {
 		}
 	};
 	w.installEventFilter(new watcher);
-	w.load_tree(shell::inert_sample_tree());
+
+	// **A local page, not the committed example's first tab.** This opened
+	// `inert_sample_tree()` and activated its first child, which in the sample
+	// is `doc.qt.io` -- so a sweep fetched a real site and pulled amplitude and
+	// Simple Analytics with it, which is how this was noticed: the driver's own
+	// output carried the Amplitude logger's warnings. See `local_page_tree`.
+	//
+	// It also makes the measurement mean something. What this reports is how
+	// the shell paints in the moments after a tab opens, and while the page
+	// came off the network those timings moved with a remote site's week rather
+	// than with this code.
+	w.load_tree(shell::local_page_tree());
 	w.resize(1100, 780);
 	w.show();
 

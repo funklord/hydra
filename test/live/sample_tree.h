@@ -27,6 +27,7 @@
 #include <QFileInfo>
 #include <QString>
 #include <QStringList>
+#include <QUrl>
 
 namespace shell {
 
@@ -126,6 +127,32 @@ inline QString single_tab_tree(const QString &url,
 		f.write(line.toUtf8());
 	}
 	return dest;
+}
+
+// **A tree whose one tab is a local page.** For the drivers that open a tab in
+// order to *have* one open, rather than to load anything in particular.
+//
+// `inert_sample_tree` is the wrong tool for that and was used for it three
+// times. It marks every row unopened so nothing loads on startup, which is
+// what "inert" means -- but a driver that then activates a row loads whatever
+// that row points at, and in the committed example the first one is
+// `doc.qt.io`. See *The drivers no longer fetch a real site to make a point*
+// in project.md: that entry fixed `try_media`, `try_frame` and `try_mse`, and
+// names this exact second half -- "the url the driver navigates to, and the
+// tree it opens". Three more drivers had only the first half fixed.
+//
+// A real url is still what you pass when a real site is the question, which is
+// how `try_extract` has always worked.
+inline QString local_page_tree(const QString &out_dir = scratch_dir()) {
+	QDir().mkpath(out_dir);
+	const QString page = QDir(out_dir).filePath("local-page.html");
+	QFile f(page);
+	if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+		f.write("<!doctype html><title>local fixture</title>"
+		         "<style>body{background:#123;color:#eee;font:16px sans-serif}"
+		         "h1{margin:2em}</style><h1>local fixture</h1>");
+	f.close();
+	return single_tab_tree(QUrl::fromLocalFile(page).toString(), out_dir);
 }
 
 }  // namespace shell

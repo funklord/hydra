@@ -11050,8 +11050,24 @@ the instrument is cheap and nothing else in the tree had found them.
 
 `test/live/sweep.sh` has the same shape in its `OUT=${HYDRA_SWEEP_OUT:-/tmp/hydra-sweep}`
 and is deliberately left: it is an output directory meant to outlive `clean`,
-and it already takes an override. The other `/tmp/hydra-*` directories on this
-machine came from ad-hoc commands rather than from anything committed.
+and it already takes an override.
+
+**The sentence that used to close this paragraph was wrong, and wrong because
+the search behind it looked in the wrong place.** It said the other
+`/tmp/hydra-*` directories on this machine came from ad-hoc commands rather
+than from anything committed. They came from the live drivers. The grep that
+produced the claim was written against `test/try_*.cpp`, and the drivers are in
+`test/live/`, so it matched nothing and the empty result was read as an answer
+— the precise failure this whole section is about, committed while writing it.
+
+Corrected by grepping the right directory: **thirty fixed `/tmp/hydra-*` paths
+across the drivers.** Twenty-nine can be redirected — most read
+`HYDRA_TEST_OUT` themselves, the rest inherit it through `shell::fixture`, and
+`try_evolve_confirm` uses `HYDRA_TEST_CONFIG` for its settings root. `sweep.sh`
+sets `HYDRA_TEST_OUT` per driver, so a sweep is contained; running one directly,
+which is what `test/README.md` tells a reader to do, is not.
+
+`try_send_gate` was the one that could not be redirected at all and now can.
 
 ## Saving on a signal, built -- and the writers made atomic first
 
@@ -12336,6 +12352,62 @@ something through here, and because the message was what made it obvious —
 the gate saying what it does not check is what turned a green run into a reason
 to look. It was found by reading the diff, which is the only instrument that
 covers it.
+
+### Four drivers still fetched a real site, and the entry that fixed three said how
+
+*The drivers no longer fetch a real site to make a point* records fixing
+`try_media`, `try_frame` and `try_mse`, and names the part that is easy to miss:
+**two things had to change for one symptom, the url the driver navigates to and
+the tree it opens.** Four drivers had only the first half.
+
+Found by reading a report nobody had read. The sweep classes eight drivers as
+report-only — they capture and time rather than assert — and judges them on
+"ran to the end". Running one and actually looking at its output, `try_flicker`
+printed the Amplitude logger's warnings and a Simple Analytics line, which no
+local page produces.
+
+The mechanism is the one that entry describes. `inert_sample_tree` marks every
+row unopened so nothing loads on startup, which is what "inert" means; a driver
+that then activates a row loads whatever that row points at, and in the
+committed example the first one is `doc.qt.io`. `try_flicker`, `try_capture` and
+`try_downloads` all did that, and `try_look` wrote its own tree with a real
+`doc.qt.io` in one row while using non-resolving `example.test` in the row below
+— inconsistent with its own practice rather than with a rule elsewhere.
+
+All four open `shell::local_page_tree()` now, a shared helper next to
+`single_tab_tree` so the fixture is written once rather than three times.
+`try_look`'s one real url matches the neighbour it sits beside. Re-run: zero
+tracker lines from any of the four, all still producing their captures —
+`try_capture` 5, `try_downloads` 14, `try_flicker` 11 grabs.
+
+It also makes `try_flicker` mean something. What it reports is how the shell
+paints in the moments after a tab opens, and while the page came off the network
+those timings moved with a remote site's week rather than with this code —
+unrepeatable in exactly the way that entry gives as its second reason.
+
+### The grep that looked in the wrong place, and the claim it produced
+
+Fixing the suites' shared `/tmp` paths this morning ended with a sentence saying
+the other `/tmp/hydra-*` directories came from ad-hoc commands rather than from
+anything committed. **That was false, and false in this section's own way:** the
+grep behind it was written against `test/try_*.cpp` while the drivers live in
+`test/live/`, so it matched nothing, and the empty result was read as an answer.
+
+Grepping the right directory: **thirty fixed `/tmp/hydra-*` paths across the
+drivers**, which is where every one of those directories came from.
+Twenty-nine can be redirected — most read `HYDRA_TEST_OUT`, the rest inherit it
+through `shell::fixture`, and `try_evolve_confirm` uses `HYDRA_TEST_CONFIG` for
+its settings root, which a three-line lookback missed and a fourth line found.
+`sweep.sh` sets `HYDRA_TEST_OUT` per driver, so a sweep is contained; running a
+driver directly, which is what `test/README.md` tells a reader to do, is not.
+
+`try_send_gate` was the one that could not be redirected at all. It now can.
+
+The lesson is not "grep more carefully". It is that **an empty result and a
+verified absence look identical**, which is the same sentence as the one about
+gates over empty file lists, and it applies to the person writing the search as
+much as to the tool. A search that returns nothing should be made to prove it
+looked — here, by naming a file it must have found.
 
 ## What is next (in order)
 

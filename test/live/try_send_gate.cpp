@@ -73,7 +73,14 @@ int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QApplication app(argc, argv);
 
-	const QString out = "/tmp/hydra-send-gate";
+	// The only one of the thirty fixed `/tmp/hydra-*` paths in these drivers
+	// that could not be redirected. Twenty-nine honour HYDRA_TEST_OUT, either
+	// directly or through `shell::fixture`, and one uses HYDRA_TEST_CONFIG;
+	// this one took the shared path unconditionally, so a second account on
+	// the machine wrote into the first account's directory or failed to.
+	const QString out = qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
+	                        ? QString::fromLocal8Bit(qgetenv("HYDRA_TEST_OUT"))
+	                        : QString("/tmp/hydra-send-gate");
 	QDir().mkpath(out);
 	int shots = 0;
 	auto save = [&](QWidget *w, const char *name) {

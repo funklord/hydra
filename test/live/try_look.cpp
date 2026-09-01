@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
 	QFile tf(tree);
 	if (!tf.open(QIODevice::WriteOnly | QIODevice::Truncate)) return 1;
 	tf.write("- [f0] folder | Work\n"
-	          "  - [a1] unopened | Qt documentation | https://doc.qt.io | "
+	          "  - [a1] unopened | Qt documentation | https://docs.example.test/qt | "
 	          "created=2026-01-04T09:00:00 | seen=2026-08-01T09:00:00\n"
 	          "  - [a2] unopened | A tab with a rather long title that will "
 	          "have to be elided somewhere | https://example.test/long | "
