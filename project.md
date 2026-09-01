@@ -11945,6 +11945,64 @@ for choosing between them, and there is no Flatpak KeePassXC here to check
 against. If the working set up is a Flatpak, that is the first thing to try and
 the path is not ruled out after all.
 
+### Two more checks that could not fail, found by looking for the shape
+
+The lens that produced the root-permission fix, the icon-directory fix and
+`try_import` is *a check that cannot fail*, and by the fourth instance it is
+worth searching for deliberately rather than waiting to trip over.
+
+The search is mechanical: a loop over a collection that sets a flag, followed
+by an assertion on the flag. When the collection is empty the loop cannot set
+it either way, so the assertion reports whatever the initialiser said. Eleven
+sites across the suites and drivers match that shape; nine are loops over
+fixture data the test built itself and cannot be empty. Two were real.
+
+**`test_settings`: the escape hatch was in the initialiser.**
+
+    bool ok = p3.selected().isEmpty();
+    for (const player_entry &e : p3.players())
+        if (e.id == p3.selected() && e.installed) ok = true;
+    check(ok, "and what it falls back to is actually installed");
+
+`selected()` is empty precisely when no media player is installed, so on such a
+machine `ok` starts true and the check passes while its own message claims an
+installation was verified. **That machine is CI** — the workflow installs no
+media player at all, so this has been green there and testing nothing. It does
+real work here, where mpv, mplayer and smplayer are present, which is why it
+never looked wrong.
+
+The correction is the one already applied twice: the accommodation belongs in a
+printed skip, not in an initialiser. A reader of the CI log now sees *"no media
+player installed, so there is nothing to fall back to; not checked"*.
+
+**`test_settings`: a negative assertion with no subject.**
+
+    bool leaked = false;
+    for (const QString &k : probe.allKeys())
+        if (probe.value(k).toString().contains(secret)) leaked = true;
+    check(!leaked, "and never written to the settings store");
+
+This one is worse than vacuous, and worth stating precisely: `leaked` can only
+stay false if the loop runs, so an empty key list passes exactly as loudly as a
+clean one — and an empty key list is what a save that silently did nothing
+leaves behind. **The check would be greenest in the one case that should alarm
+anybody**, namely that the write it is auditing never happened.
+
+Fixed by asserting the subject exists before searching it: the store has keys
+(13 here). That is `evidence.md`'s rule about mechanical changes applied to a
+test rather than to a tool — state what must hold, check it, and refuse to
+report on an empty population.
+
+**The generalisation, which is the useful part.** A negative assertion — *this
+did not happen*, *nothing leaked*, *no entry is present* — is satisfied by an
+absent population and by a correct one alike, and the two are indistinguishable
+from the result line. Every one of them wants a companion check that the
+population is not empty. The positive assertions in the same files do not need
+this, because a loop that never runs cannot make them pass.
+
+132 assertions in `test_settings`, up from 131: the leak check gained its
+precondition and the fallback check kept its meaning.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

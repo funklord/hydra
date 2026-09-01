@@ -108,11 +108,26 @@ int main(int argc, char **argv) {
 		check(p3.selected() != "definitely-not-a-real-player",
 		      QString("falls back rather than keeping a dead choice (%1)")
 		          .arg(p3.selected()));
-		bool ok = p3.selected().isEmpty();
-		for (const player_entry &e : p3.players())
-			if (e.id == p3.selected() && e.installed)
-				ok = true;
-		check(ok, "and what it falls back to is actually installed");
+		// **Only where there is something to fall back to.** `ok` was
+		// initialised from `selected().isEmpty()` -- which is precisely the
+		// no-player case -- so on a machine with none this passed while its
+		// message claimed an installation had been verified. That machine is
+		// CI: the workflow installs no media player at all, so this has been
+		// green there and checking nothing.
+		//
+		// The escape hatch belongs in a printed skip, not in the initialiser,
+		// which is the same correction made to the icon-directory check in
+		// test_theme and to try_import.
+		if (p3.selected().isEmpty()) {
+			std::printf("  --    (no media player installed, so there is "
+			             "nothing to fall back to; not checked)\n");
+		} else {
+			bool ok = false;
+			for (const player_entry &e : p3.players())
+				if (e.id == p3.selected() && e.installed)
+					ok = true;
+			check(ok, "and what it falls back to is actually installed");
+		}
 	}
 
 	section("the custom command template");
@@ -221,8 +236,17 @@ int main(int argc, char **argv) {
 
 		QSettings probe(QSettings::IniFormat, QSettings::UserScope, "hydra", "hydra");
 		probe.sync();
+		// **A negative needs a subject.** `leaked` can only stay false if the
+		// loop runs at all, so an empty key list passes this exactly as loudly
+		// as a clean one -- and an empty key list is what a save that silently
+		// did nothing leaves behind. So the check would be greenest in the one
+		// case that should alarm anybody: the write never happened.
+		const QStringList keys = probe.allKeys();
+		check(!keys.isEmpty(),
+		      QString("the settings store has keys to search (%1)")
+		          .arg(keys.size()));
 		bool leaked = false;
-		for (const QString &k : probe.allKeys())
+		for (const QString &k : keys)
 			if (probe.value(k).toString().contains(secret))
 				leaked = true;
 		check(!leaked, "and never written to the settings store");
