@@ -185,6 +185,16 @@ public:
 	static void request_capture(qint64 id, const QString &origin,
 	                             bool video, bool audio, qint64 token);
 
+	// The same question for geolocation: the shield, then the operating system.
+	//
+	// Separate from `request_capture` rather than a flag on it, because the two
+	// differ in every particular that matters -- one feature rather than two, a
+	// different Android permission, and an answer the WebView takes back by
+	// origin rather than by request object. Sharing them would be a function
+	// whose body is two functions behind a boolean.
+	static void request_geolocation(qint64 id, const QString &origin,
+	                                 qint64 token);
+
 	// A page asked for a file. Runs on the Qt thread, shows Qt's file dialog --
 	// which on Android *is* the system document picker -- and hands the chosen
 	// urls back to Java, which is the only place that may answer the WebView.

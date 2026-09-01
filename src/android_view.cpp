@@ -223,6 +223,19 @@ Java_se_vibes_hydra_HydraWebView_bridgeCall(JNIEnv *env, jclass, jlong id,
 // Called from Java on the UI thread when a page's file input is used. Posted
 // rather than waited on: the picker Qt is about to show needs that same UI
 // thread, so blocking here would deadlock the two against each other.
+// Queued, exactly like `requestCapture` and for the same reason: answering may
+// put a dialog on the screen, and this arrives on Android's UI thread.
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_requestGeolocation(JNIEnv *env, jclass, jlong id,
+                                                                  jstring origin,
+                                                                  jlong token) {
+	const QString o = from_java(env, origin);
+	const qint64 vid = id, tok = token;
+	QMetaObject::invokeMethod(qApp, [vid, o, tok] {
+		android_view::request_geolocation(vid, o, tok);
+	}, Qt::QueuedConnection);
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_se_vibes_hydra_HydraWebView_chooseFile(JNIEnv *env, jclass, jlong id,
                                                           jboolean multiple,
@@ -459,6 +472,53 @@ void android_view::request_capture(qint64 id, const QString &origin,
 		return;
 	}
 	decider(o, policy::feature::camera, policy_audio);
+}
+
+void android_view::request_geolocation(qint64 id, const QString &origin,
+                                        qint64 token) {
+	const bool debug = qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG");
+	// One place that answers, however this ends. A geolocation callback that is
+	// never invoked is not a refusal: the page waits, and its error handler
+	// eventually reports a denial it was never actually given -- which is the
+	// state this whole path was in before it existed.
+	auto answer = [token, debug](bool granted) {
+		if (debug)
+			qWarning("geolocation: token %lld -> %s", (long long)token,
+			          granted ? "granted" : "denied");
+		QJniObject::callStaticMethod<void>(k_cls, "onGeolocationDecision", "(JZ)V",
+		                                    jlong(token), jboolean(granted));
+	};
+
+	android_view *v = s_views.value(id, nullptr);
+	// Refused when nobody is listening, as with capture and for the same reason:
+	// a missing decider must not hand a page somebody's whereabouts.
+	if (!v || !v->m_decider) {
+		answer(false);
+		return;
+	}
+
+	// The shield first, then Android. Asking the operating system for a
+	// permission the shield was going to refuse spends a dialog on nothing.
+	v->m_decider(QUrl(origin), policy::feature::geolocation,
+	              [answer, debug](bool granted) {
+		if (!granted) {
+			answer(false);
+			return;
+		}
+		// **Precise or nothing is not the ask.** `QLocationPermission` defaults
+		// to approximate accuracy, and that is the right default for a browser:
+		// a page wanting a city does not need a doorstep, and Android lets the
+		// person downgrade a precise request anyway. A page that needs better
+		// will say so, and this is the layer that would have to grow an option
+		// for it rather than the one that assumes.
+		qApp->requestPermission(QLocationPermission{}, qApp,
+		                         [answer, debug](const QPermission &p) {
+			const bool ok = p.status() == Qt::PermissionStatus::Granted;
+			if (debug)
+				qWarning("geolocation: the OS %s", ok ? "granted" : "refused");
+			answer(ok);
+		});
+	});
 }
 
 void android_view::choose_file(qint64 id, bool multiple, const QString &accept) {

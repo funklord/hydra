@@ -6,6 +6,7 @@ import android.net.Uri;
 import android.util.Log;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.GeolocationPermissions;
 import android.webkit.WebStorage;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
@@ -85,6 +86,19 @@ public class HydraWebView {
 
     private static final Map<Long, PermissionRequest> PENDING = new HashMap<>();
     private static long NEXT_TOKEN = 1;
+
+    /**
+     * The same arrangement for geolocation, which arrives through a different
+     * callback and has to be parked the same way.
+     *
+     * Two maps rather than one of a common supertype: a `PermissionRequest` and
+     * a `GeolocationPermissions.Callback` have nothing in common but being
+     * answered late, and a shared map would need a cast at every use to buy
+     * nothing. The token counter is shared, so a token means one thing.
+     */
+    private static final Map<Long, GeolocationPermissions.Callback> GEO_PENDING =
+        new HashMap<>();
+    private static final Map<Long, String> GEO_ORIGIN = new HashMap<>();
 
     /**
      * Kept so every later call can be posted to the same UI-thread queue that
@@ -189,6 +203,47 @@ public class HydraWebView {
     public static native void requestCapture(long id, String origin,
                                             boolean video, boolean audio,
                                             long token);
+
+    /**
+     * Asks the shell whether this origin may know where the device is.
+     *
+     * Same shape as requestCapture and for the same two reasons: the site
+     * policy lives on the Qt thread, and the Android runtime grant may put a
+     * dialog in front of somebody. The answer comes back to
+     * onGeolocationDecision() with this token.
+     */
+    public static native void requestGeolocation(long id, String origin,
+                                                 long token);
+
+    /**
+     * The answer to a requestGeolocation, from C++ on the UI thread.
+     *
+     * `invoke` takes the origin back, so it is parked with the callback -- the
+     * WebView will not accept an answer addressed to anything else, and getting
+     * it wrong is a page that waits for ever rather than an error.
+     *
+     * The third argument is "remember this", and it is always false. Android
+     * would keep the answer in its own store, invisible to this browser and not
+     * clearable from it -- a second authority over a decision the shield
+     * already records, which is exactly the split the profile's persistent
+     * permissions were turned off to avoid on the desktop.
+     */
+    public static void onGeolocationDecision(final long token, final boolean granted) {
+        onUi(new Runnable() { @Override public void run() {
+            GeolocationPermissions.Callback cb = GEO_PENDING.remove(token);
+            String origin = GEO_ORIGIN.remove(token);
+            if (cb == null) {
+                if (permDebug())
+                    Log.d(PERM_TAG, "geolocation decision " + granted +
+                          " for token " + token + " but nothing was waiting");
+                return;
+            }
+            if (permDebug())
+                Log.d(PERM_TAG, "geolocation token=" + token +
+                      (granted ? " GRANTED" : " denied") + " for " + origin);
+            cb.invoke(origin, granted, false);
+        } });
+    }
 
     /**
      * The answer to a requestCapture, from C++ on the UI thread.
@@ -434,6 +489,38 @@ public class HydraWebView {
                         final String origin = req.getOrigin() != null
                                 ? req.getOrigin().toString() : "";
                         requestCapture(id, origin, video, audio, token);
+                    }
+
+                    /**
+                     * A page asking where the device is.
+                     *
+                     * **Not overriding this is not neutral.** The base
+                     * implementation does nothing at all -- it neither grants
+                     * nor denies, so the callback is never invoked and the
+                     * page's `getCurrentPosition` error handler fires with
+                     * "User denied Geolocation". Measured on the handset: the
+                     * shield said location was allowed, the settings screen
+                     * offered no location permission to grant, and the page was
+                     * refused anyway, all three being the same missing piece.
+                     */
+                    @Override
+                    public void onGeolocationPermissionsShowPrompt(
+                            String origin, GeolocationPermissions.Callback cb) {
+                        if (permDebug())
+                            Log.d(PERM_TAG, "onGeolocationPermissionsShowPrompt "
+                                  + "origin=" + origin);
+                        if (cb == null)
+                            return;
+                        if (origin == null || origin.isEmpty()) {
+                            // Nothing to attribute it to and nothing to answer
+                            // with: invoke() is addressed by origin.
+                            cb.invoke(origin, false, false);
+                            return;
+                        }
+                        final long token = NEXT_TOKEN++;
+                        GEO_PENDING.put(token, cb);
+                        GEO_ORIGIN.put(token, origin);
+                        requestGeolocation(id, origin, token);
                     }
                     // Returning true means "I will answer, later". Returning
                     // false would let the WebView fall back to nothing at all --

@@ -13741,6 +13741,73 @@ fail -- so a row was removed on purpose, and `try_phone` printed *"the privacy
 layout does not account for every policy feature exactly once"*; restored, it is
 silent again. Both states observed rather than one assumed.
 
+## Android geolocation, which was three missing pieces
+
+Confirmed from the handset before any of it was written: *"there are no
+permissions for location to give"*. That is the visible end of a gap with three
+parts, and each of them alone was enough to make location impossible.
+
+1. **The manifest declared none.** No `ACCESS_FINE_LOCATION`, no coarse one, so
+   Android had nothing to offer and the app's settings screen showed no location
+   entry to grant.
+2. **Nothing requested one.** The capture path asks for camera and microphone
+   through `QPermissions`; there was no equivalent here.
+3. **`onGeolocationPermissionsShowPrompt` was not overridden, and that is not
+   neutral.** The base implementation does nothing at all -- it neither grants
+   nor denies, so the callback is never invoked and the page's error handler
+   eventually fires with *"User denied Geolocation"*. Measured: the shield said
+   location was allowed, and the page was refused anyway.
+
+All three are the same shape as a defect this file keeps recording -- a refusal
+that nobody decided and nobody could see -- and the third is the worst of them,
+because the page is told it was denied by a person who was never asked.
+
+### Built as a mirror of the capture path, not as a variation of it
+
+`request_geolocation` is a separate function rather than a flag on
+`request_capture`. The two differ in every particular that matters: one feature
+rather than two, a different Android permission, and an answer the WebView takes
+back **by origin** rather than by request object. Sharing them would be a
+function whose body is two functions behind a boolean.
+
+The order is the same and for the same reason: the shield first, then the
+operating system. Asking Android for a permission the shield was going to refuse
+spends a dialog on nothing.
+
+Two decisions worth stating:
+
+- **`QLocationPermission` at its default accuracy, which is approximate.** A page
+  wanting a city does not need a doorstep, Android lets the person downgrade a
+  precise request anyway, and a browser that always demands the precise one has
+  made that choice on somebody's behalf. A page needing better would be a reason
+  to grow an option here, not a reason to assume now.
+- **The "remember this" argument to `invoke` is always false.** Android would
+  keep the answer in its own store, invisible to this browser and not clearable
+  from it -- a second authority over a decision the shield already records, which
+  is exactly the split the profile's persistent permissions were turned off to
+  avoid on the desktop.
+
+### What the build caught, and what it did not
+
+**XML comments may not contain a double hyphen**, and this project's prose uses
+one as a dash in every other file. The manifest comment did too, and the build
+said `Error in .../AndroidManifest.xml: Expected '>', but got ' '` -- which names
+the file and is a long way from naming the cause. The comment now says so, since
+the next person writing prose in that file will reach for the same dash.
+
+Verified from the artifact rather than the source: `aapt2 dump badging` reports
+`ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` in the apk, and on the
+handset the app now holds both, ungranted -- which is the thing that was missing.
+`make jni` reports 15 native methods, every one resolvable.
+
+**Not verified end to end.** The run that would have shown Android's own location
+dialog was abandoned: the handset turned out to be in a call, and the scripted
+taps were landing on the in-call screen. Nothing was toggled -- mute, speaker,
+hold and the rest all read false afterwards -- but the lesson is the one that
+should not have needed learning twice in a day: **check what is in the foreground
+before sending input to somebody's phone.** The earlier version of this was
+tapping BankID's idle screen.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

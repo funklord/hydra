@@ -64,6 +64,28 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
+    <!-- Location, for a page that asks where you are.
+
+         Nothing here declared it, so `navigator.geolocation` could not work at
+         all: the page's callback came back "User denied Geolocation" whatever
+         the shield said, and the settings screen offered no location permission
+         to grant because the app had never asked for one. Both halves confirmed
+         on the handset before this was added.
+
+         Coarse as well as fine, and both `required="false"`. A browser on a
+         device with no GPS is still a browser, and a page that only wants a
+         city does not need the precise one. Android lets the person choose
+         which to give when both are asked for, and that choice belongs to
+         them rather than to this manifest.
+
+         (No double hyphen anywhere above, because XML comments may not contain
+         one and this project's prose uses it as a dash everywhere else. The
+         build says "Expected '>', but got ' '" and names the file, which is
+         a long way from naming the cause.) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-feature android:name="android.hardware.location" android:required="false"/>
+    <uses-feature android:name="android.hardware.location.gps" android:required="false"/>
     <!-- Plain HTTP is allowed because this is a browser. Android blocks
          cleartext by default, which is right for an app that talks to its own
          backend and wrong for one whose entire job is loading addresses the
