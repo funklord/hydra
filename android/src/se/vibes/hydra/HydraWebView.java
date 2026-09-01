@@ -3,6 +3,7 @@ package se.vibes.hydra;
 import android.app.Activity;
 import android.graphics.Color;
 import android.net.Uri;
+import android.util.Log;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.WebStorage;
@@ -52,6 +53,36 @@ public class HydraWebView {
      * rather than the view id because one view can have more than one request
      * outstanding.
      */
+    /**
+     * Diagnostics for the part of the capture handshake the shell cannot see.
+     *
+     * **Most of this now belongs in the browser, not in logcat.** `filter_signals`
+     * records what each site asked for and what it was told, a report carries
+     * that evidence, and the annoyed dialog shows it -- so the person looking at
+     * the broken page can see the answer without a cable. That is the mechanism
+     * this project is built around and it should be the first thing reached for.
+     *
+     * What stays here is the half that happens below the shell: the raw resource
+     * list Android hands over, and whether `onPermissionRequest` fired at all. A
+     * request for something this class does not name, and no request whatsoever,
+     * are indistinguishable from inside the browser and are the two candidates
+     * when a site insists it has no camera.
+     *
+     * `Log.isLoggable` rather than a constant or an environment variable: a
+     * constant means rebuilding to see anything, and Qt's `HYDRA_PERM_DEBUG`
+     * cannot be set for an app Android launches. One command turns it on:
+     *
+     *     adb shell setprop log.tag.HydraPerm DEBUG
+     *
+     * Off by default, because these lines carry the origin of every page that
+     * asks for a camera and logcat is readable by more than whoever wanted the
+     * answer.
+     */
+    private static final String PERM_TAG = "HydraPerm";
+    private static boolean permDebug() {
+        return Log.isLoggable(PERM_TAG, Log.DEBUG);
+    }
+
     private static final Map<Long, PermissionRequest> PENDING = new HashMap<>();
     private static long NEXT_TOKEN = 1;
 
@@ -174,8 +205,17 @@ public class HydraWebView {
         onUi(new Runnable() {
             @Override public void run() {
                 PermissionRequest req = PENDING.remove(token);
-                if (req == null)
+                if (req == null) {
+                    // A token nothing is waiting on: answered twice, or the
+                    // view went away between the question and the answer.
+                    if (permDebug())
+                        Log.d(PERM_TAG, "decision " + granted + " for token " +
+                              token + " but nothing was waiting on it");
                     return;
+                }
+                if (permDebug())
+                    Log.d(PERM_TAG, "decision token=" + token +
+                          (granted ? " GRANTED" : " denied"));
                 if (!granted) {
                     req.deny();
                     return;
@@ -365,7 +405,27 @@ public class HydraWebView {
                             else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r))
                                 audio = true;
                         }
+                        // **The raw resource list, not just what we understood
+                        // of it.** The question this exists to answer is why a
+                        // site that asks for a camera does not get one, and the
+                        // two candidates look identical from outside: a request
+                        // for something this switch does not name, and no
+                        // request at all. Printing what arrived separates them.
+                        if (permDebug()) {
+                            StringBuilder res = new StringBuilder();
+                            for (String r : req.getResources()) {
+                                if (res.length() > 0) res.append(", ");
+                                res.append(r);
+                            }
+                            Log.d(PERM_TAG, "onPermissionRequest origin=" +
+                                  (req.getOrigin() != null ? req.getOrigin().toString() : "(none)") +
+                                  " resources=[" + res + "]" +
+                                  " -> video=" + video + " audio=" + audio);
+                        }
                         if (!video && !audio) {
+                            if (permDebug())
+                                Log.d(PERM_TAG, "denied: nothing in it was audio "
+                                      + "or video capture");
                             req.deny();
                             return;
                         }

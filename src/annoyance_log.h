@@ -31,6 +31,12 @@ struct annoyance_report {
 	QString     host;
 	QString     page;        // the address that was open
 	QStringList suspects;    // ad-shaped requests that got through, at that moment
+	// What the page asked this browser for, and what it was told. Most recent
+	// first. **The reason a report can answer "it says it has no camera" at
+	// all**: without it, a granted request and a refused one look identical
+	// from outside, and the person filing the report is the only one who can
+	// see the page's side of it.
+	QStringList capabilities;
 	int         observed = 0;  // how many requests the page had made in total
 	// What the person did next, if anything: "recorded", "zapped", "evolved",
 	// "consent". Kept because a report nobody acted on is the interesting kind

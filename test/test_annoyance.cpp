@@ -1,6 +1,7 @@
 // The "something got through here" log: what it keeps and what a round trip
 // through disk does to it.
 #include "annoyance_log.h"
+#include "filter_signals.h"
 #include "annoyed_dialog.h"
 
 #include <QApplication>
@@ -21,6 +22,10 @@ static annoyance_report make(const QString &host, const QStringList &suspects) {
 	r.page = "https://" + host + "/watch?v=1";
 	r.when = QDateTime::fromString("2026-08-04T17:30:00", Qt::ISODate);
 	r.suspects = suspects;
+	// Carried on every made-up report, so the round trip below proves the field
+	// survives disk rather than merely existing in memory.
+	r.capabilities = QStringList{ "17:30:01  Camera: allow",
+	                               "17:29:58  Microphone: block" };
 	r.observed = 42;
 	return r;
 }
@@ -87,6 +92,10 @@ int main(int argc, char **argv) {
 		check(r.page == "https://a.test/watch?v=1", "the page address survives");
 		check(r.observed == 42, "and how much traffic the page had made");
 		check(r.outcome == "evolved", "and what came of it");
+		check(r.capabilities.size() == 2 &&
+		        r.capabilities.first().contains("Camera: allow"),
+		      "and the capability evidence survives the file — the half of a "
+		      "report that explains a page insisting it has no camera");
 		check(r.when.isValid(), "and when it was filed");
 
 		// Shrinking must not leave a tail: an array rewritten shorter used to
@@ -100,6 +109,40 @@ int main(int argc, char **argv) {
 		      "leaving no trace of the reports that were removed");
 
 		QFile::remove(path);
+	}
+
+	// The second kind of evidence a report carries, and the one that answers a
+	// complaint the network half cannot: "it says I have no camera" produces no
+	// ad-shaped request at all.
+	section("capabilities a page asked for");
+	{
+		filter_signals sig;
+		sig.note_capability("meet.test", "Camera", "https://meet.test/call", "allow");
+		sig.note_capability("meet.test", "Microphone", "https://meet.test/call", "allow");
+		// An embedded frame asking on the page's behalf, which is the case
+		// worth being able to see: the rule was written about one host and the
+		// asking was done by another.
+		sig.note_capability("meet.test", "Camera", "https://sdk.other.test/f", "block");
+
+		const QStringList caps = sig.capabilities_for("meet.test");
+		check(caps.size() == 3, QString("all three are kept (%1)").arg(caps.size()));
+		check(caps.first().contains("Camera") && caps.first().contains("block"),
+		      "most recent first, so a page asking in a loop cannot push the "
+		      "interesting first attempt off the end");
+		check(caps.first().contains("asked by sdk.other.test"),
+		      "and a frame that is not the site is named, because being granted "
+		      "a camera the page never asked for is the interesting failure");
+		check(!caps.at(1).contains("asked by"),
+		      "while the site asking about itself does not repeat its own name");
+
+		check(sig.capabilities_for("elsewhere.test").isEmpty(),
+		      "and it is per site, like every other signal here");
+
+		// Clearing a site has to forget these too, or "clear" is a lie about
+		// the most sensitive thing in the record.
+		sig.clear_site("meet.test");
+		check(sig.capabilities_for("meet.test").isEmpty(),
+		      "forgetting a site forgets what it asked for");
 	}
 
 	section("forgetting, which has to work or this should not exist");

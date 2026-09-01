@@ -13658,6 +13658,62 @@ Six checks in `test_settings`, `try_phone` at 101, both gates clean. Built and
 signed; not yet installed, because the handset went off adb again before it could
 be.
 
+## Capability requests are evidence, and belong in the browser
+
+Raised while diagnosing why Teams cannot reach a camera it has been granted:
+
+> this browser is literally meant to log and eschew pointless information so an
+> AI can figure out how to fix/circumvent annoying pages. Can we not use those
+> mechanisms to troubleshoot this?
+
+Yes, and the instinct is better than the one it corrected. A logcat line had just
+been added, which needs a cable, a developer, and a `setprop` -- none of which the
+person actually looking at the broken page has. `annoyance_log` says what should
+have been done instead, in its own header: *"This records that moment so the
+diagnosis can come later, or from somebody else, or from a model."*
+
+So capability requests are now a second kind of passive signal, beside the
+ad-shaped requests `filter_signals` already accumulates.
+
+- **`note_capability(host, feature, origin, answer)`**, called from the shell's
+  permission decider -- the one place both platforms pass through -- and called
+  *before* any prompt, so a question still on screen is already in the record.
+  Somebody who gives up on a dialog and files a report instead has told us the
+  more interesting thing.
+- **Bounded at twenty per site, most recent first**, so a page asking in a loop
+  cannot push the interesting first attempt off the end or turn a diagnostic into
+  a leak of memory.
+- **The asking origin is named only when it differs from the site.** That is the
+  case worth seeing: a request from an embedded frame is how a page gets granted
+  a camera it never asked for, and how one can ask from a place the per-site rule
+  was never written about.
+- **`clear_site` forgets it**, or "clear" would be a lie about the most sensitive
+  thing in the record.
+- It rides into `annoyance_report`, survives the INI, and the annoyed dialog
+  shows it -- only when there is something, because most pages ask for nothing
+  and an empty box under every report teaches people to stop reading.
+
+**What this can answer that nothing could before.** "It says I have no camera"
+produces no ad-shaped request and no cosmetic leak, so the network half of a
+report is empty and the tools on offer do not fit. Now the report says the page
+asked, and what it was told. A request granted and a page still complaining is a
+different fault from a request refused, and the two were indistinguishable.
+
+**What stays in logcat is the half below the shell**: the raw resource list
+Android hands over, and whether `onPermissionRequest` fired at all. A request for
+something the Java side does not name, and no request whatsoever, look identical
+from inside the browser -- and they are the two candidates when a site insists it
+has no camera. Behind `Log.isLoggable`, so it is one `setprop` and off by
+default, because those lines carry the origin of every page that asks.
+
+Verified on the handset before the shell half existed, which is what makes a
+silent log meaningful: our own page produced
+`onPermissionRequest origin=... resources=[VIDEO_CAPTURE, AUDIO_CAPTURE] ->
+video=true audio=true` and then `decision token=1 GRANTED`.
+
+Six checks in `test_annoyance`, including that the evidence survives disk and
+that forgetting a site forgets it. `try_phone` still 101, both gates clean.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

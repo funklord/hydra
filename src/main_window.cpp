@@ -1754,6 +1754,7 @@ void main_window::report_annoyance() {
 	r.host     = host;
 	r.page     = page.toString();
 	if (m_signals) {
+		r.capabilities = m_signals->capabilities_for(host);
 		r.suspects = m_signals->suspects_for(host);
 		// `observed_for`, not `count_for`: the latter counts *suspects*, so
 		// using it here made the dialog say "N requests seen, N of them
@@ -2508,6 +2509,23 @@ void main_window::open_node(node *n, bool load_now) {
 		              web_view_backend::permission_answer answer) {
 			const QString host = origin.host();
 			const policy::setting s = pe->effective_setting(f, host);
+
+			// **Recorded where a person can see it**, which is the whole
+			// difference from the debug switch this used to have. A capability
+			// answered invisibly is the failure this browser exists to make
+			// visible, and the evidence belongs beside the requests that got
+			// through rather than in a log only a developer with a cable can
+			// read.
+			//
+			// Noted before the prompt rather than after, so a question that is
+			// still on screen is already in the record: somebody who gives up
+			// on a dialog and files a report instead has told us the more
+			// interesting thing.
+			if (m_signals)
+				m_signals->note_capability(host, policy::feature_label(f),
+				                            origin.toString(),
+				                            policy::setting_word(s));
+
 			if (s != policy::setting::ask) {
 				// The ordinary case, and it answers without touching the
 				// screen. `allow` or anything else -- `block`, and `unset`,

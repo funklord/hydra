@@ -62,6 +62,11 @@ bool annoyance_log::load(const QString &path) {
 		// escapes list elements itself -- which is the whole reason to hand it
 		// the list rather than a string we joined.
 		r.suspects = f.value("suspects").toStringList();
+		// Absent in files written before capability signals existed, which
+		// `value` answers with an empty list rather than a failure -- so an old
+		// annoyances.ini loads as a report that captured no capabilities,
+		// which is exactly what it is.
+		r.capabilities = f.value("capabilities").toStringList();
 		m_reports.append(r);
 	}
 	f.endArray();
@@ -81,6 +86,8 @@ bool annoyance_log::save(const QString &path) const {
 		f.setValue("page", r.page);
 		f.setValue("observed", r.observed);
 		f.setValue("suspects", r.suspects);
+		if (!r.capabilities.isEmpty())
+			f.setValue("capabilities", r.capabilities);
 		if (!r.outcome.isEmpty())
 			f.setValue("outcome", r.outcome);
 	}

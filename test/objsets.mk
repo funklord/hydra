@@ -108,6 +108,8 @@ OBJS_test_address = \
 OBJS_test_annoyance = \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
+	$(BUILD_DIR)/app/filter_signals.o \
+	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/site_extractor.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \

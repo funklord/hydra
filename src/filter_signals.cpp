@@ -1,4 +1,6 @@
 #include "filter_signals.h"
+#include <QUrl>
+#include <QDateTime>
 #include "policy_engine.h"
 
 #include <QMutexLocker>
@@ -74,8 +76,46 @@ int filter_signals::count_for(const QString &site_host) const {
 	return m_suspects.value(site_host).size();
 }
 
+void filter_signals::note_capability(const QString &site_host,
+                                      const QString &feature,
+                                      const QString &origin,
+                                      const QString &answer) {
+	if (site_host.isEmpty() || feature.isEmpty())
+		return;
+	// One line, readable by a person and by a model, with the time because the
+	// order things happened in is most of the diagnosis: a page that asks twice
+	// and is answered differently is a different fault from one asked once.
+	//
+	// The origin is included only when it differs from the site: a request from
+	// an embedded frame is the interesting case -- it is how a page can be
+	// granted a camera it never asked for, and how one can ask from a place the
+	// per-site rule was never written about -- and repeating the host when they
+	// match is noise.
+	QString line = QDateTime::currentDateTime().toString("HH:mm:ss") + "  " +
+	                feature + ": " + answer;
+	const QString from = QUrl(origin).host();
+	if (!from.isEmpty() && from != site_host)
+		line += "  (asked by " + from + ")";
+
+	QMutexLocker guard(&m_lock);
+	QStringList &list = m_capabilities[site_host];
+	list.prepend(line);
+	// **Bounded, and the bound is small on purpose.** This is evidence for the
+	// moment a person noticed something, not an audit trail; twenty entries is
+	// more than anybody reads and far less than a page asking in a loop can
+	// produce in a minute.
+	while (list.size() > 20)
+		list.removeLast();
+}
+
+QStringList filter_signals::capabilities_for(const QString &site_host) const {
+	QMutexLocker guard(&m_lock);
+	return m_capabilities.value(site_host);
+}
+
 void filter_signals::clear_site(const QString &site_host) {
 	QMutexLocker guard(&m_lock);
+	m_capabilities.remove(site_host);
 	m_suspects.remove(site_host);
 	m_observed.remove(site_host);
 }

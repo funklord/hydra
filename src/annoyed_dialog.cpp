@@ -107,6 +107,33 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 	}
 	box->addWidget(m_suspects, 1);
 
+	// **What the page asked this browser for.** Shown only when there is
+	// something, because most pages ask for nothing and an empty box under
+	// every report would teach people to stop reading this one.
+	//
+	// It is here because the network half cannot answer a whole class of
+	// complaint. "It says I have no camera" produces no ad-shaped request and
+	// no cosmetic leak; the evidence is that the page asked, and what it was
+	// told, and that was previously visible only through a debug switch on the
+	// desktop and a logcat line on the phone -- neither reachable by the person
+	// actually looking at the broken page.
+	if (!report.capabilities.isEmpty()) {
+		auto *cap_head = new QLabel(
+		  QString("It also asked for %1 capabilit%2, most recent first:")
+		    .arg(report.capabilities.size())
+		    .arg(report.capabilities.size() == 1 ? "y" : "ies"), this);
+		cap_head->setObjectName("capabilities_head");
+		cap_head->setWordWrap(true);
+		box->addWidget(cap_head);
+
+		auto *caps = new QListWidget(this);
+		caps->setObjectName("capabilities");
+		for (const QString &c : report.capabilities)
+			caps->addItem(c);
+		caps->setEnabled(false);   // evidence, not a control
+		box->addWidget(caps, 1);
+	}
+
 	auto *hint = new QLabel(
 	    "The report is kept either way. Pick a tool if one fits.", this);
 	hint->setWordWrap(true);
