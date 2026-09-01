@@ -163,7 +163,13 @@ void qtwebengine_notifications::present(
 			held->close();
 			return;
 		}
-		m_live.insert(reply.value(), held);
+		const uint id = reply.value();
+		m_live.insert(id, held);
+		// The page's own withdrawal, travelling outward. `closed()` is emitted
+		// when the page calls `close()`, and without this the notification
+		// outlives the page's intention to show it.
+		connect(held.get(), &QWebEngineNotification::closed, this,
+		         [this, id] { withdraw(id); });
 		// Only after the service has taken it. `show()` is the page's
 		// confirmation that its notification is on screen, and saying so before
 		// the call could have failed would be a lie in the one direction that
@@ -187,8 +193,29 @@ void qtwebengine_notifications::on_closed(uint id, uint reason) {
 	const auto it = m_live.find(id);
 	if (it == m_live.end())
 		return;
-	// Told before it is dropped: `close()` is what emits the page's `onclose`,
-	// and the object has to still exist to emit it.
-	(*it)->close();
+	// **Taken out of the map before the page is told, not after.** `close()` is
+	// what emits the page's `onclose`, so the object has to outlive this line --
+	// hence the local -- but it must no longer be *findable*, because closing it
+	// can emit `closed()`, whose handler would otherwise send a
+	// `CloseNotification` back to the service that has just finished telling us
+	// the notification is gone.
+	const std::shared_ptr<QWebEngineNotification> n = *it;
 	m_live.erase(it);
+	n->close();
+}
+
+void qtwebengine_notifications::withdraw(uint id) {
+	const auto it = m_live.find(id);
+	if (it == m_live.end())
+		return;   // already gone: the service got there first, or this ran twice
+	m_live.erase(it);
+#ifdef HYDRA_HAVE_DBUS
+	QDBusMessage call = QDBusMessage::createMethodCall(
+	  k_service, k_path, k_iface, QStringLiteral("CloseNotification"));
+	call << id;
+	// Sent and not waited on. There is nothing to do with the answer: the
+	// notification is already gone from this side, and a service that refuses to
+	// close one cannot be argued with.
+	QDBusConnection::sessionBus().asyncCall(call, 5000);
+#endif
 }

@@ -48,7 +48,14 @@ export QTWEBENGINE_CHROMIUM_FLAGS="${QTWEBENGINE_CHROMIUM_FLAGS:+$QTWEBENGINE_CH
 #
 # Overridable, because a second build tree is a real thing to want.
 BIN=${HYDRA_SWEEP_BIN:-test/build-make}
-OUT=${HYDRA_SWEEP_OUT:-/tmp/hydra-sweep}
+# **Per-uid, because a fixed path in /tmp belongs to whoever got there first.**
+# It was `/tmp/hydra-sweep`, and on a machine where two accounts work in this
+# tree the second one cannot write a single log into the first one's directory.
+# That is not hypothetical and it is the second time this exact shape has cost
+# something here -- the offline suite's fixed-name temporary paths met another
+# uid's directories and produced 22 failures that were nothing to do with the
+# code.
+OUT=${HYDRA_SWEEP_OUT:-/tmp/hydra-sweep-$(id -u)}
 mkdir -p "$OUT"
 
 drivers=${*:-}
@@ -191,6 +198,19 @@ for d in $drivers; do
 		continue
 	fi
 	log="$OUT/$d.log"
+	# **Truncated before the run, and the sweep stops for this driver if it
+	# cannot be.** Without this the run below fails to redirect, writes nothing,
+	# and the `grep` further down reads *whatever is already at that path* --
+	# which on the machine that found this was a log from two weeks earlier. The
+	# sweep printed "7 passed, 4 failed" for a driver that had just been changed
+	# to pass 19 of 19, and printed it in exactly the format a real result comes
+	# in. A stale answer presented as a current one is worse than no answer.
+	if ! : >"$log" 2>/dev/null; then
+		fail=$((fail+1)); failed="$failed $d"
+		printf '  FAIL   %-16s %s\n' "$d" \
+			"cannot write $log; refusing to read what is already there"
+		continue
+	fi
 	# A private session bus where the driver needs one, and nothing otherwise.
 	# Kept out of the environment of every other driver deliberately: a bus that
 	# exists only for one process is not the desktop's, and handing it to a

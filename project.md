@@ -12931,6 +12931,28 @@ the hint that carries one is a marshalled `(iiibiiay)`; that is a page-supplied
 image travelling into a system service, and it is not worth writing that path
 for decoration when the title already names the site.
 
+### A fourth mistake, found by reading the API rather than by running it
+
+**A page closing its own notification never reached the service.**
+`QWebEngineNotification::closed()` is emitted when the page calls `close()` -- a
+chat marking a message read, a countdown that has finished -- and nothing was
+listening, so the notification stayed on the desktop after the page had withdrawn
+it. The opposite direction, the service telling us, was handled from the first
+version; this is the same fact travelling outward, and it was missing because
+only one direction was obvious.
+
+`withdraw()` sends `CloseNotification` and drops the entry. The ordering in
+`on_closed` had to change with it: the notification is taken out of the map
+*before* the page is told, because `close()` can emit `closed()`, whose handler
+would otherwise send a `CloseNotification` back to the service that has just
+finished saying the notification is gone.
+
+`try_notify` grew a second notification for it, one the page takes back itself,
+and the stub's ids had to stop being fixed: with one id for every notification
+the close assertion was incapable of failing, since any withdrawal at all
+matched. 14 of 14 now, and the last check names both ids -- closed 4244, kept
+4243 -- so it says which one went rather than that one did.
+
 ### Two more build-system gaps, in the same place as the last one
 
 `test/Makefile` scanned `live/*.cpp` for `Q_OBJECT` and had no rule to moc one:
@@ -12942,6 +12964,40 @@ there and the rule was missing, so the first driver to want a `Q_OBJECT` in
 That is the second dependency gap this session in the same file, after the moc
 objects that recorded no headers. Both were invisible until something new
 crossed them.
+
+## The sweep reported a two-week-old result as a current one
+
+Worth its own section, because the failure mode is the one this project keeps
+paying for and it appeared in the tool that exists to catch it.
+
+The sweep writes each driver's output to `$OUT/<driver>.log` and then greps that
+file for a `passed,` line. `OUT` defaulted to `/tmp/hydra-sweep` -- a fixed path
+in a shared directory -- and on this machine it already existed, owned by another
+account. Every redirect failed with "Permission denied", every driver was
+reported as "no result line and did not finish", and one was not:
+`try_permissions` came back **"7 passed, 4 failed"**, in exactly the format a
+real result arrives in, listing the four camera checks that had been made
+conditional hours earlier. The file it read was from **14 August**.
+
+So the sweep did not fail to measure. It measured something else and said nothing
+about the substitution -- which is worse, because a run that produces no answer
+gets looked at and a run that produces a plausible one does not.
+
+Two changes, and the second is the one that matters:
+
+- **`OUT` is per-uid.** This is the second time a fixed name in `/tmp` has cost
+  something here; the offline suite's temporary paths met another uid's
+  directories earlier in the same session and produced 22 failures that had
+  nothing to do with the code.
+- **The log is truncated before the run, and the driver's row stops if it cannot
+  be.** That is what makes reading a stale file impossible rather than unlikely.
+  A path that cannot be written is now a `FAIL` saying so, instead of a `grep`
+  over whatever happens to be there.
+
+**The real sweep, once it could write:** 24 passed, 8 report-only, 0 failed.
+`try_permissions` 19 of 19, `try_notify` 14 of 14, `try_phone` 88 of 88,
+`try_settings_ui` 89 of 89. The `try_permissions` skip was also removed from the
+sweep's own list, since the driver now decides about the camera itself.
 
 ## What is next (in order)
 

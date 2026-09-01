@@ -59,6 +59,15 @@ Notification.requestPermission().then(function (p) {
   n.onshow  = function () { say('onshow',  'yes'); };
   n.onclick = function () { say('onclick', 'yes'); };
   n.onclose = function () { say('onclose', 'yes'); };
+
+  // A second one the *page* takes back, which is the other direction and the
+  // one nothing was carrying: a chat marking a message read, a countdown that
+  // has finished. Without it reaching the service the notification stays on
+  // the desktop after the page has withdrawn it.
+  var m = new Notification('Withdrawn', { body: 'closed by the page' });
+  m.onshow = function () { say('b-onshow', 'yes'); setTimeout(function () {
+    m.close();
+  }, 800); };
 });
 </script></body></html>)HTML";
 
@@ -116,7 +125,8 @@ class fake_notifier : public QObject {
 	Q_CLASSINFO("D-Bus Interface", "org.freedesktop.Notifications")
 public:
 	int         notify_count = 0;
-	uint        last_id = 0;
+	int         close_count = 0;
+	uint        first_id = 0, last_id = 0, last_closed = 0;
 	QString     app_name, app_icon, summary, body;
 	QStringList actions;
 	QVariantMap hints;
@@ -136,7 +146,14 @@ public slots:
 	             const QString &a_body, const QStringList &a_actions,
 	             const QVariantMap &a_hints, int a_timeout) {
 		Q_UNUSED(replaces_id)
-		++notify_count;
+		// **Distinct ids, because two notifications now exist and which of them
+		// gets closed is the whole point of the second.** A fixed id made the
+		// close assertion incapable of failing: any withdrawal at all matched.
+		last_id = uint(4242 + ++notify_count);
+		if (notify_count > 1)
+			return last_id;   // only the first one's fields are examined below
+
+		first_id = last_id;
 		app_name = a_app_name;
 		app_icon = a_app_icon;
 		summary  = a_summary;
@@ -144,7 +161,12 @@ public slots:
 		actions  = a_actions;
 		hints    = a_hints;
 		timeout  = a_timeout;
-		return (last_id = 4242);   // fixed, so the signals below can name it
+		return last_id;
+	}
+
+	void CloseNotification(uint id) {
+		++close_count;
+		last_closed = id;
 	}
 };
 
@@ -254,8 +276,8 @@ int main(int argc, char **argv) {
 	std::printf("\n== a page posts a notification and it reaches the bus ==\n");
 	check(got("permission") == "granted",
 	      QString("the page is granted permission (%1)").arg(got("permission")));
-	check(fake.notify_count == 1,
-	      QString("the service received exactly one Notify (%1)")
+	check(fake.notify_count == 2,
+	      QString("the service received both Notify calls (%1)")
 	        .arg(fake.notify_count));
 	check(fake.summary == "Hydra test",
 	      QString("with the page's title as the summary (%1)").arg(fake.summary));
@@ -273,13 +295,22 @@ int main(int argc, char **argv) {
 	// would believe its notification was on screen when nothing was.
 	check(got("onshow") == "yes", "and the page is told it was shown");
 
+	std::printf("\n== a page withdrawing its own notification reaches the service ==\n");
+	check(got("b-onshow") == "yes", "the second notification was shown too");
+	check(fake.close_count == 1,
+	      QString("the service was told to close exactly one (%1)")
+	        .arg(fake.close_count));
+	check(fake.last_closed == uint(4242 + 2),
+	      QString("and it is the one the page withdrew, not the one it kept "
+	               "(closed %1, kept %2)").arg(fake.last_closed).arg(fake.first_id));
+
 	std::printf("\n== and the service's answers reach the page ==\n");
-	emit_signal("ActionInvoked", fake.last_id, 0, "default");
+	emit_signal("ActionInvoked", fake.first_id, 0, "default");
 	spin(1200);
 	check(got("onclick") == "yes",
 	      "clicking the notification reaches the page as onclick");
 
-	emit_signal("NotificationClosed", fake.last_id, 2);
+	emit_signal("NotificationClosed", fake.first_id, 2);
 	spin(1200);
 	check(got("onclose") == "yes",
 	      "and dismissing it reaches the page as onclose");

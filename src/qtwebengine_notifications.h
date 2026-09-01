@@ -53,6 +53,16 @@ private:
 	explicit qtwebengine_notifications(QObject *parent);
 	void present(std::unique_ptr<QWebEngineNotification> n);
 
+	// Takes a notification off the screen because the *page* withdrew it.
+	//
+	// **This was missing and the notification would have stayed up for ever.**
+	// A page closing its own notification -- a chat marking a message read, a
+	// countdown that has finished -- emits `closed()` and nothing was listening,
+	// so the service was never told and the thing sat on the desktop after the
+	// page had taken it back. The opposite direction, the service telling us,
+	// was handled from the start; this is the same fact travelling the other way.
+	void withdraw(uint id);
+
 	// Held until the service says the notification is gone. **Not a cache**: the
 	// object owns the page's end of the notification, and destroying it early is
 	// what would make a click or a dismissal unreportable. The service always
