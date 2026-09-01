@@ -672,12 +672,18 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	QAction *back_act   = m_back_action;
 	QAction *fwd_act    = m_fwd_action;
 	QAction *reload_act = m_reload_action;
-	bar->addAction(back_act);
-	bar->addAction(fwd_act);
-	bar->addAction(reload_act);
+	// **The drawer button first, before Back.** It was fourth, after the
+	// navigation trio, which put the one control that reveals *where you are* in
+	// the middle of the controls that move you around. Leftmost is where the
+	// phone apps that have this pattern put it -- Claude's among them -- and it
+	// is the position a thumb finds without looking.
+	//
 	// Only shown in drawer mode; on a wide window the tree is already visible
 	// and a button to reveal it would be a control that does nothing.
 	m_drawer_action = bar->addAction("☰");
+	bar->addAction(back_act);
+	bar->addAction(fwd_act);
+	bar->addAction(reload_act);
 	m_drawer_action->setIcon(themed_icon({ "view-list-symbolic", "view-list-details",
 		                                      "format-justify-fill" }, style(),
 		                                    QStyle::SP_FileDialogDetailedView));

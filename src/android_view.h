@@ -146,7 +146,22 @@ public:
 	// Static, and the handler with it, because there is one shell: the factory is
 	// told the handler once, after the views exist on the desktop and before them
 	// here, and threading it through every view would make the order matter.
-	static bool take_external_url(const QString &url);
+	// **Split in two, because the answer and the action need different threads.**
+	//
+	// Java asks this on Android's *UI* thread, and the whole call used to hop to
+	// the Qt thread and wait. That deadlocked: Qt's thread blocks on the UI
+	// thread inside ordinary repainting -- `QOpenGLContext::makeCurrent` waits
+	// for a surface the UI thread services -- so a navigation arriving while Qt
+	// was mid-flush left each thread waiting for the other. Ten seconds later
+	// Android killed the input queue and put up "Hydra isn't responding".
+	// Diagnosed from the ANR trace; it is a race, which is why it survived a
+	// dozen navigations before it bit.
+	//
+	// `claims_external_url` is the decision and touches nothing but the url, so
+	// it answers on whatever thread asks. `hand_to_external` is the part that
+	// needs the shell, and is posted rather than waited on.
+	static bool claims_external_url(const QString &url);
+	static void hand_to_external(const QString &url);
 
 	// Whether the view behind `id` may navigate to `url` (architecture doc
 	// sec 5.5). Static for the same reason the others are: JNI has nowhere to put

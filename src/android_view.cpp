@@ -27,7 +27,9 @@
 #include <QGuiApplication>
 #include <QResizeEvent>
 #include <QTimer>
+#include <QSemaphore>
 #include <functional>
+#include <memory>
 
 namespace {
 
@@ -141,14 +143,36 @@ Java_se_vibes_hydra_HydraWebView_allowThirdPartyCookies(JNIEnv *env, jclass,
 
 namespace {
 
-// Runs `fn` on the Qt thread and waits for its answer. These arrive on a binder
-// thread that Android owns; the bridges are ordinary QObjects living on the Qt
-// thread, so this is the boundary rather than making every bridge thread-safe.
-// No deadlock: the Qt thread never blocks waiting on a binder thread.
-QString on_qt_thread(std::function<QString()> fn) {
-	QString out;
-	QMetaObject::invokeMethod(qApp, [&] { out = fn(); }, Qt::BlockingQueuedConnection);
-	return out;
+// Runs `fn` on the Qt thread and waits for its answer -- **but not for ever, and
+// the old comment here claimed a safety that does not hold.**
+//
+// It said: "No deadlock: the Qt thread never blocks waiting on a binder thread."
+// Two things were wrong with that. Some of these calls arrive on Android's *UI*
+// thread rather than a binder thread, and the Qt thread does block on the UI
+// thread -- inside ordinary repainting, where `QOpenGLContext::makeCurrent`
+// waits for a surface the UI thread services. A navigation landing while Qt was
+// mid-flush left each waiting for the other, and ten seconds later Android put
+// up "Hydra isn't responding". The ANR trace showed both halves.
+//
+// So: posted, then waited on with a deadline. A caller that times out gets its
+// own safe default rather than the browser's input queue. The result is held by
+// `shared_ptr` because the lambda may still run after the wait gives up, and it
+// must not write into a stack frame that has gone.
+//
+// **A deadline is a mitigation, not a fix.** The fix is not to ask, which is
+// what `takeExternalUrl` now does -- see `claims_external_url`. This exists for
+// the questions that genuinely need the Qt thread's state.
+bool on_qt_thread(std::function<QString()> fn, QString *out, int ms = 2000) {
+	auto done = std::make_shared<QSemaphore>();
+	auto res  = std::make_shared<QString>();
+	QMetaObject::invokeMethod(
+	  qApp, [fn, done, res] { *res = fn(); done->release(); },
+	  Qt::QueuedConnection);
+	if (!done->tryAcquire(1, ms))
+		return false;
+	if (out)
+		*out = *res;
+	return true;
 }
 
 // A QString as a javascript string literal, quoted and escaped by the JSON
@@ -174,7 +198,11 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_se_vibes_hydra_HydraWebView_bridgeDescribe(JNIEnv *env, jclass,
                                                               jlong id, jstring name) {
 	const QString n = from_java(env, name);
-	const QString r = on_qt_thread([id, n] { return android_view::describe_bridge(id, n); });
+	QString r;
+	// An empty description on timeout, which is what a bridge that does not
+	// exist already returns -- so the page sees "no such bridge" rather than
+	// hanging on a promise nothing will resolve.
+	on_qt_thread([id, n] { return android_view::describe_bridge(id, n); }, &r);
 	return env->NewStringUTF(r.toUtf8().constData());
 }
 
@@ -184,8 +212,8 @@ Java_se_vibes_hydra_HydraWebView_bridgeCall(JNIEnv *env, jclass, jlong id,
                                                           jstring args) {
 	const QString n = from_java(env, name), m = from_java(env, method),
 	              a = from_java(env, args);
-	const QString r =
-	  on_qt_thread([id, n, m, a] { return android_view::call_bridge(id, n, m, a); });
+	QString r;
+	on_qt_thread([id, n, m, a] { return android_view::call_bridge(id, n, m, a); }, &r);
 	return env->NewStringUTF(r.toUtf8().constData());
 }
 
@@ -209,14 +237,15 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_se_vibes_hydra_HydraWebView_takeExternalUrl(JNIEnv *env, jclass,
                                                                jstring url) {
 	const QString u = from_java(env, url);
-	// The answer has to come from the Qt thread: it runs the handler, which
-	// touches the download manager and the status bar.
-	return on_qt_thread([u] {
-		       return android_view::take_external_url(u) ? QStringLiteral("1")
-		                                                 : QString();
-	       }).isEmpty()
-	           ? JNI_FALSE
-	           : JNI_TRUE;
+	// **Answered here, acted on there.** This used to hop to the Qt thread and
+	// wait, on the UI thread, which is half of a deadlock -- see the note on
+	// `claims_external_url`. The decision reads only the url, so it needs no
+	// hop; the handler does, and is posted.
+	if (!android_view::claims_external_url(u))
+		return JNI_FALSE;
+	QMetaObject::invokeMethod(
+	  qApp, [u] { android_view::hand_to_external(u); }, Qt::QueuedConnection);
+	return JNI_TRUE;
 }
 
 // Asked on Android's UI thread, once per main-frame navigation. The answer has
@@ -228,13 +257,19 @@ Java_se_vibes_hydra_HydraWebView_allowNavigation(JNIEnv *env, jclass, jlong id,
                                                   jstring url, jboolean gesture) {
 	const QString u = from_java(env, url);
 	const bool user = gesture == JNI_TRUE;
-	return on_qt_thread([id, u, user] {
-		       return android_view::allow_navigation(id, u, user)
-		                  ? QStringLiteral("1")
-		                  : QString();
-	       }).isEmpty()
-	           ? JNI_FALSE
-	           : JNI_TRUE;
+	QString r;
+	// **Allowed if the answer does not arrive**, which is the same default the
+	// decider itself documents for a view with nobody listening: a refusal
+	// nobody asked for is a browser that will not browse. This one still has to
+	// ask -- the decision reads the tab tree and may queue a sub-tab -- so it
+	// gets the deadline rather than the split.
+	if (!on_qt_thread([id, u, user] {
+		    return android_view::allow_navigation(id, u, user)
+		               ? QStringLiteral("1")
+		               : QString();
+	    }, &r))
+		return JNI_TRUE;
+	return r.isEmpty() ? JNI_FALSE : JNI_TRUE;
 }
 
 // **Queued, not blocking, unlike every other entry point here.** Answering may
@@ -258,7 +293,11 @@ Java_se_vibes_hydra_HydraWebView_requestCapture(JNIEnv *env, jclass, jlong id,
 extern "C" JNIEXPORT jstring JNICALL
 Java_se_vibes_hydra_HydraWebView_injectedScripts(JNIEnv *env, jclass,
                                                                jlong id) {
-	const QString r = on_qt_thread([id] { return android_view::injected_scripts(id); });
+	QString r;
+	// Empty on timeout, which reads as "this view injects nothing" -- the same
+	// answer a view with no scripts gives, and the safe one: a page that gets no
+	// bridge script fails to find it, rather than the browser failing to draw.
+	on_qt_thread([id] { return android_view::injected_scripts(id); }, &r);
 	return env->NewStringUTF(r.toUtf8().constData());
 }
 
@@ -268,14 +307,21 @@ void android_view::set_external_handler(std::function<void(const QUrl &)> fn) {
 	s_external = std::move(fn);
 }
 
-bool android_view::take_external_url(const QString &url) {
+bool android_view::claims_external_url(const QString &url) {
 	const QUrl u(url);
 	if (u.isEmpty() || renders_as_page(u))
 		return false;
-	if (!s_external)
-		return false;   // nothing to hand it to; let the WebView fail visibly
-	s_external(u);
-	return true;
+	// Nothing to hand it to; let the WebView fail visibly rather than claim a
+	// url and drop it.
+	return s_external != nullptr;
+}
+
+void android_view::hand_to_external(const QString &url) {
+	// Asked again rather than trusted: this runs later than the decision, on
+	// another thread, and the handler could in principle have gone. Cheap, and
+	// the alternative is calling through a null std::function.
+	if (s_external && claims_external_url(url))
+		s_external(QUrl(url));
 }
 
 bool android_view::allow_navigation(qint64 id, const QString &url,
@@ -585,14 +631,43 @@ android_view::~android_view() {
 		QJniObject::callStaticMethod<void>(k_cls, "destroy", "(J)V", jlong(m_id));
 }
 
+namespace {
+
+// Whether this is something Qt puts in front of the page.
+//
+// Written as one predicate rather than repeated at both use sites, because the
+// two disagreeing is exactly how menus came to be missed: the filter's guard and
+// its counting loop both said "dialog", and neither said "popup".
+//
+// Tooltips are included. They are small and rare, and a tooltip that renders
+// underneath the page is the same defect in miniature -- there is no reason to
+// leave one window type out and find it again from a phone.
+bool covers_the_page(const QObject *o) {
+	const auto *w = qobject_cast<const QWidget *>(o);
+	if (!w)
+		return false;
+	if (qobject_cast<const QDialog *>(w))
+		return true;
+	const Qt::WindowType t = w->windowType();
+	return t == Qt::Popup || t == Qt::ToolTip;
+}
+
+}  // namespace
+
 bool android_view::eventFilter(QObject *o, QEvent *e) {
-	// Any dialog at all, modal or not: while one is up the native view has to be
-	// out of the way, because it is drawn over everything Qt renders.
+	// Anything Qt draws on top of the page, while it is up: the native view has
+	// to be out of the way, because it is drawn over everything Qt renders.
+	//
+	// **This counted dialogs only, and menus are not dialogs.** A `QMenu` is a
+	// `Qt::Popup` window, so the toolbar's menus and every combo-box drop-down
+	// went uncounted -- they opened underneath the WebView and could not be seen
+	// at all. Reported from the phone, and it is the same fault the dialog case
+	// was written for, found again one window type along.
 	if (m_native && (e->type() == QEvent::Show || e->type() == QEvent::Hide) &&
-	    qobject_cast<QDialog *>(o)) {
+	    covers_the_page(o)) {
 		int open = 0;
 		for (QWidget *w : QApplication::topLevelWidgets())
-			if (w->isVisible() && qobject_cast<QDialog *>(w))
+			if (w->isVisible() && covers_the_page(w))
 				++open;
 		// The event arrives *before* the widget's visibility changes, so a dialog
 		// being shown is not yet in that count and one being hidden still is.

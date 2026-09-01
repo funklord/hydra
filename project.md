@@ -13260,6 +13260,92 @@ dialog. That flag, the gap, and the revocation together are the evidence that
 **Android's own capability dialog appeared and was answered** -- with no per-site
 prompt in front of it. Which is what was asked for in the first place.
 
+## A deadlock in ordinary navigation, and two things it uncovered
+
+The ANR that ended the geolocation run was not about geolocation, and the trace
+said so exactly. Two stacks, each waiting for the other:
+
+**Android's UI thread**
+
+    WebView shouldOverrideUrlLoading
+      -> HydraWebView$3$2.shouldOverrideUrlLoading
+        -> Java_se_vibes_hydra_HydraWebView_takeExternalUrl   (JNI)
+          -> QMetaObject::invokeMethodImpl
+            -> QLatch::waitInternal                  <- waiting for the Qt thread
+
+**The Qt thread**
+
+    QWidgetRepaintManager::paintAndFlush
+      -> QBackingStore::flush
+        -> QRhiBackingStore::flush -> QRhi::create
+          -> QOpenGLContext::makeCurrent
+            -> QWaitCondition::wait                  <- waiting for the UI thread
+
+`Subject: Input dispatching timed out ... Waited 10010ms for MotionEvent`.
+
+**The comment on `on_qt_thread` claimed this could not happen**: *"No deadlock:
+the Qt thread never blocks waiting on a binder thread."* Wrong twice. Some of
+those calls arrive on the **UI** thread rather than a binder thread -- the file
+says so three lines further down -- and the Qt thread does block on the UI
+thread, not for a binder call but for a surface, inside ordinary repainting. It
+is a race, which is why a dozen navigations had already worked that afternoon.
+
+The neighbouring `chooseFile` had the whole answer written above it since it was
+added: *"Posted rather than waited on: the picker Qt is about to show needs that
+same UI thread, so blocking here would deadlock the two against each other."*
+The same reasoning was one function away from the bug for weeks.
+
+### The fix is to not ask, where the question does not need asking
+
+`take_external_url` was doing two things: deciding whether the url is the shell's
+(`renders_as_page`, a pure function of the scheme) and then handing it over. Only
+the second needs the Qt thread. So it is split -- `claims_external_url` answers on
+whatever thread asks, `hand_to_external` is posted -- and `takeExternalUrl` never
+blocks at all.
+
+Where the question genuinely needs the Qt thread's state -- `allowNavigation`
+reads the tab tree, the bridge calls reach QObjects living there -- `on_qt_thread`
+now posts and waits **with a deadline**, and each caller has a documented default
+if it expires. `allowNavigation` defaults to allowing, which is what the decider
+itself already documents for a view with nobody listening: a refusal nobody asked
+for is a browser that will not browse. The result is held by `shared_ptr`, because
+a lambda that times out may still run and must not write into a stack frame that
+has gone.
+
+**A deadline is a mitigation and the split is the fix.** No
+`BlockingQueuedConnection` remains in the file.
+
+Verified on the handset: six navigations in a row, six page loads, no hang.
+
+### Menus rendered underneath the page
+
+Reported from the phone while the above was being tested: *"on mobile the drop
+down menus go underneath the web browser content and cannot be seen"*.
+
+Same architectural fault as the dialog case, one window type along. The event
+filter that hides the native WebView tested `qobject_cast<QDialog *>` in both its
+guard and its counting loop -- and a `QMenu` is not a dialog, it is a `Qt::Popup`.
+So every toolbar menu and every combo-box drop-down opened behind a view that is
+composited above everything Qt renders.
+
+The two tests are now one predicate, `covers_the_page`, which is the point: the
+guard and the loop having their own copy of "what counts" is exactly how a window
+type came to be missing from both. Tooltips are included -- a tooltip behind the
+page is the same defect in miniature, and there is no reason to leave one type
+out and find it again from a phone.
+
+Verified on the handset: with a page open, opening the File menu now puts eight
+menu items on screen and no page content behind them.
+
+### The drawer button is leftmost
+
+Asked for, and the reason given was other phone apps that use the pattern.
+
+It was fourth, after Back, Forward and Reload, which put the one control that
+reveals *where you are* in the middle of the three that move you around. It is
+first now. Verified on the device by the accessibility tree, which reads the
+toolbar left to right: the button is at x=5 and Back has moved to x=74.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
