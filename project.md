@@ -13870,9 +13870,48 @@ Verified from the artifact rather than the source: `aapt2 dump badging` reports
 handset the app now holds both, ungranted -- which is the thing that was missing.
 `make jni` reports 15 native methods, every one resolvable.
 
-**Not verified end to end.** The run that would have shown Android's own location
-dialog was abandoned: the handset turned out to be in a call, and the scripted
-taps were landing on the in-call screen. Nothing was toggled -- mute, speaker,
+### Verified end to end on the handset
+
+    onGeolocationPermissionsShowPrompt origin=http://127.0.0.1:8099/
+    geolocation token=1 GRANTED
+
+and Android's own dialog in between: *"Allow Hydra to access this device's
+approximate location?"* -- approximate, which is the accuracy `QLocationPermission`
+was deliberately left at. Answered "Only this time", so the grant carries
+`ONE_TIME` and expires on its own.
+
+Then the page:
+
+    load = painted
+    asking = now
+    geo = position
+    camera = tracks-2-audio+video
+
+**`geo = position`.** A real position delivered to a page, on a build where the
+same page got *"User denied Geolocation"* that morning whatever the shield said.
+All three missing pieces were needed and all three are now there.
+
+Two things about how it was measured, both of which cost time:
+
+- **The first request hung and looked like a failure.** Thirty-eight seconds
+  passed between the WebView asking and us answering, because Android's dialog
+  was up waiting for a person; by then nothing came back. The second request,
+  with the permission already granted, answered in a hundred milliseconds and
+  produced a position. So a slow first answer is not evidence the path is broken.
+- **The report file looked empty and was not.** The server's stdout was truncated
+  with `: >` while the process still held the descriptor, so it kept writing at
+  its old offset and left a block of nulls in front of the real lines --
+  `grep -v` showed nothing, `tail` showed everything. Truncating a file another
+  process has open does not move that process's offset, and a log that looks
+  empty for that reason is indistinguishable from a page that never reported.
+
+**Not verified: the same on Teams**, which needs the copyright holder's account.
+
+**Not verified either: anything driven by `adb shell input` after the location
+dialog.** Taps and text both stopped reaching the app -- screen awake, keyguard
+down, activity resumed on display 0, `uiautomator` still dumping the app's own
+widgets. The run that produced the result above was done by hand, by the
+copyright holder, on a rig left standing for them. Nothing was toggled -- mute, speaker,
 hold and the rest all read false afterwards -- but the lesson is the one that
 should not have needed learning twice in a day: **check what is in the foreground
 before sending input to somebody's phone.** The earlier version of this was
