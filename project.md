@@ -13693,6 +13693,26 @@ ad-shaped requests `filter_signals` already accumulates.
   shows it -- only when there is something, because most pages ask for nothing
   and an empty box under every report teaches people to stop reading.
 
+### Measured at phone geometry, and the picture found the defect
+
+`try_phone` builds the annoyed dialog from a made-up report, and that report had
+no capabilities -- so the section added for them was never rendered and never
+measured. Adding three entries to it, including a long one with a frame's origin
+on the end, is what makes the case the shape that matters: a list under a list,
+each wanting height, in a window that has a fixed amount.
+
+It fits: floor 151x360, every button on screen, nothing cut, 101 of 101.
+
+**And the capture showed something no check could.** The evidence list was
+`setEnabled(false)` -- meant as "this is not a control", read on screen as
+"unavailable", greying the one part of the dialog somebody is meant to read.
+Every assertion passed while the evidence was the least legible thing in the
+window. It is `NoSelection` plus `NoFocus` now, which says the same thing about
+being a control without saying anything about applying to you.
+
+That is the fourth defect this project has found by looking at a rendered dialog
+rather than by asserting on one, and the third in a day.
+
 **What this can answer that nothing could before.** "It says I have no camera"
 produces no ad-shaped request and no cosmetic leak, so the network half of a
 report is empty and the tools on offer do not fit. Now the report says the page

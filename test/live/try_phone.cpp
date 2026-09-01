@@ -521,6 +521,14 @@ int main(int argc, char *argv[]) {
 		r.observed = 41;
 		r.suspects << "http://ads.invalid/pagead/banner.js";
 		r.suspects << "http://tracker.invalid/track?id=1";
+		// **With capability evidence, because the dialog grew a section for it
+		// and a case without one never renders that section.** This is the
+		// shape that matters at phone width: a list under a list, each wanting
+		// height, in a window that has a fixed amount of it. A long line with a
+		// frame's origin on the end is the widest thing it can hold.
+		r.capabilities << "20:35:07  Camera: allow  (asked by sdk.embedded.invalid)";
+		r.capabilities << "20:35:05  Microphone: allow";
+		r.capabilities << "20:34:58  Location: ask";
 		annoyed_dialog dlg(r, &f.window);
 		dlg.show();
 		QApplication::processEvents();

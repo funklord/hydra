@@ -7,6 +7,7 @@
 #include <QDialogButtonBox>
 #include <QLabel>
 #include <QHash>
+#include <QAbstractItemView>
 #include <QListWidget>
 #include <QPushButton>
 #include <QUrl>
@@ -130,7 +131,17 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 		caps->setObjectName("capabilities");
 		for (const QString &c : report.capabilities)
 			caps->addItem(c);
-		caps->setEnabled(false);   // evidence, not a control
+		// **Not disabled, which is what this was and what it looked like.**
+		// `setEnabled(false)` greys the text, and grey means "unavailable" --
+		// exactly the wrong thing to say about the one part of this dialog
+		// somebody is meant to read. Found by looking at the phone-geometry
+		// capture rather than by any assertion: every check passed while the
+		// evidence was the least legible thing on screen.
+		//
+		// Not selectable and not in the tab chain instead, which says "this is
+		// not a control" without saying "this does not apply to you".
+		caps->setSelectionMode(QAbstractItemView::NoSelection);
+		caps->setFocusPolicy(Qt::NoFocus);
 		box->addWidget(caps, 1);
 	}
 
