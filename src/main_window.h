@@ -375,6 +375,7 @@ private:
 	QAction            *m_reload_action = nullptr;
 	QAction            *m_print_action  = nullptr;
 	QAction            *m_source_action = nullptr;
+	QAction            *m_desktop_site_action = nullptr;
 	bool                m_page_fullscreen = false;
 	web_view_backend   *m_kiosk_view      = nullptr;
 	QAction            *m_key_action    = nullptr;

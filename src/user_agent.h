@@ -86,6 +86,42 @@ inline QString corrected(const QString &qt_default,
 }
 
 
+// The same browser, asking to be treated as a desktop one.
+//
+// **Because some sites will not serve a phone at all, whatever it looks like.**
+// `teams.microsoft.com` redirects a mobile user agent to
+// `/v2/unsupported-browser#isMobile=true` -- server-side, keyed on the `Mobile`
+// token, and Chrome on Android gets the identical page. Looking more like Chrome
+// cannot help, because looking exactly like Chrome on Android is what earns the
+// redirect. The only thing that opens the site is asking as a desktop.
+//
+// Every mobile browser has this and calls it "request desktop site". It is a
+// deliberate lie rather than a correction -- the two rules below say the machine
+// is an X11 Linux desktop and drop the `Mobile` token -- which is why it is off
+// by default and per tab, chosen each time by the person who wants that page.
+//
+// The platform string is the desktop build's own, so the two halves of this
+// project claim the same thing.
+inline QString desktop_form(const QString &mobile_ua) {
+	QString ua = mobile_ua;
+	// The platform, which is the whole of what a site keys on here.
+	//
+	// **By index, not by regular expression, and the first draft got this
+	// wrong.** A user agent has two parenthesised groups -- the platform and
+	// `(KHTML, like Gecko)` -- and a pattern replace rewrites both, producing
+	// `AppleWebKit/537.36 (X11; Linux x86_64)` in the middle of the string.
+	// Caught by running the transformation over a real string before building
+	// it, which is the cheapest place to catch anything.
+	const int open  = ua.indexOf(QLatin1Char('('));
+	const int close = open >= 0 ? ua.indexOf(QLatin1Char(')'), open) : -1;
+	if (open >= 0 && close > open)
+		ua.replace(open, close - open + 1, QStringLiteral("(X11; Linux x86_64)"));
+	// `Mobile ` sits directly before `Safari/537.36` and is the other token a
+	// server reads. Removed with its trailing space so nothing is left doubled.
+	ua.remove(QStringLiteral("Mobile "));
+	return ua;
+}
+
 // **The other channel, which the string above does not reach.**
 //
 // Chromium builds `sec-ch-ua` and `navigator.userAgentData` from its own build

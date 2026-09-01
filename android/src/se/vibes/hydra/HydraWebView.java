@@ -124,6 +124,9 @@ public class HydraWebView {
      */
     public static native String correctedUserAgent(String offered);
 
+    /** The same string, rewritten to claim a desktop. See setDesktopSite. */
+    public static native String desktopUserAgent(String mobile);
+
     /** True when the shell took a navigation instead -- magnet: and the like. */
     public static native boolean takeExternalUrl(String url);
 
@@ -778,6 +781,31 @@ public class HydraWebView {
             // what kiosk mode is asking for (architecture doc sec 8).
             w.setVerticalScrollBarEnabled(scrollbars);
             w.setHorizontalScrollBarEnabled(scrollbars);
+        } });
+    }
+
+    /**
+     * Ask this view's pages to treat it as a desktop browser.
+     *
+     * The string is built on the C++ side from whatever the WebView offers, so
+     * the two rules that make it a desktop one live beside the rules that
+     * corrected it in the first place rather than being written out twice here.
+     *
+     * A reload follows because the user agent is read when a page is fetched:
+     * without it the toggle appears to do nothing until the next navigation,
+     * which is the shape of bug that gets reported as "the setting is broken".
+     */
+    public static void setDesktopSite(final long id, final boolean on) {
+        onUi(new Runnable() { @Override public void run() {
+            WebView w = VIEWS.get(id);
+            if (w == null)
+                return;
+            WebSettings s = w.getSettings();
+            String base = correctedUserAgent(s.getUserAgentString());
+            String ua = on ? desktopUserAgent(base) : base;
+            if (ua != null && !ua.isEmpty())
+                s.setUserAgentString(ua);
+            w.reload();
         } });
     }
 

@@ -1301,6 +1301,29 @@ QMenuBar *main_window::build_menu_bar() {
 	m_source_action->setStatusTip("Open this page's HTML as a sub-tab");
 	m_source_action->setEnabled(false);
 
+	// **Request desktop site**, which is the only thing that opens a site that
+	// refuses phones outright. `teams.microsoft.com` is the measured case: it
+	// redirects a mobile user agent to `/v2/unsupported-browser#isMobile=true`
+	// server-side, and Chrome on Android gets the same page, so nothing about
+	// looking more like a browser helps.
+	//
+	// Checkable and per tab, because it is a deliberate lie told for one page
+	// rather than a claim about the machine -- and it reads its state back from
+	// the view, so a tab that never had it set shows it off.
+	//
+	// Shown everywhere, enabled where it means something: on the desktop the
+	// backend answers false and ignores it, and an entry that silently does
+	// nothing is worse than one that is not there. `refresh_page_actions`
+	// disables it when the current backend does not implement it.
+	m_desktop_site_action = view_menu->addAction("Request &Desktop Site");
+	m_desktop_site_action->setCheckable(true);
+	m_desktop_site_action->setStatusTip(
+	  "Ask this tab's pages to treat it as a desktop browser, and reload");
+	connect(m_desktop_site_action, &QAction::triggered, this, [this](bool on) {
+		if (web_view_backend *v = current_view())
+			v->set_desktop_site(on);
+	});
+
 	// ---- Go -----------------------------------------------------------------
 	QMenu *go_menu = menu->addMenu("&Go");
 	// **Created here and lent to the toolbar, rather than made twice.** These
@@ -2605,6 +2628,25 @@ void main_window::update_navigation() {
 		m_print_action->setEnabled(v && v->can_print());
 	if (m_source_action)
 		m_source_action->setEnabled(v && has_viewable_source(v->url()));
+
+	// **Its checked state comes from the view, not from the last click.** The
+	// toggle is per tab, so switching tabs has to show that tab's answer --
+	// otherwise it reports whatever the previously-focused tab was set to,
+	// which is the sort of control that teaches people not to trust it.
+	//
+	// Disabled where the backend does not implement it. On the desktop the base
+	// class answers false and ignores the setter, and a menu entry that
+	// silently does nothing is worse than one that is greyed.
+	if (m_desktop_site_action) {
+		const bool live = v != nullptr;
+#ifdef Q_OS_ANDROID
+		m_desktop_site_action->setEnabled(live);
+#else
+		m_desktop_site_action->setEnabled(false);
+#endif
+		QSignalBlocker block(m_desktop_site_action);
+		m_desktop_site_action->setChecked(live && v->desktop_site());
+	}
 
 	m_back_action->setEnabled(v && !pinned && v->can_go_back());
 	m_fwd_action->setEnabled(v && !pinned && v->can_go_forward());

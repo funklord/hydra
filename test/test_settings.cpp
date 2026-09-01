@@ -934,6 +934,28 @@ int main(int argc, char **argv) {
 		      "with no doubled space or orphaned bracket where the tokens were");
 		check(user_agent::corrected(wout, 140) == wout,
 		      "and running it twice changes nothing, as on the desktop");
+
+		// "Request desktop site", which is the only thing that opens a site
+		// refusing phones outright. Measured case: teams.microsoft.com sends a
+		// mobile user agent to /v2/unsupported-browser#isMobile=true,
+		// server-side, and Chrome on Android gets the same page.
+		const QString desk = user_agent::desktop_form(wout);
+		check(!desk.contains("Android"),
+		      "the desktop form drops the phone's platform");
+		check(!desk.contains("Mobile"),
+		      "and the Mobile token, which is the half a server keys on");
+		check(desk.contains("(X11; Linux x86_64)"),
+		      "claiming the platform the desktop build of this browser claims");
+		// **The bug the first draft had.** A user agent has two parenthesised
+		// groups; a pattern replace rewrote both and produced
+		// "AppleWebKit/537.36 (X11; Linux x86_64)" in the middle of the string.
+		check(desk.contains("(KHTML, like Gecko)"),
+		      "while the second bracket group is left alone — only the platform "
+		      "is the platform");
+		check(desk.contains("Chrome/140.0.0.0") && desk.endsWith("Safari/537.36"),
+		      "and the rest of the string is untouched");
+		check(user_agent::desktop_form(desk) == desk,
+		      "asking twice changes nothing");
 	}
 
 	section("the filter list is written atomically");

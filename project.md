@@ -13463,6 +13463,78 @@ Verified offline before the phone came back: seven checks in `test_settings`
 over a real WebView string, `make jni` at 13 native methods all resolvable, and
 both builds clean. What the device then added is in the section above.
 
+## Request desktop site, and Teams opens
+
+The section above ends with the diagnosis: Teams refuses on `isMobile`, from the
+server, keyed on the `Mobile` token, and Chrome on Android gets the same page.
+This is the feature that answers it, and it answers a class of sites rather than
+that one.
+
+**Per tab, checkable, in the View menu, and forgotten when the tab goes.** Every
+mobile browser draws the line there, and the reason is worth stating: this is a
+deliberate lie, not a correction. The corrected user-agent string says something
+true about what the engine is; `desktop_form` says the machine is an X11 Linux
+desktop, which it is not. That is a thing to do for one page, chosen each time by
+the person who wants that page, and remembering it would quietly turn a decision
+into a standing claim.
+
+`user_agent::desktop_form` is two rules -- swap the platform, drop `Mobile ` --
+and the second is where the first draft broke.
+
+**A user agent has two parenthesised groups.** The platform, and
+`(KHTML, like Gecko)`. A pattern replace rewrote both and produced
+`AppleWebKit/537.36 (X11; Linux x86_64)` in the middle of the string, which is
+not a user agent any browser has ever sent. Replacing by index -- first `(` to
+the next `)` -- is what it does now, and there is a check asserting the second
+group survives.
+
+**It was caught by running the transformation over a real string before building
+it**, in six lines of Python that took less time than the build would have. Worth
+recording as a habit rather than an anecdote: the two user-agent transformations
+in this file were both modelled that way, and both were wrong the first time.
+
+### The seam, and where the toggle lives
+
+`web_view_backend::set_desktop_site` / `desktop_site`, with a base implementation
+that ignores the setter and answers false. That is the honest desktop answer --
+its user agent already says X11 Linux, so there is nothing to request -- and the
+menu entry disables itself there rather than being a control that silently does
+nothing.
+
+The Android side sets the WebView's user agent and reloads. The reload is not
+tidiness: the string is read when a page is fetched, so without it the toggle
+appears to do nothing until the next navigation, which is the shape of bug that
+gets reported as "the setting is broken".
+
+The state is read back from the view on every action refresh rather than
+remembered from the last click, because the toggle is per tab and switching tabs
+has to show that tab's answer.
+
+### Measured on the handset
+
+With the toggle on, the local page reports
+
+    Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)
+    Chrome/140.0.0.0 Safari/537.36
+
+-- platform swapped, `Mobile` gone, second bracket group intact.
+
+`teams.microsoft.com` then **loads**: no unsupported page, no "Download Microsoft
+Teams", and the Microsoft sign-in appears, which is the web app's entry point.
+Fifteen page nodes where there had been one.
+
+**One thing that catches people and caught this run.** Turning the toggle on
+reloads, and by then the tab is sitting on `/v2/unsupported-browser`, so the
+reload fetches the refusal again and nothing appears to change. The site has to
+be navigated to afresh. That is arguably a defect -- a "request desktop site"
+that requires retyping the address is doing half the job -- and the fix is to
+reload the *original* url rather than the current one, which needs the redirect
+chain's head. Left as a known rough edge rather than guessed at.
+
+**Not established: that a Teams meeting works.** Sign-in was not attempted -- it
+is the copyright holder's account. What is established is that the door opens,
+which is the thing that was shut.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

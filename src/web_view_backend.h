@@ -125,6 +125,19 @@ public:
 	                      QAbstractListModel *windows, capture_answer answer)>;
 	virtual void set_capture_chooser(capture_chooser fn) = 0;
 
+	// Ask this tab's pages to treat it as a desktop browser, and reload.
+	//
+	// **Per tab, not per site, because that is what it is for.** A site that
+	// refuses phones is opened as a desktop *this time*, by somebody who wants
+	// that page; it is not a standing claim about the machine. Every mobile
+	// browser draws the line in the same place, and remembering it would turn a
+	// deliberate lie into a persistent one.
+	//
+	// The desktop build answers false and ignores the setter: its user agent
+	// already says X11 Linux, so there is nothing to request.
+	virtual void set_desktop_site(bool on) { Q_UNUSED(on) }
+	virtual bool desktop_site() const { return false; }
+
 	// A site asking for a username and password. **Answered while the callback
 	// runs**, which is why this is a decider rather than a signal: Qt hands
 	// over an authenticator to fill in, and a request answered later has

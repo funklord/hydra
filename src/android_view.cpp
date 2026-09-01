@@ -307,6 +307,17 @@ Java_se_vibes_hydra_HydraWebView_correctedUserAgent(JNIEnv *env, jclass,
 	return env->NewStringUTF(user_agent::corrected(in).toUtf8().constData());
 }
 
+// The desktop form of the string, for "request desktop site". Pure, like the
+// correction beside it, so it needs no thread hop either.
+extern "C" JNIEXPORT jstring JNICALL
+Java_se_vibes_hydra_HydraWebView_desktopUserAgent(JNIEnv *env, jclass,
+                                                                jstring mobile) {
+	const QString in = from_java(env, mobile);
+	if (in.isEmpty())
+		return env->NewStringUTF("");
+	return env->NewStringUTF(user_agent::desktop_form(in).toUtf8().constData());
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_se_vibes_hydra_HydraWebView_injectedScripts(JNIEnv *env, jclass,
                                                                jlong id) {
@@ -732,6 +743,15 @@ void android_view::sync_geometry() {
 	QJniObject::callStaticMethod<void>(
 	  k_cls, "setVisible", "(JZ)V", jlong(m_id),
 	  jboolean(m_widget->isVisible() && !m_blocked && !m_obscured));
+}
+
+void android_view::set_desktop_site(bool on) {
+	if (m_desktop_site == on)
+		return;
+	m_desktop_site = on;
+	if (m_native)
+		QJniObject::callStaticMethod<void>(k_cls, "setDesktopSite", "(JZ)V",
+		                                    jlong(m_id), jboolean(on));
 }
 
 void android_view::set_obscured(bool on) {

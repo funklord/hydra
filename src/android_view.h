@@ -226,6 +226,8 @@ public:
 	// instead of making `main_window` know which backend it has. If the platform
 	// grows the capability, the seam is already here.
 	void set_capture_chooser(capture_chooser fn) override { m_capture_chooser = std::move(fn); }
+	void set_desktop_site(bool on) override;
+	bool desktop_site() const override { return m_desktop_site; }
 	void set_navigation_decider(navigation_decider fn) override {
 		m_navigation_decider = std::move(fn);
 	}
@@ -273,6 +275,7 @@ private:
 	QUrl    m_url;
 	permission_decider m_decider;
 	capture_chooser    m_capture_chooser;
+	bool               m_desktop_site = false;
 	navigation_decider m_navigation_decider;
 	bridge_invoker m_bridges;
 	QStringList    m_script_names;   // named, so a test can see what was asked for
