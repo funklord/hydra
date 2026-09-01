@@ -20,10 +20,16 @@ using policy::setting;
 
 namespace {
 
+// **`ask` was missing from both of these and that was not a display bug.**
+// The combo had three entries, `ask` fell into the `default:` arm and drew as
+// "Default", and the moment anybody touched that row it was written back as
+// `unset`. So a site the person had chosen to be asked about silently became a
+// site on the global default, and nothing said so.
 int setting_to_index(setting s) {
 	switch (s) {
 		case setting::allow: return 1;
 		case setting::block: return 2;
+		case setting::ask:   return 3;
 		default:             return 0;  // unset
 	}
 }
@@ -32,6 +38,7 @@ setting index_to_setting(int i) {
 	switch (i) {
 		case 1:  return setting::allow;
 		case 2:  return setting::block;
+		case 3:  return setting::ask;
 		default: return setting::unset;
 	}
 }
@@ -170,6 +177,18 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 		combo->addItem("Default");
 		combo->addItem("Allow");
 		combo->addItem("Block");
+		// **Present on every row, enabled on six.** Greyed rather than absent,
+		// the way "Default" is greyed in the global scope: a combo whose entry
+		// count depends on the row makes every index mean something different
+		// per row, and `setting_to_index` above would have to know which. The
+		// list that decides is `policy::can_ask`, which answers from the same
+		// table the prompt takes its words from -- so a feature is offerable
+		// here exactly when there is a sentence to put in front of somebody.
+		combo->addItem("Ask");
+		if (!policy::can_ask(r.f))
+			if (auto *m = qobject_cast<QStandardItemModel *>(combo->model()))
+				if (QStandardItem *it = m->item(3))
+					it->setEnabled(false);
 		connect(combo, &QComboBox::currentIndexChanged,
 		         this, [this, i](int) { on_feature_changed(i); });
 		m_combos[i] = combo;
@@ -258,9 +277,14 @@ void site_policy_dialog::refresh_default_labels() {
 		const setting d = m_engine->global_default(f);
 		// "allowed"/"blocked" rather than "enabled"/"disabled": the entries
 		// below it say Allow and Block, and one concept wants one word.
-		m_combos[i]->setItemText(0, d == setting::block
-		                                 ? QStringLiteral("Default (blocked)")
-		                                 : QStringLiteral("Default (allowed)"));
+		// Three defaults to name now, not two. It read `block ? blocked :
+		// allowed`, which would have called an `ask` default "allowed" -- the
+		// one word of the three that is actively wrong, since a site left on
+		// that default gets a prompt and may well end up refused.
+		m_combos[i]->setItemText(
+		  0, d == setting::block ? QStringLiteral("Default (blocked)")
+		     : d == setting::ask ? QStringLiteral("Default (ask each time)")
+		                          : QStringLiteral("Default (allowed)"));
 
 		// In the global scope this entry is what a *site* falls back to, so
 		// offering it here is a setting pointing at itself -- the settings

@@ -985,8 +985,25 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 			// offering it at this level would be a setting that points at itself.
 			combo->addItem("Allow", int(policy::setting::allow));
 			combo->addItem("Block", int(policy::setting::block));
+			// **A third answer, on the features that can carry one.** Offered
+			// only where `policy::can_ask` says a prompt exists, because
+			// `is_allowed` grants on `allow` alone -- setting `ask` on a
+			// feature nothing prompts for would be a control that silently
+			// means Block, which is the worst of the three things it could do.
+			//
+			// Absent rather than greyed here, unlike the per-site dialog. That
+			// one keeps a fixed entry count because its index *is* its meaning;
+			// this one carries the setting in the item's data, so a row with
+			// two entries and a row with three both read back correctly.
+			if (policy::can_ask(f))
+				combo->addItem("Ask each time", int(policy::setting::ask));
 			const policy::setting cur = m_policy->global_default(f);
-			combo->setCurrentIndex(cur == policy::setting::block ? 1 : 0);
+			// By data, not by position. It was `block ? 1 : 0`, which read an
+			// `ask` default as Allow and then wrote that back on save -- the
+			// setting would have been quietly widened by opening the page and
+			// pressing OK without touching anything.
+			const int at = combo->findData(int(cur));
+			combo->setCurrentIndex(at >= 0 ? at : 0);
 			combo->setObjectName(QString("feature_%1").arg(policy::feature_name(f)));
 			m_feature_combos[int(f)] = combo;
 			v->addWidget(settings_row(policy::feature_label(f),
@@ -1169,7 +1186,8 @@ void settings_dialog::restore_page_defaults(int page) {
 				continue;
 			const policy::setting want =
 			  fresh.global_default(static_cast<policy::feature>(i));
-			c->setCurrentIndex(want == policy::setting::block ? 1 : 0);
+			const int at = c->findData(int(want));
+			c->setCurrentIndex(at >= 0 ? at : 0);
 		}
 		// Site exceptions are deliberately left alone. They are decisions about
 		// particular sites rather than defaults, they each have their own
@@ -1296,9 +1314,12 @@ void settings_dialog::rebuild_exceptions() {
 			const policy::setting st = policy::get_setting(r.bits, f);
 			if (st == policy::setting::unset)
 				continue;
-			said << QString("%1: %2").arg(policy::feature_label(f),
-			                               st == policy::setting::allow ? "allow"
-			                                                            : "block");
+			// `setting_word`, not a two-way ternary. The ternary called `ask`
+			// "block", which is the same class of quiet lie as the combo above
+			// and harder to notice, since this list is read rather than edited.
+			said << QString("%1: %2").arg(
+			  policy::feature_label(f),
+			  QString::fromLatin1(policy::setting_word(st)));
 		}
 		if (said.isEmpty())
 			continue;

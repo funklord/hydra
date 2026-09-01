@@ -33,9 +33,25 @@ struct view_settings {
 class web_view_backend : public QObject {
 	Q_OBJECT
 public:
-	// Answers a permission request synchronously. The shell supplies this; it
-	// is a pure policy lookup today, with no UI and no waiting.
-	using permission_decider = std::function<bool(const QUrl &origin, policy::feature f)>;
+	// Answers a permission request, **eventually**. The shell supplies it.
+	//
+	// It returned `bool` and this comment used to say "synchronously... no UI
+	// and no waiting", which was true and was the whole limitation: a bool
+	// cannot say "ask the person and I will tell you". So a site set to `ask`
+	// could not be honoured by any caller, and a refusal was silent -- the page
+	// saw a rejected promise and nobody was told a decision had been made for
+	// them.
+	//
+	// The answer callback may be invoked before this returns, which is what the
+	// common case does: a policy that already says allow or block answers
+	// immediately and nothing is posted anywhere. Callers must therefore cope
+	// with being answered re-entrantly, which is why every call site below
+	// captures what it needs by value rather than relying on a scope that may
+	// already have gone.
+	using permission_answer  = std::function<void(bool granted)>;
+	using permission_decider =
+	  std::function<void(const QUrl &origin, policy::feature f,
+	                      permission_answer answer)>;
 
 
 	explicit web_view_backend(QObject *parent = nullptr) : QObject(parent) {}

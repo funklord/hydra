@@ -330,38 +330,61 @@ void android_view::request_capture(qint64 id, const QString &origin,
 	}
 
 	const QUrl o(origin);
-	if (video && !v->m_decider(o, policy::feature::camera)) {
-		answer(false);
-		return;
-	}
-	if (audio && !v->m_decider(o, policy::feature::microphone)) {
-		answer(false);
-		return;
-	}
+	const permission_decider decider = v->m_decider;
 
-	// The site policy said yes; the operating system is a separate question
-	// with a separate answer. A user who denied this application the camera
-	// has said something no per-site rule may override.
+	// The operating system is a separate question from the site policy, with a
+	// separate answer, and it is asked second. A user who denied this
+	// application the camera has said something no per-site rule may override
+	// -- but there is no point spending that dialog on a site the shield was
+	// going to refuse anyway.
 	//
-	// Asked one after the other rather than together: each is a dialog, and
-	// two at once is a stack of them in front of somebody trying to join a
-	// call.
-	auto then_audio = [answer, audio](bool ok) {
-		if (!ok)     { answer(false); return; }
-		if (!audio)  { answer(true);  return; }
-		qApp->requestPermission(QMicrophonePermission{}, qApp,
-		                         [answer](const QPermission &p) {
-			answer(p.status() == Qt::PermissionStatus::Granted);
+	// Asked one after the other rather than together: each is a dialog, and two
+	// at once is a stack of them in front of somebody trying to join a call.
+	std::function<void()> os_stage = [answer, video, audio] {
+		auto then_audio = [answer, audio](bool ok) {
+			if (!ok)     { answer(false); return; }
+			if (!audio)  { answer(true);  return; }
+			qApp->requestPermission(QMicrophonePermission{}, qApp,
+			                         [answer](const QPermission &p) {
+				answer(p.status() == Qt::PermissionStatus::Granted);
+			});
+		};
+		if (!video) {
+			then_audio(true);
+			return;
+		}
+		qApp->requestPermission(QCameraPermission{}, qApp,
+		                         [then_audio](const QPermission &p) {
+			then_audio(p.status() == Qt::PermissionStatus::Granted);
+		});
+	};
+
+	// **The policy stage is a chain now, not two `if`s.** It read
+	// `if (video && !decider(o, camera))`, which was only possible while the
+	// decider answered from a table; it can now put a dialog on the screen, and
+	// a question that has to wait for a person cannot be asked inside a
+	// condition.
+	//
+	// A call wanting both, on a site never asked about, can therefore cost four
+	// prompts in a row: camera and microphone from the shield, then the same
+	// two from Android. Only the first time -- Android remembers its own
+	// answers, and the shield's prompt offers to. Worth it in exchange for the
+	// two questions staying separate answers, which is what lets somebody grant
+	// a meeting a microphone and not a camera.
+	auto policy_audio = [decider, o, audio, answer, os_stage](bool ok) {
+		if (!ok) { answer(false); return; }
+		if (!audio) { os_stage(); return; }
+		decider(o, policy::feature::microphone,
+		         [answer, os_stage](bool granted) {
+			if (!granted) { answer(false); return; }
+			os_stage();
 		});
 	};
 	if (!video) {
-		then_audio(true);
+		policy_audio(true);
 		return;
 	}
-	qApp->requestPermission(QCameraPermission{}, qApp,
-	                         [then_audio](const QPermission &p) {
-		then_audio(p.status() == Qt::PermissionStatus::Granted);
-	});
+	decider(o, policy::feature::camera, policy_audio);
 }
 
 void android_view::choose_file(qint64 id, bool multiple, const QString &accept) {

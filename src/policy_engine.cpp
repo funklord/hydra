@@ -16,12 +16,12 @@ namespace {
 
 // The words for a setting live in `policy` now, shared with the settings
 // bundle so the two files cannot disagree about what "block" is called.
-
-setting setting_from_name(const QString &n) {
-	if (n == "allow") return setting::allow;
-	if (n == "block") return setting::block;
-	return setting::unset;
-}
+//
+// **This was a second copy of that mapping, sitting under that comment.** It
+// knew "allow" and "block" and nothing else, so when `ask` was added the two
+// disagreed immediately and silently: a stored `ask` read back as `unset`,
+// which now means block. Delegating removes the copy rather than teaching it
+// the third word, because teaching it would leave the fourth to be found later.
 
 }  // namespace
 
@@ -35,15 +35,50 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	set_global_default(feature::popups,              setting::block);
 	set_global_default(feature::images,              setting::allow);
 	set_global_default(feature::autoplay,            setting::block);
-	set_global_default(feature::geolocation,         setting::block);
-	set_global_default(feature::camera,              setting::block);
-	set_global_default(feature::microphone,          setting::block);
-	set_global_default(feature::notifications,       setting::block);
+	// **Ask, where the capability is real and a prompt can reach somebody.**
+	// These were `block`, which is the right thing to do in the absence of an
+	// answer and was never meant to be the answer. A blocked camera reaches the
+	// page as a `NotAllowedError` and reaches the person as nothing at all, so
+	// a video call that Hydra deliberately stopped is indistinguishable from
+	// one that is simply broken -- which is exactly how it presented here, and
+	// cost a diagnosis before the cause was found to be this line.
+	//
+	// Privacy-leaning is still the default and this does not weaken it: nothing
+	// is granted, the question is merely put to the person it belongs to, once
+	// per site, refused by default if the dialog is dismissed.
+	set_global_default(feature::geolocation,         setting::ask);
+	set_global_default(feature::camera,              setting::ask);
+	set_global_default(feature::microphone,          setting::ask);
 	// Both were denied by a `default:` arm in the engine backend before they
-	// were features at all, so blocking here changes nothing and only makes
+	// were features at all, so blocking here changed nothing and only made
 	// the refusal a decision somebody can see and overrule.
+	//
+	// **Clipboard reading stays blocked, and not out of caution.** The engine
+	// gates it behind `JavascriptCanAccessClipboard` and `JavascriptCanPaste`,
+	// neither of which this project enables, so the permission request never
+	// arrives -- `ask` here would be a setting offering a prompt that cannot
+	// fire. Blocked says the true thing. When those engine settings are turned
+	// on this becomes the wrong default and should move with them.
 	set_global_default(feature::clipboard_read,      setting::block);
-	set_global_default(feature::pointer_lock,        setting::block);
+	// Pointer lock asks. It is a real capability the engine does deliver, it is
+	// always the result of a deliberate click, and Escape takes it back -- so
+	// one prompt per site, remembered, is the whole cost.
+	//
+	// The plan for this was `allow` plus a transient "press Escape" notice,
+	// which is what other browsers do and is better. It is not what shipped
+	// here, because the notice is UI that does not exist yet and `allow`
+	// without it is a silent grant -- the precise failure this whole change
+	// exists to remove, pointed the other way. `ask` until there is something
+	// to show.
+	set_global_default(feature::pointer_lock,        setting::ask);
+	// **Notifications stay blocked because nothing would arrive.** No
+	// `QWebEngineProfile::setNotificationPresenter` is installed anywhere in
+	// this tree, so a granted notification permission resolves the page's
+	// promise and then silently drops every notification it sends. Prompting
+	// for that would be asking somebody to grant a capability the browser
+	// cannot honour, which is worse than refusing it. This default moves when
+	// a presenter exists, not before.
+	set_global_default(feature::notifications,       setting::block);
 	// Allow: the media badge is a headline feature and a browser that noticed
 	// nothing until told to would be the wrong default entirely.
 	set_global_default(feature::media_detect,        setting::allow);
@@ -121,18 +156,33 @@ setting policy_engine::effective_setting(feature f, const QString &host) const {
 	return global_default(f);
 }
 
+// **Only `allow` allows, which is a change and the point of it.** This read
+// `!= block`, so any state that was not a refusal was a grant -- and with
+// `ask` in the vocabulary that would have made "consult the person" mean
+// "yes" for every caller that cannot consult anybody. Most callers cannot:
+// the request filter answering a load has no user in front of it.
+//
+// So this is the question for code that must decide now, and it fails closed.
+// Code that *can* ask calls `effective_setting` and handles `ask` itself.
 bool policy_engine::is_allowed(feature f, const QString &host) const {
-	return effective_setting(f, host) != setting::block;
+	return effective_setting(f, host) == setting::allow;
 }
 
+// **Unset fails closed.** It used to answer `allow`, which never bit because
+// every feature is given an explicit default in the constructor -- but that is
+// a property of one function agreeing with another, not a guarantee. A feature
+// added without a constructor line would have been granted to every site
+// silently, and the failure would look like the feature working.
 setting policy_engine::global_default(feature f) const {
 	const setting s = policy::get_setting(m_global_defaults, f);
-	return (s == setting::block) ? setting::block : setting::allow;
+	return s == setting::unset ? setting::block : s;
 }
 
+// Stores what it is given. The normalising this used to do -- anything not
+// `block` becomes `allow` -- would have thrown `ask` away on the way in, and
+// silently: the setter would accept it and the getter would answer `allow`.
 void policy_engine::set_global_default(feature f, setting s) {
-	const setting norm = (s == setting::block) ? setting::block : setting::allow;
-	m_global_defaults = policy::with_setting(m_global_defaults, f, norm);
+	m_global_defaults = policy::with_setting(m_global_defaults, f, s);
 	emit changed();
 }
 
@@ -164,7 +214,7 @@ bool policy_engine::load_json(const QString &path) {
 	for (auto it = gd.begin(); it != gd.end(); ++it) {
 		const feature f = policy::feature_from_name(it.key());
 		if (f != feature::count)
-			set_global_default(f, setting_from_name(it.value().toString()));
+			set_global_default(f, policy::setting_from_word(it.value().toString()));
 	}
 
 	m_rules.clear();
@@ -179,7 +229,7 @@ bool policy_engine::load_json(const QString &path) {
 		for (auto it = settings.begin(); it != settings.end(); ++it) {
 			const feature f = policy::feature_from_name(it.key());
 			if (f != feature::count)
-				r.bits = policy::with_setting(r.bits, f, setting_from_name(it.value().toString()));
+				r.bits = policy::with_setting(r.bits, f, policy::setting_from_word(it.value().toString()));
 		}
 		m_rules.push_back(r);
 	}

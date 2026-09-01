@@ -12527,28 +12527,200 @@ The obvious home for the tiny display is the status bar, which already carries
 transient state; expanding it to a panel is the same move `downloads_dialog`
 makes from its own indicator.
 
-### Open questions, which is why this is a record and not a design
+### Answered, 2026-09-01
 
-- **What "stop" and "kill" each mean.** The likely reading is that stop lets
-  the item in flight finish and then halts, while kill abandons it immediately
-  including the request already sent to the model. Two buttons only earn their
-  place if they differ, so the difference has to be stated before either is
-  built.
-- **What the slider actually moves.** Concurrency and pacing are ours to
-  control. **Memory largely is not**: with a local model the resident cost is
-  the model itself -- a 14B holds about 10 GB before any of our work starts --
-  so a slider that genuinely lowers memory has to be allowed to unload or
-  downgrade the model, which is a much bigger lever than throttling a queue.
-  Whether that is in scope changes the design completely.
-- **Whether a batch survives a restart.** The tab tree and its histories now
-  do; a queue of AI work is a different question, and a job that silently
-  resumes on the next launch is a surprise rather than a feature.
-- **Whether the questions reuse `m_confirm_action`** or get their own
-  affordance. Reusing it keeps one idiom; separating it avoids one control
-  meaning two things.
+- **Stop and kill differ, and both stay.** Stop lets the item in flight finish
+  and then halts the queue; kill abandons it immediately, including the request
+  already sent to the model.
+- **The slider does whatever can be done**, up to and including loading a
+  cheaper model when that is what lowering memory takes. Marked a late-stage
+  feature: throttling our own concurrency and pacing is the near-term part, and
+  swapping the model underneath a running batch is not.
+- **A batch is persisted only far enough to be restarted**, and only where work
+  would otherwise be lost. Restarting the job, not resuming mid-item -- which
+  is the cheaper promise to keep and the one a reader of the log can verify.
+- **Everything about a batch belongs in one place.** The questions go in the
+  panel with the progress, the log and the controls, rather than borrowing the
+  toolbar. The reason given is mobile: the UI there is non-standard and hard
+  enough to find without one feature's state being split across two places.
+
+  Note for whoever builds it: the toolbar's existing "Still working?" item is
+  **not** this. It asks whether newly applied filter rules broke the page in
+  front of you, which is a different question about a different thing, and the
+  two should not be merged because they happen to both come from the AI side.
 
 Not started. The permissions work comes first, on the holder's instruction:
 the browser has to be a browser before the harder half is worth building.
+
+## `ask`: the third answer, and the four defaults that now use it
+
+The shield had two answers and needed three. `allow` and `block` are both
+decisions taken in advance, by somebody who has not met the page — which is the
+right shape for JavaScript and images and cookies, and the wrong shape for a
+camera. There was nowhere for "put the question to the person in front of the
+screen" to live, so camera and microphone were globally blocked, which is the
+correct thing to do in the absence of an answer and was never meant to *be* the
+answer.
+
+**What that cost is recorded two sections above.** The `NotAllowedError` that
+looked like broken `getUserMedia` support on Android was the shield working
+exactly as configured: `camera=block`, refusing in silence. The page was told;
+the person was not. A video call Hydra had deliberately stopped and a video call
+that was simply broken were indistinguishable from the only side anybody was
+looking at.
+
+### The shape of the change
+
+`setting::ask = 3` went in earlier, along with the three corrections it forced —
+`is_allowed` reading `== allow` instead of `!= block`, `global_default` failing
+closed on `unset`, and the engine's private copy of the word list deleted in
+favour of `policy::setting_from_word`. That copy knew "allow" and "block" only,
+so a stored `ask` read back as `unset`: the setting would have been accepted,
+written, and quietly undone on the next start.
+
+What this section adds is everything that makes `ask` reach a person.
+
+**The decider is asynchronous.** It was
+`std::function<bool(const QUrl &, policy::feature)>` and the comment above it
+said, accurately, "synchronously… no UI and no waiting". That was the whole
+limitation: a `bool` cannot say *"I am going to put a dialog on the screen and
+tell you afterwards"*. It is now
+`std::function<void(const QUrl &, policy::feature, permission_answer)>`, and the
+answer callback may fire before the call returns — which is what the common case
+does, since a policy that already says allow or block answers without touching
+the screen. Every call site therefore captures by value rather than relying on a
+scope that may be gone.
+
+Four call sites moved:
+
+- **Desktop, 6.8 and later.** `QWebEnginePermission` is a value carrying its own
+  target, so the settle lambda captures it and can answer whenever it likes.
+- **Desktop, the pre-6.8 branch.** This one has to call back into a page this
+  object owns, and an answer that waits for a person can easily outlive the tab
+  it was asked about — so the page is held in a `QPointer` and checked at answer
+  time. That branch still cannot be compiled against the Qt in this tree, and is
+  written to the same standard anyway.
+- **Android capture.** The two policy questions were `if (video && !decider(...))`
+  and `if (audio && !decider(...))`, which only worked while the decider answered
+  from a table. They are a chain now, in front of the OS-permission chain that
+  was already there.
+- **The shell**, which is where the dialog actually lives.
+
+### The prompt
+
+`permission_dialog`, in the idiom of `auth_dialog` beside it. It names the site,
+says what is about to happen in the words of the thing rather than the words of
+the setting — "wants to use your camera", not "Camera" — and adds a second
+sentence where the plain name understates it ("It can start and stop on its own
+while the page is open").
+
+Three decisions in it are deliberate and each is the less convenient option:
+
+- **Closing the dialog blocks.** Escape, the window button, any dismissal — all
+  refusals, and by construction rather than by remembering: `m_granted` is false
+  and only the Allow button sets it. A prompt that treats "go away" as "ask me
+  again shortly" is how a page nags somebody into agreeing.
+- **Block is the default button and holds focus.** A stray Return as the dialog
+  appears lands on the refusal. A wrongly refused camera is a page that does not
+  work and a person who tries again; a wrongly granted one is a camera that is on.
+- **"Remember" is unchecked.** Checked-by-default is what other browsers do and
+  it works there because their prompt is a bar at the top of a window nobody is
+  looking at. Here the answer is given under interruption by someone who wants
+  the interruption gone, and the fastest way to dismiss a dialog is the button,
+  not the checkbox above it. A grant that outlives the moment has to be asked for.
+
+The nagging that would otherwise cause is handled better elsewhere: the shell
+keeps `m_session_permissions`, keyed host-and-feature, for this run only. A page
+calling `getUserMedia` in a retry loop is answered from there and nobody sees a
+second dialog. Nothing is written down, so it is gone when the browser is —
+which is exactly what lets the checkbox default to unchecked without condemning
+anyone to answering forever.
+
+When the box *is* ticked, the answer goes into the site rules and the policy file
+is saved immediately rather than on the debounce. An answer to a permission
+prompt is the kind of decision somebody would be furious to give twice because
+the process was killed in between.
+
+### One table, because two would have drifted
+
+The prompt's sentence and the settings page's "may this feature be set to ask?"
+are the same fact. They are one field: `ask_phrase` in `policy.cpp`'s feature
+table, non-null on six rows, with `can_ask(f)` defined as `ask_phrase(f) != nullptr`.
+
+The alternative was a list of promptable features in the UI, which is a second
+copy — and the failure mode of the copy going stale is either a feature offered
+as `ask` that no prompt has words for, or words written for a feature the combo
+box will not let anybody choose. A test asserts the two halves agree for every
+feature, and that no feature *defaults* to `ask` without a prompt able to answer
+it, which is the invariant that stops a capability being permanently and
+invisibly denied.
+
+The twelve rows with no phrase say `nullptr` explicitly. Leaving the member off
+compiles and value-initialises correctly, and cost twelve
+`-Wmissing-field-initializers` in a build that carries none — a warning worth
+keeping, since it is the one that notices a field added to this struct and
+forgotten in every row below.
+
+### Both settings surfaces were quietly destroying `ask`
+
+Neither could represent it, and neither failed loudly:
+
+- **`site_policy_dialog`** had three combo entries; `ask` fell into the
+  `default:` arm and drew as "Default". Touching that row wrote it back as
+  `unset`. A site the person had chosen to be asked about silently became a site
+  on the global default. Its "Default (allowed)" label would also have called an
+  `ask` default *allowed*, which is the one word of the three that is actively
+  wrong.
+- **`settings_dialog`** had two entries and `setCurrentIndex(cur == block ? 1 : 0)`,
+  so an `ask` default rendered as **Allow** — and its save path reads the combo,
+  so opening the settings page and pressing OK without touching anything would
+  have widened the setting. Its exception list had the same two-way ternary and
+  printed `ask` as "block".
+
+Both now carry the third state. The per-site dialog greys "Ask" where
+`can_ask` is false rather than omitting it, because its index *is* its meaning
+and a per-row entry count would make `setting_to_index` row-dependent; the
+settings page omits it instead, because it carries the setting in the item's
+data and a two-entry row and a three-entry row both read back correctly.
+
+### The defaults that moved, and the two that did not
+
+Camera, microphone, location and pointer lock now default to `ask`. Nothing is
+granted by this: the question is put to the person it belongs to, once per site,
+refused by default if the dialog is dismissed.
+
+**Notifications stay blocked, and not out of caution.** No
+`QWebEngineProfile::setNotificationPresenter` is installed anywhere in this tree
+— `grep` finds neither that nor `QWebEngineNotification`. A granted notification
+permission would resolve the page's promise and then silently drop every
+notification it sends. Prompting for that is asking somebody to grant a
+capability the browser cannot honour, which is worse than refusing it. **This is
+a real gap and the default moves when a presenter exists, not before.**
+
+**Clipboard reading stays blocked for the same class of reason.** The engine
+gates it behind `JavascriptCanAccessClipboard` and `JavascriptCanPaste`, neither
+of which this project enables, so the permission request never arrives at all.
+`ask` there would be a setting offering a prompt that cannot fire.
+
+**Pointer lock asks, where the plan said allow-plus-a-transient-notice.** The
+notice is UI that does not exist, and `allow` without it is a silent grant — the
+precise failure this whole change exists to remove, pointed the other way. `ask`
+until there is something to show.
+
+### What is verified
+
+The desktop build is clean and warning-free, and the full offline suite passes.
+`test_settings` gained 18 checks in three sections: the four defaults and the two
+that deliberately did not move, the strictness of `is_allowed` against `ask`, the
+one-table invariant above, and a save/load round-trip proving `ask` survives the
+file as both a global default and a site rule.
+
+**Not verified: that any of this has been seen on a screen.** No prompt has been
+put in front of a person on either platform. On Android specifically there is a
+risk worth naming rather than assuming away — the dialog is a Qt widget and the
+page underneath it is a native `WebView` in its own surface, and whether a
+widget dialog composites above that is exactly the kind of thing this project
+has been wrong about before. It needs the handset.
 
 ## What is next (in order)
 

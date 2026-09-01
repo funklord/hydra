@@ -395,6 +395,15 @@ private:
 	QString             m_tree_path;
 	QString             m_policy_path;
 
+	// Answers to permission prompts, for this run only: "host\nfeature" ->
+	// granted. **Not persistence -- the opposite of it.** A site set to `ask`
+	// is asked once, and a page that asks again (a reload, a second call, a
+	// frame that retries in a loop) is answered from here without anybody
+	// seeing a second dialog. Nothing is written down, so it is gone when the
+	// browser is, which is what makes the prompt's "remember" checkbox able to
+	// default to unchecked without condemning anyone to answering forever.
+	QHash<QString, bool> m_session_permissions;
+
 	QHash<QString, web_view_backend *> m_views_by_id;  // node id -> live view
 	QStringList                        m_lru;          // most-recent id at front
 };

@@ -440,6 +440,110 @@ int main(int argc, char **argv) {
 	// untested matching" for a long time because pointing a real ad name at a
 	// local server needs root or a Chromium flag Qt mangles. The predicate itself
 	// needs neither.
+	// The third setting, and the invariants that keep it from being a fourth
+	// way of saying "block". `ask` exists so that camera and microphone can be
+	// refused *visibly* -- the old `block` default reached the page as a
+	// `NotAllowedError` and reached the person as nothing, which is how a
+	// deliberately shielded video call looked exactly like a broken one.
+	section("ask: the setting that puts the question to a person");
+	{
+		policy_engine e;
+		check(e.global_default(policy::feature::camera) == policy::setting::ask,
+		      "camera asks by default rather than refusing in silence");
+		check(e.global_default(policy::feature::microphone) == policy::setting::ask,
+		      "and so does the microphone");
+		check(e.global_default(policy::feature::geolocation) == policy::setting::ask,
+		      "and location");
+		check(e.global_default(policy::feature::pointer_lock) == policy::setting::ask,
+		      "and pointer lock");
+
+		// Not everything moved, and the two that did not are the interesting
+		// ones: a prompt for a capability the browser cannot actually deliver
+		// would be asking somebody to grant nothing.
+		check(e.global_default(policy::feature::notifications) == policy::setting::block,
+		      "notifications stay blocked — no presenter is installed, so a grant "
+		      "would resolve the promise and drop every notification");
+		check(e.global_default(policy::feature::clipboard_read) == policy::setting::block,
+		      "clipboard reading stays blocked — the engine gates it behind "
+		      "settings this project does not enable, so the request never arrives");
+
+		// **The one that would have been silently wrong.** `is_allowed` read
+		// `!= block` before `ask` existed, which would have made "consult the
+		// person" mean "yes" to every caller that cannot consult anybody.
+		check(!e.is_allowed(policy::feature::camera, "example.com"),
+		      "a feature set to ask is not allowed — the callers that cannot "
+		      "prompt must read it as a refusal, not a grant");
+		e.set_setting("example.com", policy::feature::camera, policy::setting::allow);
+		check(e.is_allowed(policy::feature::camera, "example.com"),
+		      "and allow still allows once a site rule says so");
+	}
+
+	// Every feature that asks must have words to ask with, and every set of
+	// words must belong to a feature that can be set to ask. Two halves of one
+	// fact, which is why they live in one table -- this checks the table is
+	// actually being read rather than duplicated somewhere.
+	section("ask: nothing is asked for that has no sentence");
+	{
+		policy_engine e;
+		int askable = 0;
+		bool all_defaults_answerable = true, words_match_askable = true;
+		for (int i = 0; i < policy::feature_count(); ++i) {
+			const auto f = static_cast<policy::feature>(i);
+			if (policy::can_ask(f))
+				++askable;
+			if (policy::can_ask(f) != (policy::ask_phrase(f) != nullptr))
+				words_match_askable = false;
+			// A default of `ask` on a feature nothing can prompt for is a
+			// capability permanently and invisibly denied, since `is_allowed`
+			// grants on `allow` alone.
+			if (e.global_default(f) == policy::setting::ask && !policy::can_ask(f))
+				all_defaults_answerable = false;
+		}
+		check(words_match_askable,
+		      "can_ask and ask_phrase agree for every feature — one table, not two");
+		check(all_defaults_answerable,
+		      "no feature defaults to ask without a prompt that can answer it");
+		check(askable == 6,
+		      "six features can be asked about; the rest are decided in advance");
+		check(QString::fromLatin1(policy::ask_phrase(policy::feature::camera)) ==
+		        "use your camera",
+		      "and the prompt says what happens, not which switch it is");
+		check(policy::ask_phrase(policy::feature::javascript) == nullptr,
+		      "a setting nobody is interrupted for has no sentence");
+	}
+
+	// `ask` has to survive the file. It very nearly did not: the engine kept a
+	// private copy of the word list that knew "allow" and "block" only, so a
+	// stored `ask` read back as `unset` -- which now means block, silently
+	// undoing the choice.
+	section("ask: survives being written down and read back");
+	{
+		const QString path = QDir::temp().filePath("hydra-policy-ask-test.ini");
+		QFile::remove(path);
+		{
+			policy_engine e;
+			e.set_global_default(policy::feature::camera, policy::setting::ask);
+			e.set_setting("meet.example", policy::feature::microphone,
+			               policy::setting::ask);
+			e.set_setting("meet.example", policy::feature::camera,
+			               policy::setting::allow);
+			check(e.save(path), "a policy carrying ask writes");
+		}
+		{
+			policy_engine e;
+			check(e.load(path), "and reads back");
+			check(e.global_default(policy::feature::camera) == policy::setting::ask,
+			      "the global default is still ask, not unset");
+			check(e.effective_setting(policy::feature::microphone, "meet.example") ==
+			        policy::setting::ask,
+			      "and so is the site rule");
+			check(e.effective_setting(policy::feature::camera, "meet.example") ==
+			        policy::setting::allow,
+			      "a site that was answered keeps its answer");
+		}
+		QFile::remove(path);
+	}
+
 	section("ad hosts: what the seed list matches");
 	{
 		policy_engine e;

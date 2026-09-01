@@ -15,6 +15,7 @@
 #include <QWebEngineRegisterProtocolHandlerRequest>
 #include <QMessageBox>
 #include <QMetaEnum>
+#include <QPointer>
 #include <QPushButton>
 #include <QSslCertificate>
 #include <QWebEngineHistory>
@@ -437,24 +438,33 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 				perm.deny();
 				return;
 		}
-		const bool grant = m_decider ? m_decider(origin, pf) : false;
-		// What was asked and what was answered, on request. Without this the
-		// only observable is what the page ends up seeing, and "we refused" and
-		// "we granted and the engine could not deliver" look identical from
-		// there -- which cost a diagnosis once already.
-		//
-		// Our feature name, not Qt's enum number. The number was readable until
-		// 6.8 renumbered the enum underneath it, at which point a driver matching
-		// on it was quietly asking about a different permission than it thought.
-		if (qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG"))
-			qWarning("permission: %s asked for %s -> %s",
-			          qPrintable(origin.toString()),
-			          policy::feature_name(pf),
-			          grant ? "GRANTED" : "denied");
-		if (grant)
-			perm.grant();
+		// **`perm` is a value and outlives this callback**, which is what lets
+		// the answer wait for a dialog. Captured by value for that reason: the
+		// lambda may run long after this scope is gone.
+		auto settle = [perm, origin, pf](bool grant) mutable {
+			// What was asked and what was answered, on request. Without this
+			// the only observable is what the page ends up seeing, and "we
+			// refused" and "we granted and the engine could not deliver" look
+			// identical from there -- which cost a diagnosis once already.
+			//
+			// Our feature name, not Qt's enum number. The number was readable
+			// until 6.8 renumbered the enum underneath it, at which point a
+			// driver matching on it was quietly asking about a different
+			// permission than it thought.
+			if (qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG"))
+				qWarning("permission: %s asked for %s -> %s",
+				          qPrintable(origin.toString()),
+				          policy::feature_name(pf),
+				          grant ? "GRANTED" : "denied");
+			if (grant)
+				perm.grant();
+			else
+				perm.deny();
+		};
+		if (m_decider)
+			m_decider(origin, pf, settle);
 		else
-			perm.deny();
+			settle(false);
 	});
 #else
 	connect(m_page, &QWebEnginePage::featurePermissionRequested, this,
@@ -484,23 +494,29 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 				  QWebEnginePage::PermissionDeniedByUser);
 				return;
 		}
-		const bool grant = m_decider ? m_decider(origin, pf) : false;
-		// What was asked and what was answered, on request. Without this the
-		// only observable is what the page ends up seeing, and "we refused" and
-		// "we granted and the engine could not deliver" look identical from
-		// there -- which cost a diagnosis once already.
-		//
-		// Our feature name, not Qt's enum number. The number was readable until
-		// 6.8 renumbered the enum underneath it, at which point a driver matching
-		// on it was quietly asking about a different permission than it thought.
-		if (qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG"))
-			qWarning("permission: %s asked for %s -> %s",
-			          qPrintable(origin.toString()),
-			          policy::feature_name(pf),
-			          grant ? "GRANTED" : "denied");
-		m_page->setFeaturePermission(origin, f,
-		  grant ? QWebEnginePage::PermissionGrantedByUser
-		        : QWebEnginePage::PermissionDeniedByUser);
+		// **The page is held weakly, unlike the 6.8 branch above.** There a
+		// `QWebEnginePermission` is a value that carries its own target, so an
+		// answer arriving after the tab closed is inert. Here the answer has to
+		// call back into a page this object owns, and an answer that waits for
+		// a person can easily outlive the tab it was asked about -- so the
+		// pointer is checked at answer time rather than assumed.
+		QPointer<QWebEnginePage> page(m_page);
+		auto settle = [page, origin, f, pf](bool grant) {
+			if (qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG"))
+				qWarning("permission: %s asked for %s -> %s",
+				          qPrintable(origin.toString()),
+				          policy::feature_name(pf),
+				          grant ? "GRANTED" : "denied");
+			if (!page)
+				return;
+			page->setFeaturePermission(origin, f,
+			  grant ? QWebEnginePage::PermissionGrantedByUser
+			        : QWebEnginePage::PermissionDeniedByUser);
+		};
+		if (m_decider)
+			m_decider(origin, pf, settle);
+		else
+			settle(false);
 	});
 #endif
 

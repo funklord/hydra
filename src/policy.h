@@ -75,7 +75,17 @@ enum class feature : int {
 // `unset` is the architecture doc's "Default" state -- no rule expressed at
 // this scope, so resolution falls through to the global default. Spelled
 // `unset` because `default` is a keyword.
-enum class setting : quint8 { unset = 0, allow = 1, block = 2 };
+// **`ask` is value 3 because the packing already had room for it.** Settings go
+// two bits per feature into a quint64, so unset/allow/block used three of four
+// states and the fourth was free: adding it costs no change to the file format
+// and no migration, and a policy written by an older build reads back the same.
+//
+// It exists because a bool cannot say "consult the person". Before it, a
+// capability was allowed or refused and the refusal was silent -- the page saw
+// a rejected promise and the user was never told a decision had been made on
+// their behalf. That is what `camera=block` did on the test handset: exactly
+// what it said, invisibly.
+enum class setting : quint8 { unset = 0, allow = 1, block = 2, ask = 3 };
 
 inline int feature_count() { return static_cast<int>(feature::count); }
 
@@ -89,6 +99,18 @@ const char *feature_label(feature f);
 // asks" is true whether that is allowed or blocked, while "sites cannot see
 // where you are" would be a lie half the time.
 const char *feature_help(feature f);
+// What a permission prompt says the site wants to do -- "use your camera", not
+// "Camera". The settings label answers "which switch is this"; a sentence put
+// in front of somebody mid-task has to answer "what is about to happen".
+//
+// Null for the features nothing prompts for, which is most of them.
+const char *ask_phrase(feature f);
+// Whether `setting::ask` is meaningful for this feature: whether there is any
+// code path that can put the question to a person and wait for the answer.
+// Offering `ask` where there is not would produce a setting that silently
+// means block, since `is_allowed` grants only on `allow`.
+bool        can_ask(feature f);
+
 // Parse a machine name; returns feature::count on failure.
 feature     feature_from_name(const QString &name);
 

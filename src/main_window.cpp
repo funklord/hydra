@@ -1,6 +1,7 @@
 #include "main_window.h"
 
 #include "auth_dialog.h"
+#include "permission_dialog.h"
 #include "cert_dialog.h"
 #include "find_bar.h"
 #include "tab_tree_model.h"
@@ -2356,12 +2357,61 @@ void main_window::open_node(node *n, bool load_now) {
 			save_blobs_soon(m_views_by_id.key(view));
 		});
 
-		// Feature permissions (geo/cam/mic/notifications) answered from policy.
-		// The backend maps its engine's own feature enum onto policy::feature,
-		// so this stays a pure policy lookup on our side.
+		// Feature permissions (geo/cam/mic/notifications) answered from policy,
+		// and from the person when policy says to ask. The backend maps its
+		// engine's own feature enum onto policy::feature, so what arrives here
+		// is already in this project's vocabulary.
+		//
+		// **This was a one-line policy lookup returning a bool**, which is why
+		// `ask` could not exist: there was nowhere for "wait, I am going to put
+		// a dialog on the screen" to go. A blocked camera reached the page as a
+		// `NotAllowedError` and reached the person as nothing, so a video call
+		// that Hydra had deliberately stopped was indistinguishable from one
+		// that was simply broken -- which cost a real diagnosis here.
 		policy_engine *pe = m_policy;
-		view->set_permission_decider([pe](const QUrl &origin, policy::feature f) {
-			return pe->is_allowed(f, origin.host());
+		view->set_permission_decider(
+		  [this, pe](const QUrl &origin, policy::feature f,
+		              web_view_backend::permission_answer answer) {
+			const QString host = origin.host();
+			const policy::setting s = pe->effective_setting(f, host);
+			if (s != policy::setting::ask) {
+				// The ordinary case, and it answers without touching the
+				// screen. `allow` or anything else -- `block`, and `unset`,
+				// which the engine resolves to block rather than leaving a
+				// feature nobody configured wide open.
+				answer(s == policy::setting::allow);
+				return;
+			}
+
+			// Asked once per site per feature per run. The alternative is a
+			// page that calls `getUserMedia` in a retry loop putting a dialog
+			// on the screen as fast as one can be dismissed, which is not a
+			// hypothetical failure mode -- it is how a page bullies someone
+			// into pressing Allow.
+			const QString key = host + QChar('\n') +
+			                     QString::fromLatin1(policy::feature_name(f));
+			const auto seen = m_session_permissions.constFind(key);
+			if (seen != m_session_permissions.constEnd()) {
+				answer(*seen);
+				return;
+			}
+
+			permission_dialog dlg(host, f, origin.scheme() == "https", this);
+			const bool grant = dlg.exec() == QDialog::Accepted && dlg.granted();
+
+			if (dlg.remember()) {
+				// Written to the site rules, where the shield can show it and
+				// the person can take it back. Saved immediately rather than on
+				// the debounce: an answer to a permission prompt is exactly the
+				// kind of decision somebody would be furious to have to give
+				// twice because the browser was killed in between.
+				pe->set_setting(host, f, grant ? policy::setting::allow
+				                                : policy::setting::block);
+				pe->save(m_policy_path);
+			} else {
+				m_session_permissions.insert(key, grant);
+			}
+			answer(grant);
 		});
 
 		// **Asked, rather than declined on the person's behalf.** Nothing

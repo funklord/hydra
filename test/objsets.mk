@@ -123,11 +123,11 @@ OBJS_test_assembler = \
 
 OBJS_test_autofill = \
 	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/app/keepass_bridge.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_autofill_controller.o \
 	$(BUILD_DIR)/app/autofill_controller.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
-	$(BUILD_DIR)/app/keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/credential_store.o \
@@ -512,6 +512,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -533,6 +534,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -637,6 +639,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -658,6 +661,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -774,6 +778,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -793,6 +798,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -890,6 +896,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -910,6 +917,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
@@ -1015,6 +1023,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -1035,6 +1044,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
@@ -1153,6 +1163,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -1170,6 +1181,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -1262,6 +1274,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -1283,6 +1296,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -1390,6 +1404,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -1410,6 +1425,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -1512,6 +1528,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -1533,6 +1550,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -1639,6 +1657,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -1660,6 +1679,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -1765,6 +1785,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -1785,6 +1806,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
@@ -1888,6 +1910,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -1909,6 +1932,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -2023,6 +2047,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -2040,6 +2065,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -2137,6 +2163,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -2158,6 +2185,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -2264,6 +2292,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -2285,6 +2314,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -2390,6 +2420,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -2410,6 +2441,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
@@ -2524,6 +2556,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -2543,6 +2576,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -2639,6 +2673,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -2660,6 +2695,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -2767,6 +2803,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -2788,6 +2825,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -2911,6 +2949,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -2930,6 +2969,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -3036,6 +3076,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -3055,6 +3096,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -3149,6 +3191,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -3169,6 +3212,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
@@ -3276,6 +3320,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -3297,6 +3342,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -3412,6 +3458,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -3431,6 +3478,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -3535,6 +3583,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -3554,6 +3603,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -3648,6 +3698,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -3669,6 +3720,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -3800,6 +3852,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/shutdown_signals.o \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
@@ -3813,6 +3866,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
@@ -3901,6 +3955,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -3922,6 +3977,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -4036,6 +4092,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -4056,6 +4113,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
@@ -4187,6 +4245,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -4206,6 +4265,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
@@ -4315,6 +4375,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -4333,6 +4394,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
@@ -4440,6 +4502,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -4458,6 +4521,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
@@ -4563,6 +4627,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -4583,6 +4648,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
@@ -4688,6 +4754,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_antiadblock_watch.o \
 	$(BUILD_DIR)/app/antiadblock_watch.o \
 	$(BUILD_DIR)/app/extractor_signals.o \
+	$(BUILD_DIR)/app/permission_dialog.o \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/moc/moc_site_policy_dialog.o \
@@ -4708,6 +4775,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
+	$(BUILD_DIR)/moc/moc_permission_dialog.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
