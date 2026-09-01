@@ -116,7 +116,7 @@ settled and one is not:
 
 Out-of-tree build dirs, screenshots and captured evidence are written to the
 session scratchpad, which is cleared when the session ends. `build/` and
-`test/build/` are in-tree and do survive, so the desktop suite runs without a
+`test/build-make/` are in-tree and do survive, so the desktop suite runs without a
 rebuild; the Qt 6.11 and Android trees do not, and cost a full configure and
 build to recreate.
 
@@ -7336,7 +7336,7 @@ output matters most. The first was invisible twice over: it was read through a
 `tail -8` that cut off the line naming the suite, so it was written down as "an
 unexplained non-zero exit" when the summary had in fact named it.
 
-Failing suites now write their full output to `test/build/failed/<t>.log`. The
+Failing suites now write their full output to `test/build-make/failed/<t>.log`. The
 third occurrence landed there and answered it in one read.
 
 **The dialog probes when it opens** -- it asks the server what its candidate
@@ -12185,6 +12185,69 @@ Not run here. The phone reported `mWakefulness=Dozing`, and this file records
 that a dozing phone reads exactly like a regression, so any result taken now
 would be untrustworthy.
 
+## The live model suite, run for the first time
+
+`test_live_model` is in `NEEDS_MORE` and had never run here. The reason
+recorded for skipping items 1 to 4 was "needs a network, a device or a model",
+and that was **assumed rather than checked** — the device was verified for the
+autofill item, and the model never was. Ollama is serving `qwen2.5-coder:14b`
+on this machine and has been all along. So the suite ran.
+
+**And the instructions for running it were wrong.** `test/README.md` told the
+reader to run `./test/build/test_live_model`, a directory that has not existed
+since the migration from CMake, which this file records elsewhere. Nine
+commands in that README named it, and `project.md` named it twice more — once
+describing which build directories survive a session and once saying where a
+failing suite writes its log. Eleven paths, every one of them a reader's first
+step, all pointing at nothing. The document gate did not catch them: it checks
+that project.md names no missing *file*, and these are directories.
+
+### What eight runs say, and what they do not
+
+Eight runs against the built-in synthetic evidence set, gate verdict recorded
+each time: **four accepted, four rejected.**
+
+That number is about the synthetic set and does not transfer, and the README
+says so plainly in the paragraph above the command — real segments arrive
+disguised as `.woff2` web fonts while the synthetic ones arrive as `.ts`, so
+the two disagree about the thing being detected. Item 1's figures for dramafren
+and kisskh came from real captures, and `evidence/` is not in this checkout.
+So this is not a comparable score and must not be read as one.
+
+**What does transfer is the shape of the failures**, because it is about
+regular expressions rather than about the corpus.
+
+A rejected run wrote:
+
+    const hlsPattern = /master\.txt/;
+    const manifestPattern = /\.(m3u8|mpd)$/;
+
+and the gate answered *"the script found nothing"*. Both clauses miss, for two
+different reasons, and the second is general:
+
+- `master\.txt` cannot match `cf-master.1774687168.txt`. The version digits sit
+  between the word and the extension, and the model wrote the pattern as though
+  they did not exist.
+- `\.(m3u8|mpd)$` is anchored to the end of the string, so **any query string
+  defeats it**. Real manifest urls carry tokens — the accepted runs picked
+  `...cf-master.1774687168.txt?k=UCpS63&kx=17` — so an end-anchored extension
+  fallback fails on precisely the urls it exists to catch.
+
+That second point bears directly on item 1, which records that kisskh scored
+2 of 5 "purely on an `.m3u8` fallback". If the fallback the model writes is
+end-anchored, it works only where the url has no query string, and its
+successes are a property of the site rather than of the loop.
+
+**And writing both clauses is not sufficient.** Item 1 proposes asking the
+model for a note-driven match and an extension fallback in the same script.
+Three of the eight runs did produce both, unprompted — and one of those three
+was still rejected. So "both clauses present" and "accepted" are not the same
+property, and a change that only increases the first would move a number that
+is not the one being measured.
+
+Not attempted here: the real-capture runs item 1 is actually about. They need
+`evidence/`, which is not in this checkout, and a site visit.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -12221,6 +12284,15 @@ carried along as amendments to a list item.
    answered inside fifteen minutes on a loaded machine, one retry came back
    still refused and one timed out. That is a one-run result wearing a five-run
    coat, and it wants an idle machine.
+
+   **A local model is available and always was** — Ollama serves
+   `qwen2.5-coder:14b` here — so the part of this item that was deferred for
+   want of one never needed to be. `test_live_model` runs; see *The live model
+   suite, run for the first time* above. What that cannot supply is the real
+   captures this item is about: `evidence/` is not in this checkout, and the
+   synthetic set the suite falls back to does not transfer. The transferable
+   finding from those runs is that an end-anchored `\.(m3u8|mpd)$` fallback is
+   defeated by a query string, which is what a real manifest url carries.
 
    Site 2 is kisskh (`kisskh.co`, player CDN `kisscloud.online`), and it *is*
    recorded — `evidence/README.md` names the site, the episode and the exact
