@@ -14236,12 +14236,35 @@ is not honoured by Qt; and `windowsModel()` never populates at all -- zero
 windows after six seconds, with a window manager running and windows mapped,
 while Chromium's own picker lists them.
 
-The conclusion is that `QWebEngineDesktopMediaRequest` is broken on this
-platform in both versions available to us, and that hydra's handler is
-correct: it selects a valid index from the request's own model and hands it
-over, which is exactly what the documentation asks for. The driver stays
-because it now fails for a reason outside this tree, and will pass the day
-that stops being true.
+Reading Qt's own source settled the last of it. `selectScreen` asserts the
+index came from the request's own model and then passes `index.row()` to
+`DesktopMediaController`, which does `getSource(index)` and hands `source.id`
+to Chromium -- so an empty `DesktopMediaID` would explain the `INVALID_STATE`
+exactly, and the obvious suspect was selecting before the list had refreshed.
+It is not that either: waiting one, three and six seconds changes nothing, and
+`getSourceCount()` already reported the screen.
+
+**What settles it is Qt's own fallback.** The request's destructor selects
+screen 0 by itself when nobody answered:
+
+    ~QWebEngineDesktopMediaRequestPrivate() {
+        if (!didSelectOrCancel)
+            controller->screens()->getSourceCount() > 0
+                ? controller->selectScreen(0) : controller->cancel();
+    }
+
+Answering nothing at all, and letting that fire, fails identically. There is
+therefore no correct use of this API on this machine -- not ours, and not
+Qt's. The handler here selects a valid index from the request's own model and
+hands it over, which is exactly what the documentation asks for, and the
+driver stays because it now fails for a reason outside this tree and will pass
+the day that stops being true.
+
+**One distinction worth keeping for whoever reports this.** Both Qt builds
+tested are Debian's, and Debian's own Chromium works on the same display, so
+this may be a packaging defect rather than an upstream one. Official Qt
+binaries were not tried, and that is the next thing to try before filing
+anything.
 
 ## What is next (in order)
 
