@@ -19,6 +19,27 @@
 # faithful; colours and icons are not. Use `SWEEP_ONSCREEN=1` when appearance is
 # the question, and expect to be looking at somebody's screen while you do.
 #
+# **On-screen needs a window manager, and without one it lies loudly.** A bare
+# X server -- `Xvfb :77 -screen 0 1280x900x24`, which is how this can now run
+# without commandeering anybody's desktop -- has nothing to assign input focus,
+# so every dialog opens with `focusWidget()` null and `try_phone` reports "there
+# is no keyboard way in" against each one in turn. That came back seven times in
+# one run, for seven unrelated dialogs, which is the shape of an environment
+# fault rather than seven bugs: with `xfwm4` running on the same display, six of
+# the seven passed immediately. Start a window manager before believing any
+# focus result, and give it a moment -- the seventh was the filter dialog
+# opening while the WM was still taking over, and it has passed every run since.
+#
+#   Xvfb :77 -screen 0 1280x900x24 -nolisten tcp &
+#   DISPLAY=:77 xfwm4 --replace &
+#   DISPLAY=:77 SWEEP_ONSCREEN=1 test/live/sweep.sh
+#
+# **This is worth doing rather than avoiding.** Offscreen hid three real bugs
+# that the first on-screen sweep found at once: two in `consent_dialog`, whose
+# sentence-long buttons could not fit a 360-pixel screen, and `try_handoff`,
+# which had been skipped as unrunnable ever since it was written and passes
+# here. `try_import` runs nine more checks than it does offscreen.
+#
 # **Two kinds of driver, and conflating them was worth a bug twice.** Most print
 # a trailing "N passed, M failed" and are judged on it. A few -- try_flicker,
 # try_settings -- are report-only: they capture screenshots and timings for a
