@@ -39,6 +39,7 @@ static void spin(int ms) { QEventLoop l; QTimer::singleShot(ms, &l, &QEventLoop:
 
 static QString g_out;
 static int     g_shots = 0;
+static int     g_missed = 0;   // surfaces that would not grab
 
 // Two cheap, systematic checks run on every dialog as it is photographed.
 //
@@ -93,7 +94,12 @@ static void save(QWidget *w, const QString &name) {
 		             w->width(), w->height(), qPrintable(path));
 		++g_shots;
 	} else {
-		std::printf("  %-28s could not be grabbed\n", qPrintable(name));
+		// **Counted, not merely mentioned.** A line on stdout is not a result:
+		// the run below decided its exit code from the audit alone, so every
+		// grab could fail and the driver would still say "done" and exit 0.
+		++g_missed;
+		std::printf("  %-28s could not be grabbed (%s)\n", qPrintable(name),
+		             qPrintable(g_out));
 	}
 }
 
@@ -289,7 +295,32 @@ int main(int argc, char *argv[]) {
 	}
 
 	std::printf("\n%d image(s) in %s\n", g_shots, qPrintable(g_out));
-	std::printf("%d problem(s) found by the audit\n", g_problems);
+	std::printf("%d problem(s) found by the audit of %d surface(s)\n",
+	             g_problems, g_shots);
+
+	// **A run that photographed nothing is a failed run, not a clean one.**
+	//
+	// This said "0 image(s)", "0 problem(s) found by the audit" and "done", and
+	// exited 0 -- a full green result from a run that captured nothing whatever.
+	// The cause was mundane and will recur: HYDRA_SHOTS was unset, so it wrote
+	// to /tmp/hydra-look, which belongs to whoever ran it first, and every grab
+	// failed silently for the next person. The sweep counts a driver that
+	// reaches the end as fine, so this went past both the exit code and the
+	// summary line.
+	//
+	// An audit over an empty set reports success exactly as loudly as a real
+	// one. So the count is the evidence now: no pictures, no pass.
+	if (g_shots == 0) {
+		std::printf("FAIL  nothing was photographed -- is %s writable?\n",
+		             qPrintable(g_out));
+		std::printf("done\n");
+		return 1;
+	}
+	if (g_missed) {
+		std::printf("FAIL  %d surface(s) could not be grabbed\n", g_missed);
+		std::printf("done\n");
+		return 1;
+	}
 	// **The word the sweep looks for, and an exit code that means something.**
 	// This printed neither, so a driver whose pictures all came out was
 	// reported as "did not finish" in every sweep -- and had the audit found a
