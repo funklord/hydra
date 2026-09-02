@@ -1,5 +1,7 @@
 #include "qtwebengine_view.h"
 
+#include "permissions_shim.h"
+
 #include <QDataStream>
 #include <QIODevice>
 #include <QWebEngineView>
@@ -171,6 +173,10 @@ public:
 	  : QWebEnginePage(profile, parent) {}
 
 	web_view_backend::navigation_decider decider;
+	// Called before a navigation is accepted, so a per-site script can be in
+	// place before the document it belongs to exists. `loadStarted` is too late
+	// for a DocumentCreation script and `url_changed` is far too late.
+	std::function<void(const QUrl &)> before_navigate;
 
 protected:
 	bool acceptNavigationRequest(const QUrl &url, NavigationType type,
@@ -188,6 +194,8 @@ protected:
 			if (!decider(url, is_main_frame, user))
 				return false;
 		}
+		if (before_navigate && is_main_frame)
+			before_navigate(url);
 		return QWebEnginePage::acceptNavigationRequest(url, type, is_main_frame);
 	}
 };
@@ -359,6 +367,9 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	// pointer and an empty string when the pointer leaves it.
 	connect(m_page, &QWebEnginePage::linkHovered, this,
 	         [this](const QString &url) { emit link_hovered(QUrl(url)); });
+	// Through the derived type: `m_page` is held as a `QWebEnginePage *` because
+	// nothing else needs to know, and this is the one place that does.
+	page->before_navigate = [this](const QUrl &u) { refresh_permissions_shim(u); };
 	connect(m_view, &QWebEngineView::loadStarted, this,
 	         [this] { emit load_progress(0); });
 	connect(m_view, &QWebEngineView::loadProgress, this,
@@ -950,6 +961,38 @@ void qtwebengine_view::inject_script(const QString &name, const QString &source,
 	// a content script in a subframe has nothing to connect a QWebChannel to and
 	// must talk to the top frame instead. Measured; see project.md.
 	s.setRunsOnSubFrames(subframes);
+	m_page->scripts().insert(s);
+}
+
+void qtwebengine_view::refresh_permissions_shim(const QUrl &origin) {
+	if (!m_page || !m_capability_peek || origin.isEmpty())
+		return;
+	// **No operating-system gate on the desktop**, so the shield's answer is the
+	// whole answer: what it says is what would happen. On Android the same
+	// function has a second term, because Android can still refuse.
+	auto word = [this, &origin](policy::feature f) {
+		switch (m_capability_peek(origin, f)) {
+			case policy::setting::allow: return QStringLiteral("granted");
+			case policy::setting::block: return QStringLiteral("denied");
+			default:                     return QStringLiteral("prompt");
+		}
+	};
+
+	// Replaced rather than added to. `QWebEngineScriptCollection` keeps every
+	// script inserted into it, so leaving the old one behind would mean two
+	// overrides racing on the next page, and the loser would be whichever was
+	// inserted first -- a per-site answer carried onto the wrong site.
+	const QString name = QStringLiteral("hydra-permissions");
+	for (const QWebEngineScript &old : m_page->scripts().find(name))
+		m_page->scripts().remove(old);
+
+	QWebEngineScript s;
+	s.setName(name);
+	s.setSourceCode(permissions_shim::source(word(policy::feature::camera),
+	                                          word(policy::feature::microphone)));
+	s.setInjectionPoint(QWebEngineScript::DocumentCreation);
+	s.setWorldId(QWebEngineScript::MainWorld);
+	s.setRunsOnSubFrames(true);
 	m_page->scripts().insert(s);
 }
 

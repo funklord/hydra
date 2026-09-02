@@ -43,6 +43,14 @@ public:
 	void apply_settings(const view_settings &s) override;
 	void set_permission_decider(permission_decider fn) override;
 	void set_capture_chooser(capture_chooser fn) override;
+
+private:
+	// Rebuilt before every main-frame navigation, because the shield's answer is
+	// per site and a script inserted once would carry the first page's answer
+	// everywhere after it.
+	void refresh_permissions_shim(const QUrl &origin);
+
+public:
 	void set_authenticator(authenticator fn) override;
 	void set_navigation_decider(navigation_decider fn) override;
 	void set_proxy_authenticator(proxy_authenticator fn) override;

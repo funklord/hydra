@@ -137,6 +137,16 @@ public:
 	//
 	// A note rather than a return value: it arrives late, possibly after a
 	// dialog, and there is nothing to give it back to.
+	// What the shield *would* answer for this origin, without asking anybody.
+	//
+	// A synchronous read of the policy, and deliberately not the decider: the
+	// decider may put a dialog on the screen, and this is called while building
+	// a page's scripts, where waiting for a person is not an option. It answers
+	// the question "what is the standing rule", which is all the caller needs.
+	using capability_peek =
+	  std::function<policy::setting(const QUrl &origin, policy::feature f)>;
+	virtual void set_capability_peek(capability_peek fn) { m_capability_peek = std::move(fn); }
+
 	using capability_note =
 	  std::function<void(const QUrl &origin, policy::feature f,
 	                      const QString &outcome)>;
@@ -144,6 +154,7 @@ public:
 
 protected:
 	capability_note m_capability_note;
+	capability_peek m_capability_peek;
 
 public:
 

@@ -14081,6 +14081,88 @@ meaning lives only in a tooltip is desktop-only by construction. The KeePassXC
 key, the shield and the drawer button are all in the same position, and the
 shield and settings at least have menu entries. The key does not.
 
+## Teams could not find a camera, and the Permissions API is why
+
+Days of this were spent on the wrong layer. The answer was in Teams' own error
+text the whole time:
+
+> To give access, select the site information icon in your browser's address bar
+> and turn on your mic.
+
+That icon is **the browser's permission state**, and a page reads it through
+`navigator.permissions.query({name:"microphone"})`. Teams asks that first and
+only calls `getUserMedia` if the answer is `granted`. Ours said `prompt`, so it
+never called, and reported the only thing it could: no camera or mic.
+
+### Everything else was eliminated by measurement first
+
+| checked | result |
+|---|---|
+| the shield's own path | asks, allows, records -- works |
+| Android's runtime grant | granted, confirmed in the record and in logcat |
+| `enumerateDevices` | 3 placeholder devices before a grant, 8 named after |
+| the camera actually opening | never -- because nothing ever asked it to |
+| `RTCPeerConnection`, `createOffer` | present, 158-line SDP |
+| codecs | VP8, H264, AV1, VP9, rtx, red, ulpfec |
+| `getDisplayMedia`, insertable streams | both present |
+| **`permissions.query` for camera/mic** | **`prompt`, on both platforms** |
+
+The last row is the whole bug. **Neither engine answers that question from the
+shield**: Qt WebEngine keeps its own store and this profile deliberately sets
+`AskEveryTime`, so it has nothing standing to report, and Android's WebView does
+not implement the query for media at all. A site that asks politely before
+calling is told no; a site that just calls gets a stream. Teams is the polite
+kind.
+
+### The shim, and why it is not a lie
+
+`permissions_shim::source` builds one override, shared by both backends -- two
+copies of a transformation is the failure this file keeps recording, and here the
+two platforms would have answered the same question differently with the
+difference showing only on a phone.
+
+It reports **what would actually happen**, which is the whole distinction:
+
+  * shield blocks                      -> `denied`
+  * shield asks                        -> `prompt`
+  * shield allows, and nothing else stands in the way -> `granted`
+  * shield allows, Android has not granted -> `prompt`, because asking raises
+                                              Android's dialog and may be refused
+
+The desktop has no second term because it has no application-level gate.
+
+**Rebuilt before every main-frame navigation**, on both platforms, because the
+shield's answer is per site: a script inserted once would carry the first page's
+answer to every page after it. On the desktop that hangs off
+`acceptNavigationRequest`, which fires before the load -- `loadStarted` is too
+late for a `DocumentCreation` script and `url_changed` is far too late. The old
+script is removed rather than added to, or two overrides would race and the loser
+would be whichever went in first.
+
+### Measured, before and after, on the desktop build
+
+    permissions.camera      prompt        ->  granted
+    permissions.microphone  prompt        ->  granted
+
+with nothing else changed. (`getUserMedia` still fails on this machine with
+`NotFoundError`, which is honest: it has no `/dev/video*`.)
+
+### And a page that never ran, blamed on the harness
+
+The probe returned nothing for several rounds and that was read as the phone's
+input injection being unreliable. It was not. The page carried
+`o.sdp.split('\n')` written with a single backslash into a **non-raw** Python
+string, so the served HTML had a real newline inside a JavaScript string literal:
+
+    js: Uncaught SyntaxError: Invalid or unexpected token
+
+`node --check` had been run and passed -- on the *template* extracted from the
+Python source, where the escape was still intact. The served page, which is the
+artifact that matters, was never checked until the desktop build printed the
+error to its own stderr. **Check the artifact, not the thing that generates it**
+is this project's own rule and it was broken by the person who keeps writing it
+down.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

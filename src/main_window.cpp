@@ -2631,6 +2631,14 @@ void main_window::open_node(node *n, bool load_now) {
 			answer(dlg.is_screen(), dlg.chosen_row());
 		});
 
+		// What the shield *would* say, without asking anybody. Used to build the
+		// Permissions API shim on Android, where a page that politely checks
+		// before calling is otherwise told "no" whatever the truth is.
+		view->set_capability_peek(
+		  [pe](const QUrl &origin, policy::feature f) {
+			return pe->effective_setting(f, origin.host());
+		});
+
 		// The rest of the story, from below the shield. The decider above
 		// records what this browser decided; this records what happened next,
 		// so a report can say "we allowed it and the system did too" -- which

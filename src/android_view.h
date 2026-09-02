@@ -236,6 +236,13 @@ public:
 	// instead of making `main_window` know which backend it has. If the platform
 	// grows the capability, the seam is already here.
 	void set_capture_chooser(capture_chooser fn) override { m_capture_chooser = std::move(fn); }
+	// The policy peek, readable by the script builder.
+	//
+	// A plain accessor rather than making the member public: the shim needs to
+	// *ask* the shield, and nothing outside this class should be able to hand it
+	// a different answer.
+	const capability_peek &peek() const { return m_capability_peek; }
+
 	void set_desktop_site(bool on) override;
 	bool desktop_site() const override { return m_desktop_site; }
 	void set_navigation_decider(navigation_decider fn) override {

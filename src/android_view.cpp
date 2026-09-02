@@ -13,6 +13,7 @@
 
 #include "android_view.h"
 #include "request_filter.h"
+#include "permissions_shim.h"
 #include "scheme_rules.h"
 #include "user_agent.h"
 
@@ -588,6 +589,63 @@ QString android_view::call_bridge(qint64 id, const QString &name, const QString 
 	         : QStringLiteral(R"({"ok":false,"error":"no such view"})");
 }
 
+namespace {
+
+// The Permissions API, answered honestly, because Android's WebView will not
+// answer it at all.
+//
+// **`navigator.permissions.query({name:"camera"})` is how a conferencing site
+// decides whether to bother.** Teams asks it, gets something other than
+// `granted`, and never calls `getUserMedia` -- so nothing reaches this
+// browser's permission handler, the camera is never opened, and the message it
+// shows names the mechanism exactly: *"To give access, select the site
+// information icon in your browser's address bar and turn on your mic."* That
+// icon is the browser's own permission state, and in a WebView it is not wired
+// to anything.
+//
+// Every other layer was measured working first: `enumerateDevices` reports
+// devices before and after a grant, the shield allows, Android grants, and a
+// page that simply calls `getUserMedia` gets two tracks. The only broken link
+// was the one a polite page checks before asking.
+//
+// **This reports what would actually happen, which is why it is a shim and not
+// a lie.** Three states, combined from the two gates that really decide:
+//
+//   * the shield says block            -> "denied"
+//   * the shield says ask              -> "prompt"
+//   * the shield allows, OS granted    -> "granted"
+//   * the shield allows, OS has not    -> "prompt", because asking raises
+//                                          Android's dialog and might be refused
+//
+// Built per navigation rather than registered once, because the shield's answer
+// is per site and a script injected at view creation would carry the answer for
+// whatever page happened to be open first.
+QString build_permissions_shim(android_view *v) {
+	if (!v || !v->peek())
+		return QString();
+	const QUrl origin = v->url();
+	if (origin.isEmpty())
+		return QString();
+
+	auto state_for = [&](policy::feature f, Qt::PermissionStatus os) {
+		const policy::setting s = v->peek()(origin, f);
+		if (s == policy::setting::block)
+			return QStringLiteral("denied");
+		if (s != policy::setting::allow)
+			return QStringLiteral("prompt");
+		return os == Qt::PermissionStatus::Granted ? QStringLiteral("granted")
+		                                            : QStringLiteral("prompt");
+	};
+	const QString cam = state_for(policy::feature::camera,
+	                               qApp->checkPermission(QCameraPermission{}));
+	const QString mic = state_for(policy::feature::microphone,
+	                               qApp->checkPermission(QMicrophonePermission{}));
+
+	return permissions_shim::source(cam, mic);
+}
+
+}  // namespace
+
 QString android_view::injected_scripts(qint64 id) {
 	android_view *v = s_views.value(id);
 	if (!v)
@@ -601,6 +659,8 @@ QString android_view::injected_scripts(qint64 id) {
 		out += QStringLiteral("\nwindow.hydraRegisterBridge(%1);\n").arg(js_literal(name));
 	for (const QString &src : v->m_script_sources)
 		out += "\n;(function(){\n" + src + "\n})();\n";
+	// Last, so it overrides anything a page script may have captured first.
+	out += build_permissions_shim(v);
 	return out;
 }
 
