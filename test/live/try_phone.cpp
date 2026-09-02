@@ -72,6 +72,9 @@ static int g_shots = 0;
 // below pass on a run that measured one window seven times.
 static int g_measured = 0;
 static QString g_out;
+// **What the cut-off check actually measured.** Zero cut labels over zero
+// labels reads like zero over four hundred, and only one is a result.
+static int     g_labels_measured = 0;
 
 static void save(QWidget *w, const QString &name) {
 	const QString path = QString("%1/%2-%3.png")
@@ -336,6 +339,42 @@ static void measure(QWidget *dlg, const QString &name) {
 				            .arg(l->text().left(24)).arg(l->height()).arg(wants);
 		}
 	}
+	// **And the same fault pointed the other way: a label too narrow for its
+	// text.** The check above finds a wrapped paragraph given more height than
+	// it needs. This finds a *non*-wrapped label given less width than it
+	// needs, which is the one a person actually loses information to -- the
+	// text is simply cut, or elided to an ellipsis, and the end of the sentence
+	// is gone. Neither the width floor nor the button check can see it: a label
+	// inside a scroll area can be cut without the dialog getting any wider, and
+	// it is not a button.
+	//
+	// Wrapped labels are skipped because the check above owns them, and four
+	// pixels of slack because Qt rounds font metrics and a hint one pixel over
+	// the width is arithmetic rather than a defect.
+	int clipped = 0;
+	QStringList cutlabels;
+	for (QLabel *l : dlg->findChildren<QLabel *>()) {
+		if (!l->isVisible() || l->wordWrap() || l->text().trimmed().isEmpty())
+			continue;
+		if (l->objectName() == "empty_state")
+			continue;
+		const QSize hint = l->sizeHint();
+		if (hint.height() > l->height())
+			continue;               // wrapping in practice, whatever it says
+		++g_labels_measured;
+		if (hint.width() > l->width() + 4) {
+			++clipped;
+			if (cutlabels.size() < 3)
+				cutlabels << QString("\"%1\" (%2 of %3)")
+				               .arg(l->text().simplified().left(28))
+				               .arg(l->width()).arg(hint.width());
+		}
+	}
+	verdict(clipped == 0, clipped == 0
+	          ? QString("%1: and no label is cut off").arg(name)
+	          : QString("%1: %2 label(s) cut off -- %3")
+	                .arg(name).arg(clipped).arg(cutlabels.join("; ")));
+
 	verdict(stretched == 0, stretched == 0
 	          ? QString("%1: and no paragraph is absorbing spare height")
 	                .arg(name)
@@ -631,5 +670,11 @@ int main(int argc, char *argv[]) {
 	}
 
 	std::printf("\n%d image(s) in %s\n", g_shots, qPrintable(g_out));
+	// The same reasoning as the dialog floor above, for the check added last:
+	// "no label is cut off" is worth exactly as much as the number of labels it
+	// looked at, and that number belongs beside the verdict rather than in
+	// somebody's assumption.
+	std::printf("%d label(s) measured against their own width\n",
+	             g_labels_measured);
 	return shell::report();
 }
