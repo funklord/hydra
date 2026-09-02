@@ -551,6 +551,17 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	         [this](const QWebEngineDesktopMediaRequest &request) {
 		const QUrl origin = m_page ? m_page->url() : QUrl();
 		const bool debug = qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG");
+		// **Every step says so, because this path has four places to stop and
+		// three of them look identical from the page: the promise simply never
+		// settles.** Reported as "shows the picker, but then, no error,
+		// nothing", which is a description of exactly that ambiguity.
+		if (debug) {
+			auto *sm = request.screensModel();
+			auto *wm = request.windowsModel();
+			qWarning("capture: getDisplayMedia from %s, %d screen(s), %d window(s)",
+			          qPrintable(origin.toString()),
+			          sm ? sm->rowCount() : -1, wm ? wm->rowCount() : -1);
+		}
 
 		// **Cancelled on every path that is not a choice**, including the ones
 		// that look like nothing happening: no chooser installed, a refusal from
@@ -604,12 +615,19 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 					return;
 				}
 				if (debug)
-					qWarning("capture: sharing %s row %d",
-					          is_screen ? "screen" : "window", row);
+					qWarning("capture: selecting %s row %d of %d",
+					          is_screen ? "screen" : "window", row,
+					          model->rowCount());
 				if (is_screen)
 					request.selectScreen(at);
 				else
 					request.selectWindow(at);
+				// **Said after the call, not before.** "About to select" and
+				// "selected" are the same line to a reader and different facts:
+				// if the engine throws this away, the difference between them is
+				// the whole diagnosis.
+				if (debug)
+					qWarning("capture: selection handed to the engine");
 			});
 		});
 	});
