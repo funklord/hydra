@@ -27,6 +27,7 @@
 #include <QHash>
 #include <QApplication>
 #include <QDialog>
+#include <QLabel>
 #include <QTreeView>
 #include <QDir>
 #include <QEventLoop>
@@ -49,6 +50,12 @@ static int     g_missed = 0;   // surfaces that would not grab
 // presses the key and gets the wrong button. And a **window title**, because a
 // dialog without one appears in the task switcher as an empty entry.
 static int g_problems = 0;
+// **What the audit actually looked at.** Zero problems over zero widgets reads
+// exactly like zero problems over four hundred, and only one of those is a
+// result -- the same trap as a capture run that photographed nothing. The
+// counts are printed with the verdict so the verdict means something.
+static int g_buttons_seen = 0;
+static int g_labels_seen  = 0;
 static void audit(QWidget *w, const QString &name) {
 	if (!w)
 		return;
@@ -67,6 +74,7 @@ static void audit(QWidget *w, const QString &name) {
 	for (QAbstractButton *b : w->findChildren<QAbstractButton *>()) {
 		if (!b->isVisible())
 			continue;
+		++g_buttons_seen;
 		const QString t = b->text();
 		const int amp = t.indexOf('&');
 		if (amp < 0 || amp + 1 >= t.size())
@@ -79,6 +87,36 @@ static void audit(QWidget *w, const QString &name) {
 			++g_problems;
 		} else {
 			claimed.insert(key, t);
+		}
+	}
+
+	// **Text that does not fit the space it was given.** A label narrower than
+	// its own `sizeHint()` is drawn cut off or elided, which is the exact
+	// failure this driver exists to catch and the one no structural check can:
+	// the label is present, correctly worded and in the right place, and the
+	// half a person needs is not on screen.
+	//
+	// Word-wrapped labels are skipped, because for them a narrow width is the
+	// point -- they grow taller instead. So are empty ones, and any label whose
+	// height already exceeds one line, which is a wrapped paragraph however it
+	// was configured.
+	//
+	// **A margin of four pixels rather than one.** Qt rounds font metrics, and
+	// a hint one pixel over the width is not a cut-off label, it is arithmetic.
+	// The first pass of this reported nine surfaces and every one of them was
+	// rounding, which is how an audit teaches people to ignore it.
+	for (QLabel *l : w->findChildren<QLabel *>()) {
+		if (!l->isVisible() || l->wordWrap() || l->text().trimmed().isEmpty())
+			continue;
+		++g_labels_seen;
+		const QSize hint = l->sizeHint();
+		if (hint.height() > l->height())
+			continue;               // already wrapping, whatever it says
+		if (hint.width() > l->width() + 4) {
+			std::printf("    ! %s: \"%s\" needs %dpx and has %d\n",
+			             qPrintable(name), qPrintable(l->text().simplified()),
+			             hint.width(), l->width());
+			++g_problems;
 		}
 	}
 }
@@ -295,8 +333,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	std::printf("\n%d image(s) in %s\n", g_shots, qPrintable(g_out));
-	std::printf("%d problem(s) found by the audit of %d surface(s)\n",
-	             g_problems, g_shots);
+	std::printf("%d problem(s) found by the audit of %d surface(s), "
+	             "%d button(s) and %d label(s)\n",
+	             g_problems, g_shots, g_buttons_seen, g_labels_seen);
 
 	// **A run that photographed nothing is a failed run, not a clean one.**
 	//
