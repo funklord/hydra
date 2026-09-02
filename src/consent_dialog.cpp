@@ -2,6 +2,7 @@
 
 #include "consent_blocker.h"
 #include "empty_state.h"
+#include "flow_layout.h"
 
 #include <QDialogButtonBox>
 #include <QHeaderView>
@@ -48,12 +49,30 @@ consent_dialog::consent_dialog(consent_blocker *blocker, const QString &rules_pa
 	m_status->setWordWrap(true);
 	outer->addWidget(m_status);
 
-	auto *buttons = new QDialogButtonBox;
-	m_reject = buttons->addButton("This button &refuses",
-	                               QDialogButtonBox::ActionRole);
-	m_accept = buttons->addButton("This button &accepts",
-	                               QDialogButtonBox::ActionRole);
-	buttons->addButton(QDialogButtonBox::Close);
+	// **The two teaching buttons on their own row, in a `flow_layout`.**
+	//
+	// They were `ActionRole` buttons in the same `QDialogButtonBox` as Close,
+	// which lays three buttons in one line and, when the space runs short,
+	// squeezes every child equally. Their labels are sentences rather than
+	// words -- they have to be, because the button *is* the instruction -- so
+	// on a 360-pixel screen the box would not go below 389 and both of them
+	// came out 123 pixels wide against labels needing 137 and 138. A button
+	// reading "This button &refus" is not a button anybody can use, and the
+	// dialog could not be made narrow enough to fit the phone at all.
+	//
+	// `flow_layout` wraps instead of squeezing, which is the same repair
+	// `downloads_dialog` and `settings_dialog` already made for the same
+	// reason. Close stays in its own box below: it is leaving rather than
+	// teaching, and separating them says so. On a desktop the two still sit on
+	// one line exactly as before.
+	auto *row = new flow_layout;
+	m_reject = new QPushButton("This button &refuses", this);
+	m_accept = new QPushButton("This button &accepts", this);
+	row->addWidget(m_reject);
+	row->addWidget(m_accept);
+	outer->addLayout(row);
+
+	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 	connect(m_reject, &QPushButton::clicked, this,
 	         [this] { setProperty("as", "reject"); on_accept_selected(); });
