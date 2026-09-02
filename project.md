@@ -14163,6 +14163,86 @@ error to its own stderr. **Check the artifact, not the thing that generates it**
 is this project's own rule and it was broken by the person who keeps writing it
 down.
 
+## The screen-share picker works, and Qt throws the answer away
+
+Reported from the desktop: "desktop sharing at least shows the picker, but
+then, no error, nothing". The picker is ours, so the fault looked like ours,
+and the first guess was that two nested modal `exec()` loops -- the shield's
+prompt, because `screen_share` defaults to `ask`, and then the picker inside
+it -- were running in a callback the engine was waiting on.
+
+That guess was wrong, and the reason it took so long to find out is the part
+worth recording: **there was no way to run the thing here.** No display, so
+every round of this cost a message to the copyright holder describing
+symptoms. The first fix was therefore not to the browser but to the harness --
+`xvfb` installed, and `test/live/try_share.cpp` written to stand the real
+shell up, call `getDisplayMedia` from a synthesised click, and answer its own
+dialogs from a timer, which still fires inside a nested modal loop and so can
+reach the case in question.
+
+Its cases are cut where the *dialogs* differ rather than where the outcomes
+do: `allow` reaches the picker with no prompt in front of it, `ask` opens the
+prompt and the picker inside it, and a third case replaces the chooser
+entirely and answers from the callback with no dialog anywhere. Same request,
+same row, same `selectScreen` -- so the set measures the nesting instead of
+arguing about it.
+
+It measured it, and the answer was no. Every variant fails identically:
+
+| answered | result |
+| --- | --- |
+| from inside two nested modal loops | `NotAllowedError` |
+| from inside one modal loop | `NotAllowedError` |
+| from the callback, no dialog at all | `NotAllowedError` |
+| synchronously, inside the signal handler | `NotAllowedError` |
+| from a zero-timer, after the handler returns | `NotAllowedError` |
+| after waiting 1 s, 3 s, 6 s | `NotAllowedError` |
+
+**And it is not our code.** Sixty lines of plain Qt, with nothing of hydra's
+linked, fail the same way. Under the hood Chromium says what it thinks:
+
+    MSM::HandleAccessRequestResponse(..., {result=INVALID_STATE})
+    MSM::FinalizeRequestFailed(..., {result=INVALID_STATE})
+
+`INVALID_STATE`, not `PERMISSION_DENIED` -- nothing refused it. The X11
+capturer had already picked the source (`XRandR selected source: 369`) by the
+time the request was thrown away.
+
+**Nor is it the machine, and that took two controls rather than one.** The
+first ran real Chromium with `--auto-select-desktop-capture-source`, which got
+a stream -- but that flag *bypasses* `DesktopMediaList`, which is the
+component under suspicion, so it proved only that the capturer works. The
+second drove Chromium's own picker: click, "Entire Screen", the thumbnail,
+Share. It listed sources, drew a live thumbnail, and handed the page
+`stream:1:screen:369:0` -- the same XRandR source 369 Qt names before failing.
+Same display, same list, same capturer, human-equivalent clicks, a working
+stream.
+
+So the path works for Chromium and not through Qt's wrapper of it. Two Qt
+versions were tried, the second extracted from backports into a private prefix
+rather than installed:
+
+| Qt WebEngine | Chromium | page sees | internally |
+| --- | --- | --- | --- |
+| 6.8.2 (installed) | 122 | `NotAllowedError` | `INVALID_STATE` |
+| 6.10.2 (backports) | 134 | `AbortError` | `INVALID_STATE` |
+
+Only the name Blink puts on it changed. **Upgrading does not fix this.**
+
+Everything else was eliminated too: neither `permissionRequested` nor the
+deprecated `featurePermissionRequested` is emitted for display capture, so
+there is no permission left ungranted; `--auto-select-desktop-capture-source`
+is not honoured by Qt; and `windowsModel()` never populates at all -- zero
+windows after six seconds, with a window manager running and windows mapped,
+while Chromium's own picker lists them.
+
+The conclusion is that `QWebEngineDesktopMediaRequest` is broken on this
+platform in both versions available to us, and that hydra's handler is
+correct: it selects a valid index from the request's own model and hands it
+over, which is exactly what the documentation asks for. The driver stays
+because it now fails for a reason outside this tree, and will pass the day
+that stops being true.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
