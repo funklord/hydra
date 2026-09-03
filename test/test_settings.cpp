@@ -974,9 +974,21 @@ int main(int argc, char **argv) {
 		      "the device build fingerprint goes too — real Chrome does not "
 		      "send it, and it identifies the handset more precisely than any "
 		      "site needs");
-		check(wout.contains("Linux; Android 15; SM-F926B"),
-		      "while the platform and the model survive, because that part is "
-		      "true and Chrome sends it");
+		// **This asserted the opposite, on a belief that turned out to be
+		// false.** It said the model survives "because that part is true and
+		// Chrome sends it". Chrome does not. Measured on the handset this
+		// string was taken from, an Android 15 SM-F926B, Chrome announces
+		// `Mozilla/5.0 (Linux; Android 10; K) ...` -- both frozen by its
+		// user-agent reduction, because the pair identifies a phone far more
+		// precisely than a site needs. Keeping them made hydra the only thing
+		// on that phone announcing them.
+		check(wout.contains("Linux; Android 10; K"),
+		      "the android version and model are frozen, as Chrome freezes "
+		      "them — a fingerprint removed and a difference from Chrome "
+		      "closed at once");
+		check(!wout.contains("SM-F926B") && !wout.contains("Android 15"),
+		      "and the real handset is not announced by the one browser on it "
+		      "that used to");
 		check(wout.contains("Chrome/140.0.0.0") && wout.contains("Mobile Safari/537.36"),
 		      "and what is left is shaped exactly like Chrome on Android");
 		check(!wout.contains("  ") && !wout.contains(" )"),

@@ -74,6 +74,30 @@ inline QString corrected(const QString &qt_default,
 	ua.remove(QStringLiteral("; wv"));
 	ua.remove(QRegularExpression(QStringLiteral("Version/[0-9.]+ ")));
 
+	// **The Android version and the model are frozen, because that is what
+	// Chrome sends.**
+	//
+	// This used to keep them, on the stated grounds that they are true and
+	// Chrome sends them. The second half was wrong, and measuring it was one
+	// request: Chrome on the handset this was written for -- an Android 15
+	// SM-F926B -- announces
+	//
+	//     Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 ...
+	//
+	// Android 10 and a model of "K" are placeholders. Chrome froze both in its
+	// user-agent reduction, for the same reason it froze the version tail: the
+	// pair identifies a handset far more precisely than any site needs, and a
+	// foldable model number is close to a name. Sending the real ones made this
+	// browser the only thing on the phone announcing them.
+	//
+	// So it is a fingerprint removed and a difference from Chrome closed at the
+	// same time, which is the whole of what this function is for. Idempotent
+	// like the removals above -- run over a string that already says
+	// "Android 10; K" it matches and rewrites it to itself -- and scoped to
+	// strings that carry an Android platform, so a desktop one passes through.
+	ua.replace(QRegularExpression(QStringLiteral("Android [0-9.]+; [^)]+")),
+	            QStringLiteral("Android 10; K"));
+
 	// **The whole version, not just the major.** Replacing only the major left
 	// `Chrome/140.0.6261.171` -- 140 wearing Chromium 122's build numbers, a
 	// combination that has never shipped and is a worse fingerprint than the
