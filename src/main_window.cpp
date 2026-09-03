@@ -224,6 +224,51 @@ QIcon weighted_icon(const QIcon &src, const QPalette &pal) {
 }
 
 QIcon themed_icon(const QStringList &names, QStyle *st,
+                   QStyle::StandardPixmap fallback);
+
+// **Ours first, and that is the whole point of the argument.**
+//
+// Every icon on this toolbar used to be asked of the host icon theme, with a
+// Qt standard pixmap behind it. That gives a different toolbar on every
+// machine -- and on some machines no icon at all. The shield fell back to
+// `SP_VistaShield`, a Windows standard pixmap that comes back empty on Linux
+// styles; the key fell back to `SP_CustomBase`, which is explicitly a null
+// icon. Reported as "we have no shield icons here", which is exactly what
+// those two produce on a desktop whose theme happens not to carry
+// `security-high` or `dialog-password`.
+//
+// So the bundled svg decides. The theme names stay behind it rather than being
+// deleted: they cost nothing, they still answer for any caller that passes no
+// bundled name, and they document what each icon is *for* in a vocabulary
+// somebody can look up. But they no longer decide what the toolbar looks like,
+// because that is the thing that was different on every host.
+QIcon themed_icon(const QString &bundled, const QStringList &names, QStyle *st,
+                   QStyle::StandardPixmap fallback) {
+	if (!bundled.isEmpty()) {
+		const QIcon ours(QStringLiteral(":/ui/%1.svg").arg(bundled));
+		// **Asked for a pixmap, not for a list of sizes.**
+		//
+		// `isNull` alone is not enough -- QIcon accepts a path that resolves to
+		// nothing and still reports a non-null icon, which is how a mistyped
+		// resource draws an empty toolbar and says nothing. But
+		// `availableSizes()` is the wrong second question here: an svg is
+		// scalable and has no fixed sizes, so it comes back empty for an icon
+		// that is perfectly good. That check rejected all ten of these and
+		// printed "missing from the resources" about files that were sitting
+		// in the binary, which is a guard telling a lie rather than catching
+		// one.
+		//
+		// Rendering one pixmap answers what the caller actually needs to know:
+		// something can be drawn.
+		if (!ours.isNull() && !ours.pixmap(24, 24).isNull())
+			return weighted_icon(ours, QApplication::palette());
+		qWarning("icon: :/ui/%s.svg did not render; is Qt Svg present?",
+		          qPrintable(bundled));
+	}
+	return themed_icon(names, st, fallback);
+}
+
+QIcon themed_icon(const QStringList &names, QStyle *st,
                    QStyle::StandardPixmap fallback) {
 	// Weighted on the way out, so every icon on this toolbar gets the same
 	// treatment rather than one of them being adjusted by hand. The palette is
@@ -687,7 +732,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	bar->addAction(back_act);
 	bar->addAction(fwd_act);
 	bar->addAction(reload_act);
-	m_drawer_action->setIcon(themed_icon({ "view-list-symbolic", "view-list-details",
+	m_drawer_action->setIcon(themed_icon("drawer", { "view-list-symbolic", "view-list-details",
 		                                      "format-justify-fill" }, style(),
 		                                    QStyle::SP_FileDialogDetailedView));
 	m_drawer_action->setStatusTip("Show or hide the tab tree");
@@ -695,9 +740,9 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(m_drawer_action, &QAction::triggered, this,
 	         [this] { set_drawer_open(!m_drawer_open); });
 
-	back_act->setIcon(themed_icon({ "go-previous" }, style(), QStyle::SP_ArrowBack));
-	fwd_act->setIcon(themed_icon({ "go-next" }, style(), QStyle::SP_ArrowForward));
-	reload_act->setIcon(themed_icon({ "view-refresh" }, style(),
+	back_act->setIcon(themed_icon("back", { "go-previous" }, style(), QStyle::SP_ArrowBack));
+	fwd_act->setIcon(themed_icon("forward", { "go-next" }, style(), QStyle::SP_ArrowForward));
+	reload_act->setIcon(themed_icon("reload", { "view-refresh" }, style(),
 	                                 QStyle::SP_BrowserReload));
 	back_act->setToolTip("Back");
 	fwd_act->setToolTip("Forward");
@@ -757,7 +802,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// until something is detected -- detection is progressive, so it fades in a
 	// beat after load rather than being present and empty (sec 11.3).
 	m_media_action = bar->addAction("Media");
-	m_media_action->setIcon(themed_icon({ "applications-multimedia",
+	m_media_action->setIcon(themed_icon("media", { "applications-multimedia",
 		                                     "media-playback-start" }, style(),
 		                                   QStyle::SP_MediaPlay));
 	m_media_action->setToolTip("Watch or download media on this page");
@@ -775,7 +820,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// its word, which is what the whole toolbar did until today. An icon-only
 	// button with nothing behind it would be worse than the text ever was.
 	m_key_action = bar->addAction("Key");
-	m_key_action->setIcon(themed_icon({ "dialog-password", "password" }, style(),
+	m_key_action->setIcon(themed_icon("key", { "dialog-password", "password" }, style(),
 	                                   QStyle::SP_CustomBase));
 	// An icon needs this in a way a word did not: with the label gone, the
 	// tooltip is the only thing that says what the button is.
@@ -818,7 +863,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// button nobody presses while annoyed, which is the only time it is worth
 	// pressing. See annoyance_log.h.
 	m_annoyed_action = bar->addAction("Annoyed");
-	m_annoyed_action->setIcon(themed_icon({ "face-angry", "face-sad",
+	m_annoyed_action->setIcon(themed_icon("annoyed", { "face-angry", "face-sad",
 		                                       "emblem-important" }, style(),
 		                                     QStyle::SP_MessageBoxWarning));
 	m_annoyed_action->setToolTip("Something got through here");
@@ -834,7 +879,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// console message, nothing in the request log, just a player that does not
 	// start. Hidden again the moment it is answered.
 	m_confirm_action = bar->addAction("Still working?");
-	m_confirm_action->setIcon(themed_icon({ "face-smile", "dialog-question",
+	m_confirm_action->setIcon(themed_icon("confirm", { "face-smile", "dialog-question",
 		                                       "emblem-default" }, style(),
 		                                     QStyle::SP_MessageBoxQuestion));
 	m_confirm_action->setToolTip("New rules were applied here — did they break "
@@ -844,7 +889,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	         &main_window::confirm_rules);
 
 	QAction *shield_act = bar->addAction("Shield");
-	shield_act->setIcon(themed_icon({ "security-high", "security-medium",
+	shield_act->setIcon(themed_icon("shield", { "security-high", "security-medium",
 		                                 "channel-secure" }, style(),
 		                               QStyle::SP_VistaShield));
 	shield_act->setToolTip("Site controls");
@@ -3275,12 +3320,12 @@ void main_window::set_loading(bool loading) {
 	if (loading) {
 		m_reload_action->setText("&Stop");
 		m_reload_action->setToolTip("Stop loading");
-		m_reload_action->setIcon(themed_icon({ "process-stop" }, style(),
+		m_reload_action->setIcon(themed_icon("stop", { "process-stop" }, style(),
 		                                      QStyle::SP_BrowserStop));
 	} else {
 		m_reload_action->setText("&Reload");
 		m_reload_action->setToolTip("Reload");
-		m_reload_action->setIcon(themed_icon({ "view-refresh" }, style(),
+		m_reload_action->setIcon(themed_icon("reload", { "view-refresh" }, style(),
 		                                      QStyle::SP_BrowserReload));
 	}
 }

@@ -27,4 +27,31 @@
     <file>hydra-128.png</file>
     <file>hydra-256.png</file>
   </qresource>
+  <!-- The toolbar's own icons, and the reason they exist is uniformity.
+
+       Every one of these was previously asked of the host icon theme, with a
+       Qt standard pixmap behind it. That gives a different toolbar on every
+       machine, and on some machines no toolbar icon at all: the shield fell
+       back to SP_VistaShield, which is a Windows standard pixmap and comes
+       back empty on Linux styles, and the key fell back to SP_CustomBase,
+       which is explicitly a null icon. Reported as "we have no shield icons
+       here", which is exactly what that produces.
+
+       A separate prefix from /icon, which holds the application's own marks
+       at fixed sizes. These are interface furniture and scale, so they are
+       svg. Deliberately not /icons, which is Qt's conventional place for an
+       icon THEME inside resources; this is not a theme and should not be
+       mistaken for one by anything that goes looking. -->
+  <qresource prefix="/ui">
+    <file alias="back.svg">ui/back.svg</file>
+    <file alias="forward.svg">ui/forward.svg</file>
+    <file alias="reload.svg">ui/reload.svg</file>
+    <file alias="stop.svg">ui/stop.svg</file>
+    <file alias="drawer.svg">ui/drawer.svg</file>
+    <file alias="media.svg">ui/media.svg</file>
+    <file alias="key.svg">ui/key.svg</file>
+    <file alias="shield.svg">ui/shield.svg</file>
+    <file alias="annoyed.svg">ui/annoyed.svg</file>
+    <file alias="confirm.svg">ui/confirm.svg</file>
+  </qresource>
 </RCC>
