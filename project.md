@@ -14420,6 +14420,69 @@ that it compiles clean, that `make jni` resolves all sixteen native methods,
 that the vendored template matches the kit, and that the measurement above was
 taken on the device with the shim in place.
 
+## The session reader gets nothing out of what Chromium now writes
+
+`test_session` went red on this machine, on the one assertion in it that reads
+a real Chromium profile rather than a fixture:
+
+    FAIL  a live session replays to open tabs (0, no open tabs found ...)
+    FAIL  and every one is a valid address with a label (0 of 0)
+
+**It is not a regression here and it was not caused by anything in this
+session.** The assertion has stood since 2026-08-24 and nothing has touched
+`session_import` since `2f0c40a`. What changed is the input: the newest file
+in `~/.config/chromium/Default/Sessions` was written at 23:03 the night
+before, and the reader gets nothing out of it.
+
+**The first reading was wrong and the second is only half an answer.** "No
+open tabs" is what a browser quit with everything closed looks like, and that
+is what this was taken for. The message could not tell that from a reader that
+had stopped parsing, so `replay_snss` now says which:
+
+| file | size | tabs |
+| --- | --- | --- |
+| `Tabs_13432942289284066` | 93.7 MB | 0, no tab records |
+| `Session_13432942284634057` (newest) | 218 KB | 0, **no tab records** |
+| `Session_13432932176989310` | 146 KB | **1** |
+| `Tabs_13432932146247859` | 93.7 MB | 0, no tab records |
+
+Measured with a fifteen-line probe linking this tree's own
+`session_import.o`, because the suite only ever asks about the newest file and
+the question is what the reader does with the others. So it is not an empty
+session: the file before it, on the same machine, replays to a tab. The reader
+gets **no records at all** out of what this Chromium wrote last, and none out
+of the 93 MB `Tabs_*` files either.
+
+**What that is, is open.** Chromium 122 and later split the store, and the
+obvious hypothesis is that the tab navigation records this reader looks for
+have moved out of `Session_*`. The 93 MB `Tabs_*` files yielding nothing to
+the same reader is consistent with that and does not establish it -- those may
+be the tab-restore store for *closed* tabs, which is a different thing again,
+and nothing here has read Chromium's source to find out. Two files disagreeing
+is a fact; which command ids moved where is not, and guessing it is how a
+parser acquires a second wrong model.
+
+**The message is the part that is fixed**, and it paid for itself inside a
+minute: "no open tabs found in the Chromium session" became either "no tab
+records" or "N tab record(s), none still open". That is the difference between
+a fact about the machine and a defect in the reader, and the suite's own
+failure line now says which one it met.
+
+**A skip was written for it and then removed**, which is worth recording
+because the skip was the tempting move. The first repair let the test skip
+when the reader reported records but none open -- a skip a broken reader
+cannot reach, so not vacuous, and it would have been the right shape had the
+diagnosis been right. It was not: the message that came back said *no
+records*, so the skip never fired and the suite stayed red. Shipping it would
+have left a branch nothing has ever taken, excusing a cause that turned out
+not to be the cause. The red stands, because it is reporting something true.
+
+**Left for the copyright holder**, since it is a question about what this
+importer is supposed to read on a current Chromium rather than a bug with an
+obvious repair: the session importer is one of the two `try_import` covers,
+and what it should do about the split store is a design answer rather than a
+patch.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

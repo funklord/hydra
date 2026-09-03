@@ -536,8 +536,26 @@ QList<imported_tab> replay_snss(const QByteArray &file, QString *error) {
 	QList<imported_tab> out;
 	for (const auto &o : ordered)
 		out << o.second;
+	// **Say which of the two empties this is.** A session Chromium closed with
+	// nothing open, and a reader that got nothing out of the file, both end
+	// here with no tabs; one is a fact about the machine and the other is a
+	// defect, and "no open tabs found" cannot tell them apart. `tabs` is what
+	// was replayed before any of the still-open filtering, so its count is
+	// exactly the discriminator -- a reader that parsed nothing cannot report
+	// records.
+	//
+	// It earned itself immediately. `test_session`'s live-replay assertion
+	// went red here and the obvious reading was a browser quit with no tabs;
+	// with this message it says **no tab records** for the newest session
+	// file, while the file written before it on the same machine replays to
+	// one. So the reader gets nothing out of what this Chromium now writes,
+	// which is a different problem and not one a closed browser explains.
 	if (out.isEmpty() && error)
-		*error = "no open tabs found in the Chromium session";
+		*error = tabs.isEmpty()
+		    ? QStringLiteral("no tab records in the Chromium session")
+		    : QStringLiteral("no open tabs in the Chromium session "
+		                      "(%1 tab record(s), none still open)")
+		          .arg(tabs.size());
 	return out;
 }
 
