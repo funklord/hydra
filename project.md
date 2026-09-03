@@ -13627,6 +13627,38 @@ different reason above. Two lessons kept rather than one: a dump that returns
 fewer nodes than the last one is suspect before the code is, and a hand test from
 somebody looking at the screen outranks any of this.
 
+**And "the instrument failed" may be too comfortable an ending.** Signalled by
+the beerssh session 2026-09-04, from the same handset: verifying a keyboard fix
+there, `dumpsys input_method` reported `mInputShown` false while a screenshot of
+the same screen plainly showed the keyboard up, with
+`HIDE_SAME_WINDOW_FOCUSED_WITHOUT_EDITOR` in logcat beside it. Their reading is
+that if Qt's bridge is not reporting an **editor** to the framework, Android has
+no editor to call shown -- and that the same missing bridge would make a
+`uiautomator dump` come back stale. Two instruments, two Qt Widgets
+applications, one phone, both wrong on the axis that needs an accessibility
+node.
+
+Their claim, not this tree's measurement, and neither of us has shown a missing
+editor node: what exists is a hypothesis with two consistent observations under
+it. It is recorded because of what it would mean if it holds. This entry closed
+an investigation on "the harness is flaky", which is exactly the ending
+`evidence.md` warns costs more than no ending at all -- nobody keeps looking
+after it. The alternative reading has both observations as one fault, and it is
+in this program rather than in the tools pointed at it.
+
+**And the population is the one already recorded two sections up.** A Qt Widgets
+application aborting on Android whenever it opened a secondary window turned out
+to need an **accessibility service running**, and the lesson written there is
+that narrowing a condition can make a finding worse: TalkBack is an
+accessibility service, so the affected people are not those with an odd launcher
+but those who need the screen described to them. A browser whose address bar no
+accessibility service can find fails the same users, silently, and no test here
+would notice.
+
+**What would settle it costs one person and no code**: turn TalkBack on and try
+to reach the address bar. If a screen reader cannot find the editor, the bridge
+is the fault and both instruments were telling the truth.
+
 ## The standing answer: request desktop site as a site rule
 
 The View menu's toggle is per tab and forgotten, which is right for a one-off
@@ -14626,7 +14658,26 @@ carried along as amendments to a list item.
    nothing, and would make the real cause harder to find by removing the
    symptom's only witness.
 
-3. **The loop works on a disguised manifest; make it work on a noisy capture.**
+3. **Can a screen reader use this browser on Android?** Nobody has asked, and
+   there is now a reason to. *A note on measuring this, because it wasted an
+   hour* closed on "the instrument failed, not the program"; the beerssh
+   session has since hit a second instrument failing on the same axis on the
+   same phone -- `mInputShown` false against a screenshot showing the keyboard
+   up, with `HIDE_SAME_WINDOW_FOCUSED_WITHOUT_EDITOR` beside it -- and their
+   reading is a Qt accessibility bridge that reports no editor to the
+   framework. Unestablished, theirs rather than this tree's, and it costs one
+   person and no code to settle: turn TalkBack on and try to reach the address
+   bar.
+
+   It goes on this list rather than into the log because of who is in the
+   condition. The entry about an accessibility service aborting a Qt Widgets
+   application already records that narrowing a condition can make a finding
+   worse -- TalkBack *is* an accessibility service, so the people affected are
+   the ones who need the screen described to them. If the address bar cannot
+   be reached that way the browser is unusable for them, and nothing here
+   would report it.
+
+4. **The loop works on a disguised manifest; make it work on a noisy capture.**
    Three runs in five on dramafren now return `url.includes('cf-master')` — a
    stable fragment, no tokens, the master manifest on a site with no `.m3u8`
    anywhere. That is the case the whole content-type tier exists for and the
@@ -14697,19 +14748,19 @@ carried along as amendments to a list item.
    stream to be found. The line that used to sit here saying otherwise was
    stale.
 
-4. **Nothing has needed the helper tier's DOM half, and two captures is two.**
+5. **Nothing has needed the helper tier's DOM half, and two captures is two.**
    The decision is made and recorded -- the permission is gone and the design
    stays, in arch §11.5.1 and in the section above. What keeps this on the list
    is that "nothing has needed it" rests on two measured sites, both of which
    had the stream in the request log. A third site that computes its address in
    page JS would reopen it, and there is no way to know without meeting one.
 
-5. **An indicator for the AI batch jobs.** Recorded, not designed — see
+6. **An indicator for the AI batch jobs.** Recorded, not designed — see
    *Wanted: an indicator for the AI batch jobs* above for the requirement and
    the four questions that have to be answered before any of it is built. It
    comes after the browser is a browser, on the holder's instruction.
 
-6. **Android's remaining gap is the platform's autofill, and only the runtime
+7. **Android's remaining gap is the platform's autofill, and only the runtime
    half is now unverified.** The four code-level preconditions are checked and
    met — see *Two searches that found the code correct* above — and the test
    handset has an autofill service configured, so the emulator's excuse is
@@ -14728,7 +14779,7 @@ carried along as amendments to a list item.
    the browser's side of the arrangement is verified. Only the fill itself is
    open.
 
-7. **Most of what is left untested needs a network or a device — but that
+8. **Most of what is left untested needs a network or a device — but that
    sentence has been wrong once and will be again.** The sweep through
    never-tested files is finished — see the sections above; four of nine were
    wrong. The line that used to sit here said the remaining dialogs were covered
@@ -14758,7 +14809,7 @@ carried along as amendments to a list item.
    thin adapters around it, which need a page rather than a fixture, and are
    driven through the shell by the live drivers instead.
 
-8. **Whether a `file:` url should open as a page is still open, and is the
+9. **Whether a `file:` url should open as a page is still open, and is the
    copyright holder's.** The littering half is fixed — see *The url no longer
    becomes a directory* above — so what remains is only the question the fix
    deliberately did not answer: `main.cpp` classifies `file:` as a tree path,
@@ -14769,7 +14820,7 @@ carried along as amendments to a list item.
    instead. The distinction that would preserve the recorded intent exactly is
    the scheme rather than the path: `./tree.txt` has none, `file:` always did.
 
-9. **CI skips one check for want of an icon theme.** `test_theme`'s
+10. **CI skips one check for want of an icon theme.** `test_theme`'s
    system-icon-directory assertion has nothing to look at in the
    `debian:trixie` container and says so rather than failing. Installing
    `hicolor-icon-theme` would make it run; that is one word in a dependency
@@ -14777,7 +14828,7 @@ carried along as amendments to a list item.
    theme is a test dependency rather than a build one. Left for whoever owns
    that list.
 
-10. **A node's url means two things at once, and rows can be internally
+11. **A node's url means two things at once, and rows can be internally
    inconsistent.** See *One field with two meanings* above: the title follows
    the page and the url does not, so a row can carry a title from one page and
    a url from another — measured. The obvious repair breaks the tab lock,
@@ -14786,7 +14837,7 @@ carried along as amendments to a list item.
    costs are in that section. The pin is now asserted in `test_model`, so the
    repair fails loudly rather than quietly.
 
-11. **KeePassXC support is broken and needs the account that has a working
+12. **KeePassXC support is broken and needs the account that has a working
    set up.** See *KeePassXC: the socket path, settled before the session that
    can test it* above. The socket path is fixed and ruled out for an ordinary
    desktop; what is untested is everything after it — framing, key exchange,
