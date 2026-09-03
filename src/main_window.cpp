@@ -987,17 +987,26 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	        [this](node *n) { if (n) open_url_externally(QUrl(n->url)); });
 	m_tree->expandAll();
 	connect(m_tree, &QTreeView::activated, this, &main_window::on_tree_activated);
-#ifdef Q_OS_ANDROID
 	// A tap is not a double-click, and `activated` is what a double-click emits
 	// on this style -- so on the device the tree looked responsive (rows
-	// highlighted) and opened nothing, with the status bar still reading
-	// "0 / 4 live" after several attempts. Touch gets `clicked` as well.
+	// highlighted) and opened nothing. Touch gets `clicked` as well, which is
+	// why this connection exists.
 	//
-	// Android only, deliberately: making a single click open a tab on the
-	// desktop would change a behaviour nobody asked to have changed.
+	// **It used to exist twice on Android.** A second, `#ifdef`-guarded copy
+	// was added on 2026-08-02 for that symptom, and this unconditional one had
+	// been here since 2026-07-29 -- so the handler ran twice per tap on the
+	// phone and once everywhere else. It was harmless, which is why nothing
+	// found it: `open_node` returns the view it already has for a node, so the
+	// second call reloaded nothing and only re-ran the idempotent tail.
+	//
+	// The comment the duplicate carried is the part worth keeping as a
+	// warning. It said the connection was "Android only, deliberately", on the
+	// grounds that a single click opening a tab on the desktop would change a
+	// behaviour nobody asked to change -- and a single click had been opening
+	// a tab on the desktop for four days by then. A claim about what a change
+	// avoids, written without checking whether the thing it avoids was already
+	// true.
 	connect(m_tree, &QTreeView::clicked, this, &main_window::on_tree_activated);
-#endif
-	connect(m_tree, &QTreeView::clicked,   this, &main_window::on_tree_activated);
 
 	m_stack = new QStackedWidget(this);
 	m_placeholder = new QLabel("Select a tab from the tree", this);
