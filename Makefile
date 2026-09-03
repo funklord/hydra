@@ -527,7 +527,16 @@ android: android-build
 android-build: android-check
 	@test -d "$(ANDROID_NDK_ROOT)" || { echo "no NDK at $(ANDROID_NDK_ROOT)"; exit 2; }
 	@test -d "$(ANDROID_SDK_ROOT)" || { echo "no SDK at $(ANDROID_SDK_ROOT)"; exit 2; }
-	@test -d "$(JAVA_HOME)" || { echo "no JDK at $(JAVA_HOME) -- Gradle will not run on a JRE"; exit 2; }
+	@# **Asks for javac, because that is what the message is about.** This was
+	@# `test -d`, which a JRE passes -- a JRE is a directory -- so the one
+	@# cause it named was the one cause it could not detect, and it fired only
+	@# for a cause it did not name. `bin/javac` is absent from a JRE and from a
+	@# path that is not there, so the condition now covers both and the message
+	@# can say so honestly.
+	@test -x "$(JAVA_HOME)/bin/javac" || { \
+		echo "no JDK at $(JAVA_HOME): no bin/javac there." >&2; \
+		echo "  Either the path is wrong or it is a JRE; Gradle needs a JDK." >&2; \
+		exit 2; }
 	@mkdir -p $(ANDROID_BUILD_DIR)
 	cd $(ANDROID_BUILD_DIR) && \
 	  ANDROID_SDK_ROOT=$(ANDROID_SDK_ROOT) ANDROID_NDK_ROOT=$(ANDROID_NDK_ROOT) \
