@@ -241,11 +241,21 @@ for d in $drivers; do
 	case "$d" in
 		try_notify) prefix="dbus-run-session --" ;;
 	esac
+	# **HYDRA_SHOTS as well as HYDRA_TEST_OUT.** `try_look` writes its
+	# screenshots to `$HYDRA_SHOTS`, defaulting to `/tmp/hydra-look` -- a
+	# fixed path, so on any machine where somebody else ran it first it
+	# belongs to them and every grab fails. The sweep set only
+	# HYDRA_TEST_OUT, so that is exactly what happened here: `try_look`
+	# captured nothing, and until it grew a floor it said "done" and exited
+	# 0, so the sweep called it fine. Per-run and under $OUT, like everything
+	# else this sets.
 	if [ -n "${SWEEP_ONSCREEN:-}" ]; then
-		HYDRA_TEST_OUT="$OUT/$d.out" timeout "${SWEEP_TIMEOUT:-300}" \
+		HYDRA_TEST_OUT="$OUT/$d.out" HYDRA_SHOTS="$OUT/$d.shots" \
+			timeout "${SWEEP_TIMEOUT:-300}" \
 			$prefix "$BIN/$d" >"$log" 2>&1
 	else
 		QT_QPA_PLATFORM=offscreen HYDRA_TEST_OUT="$OUT/$d.out" \
+			HYDRA_SHOTS="$OUT/$d.shots" \
 			timeout "${SWEEP_TIMEOUT:-300}" $prefix "$BIN/$d" >"$log" 2>&1
 	fi
 	rc=$?
