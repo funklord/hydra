@@ -603,6 +603,23 @@ int main(int argc, char *argv[]) {
 				b->click();
 	}
 	spin(600);
+
+	// **The hint behind the drawer says nothing while the drawer is open.**
+	// It reads "the list of tabs is behind the button left of the address
+	// bar" -- advice to do the thing that has just been done -- and the drawer
+	// covers all but a strip of it, so what remained on screen at 360 pixels
+	// was "lress bar." floating beside the tree. Checked here rather than left
+	// to the photograph, because a clipped label is exactly what a person
+	// scanning a screenshot reads past.
+	{
+		QLabel *ph = f.window.findChild<QLabel *>("placeholder");
+		shell::check(ph && ph->text().isEmpty(),
+		              QString("window-drawer: the empty-page hint is silent "
+		                       "while the drawer covers it%1")
+		                .arg(ph && !ph->text().isEmpty()
+		                       ? QString(" -- says \"%1\"").arg(ph->text().simplified())
+		                       : QString()));
+	}
 	save(&f.window, "window-drawer");
 
 	// Back to a size the rest of the run expects to build dialogs against.

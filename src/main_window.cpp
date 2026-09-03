@@ -2190,11 +2190,7 @@ void main_window::update_layout_mode() {
 	// a tab from the tree" names a thing the window is not showing -- and the
 	// button that reveals it had just appeared, unexplained, in a toolbar the
 	// person had been using without it.
-	if (m_placeholder)
-		m_placeholder->setText(narrow
-		    ? "No tab open.\n\nThe list of tabs is behind the button left of "
-		       "the address bar."
-		    : "Select a tab from the tree");
+	refresh_placeholder_text();
 
 	if (narrow) {
 		// Out of the splitter and on top of the window. The stack then takes
@@ -2313,6 +2309,44 @@ bool main_window::handle_back() {
 	return false;
 }
 
+void main_window::refresh_placeholder_text() {
+	if (!m_placeholder)
+		return;
+
+	// **Nothing at all while the drawer is open, and the reason is not
+	// tidiness.** With no tab open the page area holds a hint saying "the list
+	// of tabs is behind the button left of the address bar". The drawer *is*
+	// that list and it covers the left of the window, so while it is open the
+	// sentence advises somebody to do the thing they have just done -- and
+	// only its right-hand end is still on screen to say so. Photographed at
+	// 360 pixels it read "lress bar." floating beside the drawer: not a label
+	// anybody can act on, and not obviously text at all.
+	//
+	// Emptied rather than hidden. `m_placeholder` is a page of `m_stack`, so
+	// its visibility belongs to the stack; calling `setVisible` on a stacked
+	// widget fights whichever page the stack means to show, and the failure
+	// would be a placeholder drawn over a live page rather than a clipped
+	// sentence beside a drawer. The text is what renders, so the text is what
+	// this changes.
+	//
+	// Not re-centred in the uncovered strip either: that strip is narrower
+	// than the sentence, and the sentence has nothing left to say while the
+	// drawer is open.
+	if (m_drawer_mode && m_drawer_open) {
+		m_placeholder->setText(QString());
+		return;
+	}
+	// **The empty page told people to use something that was not on screen.**
+	// At drawer width the tree is an overlay behind the drawer button, so
+	// "select a tab from the tree" names a thing the window is not showing --
+	// and the button that reveals it had just appeared, unexplained, in a
+	// toolbar the person had been using without it.
+	m_placeholder->setText(m_drawer_mode
+	    ? "No tab open.\n\nThe list of tabs is behind the button left of "
+	       "the address bar."
+	    : "Select a tab from the tree");
+}
+
 void main_window::set_drawer_open(bool open, bool animate) {
 	if (!m_drawer_mode || !m_sidebar)
 		return;
@@ -2335,6 +2369,10 @@ void main_window::set_drawer_open(bool open, bool animate) {
 		else if (!animate)
 			v->set_obscured(false);
 	}
+
+	// The hint behind the drawer is now both wrong and unreadable; see
+	// refresh_placeholder_text().
+	refresh_placeholder_text();
 
 	const int w = m_sidebar->width();
 	const int to = open ? 0 : -w;

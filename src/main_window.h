@@ -327,6 +327,10 @@ public:
 	// The empty-content message. It has to change with the layout: in drawer
 	// mode the tree it points at is not on screen.
 	QLabel          *m_placeholder = nullptr;
+	// What the empty page says, which depends on the layout mode and on
+	// whether the drawer is covering it. One place decides, because the two
+	// callers used to disagree about whether the drawer was open.
+	void refresh_placeholder_text();
 	bool             m_drawer_open = false;
 	QStackedWidget  *m_stack = nullptr;
 
