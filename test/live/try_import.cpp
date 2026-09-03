@@ -257,6 +257,17 @@ int main(int argc, char *argv[]) {
 					// tell a record that was kept from one that was merely
 					// still in memory.
 					const QString id = kept->id;
+					// **Read before the reload, because the reload frees it.**
+					// `tab_tree_model::load` does `delete m_root`, which takes
+					// every node in the old tree with it -- `carrier` among
+					// them. Comparing `again->history.index` against
+					// `carrier->history.index` afterwards was reading freed
+					// memory, and it read whatever happened to be there: this
+					// check failed two runs in three, which is what a
+					// use-after-free looks like when it is not crashing. The
+					// entries count beside it was already captured this way
+					// and never flaked.
+					const int stood = carrier->history.index;
 					w.load_tree(tree);
 					spin(400);
 					auto *m2 = w.findChild<tab_tree_model *>();
@@ -267,8 +278,9 @@ int main(int argc, char *argv[]) {
 					      QString("with the pages it had been on (%1 of %2)")
 					          .arg(again ? again->history.entries.size() : -1)
 					          .arg(entries));
-					check(again && again->history.index == carrier->history.index,
-					      "and where in them it stood");
+					check(again && again->history.index == stood,
+					      QString("and where in them it stood (%1 of %2)")
+					          .arg(again ? again->history.index : -1).arg(stood));
 				}
 			}
 		}
@@ -293,9 +305,24 @@ int main(int argc, char *argv[]) {
 			check(empty->text().contains("matches"),
 			      QString("and says it was the search (%1)")
 			          .arg(empty->text().split('\n').first()));
+			// **And the page area stops naming a tree that is showing
+			// nothing.** It said "Select a tab from the tree" beside a tree
+			// filtered down to no rows -- an instruction for an action the
+			// window was not offering, next to a message correctly explaining
+			// why. The tree owns that explanation; the page area's job here is
+			// to keep quiet.
+			QLabel *ph = w.findChild<QLabel *>("placeholder");
+			check(ph && ph->text().trimmed().isEmpty(),
+			      QString("and the page area does not tell you to pick from it"
+			               "%1")
+			        .arg(ph && !ph->text().trimmed().isEmpty()
+			               ? QString(" -- says \"%1\"").arg(ph->text().simplified())
+			               : QString()));
 			search->clear();
 			spin(400);
 			check(!empty->isVisible(), "and it goes when the search is cleared");
+			check(ph && !ph->text().trimmed().isEmpty(),
+			      "and the page area speaks again once the tree is back");
 		}
 	}
 

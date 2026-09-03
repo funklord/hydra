@@ -2336,6 +2336,23 @@ void main_window::refresh_placeholder_text() {
 		m_placeholder->setText(QString());
 		return;
 	}
+	// **And nothing while a search is hiding the tree it names.** With a
+	// filter that matches nothing, the tree says "Nothing matches that search.
+	// Clear the box above to see the whole tree again" -- correct, and in the
+	// right place -- while the page area went on saying "Select a tab from the
+	// tree" beside it. There is no tab to select: the instruction names an
+	// action the window is not currently offering, which is the same fault as
+	// the drawer hint above, arrived at from the other direction.
+	//
+	// Suppressed rather than reworded, because the tree already owns the
+	// explanation and two messages about one empty list is one more than
+	// anybody needs. Only while a search is responsible: an empty tree with no
+	// search is a different state and not one this hides.
+	if (m_search && !m_search->text().trimmed().isEmpty() &&
+	    m_proxy && m_proxy->rowCount() == 0) {
+		m_placeholder->setText(QString());
+		return;
+	}
 	// **The empty page told people to use something that was not on screen.**
 	// At drawer width the tree is an overlay behind the drawer button, so
 	// "select a tab from the tree" names a thing the window is not showing --
@@ -3741,6 +3758,9 @@ void main_window::on_search_changed(const QString &text) {
 	m_proxy->set_search_text(text);
 	if (!text.trimmed().isEmpty())
 		m_tree->expandAll();
+	// The page area's hint names the tree, so it has to be told when the tree
+	// stops showing one.
+	refresh_placeholder_text();
 }
 
 void main_window::navigate_to_address() {
