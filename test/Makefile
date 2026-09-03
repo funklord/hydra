@@ -196,7 +196,10 @@ LIVE         := $(patsubst live/%.cpp,$(BUILD_DIR)/%,$(LIVE_SRCS))
 # property of what a driver *is*, not of what its text happens to mention.
 #
 # The suites are still grepped, because they are the ones where the answer
-# varies -- and today not one of the thirty-eight reaches it.
+# varies. For a long time not one of them reached it; `test_rotation` is the
+# first that does, because turning a window is a property of `main_window`
+# and there is no smaller thing to ask. It pays a WebEngine link and does not
+# start an engine: the view factory it hands the window is a fake.
 NEEDS_ENGINE := $(shell grep -lE 'main_window\.h|qtwebengine|QWebEngine|web_view_factory' \
                   $(OFFLINE_SRCS) 2>/dev/null)
 ENGINE_BINS  := $(LIVE) $(patsubst %.cpp,$(BUILD_DIR)/%,$(NEEDS_ENGINE))
