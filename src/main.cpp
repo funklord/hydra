@@ -37,6 +37,9 @@
 #include <QByteArray>
 #include <QDir>
 #include <QFileInfo>
+#include "accept_language.h"
+
+#include <QLocale>
 #include <QStandardPaths>
 #include <QtGlobal>
 
@@ -52,6 +55,35 @@ int main(int argc, char *argv[]) {
 	if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
 		qputenv("QT_QPA_PLATFORM", QByteArray("xcb"));
 #endif
+
+	// **Tell the engine what locale it is running in, before it starts.**
+	//
+	// Qt WebEngine passes no `--lang`, so Chromium's ICU falls back to a bare
+	// language. Measured against the Chromium beside it on a machine whose
+	// `LANG` is `en_US.UTF-8`: `Intl.DateTimeFormat().resolvedOptions().locale`
+	// answered "en" here and "en-US" there, and `Intl.Collator` and
+	// `Intl.NumberFormat` agreed with it -- while `Accept-Language`,
+	// `navigator.language` and `navigator.languages` were identical in both. A
+	// browser that says en-US and resolves to en is disagreeing with itself,
+	// and a site that stores a locale and checks it later reads a change that
+	// never happened. Reported as Teams showing "Language changes detected
+	// (English)" on every load, in hydra and in no other browser.
+	//
+	// Appended rather than assigned, so a flag somebody set for their own
+	// reasons survives, and skipped entirely if they have already said `--lang`
+	// -- an explicit choice outranks this one.
+	{
+		const QString tag =
+		  accept_language::primary_tag(QLocale::system().uiLanguages());
+		const QByteArray existing = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
+		if (!tag.isEmpty() && !existing.contains("--lang=")) {
+			QByteArray flags = existing;
+			if (!flags.isEmpty())
+				flags += ' ';
+			flags += "--lang=" + tag.toUtf8();
+			qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags);
+		}
+	}
 
 	// Recommended for Qt WebEngine.
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);

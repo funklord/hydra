@@ -883,6 +883,27 @@ int main(int argc, char **argv) {
 
 		check(accept_language::header_for({ "sv-SE" }) == "sv-SE",
 		      "a single language carries no quality, which is what q=1 means");
+		// **The one tag the engine is told to run in**, which is a different
+		// question from the header and was answered by nobody. Qt WebEngine
+		// passes no `--lang`, so Chromium's ICU fell back to a bare language:
+		// measured against the Chromium beside it, `Intl.DateTimeFormat()
+		// .resolvedOptions().locale` was "en" here and "en-US" there, while
+		// `Accept-Language` and `navigator.language` matched in both. A
+		// browser saying en-US and resolving to en disagrees with itself, and
+		// a site that stores a locale and re-reads it sees a change that never
+		// happened -- Teams says "Language changes detected" on every load.
+		check(accept_language::primary_tag(measured) == "en-US",
+		      QString("the primary tag drops the script subtag (%1)")
+		          .arg(accept_language::primary_tag(measured)));
+		check(accept_language::primary_tag({ "sv-Latn-SE", "sv" }) == "sv-SE",
+		      "and does so wherever the script sits");
+		check(accept_language::primary_tag({ "de" }) == "de",
+		      "a bare language is already a tag and is left alone");
+		check(accept_language::primary_tag({ "", "fr-FR" }) == "fr-FR",
+		      "an empty first entry is skipped rather than returned");
+		check(accept_language::primary_tag({}).isEmpty(),
+		      "and nothing in means nothing out, so the caller passes no flag");
+
 		check(accept_language::header_for({}).isEmpty(),
 		      "and no languages produce no header rather than an empty one");
 

@@ -30,6 +30,37 @@ namespace accept_language {
 // sends `en-US,en;q=0.9`. So the transformation drops the script, removes
 // repeats while keeping the order, and gives each entry after the first a
 // descending quality.
+// The one language tag to tell the engine it is running in, in the same
+// vocabulary the header uses.
+//
+// **Chromium is not told otherwise and guesses badly.** Qt WebEngine passes no
+// `--lang`, so Chromium's ICU falls back to a bare language: measured on a
+// machine whose `LANG` is `en_US.UTF-8`, `Intl.DateTimeFormat().resolvedOptions()
+// .locale` answered "en" in hydra and "en-US" in the Chromium beside it, and
+// `Intl.Collator` and `Intl.NumberFormat` agreed with it. Everything else
+// matched -- `Accept-Language`, `navigator.language` and `navigator.languages`
+// were identical -- so a site comparing what the browser says it is against
+// what it resolves to sees a browser disagreeing with itself.
+//
+// That is not cosmetic: a bare "en" sorts, formats numbers and formats dates by
+// generic rules rather than the region's, and a site that stores a locale and
+// checks it later reads a change that never happened. Teams shows "Language
+// changes detected" on every load because of it.
+//
+// The script subtag goes for the same reason it goes in the header, and the
+// first entry wins because `uiLanguages()` is already in preference order.
+inline QString primary_tag(const QStringList &ui_languages) {
+	for (const QString &raw : ui_languages) {
+		if (raw.isEmpty())
+			continue;
+		const QStringList parts = raw.split('-');
+		if (parts.size() == 3 && parts.at(1).size() == 4)
+			return parts.at(0) + "-" + parts.at(2);
+		return raw;
+	}
+	return QString();
+}
+
 inline QString header_for(const QStringList &ui_languages, int max_entries = 4) {
 	QStringList out;
 	for (const QString &raw : ui_languages) {
