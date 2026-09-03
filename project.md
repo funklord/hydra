@@ -14584,18 +14584,40 @@ and on a page that simply displays it, nothing is wrong:
     element 298x396  ratio 0.751   object-fit contain
 
 **So the distortion is not in the stream and not in this browser's handling of
-it.** Teams is in desktop mode on that phone -- the site rule recorded above,
-and the only reason it opens at all -- so it lays out the landscape self-view a
-desktop client expects and is handed a 3:4 portrait frame. That is a mismatch
-of about 2.4x, and what a site does with a shape it did not ask for is its own
-business. `de46203` gave the desktop-site toggle its viewport half, which
-changes the *box*; nothing in this browser changes the *stream*.
+it.** What it *is* remains open, and the explanation published first was wrong.
 
-**What to do about it is a design question rather than a defect**, which is why
-it is recorded rather than fixed: desktop mode is what makes Teams work, a
-portrait camera is what the phone has, and the two disagree. Turning the site
-rule off would restore Teams' mobile layout and lose the thing the rule was
-added for.
+**Retracted: Teams is not in desktop mode on that phone.** That was asserted
+here -- "the site rule recorded above, and the only reason it opens at all" --
+and offered as the whole mechanism: a desktop client laying out a landscape
+self-view and being handed a 3:4 portrait frame, a mismatch of about 2.4x. It
+reads well and it was inferred from *this document* rather than measured on the
+device. Asked to turn the rule off, there was nothing to turn off:
+
+    policy.ini  [defaults] desktopSite=block
+                no [sites] group at all, for any site
+    the live user agent, from the probe:
+                ... Chrome/140.0.0.0 Mobile Safari/537.36
+
+No per-site rule exists for anything, the global default is `block`, and the
+string Teams actually receives is the mobile one. So the distortion happens in
+Teams' **mobile** layout, and `de46203` -- which gives the desktop-site toggle
+its viewport half -- cannot be involved either, since it only runs when a
+toggle that is off is on.
+
+**The correction is the lesson.** The section it was written into is the one
+that opens by saying every remaining Android question needed a page loaded on
+the device; the answer was then written from the record instead of from the
+device, minutes after the instrument for asking the device had been built. A
+claim about another tree is a measurement you did not take, and a claim about
+your own tree's *runtime state* is the same thing at closer range: `policy.ini`
+is one `adb shell run-as` away and says what is actually set.
+
+**What is excluded, and what is left.** The stream is a clean 3:4 portrait and
+renders correctly under `object-fit: contain`; the browser's handling of it is
+not at fault; desktop mode is off and was never on. What is not known is what
+Teams does with a portrait frame in its mobile layout, and answering that needs
+somebody signed in and in a call, looking. It is not a design question after
+all -- that framing belonged to the retracted explanation.
 
 **And the language prompt is not a disagreement inside this browser.** All five
 values agree on the phone:

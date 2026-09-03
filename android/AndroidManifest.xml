@@ -97,7 +97,7 @@
         android:icon="@mipmap/ic_launcher"
         android:hardwareAccelerated="true"
         android:usesCleartextTraffic="true">
-        <activity android:name="org.qtproject.qt.android.bindings.QtActivity"
+        <activity android:name="se.vibes.hydra.HydraActivity"
             android:label="Hydra"
             android:configChanges="orientation|uiMode|screenLayout|screenSize|smallestScreenSize|layoutDirection|locale|fontScale|keyboard|keyboardHidden|navigation|mcc|mnc|density"
             android:launchMode="singleTop"
@@ -127,6 +127,14 @@
             </intent-filter>
             <meta-data android:name="android.app.lib_name" android:value="hydra"/>
         </activity>
+        <!-- The shared `tool/android.mk` launches this app by Qt's class name,
+             and that fragment is one file copied into four projects: changing
+             it is a cross-project pass rather than something to do from here.
+             An alias keeps `make android-run` working while the real activity
+             is ours. No launcher category on it - two would be two icons. -->
+        <activity-alias android:name="org.qtproject.qt.android.bindings.QtActivity"
+            android:targetActivity="se.vibes.hydra.HydraActivity"
+            android:exported="true"/>
         <!-- Not exported: nothing outside this app has any business starting
              it, and a foreground service another app can start is one another
              app can use to keep this process alive. -->
