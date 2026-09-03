@@ -40,6 +40,29 @@
 # which had been skipped as unrunnable ever since it was written and passes
 # here. `try_import` runs nine more checks than it does offscreen.
 #
+# **A failure in a full sweep is not a finding until it repeats alone.**
+# These drivers are intermittent in the aggregate, and chasing that costs more
+# than it is worth if nobody says so. Measured rather than assumed, on
+# try_phone's "nothing has focus" pair from one full on-screen run:
+#
+#   alone                              118 passed, 0 failed
+#   under the sweep, by itself         118 passed, 0 failed
+#   after the 15 drivers before it     118 passed, 0 failed
+#   after the next 15                  118 passed, 0 failed
+#   after all 30 that precede it       118 passed, 0 failed
+#
+# Every isolated configuration passes, so it is neither a predecessor leaving
+# state nor a cumulative resource ceiling -- the two theories worth having, and
+# both wrong. The run that established that had try_import fail instead, which
+# had passed in the run before. Different drivers draw the short straw.
+#
+# So: **re-run a failing driver on its own before believing it.** That is one
+# command and it separates a real defect from a sweep flake, which is a
+# distinction this summary cannot make for you. try_forget's kiosk check was a
+# real one found exactly that way -- it failed on screen and passed offscreen,
+# then did the opposite next run, and the fix was to measure the view's url
+# instead of a request the cache could answer.
+#
 # **Two kinds of driver, and conflating them was worth a bug twice.** Most print
 # a trailing "N passed, M failed" and are judged on it. A few -- try_flicker,
 # try_settings -- are report-only: they capture screenshots and timings for a
