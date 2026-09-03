@@ -5104,7 +5104,7 @@ part is that it was three different things wearing one costume.
    differently, so every number in the driver silently meant a *different*
    permission. The line now prints our own feature name, which does not renumber
    when an engine changes its mind, and the driver matches on that.
-3. **A word that changed, not a decision.** Chromium says `NotAllowedError` for
+4. **A word that changed, not a decision.** Chromium says `NotAllowedError` for
    a denied device and `AbortError` when it cannot open one, and which of the two
    `getUserMedia` reports for a refused camera differs between the Chromium in
    6.8.2 and the one in 6.11 — same machine, same run, same decision, different
@@ -12222,9 +12222,12 @@ would be untrustworthy.
 ## The live model suite, run for the first time
 
 `test_live_model` is in `NEEDS_MORE` and had never run here. The reason
-recorded for skipping items 1 to 4 was "needs a network, a device or a model",
-and that was **assumed rather than checked** — the device was verified for the
-autofill item, and the model never was. Ollama is serving `qwen2.5-coder:14b`
+recorded for skipping the first several items of *What is next* was "needs a
+network, a device or a model", and that was **assumed rather than checked** —
+the device was verified for the autofill item, and the model never was. (The
+numbers those items carried are deliberately not repeated: an ordered list
+renumbers whenever anything is inserted, so a citation by position is a
+reference that goes wrong silently. Cite what an item is about.) Ollama is serving `qwen2.5-coder:14b`
 on this machine and has been all along. So the suite ran.
 
 **And the instructions for running it were wrong.** `test/README.md` told the
@@ -14413,12 +14416,90 @@ inside that frame. A per-tab `ScriptHandler` leak on tab close came out of the
 same read-through, for the same reason -- the change was reviewed for whether
 it ran early enough, twice, before anyone asked what else it touched.
 
-**None of this is confirmed against Teams**, and the distance between "builds
-and injects early" and "fixes the report" is the whole point of the exercise.
-The handset was disconnected before it could be installed. What is verified is
-that it compiles clean, that `make jni` resolves all sixteen native methods,
-that the vendored template matches the kit, and that the measurement above was
-taken on the device with the shim in place.
+### Confirmed against Teams: it finds the camera
+
+The paragraph that stood here said none of this was confirmed against Teams,
+that the handset had been disconnected before it could be installed, and that
+the distance between "builds and injects early" and "fixes the report" was the
+whole point of the exercise. That distance has now been crossed. The build
+went on the phone on 2026-09-04 and the copyright holder's report is that
+**Teams finds the camera**.
+
+That is the whole claim and it is worth stating narrowly. What was broken was
+a page reading `navigator.permissions.query()` inside its own bundle, before
+`onPageStarted` could install the override, and being told `prompt` for a
+camera the shield and the OS had both allowed -- measured on the device at
+`prompt` at parse time and `granted` 2.5 seconds later. A document-start
+script is the documented way to be earlier, taking it meant vendoring Qt's
+`build.gradle`, and the site that reads the answer first now reads the right
+one.
+
+**What is still not confirmed is everything after the permission.** Teams
+finding the camera is the shim working; whether the picture is right is a
+separate question and the answer is currently no -- see *A desktop string
+without a desktop viewport* below. Two reports arrived together and only the
+first belongs to this section.
+
+The rest of what was verified before the device stands: it compiles clean,
+`make jni` resolves all sixteen native methods, and the vendored template
+still matches the kit -- re-checked against the 6.12.0 kit, which is a
+different kit from the one it was vendored against.
+
+## A desktop string without a desktop viewport, and no language at all
+
+Two reports from the same handset session, both about Android and neither
+about the permissions work above.
+
+**The camera image is distorted**, on the cover screen. Asked which of four
+shapes the fault took -- distorted, sideways, wrongly-shaped box, wrongly
+cropped -- the answer was the picture itself having the wrong proportions,
+folded. That screen reports `840x2289` at density 420, which is **320 CSS
+pixels** wide.
+
+`setDesktopSite` changed the user agent and nothing else. Neither
+`setUseWideViewPort` nor `setLoadWithOverviewMode` is called anywhere in
+`HydraWebView.java` and both default to false, so a site told to serve its
+desktop pages -- which carry no `width=device-width` viewport meta, having no
+reason to -- was laid out at the device's own CSS width. Chrome's Request
+Desktop Site moves the layout viewport as well as the string. Both are tied to
+the toggle now, and scoped to it: switching the viewport model for ordinary
+mobile browsing changes how every site lays out, which is not what the control
+means.
+
+**Whether that is the cause of the distortion is not established.** A
+wrongly-shaped box and an `object-fit` that fills it distorts the image rather
+than merely framing it oddly, which is why the layout fault is a candidate for
+a symptom that is about the picture -- but a stream delivered at the wrong
+aspect would look identical from the outside. The measurement that separates
+them is the track's own size against the element's box, and a probe page for
+exactly that is written and served over `adb reverse`; nothing had answered it
+when this was recorded.
+
+**The language fix never reached Android, and the reason is structural.**
+Reported as Teams still showing the language-change prompt. `2af192a` appends
+`--lang=` to `QTWEBENGINE_CHROMIUM_FLAGS` in `main()`, and Android does not
+use Qt WebEngine -- it uses the system WebView, where that variable means
+nothing. `accept_language` is referenced in `main.cpp` and
+`qtwebengine_factory.cpp` and nowhere else, so the Android backend sets no
+language, no `Accept-Language`, and no locale.
+
+The desktop half does work, and was measured rather than assumed -- a probe
+linking Qt WebEngine and nothing else, run twice under one Xvfb:
+
+    (no flag)   en    | en    | en    | en    | en
+    (--lang)    en-US | en-US | en-US | en-US | en-US
+
+navigator.language, navigator.languages, `Intl.DateTimeFormat`,
+`Intl.Collator` and `Intl.NumberFormat` in that order. So the flag moves all
+five, and the desktop binary in `build/` postdates the commit that sets it.
+
+**What the Android side should do is not yet known and is deliberately not
+guessed at.** The system WebView takes its locale from the device and is
+normally self-consistent, so the desktop's disagreement may not exist there at
+all -- in which case Teams is complaining for a different reason and a fix
+copied across would be a fix for nothing. The same probe reports the five
+values from the phone, which is the cheapest way to find out and needs no
+code.
 
 ## The session reader gets nothing out of what Chromium now writes
 
@@ -14523,7 +14604,29 @@ carried along as amendments to a list item.
    arrives; its default moves if and when those do. Notifications stay blocked on
    Android, which has no service to present with.
 
-2. **The loop works on a disguised manifest; make it work on a noisy capture.**
+2. **Two Android reports are open, and one measurement answers both.** The
+   camera image is distorted on the cover screen and the language prompt is
+   still there; the section *A desktop string without a desktop viewport, and
+   no language at all* above has what is established and what is not. The
+   desktop-site toggle has gained its viewport half, which is a real gap
+   closed and an unproven cause. What is wanted is one page opened in hydra on
+   the handset -- `test/live` has no driver for this because the scripted
+   route through `uiautomator dump` is the one this file already records as
+   failing silently, so it is a page typed into the address bar and read back
+   over `adb reverse`. It reports the camera track's size against the video
+   element's box, which separates a stream delivered at the wrong aspect from
+   a correct stream stretched into a wrongly-shaped box, and the five locale
+   values, which say whether the system WebView disagrees with itself the way
+   Qt WebEngine did.
+
+   **Do not copy the desktop's `--lang` fix across before that page has
+   answered.** The system WebView takes its locale from the device and is
+   normally self-consistent, so the fault may not be there at all; a fix
+   applied on the strength of the symptom matching would be a fix for
+   nothing, and would make the real cause harder to find by removing the
+   symptom's only witness.
+
+3. **The loop works on a disguised manifest; make it work on a noisy capture.**
    Three runs in five on dramafren now return `url.includes('cf-master')` — a
    stable fragment, no tokens, the master manifest on a site with no `.m3u8`
    anywhere. That is the case the whole content-type tier exists for and the
@@ -14594,19 +14697,19 @@ carried along as amendments to a list item.
    stream to be found. The line that used to sit here saying otherwise was
    stale.
 
-3. **Nothing has needed the helper tier's DOM half, and two captures is two.**
+4. **Nothing has needed the helper tier's DOM half, and two captures is two.**
    The decision is made and recorded -- the permission is gone and the design
    stays, in arch §11.5.1 and in the section above. What keeps this on the list
    is that "nothing has needed it" rests on two measured sites, both of which
    had the stream in the request log. A third site that computes its address in
    page JS would reopen it, and there is no way to know without meeting one.
 
-4. **An indicator for the AI batch jobs.** Recorded, not designed — see
+5. **An indicator for the AI batch jobs.** Recorded, not designed — see
    *Wanted: an indicator for the AI batch jobs* above for the requirement and
    the four questions that have to be answered before any of it is built. It
    comes after the browser is a browser, on the holder's instruction.
 
-5. **Android's remaining gap is the platform's autofill, and only the runtime
+6. **Android's remaining gap is the platform's autofill, and only the runtime
    half is now unverified.** The four code-level preconditions are checked and
    met — see *Two searches that found the code correct* above — and the test
    handset has an autofill service configured, so the emulator's excuse is
@@ -14625,7 +14728,7 @@ carried along as amendments to a list item.
    the browser's side of the arrangement is verified. Only the fill itself is
    open.
 
-6. **Most of what is left untested needs a network or a device — but that
+7. **Most of what is left untested needs a network or a device — but that
    sentence has been wrong once and will be again.** The sweep through
    never-tested files is finished — see the sections above; four of nine were
    wrong. The line that used to sit here said the remaining dialogs were covered
@@ -14655,7 +14758,7 @@ carried along as amendments to a list item.
    thin adapters around it, which need a page rather than a fixture, and are
    driven through the shell by the live drivers instead.
 
-7. **Whether a `file:` url should open as a page is still open, and is the
+8. **Whether a `file:` url should open as a page is still open, and is the
    copyright holder's.** The littering half is fixed — see *The url no longer
    becomes a directory* above — so what remains is only the question the fix
    deliberately did not answer: `main.cpp` classifies `file:` as a tree path,
@@ -14666,7 +14769,7 @@ carried along as amendments to a list item.
    instead. The distinction that would preserve the recorded intent exactly is
    the scheme rather than the path: `./tree.txt` has none, `file:` always did.
 
-8. **CI skips one check for want of an icon theme.** `test_theme`'s
+9. **CI skips one check for want of an icon theme.** `test_theme`'s
    system-icon-directory assertion has nothing to look at in the
    `debian:trixie` container and says so rather than failing. Installing
    `hicolor-icon-theme` would make it run; that is one word in a dependency
@@ -14674,7 +14777,7 @@ carried along as amendments to a list item.
    theme is a test dependency rather than a build one. Left for whoever owns
    that list.
 
-9. **A node's url means two things at once, and rows can be internally
+10. **A node's url means two things at once, and rows can be internally
    inconsistent.** See *One field with two meanings* above: the title follows
    the page and the url does not, so a row can carry a title from one page and
    a url from another — measured. The obvious repair breaks the tab lock,
@@ -14683,7 +14786,7 @@ carried along as amendments to a list item.
    costs are in that section. The pin is now asserted in `test_model`, so the
    repair fails loudly rather than quietly.
 
-10. **KeePassXC support is broken and needs the account that has a working
+11. **KeePassXC support is broken and needs the account that has a working
    set up.** See *KeePassXC: the socket path, settled before the session that
    can test it* above. The socket path is fixed and ruled out for an ordinary
    desktop; what is untested is everything after it — framing, key exchange,
