@@ -770,9 +770,25 @@ int main(int argc, char *argv[]) {
 		// Half one: the screen walked back to the home page. Polled, because
 		// the navigation is issued first but the request lands when it lands,
 		// and the clear's report can beat it.
+		// **Asked of the view, not of the server.** This used to assert that
+		// the server had been sent a request for the home page, and it failed
+		// about half the time -- first on screen while offscreen passed, then
+		// the other way round on the next pair of runs, which is the signature
+		// of a race rather than a mode. The view's url said the same thing in
+		// every one of those runs: it was showing the home page. The
+		// navigation always happens; whether it reaches the wire depends on
+		// whether the engine could answer it from cache, which is not what
+		// "the screen walked back" means and not something this driver should
+		// be asserting.
+		//
+		// So the url is the check and the request is a note. The note is worth
+		// keeping because when a request *does* go out, what it carries is the
+		// interesting part -- the walk home must not be authenticated as the
+		// person who has just left.
 		int home_requests = 0;
 		QString home_cookie;
-		for (int waited = 0; waited < 15000 && home_requests == 0; waited += 100) {
+		bool at_home = false;
+		for (int waited = 0; waited < 15000 && !at_home; waited += 100) {
 			spin(100);
 			for (int i = seen_at_mark; i < site.seen.size(); ++i)
 				if (site.seen[i].path.endsWith(home_mark)) {
@@ -780,11 +796,14 @@ int main(int argc, char *argv[]) {
 					if (home_cookie.isEmpty())
 						home_cookie = site.seen[i].cookie;
 				}
+			at_home = view->url() == idle_kiosk.home;
 		}
-		check(home_requests > 0,
-		      QString("the screen walked back to the kiosk home page, measured "
-		               "as a request the server was sent (%1 of them)")
-		          .arg(home_requests));
+		check(at_home,
+		      QString("the screen walked back to the kiosk home page (showing "
+		               "%1)").arg(view->url().toString()));
+		note(QString("and the server saw %1 request(s) for it; nought is a "
+		              "cache hit rather than a screen that stayed put")
+		       .arg(home_requests));
 		// **Not a check, and the measurement contradicted the guess**, which is
 		// why it is written down. "The navigation is issued first" is about
 		// what the screen *shows* -- `load()` posts to the render process and
