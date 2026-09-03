@@ -272,13 +272,20 @@ for d in $drivers; do
 	# captured nothing, and until it grew a floor it said "done" and exited
 	# 0, so the sweep called it fine. Per-run and under $OUT, like everything
 	# else this sets.
+	# HYDRA_TEST_CONFIG as well, for the same reason: `try_evolve_confirm`
+	# points QSettings at it and falls back to a fixed `/tmp/hydra-evolve-config`
+	# otherwise. It is skipped unless SWEEP_ALL is set, which is precisely why
+	# it would have gone unnoticed -- the driver that runs rarely is the one
+	# whose shared path belongs to somebody else by the time it runs.
+	# try_send_gate records the audit that found the other twenty-nine.
 	if [ -n "${SWEEP_ONSCREEN:-}" ]; then
 		HYDRA_TEST_OUT="$OUT/$d.out" HYDRA_SHOTS="$OUT/$d.shots" \
+			HYDRA_TEST_CONFIG="$OUT/$d.config" \
 			timeout "${SWEEP_TIMEOUT:-300}" \
 			$prefix "$BIN/$d" >"$log" 2>&1
 	else
 		QT_QPA_PLATFORM=offscreen HYDRA_TEST_OUT="$OUT/$d.out" \
-			HYDRA_SHOTS="$OUT/$d.shots" \
+			HYDRA_SHOTS="$OUT/$d.shots" HYDRA_TEST_CONFIG="$OUT/$d.config" \
 			timeout "${SWEEP_TIMEOUT:-300}" $prefix "$BIN/$d" >"$log" 2>&1
 	fi
 	rc=$?
