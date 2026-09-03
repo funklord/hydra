@@ -1110,6 +1110,27 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// raises the soft keyboard over half the window before the user has asked
 	// for anything -- seen on the device the moment the drawer worked.
 	m_stack->setFocus(Qt::OtherFocusReason);
+
+	// **A url handed to us by another application**, which until the manifest
+	// grew a `VIEW` filter could not happen: hydra could not be opened from a
+	// link anywhere else on the phone, could not be offered as a browser, and
+	// the address bar was its only way in.
+	//
+	// Polled rather than delivered, and on activation rather than once. Qt's
+	// activity is `singleTop`, so a request arriving while this is already
+	// running comes as `onNewIntent` and Qt makes it the current intent --
+	// which a poll on becoming active sees and an intent listener would need
+	// private Qt API to hear. The take is destructive on the Java side, so
+	// coming back to an already-open browser does not reopen the page it was
+	// handed an hour ago.
+	connect(qApp, &QGuiApplication::applicationStateChanged, this,
+	         [this](Qt::ApplicationState state) {
+		if (state == Qt::ApplicationActive)
+			open_handed_url();
+	});
+	// The launch case, after the constructor has finished building the window
+	// it is going to open a tab in.
+	QTimer::singleShot(0, this, [this] { open_handed_url(); });
 #endif
 
 	// Realize this window with the visual the web engine needs, *before* it is
@@ -3467,6 +3488,22 @@ void main_window::enforce_live_cap(const QString &keep_id) {
 		m_views_by_id.remove(victim);
 	}
 }
+
+#ifdef Q_OS_ANDROID
+// Open whatever another application asked this browser to show, if anything.
+//
+// `take_view_url` is destructive by design -- see `android_intents.h` -- so
+// this is safe to call on every activation and does nothing on all but the
+// first after a request.
+void main_window::open_handed_url() {
+	const QString handed = android_intents::take_view_url();
+	if (handed.isEmpty())
+		return;
+	const QUrl url = QUrl::fromUserInput(handed);
+	if (url.isValid())
+		open_url(url);
+}
+#endif
 
 void main_window::on_tree_activated(const QModelIndex &proxy_index) {
 	// Picking a tab is what the drawer was opened for, so it gets out of the

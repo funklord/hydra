@@ -83,5 +83,12 @@ bool open_externally(const QUrl &url, QString *error) {
 	return true;
 }
 
+QString take_view_url() {
+	const QJniObject url = QJniObject::callStaticObjectMethod(
+	  k_cls, "takeViewUrl", "(Landroid/app/Activity;)Ljava/lang/String;",
+	  QNativeInterface::QAndroidApplication::context().object());
+	return url.isValid() ? url.toString() : QString();
+}
+
 }  // namespace android_intents
 #endif   // Q_OS_ANDROID

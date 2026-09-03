@@ -74,4 +74,37 @@ public class HydraIntents {
             return false;
         }
     }
+
+    /**
+     * The address this activity was asked to open, once.
+     *
+     * **Taken rather than read**, and that is the whole of the design. The
+     * launch intent stays attached to the activity for as long as the task
+     * lives, so a caller that merely reads it gets the same url again on
+     * every resume -- and a browser that re-opens the page you arrived on
+     * every time you come back to it is worse than one that cannot be handed
+     * a page at all. Clearing the data as it is handed over makes the read
+     * destructive, which is what "once" requires.
+     *
+     * Returns "" rather than null when there is nothing, so the C++ side has
+     * one empty case to test instead of two.
+     *
+     * `singleTop` in the manifest means a second VIEW while this is already
+     * running arrives as onNewIntent rather than as a fresh activity, and Qt
+     * sets it as the current intent, so polling this on activation covers
+     * both routes without needing an intent listener.
+     */
+    public static String takeViewUrl(final Activity a) {
+        if (a == null)
+            return "";
+        Intent i = a.getIntent();
+        if (i == null || !Intent.ACTION_VIEW.equals(i.getAction()))
+            return "";
+        Uri u = i.getData();
+        if (u == null)
+            return "";
+        i.setData(null);
+        a.setIntent(i);
+        return u.toString();
+    }
 }

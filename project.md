@@ -14533,6 +14533,85 @@ copied across would be a fix for nothing. The same probe reports the five
 values from the phone, which is the cheapest way to find out and needs no
 code.
 
+## Nothing could hand this browser a page, and that is what blocked the rest
+
+The Android manifest had one intent filter, `MAIN`/`LAUNCHER`. So hydra could
+not be opened from a link in any other application, could not be offered as a
+browser at all, and had exactly one way to be given a url: somebody typing it
+into the address bar.
+
+**That is also the one way in that depends on the on-screen keyboard**, and on
+this handset the keyboard is not dependable. `HIDE_SAME_WINDOW_FOCUSED_
+WITHOUT_EDITOR` appears repeatedly in logcat for this app, and
+`dumpsys input_method` reports `mServedView` as the window's `DecorView` with
+`mServedInputConnection=null` -- no editable view, so nothing for the keyboard
+to attach to. It is not this program's alone: the same reading came back for
+`bbq_predictor`, and the beerssh session reported `mInputShown` false against a
+screenshot showing the keyboard up. Three Qt Widgets applications, one phone.
+See *A note on measuring this* above, where this is recorded as an open
+question with a one-person test.
+
+The consequence was circular and had gone unnoticed: every remaining question
+about Android needed a page loaded, loading a page needed the address bar, and
+the address bar needed the keyboard. A report of "spurious issues loading
+pages" is what that looks like from outside.
+
+`VIEW` for `http` and `https`, with `BROWSABLE` and `DEFAULT`, closes it. No
+mime type, matching `openExternally` on the way out. The url is *taken* rather
+than read -- a launch intent stays attached to its activity for the life of the
+task, so a non-destructive read reopens the same page on every resume -- and it
+is polled on activation as well as at startup, because `singleTop` delivers a
+second request as `onNewIntent` and hearing that directly needs private Qt API.
+Polling on activation covers the case that actually happens, which is another
+application bringing this one to the front.
+
+### What it measured, in the first ten minutes it existed
+
+All of the below by `adb shell am start -a android.intent.action.VIEW`, with no
+keyboard involved.
+
+**The camera hands out a portrait stream, and will not be asked for a wide
+one:**
+
+    default               480x640  ratio 0.750
+    16:9 by size          refused: NotReadableError
+    16:9 by aspectRatio   refused: NotReadableError
+    landscape exact 640x480  ratio 1.333
+
+and on a page that simply displays it, nothing is wrong:
+
+    track   480x640  ratio 0.750   frame 480x640  ratio 0.750
+    element 298x396  ratio 0.751   object-fit contain
+
+**So the distortion is not in the stream and not in this browser's handling of
+it.** Teams is in desktop mode on that phone -- the site rule recorded above,
+and the only reason it opens at all -- so it lays out the landscape self-view a
+desktop client expects and is handed a 3:4 portrait frame. That is a mismatch
+of about 2.4x, and what a site does with a shape it did not ask for is its own
+business. `de46203` gave the desktop-site toggle its viewport half, which
+changes the *box*; nothing in this browser changes the *stream*.
+
+**What to do about it is a design question rather than a defect**, which is why
+it is recorded rather than fixed: desktop mode is what makes Teams work, a
+portrait camera is what the phone has, and the two disagree. Turning the site
+rule off would restore Teams' mobile layout and lose the thing the rule was
+added for.
+
+**And the language prompt is not a disagreement inside this browser.** All five
+values agree on the phone:
+
+    navigator.language   en-GB     Intl.DateTimeFormat  en-GB
+    navigator.languages  en-GB,en-US  Intl.Collator     en-GB
+    timeZone  Europe/Stockholm     Intl.NumberFormat    en-GB
+
+The desktop's fault -- `navigator.language` saying en-US while ICU resolved to
+a bare `en` -- does not exist here, because the system WebView takes its locale
+from the device. What differs is the *devices*: this desktop is `en-US` and
+this phone is `en-GB`, so an account used from both is genuinely seeing its
+language change. Copying the `--lang` fix across would have removed nothing and
+would have made the real difference harder to see, which is why *What is next*
+said not to.
+
 ## The session reader gets nothing out of what Chromium now writes
 
 `test_session` went red on this machine, on the one assertion in it that reads

@@ -106,6 +106,25 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- A browser that nothing can hand a page to. Until this filter
+                 existed hydra could not be opened from a link in another app,
+                 could not be offered as a browser at all, and had no way in
+                 for a url except the address bar - which is also the one way
+                 in that depends on the on-screen keyboard behaving. That last
+                 is not hypothetical on this handset.
+
+                 BROWSABLE is what makes it a candidate for a web link;
+                 DEFAULT is what lets it be chosen without being named. No
+                 mime type, matching HydraIntents.openExternally on the way
+                 out: the apps worth reaching for a page are the ones
+                 registered for the host, and a type would hide them. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="http"/>
+                <data android:scheme="https"/>
+            </intent-filter>
             <meta-data android:name="android.app.lib_name" android:value="hydra"/>
         </activity>
         <!-- Not exported: nothing outside this app has any business starting

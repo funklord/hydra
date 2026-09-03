@@ -148,6 +148,10 @@ private slots:
 	void on_sort_mode_changed(int combo_index);
 	void on_search_changed(const QString &text);
 	void navigate_to_address();
+#ifdef Q_OS_ANDROID
+	// Open a url another application handed this one, if there is one waiting.
+	void open_handed_url();
+#endif
 	// Downloads that are publicly observable (sec 11.4) get an explanation before
 	// they start, never after.
 	void confirm_public_download(const QString &source_id, const QString &note,

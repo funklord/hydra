@@ -30,4 +30,20 @@ bool open_media(const QUrl &url, const QString &mime, QString *error);
 // `video/*` would hide all of them behind players expecting a file.
 bool open_externally(const QUrl &url, QString *error);
 
+// The address this activity was asked to open, or an empty string.
+//
+// The other two hand a page *out*; this is the way in, and until the manifest
+// grew a `VIEW` filter there was none at all -- hydra could not be opened from
+// a link in another app, could not be offered as a browser, and the address
+// bar was the only door. On a handset whose on-screen keyboard hides itself
+// mid-address that is not a door either.
+//
+// **Destructive, and the name says so.** A launch intent stays attached to its
+// activity for the life of the task, so reading it non-destructively returns
+// the same url on every resume, and a browser that reopens the page you
+// arrived on each time you come back to it is worse than one with no way in.
+// Call it on activation as well as at startup: `singleTop` delivers a second
+// request as `onNewIntent`, which Qt sets as the current intent.
+QString take_view_url();
+
 }  // namespace android_intents
