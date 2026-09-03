@@ -14463,7 +14463,8 @@ carried along as amendments to a list item.
    the browser's side of the arrangement is verified. Only the fill itself is
    open.
 
-6. **What is left untested now needs a network or a device.** The sweep through
+6. **Most of what is left untested needs a network or a device — but that
+   sentence has been wrong once and will be again.** The sweep through
    never-tested files is finished — see the sections above; four of nine were
    wrong. The line that used to sit here said the remaining dialogs were covered
    only incidentally and that a unit test for one would be testing Qt. That is
@@ -14471,6 +14472,22 @@ carried along as amendments to a list item.
    for width, button reachability, cut labels, stretched paragraphs, opening
    focus and Tab coverage — and it found five real defects doing it, including
    one in `site_policy_dialog`, which was on that list as not worth testing.
+
+   **This entry claimed "needs a network or a device" flatly, and rotation
+   needed neither.** Turning the phone and opening the fold go through
+   `resizeEvent` and `update_layout_mode`, which reparent the sidebar between
+   the splitter and the window at 620 logical pixels — no display, no handset,
+   nothing but a window told to be a different size. Nothing had ever run it.
+   `test_rotation` now does, as an ordinary offline suite: four foldable shapes,
+   51 checks, and 13 of them fail when `update_layout_mode` is made to return
+   early, which is how it is known to be exercising the path rather than
+   agreeing with it.
+
+   **The lesson is about this list rather than about drawers.** Closing a gap
+   does not update the sentence that recorded it, and nobody re-reads gap claims
+   while closing one — so an entry that says where a sweep *ended* is a claim a
+   later addition falsifies silently. Read as "what remains is mostly
+   device-bound", not as an inventory.
 
    What remains genuinely out of reach here is the WebEngine backend and the
    thin adapters around it, which need a page rather than a fixture, and are
