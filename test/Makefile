@@ -219,7 +219,31 @@ LIVE_PATHS_OBJ := $(BUILD_DIR)/live_paths.o
 $(LIVE): EXTRA_OBJS = $(LIVE_PATHS_OBJ)
 $(LIVE): $(LIVE_PATHS_OBJ)
 
-.PHONY: all offline live live-objs clean help objsets
+# --- the upstream reproducer -----------------------------------------------
+# `live/repro_share.cpp` links Qt and nothing of this project, so that a
+# display-capture failure can be attributed to Qt rather than to the browser
+# around it. It is deliberately outside `LIVE_SRCS`: those glob `try_*` and
+# every one of them links the shell, which is exactly what this must not do.
+#
+# It asks pkg-config for its own flags rather than reusing `QT_CFLAGS`, so
+# that pointing `PKG_CONFIG_PATH` at another kit builds it against that kit
+# with no edit here -- which is the whole point of having it. The rpath is
+# taken from the same query, so the binary runs without `LD_LIBRARY_PATH`.
+REPRO_SRC    := live/repro_share.cpp
+REPRO        := $(BUILD_DIR)/repro_share
+REPRO_CFLAGS := $(shell pkg-config --cflags Qt6WebEngineWidgets Qt6Widgets)
+# The rpath is assembled in the shell rather than with `$(if ...)`, because a
+# comma inside a make function argument is an argument separator.
+REPRO_LIBS   := $(shell pkg-config --libs Qt6WebEngineWidgets Qt6Widgets) \
+                 $(shell d=$$(pkg-config --variable=libdir Qt6WebEngineWidgets); \
+                          [ -n "$$d" ] && echo "-Wl,-rpath,$$d")
+
+repro: $(REPRO)
+
+$(REPRO): $(REPRO_SRC) | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(REPRO_CFLAGS) $< -o $@ $(REPRO_LIBS)
+
+.PHONY: all offline live live-objs repro clean help objsets
 all: offline live
 offline: $(OFFLINE)
 live: $(LIVE)
@@ -321,7 +345,8 @@ clean:
 	       $(TMOC_INC) $(TMOC_SRCS) $(TMOC_OBJS) \
 	       $(OFFLINE) $(LIVE) $(LIVE_PATHS_OBJ) \
 	       $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(OFFLINE_SRCS)) \
-	       $(patsubst live/%.cpp,$(BUILD_DIR)/%.o,$(LIVE_SRCS))
+	       $(patsubst live/%.cpp,$(BUILD_DIR)/%.o,$(LIVE_SRCS)) \
+	       $(REPRO)
 	@find $(BUILD_DIR) -name '*.d' -delete 2>/dev/null || true
 	@echo "removed the test objects and $(words $(OFFLINE) $(LIVE)) binaries"
 
@@ -330,6 +355,6 @@ objsets:
 	@python3 ../tool/objsets.py
 
 help:
-	@echo "make -C test [offline|live|all|clean] -j2"
+	@echo "make -C test [offline|live|all|repro|clean] -j2"
 	@echo "  $(words $(OFFLINE_SRCS)) offline suites, $(words $(LIVE_SRCS)) live drivers"
 	@echo "  optional packages found: $(OPT_PKGS)"

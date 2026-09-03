@@ -91,8 +91,18 @@ done
 | Ollama | installed user-local at `~/.local/ollama` (release tarball, no root). **Not running** — start with `~/.local/ollama/bin/ollama serve` |
 | models | `~/.ollama/models`, ~13.7 GB: `qwen2.5-coder:7b` and `:14b` |
 | inference | **CPU-only.** Ollama drops the integrated Intel GPU, so it is 12 cores / ~29 GB. A 14B proposal takes a minute or two; 32B is not viable |
-| `~/Qt/6.11.1` | Qt online-installer kits: `gcc_64` (desktop, **with** WebEngine) and `android_arm64_v8a` / `armv7` / `x86` / `x86_64` |
-| `~/android-ndk-r29` | NDK r29 (29.0.14206865) |
+| `~/Qt/6.12.0` | Qt online-installer kits: `gcc_64` (desktop, **with** WebEngine, Chromium 140) and `android_arm64_v8a` / `armv7` / `x86` / `x86_64`, plus wasm and harmonyos. **Measured 2026-09-04**, and it was `6.11.1` here until somebody looked: `ls ~/Qt` is the whole check, and the kit is discovered newest-Qt-first under `QT_ROOT` so the Android build did not notice the move |
+| `~/Android/Sdk/ndk/27.2.12479018` | NDK r27. **Measured 2026-09-04**; the `~/android-ndk-r29` this row named for a month is not on this machine |
+
+Both of those moved without anything breaking, and that is `tool/android.mk`
+working rather than luck: it takes the newest kit under `QT_ROOT` and the
+newest NDK under `$(ANDROID_SDK_ROOT)/ndk/`, so neither path is written down
+anywhere that could go stale. Checked by expansion rather than by reading the
+fragment -- `make -f - show` over an include of it answers
+`/home/funk/Qt/6.12.0/android_arm64_v8a`, `/home/funk/Android/Sdk/ndk/27.2.12479018`,
+`arm64-v8a`. **The recipe in *What it took* further down still names the old
+paths**, and is left alone: it records what was run at the time, and the
+discovery above is why nobody has had to type either since.
 
 **The Android prerequisites arrived, and they confirm §19.2 rather than change
 it.** Checked rather than assumed: the Android kits ship **no WebEngine at all**
@@ -14260,11 +14270,93 @@ hands it over, which is exactly what the documentation asks for, and the
 driver stays because it now fails for a reason outside this tree and will pass
 the day that stops being true.
 
-**One distinction worth keeping for whoever reports this.** Both Qt builds
-tested are Debian's, and Debian's own Chromium works on the same display, so
-this may be a packaging defect rather than an upstream one. Official Qt
-binaries were not tried, and that is the next thing to try before filing
-anything.
+### Official Qt binaries fail identically, so it is not Debian's packaging
+
+The paragraph that used to close this section said both Qt builds tested were
+Debian's, that this might therefore be a packaging defect, and that trying an
+official Qt binary was the next thing to do before filing anything. It has
+been done. They fail the same way, and the packaging hypothesis is dead.
+
+The instrument is `test/live/repro_share.cpp`, and writing it was the first
+half of the work: the sixty lines of plain Qt this section already cites were
+scratch and went with their session, so the measurement that mattered most
+here had to be rebuilt before it could be repeated. It is in the tree now. It
+links Qt and nothing of this project, asks pkg-config for its own flags so
+that `PKG_CONFIG_PATH` picks the kit, and takes its rpath from the same query
+so the binary runs without `LD_LIBRARY_PATH`:
+
+```sh
+X='xvfb-run -a -s "-screen 0 1280x800x24"'
+
+make -C test repro
+$X ./test/build-make/repro_share
+
+env PKG_CONFIG_PATH=~/Qt/6.12.0/gcc_64/lib/pkgconfig BUILD_DIR=build-qt612 \
+    make -C test repro
+$X ./test/build-qt612/repro_share
+```
+
+Same display, same program, one screen offered and answered with
+`selectScreen(index(0, 0))`:
+
+| Qt | provenance | Chromium | the page sees | internally |
+| --- | --- | --- | --- | --- |
+| 6.8.2 | Debian | 122 | `NotAllowedError: Invalid state` | `INVALID_STATE` |
+| 6.10.2 | Debian backports | 134 | `AbortError` | `INVALID_STATE` |
+| 6.12.0 | Qt online installer | 140 | `AbortError: Invalid state` | `INVALID_STATE` |
+
+The 6.10.2 row is the earlier run recorded above; the other two are this one.
+Three builds, two vendors, eighteen Chromium major versions apart, one
+failure. The two new rows' Chromium numbers are the user agent each
+library carries -- `strings libQt6WebEngineCore.so.<v> | grep Chrome/` --
+rather than a version anybody remembered; the first draft of this table had
+6.12.0's from memory, which happened to be right and would not have been
+catchable by measuring the same thing again. 6.10.2's 134 is the earlier
+run's and was not re-taken; that build was extracted into a private prefix
+rather than installed, and nothing in this session went looking for it.
+
+**A control was run on the same Xvfb rather than borrowed from the earlier
+session's display**, because two failures on a display nobody had shown to be
+capturable would say only that Xvfb cannot be shared. Chromium itself,
+headful, `--auto-select-desktop-capture-source="Entire screen"`, put
+`R stream:1` in its window title, from a copy of the reproducer's own page,
+on the same display. So there is a screen there and it can be captured.
+
+**That control is the weaker of the two this section already describes, and
+the first draft of this paragraph claimed it was the stronger one.** It said
+the flag goes through `DesktopMediaList` -- and four paragraphs above, this
+same section records the opposite, measured: the flag *bypasses*
+`DesktopMediaList`, which is why the earlier session drove Chromium's real
+picker by hand rather than stopping there. So what the Xvfb control
+establishes is that the capturer works on this display, not that the picker
+path does; the hand-driven picker remains the evidence for that, and it was
+taken on the real desktop. Caught by re-reading the section being appended
+to, which is the only instrument that could have caught it -- the claim was
+plausible, the run was real, and nothing in the output disagreed.
+
+What the three-build comparison does not need either control for is its own
+point: same display, same program, same answer, three Qt builds, one result.
+
+Verbose Chromium logging says the same thing on 6.12.0 that it said on 6.8.2,
+with the capturer having already chosen a source before the answer is thrown
+away:
+
+    screen_capturer_x11.cc:333] XRandR selected source: 368
+    MSM::HandleAccessRequestResponse(..., {result=INVALID_STATE})
+    MSM::FinalizeRequestFailed(..., {result=INVALID_STATE})
+
+**What this does not establish.** The reproducer has never been seen to
+succeed, because nothing here can make Qt succeed -- its exit-0 branch is
+unexercised, and the page's success path is proven only by the Chromium
+control having taken it. And 6.12.0 was measured under Xvfb only: 6.8.2 is
+known to fail on the real desktop because that is where the report came from,
+and the new build has not been put on a live display, which is not this
+session's to occupy.
+
+Filing it is the copyright holder's. What the report needs is here: a
+standalone reproducer that can be handed over as it stands, three builds from
+two vendors, a control showing the display is capturable, and the internal
+result code Chromium refuses with.
 
 ## Teams reads the permission before we have answered it
 
@@ -14348,12 +14440,19 @@ carried along as amendments to a list item.
    when it was written, so no future default change reaches anybody who has run
    a previous build.
 
-   **And meet a real `getDisplayMedia`.** Everything up to the engine call is
-   proven against fakes -- the shield is consulted, the picker shown, the answer
-   turned into a `selectScreen` or `selectWindow` on the right model, and every
-   other path cancels -- but nothing here has a compositor that will hand out a
-   screen capture, so the last hop is unmeasured. A meeting on the desktop is
-   the test.
+   **And meet a real `getDisplayMedia`, which is now blocked on Qt rather than
+   on a compositor.** Everything up to the engine call is proven against fakes
+   -- the shield is consulted, the picker shown, the answer turned into a
+   `selectScreen` or `selectWindow` on the right model, and every other path
+   cancels. The last hop fails in Qt: see *Official Qt binaries fail
+   identically* above, where a standalone reproducer that links nothing of
+   this project is refused by Debian's 6.8.2 and by the Qt installer's
+   6.12.0, on the same display, in the same run of the same program -- and
+   the earlier session's 6.10.2 makes three. So a meeting on the desktop is
+   not the test any more: it would fail for a reason that is not this
+   project's. What is outstanding is a bug report, and that is the copyright
+   holder's to file; the reproducer, the three builds and the controls are
+   recorded for it.
 
    Two capabilities stay blocked on purpose and are not outstanding work.
    Clipboard reading is gated by the engine behind `JavascriptCanAccessClipboard`

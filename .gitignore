@@ -6,7 +6,11 @@
 # `android` build left 63 MB of apk showing as untracked.
 /build-android*/
 /build-qmake/
-/test/build-make/
+# `BUILD_DIR` is a variable, so the test tree's output directory is whatever
+# the reader passed: `build-make` by default, `build-qt612` for a build
+# against another Qt kit. Naming the default alone is the mistake the android
+# comment above records, one directory over.
+/test/build-*/
 # fmake's object cache. It grew to 146 MB under src/ from a trial nobody
 # cleaned up, and an ignored directory is one nothing reminds you about.
 .fmake/

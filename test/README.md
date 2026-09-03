@@ -415,6 +415,29 @@ site nobody controls.
 | `try_settings` | nothing | the Settings dialog driven through the real window |
 | `try_forget` | nothing | clearing browsing data end to end: the settings dialog's **Clear now** button, kiosk's `clear_between_sessions` in a live session, its idle timer -- the clearing moment an unattended screen actually runs on -- and the page-requested-fullscreen path that must clear *nothing*. Measured by whether a local server is still sent a `Cookie:` header |
 | `try_files` | nothing | the File System Access prompt: a page asking for a folder, driven through a real click and a real file chooser, answered both ways, and measured by what the page's promise was given. Also what could **not** be reached, and the trace that says why |
+| `try_share` | nothing | `getDisplayMedia` through the real shell, cut where the *dialogs* differ rather than where the outcomes do: the shield's prompt and the picker inside it, the picker alone, and an answer from the callback with no dialog anywhere. It fails on every variant for a reason outside this tree -- see `repro_share` below -- and stays because it will pass the day that stops being true |
+
+**`repro_share` is not a driver and is not in the table**, because it links Qt
+and nothing of this project: it exists so that a display-capture failure can be
+attributed to Qt rather than to the browser around it, which a driver linking
+the whole shell cannot do. It builds against whichever kit `PKG_CONFIG_PATH`
+points at, so a distribution's Qt and an official one can be compared without
+editing anything, and it takes its rpath from the same query so the binary runs
+as it is:
+
+```sh
+make -C test repro && xvfb-run -a -s "-screen 0 1280x800x24" \
+    ./test/build-make/repro_share
+env PKG_CONFIG_PATH=~/Qt/6.12.0/gcc_64/lib/pkgconfig BUILD_DIR=build-qt612 \
+    make -C test repro
+```
+
+Exit 0 means the page got a stream, 1 an error, 2 that nothing answered and 3
+that it could not write its page. It prints the Qt version it is running
+against, how many screens and windows the request offered, and what the page
+finally saw. `project.md` records what three builds answered, and the control
+that has to sit beside them: two failures on a display nobody has shown to be
+capturable would say only that Xvfb cannot be shared.
 
 `try_cookies` needs no server of its own and no network — it stands one up in
 process and serves the page from `127.0.0.1` and a third-party image from
