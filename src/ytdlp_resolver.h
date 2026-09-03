@@ -92,5 +92,9 @@ private:
 	QString  m_program;      // resolved absolute path
 	QStringList m_prefix;    // e.g. {"-m", "yt_dlp"} when running vendored
 	QString  m_origin;       // "PATH" or the vendored directory, for description()
+	// Why nothing was found, when nothing was. Empty unless the answer is
+	// something other than "neither the submodule nor PATH has it" -- see
+	// description(), which used to name a cause it had not tested.
+	QString  m_why;
 	QPointer<QProcess> m_proc;
 };

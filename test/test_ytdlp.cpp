@@ -61,6 +61,27 @@ static const char *k_bare = R"({
   "vcodec": "avc1", "acodec": "mp4a"
 })";
 
+// Whether this tree has the submodule checked out, looked for the way the
+// resolver does -- a checkout is the file `yt_dlp/__main__.py` -- but from
+// here rather than through the resolver, so the premise stays independent of
+// the thing being tested. Both roots the resolver searches from, the binary's
+// directory and the working directory, because checking only one would call a
+// copy absent that the resolver goes on to find. A couple of levels up, since
+// a suite may be run from the repository root or from `test/`.
+static bool vendored_checkout_present() {
+	QStringList roots;
+	roots << QCoreApplication::applicationDirPath() << QDir::currentPath();
+	QStringList rels;
+	rels << "third_party/yt-dlp" << "../third_party/yt-dlp"
+	      << "../../third_party/yt-dlp";
+	for (const QString &root : roots)
+		for (const QString &rel : rels)
+			if (QFileInfo::exists(QDir(QDir(root).absoluteFilePath(rel))
+			                          .filePath("yt_dlp/__main__.py")))
+				return true;
+	return false;
+}
+
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication app(argc, argv);
@@ -149,23 +170,27 @@ int main(int argc, char **argv) {
 		// the working directory -- because checking only one would call a copy
 		// absent that the resolver goes on to find, and then assert it was not
 		// found.
-		QStringList roots;
-		roots << QCoreApplication::applicationDirPath() << QDir::currentPath();
-		QStringList rels;
-		rels << "third_party/yt-dlp" << "../third_party/yt-dlp"
-		      << "../../third_party/yt-dlp";
-		bool vendored = false;
-		for (const QString &root : roots)
-			for (const QString &rel : rels)
-				if (QFileInfo::exists(QDir(QDir(root).absoluteFilePath(rel))
-				                          .filePath("yt_dlp/__main__.py")))
-					vendored = true;
+		const bool vendored = vendored_checkout_present();
 		const bool on_path = !QStandardPaths::findExecutable("yt-dlp").isEmpty();
-		if (vendored || on_path) {
+		// **A checkout is not on its own something that runs.** The vendored
+		// branch is guarded by python3 -- the submodule is inert source
+		// without an interpreter -- so "vendored, therefore available" is a
+		// premise this suite cannot make. It would fail on a machine with the
+		// submodule and no python3, for the absence of python3, while
+		// reporting that the resolver had failed to find a copy that is
+		// sitting right there.
+		const bool python = !QStandardPaths::findExecutable("python3").isEmpty();
+		if ((vendored && python) || on_path) {
 			check(r.available(),
 			      QString("a runnable yt-dlp was located (%1)")
-			          .arg(vendored ? "vendored copy present"
-			                         : "one on PATH"));
+			          .arg(vendored && python ? "vendored copy present"
+			                                   : "one on PATH"));
+		} else if (vendored) {
+			note("skipped: the submodule is here but python3 is not, so there "
+			      "is nothing to run it with");
+			check(!r.available(),
+			      "and the resolver says so rather than claiming a copy it "
+			      "cannot start");
 		} else {
 			note("skipped: no yt-dlp vendored and none on PATH, so there is "
 			      "nothing for the resolver to find");
@@ -173,6 +198,43 @@ int main(int argc, char **argv) {
 			      "and the resolver says so rather than claiming one");
 		}
 		check(!r.busy(), "and it starts idle");
+	}
+
+	section("when nothing runs, it names the thing that is missing");
+	{
+		// **This message reaches the status bar**, via main_window, so it is a
+		// person reading it rather than a developer. It used to say "clone
+		// with --recurse-submodules, or install it" whatever the reason --
+		// including on a tree whose submodule is fully checked out and which
+		// simply has no python3, where both offered remedies are already
+		// satisfied and the one thing actually wrong goes unmentioned. The
+		// vendored branch is guarded by python3, so a missing interpreter
+		// falls straight through the PATH fallback and out the bottom.
+		//
+		// PATH is emptied rather than mocked, because it is the only input
+		// this depends on: no python3 to run the vendored copy with, and no
+		// yt-dlp of its own to fall back to.
+		const QByteArray saved = qgetenv("PATH");
+		qputenv("PATH", "/nonexistent-so-nothing-resolves");
+		QString said;
+		bool runnable = true;
+		{
+			ytdlp_resolver r;
+			said = r.description();
+			runnable = r.available();
+		}
+		qputenv("PATH", saved);
+
+		check(!runnable, "with nothing on PATH, nothing is runnable");
+		if (vendored_checkout_present()) {
+			check(said.contains("python3"),
+			      QString("and the message names python3 -- \"%1\"").arg(said));
+			check(!said.contains("--recurse-submodules"),
+			      "rather than advising a checkout this tree already has");
+		} else {
+			note("skipped: no vendored checkout here, so the submodule advice "
+			      "is the right advice and there is nothing to distinguish");
+		}
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

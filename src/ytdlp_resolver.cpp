@@ -48,6 +48,7 @@ void ytdlp_resolver::refresh() {
 	m_program.clear();
 	m_prefix.clear();
 	m_origin.clear();
+	m_why.clear();
 
 	// **The vendored copy first, because it is pinned.** This used to prefer
 	// PATH, on the reasoning that the package manager keeps that one current
@@ -86,12 +87,35 @@ void ytdlp_resolver::refresh() {
 	if (!on_path.isEmpty()) {
 		m_program = on_path;
 		m_origin  = "PATH";
+		return;
+	}
+
+	// **Nothing runnable, so work out which thing is actually missing.**
+	//
+	// The message this feeds used to say "clone with --recurse-submodules, or
+	// install it" whatever the reason -- and on a tree whose submodule is
+	// fully checked out but which has no python3, both of those remedies are
+	// already satisfied. The vendored branch above is guarded by python3, so a
+	// missing interpreter falls straight through to here and the person is
+	// told to fix the one thing that is not wrong. It reaches the status bar,
+	// so it is a user reading it rather than a developer.
+	for (const QString &dir : vendored_candidates()) {
+		if (!looks_like_checkout(dir))
+			continue;
+		if (python.isEmpty())
+			m_why = QString("yt-dlp needs python3 to run the vendored copy in "
+			                 "%1 — install python3, or install yt-dlp itself")
+			          .arg(dir);
+		break;
 	}
 }
 
 QString ytdlp_resolver::description() const {
 	if (m_program.isEmpty())
-		return "yt-dlp not found — clone with --recurse-submodules, or install it";
+		return m_why.isEmpty()
+		         ? QString("yt-dlp not found — clone with --recurse-submodules, "
+		                    "or install it")
+		         : m_why;
 	if (m_origin == "PATH")
 		return QString("yt-dlp from PATH (%1)").arg(m_program);
 	return QString("vendored yt-dlp (%1)").arg(m_origin);
