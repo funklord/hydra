@@ -1089,6 +1089,28 @@ public class HydraWebView {
             String ua = on ? desktopUserAgent(base) : base;
             if (ua != null && !ua.isEmpty())
                 s.setUserAgentString(ua);
+            // **A desktop string without a desktop viewport is half a
+            // toggle**, and the half that was missing is the one a page can
+            // see. Both of these default to false, and neither was ever set:
+            // so a site told to serve its desktop pages -- which carry no
+            // `width=device-width` viewport meta, having no reason to -- was
+            // laid out at the device's own CSS width instead of at the wide
+            // default a desktop layout is written for. On the handset this is
+            // tested on that width is 320 CSS pixels, folded.
+            //
+            // setUseWideViewPort makes the WebView honour a viewport meta tag
+            // and fall back to the wide default when there is none;
+            // setLoadWithOverviewMode then scales that width down to fit
+            // rather than opening zoomed into its top-left corner. Chrome's
+            // own Request Desktop Site changes the layout viewport as well as
+            // the string, which is why its desktop pages arrive looking like
+            // desktop pages.
+            //
+            // Scoped to the toggle rather than set for every page: switching
+            // the viewport model for ordinary mobile browsing is a change to
+            // how every site lays out, and is not what this control means.
+            s.setUseWideViewPort(on);
+            s.setLoadWithOverviewMode(on);
             String original = w.getOriginalUrl();
             String now = w.getUrl();
             if (original != null && !original.isEmpty() && !original.equals(now))
