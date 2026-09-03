@@ -295,6 +295,30 @@ run: all
 # `build-make` relative to `test/`, which is why the target named below is
 # spelled without the `test/` that TESTS_DIR carries.
 test:
+	@# **A floor, because this list is computed and an empty one passes.**
+	@# SUITES comes from $$(wildcard test/test_*.cpp) minus NEEDS_MORE, so
+	@# anything that makes the wildcard match nothing -- a rename, a move, a
+	@# run from somewhere unexpected -- leaves both loops below iterating an
+	@# empty list, setting fail=0, printing the reassuring "not run here"
+	@# trailer and exiting 0 having built and run nothing at all.
+	@#
+	@# `.github/workflows/ci.yml` already says this in as many words and
+	@# guards it with `-ge 30`. The guard was only there, which made it
+	@# something a person could get wrong locally and hear about remotely --
+	@# and `check: style test` is what a person runs before committing. So the
+	@# floor belongs here, where both paths cross it.
+	@#
+	@# 33 run today, of 43 files with 10 in NEEDS_MORE. The floor is below
+	@# that rather than equal to it: suites come and go, and the failure worth
+	@# catching is the list collapsing, not one suite being retired.
+	@n=$$(echo $(SUITES) | wc -w); \
+	 if [ "$$n" -lt 30 ]; then \
+		echo "test: only $$n suite(s) in the list; expected at least 30." >&2; \
+		echo "      Running none of them and reporting success is the failure" >&2; \
+		echo "      this floor exists to prevent. Check that test/test_*.cpp" >&2; \
+		echo "      still matches from $$(pwd)." >&2; \
+		exit 1; \
+	 fi
 	@for t in $(SUITES); do $(MAKE) --no-print-directory -C test -j$(JOBS) \
 	   build-make/$$t >/dev/null || exit 1; done
 	@mkdir -p $(TEST_TMP)
@@ -361,21 +385,57 @@ deb: version-check
 	@ls -1 $(BUILD_DIR)/deb/*.deb
 
 # The VERSION file is the source; debian/changelog is checked against it.
+#
+# **Two readers, and the second one is the point.** This called
+# `dpkg-parsechangelog` alone and printed "skipped" when it was absent -- a
+# check reporting success over nothing, on exactly the machine least likely to
+# have dpkg-dev installed. Measured before changing it: with a stub on PATH
+# reading 9.9 against a VERSION of 0.1 the rule failed correctly, and with the
+# same disagreement and the tool merely missing it printed "skipped" and exited
+# 0. `debian/rules` and `debian/changelog` both name this rule as what fails a
+# build on drift, so that silence had somewhere to go.
+#
+# The topmost changelog entry *is* the current version, by the format's own
+# definition, so `sed` can read it and there is no machine where this has to
+# give up. `dpkg-parsechangelog` is still asked where it exists, and the two
+# are compared with each other rather than one being preferred -- a fallback
+# that only ever runs where nothing can check it is wrong the first time it
+# matters.
+#
+# **And the hydra.pro arm is no longer behind the tool.** It was the third
+# branch of an if/elif chain whose first branch caught a missing
+# `dpkg-parsechangelog`, so a check that reads one local file with `grep` and
+# needs no dpkg at all was unreachable on any machine without dpkg-dev. Two
+# checks were lost to one absent tool.
 version-check:
 	@file=$$(cat VERSION); \
-	changelog=$$(dpkg-parsechangelog -SVersion 2>/dev/null); \
-	if [ -z "$$changelog" ]; then \
-		echo "version-check: skipped (dpkg-parsechangelog unavailable)"; \
-	elif [ "$$file" != "$$changelog" ]; then \
-		echo "version-check: VERSION says $$file but"; \
-		echo "               debian/changelog says $$changelog"; \
+	line=$$(sed -n '1s/^[^ ]* (\([^)]*\)).*/\1/p' debian/changelog); \
+	if [ -z "$$line" ]; then \
+		echo "version-check: debian/changelog line 1 names no version" >&2; \
+		sed -n '1p' debian/changelog >&2; \
 		exit 1; \
-	elif ! grep -q 'VERSION *= *\$$\$$cat(VERSION' hydra.pro; then \
-		echo "version-check: hydra.pro states a version instead of reading"; \
-		echo "               VERSION; the two will drift"; \
+	fi; \
+	tool=$$(dpkg-parsechangelog -SVersion 2>/dev/null); \
+	if [ -n "$$tool" ] && [ "$$tool" != "$$line" ]; then \
+		echo "version-check: dpkg-parsechangelog reads $$tool where" >&2; \
+		echo "               line 1 reads $$line -- this rule's own" >&2; \
+		echo "               fallback is wrong, not the changelog" >&2; \
 		exit 1; \
+	fi; \
+	if [ "$$file" != "$$line" ]; then \
+		echo "version-check: VERSION says $$file but" >&2; \
+		echo "               debian/changelog says $$line" >&2; \
+		exit 1; \
+	fi; \
+	if ! grep -q 'VERSION *= *\$$\$$cat(VERSION' hydra.pro; then \
+		echo "version-check: hydra.pro states a version instead of reading" >&2; \
+		echo "               VERSION; the two will drift" >&2; \
+		exit 1; \
+	fi; \
+	if [ -n "$$tool" ]; then \
+		echo "version-check: $$file, in step (both readers agree)"; \
 	else \
-		echo "version-check: $$file, in step"; \
+		echo "version-check: $$file, in step (no dpkg-dev; read line 1)"; \
 	fi
 
 deb-check: deb
@@ -537,12 +597,43 @@ style-docs:
 	@# The shared gate checks backticked paths in table rows, which covers
 	@# most of what this target used to do by hand, and checks repeated
 	@# headings at every level rather than just `###`. What it cannot read is
-	@# this document's `foo.{h,cpp}` shorthand, used 31 times in the layout
+	@# this document's `foo.{h,cpp}` shorthand, used 72 times in the layout
 	@# table and nowhere in any sibling project, so that stays here.
-	@miss=0; for f in $$(sed -n '/^| Area | Files | Notes |/,/^$$/p' project.md | \
-	       grep -oE '`[a-z_]+\.\{h,cpp\}`' | tr -d '`' | sed 's/\.{h,cpp}/.h/' | sort -u); do \
-	   [ -f "src/$$f" ] || { echo "project.md names a file that does not exist: src/$$f"; miss=1; }; \
-	 done; exit $$miss
+	@#
+	@# **The count is asserted, not just stated.** The loop below iterates a
+	@# list this recipe computes, so an extraction that matches nothing runs
+	@# zero times, reports nothing missing and exits 0 -- a clean pass over an
+	@# empty set, which is the shape this repository keeps meeting. Changing
+	@# one word in the table's heading is enough to do it.
+	@#
+	@# **And the range no longer ends at a blank line.** `/^$$/` as the
+	@# terminator meant a blank line inserted mid-table silently truncated the
+	@# set, losing every name below it without changing the verdict. Ending at
+	@# the first line that starts with something other than `|` cannot be
+	@# tripped that way, because a blank line has no first character to match.
+	@#
+	@# The floor is deliberately below today's count rather than equal to it:
+	@# this table grows and shrinks with the source, and the failure worth
+	@# catching is collapse, not drift. `ci.yml` makes the same trade for the
+	@# suite list.
+	@names=$$(sed -n '/^| Area | Files | Notes |/,/^[^|]/p' project.md | \
+	          grep -oE '`[a-z_]+\.\{h,cpp\}`' | tr -d '`' | \
+	          sed 's/\.{h,cpp}/.h/' | sort -u); \
+	 n=$$(printf '%s\n' "$$names" | grep -c .); \
+	 if [ "$$n" -lt 60 ]; then \
+		echo "style-docs: $$n shorthand names found in the layout table," >&2; \
+		echo "            fewer than the 60 expected. The table did not shrink" >&2; \
+		echo "            by itself: the heading probably changed, so the" >&2; \
+		echo "            extraction now matches nothing and would pass." >&2; \
+		exit 1; \
+	 fi; \
+	 miss=0; for f in $$names; do \
+	   [ -f "src/$$f" ] || { echo "project.md names a file that does not exist: src/$$f" >&2; miss=1; }; \
+	 done; \
+	 if [ $$miss -eq 0 ]; then \
+		echo "style-docs: $$n names in the layout table, every one present in src/"; \
+	 fi; \
+	 exit $$miss
 
 help:
 	@sed -n '/^# TARGETS/,/^# BUILD FLAGS/p' $(firstword $(MAKEFILE_LIST)) | \
