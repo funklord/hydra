@@ -659,7 +659,26 @@ QString build_permissions_shim(android_view *v, const QUrl &origin) {
 
 QString android_view::document_start_script(qint64 id, const QUrl &url) {
 	android_view *v = s_views.value(id);
-	return v ? build_permissions_shim(v, url) : QString();
+	// Says which precondition failed, because "empty" has three causes here and
+	// they want different repairs: no view under this id, no capability peek
+	// installed yet, or a url with nothing to key a site rule on.
+	// **Two of these three are ordinary and one is not.** No view and no peek
+	// yet are both startup facts -- the first load is `about:blank` before the
+	// shell has installed anything -- so they are debug-only, or every launch
+	// prints a warning about a page with no site to have an opinion about.
+	const bool debug = qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG");
+	if (!v) {
+		if (debug)
+			qWarning("document-start: no view for id %lld", (long long)id);
+		return QString();
+	}
+	if (!v->peek()) {
+		if (debug)
+			qWarning("document-start: no capability peek yet for %s",
+			          qPrintable(url.toString()));
+		return QString();
+	}
+	return build_permissions_shim(v, url);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -676,8 +695,15 @@ Java_se_vibes_hydra_HydraWebView_documentStartScript(JNIEnv *env, jclass,
 	if (raw)
 		env->ReleaseStringUTFChars(url, raw);
 	QString r;
-	on_qt_thread([id, dest] { return android_view::document_start_script(id, dest); },
-	              &r);
+	if (!on_qt_thread([id, dest] {
+		        return android_view::document_start_script(id, dest); }, &r))
+		// **Loud, and deliberately not behind the debug flag.** This is the
+		// failure that made the shim silently absent on every launch: the page
+		// loads, nothing is injected early, and the only symptom is a site
+		// believing it has no camera. If it ever happens again it should say
+		// so without anybody having to know which variable to set.
+		qWarning("document-start: the Qt thread did not answer in time for %s",
+		          qPrintable(dest.toString()));
 	return env->NewStringUTF(r.toUtf8().constData());
 }
 
@@ -970,9 +996,25 @@ void android_view::load(const QUrl &url) {
 		return;
 	}
 	sync_geometry();
+	// **The document-start script is handed over, not asked for.**
+	//
+	// The Java side used to call back for it, and at startup that call timed
+	// out every time: "the Qt thread did not answer in time". The UI thread
+	// asks the Qt thread for the script while the Qt thread is still bringing
+	// the window up and not yet servicing queued calls, so the answer arrives
+	// after the bound and the page loads with no shim -- which is the whole
+	// bug this path exists to fix, reintroduced one layer down.
+	//
+	// Here there is nothing to wait for. This runs on the Qt thread already,
+	// which is where the shield and the permission state can be read, so the
+	// script is built before the call and travels with it. The link-click path
+	// still asks, because there the UI thread is answering a navigation the Qt
+	// thread is not involved in and `allow_navigation` proves that round trip
+	// works at that moment.
 	QJniObject::callStaticMethod<void>(
-	  k_cls, "load", "(JLjava/lang/String;)V", jlong(m_id),
-	  QJniObject::fromString(url.toString()).object<jstring>());
+	  k_cls, "load", "(JLjava/lang/String;Ljava/lang/String;)V", jlong(m_id),
+	  QJniObject::fromString(url.toString()).object<jstring>(),
+	  QJniObject::fromString(document_start_script(m_id, url)).object<jstring>());
 	emit url_changed(url);
 }
 

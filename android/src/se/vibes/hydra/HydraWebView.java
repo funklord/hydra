@@ -631,7 +631,7 @@ public class HydraWebView {
                         // url can still be registered. A link click never goes
                         // through load() above, so without this the shim would
                         // be armed for the previous page's origin.
-                        armDocumentStart(id, v, url);
+                        armDocumentStart(id, v, url, null);
                         return false;
                     }
 
@@ -876,11 +876,14 @@ public class HydraWebView {
      * dependency being compiled in, so a phone with an old provider takes the
      * onPageStarted path exactly as before -- late, but no worse than it was.
      */
-    private static void armDocumentStart(long id, WebView w, String url) {
+    private static void armDocumentStart(long id, WebView w, String url,
+                                          String provided) {
         if (w == null || url == null || url.isEmpty())
             return;
-        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT))
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            Log.d(PERM_TAG, "document-start unsupported by this WebView provider");
             return;
+        }
         // Removed first and unconditionally: the handler outlives a navigation,
         // so leaving it would stack one script per page visited, each answering
         // with the origin it was built for.
@@ -913,12 +916,20 @@ public class HydraWebView {
         final int port = u.getPort();
         final String rule = scheme + "://" + host + (port > 0 ? ":" + port : "");
 
-        String js = documentStartScript(id, url);
-        if (js == null || js.isEmpty())
+        // A caller on the Qt thread passes the script; one on the UI thread
+        // passes null and this asks, which is the round trip allow_navigation
+        // already makes safely from here.
+        String js = provided != null ? provided : documentStartScript(id, url);
+        if (js == null || js.isEmpty()) {
+            Log.d(PERM_TAG, "document-start: no script for " + url
+                             + " (rule " + rule + ")");
             return;
+        }
         try {
             START_SCRIPTS.put(id, WebViewCompat.addDocumentStartJavaScript(
                                       w, js, Collections.<String>singleton(rule)));
+            Log.d(PERM_TAG, "document-start armed for " + rule
+                             + " (" + js.length() + " chars)");
         } catch (IllegalArgumentException e) {
             // A rule the provider will not accept is not worth failing a
             // navigation over; the onPageStarted path still runs.
@@ -926,12 +937,23 @@ public class HydraWebView {
         }
     }
 
-    public static void load(final long id, final String url) {
+    /**
+     * Load a url, with the document-start script the C++ side already built.
+     *
+     * **Handed over rather than fetched back.** This called
+     * documentStartScript() from the UI thread, which asks the Qt thread and
+     * waits; at startup that timed out every time, because the Qt thread is
+     * bringing the window up and not yet servicing queued calls. The page then
+     * loaded with no shim, which is exactly the failure the shim exists to
+     * prevent. The caller is already on the Qt thread and can read the shield
+     * there, so it builds the script and passes it.
+     */
+    public static void load(final long id, final String url, final String startJs) {
         onUi(new Runnable() {
             @Override public void run() {
                 WebView w = VIEWS.get(id);
                 if (w != null) {
-                    armDocumentStart(id, w, url);
+                    armDocumentStart(id, w, url, startJs);
                     w.loadUrl(url);
                 }
             }
