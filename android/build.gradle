@@ -1,0 +1,112 @@
+// HYDRA-ADDED-BEGIN
+// Qt's own template, with one dependency added.
+//
+// **Why this file exists at all.** androiddeployqt copies its kit's
+// `templates/build.gradle` into the build directory, and anything in the
+// Android package source directory overwrites what it copied -- so the only
+// way to add a Gradle dependency is to ship the whole file. That couples this
+// to the Qt version, exactly as `AndroidManifest.xml` beside it already is.
+//
+// **The one change is `androidx.webkit`,** and it buys document-start script
+// injection. A plain WebView offers no hook that runs before a page's own
+// inline scripts: `onPageStarted` is the earliest, and it is already too late.
+// Measured on the handset -- `navigator.permissions.query({name:"camera"})`
+// answered "prompt" when a page asked at parse time and "granted" when the
+// same page asked 2.5 seconds later, from the same shim.
+//
+// `make android-gradle-check` compares this against the kit's template with
+// everything between the HYDRA-ADDED markers removed, so a kit that moves is
+// noticed rather than silently built against stale contents.
+// HYDRA-ADDED-END
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        //noinspection AndroidGradlePluginVersion
+        classpath 'com.android.tools.build:gradle:9.2.1'
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+apply plugin: qtGradlePluginType
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
+    //noinspection GradleDependency
+    implementation 'androidx.core:core:1.17.0'
+// HYDRA-ADDED-BEGIN
+    // Document-start script injection; see the note at the top of this file.
+    // Feature-detected with WebViewFeature.DOCUMENT_START_SCRIPT before use,
+    // because it depends on the WebView provider on the device rather than on
+    // this dependency being present.
+    implementation 'androidx.webkit:webkit:1.12.1'
+// HYDRA-ADDED-END
+}
+
+android {
+    /*******************************************************
+     * The following variables:
+     * - androidBuildToolsVersion,
+     * - androidCompileSdkVersion
+     * - qtAndroidDir - holds the path to qt android files
+     *                   needed to build any Qt application
+     *                   on Android.
+     * - qtGradlePluginType - whether to build an app or a library
+     *
+     * are defined in gradle.properties file. This file is
+     * updated by QtCreator and androiddeployqt tools.
+     * Changing them manually might break the compilation!
+     *******************************************************/
+
+    namespace = androidPackageName
+    compileSdkVersion androidCompileSdkVersion
+    buildToolsVersion androidBuildToolsVersion
+    ndkVersion = androidNdkVersion
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = [qtAndroidDir + '/src', 'src', 'java']
+            kotlin.srcDirs = [qtAndroidDir + '/src', 'src', 'kotlin']
+            aidl.srcDirs = [qtAndroidDir + '/src', 'src', 'aidl']
+            res.srcDirs = [qtAndroidDir + '/res', 'res']
+            resources.srcDirs = ['resources']
+            renderscript.srcDirs = ['src']
+            assets.srcDirs = ['assets']
+            jniLibs.srcDirs = ['libs']
+       }
+    }
+
+    tasks.withType(JavaCompile) {
+        options.compilerArgs += ['-Xlint:all']
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    aaptOptions {
+        // Do not compress Qt binary resources file
+        noCompress 'rcc'
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = legacyPackaging.toBoolean()
+        }
+    }
+
+    defaultConfig {
+        minSdkVersion qtMinSdkVersion
+        targetSdkVersion qtTargetSdkVersion
+        ndk.abiFilters = qtTargetAbiList.split(",")
+    }
+}

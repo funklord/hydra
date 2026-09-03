@@ -14266,6 +14266,68 @@ this may be a packaging defect rather than an upstream one. Official Qt
 binaries were not tried, and that is the next thing to try before filing
 anything.
 
+## Teams reads the permission before we have answered it
+
+"Teams still does not find cam/mic" survived the Permissions API shim, and
+measuring on the handset said why in one line. The page was asked twice from
+the same document:
+
+| when the page asked | camera |
+| --- | --- |
+| at parse time, which is what Teams does | `prompt` |
+| 2.5 seconds later | `granted` |
+
+The shim was never wrong. It computes `granted` from the shield and the OS
+grant -- logged as `camera shield=1 os=1 -> granted` on the device -- and the
+page confirmed our override was installed. It simply arrives after the
+document's own inline scripts have run, because `onPageStarted` is the
+earliest hook a plain `WebView` offers and Teams reads
+`navigator.permissions.query()` inside its bundle before that fires. The
+comment at `HydraWebView.java` had said exactly this for as long as the shim
+has existed; nothing had measured what it cost.
+
+`androidx.webkit`'s `addDocumentStartJavaScript` is the documented way to be
+earlier, and taking it meant vendoring Qt's whole `build.gradle`:
+androiddeployqt copies the kit's template and the package source directory
+overwrites what it copied, so there is no way to add one Gradle dependency
+without shipping the file. That couples it to the Qt version exactly as
+`AndroidManifest.xml` beside it already is -- and silently, which is the part
+worth fixing rather than accepting. `make android-gradle-check` strips a
+marked region and diffs the rest against
+`$QT_ANDROID_ROOT/src/android/templates/build.gradle`, so a kit that moves is
+a stop rather than a build against stale contents.
+
+**The fix introduced a worse bug than the one it repaired, and reading it
+found that rather than running it.** A document-start script is registered
+*before* the navigation, so it is armed for where the view is going rather
+than where it is -- and it was registered for `"*"`, every origin. A site the
+shield allows the camera, redirecting to one the shield blocks, would have run
+the first site's answer on the second site's document, at parse time, which is
+precisely when a page believes it. The shim would have asserted a permission
+nobody granted for that origin.
+
+It is scoped to the destination origin now, so a redirected document gets no
+script at all and falls back to what the WebView says by itself -- the honest
+answer rather than the wrong one -- with `onPageStarted` still injecting
+afterwards for the url that actually loaded. A url with no host gets nothing,
+and none of `about:`, `data:` or `file:` is a site the shield has an opinion
+about.
+
+**The lesson is where the next person will not be looking.** Everything about
+this path is timing: the bug being fixed is a race between injection and parse,
+the repair is about being earlier, and every comment in it is about *when*. The
+defect the repair introduced was about *where*, and it was invisible from
+inside that frame. A per-tab `ScriptHandler` leak on tab close came out of the
+same read-through, for the same reason -- the change was reviewed for whether
+it ran early enough, twice, before anyone asked what else it touched.
+
+**None of this is confirmed against Teams**, and the distance between "builds
+and injects early" and "fixes the report" is the whole point of the exercise.
+The handset was disconnected before it could be installed. What is verified is
+that it compiles clean, that `make jni` resolves all sixteen native methods,
+that the vendored template matches the kit, and that the measurement above was
+taken on the device with the shim in place.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

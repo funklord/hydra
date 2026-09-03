@@ -133,6 +133,11 @@ public:
 	                            const QString &args_json);
 	// Everything to run at the start of a page, shim first.
 	static QString injected_scripts(qint64 id);
+	// The shim alone, for a destination that has not been navigated to yet.
+	// Registered as a document-start script, which is the only injection point
+	// on Android that runs before a page's own inline scripts -- `onPageStarted`
+	// does not, and Teams reads `navigator.permissions` before it fires.
+	static QString document_start_script(qint64 id, const QUrl &url);
 
 	// Whether any WebView exists in this process. `android_factory` asks
 	// before clearing the cache, which Android does through a view rather than

@@ -620,11 +620,8 @@ namespace {
 // Built per navigation rather than registered once, because the shield's answer
 // is per site and a script injected at view creation would carry the answer for
 // whatever page happened to be open first.
-QString build_permissions_shim(android_view *v) {
-	if (!v || !v->peek())
-		return QString();
-	const QUrl origin = v->url();
-	if (origin.isEmpty())
+QString build_permissions_shim(android_view *v, const QUrl &origin) {
+	if (!v || !v->peek() || origin.isEmpty())
 		return QString();
 
 	auto state_for = [&](policy::feature f, Qt::PermissionStatus os) {
@@ -636,15 +633,53 @@ QString build_permissions_shim(android_view *v) {
 		return os == Qt::PermissionStatus::Granted ? QStringLiteral("granted")
 		                                            : QStringLiteral("prompt");
 	};
-	const QString cam = state_for(policy::feature::camera,
-	                               qApp->checkPermission(QCameraPermission{}));
-	const QString mic = state_for(policy::feature::microphone,
-	                               qApp->checkPermission(QMicrophonePermission{}));
+	// **Both halves of the answer, on request.** The shim reported `granted`
+	// for the microphone and `prompt` for the camera on a handset whose OS had
+	// granted both and whose shield allowed both -- which is impossible from
+	// the code above, so one of the two inputs is not what it looks like. The
+	// answer is a function of exactly two things; logging them is the whole
+	// diagnosis, and guessing between them is not.
+	const Qt::PermissionStatus cam_os = qApp->checkPermission(QCameraPermission{});
+	const Qt::PermissionStatus mic_os = qApp->checkPermission(QMicrophonePermission{});
+	const QString cam = state_for(policy::feature::camera, cam_os);
+	const QString mic = state_for(policy::feature::microphone, mic_os);
+	if (qEnvironmentVariableIsSet("HYDRA_PERM_DEBUG"))
+		qWarning("hydra-perm: origin=%s camera shield=%d os=%d -> %s | "
+		          "microphone shield=%d os=%d -> %s",
+		          qPrintable(origin.toString()),
+		          int(v->peek()(origin, policy::feature::camera)), int(cam_os),
+		          qPrintable(cam),
+		          int(v->peek()(origin, policy::feature::microphone)), int(mic_os),
+		          qPrintable(mic));
 
 	return permissions_shim::source(cam, mic);
 }
 
 }  // namespace
+
+QString android_view::document_start_script(qint64 id, const QUrl &url) {
+	android_view *v = s_views.value(id);
+	return v ? build_permissions_shim(v, url) : QString();
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_se_vibes_hydra_HydraWebView_documentStartScript(JNIEnv *env, jclass,
+                                                                   jlong id,
+                                                                   jstring url) {
+	// **The destination, not the current page.** A document-start script is
+	// registered before the load begins, so `v->url()` is still the page being
+	// left -- and the shield's answer is per site. Registering the old page's
+	// answer for the new page is the bug this whole path exists to fix, in a
+	// subtler form.
+	const char *raw = url ? env->GetStringUTFChars(url, nullptr) : nullptr;
+	const QUrl dest = QUrl(QString::fromUtf8(raw ? raw : ""));
+	if (raw)
+		env->ReleaseStringUTFChars(url, raw);
+	QString r;
+	on_qt_thread([id, dest] { return android_view::document_start_script(id, dest); },
+	              &r);
+	return env->NewStringUTF(r.toUtf8().constData());
+}
 
 QString android_view::injected_scripts(qint64 id) {
 	android_view *v = s_views.value(id);
@@ -660,7 +695,7 @@ QString android_view::injected_scripts(qint64 id) {
 	for (const QString &src : v->m_script_sources)
 		out += "\n;(function(){\n" + src + "\n})();\n";
 	// Last, so it overrides anything a page script may have captured first.
-	out += build_permissions_shim(v);
+	out += build_permissions_shim(v, v->url());
 	return out;
 }
 

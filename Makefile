@@ -524,7 +524,51 @@ android: android-build
 # The SDK, NDK and JDK go in the environment rather than on the command line
 # because that is where Qt's android mkspec reads them from, and androiddeployqt
 # reads the same variables again in the second step.
-android-build: android-check
+# **Does our vendored build.gradle still match the kit it was taken from?**
+#
+# android/build.gradle exists only to add one Gradle dependency
+# (androidx.webkit, for document-start script injection), and androiddeployqt
+# offers no way to add one without shipping the whole file. So it is Qt's own
+# template with a header and one line added -- and it is therefore coupled to
+# the Qt version, exactly as AndroidManifest.xml beside it already is.
+#
+# The failure this prevents is silent: a kit update changes the template, our
+# copy keeps the old contents, and the build carries on using them. Nothing
+# would say so, and the difference could be anything from a new lint option to
+# a Gradle plugin version the rest of the toolchain expects.
+#
+# Compared with the added line and the added header removed, so the comparison
+# is against what we actually took. It fails rather than warns: if this
+# diverges, the vendored copy is stale and what it is building with is not
+# what the kit intends.
+android-gradle-check:
+	@tmpl="$(QT_ANDROID_ROOT)/src/android/templates/build.gradle"; \
+	 if [ ! -f "$$tmpl" ]; then \
+		echo "android-gradle-check: no template at $$tmpl" >&2; \
+		echo "  QT_ANDROID_ROOT does not look like a Qt-for-Android kit." >&2; \
+		exit 2; \
+	 fi; \
+	 mkdir -p $(BUILD_DIR); \
+	 sed '/HYDRA-ADDED-BEGIN/,/HYDRA-ADDED-END/d' android/build.gradle \
+	   > $(BUILD_DIR)/gradle-ours.tmp; \
+	 if [ ! -s $(BUILD_DIR)/gradle-ours.tmp ]; then \
+		echo "android-gradle-check: stripping the markers left nothing." >&2; \
+		echo "  The markers are wrong, not the template." >&2; \
+		exit 1; \
+	 fi; \
+	 if diff -q "$$tmpl" $(BUILD_DIR)/gradle-ours.tmp >/dev/null 2>&1; then \
+		echo "android-gradle-check: android/build.gradle is the kit's template plus our one dependency"; \
+	 else \
+		echo "android-gradle-check: android/build.gradle no longer matches" >&2; \
+		echo "  $$tmpl" >&2; \
+		echo "  The kit has moved. Re-apply the androidx.webkit dependency on" >&2; \
+		echo "  top of the new template, keeping the HYDRA-ADDED markers." >&2; \
+		echo "  What differs (kit on the left, ours on the right):" >&2; \
+		diff "$$tmpl" $(BUILD_DIR)/gradle-ours.tmp | head -20 >&2; \
+		exit 1; \
+	 fi
+
+android-build: android-check android-gradle-check
 	@test -d "$(ANDROID_NDK_ROOT)" || { echo "no NDK at $(ANDROID_NDK_ROOT)"; exit 2; }
 	@test -d "$(ANDROID_SDK_ROOT)" || { echo "no SDK at $(ANDROID_SDK_ROOT)"; exit 2; }
 	@# **Asks for javac, because that is what the message is about.** This was

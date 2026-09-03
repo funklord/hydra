@@ -19,9 +19,15 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
+import androidx.webkit.ScriptHandler;
+
 import java.io.ByteArrayInputStream;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A System WebView, driven from C++.
@@ -39,6 +45,16 @@ import java.util.Map;
 public class HydraWebView {
 
     private static final Map<Long, WebView> VIEWS = new HashMap<>();
+
+    /**
+     * The document-start script each view currently has registered, so the
+     * previous one can be removed before the next is added.
+     *
+     * One per view rather than one per navigation: the handler survives loads,
+     * and leaving the old one in place would stack a script per page visited
+     * and answer with the origin of whichever ran first.
+     */
+    private static final Map<Long, ScriptHandler> START_SCRIPTS = new HashMap<>();
     /**
      * getUserMedia requests waiting on an answer.
      *
@@ -156,6 +172,13 @@ public class HydraWebView {
 
     /** Everything to run at the start of a page: the shim, then the scripts. */
     public static native String injectedScripts(long id);
+
+    /**
+     * The permissions shim alone, built for a url this view has not reached
+     * yet. Separate from injectedScripts because it is registered *before* the
+     * navigation, when the view's own url is still the page being left.
+     */
+    public static native String documentStartScript(long id, String url);
 
     /**
      * The user agent this browser should send, derived from the one the
@@ -601,7 +624,15 @@ public class HydraWebView {
                             return false;
                         // True here means "handled, do not load", so a refusal
                         // is the negation of permission.
-                        return !allowNavigation(id, url, req.hasGesture());
+                        if (!allowNavigation(id, url, req.hasGesture()))
+                            return true;
+                        // Allowed, and the load has not started yet -- which is
+                        // the only moment a document-start script for *this*
+                        // url can still be registered. A link click never goes
+                        // through load() above, so without this the shim would
+                        // be armed for the previous page's origin.
+                        armDocumentStart(id, v, url);
+                        return false;
                     }
 
                     // Every subresource passes through here, on a network
@@ -825,12 +856,84 @@ public class HydraWebView {
             ACTIVITY.runOnUiThread(r);
     }
 
+    /**
+     * Register the permissions shim to run before the next page's own scripts.
+     *
+     * **The whole point is the word "before".** onPageStarted, where this shim
+     * used to go in alone, fires after the document's inline scripts have run.
+     * Measured on the handset: the same page asking
+     * `navigator.permissions.query({name:"camera"})` at parse time was told
+     * "prompt" and asking again 2.5 seconds later was told "granted", from one
+     * shim with one answer. Teams asks at parse time, concludes there is no
+     * camera and says so, which is the report this path exists to fix.
+     *
+     * Called with the destination url rather than the current one, because a
+     * document-start script is registered before the load and the shield's
+     * answer is per site.
+     *
+     * **Feature-detected rather than assumed.** DOCUMENT_START_SCRIPT depends
+     * on the WebView provider installed on the device, not on the androidx
+     * dependency being compiled in, so a phone with an old provider takes the
+     * onPageStarted path exactly as before -- late, but no worse than it was.
+     */
+    private static void armDocumentStart(long id, WebView w, String url) {
+        if (w == null || url == null || url.isEmpty())
+            return;
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT))
+            return;
+        // Removed first and unconditionally: the handler outlives a navigation,
+        // so leaving it would stack one script per page visited, each answering
+        // with the origin it was built for.
+        ScriptHandler old = START_SCRIPTS.remove(id);
+        if (old != null) {
+            try { old.remove(); } catch (RuntimeException e) { /* already gone */ }
+        }
+        // **Scoped to the origin the answer was computed for, not to "*".**
+        //
+        // The shield's answer is per site, and this is registered before the
+        // navigation, so a redirect to somewhere else would run a script
+        // carrying the *first* site's answer on the second site's document --
+        // at parse time, which is exactly when it is believed. A site allowed
+        // the camera redirecting to one that is blocked would have told the
+        // second page "granted".
+        //
+        // Restricting the rule to this origin means such a document gets no
+        // script at all and falls back to what the WebView says by itself,
+        // which is the honest answer rather than the wrong one. onPageStarted
+        // still injects afterwards with the url that actually loaded.
+        //
+        // A url with no host -- about:, data:, file: -- has no origin to scope
+        // to and gets nothing; none of them is a site the shield has an
+        // opinion about.
+        final android.net.Uri u = android.net.Uri.parse(url);
+        final String scheme = u.getScheme();
+        final String host = u.getHost();
+        if (scheme == null || host == null || host.isEmpty())
+            return;
+        final int port = u.getPort();
+        final String rule = scheme + "://" + host + (port > 0 ? ":" + port : "");
+
+        String js = documentStartScript(id, url);
+        if (js == null || js.isEmpty())
+            return;
+        try {
+            START_SCRIPTS.put(id, WebViewCompat.addDocumentStartJavaScript(
+                                      w, js, Collections.<String>singleton(rule)));
+        } catch (IllegalArgumentException e) {
+            // A rule the provider will not accept is not worth failing a
+            // navigation over; the onPageStarted path still runs.
+            Log.d(PERM_TAG, "document-start refused: " + e.getMessage());
+        }
+    }
+
     public static void load(final long id, final String url) {
         onUi(new Runnable() {
             @Override public void run() {
                 WebView w = VIEWS.get(id);
-                if (w != null)
+                if (w != null) {
+                    armDocumentStart(id, w, url);
                     w.loadUrl(url);
+                }
             }
         });
     }
@@ -1099,6 +1202,16 @@ public class HydraWebView {
                 // A closed tab is silent whatever it was doing a moment ago.
                 PLAYING.remove(id);
                 syncPlaybackService();
+                // **And it holds no document-start script.** The handler is
+                // the WebView's, so it is dropped before the view is
+                // destroyed rather than after: removing one from a destroyed
+                // WebView is not something the API promises to survive. Left
+                // in the map it would be both a leak and a stale entry that
+                // the next view to take this id would try to remove.
+                ScriptHandler gone = START_SCRIPTS.remove(id);
+                if (gone != null) {
+                    try { gone.remove(); } catch (RuntimeException e) { /* already gone */ }
+                }
                 ViewGroup p = (ViewGroup) w.getParent();
                 if (p != null)
                     p.removeView(w);
