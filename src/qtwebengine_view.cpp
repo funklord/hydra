@@ -1007,7 +1007,8 @@ void qtwebengine_view::refresh_permissions_shim(const QUrl &origin) {
 	QWebEngineScript s;
 	s.setName(name);
 	s.setSourceCode(permissions_shim::source(word(policy::feature::camera),
-	                                          word(policy::feature::microphone)));
+	                                          word(policy::feature::microphone)) +
+	                 permissions_shim::device_labels());
 	s.setInjectionPoint(QWebEngineScript::DocumentCreation);
 	s.setWorldId(QWebEngineScript::MainWorld);
 	s.setRunsOnSubFrames(true);

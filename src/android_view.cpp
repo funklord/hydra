@@ -652,7 +652,9 @@ QString build_permissions_shim(android_view *v, const QUrl &origin) {
 		          int(v->peek()(origin, policy::feature::microphone)), int(mic_os),
 		          qPrintable(mic));
 
-	return permissions_shim::source(cam, mic);
+	// The device names go in beside the permission answers, and for the same
+	// reason: a site that cannot name a speaker cannot offer one.
+	return permissions_shim::source(cam, mic) + permissions_shim::device_labels();
 }
 
 }  // namespace
