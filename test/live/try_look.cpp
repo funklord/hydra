@@ -12,6 +12,12 @@
 // no platform theme the icon search paths differ, so icons render as Qt's
 // built-ins rather than the desktop's. Layout, spacing, wording and empty
 // states are faithful; colours and icons are not.
+#include "auth_dialog.h"
+#include "cert_dialog.h"
+#include "permission_dialog.h"
+#include "screen_picker.h"
+#include "web_view_backend.h"
+#include <QStringListModel>
 #include "main_window.h"
 #include "node.h"
 #include "policy_engine.h"
@@ -330,6 +336,63 @@ int main(int argc, char *argv[]) {
 		} else {
 			std::printf("  could not add a tab for %s\n", qPrintable(target));
 		}
+	}
+
+	// **The four the network and a page put in front of somebody**, which no
+	// slot reaches and which this driver had therefore never photographed or
+	// audited at desktop size. try_phone builds them to measure them at 360
+	// pixels; the same four want the mnemonic, window-title and cut-label
+	// checks run over them at the size most people will actually meet them.
+	//
+	// Built directly and shown rather than exec'd, which is what try_phone and
+	// try_chrome both do with these: a modal event loop blocks the driver.
+	std::printf("\n== and the ones no menu opens ==\n");
+	{
+		auth_dialog site("bank.example", "Accounts", true, &w);
+		site.show();
+		QApplication::processEvents();
+		save(&site, "auth-site");
+	}
+	{
+		auth_dialog proxy("proxy.corp.example", "Staff", false, &w,
+		                   auth_dialog::asker::proxy);
+		proxy.show();
+		QApplication::processEvents();
+		save(&proxy, "auth-proxy");
+	}
+	{
+		permission_dialog cam("meet.example", policy::feature::camera, true, &w);
+		cam.show();
+		QApplication::processEvents();
+		save(&cam, "permission-camera");
+	}
+	{
+		QStringListModel screens({"Screen 1 (built-in, 1920x1080)",
+		                           "Screen 2 (external)"});
+		QStringListModel windows({"Hydra — a tab that is open", "A terminal",
+		                           "Something with a very long window title that "
+		                           "a narrow screen has to do something sensible "
+		                           "with"});
+		screen_picker picker("meet.example", &screens, &windows, &w);
+		picker.show();
+		QApplication::processEvents();
+		save(&picker, "screen-picker");
+	}
+	{
+		QList<web_view_backend::certificate_offer> offered;
+		web_view_backend::certificate_offer a;
+		a.subject = "Ada Lovelace";
+		a.issuer  = "Example Certification Authority";
+		a.valid_until = "2027-01-01";
+		web_view_backend::certificate_offer b;
+		b.subject = "Ada (work)";
+		b.issuer  = "Corp CA";
+		b.valid_until = "2026-09-01";
+		offered << a << b;
+		cert_dialog cert("id.example", offered, &w);
+		cert.show();
+		QApplication::processEvents();
+		save(&cert, "certificate");
 	}
 
 	std::printf("\n%d image(s) in %s\n", g_shots, qPrintable(g_out));
