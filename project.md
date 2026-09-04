@@ -15717,6 +15717,118 @@ at 406 bytes from 31, which is the earlier fixture doing its job -- and it
 still does not fail the inert row, which is the clearest possible statement of
 what that row was worth.
 
+## Methods that exist, compile, look finished, and nothing calls
+
+**The lens came from the last find.** `last_flattened()` was an accessor with
+no caller anywhere, and the header beside it promised the count was there "so
+the caller can say so". Nothing said so, for as long as the loader existed. So
+the sweep to run next was not another look at loading -- it was: what else in
+this tree is complete and unasked.
+
+`tool/dangling.py` reads every public method declared in `src/*.h` and counts
+calls across `src/` and `test/`. **Reading the declarations finds nothing**,
+because the declarations are exactly what is not wrong; it reads the callers.
+
+### The control, which is the only reason the number means anything
+
+A probe whose failure mode is silence has to be shown capable of speaking. Run
+against `8b9949a` -- the commit before `last_flattened` was wired -- it names
+five. Run against the tree after this change, two:
+
+    8b9949a        has_model, last_flattened, models, output_path,
+                   remove_observer
+    after          models, output_path
+
+So it fires on real instances of exactly the class it is aimed at, and the
+three that disappeared are the three that were wired.
+
+### What the five were, one at a time
+
+- **`last_flattened`** -- wired in the previous change. Tabs had been silently
+  moved up the tree on load since the loader existed.
+- **`remove_observer`** -- the real one, below.
+- **`has_model`** -- a correct accessor its own class was not using.
+  `ollama_provider.cpp` asked `m_models.contains(m_model)` inline in two
+  places while the method sat unused in the header. Both call it now; there
+  were three copies of one predicate and there is one.
+- **`models`** -- returns the list. Nothing needs it. The settings dialog
+  could offer it as a picker instead of a free-text field, and that is a
+  feature rather than a fix. Left, and recorded so the next sweep does not
+  re-derive it.
+- **`output_path`** -- the assembler's convenience accessor for a path its
+  caller passed in. Legitimately unused. Left.
+
+**And one that was never a method.** The first run reported `android_factory`,
+which is a *constructor* -- this project names classes in `snake_case`, so a
+class name and a method name are the same shape and the declaration pattern
+matched it exactly. Reported as a finding before anybody read the line it
+pointed at.
+
+### The observer pair, and how far the hazard actually reaches
+
+`request_filter::add_observer` is called four times in `main_window`'s
+constructor. `remove_observer` was called nowhere. The observers are the
+window's own and go when it does; the filter is declared beside the window in
+`main` and outlives it. So a filter that saw a second window kept four
+pointers to freed objects, and `notify` dereferences every entry with no
+check:
+
+    for (request_observer *o : m_observers)
+        o->on_request(ctx, d);
+
+**One window is made in `main`, so the running program never reaches this.**
+Saying otherwise would be the more exciting claim and it would be false. What
+does reach it is this suite: `test_rotation` builds four windows against one
+filter, so by the end that filter held sixteen observers of which twelve were
+freed. It has not crashed because those windows use a fake factory and issue
+no requests -- **which is a property of the fixture rather than a guarantee**,
+and it stops being true the day somebody shares a filter with a real one.
+
+The fix is four lines in `~main_window`, and the destructor body is the right
+place for the reason already written a few lines below it about the kiosk:
+destructor bodies run before QObject tears down children, so the observers are
+alive here and unregistered by the time they are not.
+
+**Nothing about the list was observable from outside**, so the invariant --
+a window hands back exactly what it registered -- could not be checked by
+anything but a person reading two files. `observer_count()` makes it
+assertable, and is called by the test that asserts it rather than becoming the
+next entry in this sweep.
+
+### The middle number is the control
+
+    ok    a fresh filter has none (0)
+    ok    a live window has registered its four (4)
+    ok    and the filter is empty again once it has gone (0)
+
+**Without the middle line the last one is worthless**: a count of zero after
+the window is exactly what a filter nothing ever registered with reports, so a
+test checking only the end would pass against a window that registers nothing
+at all. Asserted exactly rather than "more than none" on purpose -- a fifth
+observer added later without a matching removal fails the end count, and fails
+this one too, which is what points at the pair instead of at the symptom.
+
+Sabotaged by deleting the four lines: one assertion red, reporting 4, control
+green.
+
+### The probe had three bugs and none of them was loud
+
+Worth recording because all three failed in the same direction. A file reread
+inside a per-line loop, and a per-name rescan of all ninety files -- 72,000
+scans -- which together took it from four seconds to not finishing inside two
+minutes. And a `^` without `re.M`, so a set of class names came back all but
+empty, **which reads exactly like a header with no classes in it** and let the
+constructor through a filter written to stop it.
+
+None of the three made it report something false and loud. Two made it stop,
+which is at least visible; the third made it quietly miss. `evidence.md` puts
+the ratio bluntly -- five probes wrong in a day and nothing measured was -- and
+this is three more on the same side of the ledger.
+
+**Kept as a tool rather than a gate.** It reports two names that are correct as
+they are, so wiring it into `make style` would need an ignore list, and a gate
+carrying an ignore list has been switched off by instalments.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

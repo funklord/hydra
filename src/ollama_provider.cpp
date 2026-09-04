@@ -24,7 +24,7 @@ QString ollama_provider::name() const {
 	// Only when the server has actually answered: `m_models` is empty before a
 	// probe, and calling that "not installed" would be a guess dressed as a
 	// fact.
-	if (m_reachable && !m_models.isEmpty() && !m_models.contains(m_model))
+	if (m_reachable && !m_models.isEmpty() && !has_model(m_model))
 		return QString("Local model (Ollama, %1 \u2014 not installed)").arg(m_model);
 	return QString("Local model (Ollama, %1)").arg(m_model);
 }
@@ -36,7 +36,10 @@ bool ollama_provider::ready(QString *reason) const {
 			           "another backend in Settings.";
 		return false;
 	}
-	if (!m_models.isEmpty() && !m_models.contains(m_model)) {
+	// `has_model` rather than a third copy of the same test. It existed with
+	// no caller anywhere while this file asked the question inline twice --
+	// the accessor was right and the class it belongs to was not using it.
+	if (!m_models.isEmpty() && !has_model(m_model)) {
 		if (reason)
 			*reason = QString("Ollama is running but does not have \"%1\". "
 			                   "Pull it, or pick one it has in Settings.")

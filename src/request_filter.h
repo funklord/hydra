@@ -101,6 +101,16 @@ public:
 	// one did.
 	void add_observer(request_observer *o) { if (o) m_observers.push_back(o); }
 	void remove_observer(request_observer *o) { m_observers.removeAll(o); }
+	// **How many are registered, so the pairing can be asserted.** For most of
+	// this class's life `add_observer` had a counterpart that nothing called,
+	// and the only way to notice was to read both. A filter that outlives a
+	// window then kept that window's observers after they were destroyed, and
+	// `notify` dereferences every entry unconditionally.
+	//
+	// Nothing about the list was observable from outside, so the invariant --
+	// a window hands back exactly what it registered -- could not be checked
+	// by anything but a person reading two files. It can now.
+	int observer_count() const { return int(m_observers.size()); }
 	void notify(const request_context &ctx, const request_decision &d) const;
 
 private:

@@ -2157,6 +2157,32 @@ bool main_window::event(QEvent *e) {
 }
 
 main_window::~main_window() {
+	// **Hand the observers back before they are destroyed.**
+	//
+	// The four below are this window's own -- parented to it, so they go when
+	// it does -- while the filter is not: it is declared beside the window and
+	// outlives it. `add_observer` had no counterpart being called anywhere, so
+	// a filter that saw a second window kept four dangling pointers from the
+	// first, and `notify` dereferences every entry unconditionally.
+	//
+	// One window is made in `main`, so nothing in the running program reaches
+	// this. The suite does: `test_rotation` builds four windows against one
+	// filter, and by the end that filter held sixteen observers of which
+	// twelve were freed. It has not crashed because those windows use a fake
+	// factory and issue no requests -- which is a property of the fixture, not
+	// a guarantee, and it stops being true the day somebody shares a filter
+	// with a real one.
+	//
+	// **The destructor body is the right place**, and for the reason stated
+	// just below about the kiosk: it runs before QObject tears down children,
+	// so the observers are still alive here and are already unregistered by
+	// the time they are not.
+	if (m_filter) {
+		m_filter->remove_observer(m_media);
+		m_filter->remove_observer(m_signals);
+		m_filter->remove_observer(m_ex_signals);
+		m_filter->remove_observer(m_antiadblock);
+	}
 	delete m_players;
 	delete m_filters;
 	// Not a QObject, so it has no parent to take it. Kept as a raw pointer to

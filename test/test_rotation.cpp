@@ -616,6 +616,48 @@ int main(int argc, char **argv) {
 		QDir(dir + "-good").removeRecursively();
 	}
 
+	// **A window hands its observers back.** `request_filter::add_observer` had
+	// a counterpart nothing called anywhere in the tree -- found by grepping
+	// for callers per method, which is the only way this shape shows up: the
+	// interface is complete, which is exactly what is not wrong with it.
+	//
+	// The observers belong to the window and go when it does; the filter is
+	// declared beside the window and outlives it. So a filter that saw a
+	// second window kept four dangling pointers from the first, and `notify`
+	// dereferences every entry with no check. One window is made in `main`, so
+	// the running program never reached it -- this suite did, holding sixteen
+	// observers of which twelve were freed by the end.
+	section("a window gives its observers back to the filter");
+	{
+		policy_engine  own_policy;
+		request_filter own_filter(&own_policy);
+		check(own_filter.observer_count() == 0,
+		      QString("a fresh filter has none (%1)")
+		          .arg(own_filter.observer_count()));
+
+		int during = -1;
+		{
+			main_window w4(&factory, &own_policy, &own_filter);
+			during = own_filter.observer_count();
+		}
+
+		// **The middle number is the control**, and without it the last
+		// assertion is worthless: a count of zero after the window is exactly
+		// what a filter nothing ever registered with reports, so a test that
+		// only checked the end would pass against a window that registers
+		// nothing at all.
+		//
+		// Asserted exactly rather than "more than none", deliberately. If a
+		// fifth observer is added later without a matching removal, the end
+		// count catches it -- and this one fails too, which is what points at
+		// the pair rather than at the symptom.
+		check(during == 4,
+		      QString("a live window has registered its four (%1)").arg(during));
+		check(own_filter.observer_count() == 0,
+		      QString("and the filter is empty again once it has gone (%1)")
+		          .arg(own_filter.observer_count()));
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }
