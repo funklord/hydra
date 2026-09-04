@@ -1593,9 +1593,26 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *zap = tools_menu->addAction("&Zap an Element…", this,
 	                                      &main_window::start_element_picker);
 	zap->setStatusTip("Click a leaked ad; Escape cancels");
-	QAction *banners = tools_menu->addAction("&Cookie Banners We Missed…", this,
+	m_banners_action = tools_menu->addAction("&Cookie Banners We Missed…", this,
 	                                          &main_window::open_site_rules);
-	banners->setStatusTip("Teach a rule from a consent banner nothing matched");
+	m_banners_action->setStatusTip(
+	    "Teach a rule from a consent banner nothing matched");
+	// **The signal had no listener anywhere in the tree.** The blocker records
+	// a banner it could not answer, keeps it in a bounded list, and emits --
+	// and the only way anybody learned of it was to open this menu and look.
+	// Of the three review loops here this is the one whose evidence *is* the
+	// proposal, so an item waiting in it is a rule almost written.
+	//
+	// A count in the entry's own text, which is what `Media (%1)` and the
+	// capture entry already do, rather than anything that interrupts: nothing
+	// here is urgent, and a person who never opens Tools is not being asked to
+	// care.
+	// Straight to the member: Qt lets a slot take fewer arguments than its
+	// signal, and this one wants neither of them -- it reads the list.
+	if (m_consent)
+		connect(m_consent, &consent_blocker::found_unanswerable, this,
+		         &main_window::refresh_banner_affordance);
+	refresh_banner_affordance();
 
 	// **"Something got through here", by name, where somebody can find it.**
 	//
@@ -2120,9 +2137,24 @@ void main_window::undo_reorganize() {
 	                       5000);
 }
 
+void main_window::refresh_banner_affordance() {
+	if (!m_banners_action)
+		return;
+	const int waiting = m_consent ? m_consent->unhandled().size() : 0;
+	m_banners_action->setText(waiting > 0
+	                            ? QString("&Cookie Banners We Missed (%1)…")
+	                                  .arg(waiting)
+	                            : QStringLiteral("&Cookie Banners We Missed…"));
+}
+
 void main_window::open_site_rules() {
 	consent_dialog dlg(m_consent, m_site_rules_path, this);
 	dlg.exec();
+	// The dialog takes a banner off the list when it turns one into a rule, so
+	// the count is stale the moment it closes. Refreshed here rather than from
+	// a signal the dialog would have to grow: it is modal, so there is exactly
+	// one moment afterwards and this is it.
+	refresh_banner_affordance();
 }
 
 void main_window::start_element_picker() {

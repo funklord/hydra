@@ -293,6 +293,33 @@ void consent_blocker::report_unhandled(const QString &labels) {
 	emit found_unanswerable(host, labels.left(400));
 }
 
+bool consent_blocker::forget_unhandled(const QString &host,
+                                         const QString &label) {
+	bool dropped = false;
+	for (int i = m_unhandled.size() - 1; i >= 0; --i) {
+		QStringList parts = m_unhandled.at(i).split(QLatin1Char('\t'));
+		if (parts.isEmpty() || parts.first() != host)
+			continue;
+		// From index 1: the first field is the host, and a host that happens
+		// to read like one of its own button labels must not be removed as
+		// though it were one.
+		for (int j = parts.size() - 1; j >= 1; --j) {
+			if (parts.at(j) == label) {
+				parts.removeAt(j);
+				dropped = true;
+			}
+		}
+		if (!dropped)
+			continue;
+		if (parts.size() <= 1)
+			m_unhandled.removeAt(i);      // nothing left to review
+		else
+			m_unhandled[i] = parts.join(QLatin1Char('\t'));
+		break;
+	}
+	return dropped;
+}
+
 site_rule consent_blocker::rule_from_label(const QString &label,
                                                const QString &as) const {
 	site_rule r;

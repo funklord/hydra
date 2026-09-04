@@ -218,6 +218,11 @@ private:
 	// splitter's first pane. One entry point for both, because the button is
 	// one button and the person pressing it is asking one question.
 	void set_tree_visible(bool visible);
+	// Put the number of banners waiting into the menu entry that reviews them.
+	// **`found_unanswerable` had no listener anywhere**, so the one loop in
+	// this project whose evidence *is* the proposal announced itself to
+	// nobody: a person had to open Tools and guess.
+	void refresh_banner_affordance();
 	// **Give up the path to a file that is there and would not load.**
 	//
 	// Every store in this window loads a file at startup and saves it back
@@ -439,6 +444,7 @@ public:
 	QSet<QString>        m_antiadblock_fixed;
 	QString              m_site_rules_path;
 	QAction            *m_media_action  = nullptr;
+	QAction            *m_banners_action = nullptr;
 	QAction            *m_back_action   = nullptr;
 	QAction            *m_fwd_action    = nullptr;
 	QAction            *m_reload_action = nullptr;

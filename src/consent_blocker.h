@@ -75,6 +75,21 @@ public:
 	// Bounded: a page that reports in a loop must not be able to grow this.
 	QStringList unhandled() const { return m_unhandled; }
 
+	// **Drop a label that has become a rule, so the list is a to-do rather
+	// than a log.** Without this the review loop had no completion: a banner
+	// stayed in `unhandled()` after a rule was learned from it, offering the
+	// same buttons for the same label, with the count under the table
+	// unchanged and everything still there the next time the dialog opened.
+	// A person working through a list could not see what they had done.
+	//
+	// The label is removed rather than the banner, so a banner offering both
+	// a reject and an accept can teach both. A row whose last label goes takes
+	// the row with it -- a host with no labels left is nothing to review.
+	//
+	// Returns whether anything was dropped, so a caller can tell a real
+	// completion from a label that was already gone.
+	bool forget_unhandled(const QString &host, const QString &label);
+
 	// Turn one of those labels into a rule.
 	//
 	// **A button label is generic and a selector is not**, which is the whole

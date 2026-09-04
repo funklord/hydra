@@ -16022,6 +16022,78 @@ thirds of the time. That is about whether the second clause is written at all.
 This is about whether it could have matched once written, and the answer was
 no.
 
+## A review loop with no way to finish an item
+
+**Found from the wrong end, which is the useful part.** A sweep for signals
+nothing connects to -- the sibling of `tool/dangling.py`, and a different lens
+because a dangling method is never called while a dangling signal is emitted
+and heard by nobody -- turned up 68 declared signals and two candidates. One
+was a false positive worth recording. The other sent somebody to read code
+that had a bigger problem than the signal.
+
+    generated_password     connected from JAVASCRIPT, at autofill_script.h:147
+                           over the web channel. A C++-only probe cannot see it.
+    found_unanswerable     emitted at consent_blocker.cpp:293, connected nowhere
+
+### What reading it found
+
+`consent_blocker` records a banner it could not answer, keeps it in a bounded
+deduplicated list, and emits. `unhandled()` is read by `consent_dialog`, which
+turns one of the banner's labels into a rule. That is the loop the record
+calls *"the simplest of the three review loops in this project because there
+is no model in it: the evidence is the proposal."*
+
+**Nothing removed the label afterwards.** `on_accept_selected` learns the
+rule, saves it, reports honestly -- and leaves the row exactly where it was.
+So the banner stayed, offering the same buttons for the same label, with the
+count under the table unchanged and all of it still there the next time the
+dialog opened. The list was a log wearing a to-do list's clothes, and a person
+working down it could not see what they had already dealt with.
+
+It was also unfixable from the list's side: `consent_blocker` had no way to
+drop a row at all. `m_unhandled` only ever grew, bounded at 20.
+
+### What changed
+
+`forget_unhandled(host, label)` drops **the label, not the banner**, so a
+banner offering both a reject and an accept can teach both before it goes; a
+row whose last label goes takes the row with it, because a host with nothing
+left to offer is nothing to review. The dialog calls it after a successful
+learn and rebuilds -- and puts the "Learned:" line back afterwards, since the
+rebuild writes the status line itself and would otherwise replace what the
+person just did with a count.
+
+**And the signal got the listener it never had.** The menu entry carries the
+number waiting -- `&Cookie Banners We Missed (1)…` -- which is exactly what
+`Media (%1)` and the capture entry already do in this window, so it is this
+codebase's idiom rather than a new one. Nothing interrupts: a person who never
+opens Tools is not being asked to care.
+
+A count would have been worthless before, incidentally. It could only have
+gone up.
+
+### Three assertions, three mechanisms, one sabotage
+
+The blocker's own behaviour is checked directly, with two controls -- a label
+that was never there must not report a drop, and the host field must not be
+matched as though it were one of its own button labels.
+
+**But that section could not have found the defect**, and saying so is the
+point of the second one. `forget_unhandled` agreeing with itself proves a
+function; what was broken was that nothing called it. So the dialog is driven
+through the button a person presses, with the buttons named for the purpose.
+
+Sabotaged together -- the dialog stops calling `forget_unhandled`, the signal
+goes back to being connected to nothing:
+
+    FAIL  pressing it takes the banner off the list (1 left)
+    FAIL  and the table it was in no longer shows it
+    FAIL  and a count once one is (&Cookie Banners We Missed…)
+
+Three failures on three mechanisms, and **the blocker section stayed entirely
+green** under the caller sabotage, which is the clearest statement available
+of what a function-level test is worth on this kind of fault.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

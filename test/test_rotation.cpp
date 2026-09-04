@@ -34,6 +34,8 @@
 #include "kiosk_controller.h"
 #include "tab_tree_view.h"
 #include "policy_engine.h"
+#include "consent_blocker.h"
+#include "consent_dialog.h"
 #include "request_filter.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"
@@ -43,6 +45,8 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QPushButton>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <QEventLoop>
 #include <QFile>
 #include <QLabel>
@@ -718,6 +722,109 @@ int main(int argc, char **argv) {
 		// tick says it instead.
 		check(w5.m_drawer_action->isCheckable(),
 		      "and it is a toggle, so its state is visible on the toolbar");
+	}
+
+	// **A review loop with no way to finish an item.** `consent_blocker`
+	// records a banner nothing could answer and the dialog turns one of its
+	// labels into a rule -- and nothing removed the label afterwards. The row
+	// stayed, offering the same buttons, with the count under the table
+	// unchanged and all of it still there the next time the dialog opened. A
+	// person working down the list could not see what they had dealt with.
+	//
+	// Found from the other end: `found_unanswerable` was emitted and connected
+	// to nothing anywhere in the tree, which is what sent anybody to read this
+	// code at all.
+	section("a banner leaves the review list once it has taught a rule");
+	{
+		policy_engine  pol;
+		consent_blocker blocker(&pol);
+		blocker.set_page_host("example.com");
+		blocker.report_unhandled("Godta alle\tAvvis alle");
+		check(blocker.unhandled().size() == 1,
+		      QString("a banner nothing answered is recorded (%1)")
+		          .arg(blocker.unhandled().size()));
+
+		// One label of two: the banner stays, because it still has something
+		// left to teach.
+		check(blocker.forget_unhandled("example.com", "Avvis alle"),
+		      "the label that became a rule is dropped");
+		check(blocker.unhandled().size() == 1,
+		      "the banner stays while it has another label to offer");
+		check(!blocker.unhandled().first().contains("Avvis alle"),
+		      "but that label is gone from it");
+		check(blocker.unhandled().first().contains("Godta alle"),
+		      "and the other one is not");
+
+		// The last one takes the row with it: a host with no labels left is
+		// nothing to review.
+		check(blocker.forget_unhandled("example.com", "Godta alle"),
+		      "the last label is dropped too");
+		check(blocker.unhandled().isEmpty(),
+		      QString("and the banner goes with it (%1 left)")
+		          .arg(blocker.unhandled().size()));
+
+		// **Two controls.** A label that was never there must not report a
+		// drop, or the return value says nothing; and the host field must not
+		// be matched as though it were one of its own button labels.
+		blocker.report_unhandled("example.com\tOK");
+		check(!blocker.forget_unhandled("example.com", "not a label here"),
+		      "a label that is not there is not reported as dropped");
+		check(!blocker.forget_unhandled("other.example", "OK"),
+		      "and neither is one on a host that was never recorded");
+	}
+
+	// **Through the dialog, because the blocker agreeing with itself proves
+	// nothing about the caller.** The section above shows `forget_unhandled`
+	// works; this shows the button a person presses actually reaches it. That
+	// is the gap the tree keeps finding -- a correct function with nothing
+	// calling it -- and it is the one the previous section could not see.
+	section("learning a rule from the dialog takes the banner off the list");
+	{
+		policy_engine   pol;
+		consent_blocker blocker(&pol);
+		blocker.set_page_host("example.com");
+		blocker.report_unhandled("Avvis alle");
+		check(blocker.unhandled().size() == 1, "one banner is waiting");
+
+		consent_dialog dlg(&blocker, QString(), nullptr);
+		auto *list = dlg.findChild<QTreeWidget *>("banners");
+		auto *reject = dlg.findChild<QPushButton *>("learn_reject");
+		check(list && reject, "the dialog has the list and the refuse button");
+		if (list && reject && list->topLevelItemCount() == 1) {
+			QTreeWidgetItem *top = list->topLevelItem(0);
+			check(top->childCount() == 1,
+			      QString("the banner offers its label (%1)")
+			          .arg(top->childCount()));
+			list->setCurrentItem(top->child(0));
+			spin(30);
+			check(reject->isEnabled(),
+			      "and the button turns on for a label, not a host");
+			reject->click();
+			spin(30);
+			check(blocker.unhandled().isEmpty(),
+			      QString("pressing it takes the banner off the list (%1 left)")
+			          .arg(blocker.unhandled().size()));
+			check(list->topLevelItemCount() == 0,
+			      "and the table it was in no longer shows it");
+		}
+	}
+
+	// The signal that led there now has a listener: the menu entry carries the
+	// count, which is what `Media (%1)` and the capture entry already do.
+	section("the menu says how many banners are waiting");
+	{
+		main_window w6(&factory, &policy, &filter);
+		check(w6.m_banners_action != nullptr, "there is a review entry");
+		const QString quiet = w6.m_banners_action->text();
+		check(!quiet.contains('('),
+		      QString("with no count while nothing is waiting (%1)").arg(quiet));
+
+		w6.m_consent->set_page_host("example.com");
+		w6.m_consent->report_unhandled("Godta alle\tAvvis alle");
+		spin(50);
+		const QString loud = w6.m_banners_action->text();
+		check(loud.contains("(1)"),
+		      QString("and a count once one is (%1)").arg(loud));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

@@ -68,6 +68,12 @@ consent_dialog::consent_dialog(consent_blocker *blocker, const QString &rules_pa
 	auto *row = new flow_layout;
 	m_reject = new QPushButton("This button &refuses", this);
 	m_accept = new QPushButton("This button &accepts", this);
+	// Named so a test can press the thing a person presses. Learning a rule
+	// and taking the banner off the list are two different actions and only
+	// one of them was happening; a test that called the blocker directly
+	// could not have seen that.
+	m_reject->setObjectName("learn_reject");
+	m_accept->setObjectName("learn_accept");
 	row->addWidget(m_reject);
 	row->addWidget(m_accept);
 	outer->addLayout(row);
@@ -161,10 +167,31 @@ void consent_dialog::on_accept_selected() {
 	m_blocker->set_rules(rules);
 
 	const bool saved = m_path.isEmpty() ? false : rules.save(m_path);
-	m_status->setText(
+
+	// **Taken off the list, because a review loop needs a done.** Until this
+	// the row stayed after a rule was learned from it -- same buttons, same
+	// label, the count underneath unchanged, and all of it still there the
+	// next time the dialog opened. A person working down a list could not see
+	// what they had already dealt with, and nothing distinguished a banner
+	// still needing an answer from one answered ten minutes ago.
+	//
+	// The label goes, not the banner, so a banner offering both a reject and
+	// an accept can teach both before it disappears. Read from the row's own
+	// parent rather than from anything remembered, since that is the host the
+	// label was recorded under.
+	const QString host = sel.first()->parent()->text(0);
+	m_blocker->forget_unhandled(host, label);
+
+	const QString learned =
 	  QString("Learned: <b>%1</b> means %2. It applies from the next page load, "
 	           "and it is flagged to be folded into the built-in rules.%3")
 	      .arg(label.toHtmlEscaped(), as,
 	           saved ? QString() : QString(" <b>It could not be saved</b>, so "
-	                                        "it will be gone when Hydra closes.")));
+	                                        "it will be gone when Hydra closes."));
+	// Rebuilt after, or the row just handled is still sitting there offering
+	// to be handled again -- and `rebuild` writes the status line itself, so
+	// what was learned has to be put back afterwards or it is replaced by a
+	// count the person did not ask for.
+	rebuild();
+	m_status->setText(learned);
 }
