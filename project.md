@@ -15829,6 +15829,77 @@ this is three more on the same side of the ledger.
 they are, so wiring it into `make style` would need an ignore list, and a gate
 carrying an ignore list has been switched off by instalments.
 
+## Held buttons looked barely held, at 1.22:1
+
+Reported from the desktop: *the contrast of held buttons is poor and hard to
+see.* Measured before anything was touched, by drawing a real `QToolButton` in
+both states and reading the pixels:
+
+    dark    held #313133  unheld #3e3e41   1.22:1
+    light   held #dbdbdb  unheld #fdfdfd   1.36:1
+
+A shade rather than a state. **Measured rather than reasoned about**, because
+which palette role a style reaches for to say "on" is the style's business,
+and the question is what a person sees.
+
+### The palette was incomplete, and that was not the whole of it
+
+`dark_palette()` sets thirteen roles and leaves `Light`, `Midlight`, `Mid`,
+`Dark` and `Shadow` at whatever `QPalette p;` default-constructed from -- the
+light desktop's. Those are the roles a style shades a sunken button with. That
+is a real defect and fixing it alone would have been a fix for one style:
+**the desktop this was reported from runs a style this machine's tests never
+load**, so a palette tuned until Fusion looked right is a guess about theirs.
+
+So the fill is drawn in the proxy style hydra already installs, over whatever
+the base style painted and inset by a pixel so the platform's own edge
+survives. A held button still looks like this desktop's button; it just
+plainly looks held. That is the one answer that does not depend on which style
+is installed.
+
+### Three things the measurement caught that reading would not have
+
+- **The suite did not install the proxy style the application installs.** The
+  first numbers described a build nobody ships. They were identical before and
+  after the fix, which is what said so.
+- **Drawing before the base means not drawing at all.** The base repaints its
+  own panel over the fill. The numbers came back unchanged a second time, and
+  a spy proxy printed which entry points a held `QToolButton` actually reaches
+  -- `PE_PanelButtonTool` and `PE_PanelButtonCommand`, both of which were
+  already handled, which is how the ordering became the suspect.
+- **The reference was the palette role and the eye uses the screen.** Fusion
+  paints an unheld button lighter than `QPalette::Button` says -- `#2b2b2e` in
+  the role, `#3e3e41` drawn -- so a fill clearing 1.6 against the role cleared
+  **1.21** against the button beside it. The fix moved the number by 0.01 and
+  the test reported it. `held_fill` now clears the bar against the base *and*
+  against a deliberately pessimistic stand-in for what a style might draw, the
+  base lightened by a third.
+
+### The floor was set to pass the bug
+
+The first version of the assertion said 1.2:1, written before any number was
+in. The reported defect measures **1.22 and 1.36**, so the check would have
+passed the very thing it was added for, and would have been quoted afterwards
+as evidence the buttons were fine.
+
+It is 1.5 now, which is above what was measured and below what the fix
+achieves. **A floor picked to sit above whatever the code currently does is
+not a floor** -- it is a record of the current behaviour with a comparison
+operator in front of it.
+
+    dark    #595960 vs #3e3e41   1.53:1     label 5.57:1
+    light   #bbbbbb vs #fdfdfd   1.89:1     label 10.94:1
+
+The second column is the other half of the pair and is why the first can be
+pushed at all: a held fill is free to be strong only while what is written on
+it stays readable, so both are asserted and the 3:1 there is the workspace's
+settled legibility floor. The 1.5 is not -- it compares two backgrounds rather
+than a colour against its own text, and the two questions do not share a
+number.
+
+**Measured on Fusion, offscreen.** The mechanism is style-independent by
+construction, the numbers are not.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

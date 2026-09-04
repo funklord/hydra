@@ -19,6 +19,10 @@
 #include <QIcon>
 #include <QStandardPaths>
 #include <QBrush>
+#include <QPixmap>
+#include <QToolButton>
+#include <cmath>
+#include <algorithm>
 #include <QPalette>
 #include <cstdio>
 #include <cstdlib>
@@ -451,6 +455,79 @@ int main(int argc, char **argv) {
 		// reaching it means a live download, and asserting against a second
 		// copy of the literal would be this file agreeing with itself. Named
 		// so the omission is a decision rather than an oversight.
+	}
+
+	// **Can you see which toolbar button is held down?** Reported from the
+	// desktop, and measured here by drawing a real QToolButton in both states
+	// and reading the pixels rather than by reasoning about palette roles.
+	section("a held button is distinguishable from one that is not");
+	{
+		// Gamma-correct relative luminance, the WCAG form the workspace
+		// settled on. Any correct luminance answers this comparison -- what
+		// matters is that both sides use the same one.
+		auto lum = [](const QColor &c) {
+			auto ch = [](double v) {
+				v /= 255.0;
+				return v <= 0.03928 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+			};
+			return 0.2126 * ch(c.red()) + 0.7152 * ch(c.green()) + 0.0722 * ch(c.blue());
+		};
+		auto contrast = [&](const QColor &a, const QColor &b) {
+			const double x = lum(a), y = lum(b);
+			return (std::max(x, y) + 0.05) / (std::min(x, y) + 0.05);
+		};
+		// **The app installs a proxy style and this suite did not**, so the
+		// first run of this measurement reported the platform style's answer
+		// while the running program uses another. The held fill is drawn by
+		// that proxy, so without this the numbers below describe a build
+		// nobody ships -- and they were identical before and after the fix,
+		// which is what said so.
+		theme::install_icon_style();
+
+		// The centre of a rendered button in a given check state. Grabbed
+		// rather than computed: which palette role a style reaches for to
+		// draw "on" is the style's business, and the question here is what
+		// the person actually sees.
+		auto fill_of = [](bool on) {
+			QToolButton b;
+			b.setCheckable(true);
+			b.setChecked(on);
+			b.setText("X");
+			b.resize(40, 40);
+			const QPixmap shot = b.grab();
+			// Two pixels in from a corner: inside the button's own panel and
+			// away from the text in the middle.
+			return shot.toImage().pixelColor(4, 4);
+		};
+
+		for (const auto scheme : {theme::choice::dark, theme::choice::light}) {
+			theme::apply(scheme);
+			const char *what = scheme == theme::choice::dark ? "dark" : "light";
+			const QColor off = fill_of(false), on = fill_of(true);
+			const double held = contrast(on, off);
+			// **1.5, chosen to reject what was measured before the fix.**
+			// The first version of this check said 1.2 -- written before the
+			// numbers were in -- and the reported bug measured 1.22 in dark
+			// and 1.36 in light, so it passed the very thing it was added
+			// for. A floor picked to sit above whatever the code currently
+			// does is not a floor.
+			//
+			// It is a visibility target rather than a legibility one: two
+			// backgrounds are being compared, not a colour against its own
+			// text, so the 3:1 the workspace settled on for that does not
+			// transfer. `held_fill` aims at 1.6 and this leaves a little
+			// room under it for a style that draws its own panel over ours.
+			check(held >= 1.5,
+			      QString("%1: held and unheld differ (%2:1, %3 vs %4)")
+			          .arg(what).arg(held, 0, 'f', 2)
+			          .arg(on.name(), off.name()));
+			const QColor label =
+			    QApplication::palette().color(QPalette::ButtonText);
+			const double readable = contrast(label, on);
+			check(readable >= 3.0,
+			      QString("%1: and its label is still readable on it (%2:1)")
+			          .arg(what).arg(readable, 0, 'f', 2));
+		}
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

@@ -6,7 +6,10 @@
 #include <QProxyStyle>
 #include <QStyleOption>
 #include <QPixmap>
+#include <QPainter>
 #include <QImage>
+#include <cmath>
+#include <algorithm>
 #include <QDir>
 #include <QStandardPaths>
 
@@ -403,9 +406,110 @@ QString theme::icon_theme_from(const QStringList &sources) {
 
 namespace {
 
+// Gamma-correct relative luminance, and the contrast ratio between two
+// colours. Written here rather than reached for from elsewhere because this
+// file is the only thing in the tree that needs it; if a second caller
+// appears, that is the moment to share it rather than to keep a second copy.
+double luminance(const QColor &c) {
+	auto channel = [](double v) {
+		v /= 255.0;
+		return v <= 0.03928 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+	};
+	return 0.2126 * channel(c.red()) + 0.7152 * channel(c.green()) +
+	        0.0722 * channel(c.blue());
+}
+
+double contrast_of(const QColor &a, const QColor &b) {
+	const double x = luminance(a), y = luminance(b);
+	return (std::max(x, y) + 0.05) / (std::min(x, y) + 0.05);
+}
+
+// **What a held button is filled with, so that it plainly looks held.**
+//
+// Reported from the desktop as "the contrast of held buttons is poor and hard
+// to see", and measured before it was touched: a checked toolbar button came
+// out at **1.22:1** against an unchecked one in dark and 1.36:1 in light,
+// which is a shade rather than a state.
+//
+// Derived from the button's own colour rather than from an accent, because
+// the ground is not always ours. In dark the palette is hydra's; in light it
+// is whatever the desktop's style handed over, and `apply()` says why that is
+// deliberate. A fixed accent chosen against one of those is a guess against
+// the other -- the workspace has the measurement for that, thirteen real
+// schemes and no accent clearing the floor on all of them.
+//
+// So walk away from the base colour until the ratio is met, in whichever
+// direction has the room: lighter on a dark button, darker on a light one.
+// That cannot fail for want of headroom, because the direction is chosen by
+// where the headroom is.
+QColor held_fill(const QColor &base) {
+	// **1.6, and it is a visibility target rather than a legibility one.**
+	// Two backgrounds are being compared, not a colour against its own text,
+	// so the 3:1 the workspace settled on for that does not transfer. What is
+	// wanted is a difference nobody has to look for.
+	constexpr double want = 1.6;
+	const bool lighter = luminance(base) < 0.5;
+
+	// **Measured against what the style DRAWS, not against the palette role.**
+	// Aiming at `Button` alone was not enough in dark: Fusion paints an
+	// unheld button lighter than the colour the palette gives -- #2b2b2e in
+	// the role, #3e3e41 on screen -- so a fill that cleared 1.6 against the
+	// role cleared only 1.21 against the button beside it, which is the
+	// comparison a person actually makes. The fix moved the number by 0.01
+	// and the test said so.
+	//
+	// The style is not going to tell us what it will draw, so clear the bar
+	// against a deliberately pessimistic stand-in as well: the base lightened
+	// by a third, which is more than Fusion moves it. Overshooting costs a
+	// slightly stronger held state; undershooting costs the whole point.
+	const QColor drawn = base.lighter(133);
+	QColor c = base;
+	for (int step = 0; step < 96; ++step) {
+		if (contrast_of(c, base) >= want && contrast_of(c, drawn) >= want)
+			break;
+		c = lighter ? c.lighter(105) : c.darker(105);
+	}
+	return c;
+}
+
 // Qt's disabled rendering, with the lift halved. See theme.h.
 class icon_style : public QProxyStyle {
 public:
+	// **Drawn here rather than left to the style**, because which palette role
+	// a style reaches for to say "on" is the style's business and the answers
+	// differ: measured offscreen it is a shade, and the desktop this was
+	// reported from runs a style this machine's test never loads. Filling it
+	// ourselves is the one answer that does not depend on which style is
+	// installed.
+	//
+	// The base style still draws afterwards, so the frame, the focus ring and
+	// everything else stay the platform's. Only the panel underneath is ours.
+	void drawPrimitive(PrimitiveElement el, const QStyleOption *opt,
+	                    QPainter *p, const QWidget *w) const override {
+		const bool held = opt && (opt->state & (State_On | State_Sunken));
+		if (!held || (el != PE_PanelButtonTool && el != PE_PanelButtonCommand)) {
+			QProxyStyle::drawPrimitive(el, opt, p, w);
+			return;
+		}
+		// **The base first, then ours on top of it.** Drawn the other way
+		// round the base repaints its own panel over the fill and nothing
+		// changes at all -- which is exactly what happened, and the
+		// measurement reporting the identical numbers before and after is
+		// what said so rather than any reading of the code.
+		QProxyStyle::drawPrimitive(el, opt, p, w);
+		// Inset by a pixel so whatever edge the platform style drew survives
+		// and only the interior is ours. A held button still looks like this
+		// desktop's button; it just plainly looks held.
+		const QRect inner = opt->rect.adjusted(1, 1, -1, -1);
+		if (inner.isEmpty())
+			return;
+		p->save();
+		p->setPen(Qt::NoPen);
+		p->setBrush(held_fill(opt->palette.color(QPalette::Button)));
+		p->drawRect(inner);
+		p->restore();
+	}
+
 	QPixmap generatedIconPixmap(QIcon::Mode mode, const QPixmap &pixmap,
 	                               const QStyleOption *opt) const override {
 		if (mode != QIcon::Disabled || pixmap.isNull())
