@@ -16383,6 +16383,63 @@ nothing can be added to the set without somebody being told.
 `scrollbars` is the deliberate exception and stays out of the pair: it is the
 kiosk controller's, not the policy's, which the comment beside it explains.
 
+## A kiosk setting that was implemented, honoured, and unreachable
+
+The same lens one type further: **a struct with its own defaults, built fresh
+by a loader, where only some fields are handled.** `view_settings` was clean;
+`kiosk_config` was not.
+
+    fields in the struct            10
+    read by settings_store::kiosk()  9
+    written by set_kiosk()           9
+    controls on the kiosk page       9
+
+`alignment` is the tenth, and it is in none of the three. It is not dead: the
+controller places the design inside the stage with it -- `aligned_rect` at
+`kiosk_controller.cpp:279` -- and the header documents what it is for, *"which
+edges crop under cover"*. So it worked perfectly, at `AlignCenter`, for ever,
+with no way to say anything else.
+
+**And the setting that makes it matter was already on the page.** `fit` is
+offered, Cover crops whatever does not fit, and which edges get cropped is the
+question somebody setting up a screen actually has -- keep the top of a
+poster, keep the bottom of a departure board. Nine of ten persisted, which is
+exactly the proportion nobody notices.
+
+It is stored now as two axes rather than as the flag word, because
+`Qt::Alignment` is a bit field whose numeric value is Qt's to change and this
+file is meant to be repairable by a person -- and because left/centre/right
+and top/centre/bottom is what the setting *is*. The control is a nine-item
+combo, which is how every tool that has this spells it, and it resets with the
+rest of the page's defaults.
+
+### The guard, and why the round trip needs the second half
+
+Every field is written to storage, read back, and compared. That catches a
+field the pair forgets -- measured, with the anchor no longer stored:
+
+    FAIL  the anchor (132 vs 66)
+
+132 is `AlignCenter`: the default arriving where the written value should be.
+
+**Every value written differs from the struct's own default**, and that is not
+decoration. A field that is never stored reads back as its default, so a round
+trip that happens to write defaults passes with the store doing nothing at
+all. There is a check asserting exactly that, so the property cannot quietly
+stop being true.
+
+And the field count is pinned, for the same reason as `view_settings`: the
+comparison names ten fields by hand, so an eleventh would be unmentioned and
+untested -- which is how this one lasted. The message says where to put it.
+
+**Three types now share this shape and two of them had the bug**: `QPalette`,
+where the five shading roles were left at another scheme's values;
+`kiosk_config`, here; and `view_settings`, which was clean but had already
+paid for it once with the scrollbars. It is worth stating as a class -- *a
+struct with in-class defaults, filled in field by field somewhere else, is a
+place where a field can be forgotten silently* -- because the next one will
+not look like either of these.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

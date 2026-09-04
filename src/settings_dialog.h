@@ -199,6 +199,7 @@ private:
 	QSpinBox             *m_kiosk_h      = nullptr;
 	QComboBox            *m_kiosk_scale  = nullptr;
 	QComboBox            *m_kiosk_fit    = nullptr;
+	QComboBox            *m_kiosk_align  = nullptr;
 	QCheckBox            *m_kiosk_cursor = nullptr;
 	QSpinBox             *m_kiosk_idle   = nullptr;
 	QCheckBox            *m_kiosk_dog    = nullptr;

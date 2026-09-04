@@ -124,6 +124,24 @@ kiosk_config kiosk() {
 	  qBound(0, st.value("scale", int(scale_mode::reflow)).toInt(), 2));
 	c.fit = static_cast<fit_mode>(
 	  qBound(0, st.value("fit", int(fit_mode::contain)).toInt(), 3));
+	// **Stored as the two axes rather than as the flag word**, because
+	// `Qt::Alignment` is a bit field whose numeric value is Qt's to change and
+	// this file is meant to be read and repaired by a person. Left/centre/right
+	// and top/centre/bottom is also what the setting *is*.
+	//
+	// It was in neither this function nor `set_kiosk` for as long as the field
+	// existed, so a knob the controller honours -- `aligned_rect` places the
+	// design inside the stage with it -- was fixed at centre with no way to
+	// reach it, while the `fit` setting that makes it matter was on the page.
+	{
+		const int h_align = qBound(0, st.value("alignH", 1).toInt(), 2);
+		const int v_align = qBound(0, st.value("alignV", 1).toInt(), 2);
+		static const Qt::Alignment hs[] = { Qt::AlignLeft, Qt::AlignHCenter,
+		                                     Qt::AlignRight };
+		static const Qt::Alignment vs[] = { Qt::AlignTop, Qt::AlignVCenter,
+		                                     Qt::AlignBottom };
+		c.alignment = hs[h_align] | vs[v_align];
+	}
 	c.hide_cursor = st.value("hideCursor", true).toBool();
 	c.idle_reset_seconds = qMax(0, st.value("idleReset", 0).toInt());
 	c.watchdog = st.value("watchdog", true).toBool();
@@ -151,6 +169,10 @@ void set_kiosk(const kiosk_config &c) {
 	st.setValue("watchdog", c.watchdog);
 	st.setValue("allowEscape", c.allow_escape);
 	st.setValue("clearBetweenSessions", c.clear_between_sessions);
+	st.setValue("alignH", c.alignment.testFlag(Qt::AlignLeft)  ? 0
+	                     : c.alignment.testFlag(Qt::AlignRight) ? 2 : 1);
+	st.setValue("alignV", c.alignment.testFlag(Qt::AlignTop)    ? 0
+	                     : c.alignment.testFlag(Qt::AlignBottom) ? 2 : 1);
 	st.endGroup();
 	// Written through, like every other setter here. The default-constructed
 	// QSettings this used to use was destroyed at the end of the call and
@@ -1359,6 +1381,10 @@ void settings_dialog::restore_page_defaults(int page) {
 		m_kiosk_h->setValue(d.design_size.isValid() ? d.design_size.height() : 0);
 		m_kiosk_scale->setCurrentIndex(m_kiosk_scale->findData(int(d.scale)));
 		m_kiosk_fit->setCurrentIndex(m_kiosk_fit->findData(int(d.fit)));
+		// Centre, which is `kiosk_config`'s own initialiser. Restoring the
+		// page's defaults and leaving one control at whatever it happened to
+		// hold is the same half-finished shape this whole entry is about.
+		m_kiosk_align->setCurrentIndex(m_kiosk_align->findData(1 * 3 + 1));
 		m_kiosk_cursor->setChecked(d.hide_cursor);
 		m_kiosk_idle->setValue(d.idle_reset_seconds);
 		m_kiosk_dog->setChecked(d.watchdog);
@@ -1873,6 +1899,31 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 	  "factor cannot scale the axes independently, so it approximates with "
 	  "cover rather than pretending.",
 	  m_kiosk_fit, page));
+
+	// **Only means anything under Cover, and that is why it belongs here.**
+	// `fit` is on this page and Cover crops whatever does not fit; which edges
+	// get cropped is the question a person setting up a screen actually has --
+	// keep the top of a poster, keep the bottom of a departure board. The
+	// controller has always honoured it (`aligned_rect`); there was simply no
+	// way to say anything but centre.
+	//
+	// Nine positions rather than two combos: it is one decision, and a grid of
+	// names is how every tool that has this setting spells it.
+	m_kiosk_align = new QComboBox(page);
+	m_kiosk_align->setObjectName("kiosk_align");
+	struct { const char *name; int h; int v; } spots[] = {
+		{ "Top left",      0, 0 }, { "Top",     1, 0 }, { "Top right",     2, 0 },
+		{ "Left",          0, 1 }, { "Centre",  1, 1 }, { "Right",         2, 1 },
+		{ "Bottom left",   0, 2 }, { "Bottom",  1, 2 }, { "Bottom right",  2, 2 },
+	};
+	for (const auto &sp : spots)
+		m_kiosk_align->addItem(sp.name, sp.h * 3 + sp.v);
+	v->addWidget(settings_row(
+	  "Anchor",
+	  "Where the design sits when it does not fill the screen, and which "
+	  "edges are cropped when Cover makes it larger. Only Cover crops; the "
+	  "other fits leave everything on screen.",
+	  m_kiosk_align, page));
 
 	m_kiosk_w = new QSpinBox(page);
 	m_kiosk_w->setRange(0, 16384);
@@ -2390,6 +2441,14 @@ void settings_dialog::load_kiosk() {
 	m_kiosk_h->setValue(c.design_size.isValid() ? c.design_size.height() : 0);
 	m_kiosk_scale->setCurrentIndex(m_kiosk_scale->findData(int(c.scale)));
 	m_kiosk_fit->setCurrentIndex(m_kiosk_fit->findData(int(c.fit)));
+	{
+		const int h_align = c.alignment.testFlag(Qt::AlignLeft) ? 0
+		                   : c.alignment.testFlag(Qt::AlignRight) ? 2 : 1;
+		const int v_align = c.alignment.testFlag(Qt::AlignTop) ? 0
+		                   : c.alignment.testFlag(Qt::AlignBottom) ? 2 : 1;
+		m_kiosk_align->setCurrentIndex(
+		    m_kiosk_align->findData(h_align * 3 + v_align));
+	}
 	m_kiosk_cursor->setChecked(c.hide_cursor);
 	m_kiosk_idle->setValue(c.idle_reset_seconds);
 	m_kiosk_dog->setChecked(c.watchdog);
@@ -2404,6 +2463,14 @@ void settings_dialog::apply_kiosk() {
 		c.design_size = QSize(m_kiosk_w->value(), m_kiosk_h->value());
 	c.scale = static_cast<scale_mode>(m_kiosk_scale->currentData().toInt());
 	c.fit = static_cast<fit_mode>(m_kiosk_fit->currentData().toInt());
+	{
+		const int packed = m_kiosk_align->currentData().toInt();
+		static const Qt::Alignment hs[] = { Qt::AlignLeft, Qt::AlignHCenter,
+		                                     Qt::AlignRight };
+		static const Qt::Alignment vs[] = { Qt::AlignTop, Qt::AlignVCenter,
+		                                     Qt::AlignBottom };
+		c.alignment = hs[qBound(0, packed / 3, 2)] | vs[qBound(0, packed % 3, 2)];
+	}
 	c.hide_cursor = m_kiosk_cursor->isChecked();
 	c.idle_reset_seconds = m_kiosk_idle->value();
 	c.watchdog = m_kiosk_dog->isChecked();

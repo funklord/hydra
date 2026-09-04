@@ -1,5 +1,6 @@
 // Settings persistence and the custom-player command template.
 #include "settings_dialog.h"
+#include "kiosk_controller.h"
 #include "request_filter.h"
 #include "scheme_rules.h"
 #include "filter_list.h"
@@ -1066,6 +1067,64 @@ int main(int argc, char **argv) {
 			      "with nothing half-written left behind");
 		}
 		QDir(dir).removeRecursively();
+	}
+
+	// **Every field of `kiosk_config` has to survive a round trip.** The
+	// struct carries its own defaults and `kiosk()` builds a fresh one, so a
+	// field the pair forgets reads back as the default however it was set --
+	// silently, and only on the next launch.
+	//
+	// Found that way: `alignment` was in neither `kiosk()` nor `set_kiosk()`
+	// for as long as it existed, while the controller honoured it and the
+	// `fit` setting that makes it matter was on the page. Nine of ten fields
+	// persisted, which is exactly what nobody notices.
+	section("a kiosk setting survives being written and read back");
+	{
+		kiosk_config c;
+		c.home = QUrl("https://example.com/board");
+		c.design_size = QSize(1280, 720);
+		c.scale = scale_mode::geometric;
+		c.fit = fit_mode::cover;
+		c.alignment = Qt::AlignRight | Qt::AlignBottom;
+		c.hide_cursor = false;
+		c.idle_reset_seconds = 90;
+		c.watchdog = false;
+		c.allow_escape = false;
+		c.clear_between_sessions = true;
+		settings_store::set_kiosk(c);
+
+		const kiosk_config back = settings_store::kiosk();
+		check(back.home == c.home, "the home page");
+		check(back.design_size == c.design_size, "the design size");
+		check(back.scale == c.scale, "the scale mode");
+		check(back.fit == c.fit, "the fit mode");
+		check(back.alignment == c.alignment,
+		      QString("the anchor (%1 vs %2)")
+		          .arg(int(back.alignment)).arg(int(c.alignment)));
+		check(back.hide_cursor == c.hide_cursor, "hiding the cursor");
+		check(back.idle_reset_seconds == c.idle_reset_seconds, "the idle reset");
+		check(back.watchdog == c.watchdog, "the watchdog");
+		check(back.allow_escape == c.allow_escape, "whether Esc leaves");
+		check(back.clear_between_sessions == c.clear_between_sessions,
+		      "clearing between sessions");
+
+		// **Every value above differs from the struct's own default**, or a
+		// field that is never written would read back as the default and pass.
+		const kiosk_config fresh;
+		check(fresh.alignment != c.alignment && fresh.fit != c.fit &&
+		          fresh.scale != c.scale && fresh.watchdog != c.watchdog,
+		      "and the values written are not the defaults, so a field that "
+		      "is never stored cannot pass by accident");
+
+		// **And a field added later cannot slip past the list above**, which
+		// names ten by hand -- an eleventh would simply be unmentioned, which
+		// is precisely how `alignment` went nine years' worth of settings
+		// without being stored. This fails to compile when the struct grows,
+		// and says what to do.
+		static_assert(sizeof(kiosk_config) == 40,
+		               "kiosk_config gained or lost a field: store it in "
+		               "kiosk()/set_kiosk, offer it on the kiosk page, and "
+		               "add it to the round trip above");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
