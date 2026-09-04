@@ -90,7 +90,15 @@ public:
 	void back() override {}
 	void forward() override {}
 	void reload() override {}
-	void apply_settings(const view_settings &) override {}
+	// Recorded rather than dropped, so a test can ask what the shell actually
+	// derived from the policy. It was discarded here, which meant nothing in
+	// the suite could see `apply_policy`'s output at all.
+	view_settings last_settings;
+	int settings_applied = 0;
+	void apply_settings(const view_settings &s) override {
+		last_settings = s;
+		++settings_applied;
+	}
 	void set_permission_decider(permission_decider) override {}
 	void set_capture_chooser(capture_chooser) override {}
 	void set_zoom_factor(double) override {}
@@ -914,6 +922,69 @@ int main(int argc, char **argv) {
 		                      nullptr);
 		check(bare.findChild<QCheckBox *>("clear_reports") == nullptr,
 		      "and it is absent when there is no log to clear");
+	}
+
+	// **Every field of `view_settings` has to be driven by something.** The
+	// struct carries in-class defaults and `apply_policy` builds a fresh one
+	// on every navigation, so a field it forgets silently takes the default
+	// instead of the policy -- and that is not hypothetical here. The comment
+	// beside `s.scrollbars` records it happening: the bars defaulted to true,
+	// every re-apply handed them back, and an unattended kiosk screen grew
+	// scrollbars the moment it followed a link.
+	section("what the policy says reaches the page");
+	{
+		policy_engine  pol;
+		request_filter filt(&pol);
+		main_window w8(&factory, &pol, &filt);
+		w8.resize(900, 600);
+
+		using F = policy::feature;
+		const F driven[] = { F::javascript, F::images, F::autoplay, F::popups };
+		for (auto f : driven)
+			pol.set_setting("blocked.example", f, policy::setting::block);
+		for (auto f : driven)
+			pol.set_setting("allowed.example", f, policy::setting::allow);
+
+		auto settings_for = [&](const char *host) {
+			w8.open_url(QUrl(QString("https://%1/page").arg(host)));
+			spin(120);
+			view_settings out;
+			for (auto *v : w8.m_views_by_id)
+				if (auto *f = dynamic_cast<fake_view *>(v))
+					if (f->settings_applied > 0 && f->url().host() == host)
+						out = f->last_settings;
+			return out;
+		};
+
+		const view_settings blocked = settings_for("blocked.example");
+		const view_settings allowed = settings_for("allowed.example");
+
+		check(!blocked.javascript && !blocked.images && !blocked.autoplay &&
+		          !blocked.popups,
+		      QString("a blocked site gets none of them (js=%1 img=%2 auto=%3 "
+		               "pop=%4)").arg(blocked.javascript).arg(blocked.images)
+		          .arg(blocked.autoplay).arg(blocked.popups));
+
+		// **The control, and the reason the line above is not enough.** Every
+		// field defaults somewhere, so "all false" would also be produced by a
+		// struct nobody filled in if the defaults happened to be false. The
+		// pair is what says the policy reached the page.
+		check(allowed.javascript && allowed.images && allowed.autoplay &&
+		          allowed.popups,
+		      QString("and an allowed one gets all of them (js=%1 img=%2 "
+		               "auto=%3 pop=%4)").arg(allowed.javascript)
+		          .arg(allowed.images).arg(allowed.autoplay)
+		          .arg(allowed.popups));
+
+		// **A field added later must not be able to slip past the pair
+		// above.** They name four fields by hand, so a fifth would be
+		// unmentioned and untested -- which is exactly how `scrollbars` got
+		// its own comment. This fails to compile when the struct grows, and
+		// the message says what to do about it.
+		static_assert(sizeof(view_settings) == 5,
+		               "view_settings gained or lost a field: drive it from "
+		               "apply_policy and name it in the two checks above, or "
+		               "say here why it is not policy's to set");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

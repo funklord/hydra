@@ -16329,6 +16329,60 @@ goes to 1.62 against 18.26. A greyed control in dark mode is therefore much
 closer to a live one than in light. Both are legible and neither is wrong; the
 inconsistency is the holder's to weigh.
 
+## Nothing stopped a page setting going unwired
+
+The palette bug's shape, in a different type: **a set of related values, built
+fresh from a default, with only some of them assigned.** `view_settings`
+carries five in-class defaults and `apply_policy` builds one on every
+navigation, so a field it forgets silently takes the default instead of the
+policy.
+
+That is not hypothetical here, and the code says so beside the field it
+happened to. `scrollbars` defaults to true, every re-apply handed the bars
+back, and **an unattended kiosk screen grew scrollbars the moment it followed
+a link** -- which is what kiosk mode exists to prevent, at the one time nobody
+is watching.
+
+All five are assigned today. Nothing was stopping a sixth from not being.
+
+### The fake view was throwing the answer away
+
+`apply_settings(const view_settings &) override {}` -- so nothing in the suite
+could see what `apply_policy` derived, at all. It records now, and the check
+is driven through `open_url`, which is what a page arriving actually does.
+
+### Two guards, because they catch different things
+
+**A field that stops being driven** is caught by asserting the pair. Every
+field defaults *somewhere*, so one direction proves nothing: with defaults of
+`true`, an all-allowed check passes even when nothing is driven at all.
+Blocking every feature for one host and allowing them for another, and
+asserting both, is what says the policy reached the page.
+
+Measured with `s.images` no longer assigned:
+
+    FAIL  a blocked site gets none of them (js=0 img=1 auto=0 pop=0)
+    ok    and an allowed one gets all of them
+
+The allowed row staying green is the point: half this test would have missed
+it.
+
+**A field that is added and never wired** cannot be caught that way, because
+the pair names four fields by hand and a fifth would simply be unmentioned --
+which is exactly how `scrollbars` earned its comment. So the struct's size is
+pinned, and the message says what to do:
+
+    error: static assertion failed: view_settings gained or lost a field:
+    drive it from apply_policy and name it in the two checks above, or say
+    here why it is not policy's to set
+
+Verified by adding a `webgl` field: the build refuses. **This is the
+population assertion the evidence rules ask for** -- the cells are named, and
+nothing can be added to the set without somebody being told.
+
+`scrollbars` is the deliberate exception and stays out of the pair: it is the
+kiosk controller's, not the policy's, which the comment beside it explains.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
