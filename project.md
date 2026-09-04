@@ -15046,24 +15046,32 @@ carried along as amendments to a list item.
    The history is in *A desktop layout meets a phone camera* above, and the
    part worth reading is not the answer but the three wrong ones before it.
 
-3. **Can a screen reader use this browser on Android?** Nobody has asked, and
-   there is now a reason to. *A note on measuring this, because it wasted an
-   hour* closed on "the instrument failed, not the program"; the beerssh
-   session has since hit a second instrument failing on the same axis on the
-   same phone -- `mInputShown` false against a screenshot showing the keyboard
-   up, with `HIDE_SAME_WINDOW_FOCUSED_WITHOUT_EDITOR` beside it -- and their
-   reading is a Qt accessibility bridge that reports no editor to the
-   framework. Unestablished, theirs rather than this tree's, and it costs one
-   person and no code to settle: turn TalkBack on and try to reach the address
-   bar.
+3. **Three controls now say what they are; whether a screen reader can drive
+   this browser is still open.** `grep -rn 'QAccessible|setAccessibleName|
+   setAccessibleDescription' src/` returned **nothing** -- this project had
+   never named a control. Qt supplies defaults for the standard classes, and
+   measuring which controls that actually left unnamed narrowed the gap a long
+   way: a toolbar button takes its accessible name from its action's *text*, so
+   Back, Forward, Reload, Media, Key, Annoyed and Shield already announced as
+   themselves. Exactly three did not.
 
-   It goes on this list rather than into the log because of who is in the
-   condition. The entry about an accessibility service aborting a Qt Widgets
-   application already records that narrowing a condition can make a finding
-   worse -- TalkBack *is* an accessibility service, so the people affected are
-   the ones who need the screen described to them. If the address bar cannot
-   be reached that way the browser is unusable for them, and nothing here
-   would report it.
+   The drawer button was `addAction()` with a hamburger glyph, U+2630 -- so the
+   one control that reveals the entire tab tree announced itself as a character.
+   The toolbar is `ToolButtonIconOnly` and the icon has a `QStyle` fallback, so
+   that text was never drawn: it existed only to be read aloud, and it was not a
+   word. The address bar and the tree had no name at all, and the address bar is
+   the control this item's own test names.
+
+   Named, and asserted in `test_rotation` because the gap survived precisely as
+   long as nothing asked: 51 checks became 55 with none of the existing ones
+   moving.
+
+   **What is still open is the whole of the original question.** Naming controls
+   is not a screen reader being able to reach them, the Qt bridge questions
+   above are untouched, and the one device run taken so far -- TalkBack on,
+   hydra launched, no abort -- never reached a menu, which is what the 2026-08-26
+   instance was. That arm needs TalkBack deliberately back on, and it is the
+   copyright holder's handset to decide about.
 
 4. **The loop works on a disguised manifest; make it work on a noisy capture.**
    Three runs in five on dramafren now return `url.includes('cf-master')` — a

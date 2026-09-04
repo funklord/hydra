@@ -29,6 +29,7 @@
 // 674x841 and 841x674 open. A desktop window dragged between those sizes is
 // the same event, which is why none of this needs a device.
 #include "main_window.h"
+#include "tab_tree_view.h"
 #include "policy_engine.h"
 #include "request_filter.h"
 #include "web_view_backend.h"
@@ -126,6 +127,32 @@ int main(int argc, char **argv) {
 	w.resize(360, 800);
 	w.show();
 	spin(120);
+
+	section("what a screen reader would be told these controls are");
+	{
+		// **Names, because Qt has no useful default for these.** A toolbar
+		// button takes its accessible name from the action's text, and a bare
+		// QLineEdit or QTreeView has none at all -- so before this the drawer
+		// button announced as a hamburger glyph, U+2630, and the address bar
+		// and the tab
+		// tree announced as an unnamed edit box and an unnamed tree.
+		//
+		// Asserted rather than trusted: the whole gap was invisible for as
+		// long as it existed because nothing here ever asked.
+		check(w.m_address && w.m_address->accessibleName() == "Address",
+		      QString("the address bar is named (\"%1\")")
+		          .arg(w.m_address ? w.m_address->accessibleName() : "none"));
+		check(w.m_address && !w.m_address->accessibleDescription().isEmpty(),
+		      "and says what it is for, which a name alone does not");
+		check(w.m_tree && w.m_tree->accessibleName() == "Tab tree",
+		      QString("the tab tree is named (\"%1\")")
+		          .arg(w.m_tree ? w.m_tree->accessibleName() : "none"));
+		// The drawer button carries its name as the action's text, which is
+		// where Qt looks and which the icon-only toolbar never draws.
+		check(w.m_drawer_action && w.m_drawer_action->text() == "Tab tree",
+		      QString("the drawer button is named rather than a glyph (\"%1\")")
+		          .arg(w.m_drawer_action ? w.m_drawer_action->text() : "none"));
+	}
 
 	section("a narrow window puts the sidebar in a drawer");
 

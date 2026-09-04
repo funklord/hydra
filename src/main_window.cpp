@@ -728,7 +728,15 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	//
 	// Only shown in drawer mode; on a wide window the tree is already visible
 	// and a button to reveal it would be a control that does nothing.
-	m_drawer_action = bar->addAction("☰");
+	// **Named rather than drawn as a glyph, because the name is what a screen
+	// reader says.** This was `addAction()` with a hamburger glyph, U+2630, and
+	// an action's text is where
+	// Qt gets a toolbar button's accessible name from -- so the one control
+	// that reveals the whole tab tree announced itself as a hamburger
+	// character. The toolbar is `ToolButtonIconOnly` and the icon is set two
+	// lines below with a `QStyle` fallback, so this text is never drawn; it
+	// exists to be read aloud.
+	m_drawer_action = bar->addAction("Tab tree");
 	bar->addAction(back_act);
 	bar->addAction(fwd_act);
 	bar->addAction(reload_act);
@@ -754,6 +762,16 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// keyboard is asked for a Go key -- see `address_input.h` for why a hint
 	// cannot do it.
 	m_address = new address_line(this);
+	// **A line edit with no name is "edit box" and nothing else.** Qt names a
+	// widget from its label, and this one has none -- there is no room on a
+	// toolbar for the word "Address" and sighted users do not need it. So the
+	// name is set here instead, which is the only way it reaches anybody using
+	// a screen reader. Measured before this: `grep -rn QAccessible src/`
+	// returned nothing at all, in a browser whose address bar is the one
+	// control everything else goes through.
+	m_address->setAccessibleName("Address");
+	m_address->setAccessibleDescription(
+	  "Type a web address to go to it, or words to search for");
 	m_address->setPlaceholderText("Address");
 	m_address->setClearButtonEnabled(true);
 	// **What the on-screen keyboard should do here, which nothing had told
@@ -900,6 +918,11 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 
 	// --- Central splitter ----------------------------------------------
 	m_tree = new tab_tree_view(this);
+	// The other half of the same gap: the tree is this browser's tab list, and
+	// an unnamed tree view is announced as one.
+	m_tree->setAccessibleName("Tab tree");
+	m_tree->setAccessibleDescription(
+	  "Open tabs and folders; a row opens the page it names");
 	m_tree->setModel(m_proxy);
 	// One place to persist, however the change was made -- a drag, a rename, a
 	// new folder. The tree file is the canonical record and a change that
