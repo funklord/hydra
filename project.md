@@ -15549,6 +15549,128 @@ save then writes the defaults over the user's rules. All five load from
 exactly one place -- `load_tree` -- so a guard there covers the class, which is
 the next piece of work rather than part of this one.
 
+## The other five stores, and a status check that was never asked
+
+The tree entry above ended by naming five stores with the same shape and
+leaving them. This is that work. `policy_engine`, `site_rules`,
+`annoyance_log`, `extractor_store` and `filter_list` each load a file at
+startup and save it back later, and each answered **"there is nothing here
+yet"** and **"I could not read what is here"** with the same `false`.
+
+**They did not all fail the same way, and treating them as one class would
+have produced four wrong fixes.** Measured one at a time:
+
+| store | absent | present, not understood |
+|---|---|---|
+| `policy_engine` | false | false -- distinguishable at the caller |
+| `site_rules` | false | false -- distinguishable at the caller |
+| `annoyance_log` | false | **true**, with the log already cleared |
+| `extractor_store` | false | **true**, store cleared, zero entries |
+| `filter_list` | false | **not detectable at all**, see below |
+
+### The caller-side half is one line, because the guards were already there
+
+`keep_or_disown(loaded, &path, what)` gives up the path to a file that exists
+and would not load. **No new state was needed**: every writer in this window
+is already guarded by an `isEmpty()` check on the path it uses, which is the
+same property `load_tree`'s own directory refusal relies on. Clearing the path
+is the whole of it.
+
+**`site_rules` was the sharpest, and its failure was already being handled.**
+The caller read `if (!cr.load(path)) cr = site_rules::defaults();` -- which
+keeps the browser working, and is right. But the path stayed set, so the first
+rule anybody added or forgot wrote those built-in defaults over a file whose
+contents had never been read. The defaults still load; the file is given up.
+
+**The extractor needed a member before it could be guarded.** Its path was
+spelled out twice from `AppDataLocation`, once at the load and once at the
+save, so there was nothing for a guard to clear. It is `m_extractors_path`
+now, named once. The load also moved down the constructor to just after the
+status bar is built: `keep_or_disown` has something to say and nowhere to say
+it at line 325, so the one reader who could act on the warning would never
+have seen it.
+
+### A status check that could not fail, in two loaders, since they were written
+
+`policy_engine::load` and `site_rules::load` both open the file like this:
+
+    QSettings f(path, QSettings::IniFormat);
+    if (f.status() == QSettings::NoError &&
+        f.value("hydra/kind").toString() == "policy") {
+
+**`QSettings` parses lazily, and `status()` answers `NoError` until something
+forces it.** `&&` is sequenced left to right, so the status was read before any
+access -- it was `NoError` for every file, including one QSettings cannot read
+at all. The check has been inert for as long as it has existed. What actually
+refused a damaged file was the marker comparison beside it, which is why
+neither loader was wrong in the end.
+
+Measured, because the first attempt to fix `annoyance_log` used the same
+inert shape and the test caught it:
+
+    status BEFORE any access : 0
+    status AFTER allKeys()   : 2      (FormatError)
+    status AFTER childGroups : 0      -- does not force the parse either
+
+Read the marker into a local first, then check the status. Both loaders now do.
+
+**And my own probe had the bug it was measuring.** The first sweep printed
+`status()` and `allKeys()` as two arguments to one `printf`, and C++ does not
+sequence those -- so `allKeys()` ran first, forced the parse, and the status
+came back as 2. The probe reported that QSettings rejects garbage up front,
+which is exactly the wrong lesson and is the lesson the fix was built on.
+
+    plain garbage text      FormatError
+    unterminated section    FormatError
+    binary NULs             NoError      <- tolerated
+    json                    FormatError
+
+**The most damaged-looking input is the one QSettings accepts.** The
+`annoyance_log` test was first written with binary NULs, on the assumption
+that more damage means more certain rejection, and it would have asserted
+nothing because the load would have succeeded.
+
+### The one that cannot be fixed this way, and why that is the honest answer
+
+**`filter_list` gets the open-failure guard and nothing more.** `parse_rule`
+returns true for every non-blank, non-comment line, so a file of nonsense
+loads as a list of nonsense rules rather than as nothing -- there is no
+"content in, nothing out" to detect. And the obvious test is unavailable:
+`save` writes two `!` header lines, so **an empty filter list is legitimately
+a file with content and no rules**, and refusing that shape would refuse what
+this code itself writes.
+
+Recorded rather than papered over. A marker line, like the `hydra/kind` the
+two INI stores carry, would make it detectable -- but that is a file-format
+change to a file people are invited to hand-edit, and it is not this change's
+to make.
+
+### What the tests prove, and one that proves less than it looks
+
+- **`test_extractor`** -- a damaged JSON file is refused and the store keeps
+  what it had, controlled by a valid-but-empty `{}` which must still load or a
+  first run breaks. Sabotaged: both assertions red, both controls green.
+- **`test_annoyance`** -- a file that will not parse is refused and the reports
+  are left alone, controlled by a path with no file (still refused, and that is
+  the ordinary first run) and by a real log reading back. **This one was red
+  before the fix for real**, twice: once for the missing guard, once for the
+  lazy-status version of it.
+- **`test_rotation`** -- a real window over a garbage `policy.ini`, a real
+  close, bytes read back.
+
+**The sabotage is what showed the last of those is half a test.** With
+`keep_or_disown` reverted, `policy.ini` went from 31 bytes to 406 -- a full
+default policy written over the user's file, which is the destruction in one
+number. `site-rules.ini` stayed at 16 bytes **with the guard sabotaged too**,
+because nothing writes the consent rules on close: that store is saved only
+from the settings dialog, which the test never opens.
+
+So that row is a true assertion that cannot fail. It is kept for what it does
+cover -- a garbage rules file does not stop the window starting or closing --
+and renamed to say so, rather than left looking like proof of a guard it never
+reaches. Its guard is the same one line; what is missing is a fixture that
+reaches its writer, and that is worth writing next rather than assuming.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

@@ -11,6 +11,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QElapsedTimer>
 #include <cstdio>
 #include <unistd.h>   // geteuid, for the check root cannot fail
@@ -1068,6 +1069,53 @@ int main(int argc, char **argv) {
 			check(QDir(dir).entryList(QDir::Files | QDir::Hidden).size() == 1,
 			      "with nothing half-written left behind");
 		}
+		QDir(dir).removeRecursively();
+	}
+
+	// **A store that could not read its file must not report an empty one.**
+	// `QJsonDocument::fromJson` answers a damaged file with a null document
+	// whose `object()` is empty, so a corrupted `extractors.json` used to
+	// clear the store, return true, and let the next save write that emptiness
+	// back over it. An empty store and a store that failed to load are the
+	// same object; only the return value could ever have told them apart.
+	section("a store that will not parse is not an empty store");
+	{
+		const QString dir = QDir::temp().filePath("hydra-extractor-garbage");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+
+		// Something in it first, so the refusal can be shown to leave the
+		// store alone as well as to report.
+		extractor_store store;
+		store.set_for(QStringLiteral("example.com"),
+		               QStringLiteral("return 1;"), QStringLiteral("a note"));
+		const QString good = dir + "/good.json";
+		check(store.save(good), "a store with an entry writes");
+
+		const QString bad = dir + "/bad.json";
+		{
+			QFile f(bad);
+			f.open(QIODevice::WriteOnly);
+			f.write("{ this is not json at all\n");
+		}
+		check(!store.load(bad),
+		      "loading a damaged file is refused rather than read as empty");
+		check(store.has(QStringLiteral("example.com")),
+		      "and the store still holds what it had");
+
+		// The control: a file that IS valid json and holds nothing is a
+		// genuinely empty store and must load, or a first run breaks.
+		const QString empty = dir + "/empty.json";
+		{
+			QFile f(empty);
+			f.open(QIODevice::WriteOnly);
+			f.write("{}\n");
+		}
+		check(store.load(empty),
+		      "while a valid but empty file loads as an empty store");
+		check(!store.has(QStringLiteral("example.com")),
+		      "and really is empty afterwards");
+
 		QDir(dir).removeRecursively();
 	}
 

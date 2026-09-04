@@ -322,9 +322,6 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		filter->add_observer(m_ex_signals);
 		filter->add_observer(m_antiadblock);
 	}
-	m_extractors.load(QDir(QStandardPaths::writableLocation(
-	                            QStandardPaths::AppDataLocation))
-	                       .filePath("extractors.json"));
 	// The sec 11.6 tap: what a page is actually feeding its <video>, for the sites
 	// where watching request URLs finds nothing.
 	m_mse = new mse_tap(this);
@@ -1086,6 +1083,17 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 
 	// --- Status bar ------------------------------------------------------
 	m_status = new QStatusBar(this);
+
+	// **Loaded here rather than with the other stores at the top, because the
+	// guard has something to say and needs somewhere to say it.** Nothing
+	// between the two points touches this store, and `keep_or_disown` writes
+	// to the status bar -- which did not exist yet where this used to be, so
+	// the one reader who could act on the warning would never have seen it.
+	m_extractors_path = QDir(QStandardPaths::writableLocation(
+	                              QStandardPaths::AppDataLocation))
+	                         .filePath("extractors.json");
+	keep_or_disown(m_extractors.load(m_extractors_path), &m_extractors_path,
+	                "The saved extractors");
 	m_tab_counts = new QLabel(this);
 	// Named so a driver can read the live-view count without scanning every
 	// label for one whose text happens to match a pattern.
@@ -2211,7 +2219,15 @@ bool main_window::load_tree(const QString &path) {
 	// delete a file rather than hunt through a store they cannot see.
 	m_view_path = dir + "/view.ini";
 	m_policy_path = dir + "/policy.ini";
-	m_policy->load(m_policy_path);   // no-op if the file doesn't exist yet
+	// **The comment here used to read "no-op if the file doesn't exist yet",
+	// and that was half the truth.** The same `false` also means the file is
+	// there and would not parse -- a wrong `hydra/kind`, a damaged INI, a
+	// legacy JSON that failed too -- and the engine is then empty while the
+	// path still points at somebody's site rules. `on_policy_changed` clears
+	// and rewrites the file, so the first change made anywhere would have
+	// replaced the lot.
+	keep_or_disown(m_policy->load(m_policy_path), &m_policy_path,
+	                "The site settings");
 
 	// The AI/user-authored filter list lives beside the rest, kept separate
 	// from any imported EasyList so upstream updates cannot clobber it (sec 12.5).
@@ -2220,10 +2236,20 @@ bool main_window::load_tree(const QString &path) {
 	// clear it rather than in a store they cannot see.
 	m_annoyances_path = dir + "/annoyances.ini";
 	if (m_annoyances)
-		m_annoyances->load(m_annoyances_path);
+		keep_or_disown(m_annoyances->load(m_annoyances_path),
+		                &m_annoyances_path, "The annoyance log");
 
 	m_filters_path = dir + "/filters-ai.txt";
-	const bool filters_read = m_filters->load(m_filters_path);
+	// **Only the open failure is caught here, and that is the honest limit.**
+	// `parse_rule` treats every non-blank, non-comment line as a rule, so a
+	// file of nonsense loads as a list of nonsense rules rather than as
+	// nothing -- there is no "content in, nothing out" to detect. And the
+	// obvious test cannot be used: `save` writes two `!` header lines, so an
+	// empty list is legitimately a file with content and no rules, and
+	// refusing that shape would refuse what this code itself writes.
+	const bool filters_read =
+	    keep_or_disown(m_filters->load(m_filters_path), &m_filters_path,
+	                    "The filter list");
 	// Where the rules came from and how many, on request. A filter list that is
 	// silently empty and one that is silently ignored look identical from a page,
 	// and telling them apart by reasoning has already cost a round.
@@ -2244,8 +2270,15 @@ bool main_window::load_tree(const QString &path) {
 	// later (sec 7.1, `cookie_notices`).
 	m_site_rules_path = dir + "/site-rules.ini";
 	site_rules cr;
-	if (!cr.load(m_site_rules_path))
+	// **The failure was handled, and the handling is what caused the loss.**
+	// Substituting the built-in defaults keeps the browser working, which is
+	// right -- but the path stayed set, so the first rule anybody added or
+	// forgot wrote those defaults over a file whose contents had never been
+	// read. Keep the defaults in memory; give up the file.
+	const bool rules_read = cr.load(m_site_rules_path);
+	if (!rules_read)
 		cr = site_rules::defaults();
+	keep_or_disown(rules_read, &m_site_rules_path, "The consent rules");
 	m_consent->set_rules(cr);
 	m_antiadblock->set_rules(cr);
 
@@ -3644,6 +3677,21 @@ bool main_window::saved_or_said(bool ok, const QString &what) {
 	return ok;
 }
 
+bool main_window::keep_or_disown(bool loaded, QString *path,
+                                  const QString &what) {
+	if (loaded || path->isEmpty() || !QFileInfo::exists(*path))
+		return true;
+	qCritical("%s: %s exists and could not be read; it will not be written to "
+	           "this session", qPrintable(what), qPrintable(*path));
+	if (m_status)
+		m_status->showMessage(
+		    QString("%1 could not be read (%2). Nothing will be saved to it "
+		             "this session, so what is in it is still there.")
+		        .arg(what, QFileInfo(*path).fileName()), 0);
+	path->clear();
+	return false;
+}
+
 void main_window::forget_shell_caches() {
 	const int answers = int(m_session_permissions.size());
 	m_session_permissions.clear();
@@ -4230,14 +4278,18 @@ void main_window::learn_this_site() {
 	if (dlg.exec() != QDialog::Accepted)
 		return;
 
-	const QString dir = QStandardPaths::writableLocation(
-	    QStandardPaths::AppDataLocation);
-	QDir().mkpath(dir);
 	// The message below says the extractor was saved, so it has to be true:
 	// claiming a save that did not happen is worse than the failed save,
 	// because it is the sentence that stops anybody looking.
-	const bool wrote =
-	    m_extractors.save(QDir(dir).filePath("extractors.json"));
+	//
+	// An empty path means the file was there at startup and would not parse,
+	// so nothing is written over it -- and the message says the extractor is
+	// this session's only, which is exactly what it is.
+	bool wrote = false;
+	if (!m_extractors_path.isEmpty()) {
+		QDir().mkpath(QFileInfo(m_extractors_path).absolutePath());
+		wrote = m_extractors.save(m_extractors_path);
+	}
 	const int found = apply_extractor(host, v->url());
 	m_status->showMessage(
 	    !wrote ? QString("Extractor set for %1 for this session — it could not "

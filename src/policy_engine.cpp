@@ -284,8 +284,15 @@ bool policy_engine::load(const QString &path) {
 	// possible way to make a file more readable.
 	if (QFileInfo::exists(path)) {
 		QSettings f(path, QSettings::IniFormat);
-		if (f.status() == QSettings::NoError &&
-		    f.value("hydra/kind").toString() == "policy") {
+		// **`status()` is lazy and answers NoError until something forces
+		// the parse**, so a status check written above the first access is
+		// inert -- and this one was, for as long as it has existed. What
+		// actually refused a damaged file was the marker comparison beside
+		// it. Read the marker first: `value()` parses, and the status means
+		// something afterwards. Measured -- `allKeys()` and `value()` force
+		// it, `childGroups()` does not.
+		const QString kind = f.value("hydra/kind").toString();
+		if (f.status() == QSettings::NoError && kind == "policy") {
 			m_rules.clear();
 			f.beginGroup("defaults");
 			for (const QString &key : f.allKeys()) {

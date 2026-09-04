@@ -221,6 +221,59 @@ int main(int argc, char **argv) {
 		      "and nothing collapses to nothing");
 	}
 
+	// **A log that could not be read must not present itself as an empty
+	// one**, and the order of the first two statements used to guarantee it
+	// did. `m_reports.clear()` ran before the file was even looked for, so
+	// every failure emptied the log and then said so -- and the caller,
+	// dropping the answer, was left with an empty store pointed at a file it
+	// had never read. The next save wrote that back.
+	section("a log that will not parse is left alone");
+	{
+		const QString dir = QDir::temp().filePath("hydra-annoyance-garbage");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+
+		annoyance_report r;
+		r.host = "example.com";
+		r.page = "https://example.com/";
+		annoyance_log log;
+		log.add(r);
+		const QString good = dir + "/good.ini";
+		check(log.save(good), "a log with a report writes");
+		check(log.all().size() == 1, "and holds it");
+
+		// **Plain prose, chosen by measurement rather than by guess.** The
+		// first draft used binary NULs, on the assumption that the more
+		// damaged a file looked the more certainly QSettings would reject it.
+		// Measured across six inputs, it is the other way round: NULs are
+		// tolerated and report NoError, while ordinary text and JSON both
+		// give FormatError. A test built on the first would have asserted
+		// nothing, because the load would have succeeded.
+		const QString bad = dir + "/bad.ini";
+		{
+			QFile f(bad);
+			f.open(QIODevice::WriteOnly);
+			f.write("this is not an ini file at all\n");
+		}
+		check(!log.load(bad), "a file that will not parse is refused");
+		check(log.all().size() == 1,
+		      QString("and the refusal left the reports alone (%1)")
+		          .arg(log.all().size()));
+
+		// The control: a path with no file must still be refused, and that
+		// refusal is the ordinary first run rather than a failure.
+		check(!log.load(dir + "/not-here.ini"),
+		      "a path with no file is still refused");
+
+		// And a real log round-trips, so the checks above are not passing
+		// because loading never works.
+		annoyance_log back;
+		check(back.load(good) && back.all().size() == 1,
+		      "while a log that was written reads back");
+
+		QDir(dir).removeRecursively();
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;
 }

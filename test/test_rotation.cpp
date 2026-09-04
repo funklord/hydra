@@ -427,6 +427,87 @@ int main(int argc, char **argv) {
 		      "with the tab that was in it still named");
 	}
 
+	// **The same defect as the tree, in the five stores beside it.** Each one
+	// loads a file at startup and saves it back later, and each answers "there
+	// is nothing here yet" and "I could not read what is here" with the same
+	// `false`. Treating the second as the first leaves the store empty with
+	// its path still set, and the next save writes that emptiness over the
+	// file.
+	//
+	// `keep_or_disown` is the caller-side fix and it needed no new state: the
+	// writers are all guarded by `isEmpty()` already, so giving up the path is
+	// the whole of it. This drives it through a real window and a real close,
+	// because the store tests prove functions and what destroys a file is the
+	// caller.
+	section("a store whose file will not parse is not written over");
+	{
+		const QString dir = QDir::temp().filePath("hydra-rotation-stores");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString tree = dir + "/tree.txt";
+		{
+			QFile f(tree);
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("- [t1] unopened_tab | A tab | https://example.com/\n");
+		}
+
+		// Two of the five, chosen because they fail differently: the policy is
+		// refused by its `hydra/kind` marker, the consent rules by the same
+		// marker *and* through a caller that used to substitute defaults and
+		// then save them back over the file it had not read.
+		struct { const char *name; QByteArray body; } files[] = {
+			{ "policy.ini",     "this is not an ini file at all\n" },
+			{ "site-rules.ini", "{ \"rules\": [] }\n" },
+		};
+		QList<QByteArray> before;
+		for (const auto &spec : files) {
+			QFile f(dir + "/" + spec.name);
+			f.open(QIODevice::WriteOnly);
+			f.write(spec.body);
+			f.close();
+			before.append(spec.body);
+		}
+
+		{
+			main_window w2(&factory, &policy, &filter);
+			check(w2.load_tree(tree),
+			      "the tree itself still loads, so the window is usable");
+			w2.show();
+			spin(150);
+			w2.close();
+			spin(150);
+		}
+
+		// **Only the first of these two proves the guard, and the sabotage is
+		// what said so.** With `keep_or_disown` reverted, `policy.ini` went
+		// from 31 bytes to 406 -- a full default policy written over the
+		// user's file, which is the destruction this exists to stop.
+		// `site-rules.ini` stayed at 16 bytes with the guard sabotaged too,
+		// because nothing writes the consent rules on close: that store is
+		// saved only from the settings dialog, which this test never opens.
+		//
+		// So the second row is a true assertion that cannot fail, and it is
+		// kept for what it does cover -- that a garbage `site-rules.ini` does
+		// not stop the window starting or closing -- and named for that
+		// rather than left looking like proof of a guard it never reaches.
+		// Its guard is the same one line; what is missing is a fixture that
+		// reaches its writer.
+		int i = 0;
+		for (const auto &spec : files) {
+			QFile f(dir + "/" + spec.name);
+			f.open(QIODevice::ReadOnly);
+			const QByteArray now = f.readAll();
+			const bool proves_guard = i == 0;
+			check(now == before[i],
+			      QString(proves_guard
+			                ? "%1 was left exactly as it was (%2 bytes, was %3)"
+			                : "%1 survived startup and close, though nothing "
+			                  "here writes it (%2 bytes, was %3)")
+			          .arg(spec.name).arg(now.size()).arg(before[i].size()));
+			++i;
+		}
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

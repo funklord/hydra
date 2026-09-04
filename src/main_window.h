@@ -213,6 +213,20 @@ private:
 	// is called from the handlers that save, and returns what it was told so a
 	// caller can still branch on it.
 	bool saved_or_said(bool ok, const QString &what);
+	// **Give up the path to a file that is there and would not load.**
+	//
+	// Every store in this window loads a file at startup and saves it back
+	// later, and each of them answers "there is nothing here yet" and "I could
+	// not read what is here" with the same `false`. The first is an ordinary
+	// first run. The second, treated as the first, means the store sits empty
+	// and the next save writes that emptiness over the file -- which is how a
+	// read failure becomes data loss.
+	//
+	// So the caller decides, using the one fact the store does not have: does
+	// the file exist. When it does and the load refused, the path is cleared
+	// and the writers guarded by `isEmpty()` -- all of them -- leave it alone
+	// for the session. Returns whether the path survived.
+	bool keep_or_disown(bool loaded, QString *path, const QString &what);
 	void update_status();
 	// Tell the page-scoped bridges which site is on screen. Called whenever that
 	// can change: a navigation in the current view, and a switch to another one.
@@ -387,6 +401,11 @@ public:
 	capture_source     *m_capture_src   = nullptr;
 	extractor_signals  *m_ex_signals    = nullptr;
 	extractor_store     m_extractors;
+	// **Named once, because it was spelled out twice.** The load in the
+	// constructor and the save in the extractor dialog each built this path
+	// from `AppDataLocation` independently, so there was nothing for a guard
+	// to clear -- and two copies of a path is two things to be wrong.
+	QString             m_extractors_path;
 	int                 m_capture_job   = 0;
 	local_proxy        *m_local_proxy   = nullptr;
 	element_picker     *m_picker        = nullptr;

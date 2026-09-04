@@ -7,6 +7,7 @@
 #include <QJSEngine>
 #include <QJSValue>
 #include <QJsonDocument>
+#include <QJsonParseError>
 #include <QJsonObject>
 #include <QJSValueIterator>
 #include <QQmlEngine>
@@ -584,7 +585,28 @@ bool extractor_store::load(const QString &path) {
 	QFile f(path);
 	if (!f.open(QIODevice::ReadOnly))
 		return false;
-	const QJsonObject root = QJsonDocument::fromJson(f.readAll()).object();
+	// **A file that is there and does not parse is not an empty store.**
+	// `fromJson` answers a damaged file with a null document, whose `object()`
+	// is an empty one -- so this used to clear itself, report success, and let
+	// the next save write the empty result back over whatever had been there.
+	// The parse error is available and says which of the two happened, so ask
+	// for it rather than reading the shape of the answer.
+	//
+	// Nothing is cleared until the parse has succeeded, so a refusal also
+	// leaves the store as it was rather than emptying it on the way out.
+	const QByteArray raw = f.readAll();
+	QJsonParseError err{};
+	const QJsonDocument doc = QJsonDocument::fromJson(raw, &err);
+	if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+		qCritical("extractors: %s did not parse (%s); leaving it alone rather "
+		           "than treating it as empty",
+		           qPrintable(path),
+		           qPrintable(err.error != QJsonParseError::NoError
+		                       ? err.errorString()
+		                       : QString("not a JSON object")));
+		return false;
+	}
+	const QJsonObject root = doc.object();
 	m_by_host.clear();
 	for (auto it = root.begin(); it != root.end(); ++it) {
 		const QJsonObject o = it.value().toObject();

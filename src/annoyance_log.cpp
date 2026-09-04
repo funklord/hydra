@@ -42,10 +42,30 @@ void annoyance_log::clear_host(const QString &host) {
 }
 
 bool annoyance_log::load(const QString &path) {
-	m_reports.clear();
+	// **Nothing is cleared until the file has been read**, and the order used
+	// to be the other way round. A load that failed emptied the log first and
+	// reported the failure afterwards, so the caller was left holding an empty
+	// store either way -- and the next save wrote it back.
 	if (!QFileInfo::exists(path))
 		return false;
 	QSettings f(path, QSettings::IniFormat);
+	// A file that is there and will not parse is not an empty log. QSettings
+	// answers a damaged one with an array of length zero, which reads exactly
+	// like a log nobody has written to, so ask its status instead of inferring
+	// from the count.
+	//
+	// **`allKeys()` first, because the parse is lazy.** Asked before any
+	// access, `status()` reports NoError for a file QSettings cannot read --
+	// the first version of this check was written that way and passed a file
+	// of plain prose straight through. `childGroups()` does not force it
+	// either; measured across both.
+	f.allKeys();
+	if (f.status() != QSettings::NoError) {
+		qCritical("annoyances: %s did not parse; leaving it alone rather than "
+		           "treating it as empty", qPrintable(path));
+		return false;
+	}
+	m_reports.clear();
 	const int n = f.beginReadArray("reports");
 	for (int i = 0; i < n; ++i) {
 		f.setArrayIndex(i);

@@ -268,8 +268,15 @@ bool site_rules::load(const QString &path) {
 	// change from costing anybody the rules they had.
 	if (QFileInfo::exists(path)) {
 		QSettings f(path, QSettings::IniFormat);
-		if (f.status() == QSettings::NoError &&
-		    f.value("hydra/kind").toString() == "siteRules") {
+		// **`status()` is lazy and answers NoError until something forces
+		// the parse**, so a status check written above the first access is
+		// inert -- and this one was, for as long as it has existed. What
+		// actually refused a damaged file was the marker comparison beside
+		// it. Read the marker first: `value()` parses, and the status means
+		// something afterwards. Measured -- `allKeys()` and `value()` force
+		// it, `childGroups()` does not.
+		const QString kind = f.value("hydra/kind").toString();
+		if (f.status() == QSettings::NoError && kind == "siteRules") {
 			// Built-ins are not in the file and must not be dropped by reading
 			// one: start from the defaults and add what was stored, exactly as
 			// the JSON path does through from_json.
