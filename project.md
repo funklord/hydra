@@ -14757,6 +14757,39 @@ the failing path never runs on it:
     audio only    {audio:true}                 <- untouched
     accepted      one call, audio preserved    <- no double request
 
+### The reload re-arm, proved on the handset with its control
+
+`b0901b9` fixed the document-start script never being rebuilt on a reload, and
+it was committed on a reading of the code. That is not the same as knowing it
+works, and this file holds everything else to the harder standard. Driven end
+to end on the phone, in one process:
+
+    OS camera permission revoked
+    page asks permissions.query at PARSE TIME   ->  camera=prompt
+    pm grant CAMERA        (pid unchanged, so a reload and not a restart)
+    F5 -> QKeySequence::Refresh -> reload_page  ->  camera=granted
+
+and with `armDocumentStart` removed from Java's `reload`, same phone, same
+page, same sequence:
+
+                                                ->  camera=prompt
+
+**The sabotaged run shows the mechanism rather than the symptom**, which is why
+it is the one worth reading: logcat carries `hydra-shim: ... cam=granted`, so
+the C++ side built the *correct* script and handed it over -- and nothing armed
+it, so the document went on running the stale one. A shim that is right and
+unreachable is exactly what the reported Teams loop looks like from outside:
+allow the camera in the shield, watch the page reload, watch it say it cannot
+find a camera.
+
+Two limits, stated because the run does not cover them. The reload came from a
+synthesised F5 rather than from the Reload item or a shield change;
+`on_policy_changed` calls the same `reload()`, but the menu was not used. And
+the input that moved was the **OS** permission rather than the shield's
+setting, because changing the shield needs that menu -- `state_for` combines
+both and the script is rebuilt from both, so it is the same path with the other
+half moved.
+
 ### Closed: turn the phone, and the picture is right
 
 The copyright holder turned the handset to landscape during a call and reports
