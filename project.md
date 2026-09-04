@@ -14713,14 +14713,27 @@ it is the previous session file, which exits with a tab still open and never
 closed -- so Chromium does not force-close tabs into the log at shutdown, and
 those seven closes are real.
 
+**How the ids were confirmed, and the limit on that.** Every command id was
+checked by name against Chromium's own `components/sessions/core/` -- but the
+copy on this machine is the one **bundled inside Qt WebEngine**, which is
+Chromium 122, while the browser that wrote this profile is 151. So the source
+read and the file read are two different Chromium lineages agreeing, not one
+verified against itself. What makes the agreement worth something is that the
+bytes corroborate independently: every id lands on a defined command with a
+matching payload size, and each `close_time` decodes to a moment inside the
+file's own last-write minute. Recorded because "checked against Chromium's
+source" reads as stronger than what was done.
+
 **The hypothesis recorded here is refuted.** It said Chromium 122 had split the
 store and moved the navigation records into the 93 MB `Tabs_*` files. Those
 files hold only ids 1, 4, 9 and 255 -- a **disjoint** command namespace, the
-closed-tab restore store -- and nothing moved into them. The version was wrong
-too: the Chromium whose profile this is reads **151.0.7922.71**. The 122 in the
-brief was Qt WebEngine's bundled Chromium, which is a different product that
-happens to be on the same machine, and conflating them is this file's own
-lesson about proxies at close range.
+closed-tab restore store -- and nothing moved into them. **Neither version
+was wrong; they are two products.** The profile belongs to Debian's Chromium at
+**151.0.7922.71**, and the 122 quoted at it was read out of
+`libQt6WebEngineCore` and is Qt's bundled Chromium. Both numbers are measured
+and both are true of this machine. What was wrong was treating one as the
+other, which is the same substitution as every other mistake in this section:
+a real measurement of an adjacent thing.
 
 ### The defect was the discriminator, and it was mine
 
