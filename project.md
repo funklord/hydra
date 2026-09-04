@@ -15415,6 +15415,140 @@ log row -- and a warning for each would spend the status bar on things nobody
 can act on, which is how the warnings that matter get ignored. Recorded here
 rather than fixed, so the next reader knows it was a decision.
 
+## The tree file was destroyed by failing to read it
+
+**Derived from the last finding by turning it around.** That one was a
+returned status nobody read. The mirror image is worse: a **read** that fails
+and reports success, because an empty result is then written back over the
+file it came from.
+
+`tree_outline::load` opened the tree and, on any failure, returned the empty
+root it had already built. So an unreadable tree reported success, the browser
+came up looking like a fresh install, and `m_tree_path` was left pointing at
+the file -- **`m_tree_path` is assigned near the top of `load_tree`, before the
+load runs**, because everything else in that function derives from the tree's
+directory. The next structural change, or simply closing the window, wrote the
+empty tree back. Every tab, gone, with nothing said at any point.
+
+**The indistinguishability is the defect**, not the failure. An empty tree is
+exactly what a first run legitimately produces, so no caller could tell a lost
+file from a new one -- `tab_tree_model::load` returned true, `load_tree`
+returned true, and both were correct about what they were told.
+
+### The instrument was wrong first, and the correction changed the finding
+
+**The permission case was measured with the wrong tool and is not the real
+hazard.** The first measurement was `mv` over a mode-000 file in a writable
+directory, which succeeds -- `rename` needs write permission on the
+*directory*, not on the file it replaces. That was taken as proof that an
+unreadable tree gets overwritten.
+
+`QSaveFile` is not `rename`, and the sabotage run said so before any
+reasoning did: the test **hung**, because `save_everything` had returned false
+and raised the modal added earlier the same day. Measured properly, over four
+modes:
+
+    mode 000  unreadable, unwritable    open=0  refused, file intact
+    mode 400  readable, not writable    open=0  refused, file intact
+    mode 200  writable, not readable    open=1  REPLACED
+    mode 600  normal                    open=1  REPLACED
+
+So `QSaveFile` refuses to replace a file it cannot write, and the writer was
+already protecting the case the fix was written for. What is left of the
+permission story is mode 200 -- writable but not readable -- which is real and
+rare.
+
+**The likely case is the one the hang pointed at instead: a tree that is
+perfectly readable and does not parse.** The loop skips every line that is not
+`- [...]`, so a file that has been damaged, truncated, written by something
+else, or mangled by an encoding produces zero nodes and reports success -- and
+that file is readable *and* writable, so nothing in `QSaveFile` stands in the
+way. **Fully protected against the rare case, entirely exposed to the common
+one**, which is what a fix built on the wrong instrument buys.
+
+`evidence.md` names this twice over: *suspect the check before the code*, and
+*a comfortable explanation that ends an investigation*. The comfortable
+explanation here was a permission bug, and it was comfortable because a one
+line shell command appeared to confirm it.
+
+### What it does now
+
+**Absent and unreadable are different answers.** An absent file still gives an
+empty root -- that is an ordinary first run. A file that exists and will not
+open, and a file that has content and yields no nodes, both return **nothing**,
+which is what makes a caller stop.
+
+**A partial read is deliberately not refused**, for the reason the depth clamp
+beside it is not: refusing loses every tab to save a few lines. So it is
+*counted* instead, through a new `unparsed` out-param, and `load_tree` acts on
+it -- because what gets written back is what parsed, and a line nobody was told
+about is a line that stops existing.
+
+**And on a partial read the original is kept**, once, at `<tree>.unparsed`,
+before the first save can reach it. A copy costs a few kilobytes. The
+alternative costs somebody their tabs, and a status message alone would have
+been a warning about a file that was already overwritten by the time anybody
+read it.
+
+**`load_tree` clears `m_tree_path` when the load fails.** That is the whole of
+the caller-side fix and it needed no new state: every writer in the window is
+already guarded by an `isEmpty()` check on the path it uses, and the same
+function's own comment says so about the directory refusal above it.
+
+### An accessor nobody ever called
+
+`tab_tree_model::last_flattened()` has existed since the tree file did, and
+`tree_outline.h` says the count is there "so the caller can say so -- a tree
+that quietly changed shape on load is the kind of thing somebody discovers
+much later and cannot explain."
+
+**Nothing in the tree calls it.** One grep:
+
+    grep -rn 'last_flattened()' src/ test/ | grep -v tab_tree_model.h
+    (nothing)
+
+So tabs have been silently moved up the tree on load for as long as the loader
+has existed, and the sentence written to explain it was never printed. It is
+wired now, beside the new count, which is why the new one is wired in the same
+change rather than added beside it -- `evidence.md`'s *an interface is only as
+wired as its least-used method*, found the way that entry says to find it: by
+grepping for callers per method rather than by reading the interface, which is
+complete and is exactly what is not wrong.
+
+### Three cases, three controls, and a sabotage of each
+
+Three cases in `test_tree`, each with a control that would separate a real
+check from one that always fires:
+
+- an unreadable file returns nothing -- controlled by a **path with no file**,
+  which must still give an empty tree, or every first run breaks;
+- a readable file with content and no nodes returns nothing -- controlled by a
+  **genuinely empty file**, which is an empty tree and must not be refused;
+- a partial read keeps what parsed and counts what it lost -- controlled by
+  asserting `flattened` stayed 0, since that is a different loss.
+
+And one in `test_rotation` that drives the whole path: an unreadable tree, a
+real window, a real close, and the bytes read back afterwards. **That is the
+one that matters**, because the loader test proves a function while what
+destroyed data was the caller.
+
+Sabotaged in both files. Restoring the refusal and removing the count turns
+exactly the two matching assertions red and leaves all three controls green;
+restoring the original loader turns the window test red on `load_tree refuses
+a tree it cannot read` -- and then **hangs**, which is how the QSaveFile
+measurement above came to be taken at all.
+
+### Still open
+
+The same shape is in the other five stores, and this change does not touch
+them. `policy_engine`, `filter_list`, `site_rules`, `annoyance_log` and
+`extractor_store` each load a file whose absence and whose unreadability are
+the same `false`, and each is saved back. `site_rules` is the sharpest: its
+caller *handles* the failure, with `cr = site_rules::defaults()`, and a later
+save then writes the defaults over the user's rules. All five load from
+exactly one place -- `load_tree` -- so a guard there covers the class, which is
+the next piece of work rather than part of this one.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

@@ -17,14 +17,26 @@
 namespace tree_outline {
 
 // Returns a synthetic root node (owns the whole tree; delete it to free).
-// On failure or empty file, returns an empty root.
+// An absent file gives an empty root, which is an ordinary first run.
+//
+// **A file that is there and yields nothing gives NOTHING**, and the
+// difference is the whole point: an empty tree is what a first run
+// legitimately produces, so a caller handed one cannot tell a fresh install
+// from a tree it has just failed to read -- and the next save writes that
+// empty tree back over the file. Returning null makes the caller stop.
 //
 // Anything nested deeper than `tree_limits::max_depth` is **flattened to that
 // depth** rather than refused: refusing a file loses tabs, flattening loses
 // only nesting. `flattened` receives how many nodes were moved up, so the
 // caller can say so -- a tree that quietly changed shape on load is the kind
 // of thing somebody discovers much later and cannot explain.
-node *load(const QString &path, int *flattened = nullptr);
+//
+// `unparsed` is the same promise for the other way a line is lost: content
+// that is not blank and is not a node, which the loop skips. **Skipping is
+// right and silence is not** -- the next save writes back what parsed, so a
+// line nobody was told about is a line that stops existing.
+node *load(const QString &path, int *flattened = nullptr,
+            int *unparsed = nullptr);
 
 bool  save(const QString &path, node *root);
 

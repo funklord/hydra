@@ -2249,7 +2249,67 @@ bool main_window::load_tree(const QString &path) {
 	m_consent->set_rules(cr);
 	m_antiadblock->set_rules(cr);
 
+	// **A tree that would not load must not be saved over.** `m_tree_path` is
+	// assigned near the top of this function because everything else here is
+	// derived from the tree's directory, and every writer below is guarded by
+	// an `isEmpty()` check on the path it uses -- so clearing it is exactly
+	// how this window says "persist the rest, but leave that file alone".
+	//
+	// The load fails only when the file is there and could not be read; an
+	// absent file is an ordinary first run and still succeeds. See
+	// `tree_outline::load` for why the two had to be told apart, and for the
+	// measurement that says an unreadable file is still replaceable.
 	const bool ok = m_model->load(path);
+	if (!ok) {
+		m_tree_path.clear();
+		if (m_status)
+			m_status->showMessage(
+			    QString("%1 could not be read. Nothing will be saved to it "
+			             "this session, so the tabs in it are still there.")
+			        .arg(path), 0);
+	} else if (const int lost = m_model->last_unparsed(); lost > 0) {
+		// **A partial read is the dangerous one, because everything looks
+		// fine.** The tree opens, the tabs that parsed are all there, and the
+		// next save writes back exactly what parsed -- so the lines that did
+		// not are gone, silently, and the file that had them is already
+		// overwritten by the time anybody wonders.
+		//
+		// Refusing the whole file would be worse: that loses every tab to
+		// save a few lines, which is the trade the depth clamp already
+		// declines. So keep the original beside itself, once, before the
+		// first save can reach it, and say where it went. A copy costs a few
+		// kilobytes; the alternative costs somebody their tabs.
+		const QString kept = path + ".unparsed";
+		const bool saved_copy = !QFileInfo::exists(kept) &&
+		                         QFile::copy(path, kept);
+		if (m_status)
+			m_status->showMessage(
+			    saved_copy
+			      ? QString("%1 line(s) of %2 were not in a form this reads. "
+			                 "The file as it was is kept at %3 — what is on "
+			                 "screen is the rest.")
+			            .arg(lost).arg(QFileInfo(path).fileName()).arg(kept)
+			      : QString("%1 line(s) of %2 were not in a form this reads, "
+			                 "and are not in what you see. Saving will drop "
+			                 "them.").arg(lost).arg(QFileInfo(path).fileName()),
+			    0);
+		qWarning("tree: %d line(s) of %s did not parse%s", lost,
+		          qPrintable(path),
+		          saved_copy ? "; the original is kept alongside" : "");
+	} else if (const int flat = m_model->last_flattened(); flat > 0) {
+		// The accessor for this existed from the beginning and **nothing ever
+		// called it** -- the header said the count was there "so the caller
+		// can say so", and no caller did. A tree that quietly changed shape
+		// on load is exactly what its comment describes as the kind of thing
+		// somebody discovers much later and cannot explain, and it stayed
+		// unexplainable because the sentence was never printed.
+		if (m_status)
+			m_status->showMessage(
+			    QString("%1 tab(s) in %2 were nested deeper than this can "
+			             "hold and have been moved up. Their nesting is not "
+			             "kept; the tabs are.")
+			        .arg(flat).arg(QFileInfo(path).fileName()), 0);
+	}
 	// After the nodes exist and before anything draws: the tree shows a count
 	// from this, so restoring it later would flash a row that claimed no past
 	// and then quietly gained one.

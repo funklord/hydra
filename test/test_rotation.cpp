@@ -38,13 +38,16 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QDir>
 #include <QEventLoop>
+#include <QFile>
 #include <QLabel>
 #include <QLayout>
 #include <QLineEdit>
 #include <QSplitter>
 #include <QTimer>
 #include <cstdio>
+#include <unistd.h>   // geteuid, for the check root cannot fail
 
 static int g_pass = 0, g_fail = 0;
 static void check(bool ok, const QString &w) {
@@ -371,6 +374,57 @@ int main(int argc, char **argv) {
 		check(w.m_sidebar->geometry().left() == 0,
 		      QString("and comes back to the left edge: x=%1")
 		              .arg(w.m_sidebar->geometry().left()));
+	}
+
+	// **The loader refusing is half the fix; the window not writing is the
+	// half that saves the file.** `test_tree` proves `tree_outline::load`
+	// returns nothing for a tree it could not read. That proves a function.
+	// What destroyed data was the caller: `m_tree_path` is assigned near the
+	// top of `load_tree`, before the load runs, so a failed load used to leave
+	// every writer in the window pointed at a file whose contents it had never
+	// seen -- and closing the window wrote an empty tree over it.
+	//
+	// So this drives the whole path: an unreadable tree, a real window, a real
+	// close, and the bytes on disk read back afterwards.
+	section("a window will not save over a tree it could not read");
+	if (geteuid() == 0) {
+		std::printf("  skip  running as root, which can read anything\n");
+	} else {
+		const QString dir = QDir::temp().filePath("hydra-rotation-unreadable");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString path = dir + "/tree.txt";
+		{
+			QFile f(path);
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("- [tab] something the user cares about | https://example.com/\n");
+		}
+		const QByteArray before = [&] {
+			QFile f(path); f.open(QIODevice::ReadOnly); return f.readAll();
+		}();
+		QFile::setPermissions(path, QFile::Permissions());
+
+		{
+			main_window unreadable(&factory, &policy, &filter);
+			check(!unreadable.load_tree(path),
+			      "load_tree refuses a tree it cannot read");
+			unreadable.show();
+			spin(150);
+			// The close is the point: this is the path that used to write an
+			// empty tree back over the file.
+			unreadable.close();
+			spin(150);
+		}
+
+		QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner);
+		const QByteArray after = [&] {
+			QFile f(path); f.open(QIODevice::ReadOnly); return f.readAll();
+		}();
+		check(after == before,
+		      QString("and the file survived the window closing (%1 bytes, was "
+		               "%2)").arg(after.size()).arg(before.size()));
+		check(after.contains("something the user cares about"),
+		      "with the tab that was in it still named");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

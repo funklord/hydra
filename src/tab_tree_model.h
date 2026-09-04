@@ -56,6 +56,13 @@ public:
 	// filed by hand; non-zero means the tree on screen is not the shape the
 	// file described, which is a thing the shell has to say out loud.
 	int last_flattened() const { return m_last_flattened; }
+	// Non-blank lines the last load could not turn into a node. **Whatever
+	// reads this has to act on it**, because what gets written back is what
+	// parsed: a line nobody was told about is a line that stops existing on
+	// the next save. `last_flattened` had the same job and nothing called it
+	// for as long as it existed, which is why this one is wired at the same
+	// time rather than added beside it.
+	int last_unparsed() const { return m_last_unparsed; }
 	bool save(const QString &path) const;
 
 	node *node_for_index(const QModelIndex &index) const;
@@ -205,4 +212,5 @@ private:
 	node                 *m_root = nullptr;
 	QHash<QString, node *> m_id_index;
 	int m_last_flattened = 0;
+	int m_last_unparsed  = 0;
 };

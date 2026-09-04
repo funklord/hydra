@@ -128,7 +128,7 @@ void tab_tree_model::reindex() {
 }
 
 bool tab_tree_model::load(const QString &path) {
-	node *fresh = tree_outline::load(path, &m_last_flattened);
+	node *fresh = tree_outline::load(path, &m_last_flattened, &m_last_unparsed);
 	if (!fresh)
 		return false;
 	beginResetModel();

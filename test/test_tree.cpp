@@ -316,6 +316,145 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	// **A tree file that cannot be READ used to be destroyed by the next
+	// save**, and this is the one file the whole application is about.
+	//
+	// `load` opened the file and, on failure, returned the empty root it had
+	// already built -- so an unreadable tree reported success and came up as a
+	// fresh install. Nothing downstream could tell that from a first run,
+	// because it is indistinguishable: `tab_tree_model::load` returned true,
+	// `main_window::load_tree` returned true, and `m_tree_path` was left
+	// pointing at the file. The next structural change, or simply closing the
+	// window, wrote the empty tree back over it.
+	//
+	// The write lands even though the read did not, which is the part that
+	// makes this fatal rather than merely wrong: an atomic save renames a new
+	// file over the old one, and `rename` needs write permission on the
+	// *directory*, not on the file it replaces. Measured here as an ordinary
+	// user -- a mode-000 file in a writable directory is replaced without
+	// complaint.
+	//
+	// So the distinction `load` has to make is between "no file yet", which is
+	// an ordinary first run, and "a file is there and I could not read it",
+	// which must stop everything. Only the second returns nothing.
+	section("a tree that cannot be read is not overwritten");
+	if (geteuid() == 0) {
+		std::printf("  skip  running as root, which can read anything\n");
+	} else {
+		const QString dir = QDir::temp().filePath("hydra-tree-unreadable");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString path = dir + "/tree.txt";
+
+		node root;
+		root.id = "root";
+		root.type = node_type::folder;
+		auto *tab = new node;
+		tab->id = "t1";
+		tab->type = node_type::unopened_tab;
+		tab->title = "something the user cares about";
+		tab->url = "https://example.com/";
+		root.children.push_back(tab);
+		check(tree_outline::save(path, &root), "a tree with a tab is written");
+		const QByteArray before = [&] {
+			QFile f(path); f.open(QIODevice::ReadOnly); return f.readAll();
+		}();
+		check(!before.isEmpty(), "and it has content");
+
+		QFile::setPermissions(path, QFile::Permissions());
+		{
+			QFile probe(path);
+			check(!probe.open(QIODevice::ReadOnly),
+			      "the file is genuinely unreadable now");
+		}
+
+		// **The load has to refuse.** Returning an empty tree here is what
+		// made the overwrite below possible, and an empty tree is exactly
+		// what a first run legitimately produces -- so the caller had no way
+		// to tell a lost file from a new one.
+		node *got = tree_outline::load(path);
+		check(got == nullptr,
+		      "loading an unreadable tree returns nothing rather than an empty "
+		      "tree");
+		delete got;
+
+		// The control, and the reason the check above is about *existence*
+		// rather than about failure in general: a path with no file is an
+		// ordinary first run and must still give a usable empty tree.
+		node *fresh = tree_outline::load(dir + "/not-here.txt");
+		check(fresh != nullptr && fresh->children.isEmpty(),
+		      "while a path with no file at all is still an empty tree");
+		delete fresh;
+
+		QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner);
+		const QByteArray after = [&] {
+			QFile f(path); f.open(QIODevice::ReadOnly); return f.readAll();
+		}();
+		check(after == before, "and the file on disk was never touched");
+	}
+
+	// **The likelier way this file is lost, and the one a permission test
+	// cannot reach.** A tree that is perfectly readable but is not in this
+	// format parses to nothing -- every line is skipped -- and used to come
+	// back as an empty tree reporting success. Nothing downstream could tell
+	// that from a first run, and the next save wrote the empty tree over it.
+	//
+	// Worth separating from the unreadable case because `QSaveFile` refuses
+	// to replace a file it cannot write, so a mode-000 tree is protected by
+	// the writer already. A readable, writable, unparseable one is not
+	// protected by anything, and it is the shape a damaged file actually
+	// takes.
+	section("a tree that is readable but says nothing this understands");
+	{
+		const QString dir = QDir::temp().filePath("hydra-tree-garbage");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+
+		const QString junk = dir + "/junk.txt";
+		{
+			QFile f(junk);
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("{\n  \"tabs\": [ { \"url\": \"https://example.com/\" } ]\n}\n");
+		}
+		node *got = tree_outline::load(junk);
+		check(got == nullptr,
+		      "a file with content and no nodes returns nothing, not an empty "
+		      "tree");
+		delete got;
+
+		// The control that keeps the check above from being "any file with
+		// braces is refused": a genuinely empty file IS an empty tree, and
+		// refusing it would break every first run.
+		const QString blank = dir + "/blank.txt";
+		{ QFile f(blank); f.open(QIODevice::WriteOnly); }
+		node *empty = tree_outline::load(blank);
+		check(empty != nullptr && empty->children.isEmpty(),
+		      "while an empty file is still an empty tree");
+		delete empty;
+
+		// And a partial read is not refused -- refusing loses every tab to
+		// save a few lines -- but it must be counted, because what gets
+		// written back is what parsed.
+		const QString partial = dir + "/partial.txt";
+		{
+			QFile f(partial);
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("- [a] unopened_tab | Kept | https://example.com/\n");
+			f.write("this line is not a node\n");
+			f.write("- [b] unopened_tab | Also kept | https://example.org/\n");
+			f.write("- [c missing bracket\n");
+		}
+		int flat = -1, lost = -1;
+		node *some = tree_outline::load(partial, &flat, &lost);
+		check(some != nullptr && some->children.size() == 2,
+		      QString("a partly-readable tree keeps what parsed (%1)")
+		          .arg(some ? some->children.size() : -1));
+		check(lost == 2,
+		      QString("and counts the lines it could not read (%1)").arg(lost));
+		check(flat == 0, "with nothing flattened, which is a different loss");
+		delete some;
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

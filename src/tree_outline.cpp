@@ -2,6 +2,7 @@
 #include "node.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QSaveFile>
 #include <QTextStream>
 #include <QVector>
@@ -39,16 +40,42 @@ int leading_spaces(const QString &line) {
 
 namespace tree_outline {
 
-node *load(const QString &path, int *flattened) {
+node *load(const QString &path, int *flattened, int *unparsed) {
 	if (flattened)
 		*flattened = 0;
+	if (unparsed)
+		*unparsed = 0;
 	node *root = new node;
 	root->id   = "root";
 	root->type = node_type::folder;
 
 	QFile f(path);
-	if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+	if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		// **"There is no file yet" and "there is a file and I could not read
+		// it" are opposite answers, and returning an empty tree for both is
+		// how the second one destroyed the first one's data.**
+		//
+		// An empty tree is exactly what a first run legitimately produces, so
+		// a caller given one has no way to tell a fresh install from a tree it
+		// has just failed to read -- and the next save wrote that empty tree
+		// back over the file. The write lands even though the read did not:
+		// an atomic save renames a new file over the old, and `rename` needs
+		// write permission on the *directory*, not on the file it replaces.
+		// Measured as an ordinary user; a mode-000 file in a writable
+		// directory is replaced without complaint.
+		//
+		// So only the second returns nothing, and the caller is expected to
+		// stop rather than carry on with a tree it invented.
+		if (QFileInfo::exists(path)) {
+			qCritical("tree: %s exists but could not be opened (%s); refusing "
+			           "to treat it as an empty tree, because the next save "
+			           "would write that back over it",
+			           qPrintable(path), qPrintable(f.errorString()));
+			delete root;
+			return nullptr;
+		}
 		return root;
+	}
 
 	QTextStream in(&f);
 	// Stack of (depth, node) used to resolve each line's parent.
@@ -57,10 +84,14 @@ node *load(const QString &path, int *flattened) {
 	stack.push_back({-1, root});
 
 	int counter = 0;
+	// Lines with something on them, and lines that became a node. A file with
+	// the first and none of the second was not read, whatever the reason.
+	int content = 0, made = 0, lost = 0;
 	while (!in.atEnd()) {
 		const QString raw = in.readLine();
 		if (raw.trimmed().isEmpty())
 			continue;
+		++content;
 
 		// Clamped, not rejected. A node deeper than the limit becomes a sibling
 		// at the limit, so its tabs survive and only its nesting is lost.
@@ -76,12 +107,16 @@ node *load(const QString &path, int *flattened) {
 		if (raw_depth > depth && flattened)
 			++*flattened;
 		QString line = raw.trimmed();
-		if (!line.startsWith("- ["))
+		if (!line.startsWith("- [")) {
+			++lost;
 			continue;
+		}
 
 		const int close = line.indexOf(']');
-		if (close < 0)
+		if (close < 0) {
+			++lost;
 			continue;
+		}
 
 		const QString id = line.mid(3, close - 3);
 		QString rest = line.mid(close + 1).trimmed();
@@ -141,7 +176,31 @@ node *load(const QString &path, int *flattened) {
 
 		stack.push_back({depth, n});
 		++counter;
+		++made;
 	}
+
+	// **A file with content and no nodes was not read.** Every reason it can
+	// happen -- a different format, a truncation, an encoding that turned the
+	// markers into something else, a file that was never a tree -- produces
+	// the same bytes-in-nothing-out, and the same empty root a first run
+	// produces legitimately. That indistinguishability is what let the next
+	// save write the empty tree back, so the two are told apart here instead.
+	//
+	// A partial read is deliberately NOT refused, for the reason the depth
+	// clamp above is not: refusing loses every tab, where carrying on loses
+	// only the lines that would not parse. `unparsed` is how the caller
+	// learns it happened, and it must do something with it -- what it writes
+	// back is what parsed.
+	if (content > 0 && made == 0) {
+		qCritical("tree: %s has %d line(s) and none of them is a node; "
+		           "refusing to read it as an empty tree, because the next "
+		           "save would write that back over it",
+		           qPrintable(path), content);
+		delete root;
+		return nullptr;
+	}
+	if (unparsed)
+		*unparsed = lost;
 	return root;
 }
 
