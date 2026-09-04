@@ -14619,6 +14619,61 @@ copied across would be a fix for nothing. The same probe reports the five
 values from the phone, which is the cheapest way to find out and needs no
 code.
 
+## A permission request parked and never unparked, twice over
+
+The same lens as the clear -- what removes from this container -- pointed at
+the permission maps. `PENDING` holds a `PermissionRequest` from the moment a
+page asks until somebody answers, and `GEO_PENDING` and `GEO_ORIGIN` hold a
+geolocation callback the same way.
+
+**Nothing removed them except an answer.** A page that navigates away while the
+prompt is up -- a redirect, a meta refresh, a timer -- leaves the entry there
+for the life of the process, holding a request and the frame state behind it.
+Android announces exactly that through `onPermissionRequestCanceled` and
+`onGeolocationPermissionsHidePrompt`, and **neither was overridden**.
+
+Geolocation leaked twice, having two maps to leak from.
+
+**The code already described the cleanup it did not do.** `onCaptureDecision`
+reads a null entry as *"answered twice, or the view went away between the
+question and the answer"* -- and nothing made the second of those true. It does
+now, so a late answer to an abandoned request finds nothing and says so instead
+of calling `grant()` on it.
+
+**The pattern was two methods below all along.** `onShowFileChooser` does
+`if (old != null) old.onReceiveValue(null); // never leave one hanging`. The
+care existed in this file, in the callback next door, and the permission paths
+had not been given it.
+
+### The cancellation callback names nothing, which needed one more map
+
+`onGeolocationPermissionsHidePrompt` takes no arguments -- it means *stop
+showing whatever you are showing* -- while both geolocation maps are keyed by
+the token the C++ side holds. There was no way to say which entries a
+cancellation referred to, and the honest choices were to drop every view's or
+none. `GEO_TOKEN` records which token each view is waiting on, which is enough
+because a WebView shows one geolocation prompt at a time. It is cleared on the
+answer as well, or a later cancellation would look up a token already dealt
+with.
+
+A view destroyed while waiting drops its geolocation request too. Capture
+requests cannot be attributed to a view -- they are keyed by token alone -- so
+`onPermissionRequestCanceled` is what covers those, and the comment says that
+rather than implying the destroy path handles both.
+
+**What this does not do.** The Qt-side dialog stays on screen after a
+cancellation. Dismissing it needs a native call into C++ and a handle on a
+modal `exec()` owns, which is a change rather than a repair. Answering a stale
+prompt is now harmless instead of acting on a dead request, and that is the
+whole of what is claimed.
+
+**Verified in the built dex, not the source.** `strings` over
+`4/classes.dex` finds both overrides. The first dex looked at was
+`mergeExtDexDebug/classes.dex`, which holds the external dependencies and
+honestly contains neither -- a zero that would have read as "the change did not
+ship". The tell, as with the `dpkg -c` glob and the UTF-16 `strings` earlier
+the same night, is a zero where a number was expected.
+
 ## A clear that cleared everything except the answers people gave
 
 Found by asking, of every container in the shell, what removes from it. Two had

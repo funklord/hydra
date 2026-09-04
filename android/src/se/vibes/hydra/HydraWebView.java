@@ -119,6 +119,19 @@ public class HydraWebView {
     private static final Map<Long, String> GEO_ORIGIN = new HashMap<>();
 
     /**
+     * Which geolocation token a view is currently waiting on, view id to token.
+     *
+     * **Needed because the cancellation callback names nothing.**
+     * `onGeolocationPermissionsHidePrompt` takes no arguments -- it means
+     * "stop showing whatever you are showing" -- while the two maps above are
+     * keyed by the token the C++ side holds. Without this there is no way to
+     * say which entries the cancellation refers to, and the honest options are
+     * to drop every view's or to drop none. A WebView shows one geolocation
+     * prompt at a time, so one token per view is the whole of it.
+     */
+    private static final Map<Long, Long> GEO_TOKEN = new HashMap<>();
+
+    /**
      * Kept so every later call can be posted to the same UI-thread queue that
      * create() used. That ordering is the whole point: runOnUiThread is FIFO, so
      * a load posted after a create runs after it, whereas looking the view up on
@@ -255,6 +268,9 @@ public class HydraWebView {
      */
     public static void onGeolocationDecision(final long token, final boolean granted) {
         onUi(new Runnable() { @Override public void run() {
+            // The note of what this view was waiting on goes with the answer,
+            // or a later cancellation would look up a token already dealt with.
+            GEO_TOKEN.values().remove(Long.valueOf(token));
             GeolocationPermissions.Callback cb = GEO_PENDING.remove(token);
             String origin = GEO_ORIGIN.remove(token);
             if (cb == null) {
@@ -536,6 +552,47 @@ public class HydraWebView {
                     }
 
                     /**
+                     * The page stopped waiting for an answer.
+                     *
+                     * **Parking a request and never unparking it is a leak
+                     * with a second edge.** A request lives in `PENDING` from
+                     * the moment it is asked until somebody answers, and if
+                     * the page navigates away while the prompt is up -- a
+                     * redirect, a meta refresh, a timer -- nobody ever does.
+                     * Android says so through this callback, which was not
+                     * overridden, so the entry stayed for the life of the
+                     * process holding a `PermissionRequest` and the frame
+                     * state behind it.
+                     *
+                     * `onCaptureDecision` already reads correctly for the
+                     * aftermath -- its null branch says "answered twice, or
+                     * the view went away between the question and the answer"
+                     * -- and that was describing a cleanup nothing performed.
+                     * It performs it now, so a late answer to a cancelled
+                     * request finds nothing and says so rather than calling
+                     * `grant()` on a request the page has abandoned.
+                     *
+                     * Searched by value because the map is keyed by the token
+                     * the C++ side holds, and Android hands back the request
+                     * rather than the token. The map has one entry per prompt
+                     * on screen, so the scan is over a list of about one.
+                     */
+                    @Override
+                    public void onPermissionRequestCanceled(PermissionRequest req) {
+                        for (java.util.Iterator<Map.Entry<Long, PermissionRequest>> it =
+                                 PENDING.entrySet().iterator(); it.hasNext(); ) {
+                            Map.Entry<Long, PermissionRequest> e = it.next();
+                            if (e.getValue() == req) {
+                                if (permDebug())
+                                    Log.d(PERM_TAG, "request cancelled by the page,"
+                                          + " dropping token " + e.getKey());
+                                it.remove();
+                                return;
+                            }
+                        }
+                    }
+
+                    /**
                      * A page asking where the device is.
                      *
                      * **Not overriding this is not neutral.** The base
@@ -564,7 +621,35 @@ public class HydraWebView {
                         final long token = NEXT_TOKEN++;
                         GEO_PENDING.put(token, cb);
                         GEO_ORIGIN.put(token, origin);
+                        GEO_TOKEN.put(Long.valueOf(id), Long.valueOf(token));
                         requestGeolocation(id, origin, token);
+                    }
+
+                    /**
+                     * The page stopped waiting to be located.
+                     *
+                     * The same leak as `onPermissionRequestCanceled` and the
+                     * same cause -- a request parked until somebody answers,
+                     * and a page that navigates away before anybody does. Two
+                     * maps held it rather than one, so it leaked twice.
+                     *
+                     * The callback that ends it names nothing, which is why
+                     * `GEO_TOKEN` exists: it says which token this view was
+                     * waiting on. The `WebView` two methods below already
+                     * knows to do this for a file chooser -- "never leave one
+                     * hanging" -- and this is that care applied where it was
+                     * missing.
+                     */
+                    @Override
+                    public void onGeolocationPermissionsHidePrompt() {
+                        Long tok = GEO_TOKEN.remove(Long.valueOf(id));
+                        if (tok == null)
+                            return;
+                        GEO_PENDING.remove(tok);
+                        GEO_ORIGIN.remove(tok);
+                        if (permDebug())
+                            Log.d(PERM_TAG, "geolocation prompt withdrawn by the"
+                                  + " page, dropping token " + tok);
                     }
                     // Returning true means "I will answer, later". Returning
                     // false would let the WebView fall back to nothing at all --
@@ -1348,6 +1433,18 @@ public class HydraWebView {
         onUi(new Runnable() {
             @Override public void run() {
                 PAGE_URLS.remove(Long.valueOf(id));
+                // **Whatever this view was waiting to be answered goes too.**
+                // A tab closed while a prompt is up leaves a request nobody
+                // will ever answer, and the request holds frame state behind
+                // it. Only geolocation can be attributed to a view here --
+                // capture requests are keyed by token alone -- so this is the
+                // half that can be done at destruction, and
+                // `onPermissionRequestCanceled` is what covers the other.
+                Long geo = GEO_TOKEN.remove(Long.valueOf(id));
+                if (geo != null) {
+                    GEO_PENDING.remove(geo);
+                    GEO_ORIGIN.remove(geo);
+                }
                 WebView w = VIEWS.remove(id);
                 if (w == null)
                     return;
