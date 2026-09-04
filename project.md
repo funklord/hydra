@@ -15668,8 +15668,54 @@ from the settings dialog, which the test never opens.
 So that row is a true assertion that cannot fail. It is kept for what it does
 cover -- a garbage rules file does not stop the window starting or closing --
 and renamed to say so, rather than left looking like proof of a guard it never
-reaches. Its guard is the same one line; what is missing is a fixture that
-reaches its writer, and that is worth writing next rather than assuming.
+reaches. **The fixture that does reach its writer is the section below**, added
+straight afterwards; this paragraph used to end by saying it was missing.
+
+## A fixture for the assertion that could not fail
+
+The entry above ends with a row that is true and inert: `site-rules.ini`
+unchanged after a window closed, which stayed green **with the guard
+sabotaged too**, because nothing writes the consent rules on close. That store
+is saved only from the settings dialog. This is the fixture that reaches it.
+
+**The dialog is built exactly as `main_window::open_settings` builds it** --
+same arguments in the same order, `m_site_rules_path` among them -- so what is
+under test is the real chain rather than a reconstruction of it: `load_tree`
+gives up the path, the window hands the empty path to the dialog, and the
+dialog's own `isEmpty()` check declines to write. Three separate pieces of
+code, none of which is asked whether it agrees with the others anywhere else.
+
+### The control is the whole point
+
+"The file did not change" passes identically for a guard that works and for a
+button that was never wired to a save. That is exactly what the inert row was:
+a correct sentence about a file nothing had tried to write.
+
+So the same click is made twice. Once with a path that was given up, against a
+file that must come out byte-identical. Once with a path that was **kept**,
+against a file **deleted first** -- and if it comes back, the click really does
+reach a writer, which is what makes the silence in the other half mean
+something. Ten assertions, and that last one carries the rest.
+
+    ok  and has given up the rules file it could not read
+    ok  the file it could not read is byte-identical (31 bytes, was 31)
+    ok  the file is removed before the click
+    ok  and it comes back, so the click really does reach a writer
+
+### What the sabotage measured
+
+Reverting `keep_or_disown` turns exactly two of the ten red, leaves the control
+green, and puts a number on it:
+
+    FAIL  and has given up the rules file it could not read
+    FAIL  the file it could not read is byte-identical (48 bytes, was 31)
+
+Thirty-one bytes of somebody's file, replaced by forty-eight bytes of freshly
+serialised defaults, because the browser could not read it and carried on as
+though there had been nothing there. The same run also fails `policy.ini`
+at 406 bytes from 31, which is the earlier fixture doing its job -- and it
+still does not fail the inert row, which is the clearest possible statement of
+what that row was worth.
 
 ## What is next (in order)
 

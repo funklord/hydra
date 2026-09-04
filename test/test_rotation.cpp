@@ -29,6 +29,8 @@
 // 674x841 and 841x674 open. A desktop window dragged between those sizes is
 // the same event, which is why none of this needs a device.
 #include "main_window.h"
+#include "settings_dialog.h"
+#include "site_rules.h"
 #include "kiosk_controller.h"
 #include "tab_tree_view.h"
 #include "policy_engine.h"
@@ -39,6 +41,8 @@
 #include <QAction>
 #include <QApplication>
 #include <QDir>
+#include <QFileInfo>
+#include <QPushButton>
 #include <QEventLoop>
 #include <QFile>
 #include <QLabel>
@@ -490,8 +494,9 @@ int main(int argc, char **argv) {
 		// kept for what it does cover -- that a garbage `site-rules.ini` does
 		// not stop the window starting or closing -- and named for that
 		// rather than left looking like proof of a guard it never reaches.
-		// Its guard is the same one line; what is missing is a fixture that
-		// reaches its writer.
+		// Its guard is the same one line, and the fixture that reaches its
+		// writer is the section below -- through the settings dialog, which
+		// is the only thing that saves that store.
 		int i = 0;
 		for (const auto &spec : files) {
 			QFile f(dir + "/" + spec.name);
@@ -506,6 +511,109 @@ int main(int argc, char **argv) {
 			          .arg(spec.name).arg(now.size()).arg(before[i].size()));
 			++i;
 		}
+	}
+
+	// **The fixture the section above said was missing.** That one asserted
+	// `site-rules.ini` was unchanged after a window closed, and the sabotage
+	// showed the assertion could not fail: nothing writes the consent rules on
+	// close, because that store is saved only from the settings dialog. So it
+	// proved the guard for `policy.ini` and nothing at all for this one.
+	//
+	// This reaches the writer. The dialog is built exactly as
+	// `main_window::open_settings` builds it -- same arguments, same order,
+	// `m_site_rules_path` included -- so what is under test is the real chain:
+	// `load_tree` gives up the path, the window hands the empty path to the
+	// dialog, and the dialog's own `isEmpty()` check declines to write.
+	//
+	// **The control is the part that matters**, and it is why the earlier row
+	// was worth so little. Asserting "the file did not change" passes equally
+	// for a guard that works and for a button that was never wired to a save.
+	// So the same click is made with a path that was kept, against a file
+	// deleted first: if it comes back, the writer really does fire, and the
+	// silence in the other half means something.
+	section("the consent rules are not written over when unread");
+	if (geteuid() == 0) {
+		std::printf("  skip  running as root\n");
+	} else {
+		const QString dir = QDir::temp().filePath("hydra-rotation-rules");
+
+		// Built exactly as main_window::open_settings does.
+		auto forget_imported_via_dialog = [](main_window *w) {
+			settings_dialog dlg(w->m_players, w->m_downloads, w->m_torrents,
+			                     w->m_local_ai, w->m_external_ai, w->m_policy,
+			                     w->m_filters, w->m_filters_path,
+			                     w->m_consent, w->m_site_rules_path, w,
+			                     w->m_factory);
+			auto *forget = dlg.findChild<QPushButton *>("rules_forget");
+			if (forget)
+				forget->click();
+			return forget != nullptr;
+		};
+
+		auto make_tree = [&](const QString &d) {
+			QDir(d).removeRecursively();
+			QDir().mkpath(d);
+			QFile f(d + "/tree.txt");
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("- [t1] unopened_tab | A tab | https://example.com/\n");
+			return d + "/tree.txt";
+		};
+
+		// The case: a rules file that will not parse.
+		{
+			const QString d = dir + "-bad";
+			const QString tree = make_tree(d);
+			const QString rules = d + "/site-rules.ini";
+			const QByteArray junk = "this is not an ini file at all\n";
+			{ QFile f(rules); f.open(QIODevice::WriteOnly); f.write(junk); }
+
+			main_window w2(&factory, &policy, &filter);
+			check(w2.load_tree(tree), "the window opens on a good tree");
+			check(w2.m_site_rules_path.isEmpty(),
+			      "and has given up the rules file it could not read");
+			check(forget_imported_via_dialog(&w2),
+			      "the Forget imported button is there and was pressed");
+			spin(50);
+
+			QFile back(rules);
+			back.open(QIODevice::ReadOnly);
+			const QByteArray now = back.readAll();
+			check(now == junk,
+			      QString("the file it could not read is byte-identical "
+			               "(%1 bytes, was %2)").arg(now.size()).arg(junk.size()));
+		}
+
+		// **The control.** Same button, same dialog, a path that was kept --
+		// and the file deleted first, so its reappearance is proof the click
+		// reaches a writer at all.
+		{
+			const QString d = dir + "-good";
+			const QString tree = make_tree(d);
+			const QString rules = d + "/site-rules.ini";
+			{
+				site_rules seed = site_rules::defaults();
+				site_rule r;
+				r.kind  = "selector";
+				r.value = ".cookie-banner";
+				r.host  = "example.com";
+				seed.add(r);
+				check(seed.save(rules), "a real rules file is written");
+			}
+
+			main_window w3(&factory, &policy, &filter);
+			check(w3.load_tree(tree), "the window opens on a good tree");
+			check(!w3.m_site_rules_path.isEmpty(),
+			      "and keeps a rules file it could read");
+
+			check(QFile::remove(rules), "the file is removed before the click");
+			check(forget_imported_via_dialog(&w3), "the same button is pressed");
+			spin(50);
+			check(QFileInfo::exists(rules),
+			      "and it comes back, so the click really does reach a writer");
+		}
+
+		QDir(dir + "-bad").removeRecursively();
+		QDir(dir + "-good").removeRecursively();
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
