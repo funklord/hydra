@@ -16287,6 +16287,48 @@ have been two, and only comparing them can see that.
 
 Sabotaged, exactly those two fail and the light scheme stays green.
 
+### And then the thing itself, in the units a person experiences
+
+Both checks above are about **where a colour sits**. Neither says whether the
+text can be read, and that is what was reported. So the palette is also swept
+pair by pair: every ground hydra's dark scheme defines, against the text drawn
+on it, at the 3:1 floor this workspace settled on for interface text.
+
+Deliberately not 4.5 -- that is the body-text figure, and holding a chrome
+palette to it fails the highlight colour every desktop ships, this one
+included at 4.31 in dark and 3.69 in light.
+
+**Only the dark palette, because it is the only one this project owns.**
+`apply()` hands the light scheme back to the style on purpose, so asserting on
+it would be asserting on Qt's choices.
+
+Sabotaged, it names the symptom rather than a proxy for it:
+
+    FAIL  dark: WindowText reads on Light (1.25:1)
+    FAIL  dark: WindowText reads on Midlight (1.31:1)
+    FAIL  dark: WindowText reads on Mid (1.59:1)
+
+**A number in that comment was arithmetic rather than a measurement**, and it
+was wrong: 1.09, computed by hand, where the run says 1.25. Corrected in
+place, and worth a sentence because a figure that arrives already reasoned
+about is the one nobody re-derives.
+
+### The audit that produced it, and what it cleared
+
+Fourteen text-on-ground pairs, both schemes. Everything it flagged outside the
+dark shading roles was either the style's own light palette -- `LinkVisited`
+at 3.14, `HighlightedText` at 3.69 -- or the probe being misaimed:
+`BrightText on Window` reads 1.15 in light, and `BrightText` is *defined* as
+the colour for dark grounds, so measuring it there was an error in the
+instrument rather than a finding. The same misaiming that the "nearer the
+window" check made with `Shadow`, twice in one afternoon.
+
+One thing recorded rather than acted on: disabled text dims to 5.04:1 in
+hydra's dark palette against 11.31 active, where the style's light palette
+goes to 1.62 against 18.26. A greyed control in dark mode is therefore much
+closer to a live one than in light. Both are legible and neither is wrong; the
+inconsistency is the holder's to weigh.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

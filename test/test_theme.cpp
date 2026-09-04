@@ -34,6 +34,23 @@ static void check(bool ok, const QString &w) {
 }
 static void section(const char *n) { std::printf("\n== %s ==\n", n); }
 
+// Gamma-correct relative luminance and the contrast ratio between two
+// colours -- the WCAG form, and the same one `theme.cpp` uses. **One copy for
+// the whole file**, because two sections need it and a second copy is how two
+// luminances stop agreeing.
+static double lum(const QColor &c) {
+	auto ch = [](double v) {
+		v /= 255.0;
+		return v <= 0.03928 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+	};
+	return 0.2126 * ch(c.red()) + 0.7152 * ch(c.green()) + 0.0722 * ch(c.blue());
+}
+
+static double contrast(const QColor &a, const QColor &b) {
+	const double x = lum(a), y = lum(b);
+	return (std::max(x, y) + 0.05) / (std::min(x, y) + 0.05);
+}
+
 static QPalette light_palette() {
 	QPalette p;
 	p.setColor(QPalette::Window, QColor(0xef, 0xef, 0xef));
@@ -465,17 +482,6 @@ int main(int argc, char **argv) {
 		// Gamma-correct relative luminance, the WCAG form the workspace
 		// settled on. Any correct luminance answers this comparison -- what
 		// matters is that both sides use the same one.
-		auto lum = [](const QColor &c) {
-			auto ch = [](double v) {
-				v /= 255.0;
-				return v <= 0.03928 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
-			};
-			return 0.2126 * ch(c.red()) + 0.7152 * ch(c.green()) + 0.0722 * ch(c.blue());
-		};
-		auto contrast = [&](const QColor &a, const QColor &b) {
-			const double x = lum(a), y = lum(b);
-			return (std::max(x, y) + 0.05) / (std::min(x, y) + 0.05);
-		};
 		// **The app installs a proxy style and this suite did not**, so the
 		// first run of this measurement reported the platform style's answer
 		// while the running program uses another. The held fill is drawn by
@@ -581,6 +587,41 @@ int main(int argc, char **argv) {
 			          p.color(QPalette::Shadow).lightness(),
 			      QString("%1: and they run Light > Midlight > Mid > Dark > "
 			               "Shadow").arg(what));
+		}
+
+		// **And the thing itself: can the text be read on it.** The checks
+		// above are about where a colour sits; this is about what a person
+		// sees, and it is the one that names the reported symptom in its own
+		// units. Measured with the fix reverted, `WindowText` reads on
+		// `Light` at **1.25:1**, on `Midlight` at 1.31 and on `Mid` at 1.59 --
+		// all of them invisible. (1.09 appeared here first, from arithmetic
+		// rather than from the run; the numbers above are the run's.)
+		//
+		// Only the dark palette, because it is the only one this project
+		// owns. `apply()` hands the light scheme back to the style on purpose
+		// -- "a desktop's light theme is the user's" -- so asserting on it
+		// would be asserting on Qt's choices rather than on ours.
+		theme::apply(theme::choice::dark);
+		{
+			const QPalette p = QApplication::palette();
+			const QPalette::ColorRole grounds[] = {
+				QPalette::Window, QPalette::Base, QPalette::AlternateBase,
+				QPalette::Button, QPalette::Light, QPalette::Midlight,
+				QPalette::Mid
+			};
+			const char *gnames[] = { "Window", "Base", "AlternateBase",
+			                          "Button", "Light", "Midlight", "Mid" };
+			// 3:1 is the floor this workspace settled on for interface text,
+			// and it is deliberately not 4.5: that is the body-text figure,
+			// and holding a chrome palette to it would fail the highlight
+			// colour every desktop ships.
+			for (int i = 0; i < 7; ++i) {
+				const double r = contrast(p.color(QPalette::WindowText),
+				                           p.color(grounds[i]));
+				check(r >= 3.0,
+				      QString("dark: WindowText reads on %1 (%2:1)")
+				          .arg(gnames[i]).arg(r, 0, 'f', 2));
+			}
 		}
 
 		// **The defect stated exactly.** `dark_palette()` overrode thirteen
