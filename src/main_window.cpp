@@ -3560,9 +3560,34 @@ void main_window::open_handed_url() {
 void main_window::forget_shell_caches() {
 	const int answers = int(m_session_permissions.size());
 	m_session_permissions.clear();
+
+	// **The allowance goes with the record of it, or the two disagree.**
+	// `m_antiadblock_fixed` is only the note that a host has been dealt with;
+	// the thing that changed behaviour is an `ads: allow` rule this browser
+	// wrote for that host without being asked. Dropping the note alone leaves
+	// the rule standing with nothing remembering that it was automatic -- and
+	// the detector's first branch then reads it back as the person's own,
+	// telling them "your own setting for this site is left as it is" about a
+	// setting they never made.
+	//
+	// Only the hosts in this set, which are exactly the ones written
+	// automatically. A rule somebody set deliberately is theirs and survives a
+	// clear, as every other policy does: forgetting is about what browsing
+	// left behind, not about undoing decisions.
+	int allowances = 0;
+	for (const QString &host : m_antiadblock_fixed) {
+		if (m_policy->setting_for(host, policy::feature::ads) ==
+		        policy::setting::allow) {
+			m_policy->set_setting(host, policy::feature::ads,
+			                       policy::setting::unset);
+			++allowances;
+		}
+	}
 	m_antiadblock_fixed.clear();
-	if (answers > 0)
-		qInfo("forget: dropped %d session permission answer(s)", answers);
+
+	if (answers > 0 || allowances > 0)
+		qInfo("forget: dropped %d session permission answer(s) and %d "
+		       "automatic ad allowance(s)", answers, allowances);
 }
 
 void main_window::on_tree_activated(const QModelIndex &proxy_index) {

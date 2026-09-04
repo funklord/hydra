@@ -141,7 +141,15 @@ int main(int argc, char **argv) {
 		// hit in it skips the prompt. On a public screen that meant the next
 		// person inherited the last person's camera.
 		w.m_session_permissions.insert("example.test\ncamera", true);
+		// An automatic allowance and the note that it was made, as the
+		// antiadblock path leaves them: the note alone is not the state that
+		// changed behaviour.
 		w.m_antiadblock_fixed.insert("example.test");
+		policy.set_setting("example.test", policy::feature::ads,
+		                    policy::setting::allow);
+		// And one the person set themselves, which forgetting must not touch.
+		policy.set_setting("chosen.test", policy::feature::ads,
+		                    policy::setting::block);
 		check(!w.m_session_permissions.isEmpty() && !w.m_antiadblock_fixed.isEmpty(),
 		      "a session answer and a fixed host are cached");
 		// **Driven through the wiring, not by calling the slot.** The slot is
@@ -164,6 +172,12 @@ int main(int argc, char **argv) {
 		      "forgetting drops the session permission answers");
 		check(w.m_antiadblock_fixed.isEmpty(),
 		      "and the record of which hosts were found running detection");
+		check(policy.setting_for("example.test", policy::feature::ads) ==
+		       policy::setting::unset,
+		      "and the allowance itself, which is what changed behaviour");
+		check(policy.setting_for("chosen.test", policy::feature::ads) ==
+		       policy::setting::block,
+		      "while a rule the person set themselves is left alone");
 		if (w.m_kiosk_action)
 			w.m_kiosk_action->trigger();
 		spin(80);

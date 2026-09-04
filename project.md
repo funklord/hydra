@@ -14739,6 +14739,34 @@ more private option produced the less private outcome.
 `m_antiadblock_fixed` goes with it: a per-host record of which sites were found
 running adblock detection, which is browsing history by another name.
 
+### And clearing the note without the rule was worse than clearing neither
+
+The first version of that fix dropped `m_antiadblock_fixed` and stopped, which
+is wrong in a way that only shows up on the next visit. **The set is only the
+note that a host has been dealt with.** What changed behaviour is an
+`ads: allow` rule this browser wrote for that host without being asked -- and
+the rule outlived the note.
+
+So the detector fires again, reaches its first branch -- the one that exists to
+respect an explicit setting -- and says *"your own setting for this site is
+left as it is"* about a setting the person never made. The browser's own
+automatic decision, read back to them as theirs.
+
+They go together now, and the discrimination is the point: **only the hosts in
+that set**, which are exactly the ones written automatically. A rule somebody
+set deliberately survives a clear, as every other policy does. Forgetting is
+about what browsing left behind, not about undoing decisions -- and a clear
+that quietly reverted someone's own site rules would be the same bug pointed
+the other way. `test_rotation` asserts both directions.
+
+**Found by re-reading a finding rather than by any gate**, and the fault was in
+the fix rather than in what it fixed. Worth noting what the antiadblock path
+does right, since the earlier note here was unfair to it: it refuses to
+override an explicit setting, announces itself, says where to undo it, fires
+once per site, and writes nothing to disk -- there is no `save`, so the rule
+does not survive a restart. The claim above that it "survives a clear" was half
+measured; this is the half that was true.
+
 ### The fix needed a signal at each end, because neither could be heard
 
 `settings_dialog::browsing_data_cleared` and
