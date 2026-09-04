@@ -99,7 +99,12 @@ public:
 	// views doing it. Called by `closeEvent` and by a shutdown signal, which
 	// are the two ways this browser ends; see the definition for why one list
 	// serves both. Not a checkpoint -- it tears the views down.
-	void save_everything();
+	// Whether the tab tree reached the disk. **The tree is the document**, so
+	// a caller that can still ask a question -- `closeEvent` -- has to know,
+	// and one that cannot -- the signal handler, mid-logout -- has at least
+	// something to log. Everything else it writes is recoverable state; the
+	// tree is not.
+	bool save_everything();
 
 protected:
 	void closeEvent(QCloseEvent *event) override;
@@ -202,6 +207,12 @@ private slots:
 
 private:
 	QMenuBar *build_menu_bar();
+	// Report a write that did not happen. Every persistent writer here returns
+	// whether it succeeded and every caller used to drop the answer, so a full
+	// disk or an unwritable profile lost the change in silence. Not a slot: it
+	// is called from the handlers that save, and returns what it was told so a
+	// caller can still branch on it.
+	bool saved_or_said(bool ok, const QString &what);
 	void update_status();
 	// Tell the page-scoped bridges which site is on screen. Called whenever that
 	// can change: a navigation in the current view, and a switch to another one.
@@ -420,6 +431,9 @@ public:
 	QAction            *m_undo_action   = nullptr;
 	tree_snapshot       m_undo;
 	QTimer             *m_save_timer    = nullptr;
+	// Whether the last debounced tree write failed, so a disk that has filled
+	// says so once instead of once per keystroke.
+	bool                m_tree_save_failed = false;
 	QTimer             *m_view_timer    = nullptr;
 	QTimer             *m_blob_timer    = nullptr;
 	// Node ids whose history has moved since the last blob flush. Ids rather

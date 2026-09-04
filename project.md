@@ -15280,6 +15280,141 @@ of closes. It was written into a commit message as a fix, quoted in the section
 above as evidence, and used to justify a theory about somebody else's file
 format -- all on an instrument that had never met the case it existed to name.
 
+## Seventeen writers reported honestly and every caller threw the answer away
+
+**Found by asking what a discarded return value costs**, which is
+`evidence.md`'s *a helper that is not there reports success* pointed the other
+way: there a guard's absence became a pass, here a guard was present, spoke,
+and nobody was listening.
+
+An earlier pass through this tree made every persistent store write through
+`QSaveFile` and `return f.commit()`, so `policy_engine::save`,
+`filter_list::save`, `site_rules::save`, `tab_tree_model::save`,
+`state_store::save`, `annoyance_log::save` and `extractor_store::save` all
+report a failed write truthfully. **Seventeen call sites, and not one read the
+result.** So a full disk, a profile that had become unwritable, a read-only
+home -- every one of them lost the change in complete silence, and the screen
+went on showing the change as though it had been made.
+
+**Re-derived rather than remembered**, because the first count was 12 from a
+looser grep and the number was about to justify the work:
+
+    grep -rnE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*(\(\))?(->|\.|::)save\(' src/*.cpp
+
+Seventeen, of which one is `QPainter::save` and irrelevant.
+
+**They are not one class, and treating them as one would have been the wrong
+fix.** Sorted by what a failure actually costs:
+
+| site | what a silent failure loses |
+|---|---|
+| `flush_tree` | **the tab tree** -- the document itself |
+| `save_everything`, from `closeEvent` | the tree, with no next attempt coming |
+| `save_everything`, from the signal handler | the same, mid-logout, with nobody to ask |
+| the permission answer in `main_window` | an answer given, wanted again next launch |
+| filter and site-rule edits | a rule the user watched disappear, back next launch |
+| the extractor | nothing -- and a status line claiming it was saved |
+| suspended-tab blobs, the annoyance log | scroll position, a log entry |
+
+So each got the report its cost earns, rather than one uniform message:
+
+- **`saved_or_said`**, a small helper on `main_window`, puts a failure in the
+  status bar and returns what it was told. Used by the policy, filter and
+  site-settings sites, where the browser carries on and the next write may
+  well succeed.
+- **`flush_tree` says it once per failure, not once per write.** It is
+  debounced off every structural change, so a full disk would otherwise
+  repaint the same warning every few seconds -- and a message that is always
+  there is one nobody reads. The latch clears on the next write that works.
+- **`closeEvent` asks instead of announcing**, because a message shown as the
+  window disappears is a message nobody reads. `save_everything` returns
+  whether the tree reached the disk; a failure raises Retry/Close, and a retry
+  that also fails keeps the window open so somebody can free space. **The
+  window is the only moment the answer is still worth something** -- everywhere
+  else there is a next save, and here the tree in memory goes with the window.
+- **The signal handler does not ask**, deliberately. It runs during a logout
+  with a session manager counting seconds, and a modal there would hang the
+  shutdown to no purpose. It logs, which is all it can honestly do.
+- **The extractor message stopped lying.** It printed `Extractor saved for %1`
+  unconditionally, directly after a save whose result it discarded. **A
+  sentence claiming a save that did not happen is worse than the failed save**,
+  because it is the thing that stops anybody looking.
+- **The settings dialog reports through the note labels it already has**, set
+  *after* the list rebuild, which writes those labels itself. Worth saying at
+  all because of what the code beside them already argues: those four controls
+  apply immediately rather than at OK, precisely so a rule that is blocking
+  something now stops blocking it now. A failed write there produces exactly
+  the divergence the immediacy exists to prevent, and produces it invisibly.
+
+**The policy site is the pointed one.** The comment beside it says the answer
+is written at that instant because somebody would be furious to have to give
+it twice -- and then the result was dropped, so a failed save produced exactly
+the outcome the immediacy was there to avoid.
+
+### Proved by breaking it
+
+`test_probe_ui` drives the failure end to end: a `settings_dialog` built with a
+filter list and a path whose *parent* does not exist, a row selected, the
+Remove button clicked, and the note read back. A path with a missing parent
+rather than a read-only directory, because it fails for root too -- and a
+check root cannot fail is not a check.
+
+**With a control**, since an assertion that a message appears passes equally
+for a message that is always shown: the same click against a working path must
+*not* report a failure, and the file must exist afterwards.
+
+**Then sabotaged, because a check is untested until it has been seen to
+fail.** Restoring the original defect -- `m_filters->save(path);` with the
+result dropped -- turns the run red on exactly that assertion and exit 1:
+
+    FAIL  a failed write is reported (No rules yet. They arrive by ...)
+
+and the control stays green, which is the point: with the caller ignoring the
+answer, the failing path and the working one produce **the same sentence**.
+That indistinguishability is the whole defect, and it is what the sabotage
+makes visible.
+
+**Driven through the button rather than by calling the store**, because the
+defect was never in the store. It was in the caller, and a test that asks a
+store whether it agrees with itself cannot see a caller that ignores it --
+`evidence.md`'s *a correct function is not a working feature*.
+
+### An anchor chosen by topic, in a header sorted by kind
+
+**Twice while making this change, a declaration went into the wrong access
+section of `main_window.h`, and `make style` passed on both.** The first was
+`bool saved_or_said(...)`, which moc accepted and would have published as a
+slot; the second was `bool m_tree_save_failed = false;`, which moc refused:
+
+    ../src/main_window.h:189:1: error: Not a signal or slot declaration
+
+Both landed there for the same reason. The anchor was chosen by **topic** --
+put the helper next to `forget_shell_caches`, put the latch next to
+`flush_tree` -- and a C++ header is sorted by **kind**. `flush_tree` is a slot,
+so everything textually near it is in `private slots:`, and a data member has
+no business there however closely related it is to what it records.
+
+**The gate cannot see this and should not be asked to.** `style_gate.py` reads
+indentation, naming and characters; it has no model of a class, so a member in
+a slots section is exactly as conforming as one in the data section. Only moc
+knows, and moc runs at build time -- which is why the first of the two, the
+one moc *accepted*, was caught by reading rather than by any tool.
+
+The rule that would have prevented both: **anchor on the boundary you mean,
+not on a neighbour that happens to be about the same thing.** In this header
+that means the section header itself -- `private:`, the first data member --
+rather than the function whose subject matches. Topical adjacency and
+structural adjacency are different relations, and in a 500-line header with
+six access sections they diverge constantly.
+
+### What is not covered
+
+The three `state_store::save` sites and the two `annoyance_log` ones are left
+discarding their result. They are recoverable state -- a scroll position, a
+log row -- and a warning for each would spend the status bar on things nobody
+can act on, which is how the warnings that matter get ignored. Recorded here
+rather than fixed, so the next reader knows it was a decision.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

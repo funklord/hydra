@@ -1,6 +1,7 @@
 // Probing in the settings window must be a button, never a side effect of
 // opening it.
 #include "settings_dialog.h"
+#include "filter_list.h"
 #include "download_manager.h"
 #include "player_launcher.h"
 #include "torrent_download_source.h"
@@ -10,7 +11,9 @@
 #include <QApplication>
 #include <QDir>
 #include <QEventLoop>
+#include <QFile>
 #include <QLabel>
+#include <QTreeWidget>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QRadioButton>
@@ -110,6 +113,65 @@ int main(int argc, char **argv) {
 	spin(300);
 	check(dlg.findChildren<QRadioButton *>().size() == before,
 	      "rescanning keeps the list consistent rather than duplicating it");
+
+	// **A write that did not happen used to look exactly like one that did.**
+	// Every store here reports honestly -- `QSaveFile`, `return f.commit()` --
+	// and every caller dropped the answer, so a full disk or an unwritable
+	// profile lost the change in silence. It matters most on the controls that
+	// apply *immediately* rather than at OK, and this is one: the rule stops
+	// blocking the moment the button is pressed, so the list on screen is
+	// already correct and nothing looks wrong until the next launch puts the
+	// rule back.
+	//
+	// Driven through the button, because the defect was never in the store. It
+	// was in the caller, and a test that asks the store whether it agrees with
+	// itself cannot see a caller that ignores the answer.
+	section("a filter list that cannot be written says so");
+	{
+		auto with_one_rule = [](filter_list *f) {
+			filter_rule r;
+			r.text = "||ads.example.com^";
+			r.note = "test";
+			f->add(r);
+		};
+		auto remove_first = [](settings_dialog *d) -> QString {
+			auto *view   = d->findChild<QTreeWidget *>("filters");
+			auto *remove = d->findChild<QPushButton *>("filter_remove");
+			auto *note   = d->findChild<QLabel *>("filter_note");
+			if (!view || !remove || !note || view->topLevelItemCount() == 0)
+				return QString();
+			view->setCurrentItem(view->topLevelItem(0));
+			remove->click();
+			return note->text();
+		};
+
+		// A path whose *parent* does not exist, so `QSaveFile` cannot place its
+		// temporary alongside the target. Chosen over a read-only directory
+		// because it fails for root too, and a check root cannot fail is not a
+		// check.
+		filter_list bad_list;
+		with_one_rule(&bad_list);
+		settings_dialog bad(&players, &downloads, tor, &local_ai, &external_ai,
+		                     nullptr, &bad_list,
+		                     QDir(tmp).filePath("no-such-dir/filters.txt"));
+		const QString said = remove_first(&bad);
+		check(!said.isEmpty(), "the filter controls are there and removable");
+		check(said.contains("could not be saved"),
+		      QString("a failed write is reported (%1)").arg(said));
+
+		// **The control.** The same click against a path that works must not
+		// report a failure, or the assertion above would pass equally for a
+		// message that is simply always shown.
+		const QString fine = QDir(tmp).filePath("filters.txt");
+		filter_list good_list;
+		with_one_rule(&good_list);
+		settings_dialog good(&players, &downloads, tor, &local_ai, &external_ai,
+		                      nullptr, &good_list, fine);
+		const QString ok_said = remove_first(&good);
+		check(!ok_said.isEmpty() && !ok_said.contains("could not be saved"),
+		      QString("and a write that works is not (%1)").arg(ok_said));
+		check(QFile::exists(fine), "the file really was written");
+	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

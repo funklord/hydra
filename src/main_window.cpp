@@ -687,7 +687,10 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	auto *shutdown = new shutdown_signals(this);
 	connect(shutdown, &shutdown_signals::received, this, [this](int signo) {
 		qInfo("caught signal %d; saving before exit", signo);
-		save_everything();
+		if (!save_everything())
+			qWarning("could not write the tab tree to %s; tabs opened since "
+			          "the last save are lost",
+			          qPrintable(m_tree_path));
 		QCoreApplication::quit();
 	});
 	if (!shutdown->armed())
@@ -1945,7 +1948,7 @@ void main_window::open_filter_evolution() {
 	if (dlg.exec() != QDialog::Accepted)
 		return;
 	if (!m_filters_path.isEmpty())
-		m_filters->save(m_filters_path);
+		saved_or_said(m_filters->save(m_filters_path), "the filter list");
 
 	QStringList added;
 	if (m_filters)
@@ -2007,7 +2010,7 @@ void main_window::confirm_rules() {
 			if (m_filters && m_filters->remove(text))
 				++removed;
 		if (m_filters && !m_filters_path.isEmpty())
-			m_filters->save(m_filters_path);
+			saved_or_said(m_filters->save(m_filters_path), "the filter list");
 		m_status->showMessage(
 		    QString("Removed %1 rule%2. Reloading %3.")
 		        .arg(removed).arg(removed == 1 ? "" : "s").arg(m_unconfirmed_host),
@@ -2759,7 +2762,8 @@ void main_window::open_node(node *n, bool load_now) {
 				// twice because the browser was killed in between.
 				pe->set_setting(host, f, grant ? policy::setting::allow
 				                                : policy::setting::block);
-				pe->save(m_policy_path);
+				saved_or_said(pe->save(m_policy_path),
+				               "that answer for " + host);
 			} else {
 				m_session_permissions.insert(key, grant);
 			}
@@ -3557,6 +3561,29 @@ void main_window::open_handed_url() {
 // `m_antiadblock_fixed` goes with it as a record of which sites were visited
 // and found to be running adblock detection, which is browsing history by
 // another name.
+// **A save that failed used to look exactly like one that worked.**
+// `filter_list::save`, `policy_engine::save` and their siblings were made to
+// report honestly -- `QSaveFile`, `return f.commit()`, false on a disk that is
+// full or a profile that cannot be written -- and every caller discarded the
+// answer. So the change was gone and nothing said so until the next launch.
+//
+// The policy one is the sharpest, because the code beside it says why it saves
+// at that instant: an answer to a permission prompt is the kind of decision
+// somebody would be furious to give twice. A failed save produces exactly the
+// outcome that immediacy exists to prevent, and produced it silently.
+//
+// The status bar is the honest channel here. It cannot fix the disk, and a
+// modal would interrupt whatever the person was doing over something they
+// probably cannot act on this second -- but they can be told, and they can
+// stop trusting that the setting stuck.
+bool main_window::saved_or_said(bool ok, const QString &what) {
+	if (!ok && m_status)
+		m_status->showMessage(
+		    QString("Could not save %1 — the change is in this session only.")
+		        .arg(what), 12000);
+	return ok;
+}
+
 void main_window::forget_shell_caches() {
 	const int answers = int(m_session_permissions.size());
 	m_session_permissions.clear();
@@ -4146,12 +4173,18 @@ void main_window::learn_this_site() {
 	const QString dir = QStandardPaths::writableLocation(
 	    QStandardPaths::AppDataLocation);
 	QDir().mkpath(dir);
-	m_extractors.save(QDir(dir).filePath("extractors.json"));
+	// The message below says the extractor was saved, so it has to be true:
+	// claiming a save that did not happen is worse than the failed save,
+	// because it is the sentence that stops anybody looking.
+	const bool wrote =
+	    m_extractors.save(QDir(dir).filePath("extractors.json"));
 	const int found = apply_extractor(host, v->url());
 	m_status->showMessage(
-	    found ? QString("Extractor saved for %1, and it found a stream — see the "
-	                     "media list.").arg(host)
-	          : QString("Extractor saved for %1.").arg(host), 9000);
+	    !wrote ? QString("Extractor set for %1 for this session — it could not "
+	                      "be saved.").arg(host)
+	    : found ? QString("Extractor saved for %1, and it found a stream — see "
+	                       "the media list.").arg(host)
+	            : QString("Extractor saved for %1.").arg(host), 9000);
 	refresh_media_affordance(host);
 }
 
@@ -4433,8 +4466,17 @@ void main_window::mark_dirty() {
 }
 
 void main_window::flush_tree() {
-	if (!m_tree_path.isEmpty())
-		m_model->save(m_tree_path);
+	if (!m_tree_path.isEmpty()) {
+		const bool ok = m_model->save(m_tree_path);
+		// **Said once per failure, not once per write.** This is debounced off
+		// every structural change, so a disk that has filled would otherwise
+		// repaint the same warning every few seconds -- and a message that is
+		// always there is one nobody reads. The latch clears on the next write
+		// that works, so a second failure later is announced again.
+		if (!ok && !m_tree_save_failed)
+			saved_or_said(false, "the tab tree");
+		m_tree_save_failed = !ok;
+	}
 	persist_histories();
 }
 
@@ -4547,7 +4589,7 @@ void main_window::open_site_controls() {
 
 void main_window::on_policy_changed() {
 	if (!m_policy_path.isEmpty())
-		m_policy->save(m_policy_path);
+		saved_or_said(m_policy->save(m_policy_path), "the site settings");
 	if (web_view_backend *v = current_view()) {
 		apply_policy(v, v->url().host());
 		v->reload();
@@ -4662,7 +4704,7 @@ void main_window::restore_view_state() {
 //
 // It suspends the live views, so it is the *end*, not a checkpoint. Nothing
 // that means to carry on running may call it.
-void main_window::save_everything() {
+bool main_window::save_everything() {
 	// Leave kiosk first, so the presented view is back in the stack and can be
 	// suspended with the rest.
 	if (m_kiosk && m_kiosk->active())
@@ -4674,14 +4716,40 @@ void main_window::save_everything() {
 	for (const QString &id : live_ids)
 		if (node *n = m_model->node_by_id(id))
 			suspend_node(n);
+	bool tree_written = true;
 	if (!m_tree_path.isEmpty())
-		m_model->save(m_tree_path);
+		tree_written = m_model->save(m_tree_path);
 	if (!m_policy_path.isEmpty())
-		m_policy->save(m_policy_path);
+		saved_or_said(m_policy->save(m_policy_path), "the site settings");
 	save_view_state();
+	return tree_written;
 }
 
 void main_window::closeEvent(QCloseEvent *event) {
-	save_everything();
+	// **The one moment the answer is still worth something.** Everywhere else
+	// a failed tree write is a status-bar line, because the browser carries on
+	// and the next debounced save may well succeed. Here there is no next one:
+	// the window is going and the tree in memory goes with it, so a silent
+	// failure is the difference between a session restored and a session gone.
+	//
+	// Asked rather than announced for the same reason -- a message shown as
+	// the window disappears is a message nobody reads. And asked *only* here:
+	// the other caller is the signal handler, which runs during a logout with
+	// a session manager counting seconds, and a modal there would hang the
+	// shutdown to no purpose.
+	if (!save_everything()) {
+		const QMessageBox::StandardButton pick = QMessageBox::warning(
+		    this, "Hydra",
+		    QString("The tab tree could not be written to\n%1\n\n"
+		             "Closing now loses every tab opened, moved or closed since "
+		             "the last save that worked.").arg(m_tree_path),
+		    QMessageBox::Retry | QMessageBox::Close, QMessageBox::Retry);
+		if (pick == QMessageBox::Retry && !save_everything()) {
+			// Still failing, so stay open and let them free some space. They
+			// can close anyway from the same dialog next time.
+			event->ignore();
+			return;
+		}
+	}
 	QWidget::closeEvent(event);
 }

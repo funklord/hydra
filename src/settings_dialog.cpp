@@ -1482,9 +1482,18 @@ void settings_dialog::build_filter_page(QWidget *page) {
 		// that is blocking something now should stop blocking it now, and the
 		// alternative is a window where pressing Cancel silently restores rules
 		// the user watched disappear.
+		bool wrote = true;
 		if (m_filters->remove(sel.first()->text(0)) && !m_filters_path.isEmpty())
-			m_filters->save(m_filters_path);
+			wrote = m_filters->save(m_filters_path);
 		rebuild_filter_list();
+		// **Set after the rebuild, which writes this label itself.** And worth
+		// saying at all because of the immediacy above: the rule is off now,
+		// so without a word the list looks correct and quietly disagrees with
+		// the disk until the next launch puts the rule back.
+		if (!wrote)
+			m_filter_note->setText(
+			    "Removed for this session only — the filter list could not be "
+			    "saved, so this rule returns next launch.");
 	});
 
 	rebuild_filter_list();
@@ -1543,10 +1552,14 @@ void settings_dialog::build_filter_page(QWidget *page) {
 		site_rules kept = m_consent->rules();
 		const int gone = kept.forget_imported();
 		m_consent->set_rules(kept);
+		bool wrote = true;
 		if (!m_rules_path.isEmpty())
-			kept.save(m_rules_path);
+			wrote = kept.save(m_rules_path);
 		rebuild_site_rules();
-		m_rules_note->setText(gone == 0
+		m_rules_note->setText(
+		  !wrote ? QString("Forgot them for this session only — the rules could "
+		                    "not be saved, so they return next launch.")
+		  : gone == 0
 		  ? QString("Nothing had been imported.")
 		  : QString("Forgot %1 imported rule%2. What you learned here is "
 		             "untouched.").arg(gone).arg(gone == 1 ? "" : "s"));
@@ -1611,9 +1624,14 @@ void settings_dialog::build_filter_page(QWidget *page) {
 		for (const site_rule &r : got.accepted)
 			merged.add(r);
 		m_consent->set_rules(merged);
+		bool wrote = true;
 		if (!m_rules_path.isEmpty())
-			merged.save(m_rules_path);
+			wrote = merged.save(m_rules_path);
 		rebuild_site_rules();
+		if (!wrote)
+			m_rules_note->setText(
+			    "Imported for this session only — the rules could not be "
+			    "saved, so they are gone next launch.");
 	});
 	rv->addLayout(rrow);
 
@@ -1639,9 +1657,14 @@ void settings_dialog::build_filter_page(QWidget *page) {
 			kept.add(r);
 		}
 		m_consent->set_rules(kept);
+		bool wrote = true;
 		if (!m_rules_path.isEmpty())
-			kept.save(m_rules_path);
+			wrote = kept.save(m_rules_path);
 		rebuild_site_rules();
+		if (!wrote)
+			m_rules_note->setText(
+			    "Removed for this session only — the rules could not be saved, "
+			    "so this one returns next launch.");
 	});
 	// What a maintainer needs and could not get: the flagged rules, in a form
 	// that can be pasted into `site_rules::defaults()`. A rule that works
