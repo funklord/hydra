@@ -59,6 +59,28 @@ QPalette dark_palette() {
 	p.setColor(QPalette::LinkVisited, QColor(0xa9, 0x8f, 0xd6));
 	p.setColor(QPalette::PlaceholderText, dim);
 
+	// **The five roles a style shades with, which this palette used to leave
+	// behind.** `QPalette p;` copies the application's current palette and
+	// only the roles named above were overridden, so `Light`, `Midlight`,
+	// `Mid`, `Dark` and `Shadow` stayed at the *light* desktop's values --
+	// measured, and identical in both schemes:
+	//
+	//     Light #ffffff  Midlight #cacaca  Mid #b8b8b8  Dark #9f9f9f
+	//
+	// A style fills frames, group boxes, headers, splitter handles and tab
+	// bars with those. In a dark window that is a near-white ground with
+	// near-white `WindowText` drawn on it, which is the "impossible to read"
+	// this was reported as.
+	//
+	// Derived from the window rather than written out, so the five stay in
+	// step with it if it ever moves, and ordered the way Qt expects:
+	// Light > Midlight > Button > Mid > Dark > Shadow.
+	p.setColor(QPalette::Light,    window.lighter(160));
+	p.setColor(QPalette::Midlight, window.lighter(130));
+	p.setColor(QPalette::Mid,      window.darker(130));
+	p.setColor(QPalette::Dark,     window.darker(160));
+	p.setColor(QPalette::Shadow,   window.darker(300));
+
 	// Disabled has to be set for every group that uses it or a greyed control
 	// keeps full-contrast text and stops looking greyed at all -- the same
 	// mistake the settings page made with its descriptions.

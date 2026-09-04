@@ -530,6 +530,72 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	// **The five roles a style shades with have to belong to the same scheme
+	// as the text drawn on them.** `dark_palette()` overrode thirteen roles
+	// and left these at whatever `QPalette p;` had copied -- the light
+	// desktop's -- so a dark window shaded a frame or a header near-white and
+	// then drew near-white `WindowText` on it. Reported from the desktop as
+	// text that was impossible to read.
+	//
+	// Asserted as a relationship rather than as five colours, so it cannot go
+	// stale the next time the window colour moves: whatever the scheme, every
+	// shading role must sit on the same side of the text as the window does.
+	section("a scheme's shading roles belong to that scheme");
+	{
+		const QPalette::ColorRole shading[] = {
+			QPalette::Light, QPalette::Midlight, QPalette::Mid,
+			QPalette::Dark, QPalette::Shadow
+		};
+		const char *names[] = { "Light", "Midlight", "Mid", "Dark", "Shadow" };
+
+		QList<int> dark_values, light_values;
+		for (const auto scheme : { theme::choice::dark, theme::choice::light }) {
+			theme::apply(scheme);
+			const QPalette p = QApplication::palette();
+			const char *what = scheme == theme::choice::dark ? "dark" : "light";
+			QList<int> &into =
+			    scheme == theme::choice::dark ? dark_values : light_values;
+			for (auto r : shading)
+				into << p.color(r).lightness();
+
+			// **`Light` is the one text lands on**, and the only one of the
+			// five with a legibility question. `Dark` and `Shadow` are meant
+			// to be dark in a light scheme -- they are edges and shadows, not
+			// grounds -- so asking all five to sit near the window fails a
+			// correct light palette, which is what the first version of this
+			// check did before the sabotage showed it.
+			const int light_role = p.color(QPalette::Light).lightness();
+			const int text = p.color(QPalette::WindowText).lightness();
+			const int win  = p.color(QPalette::Window).lightness();
+			check(qAbs(light_role - win) < qAbs(light_role - text),
+			      QString("%1: Light (%2) is the window's (%3), not the text's "
+			               "(%4)").arg(what).arg(light_role).arg(win).arg(text));
+
+			check(p.color(QPalette::Light).lightness() >
+			          p.color(QPalette::Midlight).lightness() &&
+			      p.color(QPalette::Midlight).lightness() >
+			          p.color(QPalette::Mid).lightness() &&
+			      p.color(QPalette::Mid).lightness() >
+			          p.color(QPalette::Dark).lightness() &&
+			      p.color(QPalette::Dark).lightness() >
+			          p.color(QPalette::Shadow).lightness(),
+			      QString("%1: and they run Light > Midlight > Mid > Dark > "
+			               "Shadow").arg(what));
+		}
+
+		// **The defect stated exactly.** `dark_palette()` overrode thirteen
+		// roles and left these five at whatever `QPalette p;` had copied, so
+		// they were the light desktop's -- byte for byte the same list in both
+		// schemes. Nothing about either list alone says that; the equality
+		// does.
+		check(dark_values != light_values,
+		      QString("the two schemes do not share one set of shading roles "
+		               "(dark %1,%2,%3,%4,%5)")
+		          .arg(dark_values.value(0)).arg(dark_values.value(1))
+		          .arg(dark_values.value(2)).arg(dark_values.value(3))
+		          .arg(dark_values.value(4)));
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

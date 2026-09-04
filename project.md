@@ -16230,6 +16230,63 @@ and in memory rather than on disk.
 `annoyance_log::all()` needed nothing: the test written for that section is
 its first caller, so it stopped being dangling on the way past.
 
+## Dark mode was half a palette, and the reported symptom was the other half
+
+Reported from the desktop: *the text colours are dark, impossible to read.*
+Measured before touching anything, by dumping every role in both schemes:
+
+    role        DARK       LIGHT
+    Window      #2b2b2e    #efefef
+    WindowText  #e6e6e6    #000000
+    Light       #ffffff    #ffffff     <- identical
+    Midlight    #cacaca    #cacaca     <- identical
+    Mid         #b8b8b8    #b8b8b8     <- identical
+    Dark        #9f9f9f    #9f9f9f     <- identical
+    Shadow      #767676    #767676     <- identical
+
+`dark_palette()` builds from `QPalette p;`, which **copies the application's
+current palette**, and overrides thirteen roles. The five a style shades with
+were never among them, so they stayed at the light desktop's values. A style
+fills frames, group boxes, headers, splitter handles and tab bars with those:
+in a dark window that is a near-white ground carrying near-white `WindowText`.
+
+**This was written down as a known defect and left**, in the held-button entry
+above: *"That is a real defect and fixing it alone would have been a fix for
+one style."* The conclusion was right and the action was not -- the proxy-style
+fill was the correct answer for the *button*, and the palette needed fixing
+anyway. Deferring it is what put the reported bug in front of somebody.
+
+They are derived from the window now rather than written out, so the five stay
+in step if it ever moves, in the order Qt relies on when a style picks two of
+them for a bevel.
+
+### The check written for the bug passed it, twice
+
+**First version.** "Every shading role is on the window's side of the text."
+Sabotaged, that failed `Light` at 255 and **passed `Midlight` at 202** against
+text at 230 -- a near-white ground with near-white text, which is the reported
+bug going straight through the assertion added to catch it.
+
+**Second version.** "Every shading role is nearer the window than the text."
+That caught all four dark roles, and also failed **`light: Shadow (118)`** --
+which is correct as it stands. `Dark` and `Shadow` are edges and shadows, not
+grounds; they are *supposed* to be dark in a light scheme. Capable and
+misaimed: the instrument fired, on a population it had no business judging.
+
+**What it asserts now** is the fault itself and the one role with a legibility
+question:
+
+    ok  dark: Light (71) is the window's (45), not the text's (230)
+    ok  light: Light (255) is the window's (239), not the text's (0)
+    ok  the two schemes do not share one set of shading roles
+    ok  ... and they run Light > Midlight > Mid > Dark > Shadow
+
+The equality check is the precise one. Nothing about either list alone says
+anything is wrong -- the defect was that there was one list where there should
+have been two, and only comparing them can see that.
+
+Sabotaged, exactly those two fail and the light scheme stays green.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
