@@ -155,6 +155,13 @@ QUrl search_url(const QString &terms, const QString &tmpl) {
 QUrl argument_url(const QString &raw) {
 	if (raw.isEmpty())
 		return QUrl();
+	// **An option is not an address.** `QUrl::fromUserInput` will happily
+	// guess a host out of `--version`, so without this an unrecognised flag
+	// browses to `http://--version` instead of being refused -- and a flag
+	// that is quietly treated as a page is worse than one that is rejected,
+	// because nothing says the option was not understood.
+	if (raw.startsWith(QLatin1Char('-')))
+		return QUrl();
 	// Parsed without inventing a scheme, so a path stays a path. See the
 	// header: this is the whole of why there are two QUrls here.
 	const QUrl written(raw);

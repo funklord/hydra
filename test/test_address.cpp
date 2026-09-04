@@ -162,6 +162,10 @@ int main(int argc, char **argv) {
 		      "and http");
 		check(!argument_url("").isValid(),
 		      "nothing is not a page");
+		check(!argument_url("--version").isValid(),
+		      "an option is not a page, which fromUserInput would guess it is");
+		check(!argument_url("-x").isValid(),
+		      "and neither is a short one");
 		// The older rule, left alone: an argument that names a file that
 		// exists is a tree even when it parses as a url.
 		check(!argument_url(QCoreApplication::applicationFilePath()).isValid(),

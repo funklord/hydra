@@ -37,6 +37,8 @@
 #include <QByteArray>
 #include <QDir>
 #include <QFileInfo>
+#include <cstdio>
+
 #include "accept_language.h"
 #include "address_input.h"
 
@@ -45,6 +47,41 @@
 #include <QtGlobal>
 
 int main(int argc, char *argv[]) {
+	// **Before anything else, because it must not need a display.** A version
+	// flag that starts a browser is not one: `hydra --version` used to fall
+	// through to the argument classifier, be read as something to open, and
+	// raise a window -- which on a machine with no display hangs until
+	// somebody kills it. Measured that way while installing this build.
+	//
+	// **First statement, and that was learned by running it.** The first
+	// attempt put this below the single-instance guard and above the
+	// classifier, which reads as "early" and is not: `QApplication` is
+	// constructed in between, and with no display it aborts before reaching
+	// here -- *"no Qt platform plugin could be initialized"*, exit 134, the
+	// version never printed. Nothing about the source said so.
+	//
+	// The first line is what a script would parse, so it is the plain
+	// `name version` and nothing else. The Qt line is here because an
+	// evening was lost this week to not knowing which of three Qt builds a
+	// binary was running against, and the answer is free at runtime.
+	//
+	// **The copyright line, and no licence line.** `harmonization.md` asks
+	// that the holder be named in `--version`, in an About window and in the
+	// README, and naming them is factual -- authorship vests on its own and
+	// saying who wrote something grants nothing. This project states no terms
+	// anywhere and `debian/copyright` says so; a licence line here would be
+	// inventing one, which is the copyright holder's alone.
+	//
+	// The year is the year the work began, taken from the first commit rather
+	// than chosen: `git log --reverse --format=%ad --date=short | head -1`
+	// answers 2026-07-29.
+	if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QLatin1String("--version")) {
+		std::printf("hydra %s\n", HYDRA_VERSION);
+		std::printf("Qt %s (built against %s)\n", qVersion(), QT_VERSION_STR);
+		std::printf("Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>\n");
+		return 0;
+	}
+
 	// Desktop Linux only: force the xcb platform plugin unless the environment
 	// has already chosen one, so the X11 behaviour this design relies on
 	// (architecture doc sec 2/sec 14) stays predictable, and a Wayland session runs

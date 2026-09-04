@@ -17,6 +17,10 @@ TARGET   = hydra
 # Read rather than restated: the Makefile, debian/changelog and this file
 # would otherwise be three places to change one number.
 VERSION  = $$cat(VERSION, singleline)
+# **And handed to the program**, because qmake's VERSION does nothing for an
+# app target beyond naming artifacts: without this the binary cannot say what
+# it is. One source still -- the file -- read once here.
+DEFINES += HYDRA_VERSION=\\\"$$VERSION\\\"
 
 # **Qt 6.8, refused here rather than discovered in the compiler.** The floor
 # used to be stated as 6.4, derived once from the menu bar's addAction
