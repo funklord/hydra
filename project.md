@@ -14410,6 +14410,17 @@ windows/screens you may want to share."* So Qt's own words say the caller here
 is correct, which is the thing a bug report most needs and the hardest to
 assert about oneself.
 
+**The report claims two versions and the record keeps three.** It went out
+listing 6.8.2 and 6.12.0 and mentioning 6.10.2 as also reported; the copyright
+holder had that last line dropped. The reasoning is worth keeping because it
+will come up again the next time something leaves this tree: **a report
+published under somebody's name claims only what the session filing it
+reproduced.** The 6.10.2 run is real, it is recorded above, and it is correctly
+attributed to the session that took it -- and it is exactly the kind of claim
+that cannot be defended if Qt asks how it was measured, because the build is in
+a private prefix nobody went looking for. Three builds is a stronger sentence
+than two. Two builds that can both be re-run on demand is a stronger *report*.
+
 **One claim in the report was inherited and is now measured.** That answering
 nothing fails identically -- letting
 `~QWebEngineDesktopMediaRequestPrivate` select screen 0 by itself -- came from
