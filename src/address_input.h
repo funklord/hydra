@@ -77,3 +77,24 @@ bool looks_like_address(const QString &text);
 // no `%1`, so a mistyped setting fails visibly rather than searching for
 // nothing.
 QUrl search_url(const QString &terms, const QString &tmpl);
+
+// What `hydra <argument>` was asked to open, as a page -- or an invalid QUrl
+// when the argument is a tree path.
+//
+// **The distinction is the scheme as written, and it has to be**, because
+// `QUrl::fromUserInput` *invents* one: hand it `./tree.txt` and it hands back
+// `file:///.../tree.txt`, so a classifier built on the parsed url cannot tell
+// a path from a `file:` uri and would silently change what
+// `hydra ./tree.txt` has always meant. Parsed with `QUrl(raw)` instead, which
+// invents nothing: a path has no scheme and a `file:` uri always did.
+//
+// `http` and `https` are pages, and so is `file:` -- the desktop entry claims
+// `text/html` and passes `%U`, so a file manager opening a local page hands
+// over `file:///home/me/doc.html`. Before this that was read as a tree path,
+// refused for naming no existing directory, and the browser came up on the
+// personal tree with the page nowhere: measured, and it is what "hydra cannot
+// open my html file" looks like from outside.
+//
+// An `http`/`https` argument that also names an existing file stays a tree
+// path, which is the older rule and is left alone.
+QUrl argument_url(const QString &raw);

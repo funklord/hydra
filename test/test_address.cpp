@@ -133,6 +133,41 @@ int main(int argc, char **argv) {
 		      "and any template carrying one is accepted, whoever wrote it");
 	}
 
+	{
+		section("what `hydra <argument>` was asked to open");
+		// The trap this exists for: `QUrl::fromUserInput` invents a `file:`
+		// scheme for a bare path, so a classifier built on the parsed url
+		// cannot tell `./tree.txt` from `file:///home/me/doc.html`.
+		check(!argument_url("./tree.txt").isValid(),
+		      "a relative path is a tree, not a page");
+		check(!argument_url("/home/me/tree.txt").isValid(),
+		      "and so is an absolute one");
+		// **Pinned as it stands rather than as it ought to be.** A bare
+		// dotted name that does not exist in the working directory has
+		// always been guessed as a host -- `hydra tree.txt` goes to
+		// `http://tree.txt` -- because `fromUserInput` reads `.txt` as a
+		// top-level domain. That predates the file: change and is not
+		// endorsed here; it is asserted so that changing it is a decision
+		// somebody makes rather than something that happens.
+		check(argument_url("tree.txt").isValid() &&
+		       argument_url("tree.txt").scheme() == "http",
+		      "a bare dotted name that does not exist is guessed as a host");
+		check(argument_url("file:///home/me/doc.html").isValid(),
+		      "a file: uri is a page, which is what a file manager hands over");
+		check(argument_url("file:///home/me/doc.html").scheme() == "file",
+		      "and it keeps its scheme rather than being re-guessed");
+		check(argument_url("https://example.com/").isValid(),
+		      "https is a page, as before");
+		check(argument_url("http://example.com/").isValid(),
+		      "and http");
+		check(!argument_url("").isValid(),
+		      "nothing is not a page");
+		// The older rule, left alone: an argument that names a file that
+		// exists is a tree even when it parses as a url.
+		check(!argument_url(QCoreApplication::applicationFilePath()).isValid(),
+		      "an argument naming an existing file stays a tree path");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;
 }

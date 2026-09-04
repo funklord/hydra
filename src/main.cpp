@@ -38,6 +38,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include "accept_language.h"
+#include "address_input.h"
 
 #include <QLocale>
 #include <QStandardPaths>
@@ -113,19 +114,19 @@ int main(int argc, char *argv[]) {
 	// link is gone -- which is what a browser that cannot open a link looks
 	// like from the outside.
 	//
-	// Only schemes a page can be at. A path is not a url and `file:` is not
-	// treated as one either: `hydra ./tree.txt` has always meant the tree, and
-	// this must not quietly change what that does.
+	// Which schemes are a page rather than a tree lives in `argument_url`,
+	// beside the other question about what a piece of text means, and is
+	// tested there. `hydra ./tree.txt` still means the tree: the classifier
+	// reads the scheme as *written*, and a path has none.
 	//
 	// Classified here, above everything, because the single-instance guard
 	// below has to know what this process was asked to do before it can decide
 	// what to do about it.
 	QString open_arg;
 	if (argc > 1) {
-		const QUrl candidate = QUrl::fromUserInput(QString::fromLocal8Bit(argv[1]));
-		const QString scheme = candidate.scheme();
-		if (candidate.isValid() && (scheme == "http" || scheme == "https") &&
-		    !QFileInfo::exists(QString::fromLocal8Bit(argv[1])))
+		const QUrl candidate =
+		  argument_url(QString::fromLocal8Bit(argv[1]));
+		if (candidate.isValid())
 			open_arg = candidate.toString();
 	}
 

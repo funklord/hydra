@@ -1,5 +1,6 @@
 #include "address_input.h"
 
+#include <QFileInfo>
 #include <QHostAddress>
 #include <QString>
 #include <QStringList>
@@ -149,4 +150,21 @@ QUrl search_url(const QString &terms, const QString &tmpl) {
 	const QString encoded =
 	  QString::fromLatin1(QUrl::toPercentEncoding(terms.trimmed()));
 	return QUrl(QString(tmpl).replace("%1", encoded));
+}
+
+QUrl argument_url(const QString &raw) {
+	if (raw.isEmpty())
+		return QUrl();
+	// Parsed without inventing a scheme, so a path stays a path. See the
+	// header: this is the whole of why there are two QUrls here.
+	const QUrl written(raw);
+	if (written.isValid() && written.scheme() == QLatin1String("file"))
+		return written;
+	const QUrl guessed = QUrl::fromUserInput(raw);
+	const QString scheme = guessed.scheme();
+	if (guessed.isValid() && (scheme == QLatin1String("http") ||
+	                           scheme == QLatin1String("https")) &&
+	    !QFileInfo::exists(raw))
+		return guessed;
+	return QUrl();
 }

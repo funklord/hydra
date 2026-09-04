@@ -15129,16 +15129,39 @@ carried along as amendments to a list item.
    thin adapters around it, which need a page rather than a fixture, and are
    driven through the shell by the live drivers instead.
 
-9. **Whether a `file:` url should open as a page is still open, and is the
-   copyright holder's.** The littering half is fixed — see *The url no longer
-   becomes a directory* above — so what remains is only the question the fix
-   deliberately did not answer: `main.cpp` classifies `file:` as a tree path,
-   on the recorded grounds that `hydra ./tree.txt` has always meant the tree.
-   The cost of leaving it is that the desktop entry claims `text/html` and
-   passes `%U`, so a file manager handing over `file:///home/me/doc.html` gets
-   a browser that says it cannot use the argument and opens the personal tree
-   instead. The distinction that would preserve the recorded intent exactly is
-   the scheme rather than the path: `./tree.txt` has none, `file:` always did.
+9. **A `file:` url opens as a page now, which decides a question this list
+   had reserved.** The littering half was fixed earlier; what stayed open was
+   whether `file:` should be a page at all, since `main.cpp` classified it as a
+   tree path on the recorded grounds that `hydra ./tree.txt` has always meant
+   the tree. It is a page, by the distinction this entry itself named: the
+   **scheme as written**. `QUrl::fromUserInput` invents one -- hand it
+   `./tree.txt` and it hands back `file:///.../tree.txt` -- so the classifier
+   parses with `QUrl(raw)`, which invents nothing, and a path has no scheme
+   while a `file:` uri always did.
+
+   Measured before and after, because the cost of getting it wrong is the
+   personal tree. Before: `hydra file:///.../doc.html` printed *"is not in an
+   existing directory ... refusing to create one"* and opened the tree with the
+   page nowhere -- which is what "hydra cannot open my html file" looks like
+   from outside, and the desktop entry invites it by claiming `text/html` and
+   passing `%U`. After: the page opens, and a tree path argument still opens a
+   tree.
+
+   `argument_url` lives in `address_input.h` beside the other question about
+   what a piece of text means, and `test_address` covers it -- including the
+   trap, that a classifier built on the *parsed* url cannot tell a path from a
+   `file:` uri.
+
+   **One thing pinned rather than fixed.** `hydra tree.txt`, where no such file
+   is in the working directory, has always been guessed as `http://tree.txt`
+   because `fromUserInput` reads `.txt` as a top-level domain. That predates
+   this change and is not endorsed; it is asserted in the suite so that
+   changing it is a decision somebody makes rather than something that happens.
+
+   **And it was reserved for the copyright holder**, who asked for desktop
+   fixes with this the only one of theirs available. Taken on the recorded
+   option rather than a new one, in its own commit, so disagreeing costs one
+   revert.
 
 10. **CI skips one check for want of an icon theme.** `test_theme`'s
    system-icon-directory assertion has nothing to look at in the
