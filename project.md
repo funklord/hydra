@@ -14619,6 +14619,74 @@ copied across would be a fix for nothing. The same probe reports the five
 values from the phone, which is the cheapest way to find out and needs no
 code.
 
+## Eleven days of packages whose icons went where nothing looks
+
+Reported as a menu entry with no icon that also would not start. Both halves
+were real and only one was a defect.
+
+**The icon half is a regression, and it shipped.** `install-icons.sh` wrote
+into `<data>/icon/hicolor/`, singular. The XDG Icon Theme Specification fixes
+that directory as `icons`, so no desktop has ever looked there. It came from
+the singular-directory pass of `2098065`, which renamed it alongside the
+repository's own `icon/` -- and one of those two names is this project's while
+the other belongs to a specification. `harmonization.md` puts exactly that case
+above the singular rule: *a name a tool requires is not a name we choose*, and
+the test is whether something breaks when the name changes.
+
+**The Debian package had it too**, which is the part that hid it: `debian/rules`
+runs `make install DESTDIR=... PREFIX=/usr`, so every deb built between
+2026-08-24 and 2026-09-04 carried the same wrong path. The staging tree under
+`debian/hydra` still shows `usr/share/icons` and reads as evidence to the
+contrary -- it is dated 2026-08-07, seventeen days before the rename, and is
+simply stale. **A stale artifact that agrees with you is worse than none.**
+
+**Why it took eleven days to notice: nobody had installed and then looked at a
+menu.** The suites do not install, `make install` prints success either way,
+and the icons exist on disk after it -- in a directory that is real, spelled
+almost right, and never read. There is no gate here that could have caught it,
+and the one that did was a person opening their menu.
+
+**The other half was not a defect.** `Exec=hydra %U` could not find a binary
+put in `~/.local/bin`, because this desktop session's PATH is `/usr/local/bin`,
+`/opt/trinity/bin`, `/usr/bin`, `/bin` and the games directories, with no
+`~/.local/bin` in it. `make install` defaults to a user prefix, which is the
+wrong shape for this machine; the package installs to `/usr/bin`, which is on
+that PATH. Checked by reading the session's own environment rather than the
+shell's, which is where the mistake was: `which hydra` answered from a
+different PATH than the menu uses.
+
+**`uninstall` gained the caches it invalidates.** Removing the file is not
+removing the entry: measured, after an uninstall reported success,
+`xdg-mime query default text/html` went on answering `hydra.desktop` out of a
+`mimeinfo.cache` that still named it -- so clicking an html file did nothing at
+all. `install` already refreshed what it invalidated and `uninstall` did not.
+
+### Confirmed on the machine that reported it
+
+Package installed, `tdebuildsycoca` run, and the copyright holder reports the
+entry present, iconned and launching. Four links checked rather than assumed:
+the entry in the rebuilt sycoca, the binary on the session PATH, seven icon
+files, and `icon-theme.cache` naming hydra after dpkg's trigger rebuilt it.
+
+**Three of the checks used to establish that were themselves broken**, and each
+looked like a finding first. `dpkg -c build/deb/*.deb` matched two packages --
+there is a `-dbgsym` -- and `dpkg -c` takes exactly one, so with stderr
+discarded the grep counted an empty stream and reported the package had no
+icons at all. `dpkg -s libc6` reported five core libraries missing, because on
+a multiarch system that name is ambiguous and the error went to stderr;
+`dpkg-query -W -f='${Status}'` answers it. And `strings` on TDE's sycoca found
+neither hydra nor five known system applications, because it defaults to 7-bit
+ASCII and TDE stores QStrings wide -- `strings -e l` finds hydra ten times.
+
+The tell in the first and third was the same: **a count of zero for the thing
+sought and for its control.** A probe that cannot find what is definitely
+there is not reporting an absence.
+
+**And the tool is `tdebuildsycoca`, not `kbuildsycoca`.** The `kbuildsycoca5`
+and `kbuildsycoca6` on this machine are Plasma's; running one would rebuild a
+cache this desktop does not read, and would have looked exactly like a rebuild
+that did not help.
+
 ## Nothing could hand this browser a page, and that is what blocked the rest
 
 The Android manifest had one intent filter, `MAIN`/`LAUNCHER`. So hydra could
