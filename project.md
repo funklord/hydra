@@ -13680,9 +13680,32 @@ but those who need the screen described to them. A browser whose address bar no
 accessibility service can find fails the same users, silently, and no test here
 would notice.
 
-**What would settle it costs one person and no code**: turn TalkBack on and try
-to reach the address bar. If a screen reader cannot find the editor, the bridge
-is the fault and both instruments were telling the truth.
+**Turned on, 2026-09-04, and the first half of the answer needed no screen
+reader at all.** `grep -rn 'QAccessible\|setAccessibleName\|setAccessibleDescription' src/`
+returns **nothing**. This project has never named a single control for a screen
+reader. Qt Widgets supplies defaults for the standard classes, so a reader gets
+*something* -- but every icon-only button on the toolbar is an unlabelled
+button, which is the same as unusable for the person relying on it. That is a
+gap in this tree rather than in Qt's bridge, and it does not depend on any of
+the open questions above.
+
+With TalkBack enabled and three accessibility services registered, hydra
+launched, loaded a page and **did not abort**: zero occurrences of
+`deadlock protector`, `Abort message` or `FATAL` in a `-v threadtime` capture.
+One run on one device, and not a refutation of the Note 9 instance -- a
+different phone, a different Qt, and QTBUG-144207's caller fixes may be in
+6.12.0. The expectation stated beforehand was that it would crash on the first
+menu, and no menu was reached before the handset disconnected, so the run says
+only that launching and loading survive.
+
+**And the foreground check this file has been using is wrong.** Signalled by
+beerssh 2026-09-04: `mCurrentFocus` **blanks to null while a Qt window is
+transitioning**, so a guard keyed on it refuses forever rather than
+momentarily. Observed here twice tonight and read as "nothing is focused" both
+times. `dumpsys activity activities | grep topResumedActivity` survives the
+transition and is the one to key on -- which matters for anything that checks
+what is frontmost before capturing a screenshot, since the alternative is a
+capture of whatever else was on screen.
 
 ## The standing answer: request desktop site as a site rule
 
