@@ -39,6 +39,7 @@ srcs = sorted(glob.glob(os.path.join(root, "src", "*.cpp")) +
 
 # name -> where declared
 decl = {}
+everywhere = {}
 DECL = re.compile(r'^\t(?:[A-Za-z_][\w:<>,\s\*&]*?[\s\*&])([a-z_][a-z0-9_]*)\s*\(')
 # re.M, or `^` matches only the very start of the file and this set
 # comes back all but empty -- which reads exactly like a header with no
@@ -58,6 +59,15 @@ for h in hdrs:
 		           "signals:", "public Q_SLOTS:"):
 			access = st.rstrip(":")
 			continue
+		# **Every section feeds the ambiguity map, only public ones are
+		# reported.** `find_bar::dismissed` is a SIGNAL, and it is what hid
+		# `consent_blocker::dismissed` -- an accessor with no caller whose
+		# comment names two consumers it does not have. A map built from
+		# public methods alone could not see the collision that caused the
+		# miss.
+		if m0 := DECL.match(line.rstrip("\n")):
+			everywhere.setdefault(m0.group(1), set()).add(
+			    "%s:%d" % (os.path.basename(h), i))
 		if access not in ("public", "public slots"):
 			continue
 		if "operator" in st or st.startswith("//") or st.startswith("*"):
@@ -94,9 +104,27 @@ for f in srcs:
 	use.update(CALL.findall(text))
 	use.update(QUAL.findall(text))
 
+# **A name declared by more than one class cannot be counted this way**, and
+# the failure is silent and in the comforting direction: `annoyance_log::all`
+# and `consent_blocker::dismissed` both have no caller anywhere, and both were
+# invisible here because `site_rules::all` and `find_bar::dismissed` exist and
+# are used. The count is per NAME, so a busy namesake hides an unused method.
+#
+# Resolving it properly needs to know the type of the object at each call
+# site, which needs a parser. What this does instead is refuse to answer:
+# a name declared in more than one place is reported as ambiguous rather than
+# counted, so a miss becomes a question instead of a silence. Both instances
+# above were found by hand, after the probe had reported a clean sweep twice.
+def shared(name):
+	return len(everywhere.get(name, ())) > 1
+
+ambiguous = [(n, sorted(everywhere.get(n, ())))
+              for n in sorted(decl) if shared(n)]
 dangling = []
 for name, where in sorted(decl.items()):
-	# each declaration site itself matched once as "name(" -- discount them
+	if shared(name):
+		continue
+	# the declaration site itself matched once as "name(" -- discount it
 	if use[name] - len(where) <= 0:
 		dangling.append((name, where))
 
@@ -104,3 +132,11 @@ print("declared public: %d names" % len(decl))
 print("no caller found: %d" % len(dangling))
 for name, where in dangling:
 	print("  %-34s %s" % (name, ", ".join(where)))
+# Ordered by how little the name is used anywhere, because that is where an
+# unused member is most likely to be hiding: a name with two declarations and
+# three uses has at most one spare, while one with forty is busy in both
+# classes and says nothing. The count is the whole point of the ordering -- it
+# is not a verdict, and every row here needs a person.
+print("declared by more than one class, so not counted: %d" % len(ambiguous))
+for name, where in sorted(ambiguous, key=lambda r: use[r[0]]):
+	print("  %-30s uses=%-4d %s" % (name, use[name], ", ".join(where)))

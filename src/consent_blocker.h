@@ -68,9 +68,6 @@ public:
 	// Whether the banner should be answered for this host at all.
 	bool active_for(const QString &host) const;
 
-	// What was dismissed, most recent first, for the status line and the tests.
-	QStringList dismissed() const { return m_dismissed; }
-
 	// Banners seen and not answered, newest first, as "host\tlabel\tlabel...".
 	// Bounded: a page that reports in a loop must not be able to grow this.
 	QStringList unhandled() const { return m_unhandled; }
@@ -142,7 +139,6 @@ signals:
 private:
 	policy_engine *m_policy = nullptr;
 	QString        m_host;
-	QStringList    m_dismissed;
 	QStringList    m_unhandled;
 	site_rules  m_rules = site_rules::defaults();
 };

@@ -16170,6 +16170,66 @@ that clear and save are read rather than run, and the test supplies its own
 connection in their place. The half that was missing entirely -- an emit at
 all -- is the half that is checked.
 
+## A probe that hid two of the things it was built to find
+
+**The lens is now three for three, so it is worth naming.** Each of the last
+finds was a comment that promises a consumer the code does not have:
+
+    tree_outline.h    "so the caller can say so"        nothing called it
+    consent_blocker.h "for whatever offers to teach a
+                       rule"                            nothing connected it
+    annoyance_log.h   "`clear_host` and `clear_all`
+                       exist for that"                  nothing called either
+
+So the fourth was found by reading in the same file rather than by a new
+sweep. `consent_blocker::dismissed()` -- *"What was dismissed, most recent
+first, for the status line and the tests"* -- names two consumers and has
+neither. The status line is fed by the `acted` signal, which is connected and
+is live; no test calls the accessor.
+
+### The instrument was the finding
+
+`tool/dangling.py` reported a clean sweep over both of them, twice, and the
+reason is worth more than the item: **it counts by bare name.** So
+`annoyance_log::all` was hidden by `site_rules::all`, and
+`consent_blocker::dismissed` by `find_bar::dismissed` -- which is a *signal*,
+in a section the probe did not even read.
+
+That is `evidence.md`'s asymmetry exactly: a loose pattern over-matches and
+you notice; a narrow one under-matches and hands you the answer you were
+hoping for. Both misses were silent and both were in the comforting
+direction.
+
+Resolving it properly needs the type of the object at each call site, which
+needs a parser. So the probe **refuses to answer instead**: a name declared in
+more than one place is listed as ambiguous rather than counted, and every
+declaration in every section feeds that map -- signals included, because a
+signal is what hid the second one.
+
+    no caller found:                                    2
+    declared by more than one class, so not counted:   88
+
+Eighty-eight is a lot to read, so they are ordered by how little the name is
+used anywhere: a name with two declarations and three uses has at most one
+spare, while one with forty is busy in both classes and says nothing. The
+count is an ordering, not a verdict. `dismissed` sits eighth at five uses.
+
+**A miss became a question.** That is the whole change, and it is the same
+move as a gate that reports what it could not inspect rather than passing over
+it.
+
+### What was removed
+
+The list held the last twenty banner texts with the choice made on each. Its
+accessor had no caller; `acted` says the same thing live, at the moment it
+happens, which is what the status line uses. What was left was a per-site
+record of pages somebody had been on, maintained for nobody and clearable by
+nothing -- which is the defect closed in the section above, in a smaller form
+and in memory rather than on disk.
+
+`annoyance_log::all()` needed nothing: the test written for that section is
+its first caller, so it stopped being dangling on the way past.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

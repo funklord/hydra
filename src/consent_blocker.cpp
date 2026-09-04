@@ -342,9 +342,12 @@ void consent_blocker::report_dismissed(const QString &what, const QString &choic
 	if (host.isEmpty() || !active_for(host))
 		return;
 
-	m_dismissed.prepend(QString("%1 (%2)").arg(what.left(80), choice.left(20)));
-	while (m_dismissed.size() > 20)
-		m_dismissed.removeLast();
+	// **The list this used to keep is gone.** It held the last twenty banner
+	// texts with the choice made on each, its accessor said it was "for the
+	// status line and the tests", and neither ever called it -- the status
+	// line is fed by `acted` below, which is live and says the same thing at
+	// the moment it happens. What was left was a per-site record of pages
+	// somebody had been on, maintained for nobody and clearable by nothing.
 	emit acted(host, choice.left(20));
 
 	// The choice has to survive the next load or the banner simply returns, and
