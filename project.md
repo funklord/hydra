@@ -14667,6 +14667,40 @@ modal `exec()` owns, which is a change rather than a repair. Answering a stale
 prompt is now harmless instead of acting on a dead request, and that is the
 whole of what is claimed.
 
+### Exercised on the handset, both paths
+
+The change was committed on a build, which is not the same as knowing it works.
+Installed and run, with `log.tag.HydraPerm` turned up so the parking is visible:
+
+    permissions.query camera   granted
+    getUserMedia               480x640
+    onGeolocationPermissionsShowPrompt origin=http://127.0.0.1:8099/
+    geolocation token=1 GRANTED
+    getCurrentPosition         ok, accuracy 17m
+
+So a capture request still parks in `PENDING` and is answered, and a
+geolocation request still parks in all three maps and is answered and removed.
+Accuracy only: where the handset is is not this measurement's business.
+
+Location was denied on that phone, which is why the first attempt timed out at
+the OS layer before reaching any of this code -- granted for the test on the
+copyright holder's instruction and revoked afterwards, both states read back
+and compared against what was saved before anything was touched.
+
+**And two runs in the middle of that measured nothing.** They reported
+`camera=granted` from a *restored tab* running an older probe page, not from
+the page just requested -- plausible output from somewhere other than where it
+was thought to come from, which is the whole family of instrument failures this
+night has been full of. The tell was a report arriving under the wrong name.
+
+**It also turned up litter.** Every intent sent during testing opened a tab and
+all of them persisted: 26 rows of the tree pointed at loopback ports that no
+longer answer, 25 of them created that day. Removed by matching the url *and*
+the creation date, because one such row was a fortnight older and somebody
+else's; the five real tabs and that older one were counted back afterwards
+rather than assumed. A test harness that leaves 25 tabs in somebody's browser
+is a cost the harness never reported.
+
 **Verified in the built dex, not the source.** `strings` over
 `4/classes.dex` finds both overrides. The first dex looked at was
 `mergeExtDexDebug/classes.dex`, which holds the external dependencies and
