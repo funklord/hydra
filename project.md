@@ -14388,10 +14388,37 @@ known to fail on the real desktop because that is where the report came from,
 and the new build has not been put on a live display, which is not this
 session's to occupy.
 
-Filing it is the copyright holder's. What the report needs is here: a
-standalone reproducer that can be handed over as it stands, three builds from
-two vendors, a control showing the display is capturable, and the internal
-result code Chromium refuses with.
+### The report is written, and it could not be filed from here
+
+`bugreports.qt.io` answers HTTP 401 to an anonymous identity and there is no
+credential on this machine, so filing is the copyright holder's in the literal
+sense as well as the decision sense. The text sits in the session scratch as
+`qt-bug-report.md`, ready to paste, and `test/live/repro_share.cpp` is the
+attachment.
+
+**Searched first, because a duplicate is worse than nothing.** Seven existing
+reports mention `getDisplayMedia` and one mentions `selectScreen`; none is this
+symptom. The nearest are about Wayland portal dialogs and about a request for
+the API that already exists.
+
+**And that last one is worth citing in the report rather than avoiding.**
+QTBUG-130758 was closed *Invalid* -- but for asking for a feature Qt already
+has, and its resolution comment describes the intended use exactly as this
+project uses it: *"the respective QWebEnginePage will emit the
+desktopMediaRequested signal ... You can then use that object to query the
+windows/screens you may want to share."* So Qt's own words say the caller here
+is correct, which is the thing a bug report most needs and the hardest to
+assert about oneself.
+
+**One claim in the report was inherited and is now measured.** That answering
+nothing fails identically -- letting
+`~QWebEngineDesktopMediaRequestPrivate` select screen 0 by itself -- came from
+an earlier session and had never been run here. `repro_share` grew a
+`HYDRA_REPRO_NOANSWER` mode for it, and it fails the same way on both builds:
+`NotAllowedError` on 6.8.2, `AbortError` on 6.12.0. That is the load-bearing
+sentence in the whole report, because it is what separates *this handler is
+wrong* from *no handler can be right*, and publishing it on somebody else's
+authority would have been the worst place to do that.
 
 ## Teams reads the permission before we have answered it
 

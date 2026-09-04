@@ -75,6 +75,17 @@ int main(int argc, char **argv) {
 		             screens ? screens->rowCount() : -1,
 		             windows ? windows->rowCount() : -1);
 		std::fflush(stdout);
+		// **Answer, or deliberately do not.** With `HYDRA_REPRO_NOANSWER`
+		// set this returns without selecting or cancelling, which hands the
+		// request to Qt's own fallback: `~QWebEngineDesktopMediaRequestPrivate`
+		// selects screen 0 by itself when nobody answered. That separates "this
+		// handler is wrong" from "no handler can be right", and it is the
+		// difference between a bug in the caller and a bug in Qt.
+		if (qEnvironmentVariableIsSet("HYDRA_REPRO_NOANSWER")) {
+			std::printf("answering nothing, leaving it to Qt's destructor\n");
+			std::fflush(stdout);
+			return;
+		}
 		// Exactly what the documentation asks for: an index from the
 		// request's own model, handed back to the request.
 		if (screens && screens->rowCount() > 0)
