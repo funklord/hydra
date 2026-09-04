@@ -609,7 +609,15 @@ install: all
 uninstall:
 	@rm -f $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 	@rm -f $(DESTDIR)$(SHARE)/applications/hydra.desktop
-	@rm -f $(DESTDIR)$(SHARE)/icon/hicolor/*/apps/hydra.png
+	@rm -f $(DESTDIR)$(SHARE)/icons/hicolor/*/apps/hydra.png
+	@# **The caches, because removing the file is not removing the entry.**
+	@# `install` refreshes them and this did not, so an uninstall left
+	@# `mimeinfo.cache` still naming a desktop file that was gone -- measured:
+	@# `xdg-mime query default text/html` went on answering `hydra.desktop`
+	@# after the uninstall said it had removed it, which means clicking an
+	@# html file did nothing at all. Skipped under DESTDIR, where the caches
+	@# belong to whatever installs the staged tree, exactly as `install` does.
+	@if [ -z "$(DESTDIR)" ]; then 	   command -v update-desktop-database >/dev/null 2>&1 && 	     update-desktop-database "$(SHARE)/applications" 2>/dev/null || true; 	   command -v gtk-update-icon-cache >/dev/null 2>&1 && 	     gtk-update-icon-cache -q -t -f "$(SHARE)/icons/hicolor" 2>/dev/null || true; 	 fi
 	@echo "removed $(TARGET), its desktop entry and its icons"
 
 # The build output only. `evidence/` is deliberately not touched: it is
