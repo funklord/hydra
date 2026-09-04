@@ -38,6 +38,7 @@ class torrent_download_source;
 class policy_engine;
 class filter_list;
 class consent_blocker;
+class annoyance_log;
 class web_view_factory;
 class QTreeWidget;
 class QPushButton;
@@ -68,7 +69,16 @@ public:
 	                 // say there is nothing to clear with rather than
 	                 // disappearing, because a control that vanishes tells
 	                 // nobody why.
-	                 web_view_factory *views = nullptr);
+	                 web_view_factory *views = nullptr,
+	                 // Appended for the same reason `views` was, and used for
+	                 // exactly one thing: to let somebody clear it. The header
+	                 // on `annoyance_log` has always said `clear_host` and
+	                 // `clear_all` "exist for that", and until this nothing in
+	                 // the program called either -- so a record of every site
+	                 // somebody complained about, with the page they were on,
+	                 // could be read from the ini beside the policy and not
+	                 // removed from anywhere inside Hydra.
+	                 annoyance_log *annoyances = nullptr);
 
 	// Saving belongs to *accepting*, not to a particular button. It hung off the
 	// OK button's signal, so any other route to acceptance -- code calling
@@ -88,6 +98,13 @@ signals:
 	// straight from here to the view factory, so without this nothing in the
 	// window ever learns that somebody asked to be forgotten.
 	void browsing_data_cleared();
+	// **Separate from the signal above, and only when it was asked for.** The
+	// reports are the person's own rather than something a site left, so they
+	// are never swept along with cookies -- see the checkbox for the rule this
+	// follows. The window handles it because the window is where the file's
+	// path lives, and clearing in one place while saving in another would be
+	// one operation split across two.
+	void annoyance_reports_cleared();
 
 private:
 	// Below this the category list stops being a sidebar and becomes a
@@ -145,6 +162,11 @@ private:
 	QCheckBox               *m_clear_cookies = nullptr;
 	QCheckBox               *m_clear_cache   = nullptr;
 	QCheckBox               *m_clear_links   = nullptr;
+	QCheckBox               *m_clear_reports = nullptr;
+	// Held only to decide whether the control belongs on the page at all,
+	// exactly as `m_views` gates the section around it. The clearing itself is
+	// the window's, through the signal above.
+	annoyance_log           *m_annoyances    = nullptr;   // injected, not owned
 	QPushButton             *m_clear_go      = nullptr;
 	QLabel                  *m_clear_note    = nullptr;
 	QString                  m_rules_path;

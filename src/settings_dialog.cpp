@@ -400,9 +400,11 @@ settings_dialog::settings_dialog(player_launcher *players,
                                   const QString &filters_path,
                                   consent_blocker *consent,
                                   const QString &rules_path, QWidget *parent,
-                                  web_view_factory *views)
+                                  web_view_factory *views,
+                                  annoyance_log *annoyances)
   : QDialog(parent), m_policy(policy), m_filters(filters),
     m_filters_path(filters_path), m_consent(consent), m_views(views),
+    m_annoyances(annoyances),
     m_rules_path(rules_path), m_players(players),
     m_downloads(downloads), m_torrents(torrents), m_local_ai(local_ai),
     m_external_ai(external_ai) {
@@ -912,6 +914,27 @@ void settings_dialog::build_clear_section(QVBoxLayout *v, QWidget *page) {
 	  "nothing but a slower reload.",
 	  m_clear_cache, page));
 
+	// **Its own control, and off by default, because it is not a trace.**
+	// `main_window::forget_shell_caches` states the rule this follows:
+	// forgetting is about what browsing left behind, not about undoing
+	// decisions -- and an annoyance report is something a person went to the
+	// trouble of filing. So it is never swept along with cookies.
+	//
+	// It is here at all because it holds the host and the address that was
+	// open, which is a record of where somebody has been by this project's own
+	// description of it, and there was no way to remove one from inside Hydra:
+	// `clear_host` and `clear_all` had no caller outside the tests.
+	if (m_annoyances) {
+		m_clear_reports = new QCheckBox(page);
+		m_clear_reports->setObjectName("clear_reports");
+		v->addWidget(settings_row(
+		  "Reports of sites that annoyed you",
+		  "What the Annoyed button recorded: the site, the page you were on "
+		  "and what you chose to do. Yours rather than something a site left, "
+		  "so it is never cleared unless you ask here.",
+		  m_clear_reports, page));
+	}
+
 	m_clear_links = new QCheckBox(page);
 	m_clear_links->setObjectName("clear_visited_links");
 	v->addWidget(settings_row(
@@ -944,7 +967,8 @@ void settings_dialog::clear_browsing_data() {
 	what.cookies       = m_clear_cookies->isChecked();
 	what.cache         = m_clear_cache->isChecked();
 	what.visited_links = m_clear_links->isChecked();
-	if (!what.any()) {
+	const bool reports = m_clear_reports && m_clear_reports->isChecked();
+	if (!what.any() && !reports) {
 		m_clear_note->setText("Nothing was ticked, so nothing was cleared.");
 		return;
 	}
@@ -958,6 +982,8 @@ void settings_dialog::clear_browsing_data() {
 		named << "cached files";
 	if (what.visited_links)
 		named << "the record of which links you have followed";
+	if (reports)
+		named << "every report you filed with the Annoyed button";
 
 	QMessageBox box(this);
 	box.setIcon(QMessageBox::Warning);
@@ -988,6 +1014,17 @@ void settings_dialog::clear_browsing_data() {
 	// answer `unconfirmed` or nothing at all -- so hanging this off the
 	// callback would make forgetting depend on a backend being talkative.
 	emit browsing_data_cleared();
+	if (reports)
+		emit annoyance_reports_cleared();
+
+	// **Nothing to ask the engine when only the reports were ticked.** Those
+	// are the shell's own file; handing the backend an empty request would
+	// make it answer about a clear it was never given.
+	if (!what.any()) {
+		m_clear_go->setEnabled(true);
+		m_clear_note->setText("Your Annoyed reports were cleared.");
+		return;
+	}
 
 	QPointer<settings_dialog> alive(this);
 	m_views->clear_browsing_data(what, [alive](

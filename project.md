@@ -16094,6 +16094,82 @@ Three failures on three mechanisms, and **the blocker section stayed entirely
 green** under the caller sabotage, which is the clearest statement available
 of what a function-level test is worth on this kind of fault.
 
+## A record of where somebody had been, with no way to remove it
+
+Derived from the loop above by asking what else accumulates. The answer was
+one thing, and it is a privacy defect rather than an untidy one.
+
+`annoyance_log` records what the Annoyed button filed: the host, **the address
+that was open**, a timestamp, the ad-shaped requests that got through, and
+what the person chose to do about it. Its own header says:
+
+    // not in an analytics store they cannot see. `clear_host` and `clear_all`
+    // exist for that
+
+**Neither had a caller outside the tests.** So the sentence was true about the
+methods existing and false about what they were for: nothing in the running
+program could remove a report, and the only way to clear one was to find
+`annoyances.ini` and delete it by hand.
+
+**And this is the second time this exact feature has had this exact bug.**
+`A clear that cleared everything except the answers people gave` is a section
+above, from this same session: the privacy page cleared cookies, cache and
+visited links while the shell's own session-permission answers survived. That
+fix swept the answers and the automatic ad allowances. It did not reach here.
+
+### Not swept with the cookies, and the code says why
+
+The obvious fix -- fold it into `forget_shell_caches` with the rest -- is
+wrong by this project's own stated rule, which is written in that function:
+
+> forgetting is about what browsing left behind, not about undoing decisions
+
+A cookie is a site's leavings. An annoyance report is something a person went
+to the trouble of filing, chose an outcome for, and may well want to keep. So
+it gets **its own control, unticked**, on the same page, with the reason in
+its description. That is also the only reading under which the header's claim
+becomes true: they can read it, and now they can clear it, and nothing clears
+it for them.
+
+### One operation, one place
+
+The dialog holds the log only to decide whether the control belongs on the
+page at all -- exactly as `m_views` gates the section around it -- and emits.
+The window clears **and writes the file**, because the window is where the
+path lives. Splitting those is how a store ends up emptied in memory and
+intact on disk, which is the same shape as the four save sites fixed earlier
+today.
+
+A detail that would otherwise have been a bug: with only the reports ticked
+there is nothing to ask the engine, and handing it an empty request would have
+it answer about a clear it was never given. That path returns early with its
+own message.
+
+### What the test proves, and what it does not
+
+Driven through the control a person uses -- tick the box, press Clear, and
+answer the confirmation from a timer, since the modal would otherwise hang a
+headless run. **Yes rather than Cancel**, deliberately: Cancel is the default
+button, so a run that failed to find the dialog at all would pass by doing
+nothing.
+
+With a control for the control: given no log, the checkbox must be **absent**
+rather than present and inert.
+
+    ok  the privacy page offers the control and a button
+    ok  off by default, because these are not a site's leavings
+    ok  clearing takes the reports with it (0 left)
+    ok  and it is absent when there is no log to clear
+
+Sabotaging the emit fails exactly `clearing takes the reports with it (1
+left)`.
+
+**What it does not cover, pinned rather than implied:** the window's own
+handler. `open_settings` builds its dialog and `exec()`s it, so the six lines
+that clear and save are read rather than run, and the test supplies its own
+connection in their place. The half that was missing entirely -- an emit at
+all -- is the half that is checked.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

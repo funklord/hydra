@@ -4612,9 +4612,22 @@ void main_window::open_settings() {
 	choose_ai(&ignored);          // make sure the providers exist to configure
 	settings_dialog dlg(m_players, m_downloads, m_torrents, m_local_ai,
 	                     m_external_ai, m_policy, m_filters, m_filters_path,
-	                     m_consent, m_site_rules_path, this, m_factory);
+	                     m_consent, m_site_rules_path, this, m_factory,
+	                     m_annoyances);
 	connect(&dlg, &settings_dialog::browsing_data_cleared, this,
 	         &main_window::forget_shell_caches);
+	// Cleared and written here rather than in the dialog: the dialog holds the
+	// log only to decide whether to offer the control, and this is where the
+	// file's path lives. Doing the two halves in two places is how a store
+	// ends up emptied in memory and intact on disk.
+	connect(&dlg, &settings_dialog::annoyance_reports_cleared, this, [this] {
+		if (!m_annoyances)
+			return;
+		m_annoyances->clear_all();
+		if (!m_annoyances_path.isEmpty())
+			saved_or_said(m_annoyances->save(m_annoyances_path),
+			               "the cleared reports");
+	});
 	dlg.exec();
 	// Global defaults may have moved, and every live view was configured from
 	// the old ones. Re-apply rather than wait for the next navigation, or the

@@ -36,6 +36,8 @@
 #include "policy_engine.h"
 #include "consent_blocker.h"
 #include "consent_dialog.h"
+#include "settings_dialog.h"
+#include "annoyance_log.h"
 #include "request_filter.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"
@@ -44,6 +46,8 @@
 #include <QApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QCheckBox>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -825,6 +829,91 @@ int main(int argc, char **argv) {
 		const QString loud = w6.m_banners_action->text();
 		check(loud.contains("(1)"),
 		      QString("and a count once one is (%1)").arg(loud));
+	}
+
+	// **A record of where somebody has been, with no way to remove it.**
+	// `annoyance_log`'s own header says `clear_host` and `clear_all` "exist
+	// for that" -- for letting a person read and clear what the Annoyed button
+	// filed -- and nothing in the program called either. Only the tests did.
+	// The file holds the host, the address that was open and a timestamp.
+	//
+	// It gets its own control rather than joining cookies, because
+	// `forget_shell_caches` states the rule: forgetting is about what browsing
+	// left behind, not about undoing decisions, and a report is something a
+	// person went to the trouble of filing.
+	section("the reports somebody filed can be cleared from inside Hydra");
+	{
+		main_window w7(&factory, &policy, &filter);
+		check(w7.m_annoyances != nullptr, "the window keeps an annoyance log");
+
+		annoyance_report r;
+		r.host = "example.com";
+		r.page = "https://example.com/article";
+		w7.m_annoyances->add(r);
+		check(w7.m_annoyances->all().size() == 1, "with a report in it");
+
+		// Built exactly as `open_settings` builds it, so what is under test is
+		// the dialog the person actually gets.
+		settings_dialog dlg(w7.m_players, w7.m_downloads, w7.m_torrents,
+		                     w7.m_local_ai, w7.m_external_ai, w7.m_policy,
+		                     w7.m_filters, w7.m_filters_path, w7.m_consent,
+		                     w7.m_site_rules_path, &w7, w7.m_factory,
+		                     w7.m_annoyances);
+		// **This connection stands in for the window's, and that is the
+		// limit of what the section proves.** `main_window::open_settings`
+		// makes its own dialog and `exec()`s it, so the real handler -- which
+		// also writes the file -- is not reachable from here without a modal
+		// nothing can answer. What is checked is that pressing Clear with the
+		// box ticked emits, which is the half that was missing entirely; the
+		// window's six lines are read rather than run.
+		QObject::connect(&dlg, &settings_dialog::annoyance_reports_cleared,
+		                  &w7, [&w7] {
+			                  w7.m_annoyances->clear_all();
+		                  });
+
+		auto *box = dlg.findChild<QCheckBox *>("clear_reports");
+		auto *go  = dlg.findChild<QPushButton *>("clear_now");
+		check(box && go, "the privacy page offers the control and a button");
+		if (box && go) {
+			check(!box->isChecked(),
+			      "off by default, because these are not a site's leavings");
+
+			// Only the reports, so nothing is asked of the engine -- and the
+			// cookie and cache boxes start ticked, so they have to be cleared
+			// or this would delete more than it is testing.
+			if (auto *c = dlg.findChild<QCheckBox *>("clear_cookies"))
+				c->setChecked(false);
+			if (auto *c = dlg.findChild<QCheckBox *>("clear_cache"))
+				c->setChecked(false);
+			box->setChecked(true);
+
+			// **The confirmation is modal and would hang a headless run**, so
+			// it is answered from a timer. Yes rather than Cancel, because
+			// Cancel is the default button and a run that failed to find the
+			// dialog would otherwise pass by doing nothing.
+			QTimer::singleShot(120, [] {
+				if (auto *m =
+				        qobject_cast<QMessageBox *>(QApplication::activeModalWidget()))
+					m->button(QMessageBox::Yes)->click();
+			});
+			go->click();
+			spin(500);
+
+			check(w7.m_annoyances->all().isEmpty(),
+			      QString("clearing takes the reports with it (%1 left)")
+			          .arg(w7.m_annoyances->all().size()));
+		}
+
+		// The control for the control: with no log supplied there is nothing
+		// to clear, so the checkbox must not be offered at all rather than
+		// sitting there doing nothing.
+		settings_dialog bare(w7.m_players, w7.m_downloads, w7.m_torrents,
+		                      w7.m_local_ai, w7.m_external_ai, w7.m_policy,
+		                      w7.m_filters, w7.m_filters_path, w7.m_consent,
+		                      w7.m_site_rules_path, &w7, w7.m_factory,
+		                      nullptr);
+		check(bare.findChild<QCheckBox *>("clear_reports") == nullptr,
+		      "and it is absent when there is no log to clear");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
