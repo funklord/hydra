@@ -378,7 +378,10 @@ struct replay_tab {
 
 }  // namespace
 
-QList<imported_tab> replay_snss(const QByteArray &file, QString *error) {
+QList<imported_tab> replay_snss(const QByteArray &file, QString *error,
+                                 int *tab_records_out) {
+	if (tab_records_out)
+		*tab_records_out = 0;
 	auto fail = [&](const QString &why) {
 		if (error)
 			*error = why;
@@ -402,6 +405,23 @@ QList<imported_tab> replay_snss(const QByteArray &file, QString *error) {
 	QHash<qint32, replay_tab> tabs;
 	QSet<qint32> closed_windows;
 	int seen = 0;
+	// How many distinct tabs the log ever mentioned, which is **not** the size
+	// of `tabs` at the end: a tab that was opened and later closed is removed
+	// again, so an empty hash means either that nothing parsed or that the
+	// session ended with everything closed. Those are a defect and a fact about
+	// the machine, and only this count tells them apart -- see the message at
+	// the bottom of this function, which used to get it wrong.
+	int tab_records = 0;
+	auto tab_entry = [&](qint32 id, bool order) -> replay_tab & {
+		if (!tabs.contains(id))
+			++tab_records;
+		replay_tab &t = tabs[id];
+		// Only the commands that say a tab exists set the ordering stamp;
+		// an index-in-window record carries its own order and does not.
+		if (order && t.first_seen == 0)
+			t.first_seen = ++seen;
+		return t;
+	};
 	int pos = 8;
 	while (pos + 2 <= file.size()) {
 		quint16 size = 0;
@@ -428,9 +448,7 @@ QList<imported_tab> replay_snss(const QByteArray &file, QString *error) {
 			const QString title = p.read_string16();
 			if (!p.ok() || url.isEmpty())
 				break;
-			replay_tab &t = tabs[tab];
-			if (t.first_seen == 0)
-				t.first_seen = ++seen;
+			replay_tab &t = tab_entry(tab, true);
 			// Last writer wins: a tab that navigated twice at the same index
 			// has been rewritten, and the later record is where it is now.
 			t.navigations.insert(index, { url, title });
@@ -441,9 +459,7 @@ QList<imported_tab> replay_snss(const QByteArray &file, QString *error) {
 			const qint32 index = r.read_int();
 			if (!r.ok())
 				break;
-			replay_tab &t = tabs[tab];
-			if (t.first_seen == 0)
-				t.first_seen = ++seen;
+			replay_tab &t = tab_entry(tab, true);
 			t.selected = index;
 			break;
 		}
@@ -452,9 +468,7 @@ QList<imported_tab> replay_snss(const QByteArray &file, QString *error) {
 			const qint32 tab = r.read_int();
 			if (!r.ok())
 				break;
-			replay_tab &t = tabs[tab];
-			if (t.first_seen == 0)
-				t.first_seen = ++seen;
+			replay_tab &t = tab_entry(tab, true);
 			t.window = window;
 			break;
 		}
@@ -463,7 +477,7 @@ QList<imported_tab> replay_snss(const QByteArray &file, QString *error) {
 			const qint32 index = r.read_int();
 			if (!r.ok())
 				break;
-			tabs[tab].index_in_window = index;
+			tab_entry(tab, false).index_in_window = index;
 			break;
 		}
 		case k_cmd_tab_closed: {
@@ -536,26 +550,41 @@ QList<imported_tab> replay_snss(const QByteArray &file, QString *error) {
 	QList<imported_tab> out;
 	for (const auto &o : ordered)
 		out << o.second;
-	// **Say which of the two empties this is.** A session Chromium closed with
-	// nothing open, and a reader that got nothing out of the file, both end
-	// here with no tabs; one is a fact about the machine and the other is a
-	// defect, and "no open tabs found" cannot tell them apart. `tabs` is what
-	// was replayed before any of the still-open filtering, so its count is
-	// exactly the discriminator -- a reader that parsed nothing cannot report
-	// records.
+	if (tab_records_out)
+		*tab_records_out = tab_records;
+	// **Say which of the three empties this is**, because they mean opposite
+	// things: a reader that got nothing out of the file is a defect, and a
+	// session the browser left with nothing open is a fact about the machine.
 	//
-	// It earned itself immediately. `test_session`'s live-replay assertion
-	// went red here and the obvious reading was a browser quit with no tabs;
-	// with this message it says **no tab records** for the newest session
-	// file, while the file written before it on the same machine replays to
-	// one. So the reader gets nothing out of what this Chromium now writes,
-	// which is a different problem and not one a closed browser explains.
-	if (out.isEmpty() && error)
-		*error = tabs.isEmpty()
-		    ? QStringLiteral("no tab records in the Chromium session")
-		    : QStringLiteral("no open tabs in the Chromium session "
-		                      "(%1 tab record(s), none still open)")
-		          .arg(tabs.size());
+	// **The first version of this used `tabs.isEmpty()` as the discriminator
+	// and that is wrong, which cost a whole wrong diagnosis.** `tabs` is not
+	// a tally of what was parsed -- `k_cmd_tab_closed` *removes* from it -- so
+	// a session whose tabs were every one closed empties the hash by the same
+	// route a reader that parsed nothing does, and got told it had parsed
+	// nothing. On the machine this was found on that produced "no tab records"
+	// for a 218 KB file holding 9 window assignments, 41 navigations and 7
+	// closes, and the conclusion drawn from it was that Chromium had moved the
+	// navigation records out of `Session_*` into the 93 MB `Tabs_*` store.
+	// It has not: those records are still here, still id 6, still parsed. The
+	// seven tabs were closed by hand between 23:02:33 and 23:03:54, each close
+	// carrying a `close_time` that decodes to that minute, and the browser
+	// stopped writing 0.6 s after the last one.
+	//
+	// So count the tabs the log *mentioned*, which no removal touches. Empty
+	// with a zero count is the defect; empty with a count is the browser.
+	if (out.isEmpty() && error) {
+		if (tab_records == 0)
+			*error = QStringLiteral("no tab records in the Chromium session");
+		else if (tabs.isEmpty())
+			*error = QStringLiteral("no open tabs in the Chromium session "
+			                         "(%1 tab record(s), every one closed "
+			                         "before the session ended)")
+			             .arg(tab_records);
+		else
+			*error = QStringLiteral("no open tabs in the Chromium session "
+			                         "(%1 tab record(s), none still open)")
+			             .arg(tabs.size());
+	}
 	return out;
 }
 
@@ -587,7 +616,8 @@ QString chromium_session_path(const QString &profile) {
 	return files.isEmpty() ? QString() : files.first().absoluteFilePath();
 }
 
-QList<imported_tab> chromium_tabs(const QString &session_file, QString *error) {
+QList<imported_tab> chromium_tabs(const QString &session_file, QString *error,
+                                   int *tab_records) {
 	QFile f(session_file);
 	if (!f.open(QIODevice::ReadOnly)) {
 		if (error)
@@ -596,7 +626,7 @@ QList<imported_tab> chromium_tabs(const QString &session_file, QString *error) {
 	}
 	const QByteArray raw = f.readAll();
 	f.close();
-	return replay_snss(raw, error);
+	return replay_snss(raw, error, tab_records);
 }
 
 }  // namespace session_import

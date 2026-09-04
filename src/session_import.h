@@ -113,9 +113,19 @@ QString chromium_profile(const QString &root = QString());
 QString chromium_session_path(const QString &profile);
 
 // Replay a session file into the tabs it leaves open.
-QList<imported_tab> chromium_tabs(const QString &session_file, QString *error = nullptr);
+//
+// `tab_records`, when given, is how many distinct tabs the log **mentioned**,
+// which is not how many it returns. A tab that was opened and later closed is
+// counted here and absent from the list, so the two together separate the only
+// two things an empty result can mean: zero records is a reader that could not
+// read the file, and records with no tabs is a browser that was left with
+// nothing open. Nothing else on the machine can tell those apart, and reading
+// it off the error message is reading prose.
+QList<imported_tab> chromium_tabs(const QString &session_file, QString *error = nullptr,
+                                   int *tab_records = nullptr);
 // The same, over bytes already in hand, so the replay is testable without a
 // Chromium profile.
-QList<imported_tab> replay_snss(const QByteArray &file, QString *error = nullptr);
+QList<imported_tab> replay_snss(const QByteArray &file, QString *error = nullptr,
+                                 int *tab_records = nullptr);
 
 }  // namespace session_import

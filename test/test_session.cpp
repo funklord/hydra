@@ -395,26 +395,47 @@ int main(int argc, char **argv) {
 			note("skipped the live replay: no Chromium profile on this machine.");
 		} else {
 			err.clear();
-			const auto tabs = session_import::chromium_tabs(path, &err);
-			check(!tabs.isEmpty(),
-			      QString("a live session replays to open tabs (%1%2)")
-			          .arg(tabs.size()).arg(err.isEmpty() ? "" : ", " + err));
+			int records = 0;
+			const auto tabs = session_import::chromium_tabs(path, &err, &records);
 
-			// Plausibility, since there is nothing to diff against. A parser
-			// that had the offsets wrong would produce mojibake and fragments
-			// of other fields, not a list of addresses.
-			int addressable = 0;
-			for (const auto &t : tabs) {
-				const QUrl u(t.url);
-				if (u.isValid() && !u.scheme().isEmpty() && !t.title.isEmpty())
-					++addressable;
-			}
-			check(!tabs.isEmpty() && addressable == tabs.size(),
-			      QString("and every one is a valid address with a label "
-			               "(%1 of %2)").arg(addressable).arg(tabs.size()));
-			if (!tabs.isEmpty())
+			// **Assert what the reader is responsible for, which is not how
+			// the person left their browser.** Whether any tab is still open
+			// is their business: a session closed tab by tab and then quit is
+			// a perfectly ordinary thing to find on disk, and this file used
+			// to go red for it. What must hold is that the reader still
+			// understands what this Chromium writes -- and that is exactly
+			// the record count, because a moved command set yields a file
+			// that walks cleanly and mentions no tabs at all.
+			check(records > 0,
+			      QString("a live session yields tab records (%1%2)")
+			          .arg(records).arg(err.isEmpty() ? "" : ", " + err));
+
+			if (records > 0 && tabs.isEmpty()) {
+				// Reachable only through a working reader, which is what the
+				// earlier version of this skip could not say for itself: it
+				// was written against the guess that the tabs were open and
+				// unreadable, so it never fired and the suite stayed red.
+				// This one fires here, and names the count that proves the
+				// replay ran.
+				note(QString("skipped the open-tab checks: this Chromium was "
+				              "left with nothing open (%1 tab record(s), all "
+				              "closed).").arg(records));
+			} else if (!tabs.isEmpty()) {
+				// Plausibility, since there is nothing to diff against. A parser
+				// that had the offsets wrong would produce mojibake and fragments
+				// of other fields, not a list of addresses.
+				int addressable = 0;
+				for (const auto &t : tabs) {
+					const QUrl u(t.url);
+					if (u.isValid() && !u.scheme().isEmpty() && !t.title.isEmpty())
+						++addressable;
+				}
+				check(addressable == tabs.size(),
+				      QString("and every one is a valid address with a label "
+				               "(%1 of %2)").arg(addressable).arg(tabs.size()));
 				note(QString("first: %1  <%2>")
 				         .arg(tabs.first().title.left(44), tabs.first().url.left(58)));
+			}
 		}
 	}
 

@@ -14690,68 +14690,76 @@ language change. Copying the `--lang` fix across would have removed nothing and
 would have made the real difference harder to see, which is why *What is next*
 said not to.
 
-## The session reader gets nothing out of what Chromium now writes
+## The session reader was right, and its error message was not
 
 `test_session` went red on this machine, on the one assertion in it that reads
-a real Chromium profile rather than a fixture:
+a real Chromium profile rather than a fixture. **The reader was never the
+problem.** The heading this section carried until now -- *the session reader
+gets nothing out of what Chromium now writes* -- was wrong, and so was
+everything under it.
 
-    FAIL  a live session replays to open tabs (0, no open tabs found ...)
-    FAIL  and every one is a valid address with a label (0 of 0)
+**What the newest session file actually holds**, walked record by record:
+`Session_13432942284634057`, 218,727 bytes, SNSS version 3, **253 records, and
+the final position equals the file size exactly**. No truncation, no framing
+change. `UpdateTabNavigation` is still id 6 and there are **41** of them.
+`SetTabWindow` 9, `SetTabIndexInWindow` 24, `SetSelectedNavigationIndex` 21.
+Every id the reader wants is present and parses.
 
-**It is not a regression here and it was not caused by anything in this
-session.** The assertion has stood since 2026-08-24 and nothing has touched
-`session_import` since `2f0c40a`. What changed is the input: the newest file
-in `~/.config/chromium/Default/Sessions` was written at 23:03 the night
-before, and the reader gets nothing out of it.
+Seven distinct tabs appear, and all seven are removed by id-16 `TabClosed`
+records whose payloads decode to **23:02:33 through 23:03:54 on 2026-09-03**,
+with the file's last write 0.6 s after the final close. **Zero open tabs is the
+true answer**: the browser was left with nothing open. The control that settles
+it is the previous session file, which exits with a tab still open and never
+closed -- so Chromium does not force-close tabs into the log at shutdown, and
+those seven closes are real.
 
-**The first reading was wrong and the second is only half an answer.** "No
-open tabs" is what a browser quit with everything closed looks like, and that
-is what this was taken for. The message could not tell that from a reader that
-had stopped parsing, so `replay_snss` now says which:
+**The hypothesis recorded here is refuted.** It said Chromium 122 had split the
+store and moved the navigation records into the 93 MB `Tabs_*` files. Those
+files hold only ids 1, 4, 9 and 255 -- a **disjoint** command namespace, the
+closed-tab restore store -- and nothing moved into them. The version was wrong
+too: the Chromium whose profile this is reads **151.0.7922.71**. The 122 in the
+brief was Qt WebEngine's bundled Chromium, which is a different product that
+happens to be on the same machine, and conflating them is this file's own
+lesson about proxies at close range.
 
-| file | size | tabs |
-| --- | --- | --- |
-| `Tabs_13432942289284066` | 93.7 MB | 0, no tab records |
-| `Session_13432942284634057` (newest) | 218 KB | 0, **no tab records** |
-| `Session_13432932176989310` | 146 KB | **1** |
-| `Tabs_13432932146247859` | 93.7 MB | 0, no tab records |
+### The defect was the discriminator, and it was mine
 
-Measured with a fifteen-line probe linking this tree's own
-`session_import.o`, because the suite only ever asks about the newest file and
-the question is what the reader does with the others. So it is not an empty
-session: the file before it, on the same machine, replays to a tab. The reader
-gets **no records at all** out of what this Chromium wrote last, and none out
-of the 93 MB `Tabs_*` files either.
+The message added to `replay_snss` to tell a broken reader from an empty
+session used `tabs.isEmpty()` as the test. **`k_cmd_tab_closed` removes from
+`tabs`.** So a session whose tabs were every one closed empties that hash by
+exactly the same route a reader that parsed nothing does, and the reader was
+told it had parsed nothing -- reporting *"no tab records"* about a file holding
+nine window assignments, forty-one navigations and seven closes. That wording
+is what drove the split-store hypothesis, and the hypothesis was then written
+up here as though the instrument were sound.
 
-**What that is, is open.** Chromium 122 and later split the store, and the
-obvious hypothesis is that the tab navigation records this reader looks for
-have moved out of `Session_*`. The 93 MB `Tabs_*` files yielding nothing to
-the same reader is consistent with that and does not establish it -- those may
-be the tab-restore store for *closed* tabs, which is a different thing again,
-and nothing here has read Chromium's source to find out. Two files disagreeing
-is a fact; which command ids moved where is not, and guessing it is how a
-parser acquires a second wrong model.
+It counts the tabs the log **mentions** now, which no removal touches, and
+distinguishes three states rather than two: zero records is a reader that could
+not read the file; records with an empty hash is a session closed tab by tab;
+records with tabs but none surviving the filter is the third. The count is an
+out-parameter rather than prose in an error string, so the suite asserts a
+number instead of scraping a sentence.
 
-**The message is the part that is fixed**, and it paid for itself inside a
-minute: "no open tabs found in the Chromium session" became either "no tab
-records" or "N tab record(s), none still open". That is the difference between
-a fact about the machine and a defect in the reader, and the suite's own
-failure line now says which one it met.
+**And the assertion moved to what the reader is responsible for.** Whether any
+tab is still open is the person's business -- closing tabs and quitting is an
+ordinary thing to do, and this file went red for it. What must hold is that the
+reader still understands what this Chromium writes, which is exactly the record
+count: a moved command set yields a file that walks cleanly and mentions no
+tabs at all.
 
-**A skip was written for it and then removed**, which is worth recording
-because the skip was the tempting move. The first repair let the test skip
-when the reader reported records but none open -- a skip a broken reader
-cannot reach, so not vacuous, and it would have been the right shape had the
-diagnosis been right. It was not: the message that came back said *no
-records*, so the skip never fired and the suite stayed red. Shipping it would
-have left a branch nothing has ever taken, excusing a cause that turned out
-not to be the cause. The red stands, because it is reporting something true.
+Seen to fail before being believed. Moving all four tab-mentioning ids makes
+the live assertion report `0` and the suite go red; moving only
+`k_cmd_update_tab_navigation` leaves the other three parsing, so the record
+count stays 7 and the live check correctly still passes while the synthetic
+navigation checks go red. That second case is the one worth keeping: the check
+discriminates rather than merely firing. Restored, **53 passed, 0 failed**.
 
-**Left for the copyright holder**, since it is a question about what this
-importer is supposed to read on a current Chromium rather than a bug with an
-obvious repair: the session importer is one of the two `try_import` covers,
-and what it should do about the split store is a design answer rather than a
-patch.
+**The lesson is the one this file keeps paying for.** A discriminator has to be
+tested against both of the things it discriminates, and this one was reasoned
+about rather than exercised: nobody asked what `tabs` contains after a session
+of closes. It was written into a commit message as a fix, quoted in the section
+above as evidence, and used to justify a theory about somebody else's file
+format -- all on an instrument that had never met the case it existed to name.
 
 ## What is next (in order)
 
