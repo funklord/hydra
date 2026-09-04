@@ -14671,9 +14671,41 @@ the failing path never runs on it:
     audio only    {audio:true}                 <- untouched
     accepted      one call, audio preserved    <- no double request
 
-**Unverified, and it is the whole point of the change:** whether Teams' self
-view looks right with it. That needs the handset, which disconnected while
-this was being built, and somebody in a call.
+### Closed: turn the phone, and the picture is right
+
+The copyright holder turned the handset to landscape during a call and reports
+the camera looking right. That is the whole explanation, and it means the fix
+built for this was aimed at the wrong layer.
+
+The shim asked for a landscape stream. It could never get one, because the
+shape is not a property of the request:
+
+    screen.orientation  portrait-primary 0
+    exact 640x480 x3    480x640  480x640  480x640
+
+Three consecutive `{width:{exact:640},height:{exact:480}}` requests, all
+answered portrait, on a phone held portrait. Chromium rotates the camera frame
+to match the screen and **the exact constraint is ignored rather than
+refused** -- nothing throws, so the fallback written for a refusal never fires
+and the wrong shape is returned as though it were the right one. In portrait
+the shim cannot get landscape; in landscape a plain `{video:true}` already is
+landscape. It never helps, and it cost two camera opens per call. Withdrawn in
+`b0901b9`.
+
+**So the distortion was Teams stretching a portrait frame into a landscape
+tile**, which is what a desktop layout draws, and desktop mode is not optional
+there -- the mobile string sends it to `/v2/unsupported-browser`. Nothing in
+this browser can change the shape of that frame. Turning the phone can.
+
+**Worth keeping about the shape of the fix rather than the fix.** Three
+diagnoses were published for this symptom before the right one, and each was a
+real measurement of an adjacent thing: `policy.ini` answering "is there a
+persisted rule" when the question was "what is this tab using"; a script length
+of 2957 read as the without-shim baseline when it was the with-shim one; and a
+constraint assumed to fail loudly when it fails silently. The thing none of
+them measured was the one variable nobody had written down -- which way up the
+phone was. It was in every report the probe sent and nobody had asked it to
+print `screen.orientation` until the fourth attempt.
 
 **And the language prompt is not a disagreement inside this browser.** All five
 values agree on the phone:
@@ -14814,27 +14846,18 @@ carried along as amendments to a list item.
    arrives; its default moves if and when those do. Notifications stay blocked on
    Android, which has no service to present with.
 
-2. **Two Android reports are open, and one measurement answers both.** The
-   camera image is distorted on the cover screen and the language prompt is
-   still there; the section *A desktop string without a desktop viewport, and
-   no language at all* above has what is established and what is not. The
-   desktop-site toggle has gained its viewport half, which is a real gap
-   closed and an unproven cause. What is wanted is one page opened in hydra on
-   the handset -- `test/live` has no driver for this because the scripted
-   route through `uiautomator dump` is the one this file already records as
-   failing silently, so it is a page typed into the address bar and read back
-   over `adb reverse`. It reports the camera track's size against the video
-   element's box, which separates a stream delivered at the wrong aspect from
-   a correct stream stretched into a wrongly-shaped box, and the five locale
-   values, which say whether the system WebView disagrees with itself the way
-   Qt WebEngine did.
+2. **Both Android reports are answered, and neither is this browser's.** The
+   camera image was distorted because a desktop layout was being handed a
+   portrait frame; turning the handset to landscape fixes it, confirmed on the
+   device, and nothing here can change a stream's shape. The language prompt is
+   two devices disagreeing -- `en-GB` on the phone, `en-US` on the desktop --
+   with all five locale values self-consistent on each. Kept on this list only
+   for the one thing still open: whether a browser should say anything when a
+   site it is claiming desktop for is being fed a portrait camera. That is a
+   design question and the copyright holder's.
 
-   **Do not copy the desktop's `--lang` fix across before that page has
-   answered.** The system WebView takes its locale from the device and is
-   normally self-consistent, so the fault may not be there at all; a fix
-   applied on the strength of the symptom matching would be a fix for
-   nothing, and would make the real cause harder to find by removing the
-   symptom's only witness.
+   The history is in *A desktop layout meets a phone camera* above, and the
+   part worth reading is not the answer but the three wrong ones before it.
 
 3. **Can a screen reader use this browser on Android?** Nobody has asked, and
    there is now a reason to. *A note on measuring this, because it wasted an
