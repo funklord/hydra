@@ -10,6 +10,8 @@ import android.webkit.GeolocationPermissions;
 import android.webkit.WebStorage;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebBackForwardList;
+import android.webkit.WebHistoryItem;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -1079,7 +1081,8 @@ public class HydraWebView {
      * Falls back to reload() when there was no redirect, when the WebView has
      * no original url to give, or when the two are the same.
      */
-    public static void setDesktopSite(final long id, final boolean on) {
+    public static void setDesktopSite(final long id, final boolean on,
+                                       final String url, final String startJs) {
         onUi(new Runnable() { @Override public void run() {
             WebView w = VIEWS.get(id);
             if (w == null)
@@ -1113,8 +1116,38 @@ public class HydraWebView {
             s.setLoadWithOverviewMode(on);
             String original = w.getOriginalUrl();
             String now = w.getUrl();
-            if (original != null && !original.isEmpty() && !original.equals(now))
-                w.loadUrl(original);
+            String target =
+                (original != null && !original.isEmpty() && !original.equals(now))
+                    ? original : now;
+            // **Re-arm before reloading, because the script answers questions
+            // whose answer just changed.** The document-start script is built
+            // on the C++ side from what this view is at the time, and one of
+            // the things it is built from is whether this view is claiming to
+            // be a desktop -- the camera shape shim reads exactly that. The
+            // script registered for the page now on screen was built when the
+            // answer was the other one, and a reload does not go back through
+            // `load()`, so without this the page comes back with the desktop
+            // user agent and the mobile script.
+            //
+            // Measured before it was fixed: a site with `desktopSite:allow`
+            // reloaded into the desktop string -- `X11; Linux x86_64`, no
+            // "Mobile" -- and `getUserMedia` still answered 480x640 portrait,
+            // because the shim that would have asked for landscape was not in
+            // the script that came back with it.
+            //
+            // `null` for the script, so this asks the Qt thread for a fresh
+            // one. That round trip is the one `load()` warns about at startup;
+            // this is not startup, it is a policy answer arriving for a view
+            // that is already up, and it is the same ask the link-click path
+            // in `allow_navigation` already makes safely from this thread.
+            // The url and the script both come from the caller: `w.getUrl()`
+            // is empty part-way through a navigation, and `armDocumentStart`
+            // gives up on an empty url before it logs anything, so asking
+            // here failed silently and left the stale script in place.
+            armDocumentStart(id, w, (url != null && !url.isEmpty()) ? url : target,
+                              startJs);
+            if (target != null && !target.equals(now))
+                w.loadUrl(target);
             else
                 w.reload();
         } });
@@ -1213,25 +1246,78 @@ public class HydraWebView {
     public static void back(final long id) { nav(id, -1); }
     public static void forward(final long id) { nav(id, 1); }
 
-    public static void reload(final long id) {
+    /**
+     * Reload, re-arming the document-start script first.
+     *
+     * **A reload is a navigation, and the script answers questions whose
+     * answers change between them.** The shim carries the shield's camera and
+     * microphone answers and whether this view is claiming to be a desktop,
+     * all baked in as text when it was armed. The reported journey is the one
+     * that breaks: a site says it cannot find the camera, the shield is opened
+     * and set to allow, `on_policy_changed` saves and reloads -- and the page
+     * comes back with the *old* answer still in the script, so it says the
+     * same thing again. The late `onPageStarted` injection does carry the new
+     * answer and arrives after the page's own inline scripts, which is the
+     * exact failure the document-start path exists to prevent.
+     *
+     * The desktop does not have this: `navigating_page::acceptNavigationRequest`
+     * rebuilds its shim for every main-frame navigation, which is one hook
+     * covering every route. Android arms at named call sites instead, so each
+     * route has to be remembered -- `load`, `shouldOverrideUrlLoading` and
+     * `setDesktopSite` were remembered and these two were not.
+     */
+    public static void reload(final long id, final String url, final String startJs) {
         onUi(new Runnable() {
             @Override public void run() {
                 WebView w = VIEWS.get(id);
-                if (w != null)
-                    w.reload();
+                if (w == null)
+                    return;
+                armDocumentStart(id, w, url, startJs);
+                w.reload();
             }
         });
     }
 
+    /**
+     * Back or forward, re-arming the document-start script for where we are
+     * going rather than for where we have been.
+     *
+     * **The destination is known here and only here.** C++ cannot pass it in:
+     * a history entry is the WebView's own state, and asking for it would be a
+     * round trip to find out what to send on a round trip. `copyBackForwardList`
+     * answers it directly, so the script is armed for the origin actually about
+     * to load.
+     *
+     * Without this the handler stays scoped to the origin it was armed for, so
+     * going back to a previously-visited site matched nothing and that page
+     * loaded with no document-start script at all -- falling back to the late
+     * `onPageStarted` injection, which is the arrangement this path exists to
+     * replace. Degraded rather than wrong, and invisible, which is why it
+     * survived: the page still worked, just with the shim arriving after its
+     * own scripts had already asked.
+     *
+     * `null` for the script, so this asks the Qt thread for one built against
+     * the destination. Same ask `shouldOverrideUrlLoading` already makes from
+     * this thread.
+     */
     private static void nav(final long id, final int dir) {
         onUi(new Runnable() {
             @Override public void run() {
                 WebView w = VIEWS.get(id);
                 if (w == null)
                     return;
-                if (dir < 0 && w.canGoBack())
+                final boolean can = (dir < 0) ? w.canGoBack() : w.canGoForward();
+                if (!can)
+                    return;
+                WebBackForwardList list = w.copyBackForwardList();
+                WebHistoryItem to = (list != null)
+                    ? list.getItemAtIndex(list.getCurrentIndex() + (dir < 0 ? -1 : 1))
+                    : null;
+                if (to != null && to.getUrl() != null && !to.getUrl().isEmpty())
+                    armDocumentStart(id, w, to.getUrl(), null);
+                if (dir < 0)
                     w.goBack();
-                else if (dir > 0 && w.canGoForward())
+                else
                     w.goForward();
             }
         });

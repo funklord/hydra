@@ -651,18 +651,25 @@ QString build_permissions_shim(android_view *v, const QUrl &origin) {
 		          qPrintable(cam),
 		          int(v->peek()(origin, policy::feature::microphone)), int(mic_os),
 		          qPrintable(mic));
+	// **The third input, logged unconditionally, and it earned that.** The two
+	// above are logged behind an environment variable, which on Android is a
+	// variable nobody can set: `am start` has no way to pass one to a Qt
+	// application, so the one diagnostic this subsystem has is unavailable on
+	// the only platform that has needed it.
+	//
+	// Whether this view is claiming to be a desktop decides whether the camera
+	// shape shim goes in, and an evening was spent inferring its value from
+	// the *length* of the armed script -- 2957 characters against an expected
+	// 4043 -- because nothing said it out loud. `qDebug` reaches logcat under
+	// the application's own tag and costs one line per navigation.
+	qDebug("hydra-shim: origin=%s desktop=%d cam=%s mic=%s",
+	        qPrintable(origin.toString()), int(v->desktop_site()),
+	        qPrintable(cam), qPrintable(mic));
 
 	// The device names go in beside the permission answers, and for the same
 	// reason: a site that cannot name a speaker cannot offer one.
 	//
-	// The camera's *shape* rides along only where this view is claiming to be
-	// a desktop. Read from the view's own live flag rather than from the
-	// policy, because the toggle in the shield menu is what people actually
-	// use and it does not have to have been saved as a site rule to be in
-	// force -- measured: a handset running Teams in desktop mode had no
-	// `[sites]` group in `policy.ini` at all.
-	return permissions_shim::source(cam, mic) + permissions_shim::device_labels()
-	     + (v->desktop_site() ? permissions_shim::landscape_camera() : QString());
+	return permissions_shim::source(cam, mic) + permissions_shim::device_labels();
 }
 
 }  // namespace
@@ -963,9 +970,29 @@ void android_view::set_desktop_site(bool on) {
 	if (m_desktop_site == on)
 		return;
 	m_desktop_site = on;
+	// **The script goes with it, built here.** Java reloads to make the new
+	// user agent take effect, and a reload does not go back through `load()`
+	// -- so the document-start script registered for the page on screen stays,
+	// and it was built when this answer was the other one. The camera shape
+	// shim reads exactly this flag, so the page came back with the desktop
+	// user agent and the mobile script: measured, `X11; Linux x86_64` in
+	// `navigator.userAgent` and 480x640 still coming out of `getUserMedia`.
+	//
+	// Built and handed over rather than fetched back, for the reason `load()`
+	// gives and one more. Java's own `armDocumentStart` asks the Qt thread
+	// when handed nothing, and its first act is to give up on an empty url --
+	// silently, before it logs anything. `w.getUrl()` is empty part-way
+	// through a navigation, which is exactly when this runs, so the ask never
+	// happened and the only evidence was a script that stayed 2957 characters
+	// long across a change that should have grown it. This side knows the url
+	// and can read the shield on its own thread; there is nothing to ask.
 	if (m_native)
-		QJniObject::callStaticMethod<void>(k_cls, "setDesktopSite", "(JZ)V",
-		                                    jlong(m_id), jboolean(on));
+		QJniObject::callStaticMethod<void>(
+		  k_cls, "setDesktopSite", "(JZLjava/lang/String;Ljava/lang/String;)V",
+		  jlong(m_id), jboolean(on),
+		  QJniObject::fromString(m_url.toString()).object<jstring>(),
+		  QJniObject::fromString(document_start_script(m_id, m_url))
+		      .object<jstring>());
 }
 
 void android_view::set_obscured(bool on) {
@@ -1039,8 +1066,19 @@ void android_view::forward() {
 }
 
 void android_view::reload() {
+	// The script goes with the reload, for the same reason it goes with a
+	// desktop-site change: a reload is a navigation, the shim carries the
+	// shield's answers baked in as text, and nothing else rebuilds it. The
+	// journey this fixes is the reported one -- a site says it cannot find the
+	// camera, the shield is set to allow, `on_policy_changed` reloads, and the
+	// page comes back with the old answer still in the script.
 	if (m_native)
-		QJniObject::callStaticMethod<void>(k_cls, "reload", "(J)V", jlong(m_id));
+		QJniObject::callStaticMethod<void>(
+		  k_cls, "reload", "(JLjava/lang/String;Ljava/lang/String;)V",
+		  jlong(m_id),
+		  QJniObject::fromString(m_url.toString()).object<jstring>(),
+		  QJniObject::fromString(document_start_script(m_id, m_url))
+		      .object<jstring>());
 }
 
 // The whole struct in one JNI call rather than five setters. These arrive
