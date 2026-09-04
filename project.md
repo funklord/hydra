@@ -15897,8 +15897,30 @@ settled legibility floor. The 1.5 is not -- it compares two backgrounds rather
 than a colour against its own text, and the two questions do not share a
 number.
 
-**Measured on Fusion, offscreen.** The mechanism is style-independent by
-construction, the numbers are not.
+**~~Measured on Fusion, offscreen. The mechanism is style-independent by
+construction, the numbers are not.~~ The caveat was wrong and is corrected
+here rather than struck alone**, because it was published as a limit on the
+measurement and it does not exist.
+
+Re-measured on the reporting desktop's own display. The numbers are
+**identical** to the offscreen ones -- and identical numbers are exactly the
+tell that caught two mistakes earlier in the same day, so it was discriminated
+rather than believed:
+
+    offscreen   base style: QFusionStyle
+    DISPLAY=:0  base style: QFusionStyle
+    /usr/lib/x86_64-linux-gnu/qt6/plugins/styles/   (empty)
+
+**There is no other Qt6 style on this machine to load.** TDE is Qt3-based and
+supplies none, so a Qt6 application falls back to Fusion whether it is on the
+display or not. The claim assumed a desktop that names itself in
+`XDG_CURRENT_DESKTOP` must also dress the toolkit, and for a toolkit two major
+versions along it does not.
+
+The mechanism is still style-independent by construction, which is why the
+fill is painted over the base rather than derived from palette roles. What has
+changed is that the numbers are no longer hedged: on this desktop they are the
+numbers.
 
 ## The tab tree could be shown and hidden on a phone and not on a desktop
 
