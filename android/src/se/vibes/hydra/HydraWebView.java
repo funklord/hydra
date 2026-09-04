@@ -373,10 +373,29 @@ public class HydraWebView {
      * shouldInterceptRequest needs the first-party host to apply per-site rules,
      * and cannot ask the WebView for it: getUrl() is UI-thread only and this
      * runs on the network thread. So the UI thread writes it here and the
-     * network thread reads it. Volatile because those are different threads and
-     * a stale read would apply the previous page's rules.
+     * network thread reads it.
+     *
+     * **Keyed by view, which it was not.** This was one `static volatile
+     * String` for the whole class while up to `k_max_live_views` WebViews
+     * exist, and its own description has always said "the page each WebView is
+     * on" -- per-view semantics that a single field cannot provide. Whichever
+     * view navigated most recently won, and every view read its answer.
+     *
+     * What that costs is a filter decision made against the wrong site. The
+     * first-party host becomes `request_context::site_host`, which is what
+     * per-site rules key on -- and the antiadblock path sets exactly such a
+     * rule automatically, without being asked. So a subresource still in
+     * flight from tab A -- an ad refresh timer, a lazy image, an XHR -- can
+     * arrive after tab B navigates and be judged by B's host: A's allowance
+     * stops applying and B's applies instead, and the same crossing runs the
+     * other way round.
+     *
+     * A concurrent map rather than a volatile field, because the write is on
+     * the UI thread and the read is on the network thread, which is the reason
+     * the single field was volatile in the first place.
      */
-    private static volatile String PAGE_URL = "";
+    private static final Map<Long, String> PAGE_URLS =
+        new java.util.concurrent.ConcurrentHashMap<Long, String>();
 
     /** An empty 200, which is how a WebView says "blocked". */
     private static WebResourceResponse blocked() {
@@ -581,7 +600,7 @@ public class HydraWebView {
 
                     @Override
                     public void onPageStarted(WebView v, String url, android.graphics.Bitmap f) {
-                        PAGE_URL = url;
+                        PAGE_URLS.put(Long.valueOf(id), url);
                         // Per navigation, because the policy is per site. This
                         // runs after the main document request has gone out and
                         // before its subresources, which is where third-party
@@ -663,7 +682,9 @@ public class HydraWebView {
                             if (a != null)
                                 accept = a;
                         }
-                        if (shouldBlock(req.getUrl().toString(), accept, PAGE_URL))
+                        final String page = PAGE_URLS.get(Long.valueOf(id));
+                        if (shouldBlock(req.getUrl().toString(), accept,
+                                         page != null ? page : ""))
                             return blocked();
                         return null;
                     }
@@ -1326,6 +1347,7 @@ public class HydraWebView {
     public static void destroy(final long id) {
         onUi(new Runnable() {
             @Override public void run() {
+                PAGE_URLS.remove(Long.valueOf(id));
                 WebView w = VIEWS.remove(id);
                 if (w == null)
                     return;

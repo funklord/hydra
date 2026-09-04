@@ -14619,6 +14619,67 @@ copied across would be a fix for nothing. The same probe reports the five
 values from the phone, which is the cheapest way to find out and needs no
 code.
 
+## Two findings from the sweep: one fixed, one that needs a seam it has not got
+
+A read-only sweep for *a value captured into a payload at moment A, changed at
+moment B, and never rebuilt* -- the lens the document-start defect suggested --
+returned three instances. The first was the reload re-arm, fixed and proved
+above. These are the other two.
+
+### One page url shared by every WebView
+
+`PAGE_URL` was a single `static volatile String` for the whole class while up
+to `k_max_live_views` WebViews exist. **Its own docstring says "the page each
+WebView is on"**, which is per-view semantics a single field cannot provide;
+whichever view navigated most recently won, and every view read its answer.
+Both callbacks that touch it already receive the view, and the `id` is in scope
+for them, so nothing was standing in the way.
+
+What it costs is a filter decision made against the wrong site. That host
+becomes `request_context::site_host`, which per-site rules key on -- and the
+antiadblock path sets exactly such a rule *automatically*, without being asked.
+A subresource still in flight from tab A, an ad refresh timer or a lazy image
+or an XHR, can arrive after tab B navigates and be judged by B's host: A's
+allowance stops applying and B's applies instead, and the crossing runs both
+ways.
+
+A `ConcurrentHashMap` keyed by view id now, written on the UI thread and read
+on the network thread -- which is why the single field was `volatile` -- and
+removed when the view is destroyed, beside the existing `VIEWS` and
+`START_SCRIPTS` removals.
+
+**Structural, not reproduced.** Making the crossing happen needs two tabs, a
+site carrying an automatic allowance, and a subresource timed to land across a
+navigation. Nothing here can arrange that, so this is a named sequence rather
+than a measured one, and the declaration disagreeing with its own docstring is
+the strongest evidence available.
+
+### The capture hook cannot be told to stop, and the reason is not what it looked like
+
+`hydra-mse-capture` is injected with the endpoint in it and nothing removes it
+when a capture ends, so every SourceBuffer of every video played afterwards in
+that tab POSTs its first buffer to a token the proxy has closed -- once each,
+the `.catch` setting `skip` after the first failure. Bounded, real, and easy to
+mistake for a leak.
+
+**The sweep read the blocker as a missing script-removal API. It is not.** The
+endpoint is not baked into the hook: `capture_source` is
+`window.__hydra_capture = <url>` and the hook reads
+`if (window.__hydra_capture && ...)`, so clearing that global stops it at its
+own guard. The smallest fix is one line, and it was written -- and then
+reverted, because it does not compile.
+
+**There is no way to execute script in the live page at all.** The seam has
+`inject_script` and `inject_main_world_script`, and both register a script for
+*future* documents; neither runs anything in the page that is open. The bridge
+goes the other way, page to C++. So the fix needs a new capability on the
+backend seam rather than a call to an existing one, and adding script execution
+to a boundary that deliberately has none is a decision rather than a repair.
+
+Left for the copyright holder with that framing, which is sharper than the one
+it arrived with: not *"add a removal API"* but *"should this seam be able to
+run script in the current page, given that today nothing can"*.
+
 ## Eleven days of packages whose icons went where nothing looks
 
 Reported as a menu entry with no icon that also would not start. Both halves
