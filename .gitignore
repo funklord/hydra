@@ -34,7 +34,22 @@ __pycache__/
 qrc_*.cpp
 
 # Runtime state written next to a tree file
+#
+# **All of it, because the directory was only the largest piece.** `main_window`
+# derives six paths from the tree's own directory -- `state/`, `view.ini`,
+# `policy.ini`, `annoyances.ini`, `filters-ai.txt` and `site-rules.ini` -- so
+# running the browser against a tree kept in this repository drops every one of
+# them here. Only `state/` was listed, and the rest showed up as untracked noise
+# the next time somebody read `git status`. Reported as exactly that.
+#
+# `policy.ini` is deliberately **not** here: it is tracked, committed on
+# purpose, and a gitignore entry for a tracked file changes nothing while
+# reading as though it did.
 /state/
+/view.ini
+/annoyances.ini
+/filters-ai.txt
+/site-rules.ini
 policy.json
 
 # Captured evidence from live pages. Kept on disk on purpose -- the conclusions
