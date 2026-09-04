@@ -4449,8 +4449,33 @@ surface, and Qt's accessibility bridge is already holding the lock.
 
 Not fixed here, and not obviously fixable from this side: the Qt Android plugin
 exposes no switch for its accessibility bridge that a search of the shipped
-`.so` and jar turns up. Worth reporting upstream with the abort message, which
-is specific enough to search for.
+`.so` and jar turns up.
+
+**It is reported upstream, and this entry's last line -- "worth reporting
+upstream" -- is answered.** Signalled by the beerssh session 2026-09-04, theirs
+rather than measured here: **QTBUG-144207**, open against 6.10.2, with the
+caller fixes already in. Their reading of the mechanism, which fits this
+abort exactly: `QAndroidPlatformOpenGLWindow::eglSurface()` guards surface
+creation with a single **process-wide** non-blocking flag, and
+`runInObjectContext()` is one of four holders that take it on the Android UI
+thread while blocking into the Qt thread. And it has not always been fatal --
+`qtbase` `d885a69` (2025-08-21) made it `qFatal` where it used to return
+silently, which is why a condition this old surfaced here as a crash.
+
+**What that changes for the older entry further down.** *A note on measuring
+this, because it wasted an hour* closes on "the instrument had failed, not the
+program", with `Qt A11Y: Could not run accessibility call in object context, no
+valid surface` in logcat and nothing to do with it. That message and this abort
+are the same bridge failing to get the same surface -- one returning silently
+and one aborting -- so the harness going stale is not a separate misfortune.
+Still not established that it explains the `uiautomator` staleness; but the two
+were being treated as unrelated and they are not.
+
+**How to capture it, because the obvious way loses the evidence.** The line
+naming which holder had the flag sits *above* the abort, and the crash buffer
+alone does not carry it: `adb logcat -v threadtime` to a file, then provoke it.
+That string has one producer in the whole Qt tree, so it cannot be confused
+with anything else.
 
 **Re-measured against Qt 6.12's plugin**, since the original search was of an
 older one and a switch could have arrived meanwhile. It has not. The complete
