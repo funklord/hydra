@@ -1119,6 +1119,81 @@ int main(int argc, char **argv) {
 		QDir(dir).removeRecursively();
 	}
 
+	// **What the prompt asks for has to work when written literally.** This
+	// suite already checks that for `seen`, after a script written exactly as
+	// instructed read `undefined` and looked like a model ignoring the rule.
+	// The manifest-extension fallback had the same gap one layer up: rule 3
+	// said "fall back to a manifest extension (`.m3u8`, `.mpd`)" and never
+	// said where in the url it sits, so an end-anchored test is the natural
+	// reading -- and a real manifest address carries a query string, which
+	// defeats it.
+	//
+	// Measured before the rule was changed: of the scripts kept from a run of
+	// the live-model suite, the only one with an end-anchored fallback was the
+	// only one rejected.
+	section("a manifest extension is not at the end of the url");
+	{
+		QList<evidence_request> ev;
+		int n = 0;
+		auto add = [&](const char *u, const char *k) {
+			ev << evidence_request{ QUrl(QString::fromUtf8(u)),
+			                         QString::fromUtf8(k), n++ };
+		};
+		add("https://site.example/watch/1", "other");
+		add("https://site.example/theme/app.js", "script");
+		// A plain `.m3u8` with the query string a real one carries.
+		add("https://cdn.example/hls/master.m3u8?token=abc123&e=1774687168",
+		     "other");
+		add("https://cdn.example/hls/seg-00001.ts", "other");
+
+		// The form the prompt used to invite, written out so the failure is
+		// visible rather than argued: anchored, and it matches nothing here.
+		const QString anchored =
+		  "extract = function (page, requests) {\n"
+		  "  var m = requests.find(function (r) {\n"
+		  "    return /\\.(m3u8|mpd)$/.test(r.url);\n"
+		  "  });\n"
+		  "  return m ? { url: m.url, kind: 'hls' } : null;\n"
+		  "};";
+		const extractor_verdict a = site_extractor::check(anchored, page, ev);
+		check(!a.usable,
+		      QString("an end-anchored fallback finds nothing (%1)")
+		          .arg(a.message.left(70)));
+
+		// The form rule 3 now specifies.
+		const QString tolerant =
+		  "extract = function (page, requests) {\n"
+		  "  var m = requests.find(function (r) {\n"
+		  "    return /\\.(m3u8|mpd)(\\?|&|#|$)/.test(r.url);\n"
+		  "  });\n"
+		  "  return m ? { url: m.url, kind: 'hls' } : null;\n"
+		  "};";
+		const extractor_verdict t = site_extractor::check(tolerant, page, ev);
+		check(t.usable,
+		      QString("the form the prompt now asks for finds it (%1)")
+		          .arg(t.message.left(70)));
+		check(t.result.url.toString().contains("master.m3u8"),
+		      "and it is the manifest, not the segment beside it");
+
+		// **The control, and it is what makes the pair mean anything.** Both
+		// scripts must still work on a url with no query string, or the
+		// difference above could be the anchored one being broken outright
+		// rather than being defeated by the query.
+		QList<evidence_request> plain;
+		n = 0;
+		auto add2 = [&](const char *u, const char *k) {
+			plain << evidence_request{ QUrl(QString::fromUtf8(u)),
+			                            QString::fromUtf8(k), n++ };
+		};
+		add2("https://site.example/watch/1", "other");
+		add2("https://cdn.example/hls/master.m3u8", "other");
+		add2("https://cdn.example/hls/seg-00001.ts", "other");
+		check(site_extractor::check(anchored, page, plain).usable,
+		      "the anchored form does work where there is no query string");
+		check(site_extractor::check(tolerant, page, plain).usable,
+		      "and so does the tolerant one, so it gives nothing up");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

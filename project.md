@@ -15968,6 +15968,60 @@ the restore worth anything: the pane is widened to 420 by hand first, so
 bringing it back can be shown to return *that* width rather than a default
 that happens to match.
 
+## The prompt asked for a fallback and did not say where to look
+
+Rule 3 of the extractor prompt says to write two tests: match the address the
+notes identify, then **fall back to a manifest extension (`.m3u8`, `.mpd`)**.
+It never said where in the url that extension sits, so an end-anchored test is
+the natural reading -- and a real manifest address carries a query string,
+which defeats it:
+
+    https://cdn.example/hls/master.m3u8?token=abc123&e=1774687168
+
+**Measured before the rule was touched**, in the live-model runs recorded
+above: of the three kept scripts, the only one with an end-anchored fallback
+was the only one rejected, and its sibling clause could not match the real url
+either. n is 3, which is why it was recorded as an observation rather than a
+finding -- but the mechanism does not need a sample size. An anchored regex
+cannot match a url with a query string, and every manifest url that matters
+has one.
+
+The prompt now says so, and gives the shape rather than leaving it to be
+inferred a second time. The rest of rule 3 was already right: the paragraph
+beneath it has told the model since 4 August that a master playlist is
+*"routinely disguised with an innocuous extension and a query string"* -- but
+that sentence explains why **both** tests are needed, and says nothing about
+how to write the second one. **A document can state a fact and still not
+answer the question the reader is holding.**
+
+### Checked the way the `seen` field already is
+
+This suite has met the same shape one layer down. The prompt described
+`seen`, told the model a manifest is fetched once, and asked it to test the
+field -- and the runtime object did not carry it, so a script written exactly
+as instructed read `undefined`, matched nothing, and looked like a model
+ignoring the rule. That got a check rather than a comment.
+
+So does this: a script using the anchored form finds nothing on a url with a
+query string, and one using the form rule 3 now specifies finds the manifest.
+
+**With a control, which is what makes the pair mean anything.** Both scripts
+must still work on a url with *no* query string, or the difference could be
+the anchored one being broken outright rather than being defeated by the
+query. Both do.
+
+    ok  an end-anchored fallback finds nothing
+    ok  the form the prompt now asks for finds it
+    ok  and it is the manifest, not the segment beside it
+    ok  the anchored form does work where there is no query string
+    ok  and so does the tolerant one, so it gives nothing up
+
+**What this does not close** is the compliance question beside it on the list:
+the prompt has asked for two clauses since August and gets them about two
+thirds of the time. That is about whether the second clause is written at all.
+This is about whether it could have matched once written, and the answer was
+no.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -16110,9 +16164,16 @@ carried along as amendments to a list item.
    rather than about the corpus — an end-anchored `\.(m3u8|mpd)$` fallback is
    defeated by a query string, which is what a real manifest url carries. So
    the 2 of 5 kisskh scored "purely on an `.m3u8` fallback" is a property of
-   that site's urls rather than of the loop, and the plan above to have the
-   model write both clauses needs the fallback unanchored to be worth
-   anything.
+   that site's urls rather than of the loop.
+
+   **~~and the plan above to have the model write both clauses needs the
+   fallback unanchored to be worth anything.~~ Done** — see *The prompt asked
+   for a fallback and did not say where to look* below. Rule 3 now states
+   where the extension sits and gives the tolerant shape, and the instruction
+   is checked the way this suite already checks the `seen` field: by running a
+   script written literally as instructed. What stays open here is the
+   compliance question above it, which is about whether the model writes both
+   clauses at all, not about whether the second one can match.
 
    Site 2 is kisskh (`kisskh.co`, player CDN `kisscloud.online`), and it *is*
    recorded — `evidence/README.md` names the site, the episode and the exact
