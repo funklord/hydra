@@ -15156,24 +15156,42 @@ carried along as amendments to a list item.
    the four questions that have to be answered before any of it is built. It
    comes after the browser is a browser, on the holder's instruction.
 
-7. **Android's remaining gap is the platform's autofill, and only the runtime
-   half is now unverified.** The four code-level preconditions are checked and
-   met — see *Two searches that found the code correct* above — and the test
-   handset has an autofill service configured, so the emulator's excuse is
-   gone. What is left is one measurement, needing no credentials and no
-   screenshot: open a local html login form, tap the username field, and read
-   `adb shell dumpsys autofill` for whether a session started against the
-   WebView's view structure. Wake the phone first; a dozing one reads as a
-   regression.
+7. **Closed: the platform's autofill reaches into the WebView, measured with a
+   control.** The four code-level preconditions were already checked; what was
+   left was one runtime observation, and it needed no credentials, no
+   screenshot and no tap.
 
-   §19's list is otherwise done — System WebView, drawer, request filter, script
-   bridges, external links, file picker, player handoff, downloads that a file
-   manager can see. Autofill on Android is the system service's job rather than
-   this browser's, and the menu no longer offers a KeePassXC pairing that cannot
-   exist there. The line that used to close this item — that the claim "needs a
-   device that does" have an autofill service — is answered: there is one, and
-   the browser's side of the arrangement is verified. Only the fill itself is
-   open.
+   The handset has an autofill service configured -- Google's, at
+   `com.google.android.gms/...AutofillService` -- and was awake, which this
+   entry has always said to check first. A login form was served over
+   `adb reverse` and handed to the browser by intent, which is the capability
+   added earlier the same night: before it there was no way to get a page in
+   front of this test except the address bar, and this handset's keyboard is
+   the thing that does not work.
+
+       autofill sessions before          No sessions
+       login form loaded, autofocus      mComponentName: se.vibes.hydra/
+                                         se.vibes.hydra.HydraActivity
+                                         TYPE=SUCCESS(10),
+                                         SERVICE=com.google.android.gms,
+                                         NUM_DATASETS=1
+
+   **And the control is what makes the dataset mean anything.** `dumpsys`
+   redacts the assist structure, so the field names cannot be read out of it
+   and a session alone would only show that the *activity* was seen. The same
+   browser, same service, on a page with nothing fillable on it:
+
+       NUM_DATASETS=-1
+
+   One page offers a dataset and the other does not, so the dataset is the
+   form's -- the WebView's virtual view structure reached the service, it
+   recognised the login fields, and it had something to fill them with.
+
+   **What is not established**, because the instrument cannot see it: that the
+   fill *UI* appeared, or that accepting it puts the right text in the right
+   box. That wants a person looking at the screen. What the item asked --
+   whether a session starts against the WebView's view structure -- is
+   answered, and answered yes.
 
 8. **Most of what is left untested needs a network or a device — but that
    sentence has been wrong once and will be again.** The sweep through
