@@ -983,6 +983,12 @@ void settings_dialog::clear_browsing_data() {
 	// deletion is still in flight. The factory is not, so the clear itself
 	// finishes either way; what the guard prevents is writing the result into
 	// a label that has been freed.
+	// **Said before the backend answers, not after.** The shell's own caches
+	// are cleared synchronously and the report may never arrive -- a store can
+	// answer `unconfirmed` or nothing at all -- so hanging this off the
+	// callback would make forgetting depend on a backend being talkative.
+	emit browsing_data_cleared();
+
 	QPointer<settings_dialog> alive(this);
 	m_views->clear_browsing_data(what, [alive](
 	    const web_view_factory::clear_report &r) {

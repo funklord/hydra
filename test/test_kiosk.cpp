@@ -245,6 +245,64 @@ int main(int argc, char **argv) {
 		delete home;
 	}
 
+	section("forgetting says so, so the shell can drop what no backend holds");
+	{
+		// **The window keeps caches a view factory cannot reach**, the
+		// per-session permission answers above all: an answer somebody chose
+		// *not* to have remembered, which skips the prompt next time it is
+		// asked for. Nothing cleared them, so on a public screen the next
+		// person inherited the last person's camera. This signal is how the
+		// window is told, and these check it fires at every moment a session
+		// is actually forgotten.
+		kiosk_controller k;
+		QSignalSpy forgotten(&k, &kiosk_controller::session_forgotten);
+
+		kiosk_config cfg;
+		cfg.home = QUrl("https://kiosk.example/home");
+		cfg.clear_between_sessions = false;
+		k.set_config(cfg);
+
+		fake_view view;
+		QWidget *home = new QWidget;
+		home->resize(800, 600);
+		view.widget()->setParent(home);
+		home->show();
+		spin(80);
+
+		k.enter(&view, home);
+		k.exit();
+		spin(80);
+		check(forgotten.count() == 0,
+		      QString("with clear_between_sessions off nothing is announced "
+		               "(%1)").arg(forgotten.count()));
+
+		// **No factory, deliberately.** Dropping the shell's own caches needs
+		// nothing but this object, and a kiosk told to forget with no factory
+		// warns and returns -- so an announcement below that guard would keep
+		// the last person's answers as well as their cookies. Written first
+		// with the emit below the guard, where this case reports zero.
+		cfg.clear_between_sessions = true;
+		k.set_config(cfg);
+		forgotten.clear();
+		k.enter(&view, home);
+		check(forgotten.count() >= 1,
+		      QString("entering a session announces the forgetting (%1)")
+		          .arg(forgotten.count()));
+		forgotten.clear();
+		k.exit();
+		spin(80);
+		check(forgotten.count() >= 1,
+		      QString("and so does leaving one (%1)").arg(forgotten.count()));
+		// **Unparented before the window goes.** `fake_view` owns its widget,
+		// and leaving it a child of `home` means `home`'s destructor frees it
+		// and the view's frees it again -- `free(): invalid pointer`, after
+		// every assertion above had already passed. A suite that aborts on
+		// the way out still fails, and reads as a fault in what it was
+		// testing rather than in how it tidied up.
+		view.widget()->setParent(nullptr);
+		delete home;
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

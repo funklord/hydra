@@ -144,6 +144,20 @@ bool kiosk_controller::enter(web_view_backend *view, QWidget *restore_to) {
 void kiosk_controller::forget_session(const char *why) {
 	if (!m_config.clear_between_sessions)
 		return;
+
+	// **Above the factory guard, not below it.** The shell holds caches no
+	// backend knows about -- the per-session permission answers most of all --
+	// and dropping those needs nothing but this object. Putting the
+	// announcement after the guard would mean a kiosk configured to forget but
+	// handed no factory keeps the last person's camera answer *as well as*
+	// their cookies, which is the misconfiguration made worse rather than
+	// merely unhelped.
+	//
+	// It also goes before the backend is asked rather than in its callback: a
+	// store can answer `unconfirmed` or never answer at all, and forgetting
+	// must not depend on one being talkative.
+	emit session_forgotten();
+
 	if (!m_factory) {
 		// Configured to forget with nothing able to do it. Loud, because the
 		// whole point of the setting is that somebody is relying on it.

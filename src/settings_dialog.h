@@ -81,6 +81,14 @@ public:
 protected:
 	void resizeEvent(QResizeEvent *event) override;
 
+signals:
+	// **Emitted when the button was actually pressed and a clear went out.**
+	// The shell keeps caches of its own that no backend knows about -- the
+	// per-session permission answers most of all -- and the clear goes
+	// straight from here to the view factory, so without this nothing in the
+	// window ever learns that somebody asked to be forgotten.
+	void browsing_data_cleared();
+
 private:
 	// Below this the category list stops being a sidebar and becomes a
 	// dropdown. Named for the same reason `main_window::k_drawer_threshold`

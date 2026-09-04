@@ -148,6 +148,10 @@ private slots:
 	void on_sort_mode_changed(int combo_index);
 	void on_search_changed(const QString &text);
 	void navigate_to_address();
+	// Drop the caches this window keeps that no backend knows about. Called
+	// whenever browsing data is cleared, from the settings page or from
+	// kiosk mode's own forgetting.
+	void forget_shell_caches();
 #ifdef Q_OS_ANDROID
 	// Open a url another application handed this one, if there is one waiting.
 	void open_handed_url();

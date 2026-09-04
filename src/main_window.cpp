@@ -1659,6 +1659,8 @@ void main_window::toggle_kiosk() {
 		m_kiosk->set_view_factory(m_factory);
 		// Coming back from kiosk: put the view on screen again and resync the
 		// menu check, which also covers Esc exiting without going through here.
+		connect(m_kiosk, &kiosk_controller::session_forgotten, this,
+		         &main_window::forget_shell_caches);
 		connect(m_kiosk, &kiosk_controller::left, this, [this] {
 			// **Not `m_kiosk->view()`, which is already null here.** `exit()`
 			// clears its view before emitting this, so asking the controller
@@ -3537,6 +3539,32 @@ void main_window::open_handed_url() {
 }
 #endif
 
+// **The caches a backend cannot reach, dropped when somebody asks to be
+// forgotten.** `clear_browsing_data` covers cookies, the cache and visited
+// links, and goes straight from the settings page or from kiosk mode to the
+// view factory -- so these two, which live here, survived every clear there
+// was.
+//
+// The one that matters is `m_session_permissions`. It holds the answers given
+// to permission prompts by somebody who chose **not** to have them remembered,
+// and a hit in it skips the prompt entirely. On a public screen with kiosk's
+// `clear_between_sessions` on, that meant the next person inherited the last
+// person's camera: the site asks, the cache answers, no dialog appears. And
+// the direction is the wrong way round -- an answer that *was* remembered goes
+// into the site rules, where the shield shows it and anyone can take it back,
+// so choosing the more private option produced the less private outcome.
+//
+// `m_antiadblock_fixed` goes with it as a record of which sites were visited
+// and found to be running adblock detection, which is browsing history by
+// another name.
+void main_window::forget_shell_caches() {
+	const int answers = int(m_session_permissions.size());
+	m_session_permissions.clear();
+	m_antiadblock_fixed.clear();
+	if (answers > 0)
+		qInfo("forget: dropped %d session permission answer(s)", answers);
+}
+
 void main_window::on_tree_activated(const QModelIndex &proxy_index) {
 	// Picking a tab is what the drawer was opened for, so it gets out of the
 	// way. Leaving it up would cover the page the user just asked for.
@@ -4307,6 +4335,8 @@ void main_window::open_settings() {
 	settings_dialog dlg(m_players, m_downloads, m_torrents, m_local_ai,
 	                     m_external_ai, m_policy, m_filters, m_filters_path,
 	                     m_consent, m_site_rules_path, this, m_factory);
+	connect(&dlg, &settings_dialog::browsing_data_cleared, this,
+	         &main_window::forget_shell_caches);
 	dlg.exec();
 	// Global defaults may have moved, and every live view was configured from
 	// the old ones. Re-apply rather than wait for the next navigation, or the

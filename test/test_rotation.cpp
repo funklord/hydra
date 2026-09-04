@@ -29,6 +29,7 @@
 // 674x841 and 841x674 open. A desktop window dragged between those sizes is
 // the same event, which is why none of this needs a device.
 #include "main_window.h"
+#include "kiosk_controller.h"
 #include "tab_tree_view.h"
 #include "policy_engine.h"
 #include "request_filter.h"
@@ -127,6 +128,46 @@ int main(int argc, char **argv) {
 	w.resize(360, 800);
 	w.show();
 	spin(120);
+
+	section("what a clear actually clears");
+	{
+		// **The caches no backend can reach.** `clear_browsing_data` covers
+		// cookies, the cache and visited links, and goes straight from the
+		// settings page or from kiosk mode to the view factory -- so these
+		// two, which live on the window, survived every clear there was.
+		//
+		// `m_session_permissions` is the one that matters: it holds answers
+		// given by somebody who chose *not* to have them remembered, and a
+		// hit in it skips the prompt. On a public screen that meant the next
+		// person inherited the last person's camera.
+		w.m_session_permissions.insert("example.test\ncamera", true);
+		w.m_antiadblock_fixed.insert("example.test");
+		check(!w.m_session_permissions.isEmpty() && !w.m_antiadblock_fixed.isEmpty(),
+		      "a session answer and a fixed host are cached");
+		// **Driven through the wiring, not by calling the slot.** The slot is
+		// private and stays private -- widening it for a test would be
+		// testing the easy half, and the wiring is where the defect was:
+		// both clear paths went straight to the view factory and nothing
+		// told the window anything. `toggle_kiosk` builds the controller and
+		// makes the connection; emitting its signal is what the idle timer,
+		// entering and leaving all do.
+		// Through the menu action, which is how a person reaches it and needs
+		// no access this test has no business having.
+		if (w.m_kiosk_action)
+			w.m_kiosk_action->trigger();
+		spin(80);
+		check(w.m_kiosk != nullptr, "kiosk mode built its controller");
+		if (w.m_kiosk)
+			emit w.m_kiosk->session_forgotten();
+		spin(20);
+		check(w.m_session_permissions.isEmpty(),
+		      "forgetting drops the session permission answers");
+		check(w.m_antiadblock_fixed.isEmpty(),
+		      "and the record of which hosts were found running detection");
+		if (w.m_kiosk_action)
+			w.m_kiosk_action->trigger();
+		spin(80);
+	}
 
 	section("what a screen reader would be told these controls are");
 	{

@@ -14619,6 +14619,87 @@ copied across would be a fix for nothing. The same probe reports the five
 values from the phone, which is the cheapest way to find out and needs no
 code.
 
+## A clear that cleared everything except the answers people gave
+
+Found by asking, of every container in the shell, what removes from it. Two had
+no removal at all, and one of those is a privacy defect in the feature built to
+prevent exactly it.
+
+`m_session_permissions` holds the answers given to permission prompts by
+somebody who chose **not** to have them remembered. A hit in it does not
+re-prompt -- `answer(*seen); return;` -- which is deliberate and right: a page
+calling `getUserMedia` in a loop would otherwise put a dialog on screen as fast
+as one can be dismissed, which is how a page bullies somebody into pressing
+Allow.
+
+Nothing ever cleared it. `browsing_data` covers cookies, the cache and visited
+links; both routes that clear -- the settings page's *Clear now* and kiosk
+mode's `forget_session` -- call straight through to the view factory, and the
+window is never told. So:
+
+**On a public screen with `clear_between_sessions` on, person A grants the
+camera for this session only, deliberately declining "remember". The kiosk
+forgets between sessions. Person B walks up, the same site asks, and the camera
+is granted silently with no prompt.**
+
+**The direction is what makes it worse than a leak.** An answer that *was*
+remembered goes into the site rules, where the shield shows it and anybody can
+take it back. The session answer is invisible and unremovable. Choosing the
+more private option produced the less private outcome.
+
+`m_antiadblock_fixed` goes with it: a per-host record of which sites were found
+running adblock detection, which is browsing history by another name.
+
+### The fix needed a signal at each end, because neither could be heard
+
+`settings_dialog::browsing_data_cleared` and
+`kiosk_controller::session_forgotten`, both connected to
+`main_window::forget_shell_caches`. Both are emitted **before** the backend is
+asked rather than from its callback: a store can answer `unconfirmed` or never
+answer at all, and forgetting must not depend on one being talkative.
+
+The kiosk signal covers all three moments `forget_session` runs at -- entering,
+**idle**, and leaving. Only leaving had a signal before, and idle is the one an
+unattended screen actually resets on.
+
+### Four things the test found, none of them in the feature
+
+Writing it was worth more than the fix, and all four were in the change or the
+instruments rather than in the code under test.
+
+**The emit was below the factory guard.** A kiosk configured to forget with no
+factory warns and returns -- so an announcement below that guard would have
+kept the last person's camera answer *as well as* their cookies: the
+misconfiguration made worse rather than merely unhelped. Dropping the shell's
+own caches needs nothing but the controller. It is above the guard now, and the
+no-factory case in `test_kiosk` is what pins it there.
+
+**The suite aborted after passing.** Every new assertion reported `ok`, then
+`free(): invalid pointer`, exit 134 -- the fake view's widget left parented to a
+window the test then deleted, so both destructors freed it. A suite that aborts
+on the way out still fails, and reads as a fault in what it was testing.
+
+**A stale binary reported a pass.** A failed build printed `BUILD=2` and the run
+straight after it said `55 passed, 0 failed, exit 0` -- the previous binary,
+containing none of the change. Reading the build status before the suite output
+is the whole defence, and it is this file's own rule.
+
+**And `moc` caught what the compiler and the style gate did not.** The
+`signals:` block went in mid-way through a run of private declarations, so
+every member after it was swallowed into the signals section. `make style`
+passed on that header twice. A header can be valid C++ and structurally wrong
+for Qt, and only the meta-object compiler has an opinion.
+
+### What the test does not reach, said plainly
+
+The slot is private and stays private; widening it so a test could call it
+would have tested the easy half, when the wiring is where the defect was. The
+test triggers the menu action instead, so it drives the action, the lazy
+controller construction, the connection, the signal and the slot. **The
+settings-page path is not covered** -- that dialog is stack-created inside a
+handler -- so only its emit is tested, in the sense that the code exists; no
+test presses that button.
+
 ## Two findings from the sweep: one fixed, one that needs a seam it has not got
 
 A read-only sweep for *a value captured into a payload at moment A, changed at

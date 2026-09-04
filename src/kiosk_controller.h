@@ -105,6 +105,14 @@ public:
 signals:
 	void entered();
 	void left();
+	// **Fired every time a session is actually forgotten, which is three
+	// moments and only one of them is `left`.** `forget_session` runs on
+	// entering, on the idle timer and on leaving; the idle one is the moment
+	// an unattended screen actually resets between two people, and nothing
+	// could hear it. The shell holds caches no backend knows about -- the
+	// per-session permission answers above all -- and this is how it is told
+	// to drop them.
+	void session_forgotten();
 
 protected:
 	bool eventFilter(QObject *obj, QEvent *e) override;
