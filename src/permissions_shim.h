@@ -86,6 +86,76 @@ inline QString source(const QString &camera, const QString &microphone) {
 // checks either would break on a fix meant to help it. The proxy answers
 // `label` itself and forwards everything else to the real device, binding
 // methods so they still run against it.
+// **A desktop layout meets a phone camera, and the phone camera wins.**
+//
+// Measured on the handset this is reported from, folded, with the shield's
+// desktop-site toggle on for the site:
+//
+//     {video:true}                             480x640   ratio 0.750
+//     {width:{ideal:1280},height:{ideal:720}}  refused: NotReadableError
+//     {aspectRatio:{ideal:1.7777}}             refused: NotReadableError
+//     {width:{exact:640},height:{exact:480}}   640x480   ratio 1.333
+//
+// So the default stream is **portrait**, a 16:9 request is refused outright
+// rather than negotiated down, and a landscape one has to be asked for
+// exactly. A site laid out for a desktop puts that portrait frame in a
+// landscape tile, and what it does to fill it is its own business -- the
+// reported symptom was a distorted picture, and the stream itself measures
+// clean at 3:4.
+//
+// **Scoped to the sites we are already lying to, and only those.** The
+// desktop-site toggle tells a site this is a desktop browser; the camera shape
+// is part of the same claim, and a site told it is talking to a desktop is
+// entitled to a desktop-shaped camera. Where the toggle is off the request is
+// untouched, because a mobile layout wants the portrait frame it is being
+// given and rotating it would be the same bug pointed the other way.
+//
+// **Three things it will not do.** It does not touch a request that named its
+// own `width`, `height` or `aspectRatio` -- a site that asked for a shape gets
+// the shape it asked for, and this exists for the ones that asked for nothing.
+// It does not touch audio-only requests. And it **falls back to the original
+// constraints** when the landscape attempt fails: 640x480 is what one device
+// answered on one day, and a browser that turned a working camera into a
+// failed one in pursuit of a better aspect would have made things worse than
+// it found them.
+//
+// 4:3 rather than 16:9 because 16:9 is not on offer here -- both ways of
+// asking for it were refused. Landscape is the property that matters; the
+// exact ratio is what the hardware has.
+inline QString landscape_camera() {
+	return QStringLiteral(R"JS(
+(function () {
+  var md = navigator.mediaDevices;
+  if (!md || !md.getUserMedia) return;
+  var real = md.getUserMedia.bind(md);
+  function shaped(v) {
+    // A site that named any of these has told us the shape it wants.
+    return v && typeof v === "object" &&
+           (v.width !== undefined || v.height !== undefined ||
+            v.aspectRatio !== undefined);
+  }
+  md.getUserMedia = function (constraints) {
+    var c = constraints || {};
+    if (!c.video || shaped(c.video))
+      return real(constraints);
+    var video = (typeof c.video === "object") ? c.video : {};
+    var wide = {};
+    for (var k in c) if (Object.prototype.hasOwnProperty.call(c, k)) wide[k] = c[k];
+    var v = {};
+    for (var j in video) if (Object.prototype.hasOwnProperty.call(video, j)) v[j] = video[j];
+    v.width = { exact: 640 };
+    v.height = { exact: 480 };
+    wide.video = v;
+    return real(wide).catch(function () {
+      // The device could not do it after all. Whatever the page would have
+      // got without this is what it gets.
+      return real(constraints);
+    });
+  };
+})();
+)JS");
+}
+
 inline QString device_labels() {
 	return QStringLiteral(R"JS(
 (function () {

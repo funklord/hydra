@@ -654,7 +654,15 @@ QString build_permissions_shim(android_view *v, const QUrl &origin) {
 
 	// The device names go in beside the permission answers, and for the same
 	// reason: a site that cannot name a speaker cannot offer one.
-	return permissions_shim::source(cam, mic) + permissions_shim::device_labels();
+	//
+	// The camera's *shape* rides along only where this view is claiming to be
+	// a desktop. Read from the view's own live flag rather than from the
+	// policy, because the toggle in the shield menu is what people actually
+	// use and it does not have to have been saved as a site rule to be in
+	// force -- measured: a handset running Teams in desktop mode had no
+	// `[sites]` group in `policy.ini` at all.
+	return permissions_shim::source(cam, mic) + permissions_shim::device_labels()
+	     + (v->desktop_site() ? permissions_shim::landscape_camera() : QString());
 }
 
 }  // namespace

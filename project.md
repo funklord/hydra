@@ -14612,12 +14612,68 @@ claim about another tree is a measurement you did not take, and a claim about
 your own tree's *runtime state* is the same thing at closer range: `policy.ini`
 is one `adb shell run-as` away and says what is actually set.
 
-**What is excluded, and what is left.** The stream is a clean 3:4 portrait and
-renders correctly under `object-fit: contain`; the browser's handling of it is
-not at fault; desktop mode is off and was never on. What is not known is what
-Teams does with a portrait frame in its mobile layout, and answering that needs
-somebody signed in and in a call, looking. It is not a design question after
-all -- that framing belonged to the retracted explanation.
+**And the retraction was itself wrong, which is the part worth keeping.**
+Asked to turn desktop mode off and try again, the browser was pointed at
+`teams.microsoft.com` with the default mobile string and photographed:
+
+    address bar   ...unsupported-browser#isMobile=true
+    the page      "Hmm. Your browser version isn't supported.
+                   Quickest solution? Download the mobile app."
+
+So Teams **cannot** run here without desktop mode, which means it was on when
+the camera was reported distorted, and the original explanation stands after
+all. `policy.ini` was the wrong instrument, not the wrong reading: it answers
+*is there a persisted site rule*, and the shield menu's toggle is a live
+per-view flag -- `android_view::m_desktop_site` -- that does not have to have
+been saved to be in force. A proxy for the question, substituted for the
+question, one layer along from the mistake it was correcting.
+
+**Two wrong answers in one evening on one symptom, in opposite directions.**
+The first inferred the device's state from this document. The second measured
+the device and measured the wrong thing. What both have in common is that the
+instrument was chosen before the question was stated precisely, and in both
+cases the honest question -- *what is this tab using right now* -- had an
+answer in the running program rather than in a file.
+
+### A desktop layout meets a phone camera, and the phone camera wins
+
+With the toggle on, everything the site is told is a desktop's except the one
+thing that is not negotiable:
+
+    {video:true}                             480x640   ratio 0.750
+    {width:{ideal:1280},height:{ideal:720}}  refused: NotReadableError
+    {aspectRatio:{ideal:1.7777}}             refused: NotReadableError
+    {width:{exact:640},height:{exact:480}}   640x480   ratio 1.333
+
+A 16:9 request is **refused rather than negotiated down**, both ways of asking,
+and landscape has to be named exactly. So a desktop layout puts a portrait
+frame in a landscape tile.
+
+`permissions_shim::landscape_camera` closes it from the same seam the
+permission answers already use: where the view is claiming to be a desktop, a
+`getUserMedia` that named no shape is asked for 640x480 instead. Three things
+it will not do, because each is a way of making things worse than it found
+them -- it leaves a request that named its own `width`, `height` or
+`aspectRatio` alone, it leaves audio-only requests alone, and **it falls back
+to the original constraints when the landscape attempt fails**, so a device
+that cannot do it keeps the camera it had.
+
+4:3 rather than 16:9 because 16:9 is not on offer on this hardware. Landscape
+is the property that matters.
+
+**Proven against a fake before it goes near a phone**, which is the only way
+the fallback can be exercised at all here -- the device answers 640x480, so
+the failing path never runs on it:
+
+    plain video   {video:{width:{exact:640},height:{exact:480}}}
+                  THEN {video:true}            <- fallback, on refusal
+    shaped        {video:{width:1280}}         <- untouched
+    audio only    {audio:true}                 <- untouched
+    accepted      one call, audio preserved    <- no double request
+
+**Unverified, and it is the whole point of the change:** whether Teams' self
+view looks right with it. That needs the handset, which disconnected while
+this was being built, and somebody in a call.
 
 **And the language prompt is not a disagreement inside this browser.** All five
 values agree on the phone:
