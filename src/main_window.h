@@ -213,6 +213,11 @@ private:
 	// is called from the handlers that save, and returns what it was told so a
 	// caller can still branch on it.
 	bool saved_or_said(bool ok, const QString &what);
+	// Show or hide the tab tree, whichever shape the window is in. On a narrow
+	// window that is the drawer sliding over the page; on a wide one it is the
+	// splitter's first pane. One entry point for both, because the button is
+	// one button and the person pressing it is asking one question.
+	void set_tree_visible(bool visible);
 	// **Give up the path to a file that is there and would not load.**
 	//
 	// Every store in this window loads a file at startup and saves it back
@@ -450,6 +455,11 @@ public:
 	QAction            *m_undo_action   = nullptr;
 	tree_snapshot       m_undo;
 	QTimer             *m_save_timer    = nullptr;
+	// Whether the tree is showing now, and how wide it was when it last was.
+	// The width is remembered so that showing it again gives back the pane the
+	// person had sized, rather than a default that undoes their drag.
+	bool                m_tree_visible  = true;
+	int                 m_tree_width    = 280;
 	// Whether the last debounced tree write failed, so a disk that has filled
 	// says so once instead of once per keystroke.
 	bool                m_tree_save_failed = false;

@@ -744,9 +744,19 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		                                      "format-justify-fill" }, style(),
 		                                    QStyle::SP_FileDialogDetailedView));
 	m_drawer_action->setStatusTip("Show or hide the tab tree");
-	m_drawer_action->setVisible(false);
+	// **Checkable, and shown at every width.** It used to appear only on a
+	// window narrow enough to put the tree in a drawer, so on a desktop there
+	// was no way to get the pane out of the way at all -- the splitter could
+	// be dragged shut, which is not the same offer and does not come back.
+	//
+	// Checkable because the state is the answer to the question the button
+	// asks. It is also, as it happens, the only checkable button in this
+	// toolbar: everything else here acts and returns, and the rest of what
+	// toggles lives in menus, where a tick says it instead.
+	m_drawer_action->setCheckable(true);
+	m_drawer_action->setChecked(true);
 	connect(m_drawer_action, &QAction::triggered, this,
-	         [this] { set_drawer_open(!m_drawer_open); });
+	         [this](bool on) { set_tree_visible(on); });
 
 	back_act->setIcon(themed_icon("back", { "go-previous" }, style(), QStyle::SP_ArrowBack));
 	fwd_act->setIcon(themed_icon("forward", { "go-next" }, style(), QStyle::SP_ArrowForward));
@@ -2405,7 +2415,6 @@ void main_window::update_layout_mode() {
 	if (narrow == m_drawer_mode || !m_sidebar || !m_splitter)
 		return;
 	m_drawer_mode = narrow;
-	m_drawer_action->setVisible(narrow);
 
 	// **The empty page told people to use something that was not on screen.**
 	// At this width the tree is an overlay behind the drawer button, so "select
@@ -2427,9 +2436,43 @@ void main_window::update_layout_mode() {
 		// Back where it came from, at the position it had.
 		m_splitter->insertWidget(0, m_sidebar);
 		m_sidebar->move(0, 0);
-		m_splitter->setSizes({280, qMax(400, width() - 280)});
 		m_drawer_open = false;
+		// Whatever it was before the window was narrowed. A window dragged
+		// wide again should show the tree it was showing, and one that had it
+		// hidden should not have it reappear because the width changed.
+		m_sidebar->setVisible(m_tree_visible);
+		if (m_tree_visible)
+			m_splitter->setSizes({m_tree_width,
+			                       qMax(400, width() - m_tree_width)});
 	}
+	// The drawer starts closed and the pane starts as it was, so the button
+	// has to agree with whichever one is now on screen.
+	if (m_drawer_action)
+		m_drawer_action->setChecked(narrow ? false : m_tree_visible);
+}
+
+void main_window::set_tree_visible(bool visible) {
+	if (m_drawer_action)
+		m_drawer_action->setChecked(visible);
+	if (m_drawer_mode) {
+		set_drawer_open(visible);
+		return;
+	}
+	if (!m_sidebar || !m_splitter)
+		return;
+	m_tree_visible = visible;
+	if (!visible) {
+		// Remembered before hiding, or the width is gone by the time anybody
+		// asks for it back: a hidden splitter pane reports zero.
+		const int was = m_splitter->sizes().value(0);
+		if (was > 0)
+			m_tree_width = was;
+		m_sidebar->hide();
+	} else {
+		m_sidebar->show();
+		m_splitter->setSizes({m_tree_width, qMax(400, width() - m_tree_width)});
+	}
+	save_view_soon();
 }
 
 bool main_window::eventFilter(QObject *watched, QEvent *event) {
@@ -2590,6 +2633,13 @@ void main_window::set_drawer_open(bool open, bool animate) {
 	if (!m_drawer_mode || !m_sidebar)
 		return;
 	m_drawer_open = open;
+	// **Synced here rather than at the button**, because this is not the only
+	// way the drawer closes: a tap on the page closes it, and so does Back on
+	// Android. A toggle that only learns about the presses somebody makes on
+	// it is the shape this tree has met before -- two consumers of one state
+	// and only the obvious one wired.
+	if (m_drawer_action)
+		m_drawer_action->setChecked(open);
 
 	// **Tell the page it is being covered.** On a backend Qt draws, this is a
 	// no-op and the stacking below is the whole story. On Android the page is
@@ -4779,6 +4829,11 @@ void main_window::save_view_state() const {
 	v.setValue("geometry", QString::fromLatin1(saveGeometry().toBase64()));
 	if (m_sort_box)
 		v.setValue("sort", m_sort_box->currentIndex());
+	// Only meaningful for a window wide enough to have a pane; a drawer always
+	// starts closed. Written unconditionally so a window that was narrow at
+	// the end does not lose what it had when it was wide.
+	v.setValue("tree_visible", m_tree_visible);
+	v.setValue("tree_width", m_tree_width);
 }
 
 void main_window::restore_view_state() {
@@ -4800,6 +4855,13 @@ void main_window::restore_view_state() {
 		if (sort >= 0 && sort < m_sort_box->count())
 			m_sort_box->setCurrentIndex(sort);
 	}
+
+	// **Through `set_tree_visible`, not by assigning the members.** The
+	// button, the pane and the flag have to agree, and the one function that
+	// makes them agree is the one the button uses -- writing the fields here
+	// as well would be a second place that has to be kept in step with it.
+	m_tree_width = qMax(120, v.value("tree_width", m_tree_width).toInt());
+	set_tree_visible(v.value("tree_visible", true).toBool());
 
 	// Collapse first, then open what was open. Without the collapse this would
 	// only ever add folders: a run that starts from an expanded tree and is

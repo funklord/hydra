@@ -282,10 +282,21 @@ int main(int argc, char **argv) {
 		      QString("%1: the address bar still holds what was typed")
 		              .arg(QString::fromUtf8(next.what)));
 
-		check(w.m_drawer_action
-		              && w.m_drawer_action->isVisible() == next.drawer,
-		      QString("%1: the drawer button is shown only where the drawer is")
+		// **This asserted the opposite until the button became a toggle.**
+		// It was shown only on a window narrow enough to put the tree in a
+		// drawer, so on a desktop there was no way to get the pane out of the
+		// way -- the splitter could be dragged shut, which is a different
+		// offer and does not come back. It is shown at every width now, and
+		// what changes with the mode is what it is checked to.
+		check(w.m_drawer_action && w.m_drawer_action->isVisible(),
+		      QString("%1: the tab-tree button is there at this size")
 		              .arg(QString::fromUtf8(next.what)));
+		check(w.m_drawer_action
+		              && w.m_drawer_action->isChecked() != next.drawer,
+		      QString("%1: and is checked when the tree is showing (drawer=%2, "
+		               "checked=%3)")
+		              .arg(QString::fromUtf8(next.what)).arg(next.drawer)
+		              .arg(w.m_drawer_action && w.m_drawer_action->isChecked()));
 
 		// Whichever mode it is in, the sidebar has to be somewhere the window
 		// can show it: in the splitter when wide, on the window when narrow.
@@ -656,6 +667,57 @@ int main(int argc, char **argv) {
 		check(own_filter.observer_count() == 0,
 		      QString("and the filter is empty again once it has gone (%1)")
 		          .arg(own_filter.observer_count()));
+	}
+
+	// **Asked for from the desktop: the tabs show/hide button on desktop too.**
+	// It existed only on a narrow window, where the tree is a drawer over the
+	// page. On a wide one the tree is a splitter pane and the only way to get
+	// it out of the way was to drag the splitter shut -- which is not the same
+	// offer, gives nothing to press to get it back, and leaves no button whose
+	// state says which way round things are.
+	section("the tab tree can be hidden and brought back on a wide window");
+	{
+		main_window w5(&factory, &policy, &filter);
+		w5.resize(900, 600);
+		w5.show();
+		spin(120);
+
+		check(!w5.m_drawer_mode, "a 900px window is not in drawer mode");
+		check(w5.m_sidebar && w5.m_sidebar->isVisible(),
+		      "and the tree is showing to begin with");
+		check(w5.m_drawer_action && w5.m_drawer_action->isChecked(),
+		      "with the button checked to say so");
+
+		// Widen the pane first, so restoring it can be shown to give back
+		// what was there rather than a default that happens to match.
+		w5.m_splitter->setSizes({420, 480});
+		spin(60);
+		const int widened = w5.m_splitter->sizes().value(0);
+		check(widened > 300,
+		      QString("the pane can be sized by hand (%1)").arg(widened));
+
+		w5.m_drawer_action->trigger();
+		spin(60);
+		check(w5.m_sidebar && !w5.m_sidebar->isVisible(),
+		      "pressing it hides the tree");
+		check(!w5.m_drawer_action->isChecked(),
+		      "and the button says so");
+
+		w5.m_drawer_action->trigger();
+		spin(60);
+		check(w5.m_sidebar && w5.m_sidebar->isVisible(),
+		      "pressing it again brings the tree back");
+		const int restored = w5.m_splitter->sizes().value(0);
+		check(restored == widened,
+		      QString("at the width it had, not a default (%1, was %2)")
+		          .arg(restored).arg(widened));
+
+		// **The button is the only checkable thing in this toolbar**, which is
+		// what made the held-contrast fix impossible to look at: everything
+		// else here acts and returns, and what toggles lives in menus where a
+		// tick says it instead.
+		check(w5.m_drawer_action->isCheckable(),
+		      "and it is a toggle, so its state is visible on the toolbar");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

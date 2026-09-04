@@ -15900,6 +15900,52 @@ number.
 **Measured on Fusion, offscreen.** The mechanism is style-independent by
 construction, the numbers are not.
 
+## The tab tree could be shown and hidden on a phone and not on a desktop
+
+Asked for from the desktop, and the button already existed. It was created
+`setVisible(false)` and shown only by `update_layout_mode` when the window is
+narrow enough to put the tree in a drawer -- so on a wide window there was no
+way to get the pane out of the way at all.
+
+**The splitter is not the same offer.** It can be dragged shut, and then there
+is nothing to press to get it back and nothing whose state says which way
+round things are. A drag to zero is also not a mode anything remembers: the
+next launch restores a geometry, not an intent.
+
+It is shown at every width now and is **checkable**, because the state is the
+answer to the question the button asks. One entry point, `set_tree_visible`,
+covers both shapes: the drawer on a narrow window, the splitter's first pane
+on a wide one. The width is remembered before hiding -- a hidden splitter pane
+reports zero, so asking afterwards is too late -- and given back on the way in,
+so showing the tree returns the pane somebody sized rather than a default that
+undoes their drag.
+
+**Synced inside `set_drawer_open` rather than at the button.** That is not the
+only way the drawer closes: a tap on the page closes it and so does Back on
+Android. A toggle that only learns about the presses made on it is the shape
+this tree has met before -- one piece of state with several producers and only
+the obvious one wired.
+
+**And it answers a question the previous entry could not.** The held-button
+contrast fix was measured offscreen and could not be looked at on the desktop
+it was reported from, because *there was no held button to look at*: every
+other action in that toolbar acts and returns, and everything that toggles
+lives in a menu, where a tick says it instead. This is now the one checkable
+button on the toolbar, so the held state has somewhere to be seen.
+
+### A test that asserted the old behaviour
+
+`test_rotation` checked `m_drawer_action->isVisible() == next.drawer` across
+four window shapes -- the button shown only where the drawer is. That was a
+correct statement of the old intent and had to be rewritten rather than
+deleted: the button is now asserted present at every width, and what varies
+with the mode is what it is **checked** to.
+
+Nine assertions cover the wide case end to end, including the one that makes
+the restore worth anything: the pane is widened to 420 by hand first, so
+bringing it back can be shown to return *that* width rather than a default
+that happens to match.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
