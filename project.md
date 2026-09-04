@@ -14911,8 +14911,36 @@ unreachable is exactly what the reported Teams loop looks like from outside:
 allow the camera in the shield, watch the page reload, watch it say it cannot
 find a camera.
 
-Two limits, stated because the run does not cover them. The reload came from a
-synthesised F5 rather than from the Reload item or a shield change;
+**The back-and-forward half is NOT proved, and trying to prove it found
+something else.** Same shape as the reload run: camera revoked, site A on
+`127.0.0.1:8099` reporting `prompt` at parse time, a page-initiated navigation
+to a *different origin* on `:8100` so the handler would have to be re-armed for
+A on the way back, the permission granted live with the process unchanged, then
+`adb shell input keyevent 4`.
+
+Nothing came back from A, and the device log shows no arm after the one for
+`:8100` -- so `nav()` was never reached. What had happened is that **the Back
+key left the browser**: the frontmost activity afterwards was Google Calendar,
+with the A-to-B history sitting in the tab behind it.
+
+**Two readings, and this run cannot choose between them.** Either a synthesised
+`KEYCODE_BACK` is not delivered the way a real gesture is on Android 15, in
+which case the instrument is wrong and says nothing about the program -- or
+`handle_back` is not seeing the key, and Back with history present backs out of
+the application, which is the defect *Back closed the browser, and menus had no
+way out* was written to fix. The code reads correctly: `handle_back` falls
+through popup, dialog and drawer to `can_go_back()` and `go_back()`. Reading it
+is not what settles this.
+
+**One person pressing Back on a page that has history settles it in a second.**
+Until somebody does, the back-and-forward re-arm stays unverified and the
+possible regression stays open. Recorded here rather than filed as a finding
+because a synthetic key behaving differently from a gesture is at least as
+likely as the other reading, and this file has spent an evening learning what a
+wrong instrument looks like.
+
+Two limits on the reload run, stated because it does not cover them. It came
+from a synthesised F5 rather than from the Reload item or a shield change;
 `on_policy_changed` calls the same `reload()`, but the menu was not used. And
 the input that moved was the **OS** permission rather than the shield's
 setting, because changing the shield needs that menu -- `state_for` combines
