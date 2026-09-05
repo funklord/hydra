@@ -16591,12 +16591,44 @@ answer:
 That second line is the bug itself: a script the person never asked for,
 sitting in a dialog that had just opened.
 
-### The other dialog got the fix and no fixture
+### The other dialog got the fix and now has a fixture
 
-`filter_dialog` gets the same destructor and **is not driven by any test**.
-No suite builds one against a stub, and the two-dialog fixture above is
-`test_extloop`'s, which is the extractor's. The fix is four lines identical
-to the one that is tested, and that is an argument, not evidence.
+`filter_dialog` got the same destructor and, when this was written, no test.
+**~~The fix is four lines identical to the one that is tested, and that is an
+argument, not evidence.~~ It has its own fixture now**, in `test_rotation`,
+which already links the dialog: a stub whose `cancel` really cancels, a first
+dialog closed mid-request, and a second that must not be handed the answer.
+
+Sabotaged by removing the destructor again, the second dialog's proposals
+list gains **a rule it never asked for**:
+
+    FAIL  closing it cancels what it asked (0)
+    FAIL  and nothing was put in it (1 row(s))
+
+**Two things about that fixture were nearly worthless.** The first draft
+looked for a `QPlainTextEdit` named "proposal", which `filter_dialog` does not
+have -- `findChild` returned null, and `!proposal || empty` is true for a
+widget that does not exist, so the check could not fail. It asserts the widget
+is there before asserting what is in it. And the stub first replied with
+`"! a proposed rule"`, which is an EasyList *comment*: it parses to nothing,
+so a stale reply would have produced an empty list either way. The reply is a
+real rule now, and the observable is a row.
+
+### And where the same shape is done correctly
+
+`main_window`'s yt-dlp path is the model the AI dialogs lacked, and it is
+worth naming because it answers the same question twice over. `resolve()`
+refuses while `busy()`, so two cannot be in flight; the request site calls
+`m_ytdlp->disconnect(this)` before connecting, so a stale handler cannot
+survive into the next request; the lambda captures the host it asked about
+rather than reading the current one; and the connection is
+`Qt::SingleShotConnection`. Its comment says why: *"reconnected per request so
+a later answer cannot arrive against a page the user has since left."*
+
+`media_remux` is safe by construction -- the signal belongs to a per-request
+object, so the object is the identity. Between them that is the whole
+population: `ai_provider` was the only request/reply broadcast in this tree
+without one.
 
 ## What is next (in order)
 

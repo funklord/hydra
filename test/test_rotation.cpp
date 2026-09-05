@@ -30,6 +30,10 @@
 // the same event, which is why none of this needs a device.
 #include "main_window.h"
 #include "settings_dialog.h"
+#include "filter_dialog.h"
+#include "filter_signals.h"
+#include "filter_list.h"
+#include "ai_provider.h"
 #include "site_rules.h"
 #include "kiosk_controller.h"
 #include "tab_tree_view.h"
@@ -77,6 +81,39 @@ static void spin(int ms) {
 // shared: the two files want the double for opposite reasons -- kiosk borrows
 // the widget and must give it back, this one never opens a tab at all -- and a
 // header holding both would have to grow whichever of them changed first.
+// A provider that answers on the next turn of the event loop and really stops
+// when told to. **The guard matters more than the counter**: a stub that keeps
+// answering after `cancel` would let the check below pass for a dialog that
+// cancels and for one that does not.
+// **No `Q_OBJECT`, deliberately.** It declares no signal of its own -- it
+// emits `ai_provider`'s -- so it needs no metaobject, and asking for one in a
+// test source that nothing mocs is an undefined vtable at link time.
+class stub_ai : public ai_provider {
+public:
+	// A rule that really parses, so a stale reply shows up as a *row*
+	// rather than as a status line -- a positive observable, since "the
+	// status did not change" is far too easy to satisfy by accident.
+	QString reply = "||ads.example.com^";
+	int cancelled = 0;
+	QString name() const override { return "Stub"; }
+	bool available() const override { return true; }
+	bool is_external() const override { return false; }
+	void send(const QString &, const QString &) override {
+		m_live = true;
+		QTimer::singleShot(0, this, [this] {
+			if (m_live)
+				emit finished(reply);
+		});
+	}
+	void cancel() override {
+		++cancelled;
+		m_live = false;
+	}
+
+private:
+	bool m_live = false;
+};
+
 class fake_view : public web_view_backend {
 public:
 	explicit fake_view(QWidget *parent = nullptr) : web_view_backend(nullptr) {
@@ -985,6 +1022,45 @@ int main(int argc, char **argv) {
 		               "view_settings gained or lost a field: drive it from "
 		               "apply_policy and name it in the two checks above, or "
 		               "say here why it is not policy's to set");
+	}
+
+	// **The gap the previous change left open, closed.** `filter_dialog` got
+	// the same destructor as `extractor_dialog` and nothing drove it: the
+	// two-dialog fixture lives in `test_extloop`, which is the extractor's,
+	// and four identical lines is an argument rather than evidence.
+	//
+	// The hazard is the same one. `ai_provider::finished` carries no request
+	// identity and the provider outlives every dialog that asks, so a reply
+	// still in flight when this closes lands on whatever is connected next.
+	section("the filter dialog takes its question with it too");
+	{
+		stub_ai prov;
+		filter_signals sig;
+		filter_list list;
+
+		{
+			filter_dialog first(&sig, &list, &prov, "site.example");
+			for (QPushButton *b : first.findChildren<QPushButton *>())
+				if (b->text().contains("Send"))
+					b->setEnabled(true), b->click();
+		}
+		check(prov.cancelled == 1,
+		      QString("closing it cancels what it asked (%1)")
+		          .arg(prov.cancelled));
+
+		// And the half that says why the counter is not enough: a second
+		// dialog must not be handed the first one's answer.
+		filter_dialog second(&sig, &list, &prov, "site.example");
+		spin(150);
+		// **Asserted on a widget that is there**, or the check passes for a
+		// dialog with no such widget at all -- which is what the first draft
+		// of this did, looking for a `QPlainTextEdit` named "proposal" that
+		// `filter_dialog` does not have.
+		auto *rules = second.findChild<QTreeWidget *>();
+		check(rules != nullptr, "the second dialog has a proposals list");
+		check(rules && rules->topLevelItemCount() == 0,
+		      QString("and nothing was put in it (%1 row(s))")
+		          .arg(rules ? rules->topLevelItemCount() : -1));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
