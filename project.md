@@ -17699,6 +17699,48 @@ another one.
 With the one line removed the last of those reads `(1.25)` and nothing else
 moves.
 
+### The same two entries were missing from the other handler, and it said so
+
+There are **two** events that have to walk everything the shell keys by node
+id: a node being deleted, and a node being re-minted when it is dragged out of
+a session mirror. They were two hand-written lists in two places that do not
+mention each other, and both were short by the same two entries. The second
+one's comment reads:
+
+    Everything here that is keyed by id has to follow it, or a tab that was
+    open a moment ago is a live view under a name nothing resolves
+
+and it moved three of five.
+
+**Here the collision is faster than in the delete case, not slower.** Mirror
+ids are scoped to their source -- `firefox-0`, `firefox-1` -- and
+`replace_mirror` mints those same names again on the next refresh, which
+`session_mirror.h` puts at about every two and a half seconds. So a zoom left
+behind under `firefox-0` is not waiting for a collision; it is waiting for the
+next Firefox tab to take that name.
+
+Both are `forget_node_state` and `rekey_node_state` now, adjacent, with the
+pairing named in the header. A map added later is still added by hand -- but
+in one region of one file with both callers in view.
+
+    ok    dragging it out re-mints the id (t-2 -> t-3)
+    ok    the zoom follows the tab (1.1)
+    ok    and nothing is left under the name the mirror will reuse
+
+Sabotaged back to three of five, the middle two fail and the live-view one --
+which that handler already moved -- does not.
+
+**`m_zoom` is public now**, for the reason `m_views_by_id` is: a view's own
+`zoom_factor()` cannot answer this question, because the widget survives a
+rename and reports the right number whether or not the map followed the id.
+
+**And the first version of the assertion was written against 1.25.** The
+section above triggers Zoom In twice; this one triggers it once, and the first
+step up the ladder is 1.1 -- so it failed while the code was correct, and the
+debug print is what said so rather than any reasoning. It reads the value
+before the rename and compares, which is what the assertion was always about:
+that the number survives, not what the number is.
+
 **The fake had to learn to answer before the test could see it.**
 `fake_view::set_zoom_factor` was a no-op and `zoom_factor()` was the base
 class's constant 1.0, so the shell could be asked what it had decided and

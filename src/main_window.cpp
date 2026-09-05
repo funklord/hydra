@@ -1001,21 +1001,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// view under a name nothing resolves: invisible, uncloseable, and holding
 	// a slot against the live-view cap.
 	connect(m_model, &tab_tree_model::id_changed, this,
-	         [this](const QString &was, const QString &now) {
-		if (web_view_backend *v = m_views_by_id.take(was))
-			m_views_by_id.insert(now, v);
-		const int at = m_lru.indexOf(was);
-		if (at >= 0)
-			m_lru[at] = now;
-		// A mirrored tab has no state of its own -- a mirror is never saved --
-		// but it can have been opened and suspended while it was on screen, and
-		// that blob is real. Moved rather than dropped: the tab the user is
-		// keeping is the one they were just looking at.
-		if (m_state && m_state->has_state(was)) {
-			m_state->save(now, m_state->load(was));
-			m_state->remove(was);
-		}
-	});
+	         &main_window::rekey_node_state);
 	m_tree->setHeaderHidden(true);
 	m_tree->setUniformRowHeights(true);
 	// The title takes what is left; the history count takes exactly what it
@@ -3984,6 +3970,58 @@ void main_window::open_url_externally(const QUrl &url) {
 
 // Everything under `n`, because deleting a folder takes what is inside it and
 // each of those may have a view and a state blob of its own.
+// The saved state goes too. A blob for a node that no longer exists is
+// unreachable by anything except an id collision, which is the one way it
+// could ever be read again -- into the wrong tab.
+//
+// **And the collision is the normal case rather than a remote one**, which is
+// what the zoom entry missing from here cost. `tab_tree_model::unused_id`
+// hands out the lowest free id, so a deleted tab's id is what the next tab
+// gets: delete a tab left at 125% and the tab created after it opened at 125%,
+// with nothing on screen saying why.
+//
+// `m_blobs_dirty` was harmless where it stood -- `flush_blobs` looks each id
+// up in `m_views_by_id` and finds nothing -- but it is a note about a node
+// that no longer exists, and the id is about to belong to another one.
+void main_window::forget_node_state(const QString &id) {
+	m_views_by_id.remove(id);
+	m_lru.removeAll(id);
+	m_zoom.remove(id);
+	m_blobs_dirty.remove(id);
+	if (m_state)
+		m_state->remove(id);
+}
+
+// The same set, moved rather than dropped.
+//
+// **Mirror ids are reused within seconds**, which is what makes the two
+// entries this used to miss more than untidiness: they are scoped to their
+// source -- `firefox-0`, `firefox-1` -- and `replace_mirror` mints those same
+// names again on the next refresh, about every two and a half seconds. So a
+// zoom left behind under `firefox-0` is not a leak waiting for a collision; it
+// is a zoom waiting to be applied to whichever Firefox tab takes that name
+// next.
+//
+// A mirrored tab has no state of its own -- a mirror is never saved -- but it
+// can have been opened and suspended while it was on screen, and that blob is
+// real. Moved rather than dropped: the tab the user is keeping is the one they
+// were just looking at.
+void main_window::rekey_node_state(const QString &was, const QString &now) {
+	if (web_view_backend *v = m_views_by_id.take(was))
+		m_views_by_id.insert(now, v);
+	const int at = m_lru.indexOf(was);
+	if (at >= 0)
+		m_lru[at] = now;
+	if (m_zoom.contains(was))
+		m_zoom.insert(now, m_zoom.take(was));
+	if (m_blobs_dirty.remove(was))
+		m_blobs_dirty.insert(now);
+	if (m_state && m_state->has_state(was)) {
+		m_state->save(now, m_state->load(was));
+		m_state->remove(was);
+	}
+}
+
 void main_window::forget_subtree(node *n) {
 	if (!n)
 		return;
@@ -3997,24 +4035,7 @@ void main_window::forget_subtree(node *n) {
 		m_stack->removeWidget(w);
 		w->deleteLater();
 	}
-	m_views_by_id.remove(n->id);
-	m_lru.removeAll(n->id);
-	// The saved state goes with it. A blob for a node that no longer exists is
-	// unreachable by anything except an id collision, which is the one way it
-	// could ever be read again -- into the wrong tab.
-	if (m_state)
-		m_state->remove(n->id);
-	// **And the zoom, for exactly the reason written above it -- which this
-	// line did not do.** `tab_tree_model::unused_id` hands out the LOWEST free
-	// id, so the collision that paragraph calls the one way a stale blob could
-	// be read is not a remote possibility here: it is what the next tab gets.
-	// Delete a tab left at 125% and the tab created after it opened at 125%,
-	// with nothing on screen saying why.
-	m_zoom.remove(n->id);
-	// Harmless where it stood -- `flush_blobs` looks the id up in
-	// `m_views_by_id` and finds nothing -- but it is a note about a node that
-	// no longer exists, and the id is about to be handed to another one.
-	m_blobs_dirty.remove(n->id);
+	forget_node_state(n->id);
 	update_status();
 	page_changed();
 }

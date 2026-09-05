@@ -273,12 +273,31 @@ private:
 	void step_zoom(int direction);          // -1, 0 to reset, +1
 	void apply_zoom(web_view_backend *view, const QString &node_id);
 
-	QHash<QString, double> m_zoom;          // node id -> factor, 1.0 omitted
+	// **Everything the shell keys by node id, visited from one place.**
+	//
+	// Two events have to walk the whole set: a node being deleted, and a node
+	// being re-minted when it is dragged out of a session mirror. They were
+	// two separate lists written by hand, and both were short by the same two
+	// entries -- `m_zoom` and `m_blobs_dirty` -- while the comment over the
+	// second one said "everything here that is keyed by id has to follow it".
+	//
+	// A map added later is still added by hand, but it is added in one region
+	// of one file with both callers in view, rather than in two handlers that
+	// do not mention each other.
+	void forget_node_state(const QString &id);
+	void rekey_node_state(const QString &was, const QString &now);
 
 	// Show where a hovered link would go, or clear it when the pointer leaves.
 	// Public so a test can drive the presentation without an engine: what is
 	// worth checking is the eliding and the clearing, not Qt's own signal.
 public:
+	// Public for the same reason `m_views_by_id` is: the two functions above
+	// have to keep it in step with the tree, and the only way to see that they
+	// did is to read it. A view's own `zoom_factor()` cannot answer -- the
+	// widget survives a rename, so it reports the right number whether or not
+	// the map followed the id.
+	QHash<QString, double> m_zoom;          // node id -> factor, 1.0 omitted
+
 	void show_link_target(const QUrl &url);
 
 	// A page whose renderer died. Public for the same reason as the one above:

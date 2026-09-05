@@ -1274,6 +1274,56 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	section("a tab dragged out of a mirror keeps its zoom, and leaves none behind");
+	{
+		// The twin of the section above, and the one with the faster
+		// collision. Mirror ids are scoped to their source -- `firefox-0` --
+		// and `replace_mirror` mints those same names again on the next
+		// refresh, about every two and a half seconds. So a zoom left under
+		// the old id is not waiting for a collision; it is waiting for the
+		// next Firefox tab to take that name.
+		//
+		// The handler's own comment said "everything here that is keyed by id
+		// has to follow it" and moved three of five.
+		main_window w11(&factory, &policy, &filter);
+		QAction *zoom_in = nullptr;
+		for (QAction *a : w11.findChildren<QAction *>())
+			if (a->text() == QStringLiteral("Zoom &In"))
+				zoom_in = a;
+
+		node *t = w11.m_model->add_tab(nullptr, "mirrored", "http://c.example/");
+		check(t && zoom_in, "a tab, and the Zoom In action");
+		if (t && zoom_in) {
+			// Made to look like a mirror row, which is the only state
+			// `clear_mirror` acts on.
+			t->mirror = QStringLiteral("firefox");
+			const QString was = t->id;
+			QMetaObject::invokeMethod(
+			  &w11, "on_tree_activated",
+			  Q_ARG(QModelIndex,
+			         w11.m_proxy->mapFromSource(w11.m_model->index_for_node(t))));
+			zoom_in->trigger();
+			// Read rather than assumed: the first step up the ladder is
+			// 1.1, and an assertion written against 1.25 passed the wrong
+			// half of this section for one run. What matters is that the
+			// number survives the rename, not what the number is.
+			const double before = w11.m_zoom.value(was, 1.0);
+			check(before > 1.0, "zoomed while it was still the mirror's");
+
+			w11.m_model->clear_mirror(t);
+			check(t->id != was,
+			       QString("dragging it out re-mints the id (%1 -> %2)")
+			           .arg(was, t->id));
+			check(qFuzzyCompare(w11.m_zoom.value(t->id, 1.0), before),
+			       QString("the zoom follows the tab (%1)").arg(before));
+			check(!w11.m_zoom.contains(was),
+			       "and nothing is left under the name the mirror will reuse");
+			check(w11.m_views_by_id.contains(t->id) &&
+			       !w11.m_views_by_id.contains(was),
+			       "as with the live view, which this handler already moved");
+		}
+	}
+
 	section("clearing browsing data clears what only Hydra remembers");
 	{
 		// Five observers ride the interceptor's seam and each keeps a record
