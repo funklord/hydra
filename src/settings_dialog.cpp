@@ -2,6 +2,7 @@
 #include "claude_provider.h"
 #include "download_manager.h"
 #include "flow_layout.h"
+#include "autofill_controller.h"
 #include "ollama_provider.h"
 #include "player_launcher.h"
 #include "torrent_download_source.h"
@@ -213,6 +214,18 @@ QString search_engine() {
 
 QString default_search_engine() {
 	return QStringLiteral("https://duckduckgo.com/?q=%1");
+}
+
+bool autofill_https_only() {
+	QSettings s = open_settings();
+	return s.value("autofill/httpsOnly",
+	                autofill_controller::k_https_only_default).toBool();
+}
+
+void set_autofill_https_only(bool on) {
+	QSettings s = open_settings();
+	s.setValue("autofill/httpsOnly", on);
+	s.sync();
 }
 
 void set_search_engine(const QString &tmpl) {
@@ -1215,6 +1228,27 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	connect(m_search_engine, &QLineEdit::textChanged, this, say_if_broken);
 	say_if_broken();
 
+	// **The switch the autofill feature's own description already promised.**
+	// `policy.cpp` says autofill is "limited to HTTPS pages unless that
+	// requirement is turned off", and until this there was nothing to turn it
+	// off with: `autofill_controller::set_https_only` existed and its only
+	// caller in the tree was a test.
+	//
+	// On this page rather than beside the permission tri-states, because it is
+	// not a per-site answer -- it is one rule about where a password may be
+	// typed at all, and the tri-state for autofill governs *whether*, not
+	// *where*.
+	v->addWidget(section_heading("Autofill", page));
+	m_autofill_https = new QCheckBox(page);
+	m_autofill_https->setObjectName("autofill_https_only");
+	v->addWidget(settings_row(
+	  "Only fill passwords on HTTPS pages",
+	  "Filling a saved password into a page served over plain HTTP puts it on "
+	  "the wire, where anything between you and the site can read it. Turn "
+	  "this off only for something like a printer or a router on your own "
+	  "network that offers no HTTPS at all.",
+	  m_autofill_https, page));
+
 	// --- Site exceptions ---------------------------------------------------
 	//
 	// The page above says an exception always wins over what is chosen here,
@@ -1353,6 +1387,12 @@ void settings_dialog::restore_page_defaults(int page) {
 		// have pressed that button to undo.
 		if (m_search_engine)
 			m_search_engine->setText(settings_store::default_search_engine());
+		// The controller's own default, named on the class rather than
+		// retyped here -- the same rule as the fresh objects the pages below
+		// read, without constructing one that needs a bridge and a policy.
+		if (m_autofill_https)
+			m_autofill_https->setChecked(
+			  autofill_controller::k_https_only_default);
 		// Site exceptions are deliberately left alone. They are decisions about
 		// particular sites rather than defaults, they each have their own
 		// Remove, and quietly discarding them behind a button labelled
@@ -2449,6 +2489,9 @@ void settings_dialog::load() {
 	if (m_external_ai)
 		m_claude_model->setText(m_external_ai->model());
 
+	if (m_autofill_https)
+		m_autofill_https->setChecked(settings_store::autofill_https_only());
+
 	switch (settings_store::ai_mode()) {
 		case ai_choice::local_only: m_ai_local->setChecked(true); break;
 		case ai_choice::external:   m_ai_external->setChecked(true); break;
@@ -2575,6 +2618,8 @@ void settings_dialog::apply() {
 		if (!tmpl.isEmpty())
 			settings_store::set_search_engine(tmpl);
 	}
+	if (m_autofill_https)
+		settings_store::set_autofill_https_only(m_autofill_https->isChecked());
 	if (m_policy) {
 		// Exceptions the user removed. Every feature is set back to unset, which
 		// is what "falls through to the defaults" means in the policy model --

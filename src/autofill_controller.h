@@ -36,7 +36,21 @@ public:
 	void set_page_origin(const QString &origin);
 	QString page_origin() const { return m_origin; }
 
+	// **The shipped answer, named once.** `restore_page_defaults` reads every
+	// other page's defaults from a freshly built object rather than from a
+	// second table of constants; this one is a constant on the class instead,
+	// which is the same rule with one fewer object. Building an
+	// `autofill_controller` to read a bool would need a bridge and a policy,
+	// and it dragged the whole class into the link set of every binary that
+	// touches the settings dialog -- `test_settings` failed to link on its
+	// vtable, which is what said so.
+	static constexpr bool k_https_only_default = true;
+
+	// Both halves, because the settings page needs to read it back: a value
+	// that can be written and not read cannot be shown in the control that
+	// sets it.
 	void set_https_only(bool on) { m_https_only = on; }
+	bool https_only() const { return m_https_only; }
 
 	// Why a fill would be refused right now; empty when it would proceed.
 	QString blocked_reason(const QString &origin) const;
@@ -108,7 +122,7 @@ private:
 	keepass_bridge *m_bridge = nullptr;
 	policy_engine  *m_policy = nullptr;
 	QString m_origin;
-	bool    m_https_only = true;
+	bool    m_https_only = k_https_only_default;
 	int     m_next_tag = 1;
 	int     m_pending  = 0;
 	// Separate tags per kind of request. One `m_pending` was enough while a

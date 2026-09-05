@@ -355,6 +355,10 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	        [this](const QString &why) { m_status->showMessage(why, 8000); });
 
 	m_autofill = new autofill_controller(m_keepass, m_policy, this);
+	// Applied here rather than only when the settings page is opened, for the
+	// reason `load_into` exists: otherwise "settings persist" quietly means
+	// "settings persist if you go and look".
+	m_autofill->set_https_only(settings_store::autofill_https_only());
 	// More than one login for a site is a question only the user can answer, and
 	// it is asked here rather than in the page: the controller holds the
 	// passwords until the answer comes back, so the picker is a list of names
@@ -4762,6 +4766,12 @@ void main_window::open_settings() {
 	// it. Refreshed here for the same reason the views are re-configured
 	// below: the dialog is the one place that can change it.
 	refresh_kiosk_tip();
+	// The same shape: a live controller configured from the old value, and the
+	// dialog is the one place that can change it. Without this the setting
+	// would take effect on the next launch, which for a control about where a
+	// password may be typed is the wrong kind of surprise in both directions.
+	if (m_autofill)
+		m_autofill->set_https_only(settings_store::autofill_https_only());
 
 	// Global defaults may have moved, and every live view was configured from
 	// the old ones. Re-apply rather than wait for the next navigation, or the

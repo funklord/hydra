@@ -16730,11 +16730,11 @@ nobody could drop* below.
 per-site media counts accumulate for the process lifetime and a site's badge
 is computed from an earlier visit.
 
-**`policy.cpp`'s autofill description names an HTTPS-only switch with no
-surface** -- `set_https_only`'s only caller is a test. ~~And the kiosk status
-tip promises "Esc returns" while `allow_escape` is a saved setting.~~ That
-one is fixed -- see *A menu entry promising the opposite of the setting*
-below.
+~~`policy.cpp`'s autofill description names an HTTPS-only switch with no
+surface.~~ ~~And the kiosk status tip promises "Esc returns" while
+`allow_escape` is a saved setting.~~ Both fixed -- see *A menu entry promising
+the opposite of the setting* and *The switch the description had been
+promising all along* below.
 
 ## A dead renderer took the whole browser with it
 
@@ -17871,6 +17871,93 @@ whichever way it is settled the suite goes red deliberately.
 `./`, `../`, `~/` -- and the suite exercised three. `../notes.html` is
 asserted now; a rule with no case is a rule that can be deleted without
 anything going red.
+
+## The switch the description had been promising all along
+
+The autofill feature's own description, on the privacy page:
+
+    Limited to HTTPS pages unless that requirement is turned off, because
+    filling a password over plain HTTP puts it on the wire.
+
+`autofill_controller::set_https_only` had exactly one caller in the tree, and
+it was a test. So there was nothing to turn it off with, and somebody on an
+HTTP-only intranet login page read *"Autofill is limited to HTTPS; this page
+is not secure"* and went looking in Settings for a control that was not there.
+
+**This was a decision already taken, not one to defer**, which is the
+difference between this and the address-bar question above. `architecture.md`
+asks for *"an HTTPS-only-fill option"*; the description promises it; the
+mechanism exists. Only the surface was missing, and `working-practice.md` is
+explicit that a gap left open waiting for a decision that was taken months ago
+stays open indefinitely, because nobody is coming to take it again.
+
+So: a checkbox on the privacy page, defaulting on, stored under
+`autofill/httpsOnly`, and applied in **three** places, because a setting that
+is only applied in one of them is the failure mode this project keeps writing
+down --
+
+- at startup, beside the controller's construction, for the reason
+  `load_into` exists: otherwise "settings persist" means "settings persist if
+  you go and look";
+- after the settings dialog closes, beside `refresh_kiosk_tip` and for the
+  same reason -- a live controller configured from the old value;
+- in `restore_page_defaults`, from the controller's own
+  `k_https_only_default` rather than from a second constant, which is that
+  function's own rule; `https_only()` was added beside the setter for the
+  same reason, since a value that can be written and not read cannot be shown
+  in the control that sets it.
+
+### Reading the default from a fresh object broke the link, and the guard could not see it
+
+The first version obeyed that rule literally -- `const autofill_controller
+fresh(nullptr, nullptr)` -- and `make test` came back with **zero suites run**:
+
+    undefined reference to `autofill_controller::autofill_controller(...)'
+    undefined reference to `vtable for autofill_controller'
+    make: *** [test] Error 1
+
+`settings_dialog.o` had acquired an edge to a class it never referenced
+before, and `test/objsets.mk` -- the committed, generated per-binary link set
+-- did not carry `autofill_controller.o` for `test_settings`.
+
+**The objsets guard cannot catch this, and its own comment says what it does
+catch:** it compares the *source list* the file was generated from against the
+tree, so it fires when somebody adds or removes a test file. Here no file was
+added. What changed was the symbol graph, which is exactly what the generated
+file describes and exactly what the guard does not read. That is the same
+shape as everything else in this document: a check that is real, correct, and
+answering a narrower question than its output implies.
+
+**It did fail loudly rather than silently**, which is the part that worked --
+`0 FAIL` beside `0 suites` is not a pass, and the exit code was 2. A tally
+over work that did not happen reports success as loudly as a real one, so the
+count and the status had to be read as one result.
+
+The fix removes the edge instead of regenerating the file: a
+`static constexpr bool` on the class, used by the member initialiser, by the
+settings store's fallback and by Restore Defaults. Constructing a controller
+that needs a bridge and a policy in order to read a bool was the wrong shape
+anyway -- the other pages read fresh objects because theirs are cheap and
+already linked.
+
+### One assertion in this section is a smoke check, and it says so
+
+    ok    the window has an autofill controller and it is on
+    ok    turning it off is written down
+    ok    and the next launch comes up with it off
+    ok    and Restore Privacy defaults turns it back on
+
+The first passes whether or not the startup line exists, because the stored
+value there **is** the controller's own default -- a control that agrees with
+the thing it is controlling for. The one that discriminates is the third,
+where the stored value and the default differ, and sabotaging the startup line
+fails exactly that one and nothing else.
+
+**What is not covered**: the post-dialog re-apply. The test accepts the dialog
+directly rather than through `main_window::open_settings`, which `exec()`s, so
+the line that re-applies the setting to the live controller is read rather
+than run. `try_forget` has the harness for driving that dialog modally and
+this section does not.
 
 ## What is next (in order)
 

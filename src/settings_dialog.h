@@ -163,6 +163,7 @@ private:
 	QCheckBox               *m_clear_cache   = nullptr;
 	QCheckBox               *m_clear_links   = nullptr;
 	QCheckBox               *m_clear_reports = nullptr;
+	QCheckBox               *m_autofill_https = nullptr;
 	// Held only to decide whether the control belongs on the page at all,
 	// exactly as `m_views` gates the section around it. The clearing itself is
 	// the window's, through the signal above.
@@ -296,5 +297,19 @@ void    set_search_engine(const QString &tmpl);
 // Restore Defaults. Two of those already held their own copy of the string,
 // and the third did not reset the control at all.
 QString default_search_engine();
+
+// Whether autofill refuses a page that is not HTTPS.
+//
+// **The mechanism existed and the surface did not.** `autofill_controller`
+// has had `set_https_only` since it was written, the architecture doc asks
+// for "an HTTPS-only-fill option", and the feature's own description on the
+// privacy page says autofill is limited to HTTPS "unless that requirement is
+// turned off" -- while the only caller of the setter anywhere in the tree was
+// a test. So the sentence described a control nobody could reach.
+//
+// Defaults to true, which is what the controller's own member defaults to:
+// filling a password over plain HTTP puts it on the wire.
+bool autofill_https_only();
+void set_autofill_https_only(bool on);
 
 }  // namespace settings_store

@@ -44,6 +44,7 @@
 #include "consent_blocker.h"
 #include "consent_dialog.h"
 #include "annoyance_log.h"
+#include "autofill_controller.h"
 #include "antiadblock_watch.h"
 #include "extractor_signals.h"
 #include "media_detector.h"
@@ -1388,6 +1389,71 @@ int main(int argc, char **argv) {
 		check(badge.count() > 0 &&
 		       badge.last().at(1).toInt() == 0,
 		       "the badge is told, rather than being left showing a count");
+	}
+
+	section("the HTTPS-only autofill switch the description already promised");
+	{
+		// `policy.cpp` has always told the user that autofill is "limited to
+		// HTTPS pages unless that requirement is turned off", and the
+		// architecture doc asks for "an HTTPS-only-fill option". The mechanism
+		// existed -- `autofill_controller::set_https_only` -- and its only
+		// caller in the whole tree was a test, so the sentence described a
+		// control nobody could reach.
+		const bool was = settings_store::autofill_https_only();
+		settings_store::set_autofill_https_only(true);
+		{
+			main_window w13(&factory, &policy, &filter);
+			// **A smoke check, and it says so.** The stored value here is
+			// the controller's own default, so this passes whether or not
+			// the startup line exists. The assertion that discriminates is
+			// "the next launch comes up with it off", below, where the two
+			// differ.
+			check(w13.m_autofill && w13.m_autofill->https_only(),
+			       "the window has an autofill controller and it is on");
+
+			settings_dialog dlg(w13.m_players, w13.m_downloads, w13.m_torrents,
+			                     w13.m_local_ai, w13.m_external_ai, w13.m_policy,
+			                     w13.m_filters, w13.m_filters_path, w13.m_consent,
+			                     w13.m_site_rules_path, &w13, w13.m_factory,
+			                     w13.m_annoyances);
+			auto *box = dlg.findChild<QCheckBox *>("autofill_https_only");
+			check(box != nullptr, "the privacy page offers the switch");
+			if (box) {
+				check(box->isChecked(), "on, which is what the controller defaults to");
+				box->setChecked(false);
+				dlg.accept();
+				check(!settings_store::autofill_https_only(),
+				       "turning it off is written down");
+			}
+		}
+		// A second window, because the point of writing it down is the run
+		// where nobody opens that dialog.
+		{
+			main_window w14(&factory, &policy, &filter);
+			check(w14.m_autofill && !w14.m_autofill->https_only(),
+			       "and the next launch comes up with it off");
+		}
+		// Back on, then Restore Defaults on the page it lives on.
+		{
+			main_window w15(&factory, &policy, &filter);
+			settings_dialog dlg(w15.m_players, w15.m_downloads, w15.m_torrents,
+			                     w15.m_local_ai, w15.m_external_ai, w15.m_policy,
+			                     w15.m_filters, w15.m_filters_path, w15.m_consent,
+			                     w15.m_site_rules_path, &w15, w15.m_factory,
+			                     w15.m_annoyances);
+			auto *box  = dlg.findChild<QCheckBox *>("autofill_https_only");
+			auto *cats = dlg.findChild<QListWidget *>("categories");
+			auto *restore = dlg.findChild<QPushButton *>("restore_defaults");
+			check(box && cats && restore, "the page, the list and the button");
+			if (box && cats && restore) {
+				check(!box->isChecked(), "the dialog shows it off, as stored");
+				cats->setCurrentRow(0);
+				restore->click();
+				check(box->isChecked(),
+				       "and Restore Privacy defaults turns it back on");
+			}
+		}
+		settings_store::set_autofill_https_only(was);
 	}
 
 	section("Restore Privacy defaults restores the search engine too");
