@@ -80,12 +80,7 @@ void filter_dialog::build_ui() {
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
 	m_status->setText(
-	  m_provider->is_external()
-	    ? QString("<b>%1</b> — external provider. Review exactly what will "
-	              "be sent; nothing leaves until you press Send.")
-	              .arg(m_provider->name())
-	    : QString("<b>%1</b> — local provider; nothing leaves this machine.")
-	              .arg(m_provider->name()));
+	  provider_note(m_provider, "Review exactly what will be sent."));
 	outer->addWidget(m_status);
 
 	m_pages = new QStackedWidget(this);

@@ -1,4 +1,6 @@
 #include "ollama_provider.h"
+
+#include <QHostAddress>
 #include <QJsonArray>
 
 #include <QJsonDocument>
@@ -13,6 +15,22 @@ ollama_provider::ollama_provider(QObject *parent) : ai_provider(parent) {
 	m_net = new QNetworkAccessManager(this);
 }
 
+bool ollama_provider::endpoint_is_local(const QUrl &url) {
+	const QString scheme = url.scheme().toLower();
+	if (scheme != "http" && scheme != "https")
+		return false;
+	const QString host = url.host().toLower();
+	if (host.isEmpty())
+		return false;
+	if (host == "localhost" || host.endsWith(".localhost"))
+		return true;
+	// A literal, and only a literal: `QHostAddress(QString)` parses addresses
+	// and refuses names, so a hostname falls through to false rather than
+	// being resolved here.
+	const QHostAddress addr(host);
+	return !addr.isNull() && addr.isLoopback();
+}
+
 QString ollama_provider::name() const {
 	// **Says when the configured model is not there.** Every use of this is a
 	// label a person reads -- three dialog banners and an "Asking %1..."
@@ -24,9 +42,18 @@ QString ollama_provider::name() const {
 	// Only when the server has actually answered: `m_models` is empty before a
 	// probe, and calling that "not installed" would be a guess dressed as a
 	// fact.
+	//
+	// **And it says where the endpoint is, for the same reason.** "Local
+	// model" is a claim about the machine, not about the backend, and it stops
+	// being true the moment somebody points the endpoint at another host --
+	// which the Settings page invites, and whose own timeout row talks about
+	// exactly that case four lines below the field.
+	const QString what = endpoint_is_local(m_endpoint)
+	  ? QString("Local model (Ollama, %1").arg(m_model)
+	  : QString("Ollama on %1 (%2").arg(m_endpoint.host(), m_model);
 	if (m_reachable && !m_models.isEmpty() && !has_model(m_model))
-		return QString("Local model (Ollama, %1 \u2014 not installed)").arg(m_model);
-	return QString("Local model (Ollama, %1)").arg(m_model);
+		return what + QString(" \u2014 not installed)");
+	return what + ")";
 }
 
 bool ollama_provider::ready(QString *reason) const {

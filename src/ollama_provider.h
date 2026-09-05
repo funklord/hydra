@@ -9,8 +9,10 @@
 class QNetworkAccessManager;
 class QNetworkReply;
 
-// Local-model backend: Ollama on localhost (architecture doc sec 9.1). Nothing
-// leaves the machine, which is why this is the default when it is reachable.
+// Local-model backend: Ollama (architecture doc sec 9.1). On loopback nothing
+// leaves the machine, which is why this is the default when it is reachable --
+// but the endpoint is a free-text setting, so that is a question to ask rather
+// than a property to assume. See `endpoint_is_local`.
 class ollama_provider : public ai_provider {
 	Q_OBJECT
 public:
@@ -18,7 +20,26 @@ public:
 
 	QString name() const override;
 	bool available() const override;
-	bool is_external() const override { return false; }
+	// **Asks the endpoint, which is the thing the base class actually means.**
+	// This returned a flat `false`, so it was answering "is this the Ollama
+	// backend" while `ai_provider` asks "does anything leave the machine" --
+	// and the endpoint above is a free-text field in Settings. Point it at a
+	// box on the LAN and three dialogs went on saying, in bold and directly
+	// over the Send button, *"local provider; nothing leaves this machine"*
+	// before sending a tab tree over the network.
+	bool is_external() const override { return !endpoint_is_local(m_endpoint); }
+
+	// Whether `url` names this machine.
+	//
+	// Deliberately narrow: `localhost` and anything under `.localhost` (which
+	// RFC 6761 reserves for loopback), or a literal address that is loopback.
+	// A name resolving to 127.0.0.1 through `/etc/hosts` reads as remote, and
+	// that is the direction to be wrong in -- calling a remote host local
+	// leaks a payload, while calling a local host remote costs a review step
+	// somebody was about to take anyway. It is also the only answer available
+	// without a DNS lookup, and a lookup's answer can change between asking
+	// and sending.
+	static bool endpoint_is_local(const QUrl &url);
 	void send(const QString &system_prompt, const QString &user_prompt) override;
 	void cancel() override;
 

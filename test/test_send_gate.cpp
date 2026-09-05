@@ -119,6 +119,51 @@ int main(int argc, char **argv) {
 		      "and ready: an empty list is an unanswered question, not a no");
 	}
 
+	section("where the endpoint points decides what the banner may promise");
+	{
+		// The claim under test is the one sentence sitting in bold directly
+		// over Send. `is_external()` used to return a flat `false`, so it
+		// answered "is this the Ollama backend" while `ai_provider` asks "does
+		// anything leave the machine" -- and the endpoint is a free-text field
+		// in Settings.
+		ollama_provider p;
+		p.set_model("llama3");
+
+		p.set_endpoint(QUrl("http://localhost:11434"));
+		check(!p.is_external(), "localhost is this machine");
+		check(provider_note(&p, "x").contains("nothing leaves this machine"),
+		       "and the banner may say so");
+
+		p.set_endpoint(QUrl("http://127.0.0.1:11434"));
+		check(!p.is_external(), "so is a loopback literal");
+		p.set_endpoint(QUrl("http://[::1]:11434"));
+		check(!p.is_external(), "and the v6 one");
+		p.set_endpoint(QUrl("http://box.localhost:11434"));
+		check(!p.is_external(), "and .localhost, which RFC 6761 reserves");
+
+		p.set_endpoint(QUrl("http://nas.lan:11434"));
+		check(p.is_external(), "a host on the LAN is not this machine");
+		const QString note = provider_note(&p, "Only titles travel.");
+		check(!note.contains("nothing leaves this machine"),
+		       "and the banner must not say it does");
+		check(note.contains("Only titles travel."),
+		       "it says what the payload holds instead");
+		check(note.contains("Nothing leaves until you press Send."),
+		       "and that pressing Send is what sends it");
+		check(p.name().contains("nas.lan"),
+		       "the name says where, since every label a person reads uses it");
+
+		p.set_endpoint(QUrl("http://192.168.1.50:11434"));
+		check(p.is_external(), "nor is a routable literal");
+		// A name that happens to resolve to loopback reads as remote. That is
+		// the direction to be wrong in: calling a remote host local leaks a
+		// payload, calling a local host remote costs a review step somebody
+		// was about to take anyway.
+		p.set_endpoint(QUrl("http://my-desktop:11434"));
+		check(p.is_external(),
+		       "and a bare name is not assumed local, however it resolves");
+	}
+
 	section("gate_send does both halves");
 	{
 		server.names = { "mistral" };

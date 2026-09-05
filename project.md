@@ -17288,6 +17288,96 @@ the objects away. Writing `0.1` there would create a second copy of a number
 whose whole point is to live in one place, and would invite somebody to keep
 it in step with a file it has nothing to do with.
 
+## "Nothing leaves this machine", said while it left
+
+Three dialogs put one sentence in bold directly over their Send button:
+
+    <b>Local model (Ollama, llama3)</b> — local provider; nothing leaves
+    this machine.
+
+It is decided by `ai_provider::is_external()`, whose own comment states the
+question exactly: *"Does anything leave the machine? Drives the
+review-before-send gate."* `ollama_provider` answered:
+
+    bool is_external() const override { return false; }
+
+which answers a different question -- *is this the Ollama backend* -- and the
+Ollama **endpoint is a free-text field in Settings**. Point it at a box on the
+LAN and Hydra tells you in bold that nothing leaves this machine, then sends
+the tab tree: every title and every URL.
+
+Three surfaces made the claim and none of them consulted the setting.
+
+- The banner above Send, in `reorganize_dialog`, `filter_dialog` and
+  `extractor_dialog` -- three identical copies of the local half.
+- `ollama_provider::name()`, which returns `Local model (Ollama, llama3)` and
+  whose own comment says every label a person reads goes through it.
+- The **Local only** radio button on the AI settings page: *"Never uses an
+  external service."* The endpoint field is four lines below it, on the same
+  page, and the timeout row below **that** already discusses the case --
+  *"lower it if the endpoint is not on this machine"*. The page contradicted
+  itself within one screen.
+
+`endpoint_is_local` is deliberately narrow: `localhost`, anything under
+`.localhost` (RFC 6761 reserves it), or a literal that is loopback. A name
+resolving to 127.0.0.1 through `/etc/hosts` reads as remote. **That is the
+direction to be wrong in** -- calling a remote host local leaks a payload,
+while calling a local host remote costs a review step somebody was about to
+take anyway -- and it is also the only answer available without a DNS lookup,
+whose result can change between asking and sending.
+
+`name()` says `Ollama on nas.lan (llama3)` when the endpoint is not here, for
+the reason its own comment already gives about "not installed": every label a
+person reads is built from it, so the state belongs there rather than in three
+copies of a check.
+
+The **Local only** description is now read from the field as it is typed, the
+same fix as the kiosk status tip and for the same reason -- the promise and
+the thing that breaks it were on one screen, and only one of them was being
+consulted.
+
+### One copy of a privacy claim, not three
+
+The local sentence was byte-identical in all three dialogs and the external
+sentence had already drifted into three wordings. `provider_note()` in
+`ai_provider.h` holds it once; each dialog passes only the clause about its
+own payload, which is the one part that is genuinely different. So the next
+time this claim is wrong it is wrong in one place, and a test can read the
+sentence a person reads rather than the flag it is derived from.
+
+### The evidence
+
+    ok    localhost is this machine
+    ok    and .localhost, which RFC 6761 reserves
+    ok    a host on the LAN is not this machine
+    ok    and the banner must not say it does
+    ok    the name says where, since every label a person reads uses it
+    ok    and a bare name is not assumed local, however it resolves
+
+Sabotaged back to `return false`, six of the twelve fail -- and *"the name
+says where"* keeps passing, because that half is a separate fix. Sabotaging
+`name()` on its own fails exactly that one and nothing else, which is what
+says the two are independently held. In `test_rotation` the settings page is
+built for real and the sentence read off the label; with the update removed,
+three of its six fail.
+
+### The lens that found it
+
+Two consecutive findings were **a fixed string asserting something a setting
+controls** -- the kiosk tip promising Esc, and the media dialog promising that
+playback continues locally. So the lens was: sweep user-facing strings for
+promises. `will`, `always`, `never`, `until`, `nothing leaves`; 88 hits, read
+by hand. This was the worst of them because it is the sentence somebody reads
+in order to decide, and because it is about somebody else's data.
+
+**The lifetime sweep that came first found nothing, and the method is worth
+recording so it is not re-run.** Every `QDialog` subclass was checked for a
+member that starts work outliving it -- `QProcess`, `QNetworkAccessManager`,
+`network_fetcher`, `QTemporaryDir`, `QTemporaryFile`, or a `QTimer` child. The
+only hits were `downloads_dialog`'s two coalescing timers, which are UI and
+*should* die with it. So `media_dialog` was the only instance, and that family
+is closed.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

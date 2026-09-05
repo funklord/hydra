@@ -74,6 +74,35 @@ signals:
 	void failed(const QString &error);
 };
 
+// The sentence above a Send button, saying where what is about to leave is
+// going.
+//
+// **One copy, because it is a privacy claim and there were three.** Each of
+// the three review dialogs built its own, and the local half was identical in
+// all of them -- so `ollama_provider::is_external()` returning a flat `false`
+// made the same false promise in three places at once, and a fix had to be
+// found three times. The external halves had already drifted into three
+// wordings.
+//
+// `what_travels` is the one part that is genuinely the dialog's own: what its
+// particular payload contains. Everything around it is the same question.
+inline QString provider_note(const ai_provider *provider,
+                              const QString &what_travels) {
+	if (!provider)
+		return QStringLiteral("<b>No AI backend.</b> Nothing can be sent.");
+	const QString name = "<b>" + provider->name().toHtmlEscaped() + "</b>";
+	// Not "on this machine" as a phrase about the backend: `is_external` is
+	// asked of the provider precisely so that a backend which is usually local
+	// can say when it is not.
+	if (!provider->is_external())
+		return name + QStringLiteral(" \u2014 local provider; nothing leaves "
+		                              "this machine.");
+	QString note = name + QStringLiteral(" \u2014 external provider.");
+	if (!what_travels.isEmpty())
+		note += " " + what_travels;
+	return note + QStringLiteral(" Nothing leaves until you press Send.");
+}
+
 // Disable a Send button when the provider cannot answer, and say why on it.
 //
 // **The label was already honest and the button was not.** `ollama_provider`

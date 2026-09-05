@@ -40,9 +40,7 @@
 #include "policy_engine.h"
 #include "consent_blocker.h"
 #include "consent_dialog.h"
-#include "settings_dialog.h"
 #include "annoyance_log.h"
-#include "kiosk_controller.h"
 #include "request_filter.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"
@@ -1204,6 +1202,43 @@ int main(int argc, char **argv) {
 
 		c.allow_escape = was;
 		settings_store::set_kiosk(c);
+	}
+
+	section("\"Local only\" describes the endpoint that is in the box");
+	{
+		// The sentence under that radio button said "Never uses an external
+		// service" whatever the endpoint was, and the endpoint is a free-text
+		// field four lines below it on the same page. So the page could state
+		// the opposite of what it would do, and the two halves were close
+		// enough to read in one glance.
+		main_window w8(&factory, &policy, &filter);
+		settings_dialog dlg(w8.m_players, w8.m_downloads, w8.m_torrents,
+		                     w8.m_local_ai, w8.m_external_ai, w8.m_policy,
+		                     w8.m_filters, w8.m_filters_path, w8.m_consent,
+		                     w8.m_site_rules_path, &w8, w8.m_factory,
+		                     w8.m_annoyances);
+		auto *url  = dlg.findChild<QLineEdit *>("ollama_url");
+		auto *note = dlg.findChild<QLabel *>("ai_local_note");
+		check(url && note, "the AI page has the endpoint and the description");
+		if (url && note) {
+			url->setText("http://localhost:11434");
+			check(note->text().contains("Never uses an external service"),
+			       "on loopback it promises nothing leaves");
+
+			url->setText("http://nas.lan:11434");
+			check(!note->text().contains("Never uses an external service"),
+			       "pointed elsewhere it stops promising that");
+			check(note->text().contains("nas.lan"),
+			       "and names where it would go");
+			check(note->text().contains("not this machine"),
+			       "in the words the promise was made in");
+
+			// Empty means the placeholder, which is loopback -- so a cleared
+			// field must read as local rather than as an unknown host.
+			url->setText("");
+			check(note->text().contains("Never uses an external service"),
+			       "an empty field is the placeholder, and that is loopback");
+		}
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

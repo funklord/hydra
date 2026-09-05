@@ -2253,12 +2253,21 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	int which = 0;
 	for (QRadioButton *b : { m_ai_auto, m_ai_local, m_ai_external }) {
 		gv->addWidget(b);
-		QLabel *note = dim_label(why[which++], group);
+		QLabel *note = dim_label(why[which], group);
 		// Indented under its button rather than against the margin, so it reads
 		// as belonging to the one above it and not to the one below.
 		note->setContentsMargins(22, 0, 0, 6);
 		gv->addWidget(note);
+		// The middle one is the only claim on this page that a field further
+		// down can falsify, so it is kept rather than written once.
+		if (b == m_ai_local) {
+			m_ai_local_note = note;
+			// Named so a test can read the sentence a person reads, rather
+			// than the field it is derived from.
+			note->setObjectName("ai_local_note");
+		}
 		connect(b, &QRadioButton::toggled, this, &settings_dialog::update_ai_state);
+		++which;
 	}
 	v->addWidget(group);
 	// The paragraph that used to sit here said what "Local only" means, which
@@ -2268,7 +2277,14 @@ void settings_dialog::build_ai_page(QWidget *page) {
 
 	v->addWidget(section_heading("Local model (Ollama)", page));
 	m_ollama_url = new QLineEdit(page);
+	m_ollama_url->setObjectName("ollama_url");
 	m_ollama_url->setPlaceholderText("http://localhost:11434");
+	// **"Local only" is a promise this field can break**, and the two are four
+	// lines apart on one page. Rechecked as it is typed, so the description
+	// above describes what is in the box rather than what was in it when the
+	// dialog opened.
+	connect(m_ollama_url, &QLineEdit::textChanged, this,
+	         &settings_dialog::update_ai_state);
 	v->addWidget(settings_row("Endpoint", "Where Ollama is listening.",
 	                           m_ollama_url, page, /*wide=*/true));
 	m_ollama_model = new QLineEdit(page);
@@ -2331,6 +2347,27 @@ void settings_dialog::build_ai_page(QWidget *page) {
 void settings_dialog::update_ai_state() {
 	if (!m_ai_status)
 		return;
+
+	// **The endpoint decides what "Local only" is able to promise.** It said
+	// "Never uses an external service" unconditionally, while the field below
+	// it takes any URL -- so pointing Ollama at a box on the LAN left the page
+	// stating the opposite of what it would then do. Read from the field and
+	// not from the saved value: the person changing it is looking at it now.
+	if (m_ai_local_note && m_ollama_url) {
+		const QString typed = m_ollama_url->text().trimmed();
+		const QUrl endpoint(typed.isEmpty() ? m_ollama_url->placeholderText()
+		                                     : typed);
+		m_ai_local_note->setText(
+		  ollama_provider::endpoint_is_local(endpoint)
+		    ? QStringLiteral("Never uses an external service. If the local "
+		                      "model is not running the AI features are simply "
+		                      "unavailable, rather than quietly switching.")
+		    : QString("Never uses Claude — but the endpoint below is %1, "
+		               "which is not this machine, so what is sent still "
+		               "leaves it. If it does not answer the AI features are "
+		               "simply unavailable, rather than quietly switching.")
+		          .arg(endpoint.host().isEmpty() ? typed : endpoint.host()));
+	}
 
 	const bool ext_ok = m_external_ai &&
 	                     (m_external_ai->has_api_key() ||

@@ -233,6 +233,9 @@ private:
 	QCheckBox      *m_sequential   = nullptr;
 
 	QRadioButton *m_ai_auto     = nullptr;
+	// The "Local only" description, kept because the Ollama endpoint field
+	// below it can make that description false. See `update_ai_state`.
+	QLabel       *m_ai_local_note = nullptr;
 	QRadioButton *m_ai_local    = nullptr;
 	QRadioButton *m_ai_external = nullptr;
 	QLineEdit    *m_ollama_url   = nullptr;
