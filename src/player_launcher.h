@@ -82,7 +82,9 @@ public:
 	// Returns false and fills `error` if it could not start.
 	// `via` overrides the URL handed to the player -- the local proxy's
 	// localhost URL when one is available, so the CDN sees the page's own
-	// Referer and cookies instead of a naked request (sec 11.3).
+	// context instead of a naked request (sec 11.3). Referer and User-Agent
+	// always; cookies only when a learned extractor named them, because
+	// nothing observes the engine's jar -- see `media_dialog::watch`.
 	bool play(const media_item &item, QString *error,
 	           const QUrl &via = QUrl()) const;
 

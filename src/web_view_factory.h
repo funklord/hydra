@@ -31,6 +31,14 @@ public:
 	// alone. The comment beside it said "and this browser's own User-Agent"
 	// while the line was not there.
 	//
+	// **The third field is still missing a supplier**, and this is the seam
+	// it would arrive through. `stream_context::cookies` is filled only from
+	// a learned extractor's headers; nothing reads the engine's cookie jar,
+	// so an ordinary detected stream goes upstream with no `Cookie` header at
+	// all. Android could answer in one call -- `CookieManager.getCookie(url)`
+	// -- and the desktop cannot, which is what makes it a design question
+	// rather than an omission. See project.md.
+	//
 	// Empty means "this backend cannot say", and a caller must then leave the
 	// field alone rather than invent one: a wrong User-Agent is worse than
 	// the transport's default, which is at least honest about being a

@@ -17959,6 +17959,69 @@ the line that re-applies the setting to the live controller is read rather
 than run. `try_forget` has the harness for driving that dialog modally and
 this section does not.
 
+## Open: the proxy can send cookies and nothing supplies them
+
+`architecture.md` sec 11.3 is explicit -- *"a naked stream URL frequently
+returns 403, because the CDN expects the same `Referer`, cookies, and
+`User-Agent` the page carried ... the local proxy, which injects the observed
+headers/cookies upstream"* -- and both ends of that are built.
+`stream_context` carries a `cookies` field, and `local_proxy.cpp` sends it:
+
+    if (!e.ctx.cookies.isEmpty())
+        req.setRawHeader("Cookie", e.ctx.cookies.toUtf8());
+
+**What is missing is the supplier.** `main_window::page_context` fills the
+referer and the user agent and leaves cookies empty. The only writes to that
+field anywhere are from a *learned extractor's* headers, in `media_dialog` and
+`extractor_dialog`. So a stream found the ordinary way -- by watching requests
+-- goes upstream with no `Cookie` header, on a CDN that the design says
+expects one.
+
+Three comments asserted otherwise and now say what happens instead:
+`media_dialog::watch` promised "the CDN sees the page's Referer and cookies",
+`player_launcher::play`'s header said the same, and `web_view_factory`'s
+`user_agent` comment -- which exists *because* the User-Agent was the second
+of these three fields to be found missing -- named the third without noticing
+it was in the same state.
+
+**Why it is a design question and not an omission.** The two platforms are not
+in the same position:
+
+- **Android answers in one call.** `CookieManager.getCookie(url)` returns
+  exactly the `Cookie` header the WebView would send, matching rules included.
+- **The desktop has no such call.** `QWebEngineCookieStore` only *observes* --
+  `cookieAdded` / `cookieRemoved` -- so filling this means keeping a mirror of
+  the engine's jar and re-implementing domain, path, secure and expiry
+  matching against it. That is a second cookie jar, wrong in ways that are
+  hard to see, on the side of the browser that handles the most sites.
+
+The seam it would arrive through is `web_view_factory`, beside `user_agent()`,
+with the same "empty means this backend cannot say" contract that one already
+has. That would make the platform difference honest rather than hidden -- and
+it also means shipping a capability only one backend has, which is the part
+that is the copyright holder's to decide.
+
+## An empty sweep: capabilities with no surface
+
+Derived from the autofill switch -- a mechanism with a setter and no caller
+outside a test. Swept every public `set_*` in `src/*.h` for one with no use
+anywhere in `src/`. **Nothing survived**, and the method is worth recording
+because the first version of it produced three findings and all three were
+false:
+
+- `keepass_bridge::set_association` -- called by `restore_pairing()`, in the
+  same class, with no object prefix.
+- `android_view::set_external_handler` -- called from `android_factory`, whose
+  definition is **inline in a header**, and the first corpus was `src/*.cpp`.
+- `torrent_download_source::set_state_directory` -- a test seam whose default
+  is set in the constructor from `QStandardPaths`, which is correct.
+
+That is the third time this session a caller search keyed on `.name(` or
+`->name(` has produced a false absence: `forget_subtree` was reached through a
+Qt connection, and these two through a bare call and an inline definition.
+**The pattern finds calls through an object and nothing else**, which is a
+minority of the ways a C++ function is reached.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

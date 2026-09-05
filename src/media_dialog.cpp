@@ -273,7 +273,14 @@ void media_dialog::watch(const media_item &item) {
 
 	const QString warn = m_players->warning_for(item);
 	// Hand the player a localhost URL when the proxy is up, so the CDN sees
-	// the page's Referer and cookies rather than a naked request (sec 11.3).
+	// the page's own context rather than a naked request (sec 11.3).
+	//
+	// **Referer and User-Agent, and cookies only when a learned extractor
+	// named them.** `page_context` fills the first two; nothing observes the
+	// engine's cookie jar, so `ctx.cookies` is empty for a stream found by
+	// watching requests. The proxy sends the header when the field is set --
+	// see `local_proxy.cpp` -- so the gap is the supplier and not the
+	// plumbing. Recorded in project.md.
 	// The page's own context, overlaid with anything this particular stream
 	// asked for. A learned extractor names the headers its CDN checks, and
 	// they are useless if they stop here.
