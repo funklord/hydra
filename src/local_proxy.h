@@ -99,6 +99,13 @@ public:
 	                   available_length avail = {}, expected_length total = {});
 	void unpublish_all();
 
+	// How many streams are published. **Nothing could see this**, so the fact
+	// that `unpublish_all` had no caller anywhere -- and that every stream
+	// watched in a session therefore stayed servable on loopback, holding the
+	// page's context, for the life of the process -- was invisible to any
+	// test. It is one line and it makes that assertable.
+	int published_count() const { return int(m_published.size()); }
+
 	// --- capture (architecture doc sec 11.6) ---------------------------------
 	// Open a file for a page to append to, and get back the URL it posts to.
 	//

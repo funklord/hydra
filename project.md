@@ -16722,10 +16722,9 @@ after a second was sent, is emitted under the second's tag -- the same
 shape as the AI dialogs, in a subsystem that moves credentials. Believed, not
 established: it needs the stubbed-bridge experiment the report names.
 
-**`local_proxy::failed` is connected nowhere and `start()`'s result is
-discarded**, so a proxy that cannot bind is silent; and `unpublish_all()` has
-no caller, so every stream watched in a session stays published on loopback
-for the life of the process, each holding the page's cookies and Referer.
+**~~`local_proxy::failed` is connected nowhere ... `unpublish_all()` has no
+caller.~~ Both fixed** -- see *A proxy nobody could hear, holding streams
+nobody could drop* below.
 
 **`media_detector::clear_site` has no caller anywhere**, not even a test, so
 per-site media counts accumulate for the process lifetime and a site's badge
@@ -17120,6 +17119,53 @@ The machinery is closer than it looks -- `start` already resumes with a
 what is on disk, with unpause a fresh `start`. That is a feature rather than
 a defect, it wants a real transfer to test against, and it is recorded here
 rather than half-built. What is fixed is the button that lied.
+
+## A proxy nobody could hear, holding streams nobody could drop
+
+Two findings in one object, and they are the same shape as the rest of this
+sweep: a signal with no listener, and a method with no caller.
+
+**`local_proxy::failed` was emitted and connected nowhere.** A proxy that
+cannot bind is optional by design -- the comment beside `start()` says it is
+an upgrade tier rather than a prerequisite -- but it was also *silent*. The
+only hint reached somebody who happened to press Watch on a download, where
+`downloads_dialog` says "the local proxy is not listening"; `media_dialog`
+degraded wordlessly to a naked URL. It reports now, and says what will happen
+instead, which is the part that makes a message worth showing.
+
+**`unpublish_all()` had no caller anywhere.** Every stream watched in a
+session stayed published on loopback for the life of the process, each holding
+its `stream_context` -- the page's Referer, its User-Agent, and whatever
+headers a learned extractor named.
+
+Clearing is where they stop being wanted, and the reasoning is the one already
+written into `forget_shell_caches`: the stream was authorised by cookies that
+have just been deleted, so continuing to serve it from a remembered context is
+exactly what the clear was for. It interrupts anything being watched through
+the proxy, which is honest -- the confirmation says the clear applies to every
+site and cannot be undone.
+
+### Reaching a private slot without widening the class for a test
+
+`forget_shell_caches` is a private slot, driven by a signal from a dialog that
+is opened modally, so the real trigger is out of reach offline. Rather than
+make it public -- that section of the header is genuine API, not a test hatch
+-- the test invokes it **by name through the meta-object**, which runs the
+actual slot and changes no interface.
+
+`published_count()` is added, because nothing could see the store at all: that
+`unpublish_all` had no caller, and that everything accumulated, was invisible
+to any possible test.
+
+### The control was coupled to the thing it was controlling for
+
+It asserted the count was `1` after publishing again -- so when the clear was
+sabotaged, *both* rows went red: the real one because two streams survived,
+and the control because 2 + 1 is 3. A control that fails for the fault it is
+controlling for is not a control.
+
+It reads `held + 1` now, and under the same sabotage only the real assertion
+fails.
 
 ## What is next (in order)
 

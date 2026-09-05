@@ -600,6 +600,18 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// simply hands over the raw URL (sec 10 -- it is an upgrade tier, not a
 	// prerequisite).
 	m_local_proxy = new local_proxy(this);
+	// **The signal had no listener anywhere**, so a proxy that could not bind
+	// was silent: the only hint was `downloads_dialog` saying "the local proxy
+	// is not listening" to somebody who happened to press Watch on a
+	// download, while `media_dialog` degraded wordlessly to a naked URL. It
+	// is optional -- an upgrade tier, per the comment above -- so this
+	// reports rather than refuses.
+	connect(m_local_proxy, &local_proxy::failed, this, [this](const QString &e) {
+		qWarning("%s", qPrintable(e));
+		if (m_status)
+			m_status->showMessage(e + " Watch will hand the address straight "
+			                            "to the player.", 12000);
+	});
 	m_local_proxy->start();
 	m_filters   = new filter_list;
 	// The cosmetic half of sec 12. It reads the same list the interceptor does, and
@@ -3829,6 +3841,20 @@ void main_window::forget_shell_caches() {
 	// automatically. A rule somebody set deliberately is theirs and survives a
 	// clear, as every other policy does: forgetting is about what browsing
 	// left behind, not about undoing decisions.
+	// **A published stream carries the page's context**, which is the
+	// Referer, the User-Agent and whatever headers a learned extractor named
+	// -- and it stays servable on loopback for the life of the process,
+	// because `unpublish_all` existed and nothing called it. Clearing is
+	// exactly the moment those stop being wanted: the stream was authorised
+	// by cookies that have just been deleted, and continuing to serve it from
+	// a remembered context is the leak this whole sweep is about.
+	//
+	// It interrupts anything being watched through the proxy, which is the
+	// honest outcome: the confirmation says the clear applies to every site
+	// and cannot be undone.
+	if (m_local_proxy)
+		m_local_proxy->unpublish_all();
+
 	int allowances = 0;
 	for (const QString &host : m_antiadblock_fixed) {
 		if (m_policy->setting_for(host, policy::feature::ads) ==

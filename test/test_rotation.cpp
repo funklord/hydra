@@ -1112,6 +1112,56 @@ int main(int argc, char **argv) {
 		delete v;
 	}
 
+	// **A published stream outlives the page it came from, holding its
+	// context.** `local_proxy::publish` keeps the Referer, the User-Agent and
+	// whatever headers a learned extractor named, behind a token that stays
+	// servable on loopback -- and `unpublish_all` existed with no caller
+	// anywhere, so everything watched in a session accumulated for the life
+	// of the process.
+	//
+	// Clearing is the moment they stop being wanted: the stream was
+	// authorised by cookies that have just been deleted.
+	section("clearing takes the published streams with it");
+	{
+		main_window w11(&factory, &policy, &filter);
+		check(w11.m_local_proxy != nullptr, "the window has a proxy");
+
+		stream_context ctx;
+		ctx.referer    = "https://site.example/watch";
+		ctx.user_agent = "Mozilla/5.0 (Test)";
+		w11.m_local_proxy->publish(QUrl("https://cdn.example/a.m3u8"), ctx);
+		w11.m_local_proxy->publish(QUrl("https://cdn.example/b.m3u8"), ctx);
+		check(w11.m_local_proxy->published_count() == 2,
+		      QString("two streams are published (%1)")
+		          .arg(w11.m_local_proxy->published_count()));
+
+		// **The window's own slot, by name.** `forget_shell_caches` is a
+		// private slot -- the settings dialog's `browsing_data_cleared` is
+		// what drives it, and that dialog is opened modally, so the real
+		// trigger is out of reach here. Invoking it through the meta-object
+		// runs the actual code rather than a stand-in, and needs no widening
+		// of the class's interface for a test's benefit.
+		check(QMetaObject::invokeMethod(&w11, "forget_shell_caches",
+		                                 Qt::DirectConnection),
+		      "the shell's forget slot is invokable and ran");
+		spin(50);
+
+		check(w11.m_local_proxy->published_count() == 0,
+		      QString("and none survive the clear (%1)")
+		          .arg(w11.m_local_proxy->published_count()));
+
+		// **The control, and it is written as a delta on purpose.** Its job
+		// is to show the clear emptied the store rather than breaking the
+		// proxy -- so it must not also fail when the clear does nothing.
+		// Asserting `== 1` coupled it to the assertion above and made both go
+		// red for one fault; `+1 from whatever was there` separates them.
+		const int held = w11.m_local_proxy->published_count();
+		w11.m_local_proxy->publish(QUrl("https://cdn.example/c.m3u8"), ctx);
+		check(w11.m_local_proxy->published_count() == held + 1,
+		      QString("while the proxy still publishes afterwards (%1 -> %2)")
+		          .arg(held).arg(w11.m_local_proxy->published_count()));
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }
