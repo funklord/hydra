@@ -16695,13 +16695,9 @@ of these appear in that list**:
   browser with it* below.
 - ~~`title_changed` is never emitted and there is no `onReceivedTitle`.~~
   **Fixed** -- see *Every tab on Android was named after its host* below.
-- `load_progress` / `load_finished` are never emitted, so `m_loading` is
-  permanently false: no progress bar, and the "could not be loaded" message
-  never runs. A failed load leaves the previous page up with nothing said.
-- `stop()` is unimplemented, and is *latent* only because the above keeps the
-  Stop button from ever appearing. **Fixing the progress signals alone would
-  turn it into a visible lie** -- the button would say Stop, the bar would
-  vanish, the status bar would say "Stopped.", and the page would carry on.
+- ~~`load_progress` / `load_finished` are never emitted.~~ ~~`stop()` is
+  unimplemented.~~ **Both fixed together** -- see *A load that never ended*
+  below. Doing either alone would have been worse than neither.
 - HTML5 fullscreen does nothing: no `fullscreen_requested`, no
   `onShowCustomView` -- on the platform where a fullscreen video matters most.
 
@@ -16915,6 +16911,64 @@ page.
 **And the litter was cleaned up.** Two `chrome://crash` tabs from the previous
 test were left in the device's tree and would have killed the renderer on
 every launch. Removed from the device, since they were mine.
+
+## A load that never ended, and the three fixes that changed nothing
+
+`m_loading` is set only from `load_progress`, and `android_view` emitted
+neither that nor `load_finished`. So on Android there was no progress bar, the
+Reload button never became Stop, and `on_load_finished(false)` -- the only
+thing that says *"could not be loaded"* -- could not run. A page that failed
+left the previous one up with nothing said.
+
+`stop()` was the base class's empty body, and **latent only because of the
+above**: the button never appeared, so nobody could press it. Adding the
+progress signals alone would have made it a lie somebody could watch -- Stop
+offered, the bar hidden, "Stopped." printed, and the page loading on behind
+all three. That is why these were done together and not in the order they were
+found.
+
+### Three fixes that changed nothing, and why
+
+Progress worked immediately. A failed load did not: the browser sat showing a
+Stop button and a full progress bar over Chromium's `ERR_NAME_NOT_RESOLVED`
+page, **and it did so through three separate attempts** --
+
+1. report the end from `onPageFinished`, which does not reliably arrive for a
+   main-frame failure;
+2. report it from `onReceivedError` instead;
+3. report it from all three routes, `onProgressChanged(100)` included, with a
+   per-navigation guard so only the first counts.
+
+Not one of them changed the screen. **That was the finding.** Three different
+corrections to *the ending* leaving the behaviour identical says the ending
+was never the problem.
+
+What it is: `main_window::on_load_progress` sets `m_loading` **true**. The
+error page Chromium draws after a failure is *itself a load*, so its progress
+arrives right after the real navigation ended and turns the whole state back
+on. Every fix was correct and every one was overwritten a moment later.
+
+So progress is silent once a navigation has ended, and `onPageStarted` opens
+the next one. The ending is reported by whichever of the three routes gets
+there first.
+
+### What was watched happening
+
+Screenshots, because none of this is visible in a log:
+
+- **loading** -- toolbar shows `X`, status bar carries a progress bar
+- **succeeded** -- reload arrow, no bar, page rendered
+- **failed** -- reload arrow, no bar, Chromium's error page on screen
+- **stopped** -- a hung load on an unroutable address, bar stalled at about a
+  tenth, `X` tapped, and the next frame has the reload arrow and no bar
+
+The last one has its own control: the frame *before* the tap shows the Stop
+button and the stalled bar, so the tap is the only thing between the two
+states.
+
+**What was not captured is the "Stopped." message**, which is transient and
+had timed out before the screenshot. The state change is the evidence; the
+wording is not.
 
 ## What is next (in order)
 

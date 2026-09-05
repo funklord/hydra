@@ -118,6 +118,18 @@ Java_se_vibes_hydra_HydraWebView_onRenderGone(JNIEnv *, jclass, jlong id,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onLoadProgress(JNIEnv *, jclass, jlong id,
+                                                 jint percent) {
+	android_view::report_progress(id, int(percent));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onLoadFinished(JNIEnv *, jclass, jlong id,
+                                                 jboolean ok) {
+	android_view::report_load_finished(id, ok == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_se_vibes_hydra_HydraWebView_onTitleChanged(JNIEnv *env, jclass, jlong id,
                                                  jstring title) {
 	const char *utf = env->GetStringUTFChars(title, nullptr);
@@ -825,6 +837,32 @@ void android_view::report_title(qint64 id, const QString &title) {
 		v->m_title = title;
 		emit v->title_changed(title);
 	}, Qt::QueuedConnection);
+}
+
+void android_view::report_progress(qint64 id, int percent) {
+	QMetaObject::invokeMethod(qApp, [id, percent] {
+		if (android_view *v = s_views.value(id))
+			emit v->load_progress(percent);
+	}, Qt::QueuedConnection);
+}
+
+void android_view::report_load_finished(qint64 id, bool ok) {
+	QMetaObject::invokeMethod(qApp, [id, ok] {
+		if (android_view *v = s_views.value(id))
+			emit v->load_finished(ok);
+	}, Qt::QueuedConnection);
+}
+
+// **The base class's was empty here**, so the shell offered Stop, hid the
+// progress bar and said "Stopped." while the page carried on loading. That
+// was invisible only because the progress signals above were missing and the
+// button never became Stop -- adding those without this would have turned a
+// latent lie into one somebody could watch.
+void android_view::stop() {
+	if (!m_native)
+		return;
+	QJniObject::callStaticMethod<void>(k_cls, "stopLoading", "(J)V",
+	                                    jlong(m_id));
 }
 
 void android_view::report_render_gone(qint64 id, bool crashed) {

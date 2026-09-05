@@ -109,6 +109,12 @@ public:
 	// falls back to the host when nothing arrives -- which, until this
 	// existed, was every row on Android.
 	static void report_title(qint64 id, const QString &title);
+	// How far the current load has got, and that it ended. The shell believes
+	// a load is in flight only from these, so without them its progress bar,
+	// its Stop button and its "could not be loaded" message were all
+	// unreachable on this backend.
+	static void report_progress(qint64 id, int percent);
+	static void report_load_finished(qint64 id, bool ok);
 
 	// Called from JNI, on the WebView's *network* thread -- not the UI thread and
 	// not Qt's. It consults the shared filter and touches nothing else, which is
@@ -245,6 +251,7 @@ public:
 	// -- including the one that is deliberately still not honoured.
 	void apply_settings(const view_settings &s) override;
 	QString page_title() const override { return m_title; }
+	void stop() override;
 	void set_permission_decider(permission_decider fn) override { m_decider = std::move(fn); }
 	// **Accepted and never called, which is honest rather than lazy.** Android's
 	// WebView has no `getDisplayMedia` to answer, so there is nothing to choose

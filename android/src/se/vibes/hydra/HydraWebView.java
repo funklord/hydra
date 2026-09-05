@@ -20,6 +20,7 @@ import android.webkit.WebView;
 import android.webkit.ValueCallback;
 import android.webkit.PermissionRequest;
 import android.webkit.RenderProcessGoneDetail;
+import android.webkit.WebResourceError;
 import android.webkit.WebChromeClient;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -167,6 +168,12 @@ public class HydraWebView {
 
     /** What the page calls itself, as `onReceivedTitle` reported it. */
     public static native void onTitleChanged(long id, String title);
+
+    /** How far the current load has got, 0..100. */
+    public static native void onLoadProgress(long id, int percent);
+
+    /** The load ended; `ok` is false when the main frame reported an error. */
+    public static native void onLoadFinished(long id, boolean ok);
 
     /**
      * Asks the shared request_filter about one request. Called on the WebView's
@@ -422,6 +429,40 @@ public class HydraWebView {
      * the UI thread and the read is on the network thread, which is the reason
      * the single field was volatile in the first place.
      */
+    /**
+     * Which views have had a main-frame error since their last navigation.
+     *
+     * Android reports the end of a load and its failure through two separate
+     * callbacks, so success is the absence of an error rather than something
+     * it states. Keyed by view and cleared at `onPageStarted`, or a failure
+     * would outlive the page it belonged to.
+     */
+    private static final Map<Long, Boolean> FAILED =
+        new java.util.concurrent.ConcurrentHashMap<Long, Boolean>();
+
+    /**
+     * Which views have already reported the end of their current navigation.
+     *
+     * **A load ends once, and Android can say so three ways.** `onPageFinished`
+     * does not reliably arrive for a main-frame failure; `onReceivedError`
+     * does, but the error page Chromium then draws is *itself* a load, so
+     * progress runs up again behind it. Measured on this handset: reporting
+     * the failure from `onReceivedError` alone left the browser showing a
+     * Stop button and a full progress bar over `ERR_NAME_NOT_RESOLVED`,
+     * because the error document's own progress turned loading back on.
+     *
+     * So all three routes call `endLoad`, the first one wins, and
+     * `onPageStarted` opens the next navigation by clearing this.
+     */
+    private static final Map<Long, Boolean> ENDED =
+        new java.util.concurrent.ConcurrentHashMap<Long, Boolean>();
+
+    /** Report the end of a navigation exactly once. */
+    private static void endLoad(long id, boolean ok) {
+        if (ENDED.putIfAbsent(Long.valueOf(id), Boolean.TRUE) == null)
+            onLoadFinished(id, ok);
+    }
+
     private static final Map<Long, String> PAGE_URLS =
         new java.util.concurrent.ConcurrentHashMap<Long, String>();
 
@@ -523,6 +564,41 @@ public class HydraWebView {
                      * its own title, which is what the desktop backend's
                      * signal does too.
                      */
+                    /**
+                     * How far the current load has got, 0..100.
+                     *
+                     * **Without this the shell never believes a load is in
+                     * flight at all.** `m_loading` is set only from this
+                     * signal, so the progress bar never appeared, the Reload
+                     * button never became Stop, and a page that failed said
+                     * nothing -- `on_load_finished(false)` is what prints
+                     * "could not be loaded", and it needs a load to have
+                     * started.
+                     */
+                    @Override
+                    public void onProgressChanged(WebView v, int percent) {
+                        // **Silent once this navigation has ended**, and that
+                        // is the whole of it. `on_load_progress` in the shell
+                        // sets `m_loading` *true*, so progress arriving after
+                        // a load has finished turns the Stop button and the
+                        // bar back on -- and Chromium's error page is itself
+                        // a load, which reports progress right after the
+                        // failure that ended the real one.
+                        //
+                        // Measured three times over: reporting the end from
+                        // `onReceivedError`, then from `onPageFinished`, then
+                        // from both plus progress-100, changed nothing at all
+                        // -- because each fixed the ending and none of them
+                        // stopped what came after it.
+                        if (ENDED.containsKey(Long.valueOf(id)))
+                            return;
+                        onLoadProgress(id, percent);
+                        // 100 is an ending too, and the only one that arrives
+                        // for every outcome.
+                        if (percent >= 100)
+                            endLoad(id, !FAILED.containsKey(Long.valueOf(id)));
+                    }
+
                     @Override
                     public void onReceivedTitle(WebView v, String title) {
                         onTitleChanged(id, title == null ? "" : title);
@@ -758,9 +834,50 @@ public class HydraWebView {
                         return true;
                     }
 
+                    /**
+                     * The load ended. Android has no "ok" here -- it reports
+                     * a failure separately through `onReceivedError` -- so
+                     * success is the absence of one for this navigation,
+                     * which `FAILED` records.
+                     */
+                    @Override
+                    public void onPageFinished(WebView v, String url) {
+                        endLoad(id, !FAILED.containsKey(Long.valueOf(id)));
+                    }
+
+                    /**
+                     * **Main frame only.** A subresource that 404s is not a
+                     * page that failed to load, and reporting it as one would
+                     * put "could not be loaded" under a page the person is
+                     * reading.
+                     */
+                    @Override
+                    public void onReceivedError(WebView v, WebResourceRequest req,
+                                                 WebResourceError err) {
+                        if (req == null || !req.isForMainFrame())
+                            return;
+                        // **Reported from here, not left to
+                        // `onPageFinished`.** That callback does not reliably
+                        // arrive for a main-frame failure: measured on this
+                        // handset against `ERR_NAME_NOT_RESOLVED`, the
+                        // browser sat showing a Stop button and a progress
+                        // bar indefinitely while Chromium's own error page
+                        // was on screen behind them.
+                        //
+                        // The flag stays, so that an `onPageFinished` which
+                        // *does* follow is not read as a second, successful
+                        // end to the same navigation.
+                        FAILED.put(Long.valueOf(id), Boolean.TRUE);
+                        endLoad(id, false);
+                    }
+
                     @Override
                     public void onPageStarted(WebView v, String url, android.graphics.Bitmap f) {
                         PAGE_URLS.put(Long.valueOf(id), url);
+                        // A new navigation has not failed and has not
+                        // ended.
+                        FAILED.remove(Long.valueOf(id));
+                        ENDED.remove(Long.valueOf(id));
                         // Per navigation, because the policy is per site. This
                         // runs after the main document request has gone out and
                         // before its subresources, which is where third-party
@@ -1500,6 +1617,26 @@ public class HydraWebView {
                     w.goBack();
                 else
                     w.goForward();
+            }
+        });
+    }
+
+    /**
+     * Stop whatever this view is loading.
+     *
+     * **The seam's `stop()` was the base class's empty one here**, so Reload
+     * offered Stop, the shell hid the progress bar and said "Stopped.", and
+     * the page carried on loading behind all three. That was invisible only
+     * because the progress signals were missing too and the button never
+     * became Stop; adding those without this would have made it a lie
+     * somebody could see.
+     */
+    public static void stopLoading(final long id) {
+        onUi(new Runnable() {
+            @Override public void run() {
+                WebView w = VIEWS.get(id);
+                if (w != null)
+                    w.stopLoading();
             }
         });
     }
