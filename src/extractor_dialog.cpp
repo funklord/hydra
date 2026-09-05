@@ -365,6 +365,11 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
 	probe_candidates();
 }
 
+extractor_dialog::~extractor_dialog() {
+	if (m_provider)
+		m_provider->cancel();
+}
+
 void extractor_dialog::rebuild_payload() {
 	int kept = 0;
 	const QString folded = summarise(m_evidence, &kept);

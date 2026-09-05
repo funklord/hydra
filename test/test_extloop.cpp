@@ -88,9 +88,25 @@ public:
 	bool is_external() const override { return external; }
 	void send(const QString &, const QString &user) override {
 		last_payload = user;
-		QTimer::singleShot(0, this, [this] { emit finished(reply); });
+		m_live = true;
+		// **Guarded by `m_live`, so `cancel` really cancels.** A counter alone
+		// would let this stub answer a question nobody is waiting for any
+		// more, which is exactly the state under test -- the check would then
+		// pass for a dialog that cancels and for one that does not.
+		QTimer::singleShot(0, this, [this] {
+			if (m_live)
+				emit finished(reply);
+		});
+	}
+	void cancel() override {
+		++cancelled;
+		m_live = false;
 	}
 	QString last_payload;
+	int cancelled = 0;
+
+private:
+	bool m_live = false;
 };
 
 // A stream the way the measured site serves one: a playlist wearing `.txt` and
@@ -520,6 +536,50 @@ int main(int argc, char **argv) {
 		check(shown.contains("evil.example"),
 		      "naming the address it tried to reach");
 		check(store.source_for("site.example").isEmpty(), "and nothing is stored");
+	}
+
+	// **One provider, three dialogs, and a reply with no name on it.**
+	// `ai_provider::finished` carries the answer and nothing that says which
+	// question it belongs to, and the provider outlives every dialog that
+	// asks -- it belongs to the window. So a request still in flight when a
+	// dialog closes lands on whichever dialog is connected when it arrives.
+	//
+	// `reorganize_dialog` has cancelled in its destructor since it was
+	// written. `extractor_dialog` and `filter_dialog` had no destructor at
+	// all.
+	section("a dialog that closes takes its question with it");
+	{
+		stub_provider prov;
+		prov.reply = "extract = function () { return null; };";
+		extractor_signals sig;
+		extractor_store store;
+		const QUrl page("https://site.example/watch");
+
+		{
+			extractor_dialog first(&sig, &store, &prov, "site.example", page);
+			// The dialog probes its candidates on open and keeps Send
+			// disabled until those answers are in -- see `send_ready` above
+			// for what that cost when it was treated as a delay. Sending is
+			// not the point here anyway: `on_send` is called directly so the
+			// request is in flight without waiting on six DNS failures.
+			for (QPushButton *b : first.findChildren<QPushButton *>())
+				if (b->text().contains("Send"))
+					b->setEnabled(true), b->click();
+			// Closed before the answer: the stub replies on the next turn of
+			// the event loop and nothing has spun it yet.
+		}
+		check(prov.cancelled == 1,
+		      QString("closing it cancels what it asked (%1)")
+		          .arg(prov.cancelled));
+
+		// **The half that matters**, and the reason the counter is not
+		// enough: a second dialog must not receive the first one's answer.
+		extractor_dialog second(&sig, &store, &prov, "site.example", page);
+		spin(150);
+		auto *script = second.findChild<QPlainTextEdit *>("proposal");
+		check(!script || script->toPlainText().isEmpty(),
+		      QString("and the next dialog is not handed it (%1)")
+		          .arg(script ? script->toPlainText().left(40) : QString()));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

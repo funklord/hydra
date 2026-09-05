@@ -33,6 +33,15 @@ public:
 	                  ai_provider *provider, const QString &site_host,
 	                  const QUrl &page_url, QWidget *parent = nullptr);
 
+	// **Cancels whatever it asked for.** The provider outlives this dialog --
+	// it belongs to the window -- and `ai_provider::finished` carries no
+	// request identity, so a reply still in flight when this closes is
+	// broadcast to whichever dialog is connected when it lands. That is a
+	// different question's answer arriving as this one's.
+	//
+	// `reorganize_dialog` has always done this and these two never did.
+	~extractor_dialog() override;
+
 	// The evidence, folded down to something a person can read and a model can
 	// use. A player requests hundreds of segments that differ only by a number,
 	// and sending all of them buries the handful of requests that matter.

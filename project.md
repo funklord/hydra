@@ -16546,6 +16546,58 @@ emits, and read the difference** -- every clean row above is a difference that
 turned out to be derived or deliberate, and each deliberate one has a comment
 saying so. That is what made the four stand out: nothing explained them.
 
+## One provider, three dialogs, and a reply with nobody's name on it
+
+A different family from the last several, and a crash-adjacent one rather
+than a data one: **an asynchronous answer arriving after the thing that asked
+has gone.**
+
+The sweep that produced it came up clean twice first, and both are worth
+recording as measurements. Every `QTimer::singleShot` in this tree passes a
+context object -- `qApp`, the reply, `this`, the loop -- so none of them can
+fire into a freed capture. And all three AI dialogs connect with `this` as the
+context and a member slot, so Qt disconnects them on destruction. Nobody here
+had made the classic mistake.
+
+**The hazard is one level up.** `ai_provider::finished(const QString &reply)`
+carries the answer and nothing that says which question it belongs to, and the
+provider outlives every dialog that asks -- it is the window's. So a request
+still in flight when a dialog closes is not stopped; it lands on whichever
+dialog is connected when it arrives.
+
+`reorganize_dialog::~reorganize_dialog` has cancelled since it was written.
+`extractor_dialog` and `filter_dialog` **had no destructor at all**.
+
+Both providers implement `cancel()` properly -- `m_reply->abort()` -- so this
+was a call nobody made rather than a call that did nothing. That was worth
+checking before treating it as the fix: the base is `virtual void cancel() {}`,
+and a no-op default would have made `reorganize_dialog`'s protection theatre.
+
+### Reproduced, which took fixing the stub first
+
+`stub_provider` answered on the next turn of the event loop and inherited the
+base's empty `cancel`. So it would have gone on answering a question nobody
+was waiting for -- and the check would then have passed for a dialog that
+cancels and for one that does not. It guards its emit on a live flag now,
+which is what a real provider aborting its reply amounts to.
+
+With the destructor removed, the second dialog is handed the first one's
+answer:
+
+    FAIL  closing it cancels what it asked (0)
+    FAIL  and the next dialog is not handed it
+          (extract = function () { return null; };)
+
+That second line is the bug itself: a script the person never asked for,
+sitting in a dialog that had just opened.
+
+### The other dialog got the fix and no fixture
+
+`filter_dialog` gets the same destructor and **is not driven by any test**.
+No suite builds one against a stub, and the two-dialog fixture above is
+`test_extloop`'s, which is the extractor's. The fix is four lines identical
+to the one that is tested, and that is an argument, not evidence.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

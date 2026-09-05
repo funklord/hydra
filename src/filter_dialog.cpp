@@ -69,6 +69,11 @@ filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
 		                  "against.");
 }
 
+filter_dialog::~filter_dialog() {
+	if (m_provider)
+		m_provider->cancel();
+}
+
 void filter_dialog::build_ui() {
 	auto *outer = new QVBoxLayout(this);
 
