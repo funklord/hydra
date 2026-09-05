@@ -4004,6 +4004,17 @@ void main_window::forget_subtree(node *n) {
 	// could ever be read again -- into the wrong tab.
 	if (m_state)
 		m_state->remove(n->id);
+	// **And the zoom, for exactly the reason written above it -- which this
+	// line did not do.** `tab_tree_model::unused_id` hands out the LOWEST free
+	// id, so the collision that paragraph calls the one way a stale blob could
+	// be read is not a remote possibility here: it is what the next tab gets.
+	// Delete a tab left at 125% and the tab created after it opened at 125%,
+	// with nothing on screen saying why.
+	m_zoom.remove(n->id);
+	// Harmless where it stood -- `flush_blobs` looks the id up in
+	// `m_views_by_id` and finds nothing -- but it is a note about a node that
+	// no longer exists, and the id is about to be handed to another one.
+	m_blobs_dirty.remove(n->id);
 	update_status();
 	page_changed();
 }

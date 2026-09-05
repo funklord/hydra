@@ -17646,17 +17646,81 @@ Two things follow, and the second is the one worth keeping:
 
 - The auth path is unexercised. It compiles, its names resolve and its
   descriptors are right, and none of that is evidence that a dialog appears.
-- **A handed url may not open.** The tree gained a `127.0.0.1` node and the
-  current tab did not change, so `ACTION_VIEW` on a running instance appears
-  to create the node without navigating to it. That is a separate finding and
-  it is not established -- one screenshot, on a device somebody else was
-  using, with no second observation.
+- **Why nothing was requested is unsettled, and reading the code narrows it
+  rather than answering it.** The first guess -- that a handed url creates a
+  tree node without navigating -- does not survive: `open_url` adds the tab,
+  calls `open_node`, and updates the address bar, and `open_node` is what
+  loads. The `127.0.0.1` node in the screenshot was attributed to this run on
+  no evidence; that tree has been used from this handset before.
+
+  The launch was a cold start (`force-stop`, then `am start` with the action
+  and the data), which is the case `HydraActivity`'s comment records as
+  *working* -- it exists because the **running** case did not. So the likelier
+  place to look is between the intent and `takeViewUrl`, or between
+  `open_node` and the network, and not in `open_url`. **One screenshot on a
+  device somebody else was using is not a finding**, and this is recorded as a
+  direction for whoever repeats it, not as a claim.
 
 The run was stopped there rather than driven further: the phone was in active
 use, another application had focus, and an unanswered modal prompt would have
 been left sitting in front of somebody. The fixture is
 `authsrv.py` in this session's scratch directory and takes a `reverse` and one
 navigation to finish.
+
+## A deleted tab lent its zoom to the next one
+
+`forget_subtree` drops what the shell holds for a node that is going away: its
+live view, its place in the LRU, and its saved state blob. The blob is removed
+under a comment that names the hazard precisely --
+
+    A blob for a node that no longer exists is unreachable by anything except
+    an id collision, which is the one way it could ever be read again -- into
+    the wrong tab.
+
+-- and three lines above it, `m_zoom` was left keyed by the same id.
+
+**The collision is not a remote possibility, it is the normal case.**
+`tab_tree_model::unused_id` scans from `t-2` upward and returns the first id
+not in the index, so a deleted tab's id is what the *next* tab gets. Delete a
+tab left at 125% and the tab created after it opens at 125%, with nothing on
+screen saying why. Measured, and the ids in the test are literally `t-2` both
+times.
+
+`m_blobs_dirty` went with it. That one was harmless where it stood --
+`flush_blobs` looks each id up in `m_views_by_id` and finds nothing -- but it
+is a note about a node that no longer exists, and the id is about to belong to
+another one.
+
+    ok    Zoom In moved it (1.25)
+    ok    deleting it takes the live view with it
+    ok    and the next tab is handed the same id (t-2)
+    ok    which opens at 100%, not at the dead tab's zoom (1)
+
+With the one line removed the last of those reads `(1.25)` and nothing else
+moves.
+
+**The fake had to learn to answer before the test could see it.**
+`fake_view::set_zoom_factor` was a no-op and `zoom_factor()` was the base
+class's constant 1.0, so the shell could be asked what it had decided and
+would always say 100%. A no-op setter beside an inherited getter is a hole a
+suite cannot see through, and it is the same shape as `last_settings`, which
+that fake already records for exactly this reason.
+
+**And a correction worth keeping.** Looking for the callers of
+`forget_subtree`, `grep -n 'forget_subtree('` found only its definition and
+its own recursion, which reads as dead code -- and it is not. It is connected
+as `&main_window::forget_subtree` to `tab_tree_model::about_to_remove`, a
+form with no parentheses after the name. **A caller search keyed on the call
+syntax cannot see a Qt connection**, and a hand grep for `name(` is exactly
+that search.
+
+`tool/dangling.py` does not share the blind spot, and it is worth saying so
+rather than assuming it does: it counts `CALL` -- `name(` -- **and** `QUAL` --
+`::name` -- and unions them, so `&main_window::forget_subtree` registers as a
+use. The first draft of this paragraph claimed the tool had the same hole, on
+no evidence beyond the shape of my own mistake; reading the two patterns took
+one command. **The lesson a hand search taught is not automatically a lesson
+about the tool.**
 
 ## What is next (in order)
 

@@ -37,6 +37,9 @@
 #include "site_rules.h"
 #include "kiosk_controller.h"
 #include "tab_tree_view.h"
+#include "tab_tree_model.h"
+#include "node.h"
+#include "tree_sort_proxy.h"
 #include "policy_engine.h"
 #include "consent_blocker.h"
 #include "consent_dialog.h"
@@ -143,7 +146,12 @@ public:
 	}
 	void set_permission_decider(permission_decider) override {}
 	void set_capture_chooser(capture_chooser) override {}
-	void set_zoom_factor(double) override {}
+	// Recorded and answered, for the reason `last_settings` is: a no-op setter
+	// with a base-class getter means the shell can be asked what it decided
+	// and always hear 1.0, so a zoom carried into the wrong tab is invisible.
+	double zoom = 1.0;
+	void   set_zoom_factor(double f) override { zoom = f; }
+	double zoom_factor() const override { return zoom; }
 	void inject_script(const QString &, const QString &, bool) override {}
 	void inject_main_world_script(const QString &, const QString &) override {}
 	void set_script_bridge(QObject *, const QString &) override {}
@@ -1207,6 +1215,63 @@ int main(int argc, char **argv) {
 
 		c.allow_escape = was;
 		settings_store::set_kiosk(c);
+	}
+
+	section("a deleted tab does not lend its zoom to the next one");
+	{
+		// `tab_tree_model::unused_id` hands out the LOWEST free id, so a
+		// deleted tab's id is not merely reusable -- it is what the next tab
+		// gets. `forget_subtree` dropped the view, the LRU entry and the saved
+		// state blob for exactly that reason, in a comment naming an id
+		// collision as the one way a stale blob could be read into the wrong
+		// tab, and left `m_zoom` keyed by the same id three lines away.
+		main_window w10(&factory, &policy, &filter);
+
+		auto open = [&w10](node *n) {
+			QMetaObject::invokeMethod(
+			  &w10, "on_tree_activated",
+			  Q_ARG(QModelIndex,
+			         w10.m_proxy->mapFromSource(w10.m_model->index_for_node(n))));
+		};
+		QAction *zoom_in = nullptr;
+		for (QAction *a : w10.findChildren<QAction *>())
+			if (a->text() == QStringLiteral("Zoom &In"))
+				zoom_in = a;
+		check(zoom_in != nullptr, "the View menu has Zoom In");
+
+		node *first = w10.m_model->add_tab(nullptr, "first", "http://a.example/");
+		check(first != nullptr, "a tab to zoom");
+		if (!first || !zoom_in) {
+			std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
+			return g_fail == 0 ? 0 : 1;
+		}
+		const QString id = first->id;
+		open(first);
+		zoom_in->trigger();
+		zoom_in->trigger();
+
+		auto zoom_of = [&w10](const QString &node_id) {
+			web_view_backend *v = w10.m_views_by_id.value(node_id, nullptr);
+			return v ? v->zoom_factor() : -1.0;
+		};
+		const double zoomed = zoom_of(id);
+		check(zoomed > 1.0,
+		       QString("Zoom In moved it (%1)").arg(zoomed));
+
+		w10.m_model->remove_node(first);
+		check(!w10.m_views_by_id.contains(id),
+		       "deleting it takes the live view with it");
+
+		node *second = w10.m_model->add_tab(nullptr, "second", "http://b.example/");
+		check(second && second->id == id,
+		       QString("and the next tab is handed the same id (%1)")
+		           .arg(second ? second->id : QStringLiteral("none")));
+		if (second) {
+			open(second);
+			check(qFuzzyCompare(zoom_of(second->id), 1.0),
+			       QString("which opens at 100%, not at the dead tab's zoom "
+			                "(%1)").arg(zoom_of(second->id)));
+		}
 	}
 
 	section("clearing browsing data clears what only Hydra remembers");
