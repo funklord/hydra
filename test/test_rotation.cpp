@@ -41,6 +41,10 @@
 #include "consent_blocker.h"
 #include "consent_dialog.h"
 #include "annoyance_log.h"
+#include "antiadblock_watch.h"
+#include "extractor_signals.h"
+#include "media_detector.h"
+#include "mse_tap.h"
 #include "request_filter.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"
@@ -58,6 +62,7 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QLabel>
+#include <QSignalSpy>
 #include <QLayout>
 #include <QLineEdit>
 #include <QSplitter>
@@ -1202,6 +1207,71 @@ int main(int argc, char **argv) {
 
 		c.allow_escape = was;
 		settings_store::set_kiosk(c);
+	}
+
+	section("clearing browsing data clears what only Hydra remembers");
+	{
+		// Five observers ride the interceptor's seam and each keeps a record
+		// per host for the life of the process. `clear_site` existed on all
+		// five and had no caller anywhere in src/, so nothing had ever emptied
+		// any of them -- while the clear that drops cookies and the cache runs
+		// at exactly the moment somebody has said to forget where they have
+		// been.
+		main_window w9(&factory, &policy, &filter);
+
+		request_context ctx;
+		ctx.site_host    = "measured.example";
+		ctx.request_host = "cdn.measured.example";
+		request_decision pass;
+		pass.block = false;
+
+		// One request each, chosen so every observer records something: a
+		// manifest for the media detector, a detector script for the
+		// anti-adblock watch, an ad-shaped url for the filter signals. Every
+		// one of them is evidence for the extractor signals, which keep the
+		// lot.
+		ctx.url = QUrl("https://cdn.measured.example/live/index.m3u8");
+		w9.m_media->on_request(ctx, pass);
+		w9.m_ex_signals->on_request(ctx, pass);
+		w9.m_signals->on_request(ctx, pass);
+		ctx.url = QUrl("https://cdn.measured.example/js/fuckadblock.min.js");
+		w9.m_antiadblock->on_request(ctx, pass);
+		w9.m_ex_signals->on_request(ctx, pass);
+		ctx.url  = QUrl("https://ads.doubleclick.net/pagead/banner.js");
+		ctx.request_host = "ads.doubleclick.net";
+		w9.m_signals->on_request(ctx, pass);
+		w9.m_mse->report("measured.example", "video/mp4", 4096, 3, 1.5, 60.0);
+
+		QSignalSpy badge(w9.m_media, &media_detector::site_updated);
+
+		check(w9.m_media->count_for("measured.example") > 0,
+		       "the media detector has a stream");
+		check(w9.m_ex_signals->count_for("measured.example") > 0,
+		       "the extractor signals have the requests");
+		check(!w9.m_signals->observed_for("measured.example").isEmpty(),
+		       "the filter signals have what the page asked for");
+		check(w9.m_antiadblock->checked_for_blocker("measured.example"),
+		       "the watch saw a detector script");
+		check(!w9.m_mse->streams_for("measured.example").isEmpty(),
+		       "the tap has a stream the address bar could not name");
+
+		QMetaObject::invokeMethod(&w9, "forget_shell_caches");
+
+		check(w9.m_media->count_for("measured.example") == 0,
+		       "and the clear empties the media detector");
+		check(w9.m_ex_signals->count_for("measured.example") == 0,
+		       "the extractor signals, which held every url with its kind");
+		check(w9.m_signals->observed_for("measured.example").isEmpty(),
+		       "the filter signals");
+		check(!w9.m_antiadblock->checked_for_blocker("measured.example"),
+		       "the anti-adblock watch");
+		check(w9.m_mse->streams_for("measured.example").isEmpty(),
+		       "and the tap");
+		// The badge is driven by that signal, so a clear that emitted nothing
+		// would empty the list and leave the number over it unchanged.
+		check(badge.count() > 0 &&
+		       badge.last().at(1).toInt() == 0,
+		       "the badge is told, rather than being left showing a count");
 	}
 
 	section("\"Local only\" describes the endpoint that is in the box");

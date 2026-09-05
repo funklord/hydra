@@ -1,4 +1,6 @@
 #include "filter_signals.h"
+
+#include <QSet>
 #include <QUrl>
 #include <QDateTime>
 #include "policy_engine.h"
@@ -111,6 +113,20 @@ void filter_signals::note_capability(const QString &site_host,
 QStringList filter_signals::capabilities_for(const QString &site_host) const {
 	QMutexLocker guard(&m_lock);
 	return m_capabilities.value(site_host);
+}
+
+int filter_signals::clear_all() {
+	QMutexLocker guard(&m_lock);
+	// The union, not one of them: a site can be in `m_observed` with nothing
+	// suspected, and counting only the suspects would under-report a clear.
+	QSet<QString> sites;
+	for (const QString &k : m_capabilities.keys()) sites.insert(k);
+	for (const QString &k : m_suspects.keys())     sites.insert(k);
+	for (const QString &k : m_observed.keys())     sites.insert(k);
+	m_capabilities.clear();
+	m_suspects.clear();
+	m_observed.clear();
+	return int(sites.size());
 }
 
 void filter_signals::clear_site(const QString &site_host) {

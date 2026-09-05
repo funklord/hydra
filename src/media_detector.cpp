@@ -176,6 +176,21 @@ void media_detector::add_item(const QString &site_host, const media_item &item) 
 	emit site_updated(site_host, count_for(site_host));
 }
 
+int media_detector::clear_all() {
+	QStringList sites;
+	{
+		QMutexLocker guard(&m_lock);
+		sites = m_by_site.keys();
+		m_by_site.clear();
+	}
+	// **Outside the lock, and one per site.** The badge is driven by this
+	// signal, so a clear that emitted nothing would empty the list and leave
+	// the number over it saying there were seven.
+	for (const QString &s : sites)
+		emit site_updated(s, 0);
+	return int(sites.size());
+}
+
 void media_detector::clear_site(const QString &site_host) {
 	QMutexLocker guard(&m_lock);
 	m_by_site.remove(site_host);

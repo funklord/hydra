@@ -65,6 +65,18 @@ public:
 	QStringList capabilities_for(const QString &site_host) const;
 
 	void clear_site(const QString &site_host);
+	// Forget every site at once, for "Clear browsing data".
+	//
+	// **This is a browsing record and it was not being cleared.** The shell's
+	// clear dropped cookies, the cache, session permission answers and the
+	// proxy's publications, and left this behind for the life of the process
+	// -- which is the moment a person has just said they want the browser to
+	// forget where they have been.
+	//
+	// Returns how many sites were dropped, so the caller can say what it did
+	// rather than claiming a clear it cannot see the size of.
+	int clear_all();
+
 
 	// Heuristics only, deliberately loose: this decides what to *show a human*,
 	// not what to block.

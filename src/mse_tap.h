@@ -58,6 +58,18 @@ public:
 	QList<mse_stream> streams_for(const QString &site_host) const;
 	bool active_for(const QString &site_host) const;
 	void clear_site(const QString &site_host);
+	// Forget every site at once, for "Clear browsing data".
+	//
+	// **This is a browsing record and it was not being cleared.** The shell's
+	// clear dropped cookies, the cache, session permission answers and the
+	// proxy's publications, and left this behind for the life of the process
+	// -- which is the moment a person has just said they want the browser to
+	// forget where they have been.
+	//
+	// Returns how many sites were dropped, so the caller can say what it did
+	// rather than claiming a clear it cannot see the size of.
+	int clear_all();
+
 
 	// Every key held. The hook reports `location.hostname` of the frame it runs
 	// in, which on a page whose player is a third-party iframe is *not* the host

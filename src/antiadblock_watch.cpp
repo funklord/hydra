@@ -69,6 +69,13 @@ QStringList antiadblock_watch::evidence_for(const QString &site_host) const {
 	return m_by_site.value(site_host);
 }
 
+int antiadblock_watch::clear_all() {
+	QMutexLocker lock(&m_lock);
+	const int sites = m_by_site.size();
+	m_by_site.clear();
+	return sites;
+}
+
 void antiadblock_watch::clear_site(const QString &site_host) {
 	QMutexLocker lock(&m_lock);
 	m_by_site.remove(site_host);

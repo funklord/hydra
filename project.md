@@ -17378,6 +17378,109 @@ only hits were `downloads_dialog`'s two coalescing timers, which are UI and
 *should* die with it. So `media_dialog` was the only instance, and that family
 is closed.
 
+## Clear browsing data left the records only Hydra keeps
+
+Five observers ride the interceptor's seam, and each holds a hash keyed by
+host for the life of the process:
+
+    extractor_signals    every url a page requested, with kind and order (400/site)
+    media_detector       every media address, with segment hit counts
+    mse_tap              every stream the page fed its own player
+    filter_signals       what was asked for and what looked ad-shaped
+    antiadblock_watch    which sites ran a blocker detector
+
+All five have a `clear_site`. **None of the five had a caller anywhere in
+`src/`** -- every call site is a test or a live driver -- so nothing had ever
+emptied any of them, by any route.
+
+`forget_shell_caches` runs when somebody presses Clear on the privacy page. It
+dropped the session permission answers, the automatic ad allowances and the
+proxy's publications, and left the five standing. So the clear forgot the
+parts a *site* can see -- cookies, cache -- and kept the parts only Hydra can:
+a per-host record of every sub-resource every page fetched.
+
+The argument is already written in this file, one paragraph up in the same
+function, about the proxy's publications: *"Clearing is exactly the moment
+those stop being wanted."* The sweep that produced that paragraph stopped one
+seam short.
+
+`clear_all()` on each, called from there, returning how many sites it dropped
+so the log can say what it did rather than announce a clear it cannot size.
+Two details that are not bookkeeping:
+
+- **`media_detector` and `mse_tap` emit `site_updated` per dropped host**, and
+  outside the lock. The media badge is driven by that signal, so a clear that
+  emptied the list silently would leave the number over it saying seven.
+- **`extractor_signals` clears `m_next_order` too.** The prompt tells the model
+  that `order` is *"this visit's position in the list"*, and a counter that
+  survives the clear makes the next page's first request number 400.
+
+### What the sabotage showed
+
+    ok    the media detector has a stream
+    ok    the watch saw a detector script
+    ...
+    ok    and the clear empties the media detector
+    ok    the badge is told, rather than being left showing a count
+
+With the five calls removed, the first five assertions still pass -- the
+observers really did record something -- and all six after the clear fail.
+
+### The lens, and what it cost to get here
+
+Derived from `is_external()`: an implementation answering a narrower question
+than its interface declares. Applied to the pure virtuals it found nothing --
+`download_source::capabilities()` was checked field by field, and `resumable`
+reads as honest once you see that it means "re-enqueueing continues rather
+than restarts", which both sources do. `seeds`, `multi_file` and `resumable`
+have no consumer at all, and `seeds` carries an instruction to the manager
+-- *"must not treat completion as permission to reclaim the job"* -- that the
+manager happens to satisfy because reclamation is driven by `finished`
+instead. Nothing to fix; worth knowing that the rule is unenforced.
+
+`tool/dangling.py` now reports exactly one public method with no caller,
+`ollama_provider::models()`. It cannot see this family at all: five classes
+declare `clear_site`, so the name is ambiguous and the tool counts 15 uses
+and declines to judge. **The tool's own honesty about ambiguity is what hid
+the finding**, and the answer is not to make it guess -- it is that an
+ambiguous name needs the per-class question asked by hand.
+
+## Open: these records are keyed by host, and one of them says it is a page
+
+`extractor_signals`' header states the requirement outright:
+
+    it must survive exactly as long as the page it describes
+
+It cannot. `request_context` carries `site_host` and not the page, so the
+observers are structurally unable to tell one page on a host from the next.
+The consequences, in the order they matter:
+
+- `extractor_dialog` says *"This is the list of addresses **this page**
+  requested"*. On the second page of a session on one host, it is not.
+- `helper_allowlist::observe(evidence_for(host))` decides what a generated
+  script may fetch, and refuses with *"that address was never observed"*.
+  Stale evidence widens that to addresses observed on other pages of the same
+  host.
+- The media dialog lists every stream seen on the host this session. Watch a
+  second video on one site and the older manifests are still there, mostly
+  dead.
+
+**The fix is available and the decision is not mine.** Both backends already
+hold the page URL and discard it -- `qtwebengine_interceptor.cpp` writes
+`info.firstPartyUrl().host()`, and `android_view.cpp` writes
+`QUrl(page_url).host()` -- so widening `request_context` with the page is two
+lines per backend.
+
+What needs deciding is per observer, and the answers differ. Evidence is
+about one page load. Media detection is arguably about the site: segments are
+credited to a manifest over time, and a reload should not throw that away.
+Filter signals and the anti-adblock watch ask *what does this site do*, which
+is a site question. Keying all five by page would be as wrong as keying all
+five by host.
+
+Not deferred for want of an idea: deferred because it is four separate
+product questions wearing one refactor's clothes.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

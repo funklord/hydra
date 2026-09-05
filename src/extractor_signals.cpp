@@ -38,6 +38,17 @@ int extractor_signals::count_for(const QString &site_host) const {
 	return m_by_site.value(site_host).size();
 }
 
+int extractor_signals::clear_all() {
+	QMutexLocker lock(&m_lock);
+	const int sites = m_by_site.size();
+	m_by_site.clear();
+	// The counter too, or the next page's first request is numbered from where
+	// the last session left off -- and the prompt tells the model that `order`
+	// is this visit's position in the list.
+	m_next_order.clear();
+	return sites;
+}
+
 void extractor_signals::clear_site(const QString &site_host) {
 	QMutexLocker lock(&m_lock);
 	m_by_site.remove(site_host);

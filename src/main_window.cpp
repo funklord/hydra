@@ -3888,6 +3888,24 @@ void main_window::forget_shell_caches() {
 	if (m_local_proxy)
 		m_local_proxy->unpublish_all();
 
+	// **The per-site observers, which this function used not to touch.** Five
+	// of them ride the interceptor's seam and each keeps a record per host for
+	// the life of the process: every url a page requested with its kind and
+	// order, every media address, every MSE stream, what was blocked, and what
+	// looked like an anti-adblock wall. That is a browsing record in memory,
+	// and a clear that dropped cookies and the cache and left it standing was
+	// forgetting the parts a site can see and keeping the parts only Hydra
+	// can. The same argument the proxy publications above are cleared for.
+	//
+	// None of them had a caller for `clear_site` anywhere in `src/` either --
+	// so nothing had ever emptied any of these, by any route.
+	int records = 0;
+	if (m_ex_signals)  records += m_ex_signals->clear_all();
+	if (m_media)       records += m_media->clear_all();
+	if (m_mse)         records += m_mse->clear_all();
+	if (m_signals)     records += m_signals->clear_all();
+	if (m_antiadblock) records += m_antiadblock->clear_all();
+
 	int allowances = 0;
 	for (const QString &host : m_antiadblock_fixed) {
 		if (m_policy->setting_for(host, policy::feature::ads) ==
@@ -3899,9 +3917,10 @@ void main_window::forget_shell_caches() {
 	}
 	m_antiadblock_fixed.clear();
 
-	if (answers > 0 || allowances > 0)
-		qInfo("forget: dropped %d session permission answer(s) and %d "
-		       "automatic ad allowance(s)", answers, allowances);
+	if (answers > 0 || allowances > 0 || records > 0)
+		qInfo("forget: dropped %d session permission answer(s), %d "
+		       "automatic ad allowance(s) and %d per-site observation "
+		       "record(s)", answers, allowances, records);
 }
 
 void main_window::on_tree_activated(const QModelIndex &proxy_index) {

@@ -191,6 +191,14 @@ bool mse_tap::active_for(const QString &site_host) const {
 	return false;
 }
 
+int mse_tap::clear_all() {
+	const QStringList sites = m_by_site.keys();
+	m_by_site.clear();
+	for (const QString &s : sites)
+		emit site_updated(s);
+	return int(sites.size());
+}
+
 void mse_tap::clear_site(const QString &site_host) {
 	m_by_site.remove(site_host);
 }

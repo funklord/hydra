@@ -28,6 +28,18 @@ public:
 	QList<evidence_request> evidence_for(const QString &site_host) const;
 	int count_for(const QString &site_host) const;
 	void clear_site(const QString &site_host);
+	// Forget every site at once, for "Clear browsing data".
+	//
+	// **This is a browsing record and it was not being cleared.** The shell's
+	// clear dropped cookies, the cache, session permission answers and the
+	// proxy's publications, and left this behind for the life of the process
+	// -- which is the moment a person has just said they want the browser to
+	// forget where they have been.
+	//
+	// Returns how many sites were dropped, so the caller can say what it did
+	// rather than claiming a clear it cannot see the size of.
+	int clear_all();
+
 
 	// How many requests are kept per page.
 	static constexpr int k_limit = 400;
