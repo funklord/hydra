@@ -17544,6 +17544,42 @@ What did pay was turning the same question on the *backend interface*:
 returns false and the UI gates on it, the authenticator and certificate hooks
 have no Android surface yet -- and one was this.
 
+## The clear, checked against a real engine -- and the first check could not fail usefully
+
+`test_rotation` proves the window's clear reaches five observers it was
+handed, because it feeds them by calling `on_request` itself. Two things it
+cannot ask: whether the **real interceptor** feeds those objects, and whether
+the window is holding the ones the seam is actually wired to. `try_forget`
+drives the button against a live engine and a local server, so it can.
+
+The first version of the assertion read the counts **after the dialog closed**,
+and reported:
+
+    FAIL  the per-site observation records went with it (2 before, 2 after one further visit)
+
+which is not a finding. The check that follows it re-visits the server to see
+whether the cookie stopped being sent, and that visit refills the observers --
+so two-before against two-after cannot separate a clear that worked from one
+that did nothing at all. It failed for a reason that had nothing to do with
+the code under test.
+
+The clear is synchronous -- `browsing_data_cleared` is a direct connection and
+`forget_shell_caches` runs inside the click -- while the *engine's* three
+stores empty later, which is why the surrounding code waits. Reading the
+observer counts immediately after `go->click()`, with nothing navigating in
+between, is the only point where the number is the clear's own result:
+
+    ok    the per-site observation records went with it (extractor 3 -> 0, filter 3 -> 0)
+
+With the five `clear_all` calls disabled it reads `extractor 3 -> 4, filter
+3 -> 3` -- and the 4 is the confirmation dialog's own doing, which is the
+detail that says the count is live rather than frozen.
+
+**The lesson is about where a measurement is taken, not about the code.** The
+population was real and the assertion was about the right thing; it was read
+one step downstream of a line that changes it. A check placed after something
+that refills what it measures reports on the refill.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

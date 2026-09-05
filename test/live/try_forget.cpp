@@ -76,6 +76,8 @@
 // here -- the same limit `test/README.md` records for every driver.
 #include "kiosk_controller.h"
 #include "main_window.h"
+#include "extractor_signals.h"
+#include "filter_signals.h"
 #include "policy_engine.h"
 #include "qtwebengine_factory.h"
 #include "qtwebengine_view.h"
@@ -507,6 +509,24 @@ int main(int argc, char *argv[]) {
 	// ------------------------------------- 1. the button, end to end --
 	section("1. the settings dialog's Clear now button");
 	{
+		// **What the offline test cannot ask.** `test_rotation` feeds the five
+		// per-site observers by calling `on_request` itself, so it proves the
+		// window's clear reaches objects it was handed. It cannot prove that
+		// the real interceptor feeds those objects, nor that the window holds
+		// the ones the seam is wired to. The page loads above went through the
+		// engine, so this population arrived the way browsing produces it.
+		const QString origin = QStringLiteral("127.0.0.1");
+		const int ev_before  = w.m_ex_signals
+		                         ? w.m_ex_signals->count_for(origin) : -1;
+		const int sig_before = w.m_signals
+		  ? int(w.m_signals->observed_for(origin).size()) : -1;
+		check(ev_before > 0,
+		       QString("the page's own requests reached the extractor signals "
+		                "through the real interceptor (%1)").arg(ev_before));
+		check(sig_before > 0,
+		       QString("and the filter signals (%1)").arg(sig_before));
+
+		int ev_after = -2, sig_after = -2;
 		bool saw_dialog = false, saw_confirmation = false, pressed = false;
 		bool ticked_all = false;
 		QString reported;
@@ -533,6 +553,19 @@ int main(int argc, char *argv[]) {
 			answer_confirmation(&saw_confirmation, "Clear");
 			pressed = true;
 			go->click();
+
+			// **Read here, not after the dialog closes.** The clear itself is
+			// synchronous -- `browsing_data_cleared` is a direct connection
+			// and `forget_shell_caches` runs inside the click -- while the
+			// engine's three stores empty later. Reading afterwards measured
+			// the count after a further page visit had refilled it, and two
+			// before against two after cannot tell a clear that worked from
+			// one that did nothing. Nothing navigates between the click and
+			// this line, so this number is the clear's own result.
+			ev_after  = w.m_ex_signals
+			              ? w.m_ex_signals->count_for(origin) : -1;
+			sig_after = w.m_signals
+			  ? int(w.m_signals->observed_for(origin).size()) : -1;
 
 			// None of the three stores empties synchronously, so the report
 			// lands after the press returns. Wait for it here, while the
@@ -566,6 +599,11 @@ int main(int argc, char *argv[]) {
 		check(!after.contains("sess=1"),
 		      QString("and the server is no longer sent the cookie "
 		               "(server saw: %1)").arg(after));
+
+		check(ev_after == 0 && sig_after == 0,
+		       QString("the per-site observation records went with it "
+		                "(extractor %1 -> %2, filter %3 -> %4)")
+		           .arg(ev_before).arg(ev_after).arg(sig_before).arg(sig_after));
 	}
 
 	// ------------------------------------------- 2. kiosk, configured to forget --
