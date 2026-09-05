@@ -6,6 +6,7 @@ import android.os.Build;
 import android.graphics.Color;
 import android.net.Uri;
 import android.util.Log;
+import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
@@ -174,6 +175,9 @@ public class HydraWebView {
 
     /** The load ended; `ok` is false when the main frame reported an error. */
     public static native void onLoadFinished(long id, boolean ok);
+
+    /** A page went fullscreen, or came back out of it. */
+    public static native void onFullscreen(long id, boolean on);
 
     /**
      * Asks the shared request_filter about one request. Called on the WebView's
@@ -457,6 +461,80 @@ public class HydraWebView {
     private static final Map<Long, Boolean> ENDED =
         new java.util.concurrent.ConcurrentHashMap<Long, Boolean>();
 
+    /**
+     * The view a page is showing fullscreen, and the callback that dismisses
+     * it. One at a time: Android hands over a single custom view, and a
+     * second request while one is up is a page misbehaving rather than a case
+     * to support.
+     */
+    private static View FULLSCREEN_VIEW = null;
+    private static WebChromeClient.CustomViewCallback FULLSCREEN_CB = null;
+    private static long FULLSCREEN_ID = 0;
+
+    /**
+     * Put the page's fullscreen view up, or take it down.
+     *
+     * **Without `onShowCustomView` a video simply does not go fullscreen.**
+     * The default implementation does nothing, so the control on the player
+     * is dead -- on the platform where a fullscreen video matters most. The
+     * page is told nothing either, so it sits in whatever layout it chose.
+     *
+     * Attached the way the WebViews are, and for the same reason: Qt draws
+     * into a `SurfaceView` with its Z-order set, which punches through
+     * anything merely layered on top, so being added later is not enough.
+     */
+    private static void showFullscreen(final long id, final View v,
+                                        final WebChromeClient.CustomViewCallback cb) {
+        onUi(new Runnable() {
+            @Override public void run() {
+                if (ACTIVITY == null || FULLSCREEN_VIEW != null) {
+                    if (cb != null)
+                        cb.onCustomViewHidden();
+                    return;
+                }
+                FULLSCREEN_VIEW = v;
+                FULLSCREEN_CB = cb;
+                FULLSCREEN_ID = id;
+                ACTIVITY.addContentView(v, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+                v.bringToFront();
+                v.setZ(200f);   // above the page, which is already above Qt
+                onFullscreen(id, true);
+            }
+        });
+    }
+
+    private static void hideFullscreen() {
+        onUi(new Runnable() {
+            @Override public void run() {
+                View v = FULLSCREEN_VIEW;
+                if (v == null)
+                    return;
+                final long id = FULLSCREEN_ID;
+                ViewGroup p = (ViewGroup) v.getParent();
+                if (p != null)
+                    p.removeView(v);
+                FULLSCREEN_VIEW = null;
+                FULLSCREEN_ID = 0;
+                // **The page is told last.** Its callback is what lets it put
+                // the player back the way it was, and calling it before the
+                // view is detached leaves the old surface on screen over the
+                // restored layout.
+                WebChromeClient.CustomViewCallback cb = FULLSCREEN_CB;
+                FULLSCREEN_CB = null;
+                if (cb != null)
+                    cb.onCustomViewHidden();
+                onFullscreen(id, false);
+            }
+        });
+    }
+
+    /** Leave fullscreen because the shell said so, not the page. */
+    public static void exitFullscreen(long id) {
+        hideFullscreen();
+    }
+
     /** Report the end of a navigation exactly once. */
     private static void endLoad(long id, boolean ok) {
         if (ENDED.putIfAbsent(Long.valueOf(id), Boolean.TRUE) == null)
@@ -575,6 +653,16 @@ public class HydraWebView {
                      * "could not be loaded", and it needs a load to have
                      * started.
                      */
+                    @Override
+                    public void onShowCustomView(View view, CustomViewCallback cb) {
+                        showFullscreen(id, view, cb);
+                    }
+
+                    @Override
+                    public void onHideCustomView() {
+                        hideFullscreen();
+                    }
+
                     @Override
                     public void onProgressChanged(WebView v, int percent) {
                         // **Silent once this navigation has ended**, and that

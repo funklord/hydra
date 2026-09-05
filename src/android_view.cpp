@@ -118,6 +118,12 @@ Java_se_vibes_hydra_HydraWebView_onRenderGone(JNIEnv *, jclass, jlong id,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onFullscreen(JNIEnv *, jclass, jlong id,
+                                               jboolean on) {
+	android_view::report_fullscreen(id, on == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_se_vibes_hydra_HydraWebView_onLoadProgress(JNIEnv *, jclass, jlong id,
                                                  jint percent) {
 	android_view::report_progress(id, int(percent));
@@ -862,6 +868,24 @@ void android_view::stop() {
 	if (!m_native)
 		return;
 	QJniObject::callStaticMethod<void>(k_cls, "stopLoading", "(J)V",
+	                                    jlong(m_id));
+}
+
+void android_view::report_fullscreen(qint64 id, bool on) {
+	QMetaObject::invokeMethod(qApp, [id, on] {
+		if (android_view *v = s_views.value(id))
+			emit v->fullscreen_requested(on);
+	}, Qt::QueuedConnection);
+}
+
+// **The shell's way of refusing, or of being told to give the screen back.**
+// `present_fullscreen` calls this when it could not present, so a page that
+// asked and was declined is put back rather than left laid out for a screen
+// it never got.
+void android_view::exit_fullscreen() {
+	if (!m_native)
+		return;
+	QJniObject::callStaticMethod<void>(k_cls, "exitFullscreen", "(J)V",
 	                                    jlong(m_id));
 }
 

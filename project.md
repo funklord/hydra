@@ -16698,8 +16698,8 @@ of these appear in that list**:
 - ~~`load_progress` / `load_finished` are never emitted.~~ ~~`stop()` is
   unimplemented.~~ **Both fixed together** -- see *A load that never ended*
   below. Doing either alone would have been worse than neither.
-- HTML5 fullscreen does nothing: no `fullscreen_requested`, no
-  `onShowCustomView` -- on the platform where a fullscreen video matters most.
+- ~~HTML5 fullscreen does nothing.~~ **Fixed** -- see *A fullscreen control
+  that did nothing, on the platform it matters most on* below.
 
 **`stream_context::user_agent` and `::cookies` have four readers and no
 writer.** `local_proxy`, `hls_assembler`, `stream_probe` and `network_fetcher`
@@ -16969,6 +16969,59 @@ states.
 **What was not captured is the "Stopped." message**, which is transient and
 had timed out before the screenshot. The state change is the evidence; the
 wording is not.
+
+## A fullscreen control that did nothing, on the platform it matters most on
+
+`WebChromeClient.onShowCustomView` is how a WebView asks for the screen, and
+its default implementation does nothing at all. So the fullscreen button on
+any video was dead on Android: no view was shown, no `fullscreen_requested`
+reached the shell, and the page was told nothing either -- it sat in whatever
+layout it had chosen for a screen it never got.
+
+Two halves, and neither works alone. **Java attaches the view the page hands
+over**, the same way the WebViews themselves are attached and for the same
+stated reason -- Qt draws into a `SurfaceView` with its Z-order set, which
+punches through anything merely layered on top, so being added later is not
+enough. **The shell hides its own chrome** by entering kiosk, which is what
+`present_fullscreen` already did for the desktop.
+
+`exit_fullscreen()` is implemented too, because `present_fullscreen` calls it
+when it *could not* present -- a page that asked and was refused has to be put
+back rather than left laid out for a screen it never got. That is the desktop
+comment's reasoning, and it applies here unchanged.
+
+The order in `hideFullscreen` is deliberate: the view is detached first and
+the page's callback invoked last. The callback is what lets the page restore
+its player, and calling it while the old surface is still attached leaves it
+on screen over the restored layout.
+
+### Watched, both directions
+
+A page served over `adb reverse` with a div that calls `requestFullscreen()`
+and colours itself from its own `fullscreenchange` event -- so the *page's*
+opinion is visible in the screenshot rather than inferred from the browser's.
+
+    before   red block, "state: normal", menu bar, toolbar, status bar
+    tapped   green, filling the screen: no browser chrome, no Android status
+             or navigation bar
+    Back     red again, "state: normal", chrome restored, app still alive
+
+The colour is the control. A view that merely covered the screen would still
+be red -- green means `document.fullscreenElement` is set, which only the real
+fullscreen path produces.
+
+### Two process mistakes worth keeping
+
+**`$!` after a subshell is not the pid you want.** The test server was started
+as `( cd dir && timeout 240 python3 -m http.server & echo $! > pid )`, and the
+recorded pid was the subshell's; killing it left `timeout` and `python`
+running. That is the same shape as killing `timeout` instead of the browser
+earlier in this session -- twice in one day, a pid recorded for a process that
+was not the one doing the work.
+
+**And `pgrep -af` matched its own command line** while looking for the
+survivors, exactly as the running-code guidance says it will. The count was
+one too many until the match was filtered.
 
 ## What is next (in order)
 
