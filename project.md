@@ -16808,12 +16808,69 @@ instance, not `extern "C"`. So the types were matched by hand: `long`→`jlong`,
 `boolean`→`jboolean`, `void`→`void`, `static`→`jclass`, and the definition
 carries `extern "C"`.
 
-**Not verified: that it does what it is for.** Nothing here can kill a
-renderer. The claim that the old code loses the process is the platform's
-documented behaviour for `targetSdk >= 26` rather than something observed in
-this tree, and the recovery path -- teardown, rebuild, resize, reload -- has
-been compiled and read, not run. It wants a handset and a page that kills its
-own renderer.
+**~~Not verified: that it does what it is for.~~ Verified on an SM-N960F,
+against `chrome://crash`.** The whole chain is in one log:
+
+    chromium: Intentionally crashing (with null pointer dereference)
+              because user navigated to chrome://crash/
+    chromium: Renderer process (5104) crash detected (code 11).
+    hydra   : render process gone for view 3 (crashed=true)
+    hydra   : render process gone for view 2 (crashed=true)
+    default : android: render process crashed for crash
+
+and the process kept its pid and its window throughout. Loading a page
+afterwards armed the document-start script on the replacement view, so the
+rebuild works and not merely the survival.
+
+**Two views reported gone for one renderer death**, which is worth knowing:
+WebViews share a renderer process, so a crash takes every tab using it and
+each client fires. Both were torn down and rebuilt. One produced no C++ line,
+which is the `if (!v) return;` in `report_render_gone` doing its job for an id
+with no live `android_view` behind it.
+
+What is still inferred rather than measured is the *old* behaviour: nothing
+here ran a build without the override to watch the process die. That the
+default kills the app is the platform's documented behaviour for
+`targetSdk >= 26`, and what was observed is that the override fires and the
+app lives.
+
+## The alias that kept a make target working started the app and killed it
+
+Found while installing the above, and **it was mine**, from earlier in this
+session. `make android-run` launches by Qt's class name, and this project's
+activity became `se.vibes.hydra.HydraActivity` -- a four-line subclass that
+calls `setIntent()` before `super.onNewIntent()`, because Qt does not, and
+without it a url handed to a running browser opens the page it was given last
+time. An `<activity-alias>` under Qt's name was added so the shared fragment
+would keep working.
+
+**It cannot work.** Measured on the handset:
+
+    QtActivityBase: Starting an alias-activity, skipping loading of the
+                    Qt libraries.
+    UnsatisfiedLinkError: No implementation found for
+        org.qtproject.qt.android.QtNative.updateApplicationState
+
+Qt detects an alias launch and *deliberately* declines to load its native
+libraries; `onResume` then calls into them and the app dies before its window
+appears. So the alias converted "the make target names an activity that does
+not exist" into "the make target starts an app that dies" -- the worse of the
+two, and silent unless somebody launched it that way.
+
+The launcher icon was never affected: `MAIN`/`LAUNCHER` sit on the real
+activity, so tapping it has always worked. Only the make target's path was
+broken, which is exactly why it survived a session of Android work.
+
+**It was never tested when it was written.** That is the whole lesson: it was
+added to keep a target working, and the target was not then run.
+
+The alias is gone and `android-run` is overridden in this project's Makefile
+to name the real class. The fragment wants an `ANDROID_ACTIVITY` variable --
+one file copied into four projects, so a deliberate cross-project pass rather
+than something to do from inside this one. Make warns that the recipe is
+overridden, and that warning is correct and worth seeing.
+
+
 
 ## What is next (in order)
 

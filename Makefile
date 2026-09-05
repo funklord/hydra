@@ -271,6 +271,27 @@ all:
 # in above would make android-check the default goal.
 include tool/android.mk
 
+# **Overrides the fragment's, which launches Qt's class name.**
+#
+# This app's activity is `se.vibes.hydra.HydraActivity` -- a four-line
+# subclass that calls `setIntent()` before `super.onNewIntent()`, because Qt
+# does not, and without it `getIntent()` stays stale and a url handed to a
+# running browser opens the page it was given last time.
+#
+# The obvious way to keep the shared target working was an `<activity-alias>`
+# under Qt's name. It cannot work: Qt sees an alias launch and skips loading
+# its own libraries, so the app dies in `onResume` with an
+# `UnsatisfiedLinkError`. The manifest carries the measurement.
+#
+# So the class is named here. The fragment wants an `ANDROID_ACTIVITY`
+# variable, which is a change to one file copied into four projects and
+# therefore a deliberate cross-project pass rather than something to do from
+# inside this one -- signalled rather than made. Make warns that this
+# overrides the fragment's recipe, and that warning is correct and worth
+# seeing.
+android-run: android-install
+	$(ANDROID_ADB) shell am start -n $(APP_ID)/se.vibes.hydra.HydraActivity
+
 # **Run against a copy, not the tracked sample.** The app saves its tree on
 # exit, so pointing it at `sample-tree.txt` means merely starting the browser
 # rewrites a file in git -- a page title here, a type changed from suspended to
