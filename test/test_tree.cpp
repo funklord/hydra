@@ -455,6 +455,101 @@ int main(int argc, char **argv) {
 		delete some;
 	}
 
+	// **Tags were typed into a dialog and thrown away by the next save.**
+	// `node` carries them, the Properties dialog offers a field for them,
+	// `update_node` stores them, `deep_copy` copies them, and the AI payload
+	// in `tree_serializer` both writes and reads `tags=`. The tree file --
+	// the one that is the user's data -- wrote them nowhere and read them
+	// nowhere, so a person could tag a tab, see it take, and find it bare on
+	// the next launch.
+	//
+	// Found by comparing `node`'s fields against what `write_node` emits.
+	// Three others are absent from the file on purpose and stay that way:
+	// `history` has its own file beside the tree, `mirror` must not be
+	// written or it resurrects somebody else's tabs as real ones, and `order`
+	// and `parent` are the line's position and indentation rather than
+	// fields.
+	section("tags survive the tree file");
+	{
+		const QString dir = QDir::temp().filePath("hydra-tree-tags");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString path = dir + "/tree.txt";
+
+		node root;
+		root.id = "root";
+		root.type = node_type::folder;
+
+		auto *tab = new node;
+		tab->id = "t1";
+		tab->type = node_type::unopened_tab;
+		tab->title = "An article";
+		tab->url = "https://example.com/a";
+		tab->tags = QStringList{ "read later", "work" };
+		root.children.push_back(tab);
+
+		auto *folder = new node;
+		folder->id = "f1";
+		folder->type = node_type::folder;
+		folder->title = "A folder";
+		folder->tags = QStringList{ "filed" };
+		root.children.push_back(folder);
+
+		check(tree_outline::save(path, &root), "a tagged tree is written");
+
+		node *back = tree_outline::load(path);
+		check(back != nullptr && back->children.size() == 2,
+		      "and read back whole");
+		if (back && back->children.size() == 2) {
+			check(back->children[0]->tags == tab->tags,
+			      QString("a tab keeps its tags (%1)")
+			          .arg(back->children[0]->tags.join('/')));
+			check(back->children[1]->tags == folder->tags,
+			      QString("and so does a folder (%1)")
+			          .arg(back->children[1]->tags.join('/')));
+			// The fields either side of the new one, because appending a key
+			// to a line read from the right is exactly where a url goes
+			// missing.
+			check(back->children[0]->url == tab->url,
+			      QString("with the url still the url (%1)")
+			          .arg(back->children[0]->url));
+			check(back->children[0]->title == tab->title,
+			      QString("and the title still the title (%1)")
+			          .arg(back->children[0]->title));
+		}
+		delete back;
+
+		// **A bar in a tag would split the line**, since fields are separated
+		// by " | " and there is no escape in this format. Stripped on the way
+		// out rather than allowed to corrupt the file -- the same fault that
+		// once ate a real address when a title contained one.
+		tab->tags = QStringList{ "a | b", "plain" };
+		check(tree_outline::save(path, &root), "a tag containing a bar writes");
+		node *bar = tree_outline::load(path);
+		check(bar != nullptr && bar->children.size() == 2,
+		      "and the file still has both rows in it");
+		if (bar && bar->children.size() == 2) {
+			check(bar->children[0]->url == tab->url,
+			      QString("the url survived it (%1)")
+			          .arg(bar->children[0]->url));
+			check(bar->children[0]->tags == (QStringList{ "a b", "plain" }),
+			      QString("and the tag lost only the bar (%1)")
+			          .arg(bar->children[0]->tags.join('/')));
+		}
+		delete bar;
+
+		// The control: a tree with no tags must still round-trip, and must
+		// not grow an empty `tags=` on every line.
+		tab->tags.clear();
+		folder->tags.clear();
+		check(tree_outline::save(path, &root), "an untagged tree writes");
+		QFile f(path);
+		f.open(QIODevice::ReadOnly);
+		const QByteArray text = f.readAll();
+		check(!text.contains("tags="),
+		      "with no empty tags= field on any line");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

@@ -152,6 +152,8 @@ node *load(const QString &path, int *flattened, int *unparsed) {
 				n->renamed = t.mid(6) == "1";
 			else if (t.startsWith("locked="))
 				n->locked = t.mid(7) == "1";
+			else if (t.startsWith("tags="))
+				n->tags = t.mid(5).split(QLatin1Char(','), Qt::SkipEmptyParts);
 			else
 				break;
 			rest_fields.removeLast();
@@ -204,6 +206,29 @@ node *load(const QString &path, int *flattened, int *unparsed) {
 	return root;
 }
 
+// The tags as one field, or nothing when there are none.
+//
+// **`|` is stripped, because the line format has no escape.** Fields are
+// separated by " | " and read from the right, so a tag containing one would
+// split the line and the loader would take part of it as the url -- which is
+// the same fault that once ate a real address when a title held " | ". The
+// dialog already splits on commas, so a comma cannot reach here; a bar can.
+static QString tags_field(node *n) {
+	if (n->tags.isEmpty())
+		return QString();
+	QStringList clean;
+	for (QString t : n->tags) {
+		// `simplified` rather than `remove` then `trimmed`: taking the bar out
+		// of "a | b" leaves "a  b" with the gap it used to separate, and a tag
+		// carrying a double space is a different tag from the one beside it.
+		t = t.replace(QLatin1Char('|'), QLatin1Char(' ')).simplified();
+		if (!t.isEmpty())
+			clean << t;
+	}
+	return clean.isEmpty() ? QString()
+	                        : " | tags=" + clean.join(QLatin1Char(','));
+}
+
 static void write_node(QTextStream &out, node *n, int depth) {
 	// A mirror is a view of another browser's session, not part of this tree.
 	// Writing it would resurrect a stale copy of somebody else's tabs on the
@@ -221,7 +246,7 @@ static void write_node(QTextStream &out, node *n, int depth) {
 		// is the same complaint.
 		if (n->locked)
 			out << " | locked=1";
-		out << "\n";
+		out << tags_field(n) << "\n";
 	} else {
 		out << indent << "- [" << n->id << "] " << type_to_string(n->type)
 		     << " | " << n->title
@@ -235,7 +260,7 @@ static void write_node(QTextStream &out, node *n, int depth) {
 			out << " | named=1";
 		if (n->locked)
 			out << " | locked=1";
-		out << "\n";
+		out << tags_field(n) << "\n";
 	}
 	for (node *c : n->children)
 		write_node(out, c, depth + 1);

@@ -16440,6 +16440,61 @@ struct with in-class defaults, filled in field by field somewhere else, is a
 place where a field can be forgotten silently* -- because the next one will
 not look like either of these.
 
+## Tags were typed into a dialog and thrown away by the next save
+
+The same lens at the highest stakes it reaches in this tree: **`node`, against
+what `write_node` emits.** The tree file is the user's data, and one field of
+the struct was in neither half of the round trip.
+
+`node::tags` is offered by the Properties dialog, stored by `update_node`,
+copied by `deep_copy`, and both written and read by `tree_serializer` -- the
+payload the AI reorganizer sends and parses. So a person could tag a tab, see
+it take, watch it travel through a reorganize, and find it bare on the next
+launch, because `tree_outline` wrote it nowhere and read it nowhere.
+
+**Four other fields are absent from the file and stay that way**, which is
+what makes this one a finding rather than a fifth exception. `history` has its
+own file beside the tree and the header says why; `mirror` must never be
+written or it resurrects somebody else's tabs as real ones; `order` and
+`parent` are the line's position and its indentation rather than fields. Only
+`tags` is content with nowhere to live.
+
+### Appending a key to a line that is read from the right
+
+The metadata keys are popped off the end while they are recognised, so
+`tags=` goes last and is seen first. The fields either side of it are asserted
+too, because **appending to this format is exactly where a url has gone
+missing before**: a title containing " | " once shifted every field after it
+and the real address landed in a position nothing read.
+
+Which is also why a bar cannot go into a tag. There is no escape in this
+format, so one would split the line and the loader would take part of the tag
+as the url. It is replaced with a space and the tag `simplified` -- not merely
+removed, because taking the bar out of `a | b` leaves `a  b`, and a tag
+carrying a double space is a different tag from the one beside it. That
+correction came from the test: the assertion was written expecting `a b` and
+the run said `a  b`, and the code was what needed changing.
+
+### What the four assertions are for
+
+    ok  a tab keeps its tags (read later/work)
+    ok  and so does a folder (filed)
+    ok  with the url still the url
+    ok  the tag lost only the bar (a b/plain)
+    ok  an untagged tree writes, with no empty tags= field on any line
+
+The last is the control that keeps the fix from being worse than the bug: a
+`tags=` on every line of a file nobody has tagged would be noise in a format
+whose whole argument is that a person can read and repair it.
+
+Sabotaging the writer fails three of them and leaves the rest green.
+
+**A note for whoever changes this format next.** An older build reading a file
+with `tags=` in it would not recognise the key, would stop the metadata scan
+there, and would take the tag as the url. Downgrade is not a path this project
+supports and nothing here depends on it -- but the trailing-key format has
+that property, and it is better written down than rediscovered.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
