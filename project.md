@@ -16690,11 +16690,9 @@ Its header is otherwise scrupulous about listing what it ignores and why --
 the capture chooser, downloads, `window.open`, isolated worlds -- and **none
 of these appear in that list**:
 
-- `render_process_gone` is never emitted and the Java has no
-  `onRenderProcessGone`. On `targetSdk >= 26` a `WebViewClient` that does not
-  override it lets the system **kill the app process** when a renderer dies.
-  The desktop shows "the page crashed, Reload"; Android would lose the window
-  and everything since the last debounced save.
+- ~~`render_process_gone` is never emitted and the Java has no
+  `onRenderProcessGone`.~~ **Fixed** -- see *A dead renderer took the whole
+  browser with it* below.
 - `title_changed` is never emitted and there is no `onReceivedTitle`, so
   `page_title()` returns empty. **Every tab in the tree and every window title
   on Android is a host, never the page's name** -- and `main_window` sets the
@@ -16746,6 +16744,76 @@ is computed from an earlier visit.
 surface** -- `set_https_only`'s only caller is a test -- and the kiosk status
 tip promises *"Esc returns"* while `allow_escape` is a saved setting the
 settings page warns may leave *"no way out except ending the process"*.
+
+## A dead renderer took the whole browser with it
+
+**Returning false from `onRenderProcessGone` kills the application process**,
+and a `WebViewClient` that does not override it returns false. hydra's had no
+override at all, so one page's renderer going away took every tab, the tree
+since the last debounced save, and any kiosk session with nobody watching.
+
+The desktop backend has treated this event as recoverable since it was
+written: `qtwebengine_view` emits `render_process_gone`, `main_window`
+answers with *"%1 stopped responding. Reload to try again."* and the browser
+carries on. **The signal existed, both consumers were connected, and one
+backend never emitted it** -- the shape this tree keeps finding, in the one
+instance where the cost is the whole window.
+
+Worth saying that `android_view.h` is otherwise scrupulous about listing what
+it ignores and why -- the capture chooser, downloads, `window.open`, isolated
+worlds. This was not on that list. It was not a decision.
+
+### The message had to stay true
+
+Returning `true` is the whole of the crash fix. It is not the whole of the
+change, because the shell's answer to this event says **Reload to try
+again**, and the platform is explicit that a `WebView` whose renderer has
+gone is finished -- reloading into it does nothing. Shipping the return value
+alone would have swapped a crash for a promise the browser cannot keep, which
+is the defect class the rest of this file is about.
+
+So the dead view is torn down by the same path a closed tab uses, and a fresh
+one is built under the same id. `create` already guards on the id being
+absent, so it needed nothing new.
+
+**And the replacement needed its geometry.** Java rebuilds the view; the size
+and position it had came from Qt's widget through `sync_geometry`, and nothing
+re-sends that on its own. Without it the reload lands in a view of zero size
+-- which looks exactly like the crash it just recovered from. Everything else
+is the shell's and is re-applied on the next navigation, which is the reload
+its own message asks for.
+
+`didCrash` is carried through and logged, because a false there means Android
+reclaimed the renderer to save memory rather than anything faulting, and on a
+phone that is the commoner of the two.
+
+### What was verified, and what was not
+
+The APK builds, which compiles both halves -- the Java override with its
+`@TargetApi` and imports, and the JNI function. Then the artifact was read
+rather than the build trusted:
+
+    nm -D libhydra_arm64-v8a.so   T Java_se_vibes_hydra_HydraWebView_onRenderGone
+    classes*.dex                  onRenderProcessGone present, onRenderGone present
+    make jni                      17 native method(s), every one resolvable
+
+**The dex search needed a control before it meant anything.** The first
+attempt reported zero for `onRenderProcessGone` across all five dex files --
+and zero for `onNavState`, which certainly exists. The instrument was wrong,
+not the package. With `grep -a` over the concatenated dex, the three
+known-present methods and the two new ones all return 1.
+
+`make jni` compares **names only** -- not argument types, not `static` versus
+instance, not `extern "C"`. So the types were matched by hand: `long`→`jlong`,
+`boolean`→`jboolean`, `void`→`void`, `static`→`jclass`, and the definition
+carries `extern "C"`.
+
+**Not verified: that it does what it is for.** Nothing here can kill a
+renderer. The claim that the old code loses the process is the platform's
+documented behaviour for `targetSdk >= 26` rather than something observed in
+this tree, and the recovery path -- teardown, rebuild, resize, reload -- has
+been compiled and read, not run. It wants a handset and a page that kills its
+own renderer.
 
 ## What is next (in order)
 

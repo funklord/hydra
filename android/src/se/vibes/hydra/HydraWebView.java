@@ -1,6 +1,8 @@
 package se.vibes.hydra;
 
+import android.annotation.TargetApi;
 import android.app.Activity;
+import android.os.Build;
 import android.graphics.Color;
 import android.net.Uri;
 import android.util.Log;
@@ -17,6 +19,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.ValueCallback;
 import android.webkit.PermissionRequest;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebChromeClient;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -155,6 +158,12 @@ public class HydraWebView {
      * this app has already met once, from Qt's accessibility bridge.
      */
     public static native void onNavState(long id, boolean back, boolean forward);
+
+    /**
+     * The renderer died and a replacement view has been put in its place.
+     * `crashed` separates a real fault from Android reclaiming memory.
+     */
+    public static native void onRenderGone(long id, boolean crashed);
 
     /**
      * Asks the shared request_filter about one request. Called on the WebView's
@@ -681,6 +690,49 @@ public class HydraWebView {
                         // The callback Android provides for exactly this: the
                         // back/forward list has changed.
                         onNavState(id, v.canGoBack(), v.canGoForward());
+                    }
+
+                    /**
+                     * The renderer for this tab died.
+                     *
+                     * **Returning false here kills the whole application
+                     * process**, which is what a `WebViewClient` that does
+                     * not override this does by default from API 26 onwards.
+                     * So the browser vanished -- every tab, the tree since
+                     * the last debounced save, and a kiosk session with
+                     * nobody watching -- because one page's renderer went
+                     * away. The desktop backend shows "stopped responding,
+                     * Reload to try again" and carries on; this is the same
+                     * event and it took the window with it.
+                     *
+                     * The dead `WebView` cannot be reused: the platform is
+                     * explicit that the instance is finished. So it is torn
+                     * down by the same path a closed tab uses, and a fresh
+                     * one is built under the same id -- because the message
+                     * the shell shows says *Reload to try again*, and a
+                     * reload needs something to load into. Shipping the
+                     * message without the view would be a promise the
+                     * browser cannot keep.
+                     *
+                     * The new view starts with default settings; the shell
+                     * re-applies the site's policy on the next navigation,
+                     * which is the reload the person was just asked for.
+                     */
+                    @Override
+                    @TargetApi(Build.VERSION_CODES.O)
+                    public boolean onRenderProcessGone(WebView v,
+                                                        RenderProcessGoneDetail detail) {
+                        // `didCrash` false means Android reclaimed the
+                        // renderer to save memory, which is not a fault and
+                        // is commoner on a phone than a real crash.
+                        final boolean crashed =
+                          detail != null && detail.didCrash();
+                        Log.w("hydra", "render process gone for view " + id
+                                        + " (crashed=" + crashed + ")");
+                        destroy(id);
+                        create(ACTIVITY, id);
+                        onRenderGone(id, crashed);
+                        return true;
                     }
 
                     @Override

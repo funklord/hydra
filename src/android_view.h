@@ -99,6 +99,12 @@ public:
 	// to put a `this`; the id is how it finds its way back.
 	static void report_url(qint64 id, const QString &url);
 	static void report_nav_state(qint64 id, bool back, bool forward);
+	// The renderer for `id` died and Java has already put a fresh WebView in
+	// its place. See the Java override for why it must not simply be left
+	// dead: returning false from `onRenderProcessGone` kills the application
+	// process, and the desktop backend treats the same event as a page that
+	// stopped responding.
+	static void report_render_gone(qint64 id, bool crashed);
 
 	// Called from JNI, on the WebView's *network* thread -- not the UI thread and
 	// not Qt's. It consults the shared filter and touches nothing else, which is

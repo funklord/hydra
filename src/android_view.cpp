@@ -111,6 +111,12 @@ Java_se_vibes_hydra_HydraWebView_onNavState(JNIEnv *, jclass, jlong id,
 	android_view::report_nav_state(id, back == JNI_TRUE, forward == JNI_TRUE);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onRenderGone(JNIEnv *, jclass, jlong id,
+                                               jboolean crashed) {
+	android_view::report_render_gone(id, crashed == JNI_TRUE);
+}
+
 // Called from Java on the WebView's network thread, once per request. Returning
 // true makes the Java side answer with an empty response, which is how a
 // WebView blocks: there is no "cancel this request" to call.
@@ -798,6 +804,28 @@ void android_view::report_nav_state(qint64 id, bool back, bool forward) {
 	QMetaObject::invokeMethod(qApp, [id, back, forward] {
 		if (android_view *v = s_views.value(id))
 			v->on_nav_state_from_java(back, forward);
+	}, Qt::QueuedConnection);
+}
+
+void android_view::report_render_gone(qint64 id, bool crashed) {
+	// Onto the Qt thread, like the two above: this arrives on Android's UI
+	// thread, from inside the WebViewClient callback.
+	QMetaObject::invokeMethod(qApp, [id, crashed] {
+		android_view *v = s_views.value(id);
+		if (!v)
+			return;
+		qWarning("android: render process %s for %s",
+		          crashed ? "crashed" : "was reclaimed",
+		          qPrintable(v->m_url.host()));
+		// **The replacement is a fresh WebView at no particular size.** Java
+		// rebuilt it under the same id, but the geometry this view has been
+		// pushing came from Qt's widget and nothing re-sends it on its own --
+		// so without this the page reloads into a view of zero size, which
+		// looks exactly like the crash it just recovered from.
+		v->sync_geometry();
+		// Everything else the shell owns and re-applies on the next
+		// navigation, which is the reload its own message asks for.
+		emit v->render_process_gone();
 	}, Qt::QueuedConnection);
 }
 
