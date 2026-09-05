@@ -1425,7 +1425,7 @@ QMenuBar *main_window::build_menu_bar() {
 	m_kiosk_action = view_menu->addAction("&Kiosk Mode", QKeySequence(Qt::Key_F11),
 	                                       this, &main_window::toggle_kiosk);
 	m_kiosk_action->setCheckable(true);
-	m_kiosk_action->setStatusTip("Fullscreen chrome-less presentation; Esc returns");
+	refresh_kiosk_tip();
 
 	view_menu->addSeparator();
 	// **A sub-tab, not a window or a pane**, which costs nothing here because
@@ -2145,6 +2145,20 @@ void main_window::undo_reorganize() {
 	mark_dirty();
 	m_status->showMessage(QString("Reverted the reorganization (%1 nodes).").arg(n),
 	                       5000);
+}
+
+void main_window::refresh_kiosk_tip() {
+	if (!m_kiosk_action)
+		return;
+	// Read rather than remembered: the setting can change in the dialog while
+	// this window is open, and a second copy of it here would be a second
+	// thing to keep right.
+	m_kiosk_action->setStatusTip(
+	    settings_store::kiosk().allow_escape
+	      ? QStringLiteral("Fullscreen chrome-less presentation; Esc returns")
+	      : QStringLiteral("Fullscreen chrome-less presentation — Esc is "
+	                        "turned off for this screen, so there may be no "
+	                        "way out except ending the process"));
 }
 
 void main_window::refresh_banner_affordance() {
@@ -4674,6 +4688,11 @@ void main_window::open_settings() {
 			               "the cleared reports");
 	});
 	dlg.exec();
+	// The kiosk lockdown setting may have moved, and the menu entry describes
+	// it. Refreshed here for the same reason the views are re-configured
+	// below: the dialog is the one place that can change it.
+	refresh_kiosk_tip();
+
 	// Global defaults may have moved, and every live view was configured from
 	// the old ones. Re-apply rather than wait for the next navigation, or the
 	// setting appears not to have taken until the page is reloaded.

@@ -16731,9 +16731,10 @@ per-site media counts accumulate for the process lifetime and a site's badge
 is computed from an earlier visit.
 
 **`policy.cpp`'s autofill description names an HTTPS-only switch with no
-surface** -- `set_https_only`'s only caller is a test -- and the kiosk status
-tip promises *"Esc returns"* while `allow_escape` is a saved setting the
-settings page warns may leave *"no way out except ending the process"*.
+surface** -- `set_https_only`'s only caller is a test. ~~And the kiosk status
+tip promises "Esc returns" while `allow_escape` is a saved setting.~~ That
+one is fixed -- see *A menu entry promising the opposite of the setting*
+below.
 
 ## A dead renderer took the whole browser with it
 
@@ -17166,6 +17167,37 @@ controlling for is not a control.
 
 It reads `held + 1` now, and under the same sabotage only the real assertion
 fails.
+
+## A menu entry promising the opposite of the setting
+
+    m_kiosk_action->setStatusTip("Fullscreen chrome-less presentation; Esc returns");
+
+Both Esc and F11 are gated on `m_config.allow_escape`, which is saved, and
+whose own settings row says: *"Turning this off locks the screen down: Esc and
+F11 will not leave, and on a machine with no keyboard shortcut left there may
+be no way out except ending the process."*
+
+So the program contradicted itself, and it did so **in the status bar at the
+moment somebody was deciding whether to press the entry** -- which is the
+worst place for it, because a status tip is read immediately before
+committing, by someone looking for exactly this reassurance.
+
+It is read from the setting now rather than written out, and refreshed when
+the settings dialog closes, which is the one place that can change it. Read
+rather than remembered, for the same reason the file gives elsewhere: a second
+copy of a setting is a second thing to keep right.
+
+The off wording borrows the settings page's own -- *"there may be no way out
+except ending the process"* -- so the two surfaces say one thing rather than
+two.
+
+    ok  with Esc on, it says Esc returns
+    ok  with it off, it does not promise Esc
+    ok  and says what that actually means, in the settings page's own words
+
+Sabotaged back to the fixed string, the second and third fail and the first
+does not, which is what says the test is about the *setting* rather than about
+the wording.
 
 ## What is next (in order)
 

@@ -42,6 +42,7 @@
 #include "consent_dialog.h"
 #include "settings_dialog.h"
 #include "annoyance_log.h"
+#include "kiosk_controller.h"
 #include "request_filter.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"
@@ -1160,6 +1161,49 @@ int main(int argc, char **argv) {
 		check(w11.m_local_proxy->published_count() == held + 1,
 		      QString("while the proxy still publishes afterwards (%1 -> %2)")
 		          .arg(held).arg(w11.m_local_proxy->published_count()));
+	}
+
+	// **The menu promised the opposite of what the setting does.** Both Esc
+	// and F11 are gated on `allow_escape`, and the Kiosk Mode entry's status
+	// tip said "Esc returns" whatever that was set to -- shown in the status
+	// bar at the moment somebody is deciding whether to press it, while the
+	// settings row for the same flag warns that turning it off may leave "no
+	// way out except ending the process".
+	section("the kiosk menu entry says how to get out, truthfully");
+	{
+		policy_engine  kpol;
+		request_filter kfilt(&kpol);
+		fake_factory   kfac;
+
+		kiosk_config c = settings_store::kiosk();
+		const bool was = c.allow_escape;
+
+		c.allow_escape = true;
+		settings_store::set_kiosk(c);
+		{
+			main_window w(&kfac, &kpol, &kfilt);
+			check(w.m_kiosk_action &&
+			          w.m_kiosk_action->statusTip().contains("Esc returns"),
+			      QString("with Esc on, it says Esc returns (%1)")
+			          .arg(w.m_kiosk_action ? w.m_kiosk_action->statusTip()
+			                                 : QString()));
+		}
+
+		c.allow_escape = false;
+		settings_store::set_kiosk(c);
+		{
+			main_window w(&kfac, &kpol, &kfilt);
+			const QString tip =
+			  w.m_kiosk_action ? w.m_kiosk_action->statusTip() : QString();
+			check(!tip.contains("Esc returns"),
+			      QString("with it off, it does not promise Esc (%1)").arg(tip));
+			check(tip.contains("no way out"),
+			      "and says what that actually means, in the settings page's "
+			      "own words");
+		}
+
+		c.allow_escape = was;
+		settings_store::set_kiosk(c);
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
