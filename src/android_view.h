@@ -219,6 +219,12 @@ public:
 	// different Android permission, and an answer the WebView takes back by
 	// origin rather than by request object. Sharing them would be a function
 	// whose body is two functions behind a boolean.
+	// A site asking for a username and password. Parked on the Java side
+	// until this answers, because answering puts a dialog on the Qt thread.
+	static void request_http_auth(qint64 id, const QString &host,
+	                               const QString &realm, bool secure,
+	                               qint64 token);
+
 	static void request_geolocation(qint64 id, const QString &origin,
 	                                 qint64 token);
 
@@ -261,6 +267,13 @@ public:
 	void exit_fullscreen() override;
 	void find_text(const QString &text, bool forward, bool fresh) override;
 	void set_permission_decider(permission_decider fn) override { m_decider = std::move(fn); }
+	// **The shell installed one on every view and this end ignored it**, so a
+	// site behind HTTP authentication failed on Android with no prompt. The
+	// proxy authenticator is deliberately *not* overridden: WebView surfaces
+	// no proxy challenge, and answering a site's prompt through the proxy's
+	// wording -- or the reverse -- is the confusion `web_view_backend` says
+	// these two callbacks exist to prevent.
+	void set_authenticator(authenticator fn) override { m_authenticator = std::move(fn); }
 	// **Accepted and never called, which is honest rather than lazy.** Android's
 	// WebView has no `getDisplayMedia` to answer, so there is nothing to choose
 	// between; storing it keeps the shell's wiring identical on both platforms
@@ -323,6 +336,7 @@ private:
 	QUrl    m_url;
 	QString m_title;   // last reported by onReceivedTitle; see page_title()
 	permission_decider m_decider;
+	authenticator      m_authenticator;
 	capture_chooser    m_capture_chooser;
 	bool               m_desktop_site = false;
 	navigation_decider m_navigation_decider;

@@ -10,6 +10,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
+import android.webkit.HttpAuthHandler;
 import android.webkit.WebStorage;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
@@ -135,6 +136,29 @@ public class HydraWebView {
      * prompt at a time, so one token per view is the whole of it.
      */
     private static final Map<Long, Long> GEO_TOKEN = new HashMap<>();
+
+    /**
+     * A site's HTTP authentication challenge, parked until the shell answers.
+     *
+     * **The default is to cancel**, which is what WebView does when nothing
+     * overrides `onReceivedHttpAuthRequest` -- so before this a site behind
+     * basic authentication failed to load on Android and said nothing about
+     * why, while the desktop asked. The shell's dialog is engine-neutral and
+     * was already installed on every view; only this end of the wire was
+     * missing.
+     *
+     * Answering may put a dialog in front of somebody on the Qt thread, so the
+     * handler is parked here and the answer arrives at onHttpAuthDecision()
+     * with the token -- the same shape as geolocation and capture.
+     */
+    private static final Map<Long, HttpAuthHandler> AUTH_PENDING = new HashMap<>();
+
+    /**
+     * Which auth token a view is waiting on, so a view destroyed mid-prompt
+     * can cancel it. A WebView shows one challenge at a time, as with
+     * geolocation above.
+     */
+    private static final Map<Long, Long> AUTH_TOKEN = new HashMap<>();
 
     /**
      * Kept so every later call can be posted to the same UI-thread queue that
@@ -289,6 +313,23 @@ public class HydraWebView {
                                                  long token);
 
     /**
+     * A site is asking for a username and password.
+     *
+     * `secure` is whether the credentials would travel encrypted, and it is
+     * answered conservatively: true only when the page is https AND its host
+     * is the host asking. Android's callback names a host and a realm and
+     * nothing else, so a challenge from a subresource on another host cannot
+     * be shown to be encrypted from here -- and a warning shown when it was
+     * not needed costs a sentence, while one withheld when it was needed costs
+     * the password. That is the same trade the proxy prompt already makes on
+     * the desktop.
+     *
+     * The answer comes back to onHttpAuthDecision() with this token.
+     */
+    public static native void requestHttpAuth(long id, String host, String realm,
+                                               boolean secure, long token);
+
+    /**
      * The answer to a requestGeolocation, from C++ on the UI thread.
      *
      * `invoke` takes the origin back, so it is parked with the callback -- the
@@ -301,6 +342,28 @@ public class HydraWebView {
      * already records, which is exactly the split the profile's persistent
      * permissions were turned off to avoid on the desktop.
      */
+    /**
+     * The answer to a requestHttpAuth, from C++ on the Qt thread.
+     *
+     * Empty credentials mean the person declined, and that is a `cancel()`
+     * rather than a proceed with nothing: proceeding with an empty username
+     * sends a real -- and wrong -- attempt, which on some servers counts
+     * against a lockout.
+     */
+    public static void onHttpAuthDecision(final long token, final String user,
+                                           final String password) {
+        onUi(new Runnable() { @Override public void run() {
+            AUTH_TOKEN.values().remove(Long.valueOf(token));
+            HttpAuthHandler h = AUTH_PENDING.remove(token);
+            if (h == null)
+                return;
+            if (user == null || user.isEmpty())
+                h.cancel();
+            else
+                h.proceed(user, password == null ? "" : password);
+        }});
+    }
+
     public static void onGeolocationDecision(final long token, final boolean granted) {
         onUi(new Runnable() { @Override public void run() {
             // The note of what this view was waiting on goes with the answer,
@@ -896,6 +959,65 @@ public class HydraWebView {
                     }
                 });
                 w.setWebViewClient(new WebViewClient() {
+                    /**
+                     * A site wants a username and password.
+                     *
+                     * **WebView's own default is `handler.cancel()`**, so
+                     * until this existed a site behind basic authentication
+                     * failed to load on Android with no prompt and no message,
+                     * while the desktop asked. The shell installs an
+                     * authenticator on every view; nothing on this side called
+                     * it.
+                     *
+                     * `useHttpAuthUsernamePassword()` is deliberately not
+                     * consulted. It reads WebView's own credential store,
+                     * which this browser never writes and cannot clear -- a
+                     * second authority over a secret, which is the same split
+                     * the geolocation prompt refuses to create by never
+                     * passing "remember this".
+                     */
+                    @Override
+                    public void onReceivedHttpAuthRequest(WebView v,
+                                                           HttpAuthHandler handler,
+                                                           String host,
+                                                           String realm) {
+                        if (handler == null)
+                            return;
+                        // One challenge at a time per view: a second arriving
+                        // while the first is up would orphan the first
+                        // handler, and an unanswered handler is a page that
+                        // waits for ever rather than one that failed.
+                        Long busy = AUTH_TOKEN.get(Long.valueOf(id));
+                        if (busy != null) {
+                            handler.cancel();
+                            return;
+                        }
+                        final long token = NEXT_TOKEN++;
+                        AUTH_PENDING.put(token, handler);
+                        AUTH_TOKEN.put(Long.valueOf(id), Long.valueOf(token));
+
+                        // Encrypted only if the page itself is https *and* the
+                        // host asking is the page's own. Anything else is
+                        // reported as not encrypted, which puts the warning up
+                        // when in doubt.
+                        String page = PAGE_URLS.get(Long.valueOf(id));
+                        boolean secure = false;
+                        if (page != null && page.startsWith("https://") && host != null) {
+                            String rest = page.substring(8);
+                            int cut = rest.indexOf('/');
+                            String page_host = cut < 0 ? rest : rest.substring(0, cut);
+                            int at = page_host.indexOf('@');
+                            if (at >= 0)
+                                page_host = page_host.substring(at + 1);
+                            int colon = page_host.indexOf(':');
+                            if (colon >= 0)
+                                page_host = page_host.substring(0, colon);
+                            secure = page_host.equalsIgnoreCase(host);
+                        }
+                        requestHttpAuth(id, host == null ? "" : host,
+                                         realm == null ? "" : realm, secure, token);
+                    }
+
                     @Override
                     public void doUpdateVisitedHistory(WebView v, String url,
                                                         boolean isReload) {
@@ -1807,6 +1929,18 @@ public class HydraWebView {
                 if (geo != null) {
                     GEO_PENDING.remove(geo);
                     GEO_ORIGIN.remove(geo);
+                }
+                // **And it is cancelled, not merely forgotten.** An
+                // HttpAuthHandler holds the load behind it, so dropping the
+                // map entry alone leaves a request in the engine that nothing
+                // will ever answer. Geolocation above has nothing to cancel --
+                // the callback belongs to a page that is going away with the
+                // view -- which is why the two are not the same two lines.
+                Long auth = AUTH_TOKEN.remove(Long.valueOf(id));
+                if (auth != null) {
+                    HttpAuthHandler h = AUTH_PENDING.remove(auth);
+                    if (h != null)
+                        h.cancel();
                 }
                 WebView w = VIEWS.remove(id);
                 if (w == null)

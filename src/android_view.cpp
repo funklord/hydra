@@ -276,6 +276,21 @@ Java_se_vibes_hydra_HydraWebView_requestGeolocation(JNIEnv *env, jclass, jlong i
 	}, Qt::QueuedConnection);
 }
 
+// Queued for the same reason as the two above, and one more: answering runs a
+// modal dialog on the Qt thread. Blocking Android's UI thread on that would
+// deadlock the pair the moment the dialog wanted anything from it.
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_requestHttpAuth(JNIEnv *env, jclass, jlong id,
+                                                  jstring host, jstring realm,
+                                                  jboolean secure, jlong token) {
+	const QString h = from_java(env, host), r = from_java(env, realm);
+	const qint64 vid = id, tok = token;
+	const bool enc = secure == JNI_TRUE;
+	QMetaObject::invokeMethod(qApp, [vid, h, r, enc, tok] {
+		android_view::request_http_auth(vid, h, r, enc, tok);
+	}, Qt::QueuedConnection);
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_se_vibes_hydra_HydraWebView_chooseFile(JNIEnv *env, jclass, jlong id,
                                                           jboolean multiple,
@@ -529,6 +544,46 @@ void android_view::request_capture(qint64 id, const QString &origin,
 		return;
 	}
 	decider(o, policy::feature::camera, policy_audio);
+}
+
+void android_view::request_http_auth(qint64 id, const QString &host,
+                                      const QString &realm, bool secure,
+                                      qint64 token) {
+	// One place that answers, however this ends -- the same rule geolocation
+	// keeps below. A parked `HttpAuthHandler` holds the load behind it, so a
+	// path that returns without answering is not a refusal: it is a page that
+	// waits for ever.
+	auto answer = [token](const QString &user, const QString &password) {
+		QJniObject::callStaticMethod<void>(
+		  k_cls, "onHttpAuthDecision", "(JLjava/lang/String;Ljava/lang/String;)V",
+		  jlong(token), QJniObject::fromString(user).object<jstring>(),
+		  QJniObject::fromString(password).object<jstring>());
+	};
+
+	android_view *v = s_views.value(id, nullptr);
+	if (!v || !v->m_authenticator) {
+		// Declining is what happened before this existed, so a view with no
+		// authenticator is no worse off -- and it is the safe direction.
+		answer(QString(), QString());
+		return;
+	}
+
+	// The scheme carries the one thing the dialog needs beyond the host: it
+	// warns when credentials would travel in the clear, and `secure` is
+	// answered conservatively on the Java side.
+	QUrl url;
+	url.setScheme(secure ? QStringLiteral("https") : QStringLiteral("http"));
+	url.setHost(host);
+
+	QString user, password;
+	if (!v->m_authenticator(url, realm, &user, &password) || user.isEmpty()) {
+		// **An empty username is a decline, not an attempt.** Sending one is a
+		// real and wrong login, which on some servers counts against a
+		// lockout, and the Java side reads it as cancel for that reason.
+		answer(QString(), QString());
+		return;
+	}
+	answer(user, password);
 }
 
 void android_view::request_geolocation(qint64 id, const QString &origin,

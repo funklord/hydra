@@ -17580,6 +17580,84 @@ population was real and the assertion was about the right thing; it was read
 one step downstream of a line that changes it. A check placed after something
 that refills what it measures reports on the refill.
 
+## HTTP authentication on Android: the shell asked, nothing listened
+
+`main_window` installs an authenticator on every view, with a comment saying
+why: *"Asked, rather than declined on the person's behalf. Nothing answered
+this, so a site wanting HTTP authentication simply failed to load and said
+nothing about why."* That was written for the desktop. On Android the same
+sentence was still true, because `android_view` never overrode
+`set_authenticator` and WebView's default for `onReceivedHttpAuthRequest` is
+`handler.cancel()`.
+
+So a site behind basic authentication failed on the phone, with no prompt and
+no message, while the desktop asked. The dialog was already engine-neutral and
+already installed; only this end of the wire was missing.
+
+The token pattern is `requestGeolocation`'s, unchanged: the Java side parks the
+`HttpAuthHandler`, calls `requestHttpAuth`, and the answer arrives later at
+`onHttpAuthDecision`. It has to be that shape rather than a return value --
+answering runs a modal dialog on the Qt thread, and blocking Android's UI
+thread on that would deadlock the pair.
+
+Four decisions that are not mechanical:
+
+- **`useHttpAuthUsernamePassword()` is deliberately not consulted.** It reads
+  WebView's own credential store, which this browser never writes and cannot
+  clear -- a second authority over a secret, which is exactly the split the
+  geolocation prompt refuses to create by never passing "remember this".
+- **An empty username is a decline, not an attempt.** Proceeding with one
+  sends a real and wrong login, which on some servers counts against a
+  lockout. Both sides read it that way.
+- **`secure` is answered conservatively.** The dialog warns when credentials
+  would travel in the clear, and Android's callback names a host and a realm
+  and nothing else -- so a challenge from a subresource on another host cannot
+  be shown to be encrypted, and is reported as not. A warning shown when it
+  was not needed costs a sentence; one withheld costs the password. The same
+  trade the desktop's proxy prompt already makes.
+- **The proxy authenticator is not overridden**, and that is a decision rather
+  than an omission. WebView surfaces no proxy challenge, and routing a site's
+  prompt through the proxy's wording -- or the reverse -- is precisely the
+  confusion `web_view_backend` says the two separate callbacks exist to
+  prevent. A prompt that does not say which party is asking invites typing the
+  site's password into the proxy's box.
+
+A destroyed view **cancels** its parked handler rather than merely forgetting
+it: the handler holds the load behind it, so dropping the map entry alone
+leaves a request in the engine that nothing will ever answer. Geolocation next
+to it has nothing to cancel, which is why the two are not the same two lines.
+
+### What was checked, and what the device did not show
+
+Both builds pass. `jni-check` resolves 23 native methods, and because that
+check matches names and not signatures the descriptors were read by hand:
+`requestHttpAuth` is `(JLjava/lang/String;Ljava/lang/String;ZJ)V` and
+`onHttpAuthDecision` is `(JLjava/lang/String;Ljava/lang/String;)V`.
+
+**The prompt has not been seen.** A fixture serving `401` with
+`WWW-Authenticate: Basic realm="Hydra Test Realm"` was run behind
+`adb reverse`, the APK installed, and Hydra started with an `ACTION_VIEW`
+intent naming it. Hydra came up on its restored session instead -- the
+previous tab, `ERR_CONNECTION_REFUSED` -- and **the server received nothing
+from the phone**. The only two requests in its log are the two `curl` calls
+that checked the fixture itself before the phone was involved.
+
+Two things follow, and the second is the one worth keeping:
+
+- The auth path is unexercised. It compiles, its names resolve and its
+  descriptors are right, and none of that is evidence that a dialog appears.
+- **A handed url may not open.** The tree gained a `127.0.0.1` node and the
+  current tab did not change, so `ACTION_VIEW` on a running instance appears
+  to create the node without navigating to it. That is a separate finding and
+  it is not established -- one screenshot, on a device somebody else was
+  using, with no second observation.
+
+The run was stopped there rather than driven further: the phone was in active
+use, another application had focus, and an unanswered modal prompt would have
+been left sitting in front of somebody. The fixture is
+`authsrv.py` in this session's scratch directory and takes a `reverse` and one
+navigation to finish.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
