@@ -45,6 +45,7 @@ class downloads_dialog;
 class torrent_download_source;
 class ytdlp_resolver;
 class mse_tap;
+class stream_assembly;
 class capture_source;
 class extractor_signals;
 class filter_signals;
@@ -420,6 +421,8 @@ public:
 	torrent_download_source *m_torrents = nullptr;
 	ytdlp_resolver     *m_ytdlp          = nullptr;
 	mse_tap            *m_mse            = nullptr;
+	// HLS assembly, held here because it outlives the dialog that starts it.
+	stream_assembly    *m_assembly       = nullptr;
 	QAction            *m_capture_action = nullptr;
 	QUrl                m_capture_url;      // the proxy endpoint, while capturing
 	QString             m_capture_path;

@@ -1409,7 +1409,7 @@ Linux-conditional before a Windows or macOS build is meaningful.
 | Shared UI helpers | `empty_state.{h,cpp}`, `flow_layout.{h,cpp}`, `theme.{h,cpp}` | the message an empty list shows, a button row that wraps instead of squeezing, and the colour and icon scheme |
 | Page tools | `find_bar.{h,cpp}`, `element_picker.{h,cpp}`, `picker_script.h`, `cosmetic_filters.{h,cpp}` | find in page, pick an element to block, and the rules that hide it |
 | Site extractors | `site_extractor.{h,cpp}`, `extractor_signals.{h,cpp}`, `extractor_dialog.{h,cpp}`, `extractor_helpers.{h,cpp}`, `stream_probe.{h,cpp}` | a per-site script that names the stream, the evidence it is written from, and the budgeted fetch a helper may make |
-| Media assembly | `hls_playlist.{h,cpp}`, `hls_assembler.{h,cpp}`, `network_fetcher.{h,cpp}`, `local_proxy.{h,cpp}`, `capture_source.{h,cpp}` | segments to one file, and a recording in progress presented as a download |
+| Media assembly | `hls_playlist.{h,cpp}`, `hls_assembler.{h,cpp}`, `stream_assembly.{h,cpp}`, `network_fetcher.{h,cpp}`, `local_proxy.{h,cpp}`, `capture_source.{h,cpp}` | segments to one file, and a recording in progress presented as a download |
 | Session import | `session_import.{h,cpp}`, `session_mirror.{h,cpp}` | another browser's open tabs, read and then followed |
 | Settings file | `settings_bundle.{h,cpp}` | everything on the settings pages plus site exceptions and accepted rules, in one INI you can read and carry |
 | Scheme rules | `scheme_rules.{h,cpp}` | which urls the engine renders itself and which are somebody else's to open |
@@ -17198,6 +17198,95 @@ two.
 Sabotaged back to the fixed string, the second and third fail and the first
 does not, which is what says the test is about the *setting* rather than about
 the wording.
+
+## An assembly that only ran while the picker was open
+
+Watch on an HLS stream, with a player that cannot take a manifest, assembles
+the segments into one growing local file and hands the player that file --
+sec 11.3's tee-to-disk trick, and the dialog says so in as many words:
+*"Stream assembled; playback continues locally."*
+
+Both halves of that machinery were members of `media_dialog`:
+
+    hls_assembler    *m_assembler = nullptr;   // a child of the dialog
+    QTemporaryDir     m_scratch;
+
+and the dialog is a **stack object run with `exec()`**. So closing the picker
+destroyed the assembler part-way through the assembly, and then removed the
+temporary directory -- taking the file out from under a player that was
+reading it. The sentence about playback continuing locally was true for
+exactly as long as somebody left the picker open, which is the opposite of
+what a picker is for.
+
+Nothing reported it. The player does not complain about a file that stops
+existing; it stops making sense, which is the same symptom as a bad stream.
+
+`stream_assembly` now owns the scratch directory and the assembler, the window
+owns it, and the dialog is handed it -- the same shape as the player launcher,
+the download manager and the proxy, none of which the dialog owns either. The
+status line became a signal for the same reason: while the dialog is open it
+belongs in its label, and once it has gone the window's status bar is the only
+place an assembly can still be seen. An assembly nobody can see is one people
+kill by quitting.
+
+`test_assembly` builds the real dialog, clicks its real `▶ Watch` button, waits
+for a segment, destroys the dialog and then asks the filesystem. The fixture's
+CDN answers each segment after 120ms **because an assembly that has already
+finished cannot demonstrate surviving anything** -- a fast fixture would pass
+with the defect present.
+
+Sabotaged back to the old ownership -- the dialog constructing its own
+`stream_assembly` as a child -- exactly the four lifetime assertions fail:
+
+    ok    a segment lands while the dialog is open
+    ok    and the assembly is still running when it is closed
+    FAIL  the assembled file survives the dialog closing
+    FAIL  and goes on growing once nobody is watching it
+    FAIL  and goes on saying so, which is all the window has left to show
+    FAIL  the whole stream is there, in order, with nothing repeated
+
+The first sabotage run reported eight passes, and that was the binary from
+before it: the edit had a compile error, `make` stopped at the object, and the
+suite ran the stale executable. Caught only because a passing sabotage is
+supposed to be impossible -- which is the whole reason for looking at the
+result rather than at the intention.
+
+**The last assertion, that the scratch directory is still there for the next
+stream, passes under the sabotage too**, because the sabotaged dialog builds a
+second assembly and leaves the test's own untouched. It discriminates a
+different fault -- a scratch that could not be created -- and it is not
+evidence for this one.
+
+## `make objsets` had been broken for a day, and only adding a test could find it
+
+Adding `test_assembly.cpp` meant regenerating `test/objsets.mk`, and that
+failed:
+
+    ‘HYDRA_VERSION’ was not declared in this scope
+      in src/main.cpp
+      HYDRA_VERSION is defined by no file in this tree, which is what a build
+      system injecting a version looks like
+
+`--version` landed on 2026-09-04 (`138c634`) and takes the number from the
+`VERSION` file through a `-D` in the Makefile. fmake reads the sources and not
+the Makefile, so it stopped -- and `git log` puts the last regeneration of
+`objsets.mk` on 2026-09-03, the day before.
+
+**It is the CI shape from `evidence.md` in a build system**: `objsets.mk` is
+generated *and committed*, so an ordinary build never runs the generator. The
+one event that does is adding or removing a test source, which happens rarely
+and is exactly when somebody is thinking about something else. A generator
+that runs once a fortnight is a generator that has stopped running, and
+nothing says so.
+
+The value fmake is given is deliberately **not** the version:
+
+    cflags = ['-DHYDRA_VERSION="(link sets only; see fmake.toml)"']
+
+`make objsets` compiles the tree only to read its symbol tables, and throws
+the objects away. Writing `0.1` there would create a second copy of a number
+whose whole point is to live in one place, and would invite somebody to keep
+it in step with a file it has nothing to do with.
 
 ## What is next (in order)
 

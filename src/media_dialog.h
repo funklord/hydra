@@ -3,8 +3,6 @@
 #include "media_detector.h"
 #include "local_proxy.h"
 
-#include <QTemporaryDir>
-
 #include <QDialog>
 
 class QLabel;
@@ -14,8 +12,8 @@ class QTreeWidget;
 class download_manager;
 class player_launcher;
 class local_proxy;
-class hls_assembler;
 class mse_tap;
+class stream_assembly;
 
 // The compact list behind the media badge (architecture doc sec 11.2/sec 11.3).
 // One row per detected stream, each offering both Watch and Download -- both
@@ -28,7 +26,8 @@ class media_dialog : public QDialog {
 public:
 	media_dialog(media_detector *detector, player_launcher *players,
 	              download_manager *downloads, local_proxy *proxy,
-	              mse_tap *tap, QWidget *parent = nullptr);
+	              mse_tap *tap, stream_assembly *assembly,
+	              QWidget *parent = nullptr);
 
 	void set_site(const QString &site_host, const QString &node_id,
 	               const stream_context &ctx);
@@ -43,20 +42,16 @@ private:
 	void repopulate();
 	void watch(const media_item &item);
 	void save(const media_item &item);
-	// Assemble an HLS stream into one progressive file, then act on it.
-	void assemble_then(const media_item &item, bool play_it);
 
 	media_detector   *m_detector  = nullptr;
 	player_launcher  *m_players   = nullptr;
 	download_manager *m_downloads = nullptr;
 	local_proxy      *m_proxy     = nullptr;
 	mse_tap          *m_tap       = nullptr;
+	// **Injected, not owned, and that is the whole point of it.** An assembly
+	// outlives this dialog -- see `stream_assembly.h` for what owning it cost.
+	stream_assembly  *m_assembly  = nullptr;
 	stream_context    m_ctx;
-	hls_assembler    *m_assembler = nullptr;
-	QTemporaryDir     m_scratch;
-	// One name per assembly. A fixed one meant watching a second stream
-	// truncated the file the first player was still reading.
-	int               m_stream_seq = 0;
 	QString m_site;
 	QString m_node_id;
 

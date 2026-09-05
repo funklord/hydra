@@ -6,10 +6,7 @@
 #include "mse_tap.h"
 #include "player_launcher.h"
 #include "local_proxy.h"
-#include "hls_assembler.h"
-#include "media_remux.h"
-
-#include <QDir>
+#include "stream_assembly.h"
 
 #include <QDialogButtonBox>
 #include <QHeaderView>
@@ -107,9 +104,10 @@ QString kind_label(media_kind k) {
 
 media_dialog::media_dialog(media_detector *detector, player_launcher *players,
                             download_manager *downloads, local_proxy *proxy,
-                            mse_tap *tap, QWidget *parent)
+                            mse_tap *tap, stream_assembly *assembly,
+                            QWidget *parent)
   : QDialog(parent), m_detector(detector), m_players(players),
-    m_downloads(downloads), m_proxy(proxy), m_tap(tap) {
+    m_downloads(downloads), m_proxy(proxy), m_tap(tap), m_assembly(assembly) {
 	setWindowTitle("Media on this page");
 	resize(720, 340);
 
@@ -138,6 +136,14 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
 	outer->addWidget(m_status);
+
+	// While this is open its own line is where somebody is looking, so the
+	// assembly reports here too. It goes on reporting to the window after the
+	// dialog closes -- the connection is bound to `this` and dies with it,
+	// which is the whole reason the assembly is not.
+	if (m_assembly)
+		connect(m_assembly, &stream_assembly::status, this,
+		         [this](const QString &text) { m_status->setText(text); });
 
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -254,92 +260,14 @@ void media_dialog::repopulate() {
 	}
 }
 
-void media_dialog::assemble_then(const media_item &item, bool play_it) {
-	if (!m_assembler)
-		m_assembler = new hls_assembler(this);
-
-	// **`Qt::UniqueConnection` does nothing for the lambdas below**, and the
-	// three connections here relied on it. The flag deduplicates connections to
-	// *member functions*; a functor is a fresh object every time, so nothing
-	// matches and every press added another full set of handlers to the one
-	// assembler this dialog keeps.
-	//
-	// The second Watch therefore ran the progress handler twice and launched
-	// two players; the third launched three. Download drove one output path
-	// from several assemblies at once. It got worse the more it was used and
-	// differed every time, which is what "many bugs in watch/download" looks
-	// like from outside.
-	//
-	// Each press replaces the handlers rather than joining them: the captures
-	// below differ per press -- the output path and whether to play -- so
-	// connecting once up front is not available either.
-	m_assembler->disconnect(this);
-
-	const QString out = play_it
-	  // **A name of its own, not a shared one.** This was `stream.ts` for every
-	  // assembly, and `hls_assembler::start` opens the output with Truncate --
-	  // so watching a second stream cut the file the first player still had
-	  // open, and then wrote over it. The player does not notice; it simply
-	  // stops making sense.
-	  ? m_scratch.filePath(QString("stream-%1.ts").arg(++m_stream_seq))
-	  : QDir(m_downloads->directory()).filePath(
-	        item.label.section('/', -1).section('.', 0, 0) + ".ts");
-
-	connect(m_assembler, &hls_assembler::progress, this,
-	         [this, out, play_it, item](qint64 bytes, int done, int total) {
-		m_status->setText(QString("Assembling %1/%2 segments (%3 KiB)…")
-		                      .arg(done).arg(total).arg(bytes / 1024));
-		// Hand the player the growing file as soon as there is something to
-		// play -- that is the sec 11.3 tee-to-disk trick, and it is what turns a
-		// live stream into a locally seekable one.
-		if (play_it && done == 1) {
-			const QUrl via = m_proxy ? m_proxy->publish_file(out, "video/mp2t") : QUrl();
-			QString error;
-			if (!m_players->play(item, &error, via))
-				m_status->setText("<b>" + error.toHtmlEscaped() + "</b>");
-		}
-	});
-
-	connect(m_assembler, &hls_assembler::completed, this, [this, out, play_it] {
-		if (play_it) {
-			// **Not remuxed, deliberately.** A player already has this file
-			// open and has been reading it since the first segment landed --
-			// that is the tee-to-disk trick above. Rewrapping it now would
-			// replace the file underneath a running player to gain a container
-			// nobody is going to seek around afterwards.
-			m_status->setText("Stream assembled; playback continues locally.");
-			return;
-		}
-
-		// The sec 11.2 step: a saved stream should be a file the rest of the
-		// world accepts, and concatenated MPEG-TS is not that. Optional, so
-		// the message says what happened either way rather than only on
-		// success -- "saved" with no mention of the container would leave
-		// somebody wondering why they have a `.ts`.
-		m_status->setText(QString("Saved %1; rewrapping…").arg(out));
-		auto *remux = new media_remux(this);
-		connect(remux, &media_remux::finished, this,
-		         [this, remux](bool ok, const QString &path, const QString &why) {
-			m_status->setText(ok ? QString("Saved %1.").arg(path)
-			                      : QString("Saved %1 — %2").arg(path, why));
-			remux->deleteLater();
-		});
-		remux->start(out);
-	});
-
-	connect(m_assembler, &hls_assembler::failed, this, [this](const QString &e) {
-		m_status->setText("<b>Assembly failed:</b> " + e.toHtmlEscaped());
-	});
-
-	m_status->setText("Fetching manifest…");
-	m_assembler->start(item.url, m_ctx, out);
-}
-
 void media_dialog::watch(const media_item &item) {
 	// A player that cannot take a manifest gets an assembled progressive file
 	// instead -- "the app compensates in the proxy for what the player lacks".
 	if (item.kind == media_kind::hls && !m_players->selected_handles_streams()) {
-		assemble_then(item, true);
+		if (m_assembly)
+			m_assembly->watch(item, m_ctx);
+		else
+			m_status->setText("<b>Nothing can assemble this stream.</b>");
 		return;
 	}
 
@@ -372,7 +300,10 @@ void media_dialog::watch(const media_item &item) {
 void media_dialog::save(const media_item &item) {
 	// HLS is saveable now: fetch the segments and concatenate them (sec 11.2).
 	if (item.kind == media_kind::hls) {
-		assemble_then(item, false);
+		if (m_assembly)
+			m_assembly->save(item, m_ctx);
+		else
+			m_status->setText("<b>Nothing can assemble this stream.</b>");
 		return;
 	}
 

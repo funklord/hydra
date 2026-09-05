@@ -24,6 +24,7 @@
 #include "claude_provider.h"
 #include "media_detector.h"
 #include "media_dialog.h"
+#include "stream_assembly.h"
 #include "player_launcher.h"
 #include "download_manager.h"
 #include "http_download_source.h"
@@ -613,6 +614,23 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 			                            "to the player.", 12000);
 	});
 	m_local_proxy->start();
+
+	// **Owned here rather than by the media dialog, which is what it used to
+	// be.** That dialog is a stack object run with `exec()`, so closing it
+	// destroyed the assembler mid-assembly and removed the temporary directory
+	// the bytes were going into -- out from under a player that had been handed
+	// the growing file and told playback would continue locally. See
+	// `stream_assembly.h`.
+	m_assembly = new stream_assembly(m_players, m_downloads, m_local_proxy, this);
+	// Once the dialog has gone this is the only place an assembly can still be
+	// seen. Timed rather than permanent: progress arrives per segment and keeps
+	// it refreshed, and the last message is one somebody should be able to
+	// dismiss by doing anything else.
+	connect(m_assembly, &stream_assembly::status, this, [this](const QString &t) {
+		if (m_status)
+			m_status->showMessage(t, 8000);
+	});
+
 	m_filters   = new filter_list;
 	// The cosmetic half of sec 12. It reads the same list the interceptor does, and
 	// reaches pages the only way a `##` rule can: through the DOM.
@@ -1886,7 +1904,8 @@ void main_window::open_media() {
 	apply_extractor(v->url().host(), v->url());
 
 	const stream_context ctx = page_context(v);
-	media_dialog dlg(m_media, m_players, m_downloads, m_local_proxy, m_mse, this);
+	media_dialog dlg(m_media, m_players, m_downloads, m_local_proxy, m_mse,
+	                  m_assembly, this);
 	connect(&dlg, &media_dialog::capture_requested, this, [this] {
 		// Queued: the dialog is closing itself, and starting a capture reloads
 		// the page -- not something to do from inside its own exec().

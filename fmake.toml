@@ -19,6 +19,19 @@
 # twice. That is a small duplication and the alternative is worse.
 #
 # `third_party/` is the vendored yt-dlp, which is Python.
+#
+# **`HYDRA_VERSION` is injected by the build, not written in any source.**
+# `main.cpp` prints it for `--version`, and the Makefile defines it from the
+# `VERSION` file so the number lives in one place. fmake reads the sources and
+# not the Makefile, so without this it stops on an undefined identifier -- and
+# it says so precisely, naming the line it would need.
+#
+# **The value here is deliberately not the version**, and this is not a second
+# copy of it going stale. `make objsets` compiles the tree only to read its
+# symbol tables; the objects are thrown away and nothing built here is ever
+# run or shipped, so what the string says is irrelevant and saying `0.1` would
+# invite somebody to keep it in step with a file it has nothing to do with.
 [project]
+cflags  = ['-DHYDRA_VERSION="(link sets only; see fmake.toml)"']
 exclude = ["build/**", "build-android/**", "build-qmake/**",
             "test/build-make/**", "third_party/**", "attic/**"]
