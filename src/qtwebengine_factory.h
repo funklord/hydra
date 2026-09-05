@@ -19,6 +19,7 @@ public:
 	~qtwebengine_factory() override;
 
 	web_view_backend *create_view(QWidget *parent) override;
+	QString user_agent() const override;
 	void set_external_url_handler(external_url_handler fn) override;
 	void set_download_handler(download_note fn) override;
 	void clear_browsing_data(const browsing_data &what,

@@ -1873,10 +1873,7 @@ void main_window::open_media() {
 	// so a learned stream appears beside whatever detection found on its own.
 	apply_extractor(v->url().host(), v->url());
 
-	// The context a CDN expects: the page that loaded the stream, and this
-	// browser's own User-Agent.
-	stream_context ctx;
-	ctx.referer = v->url().toString();
+	const stream_context ctx = page_context(v);
 	media_dialog dlg(m_media, m_players, m_downloads, m_local_proxy, m_mse, this);
 	connect(&dlg, &media_dialog::capture_requested, this, [this] {
 		// Queued: the dialog is closing itself, and starting a capture reloads
@@ -3801,6 +3798,20 @@ bool main_window::keep_or_disown(bool loaded, QString *path,
 	return false;
 }
 
+stream_context main_window::page_context(web_view_backend *v) const {
+	stream_context ctx;
+	if (!v)
+		return ctx;
+	ctx.referer = v->url().toString();
+	// **Left empty when the backend cannot say what it sends**, rather than
+	// guessed. A wrong User-Agent is worse than the transport's own, which is
+	// at least honest about being a library; `local_proxy` only sets the
+	// header when this is non-empty.
+	if (m_factory)
+		ctx.user_agent = m_factory->user_agent();
+	return ctx;
+}
+
 void main_window::forget_shell_caches() {
 	const int answers = int(m_session_permissions.size());
 	m_session_permissions.clear();
@@ -4366,9 +4377,9 @@ void main_window::learn_this_site() {
 	std::unique_ptr<helper_allowlist> allow;
 	std::unique_ptr<helper_host> helpers;
 	if (m_policy && m_policy->is_allowed(policy::feature::extractor_fetch, host)) {
-		stream_context ctx;
-		ctx.referer = v->url().toString();
-		fetcher = std::make_unique<network_fetcher>(ctx);
+		// A helper fetch is the browser asking on the page's behalf, so it
+		// says what the browser says.
+		fetcher = std::make_unique<network_fetcher>(page_context(v));
 		allow   = std::make_unique<helper_allowlist>();
 		allow->observe(m_ex_signals->evidence_for(host));
 		helpers = std::make_unique<helper_host>(allow.get(), fetcher->as_function(),

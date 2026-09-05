@@ -45,6 +45,7 @@
 #include "request_filter.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"
+#include "local_proxy.h"
 
 #include <QAction>
 #include <QApplication>
@@ -162,7 +163,12 @@ public:
 	void clear_browsing_data(const browsing_data &, clear_note done) override {
 		if (done) done(clear_report{});
 	}
+	// A backend that can say what it sends. The base returns empty, which is
+	// how a backend says it cannot -- and the empty case is asserted below,
+	// because that is the one that must not be turned into a guess.
+	QString user_agent() const override { return ua; }
 
+	QString ua;
 	int made = 0;
 };
 
@@ -1061,6 +1067,49 @@ int main(int argc, char **argv) {
 		check(rules && rules->topLevelItemCount() == 0,
 		      QString("and nothing was put in it (%1 row(s))")
 		          .arg(rules ? rules->topLevelItemCount() : -1));
+	}
+
+	// **The proxy exists to make a fetch look like the page's**, and its own
+	// header names the three things a CDN checks: Referer, cookies and
+	// User-Agent. The shell built that context with the Referer alone -- in
+	// two places, each carrying a comment that promised *"and this browser's
+	// own User-Agent"* beside a line that did not set it. So every fetch the
+	// proxy made announced itself as Qt's network stack, to exactly the CDN
+	// the proxy was standing in front of.
+	section("a fetch outside the engine says what the browser says");
+	{
+		policy_engine  pol;
+		request_filter filt(&pol);
+		fake_factory   fac;
+		fac.ua = "Mozilla/5.0 (Test) HydraTest/1.0";
+		main_window w9(&fac, &pol, &filt);
+
+		auto *v = fac.create_view(nullptr);
+		v->load(QUrl("https://site.example/watch/7"));
+
+		const stream_context ctx = w9.page_context(v);
+		check(ctx.referer == "https://site.example/watch/7",
+		      QString("the page that loaded it is the Referer (%1)")
+		          .arg(ctx.referer));
+		check(ctx.user_agent == fac.ua,
+		      QString("and the browser's own User-Agent goes with it (%1)")
+		          .arg(ctx.user_agent));
+
+		// **The control, and it is the half that must not be "fixed".** A
+		// backend that cannot say what it sends returns empty, and the field
+		// stays empty: `local_proxy` then sends no User-Agent header at all,
+		// which is honest, where a guessed one would be a lie to the one
+		// party this whole mechanism exists to satisfy.
+		fake_factory quiet;
+		main_window w10(&quiet, &pol, &filt);
+		const stream_context none = w10.page_context(v);
+		check(none.user_agent.isEmpty(),
+		      QString("a backend that cannot say leaves it empty (%1)")
+		          .arg(none.user_agent));
+		check(none.referer == "https://site.example/watch/7",
+		      "while the Referer, which the shell does know, is still there");
+
+		delete v;
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

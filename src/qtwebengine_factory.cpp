@@ -441,3 +441,10 @@ qtwebengine_factory::~qtwebengine_factory() {
 web_view_backend *qtwebengine_factory::create_view(QWidget *parent) {
 	return new qtwebengine_view(m_profile, parent);
 }
+
+// The profile's, rather than recomputing it: this is the string the engine
+// actually sends, so anything fetching alongside it says the same thing even
+// if the transformation above changes.
+QString qtwebengine_factory::user_agent() const {
+	return m_profile ? m_profile->httpUserAgent() : QString();
+}

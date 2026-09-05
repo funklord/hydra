@@ -51,6 +51,7 @@ class filter_signals;
 class filter_list;
 class cosmetic_filters;
 class request_filter;
+struct stream_context;
 class keepass_bridge;
 class autofill_controller;
 class consent_blocker;
@@ -84,6 +85,17 @@ public:
 	~main_window() override;
 
 	bool load_tree(const QString &path);
+
+	// What a fetch outside the engine should say about itself, for the page
+	// `v` is on: the Referer that page would send, and what this browser
+	// calls itself.
+	//
+	// **One function because it was two copies of two lines**, and one of the
+	// two lines was missing from both -- the comment beside them promised the
+	// User-Agent for as long as it existed while only the Referer was set.
+	// A named thing can also be asked, which two lines inside a function that
+	// opens a modal cannot.
+	stream_context page_context(web_view_backend *v) const;
 
 	// Open an address as a tab, for a url handed to us from outside: the
 	// desktop entry declares `Exec=hydra %U` and registers http and https, so

@@ -16701,13 +16701,13 @@ of these appear in that list**:
 - ~~HTML5 fullscreen does nothing.~~ **Fixed** -- see *A fullscreen control
   that did nothing, on the platform it matters most on* below.
 
-**`stream_context::user_agent` and `::cookies` have four readers and no
-writer.** `local_proxy`, `hls_assembler`, `stream_probe` and `network_fetcher`
-all read them; every shell-originated context sets only `referer`. The
-proxy's own header says its purpose is that *"the CDN expects the same
-Referer, cookies and User-Agent the page carried"*, and it supplies one of the
-three -- while this browser has a deliberately corrected User-Agent that never
-reaches them.
+**~~`stream_context::user_agent` and `::cookies` have four readers and no
+writer.~~ Half right, and the half that was right is fixed** -- see *A comment
+that promised a User-Agent* below. The "no writer" was wrong: both fields are
+written from a learned extractor's headers, in `media_dialog` and
+`extractor_dialog`. What was true is that the *shell-originated* contexts set
+only `referer`, so a stream with no learned headers went out as Qt's network
+stack. Cookies remain unset and are recorded there as the harder half.
 
 **Pause is offered on HTTP downloads and does nothing.**
 `http_download_source` sets `resumable = true`, meaning Range-resume across
@@ -17022,6 +17022,60 @@ was not the one doing the work.
 **And `pgrep -af` matched its own command line** while looking for the
 survivors, exactly as the running-code guidance says it will. The count was
 one too many until the match was filtered.
+
+## A comment that promised a User-Agent
+
+    // The context a CDN expects: the page that loaded the stream, and this
+    // browser's own User-Agent.
+    stream_context ctx;
+    ctx.referer = v->url().toString();
+
+The second half of that sentence was not in the code, in **two** places, each
+carrying its own version of the promise. `local_proxy`'s header says the whole
+point is that *"the CDN expects the same Referer, cookies and User-Agent the
+page carried"* -- and every fetch the proxy made announced itself as Qt's
+network stack, to exactly the CDN the proxy was standing in front of.
+
+This browser has a deliberately corrected User-Agent, argued for at length in
+`user_agent.h` and applied to the engine profile, and none of it reached the
+four things that fetch alongside the engine: `local_proxy`, `hls_assembler`,
+`stream_probe`, `network_fetcher`.
+
+**A sweep said "four readers and no writer" and that was wrong**, which is
+worth recording because the finding survived being corrected. Both fields
+*are* written -- from a learned extractor's headers, in `media_dialog` and
+`extractor_dialog`, where the comment says they would be "useless if they stop
+here". What is true is narrower and still a defect: a stream with no learned
+headers got nothing.
+
+### One function, because it was two copies with the same line missing
+
+`page_context(view)` replaces both, and the shape is the point: two lines
+duplicated in two places, and the *same* line absent from both. A named thing
+can also be asked, which two lines inside a function that opens a modal
+cannot -- which is why this was untestable before and is tested now.
+
+**The empty case is asserted, and it is the half that must not be "fixed".**
+A backend that cannot say what it sends returns an empty string, and the field
+stays empty -- `local_proxy` then sends no `User-Agent` header at all. That is
+honest. A guessed one would be a lie told to the one party this whole
+mechanism exists to satisfy.
+
+    ok  the page that loaded it is the Referer
+    ok  and the browser's own User-Agent goes with it
+    ok  a backend that cannot say leaves it empty
+    ok  while the Referer, which the shell does know, is still there
+
+Sabotaged, exactly the second fails.
+
+### Cookies are the harder half and are not done
+
+The header names three things and this supplies two. Cookies would have to
+come from the engine's cookie store, per-URL and asynchronously, and be
+carried into a context that is built synchronously at the moment a dialog
+opens. That is a different piece of work, and pretending otherwise by sending
+nothing while the comment claims three would be the defect this entry is
+about.
 
 ## What is next (in order)
 

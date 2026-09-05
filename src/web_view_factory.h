@@ -22,6 +22,21 @@ public:
 
 	virtual web_view_backend *create_view(QWidget *parent) = 0;
 
+	// **What this browser tells a server it is**, so that anything fetching a
+	// stream outside the engine can say the same thing.
+	//
+	// The local proxy exists because a CDN expects the request to look like
+	// the one the page made -- its own header says Referer, cookies *and*
+	// User-Agent -- and the shell was building that context with the Referer
+	// alone. The comment beside it said "and this browser's own User-Agent"
+	// while the line was not there.
+	//
+	// Empty means "this backend cannot say", and a caller must then leave the
+	// field alone rather than invent one: a wrong User-Agent is worse than
+	// the transport's default, which is at least honest about being a
+	// library.
+	virtual QString user_agent() const { return QString(); }
+
 	// Called when the engine is handed a URL it will not render as a page --
 	// a `magnet:` link being the motivating case (sec 11.4). The shell decides
 	// what to do with it; the engine's only job is to hand it over and not
