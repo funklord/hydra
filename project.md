@@ -17808,6 +17808,70 @@ Two controls are deliberately untouched and stay that way: the Claude API key,
 which was never stored so has no default to return to, and the four Clear
 checkboxes, which are the state of a destructive action rather than settings.
 
+## Open: a single-label host with a path goes to the search engine
+
+`address_input.h` states the one leak it accepts, by name:
+
+    A bare word with no dot -- `wiki`, `router` -- is searched, which is what
+    every browser does and is the one leak this accepts: the word itself goes
+    out, and it is a word rather than a path.
+
+A single-label host **with a path** is one step past that sentence, and it is
+not what the sentence licensed. Measured against the real classifier:
+
+    router/admin               search
+    nas/share                  search
+    intranet/wiki/Main_Page    search
+    printer/status?job=1       search
+    gitlab/-/profile           search
+
+    localhost/admin            ADDRESS
+    192.168.1.1/admin          ADDRESS
+    internal.corp.example/secret   ADDRESS
+
+So what goes out is the host **and the path** -- `nas/share`,
+`printer/status?job=1` -- which is the failure the whole file exists to
+prevent, arriving through the one case its own rule did not name. The header's
+asymmetry points straight at it: *"guessing search for an intranet address
+sends a private hostname to a third party, and that cannot be taken back."*
+
+**And it is not fixed, because the counter-cases are real and there is no
+syntactic rule that separates them.** `AC/DC`, `TCP/IP`, `and/or`, `24/7`,
+`km/h` are all two short alphabetic segments and are indistinguishable in
+shape from `router/admin`. Narrowing to "more than one path segment, or a
+query, or a non-word segment" catches three of the five measured cases above
+and misses exactly the two that look most like prose.
+
+The options, their costs, and whose decision it is:
+
+- **Leave it.** Intranet hosts with a path keep leaking; every common
+  slash-search keeps working. This is today.
+- **Treat `word/path` as an address.** The leak closes; `AC/DC` becomes a
+  failed load with no answer instead of search results. By the header's own
+  accounting that is the cheap error -- a wasted keystroke against a
+  disclosure that cannot be recalled -- but "wasted keystroke" understates a
+  dead end where the user wanted an answer, and on a machine with a DNS search
+  domain `http://ac/dc` may even resolve somewhere.
+- **Navigate, and fall back to searching when the load fails.** Nothing leaves
+  until the address is shown not to exist -- and then the query goes out
+  anyway, so it defers the disclosure rather than removing it.
+- **Ask.** A prompt on every ambiguous input, which is intrusive on the
+  commonest case.
+
+**It is the copyright holder's**, because it trades a privacy property this
+project treats as load-bearing against a class of ordinary searches, and the
+rule that would decide it was written without the counter-case in view.
+
+`test_address` pins the present answer in a section that says so, together
+with the three cases that are already addresses and the three that are prose,
+so a change aimed at the four leaking cases cannot quietly move the others and
+whichever way it is settled the suite goes red deliberately.
+
+**And one rule had no case at all.** `is_path` names four prefixes -- `/`,
+`./`, `../`, `~/` -- and the suite exercised three. `../notes.html` is
+asserted now; a rule with no case is a rule that can be deleted without
+anything going red.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

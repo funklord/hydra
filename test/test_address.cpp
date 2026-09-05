@@ -82,6 +82,10 @@ int main(int argc, char **argv) {
 		is_address("[::1]:8080");
 		is_address("/etc/hosts");
 		is_address("./notes.html");
+		// `../` is the third prefix `is_path` names and the only one of the
+		// four the suite did not exercise. A rule with no case is a rule that
+		// can be dropped without anything going red.
+		is_address("../notes.html");
 		is_address("~/notes.html");
 	}
 
@@ -109,6 +113,40 @@ int main(int argc, char **argv) {
 		// ideal: a custom scheme is exactly this shape, and refusing it would
 		// break the ones the shell exists to route.
 		is_address("foo:bar");
+	}
+
+	// -------------------------------------------------------------------
+	// **Recorded behaviour at an open question, not an endorsement of it.**
+	//
+	// `address_input.h` accepts one leak by name: "a bare word with no dot --
+	// `wiki`, `router` -- is searched ... the word itself goes out, and it is
+	// a word rather than a path." A single-label host WITH a path is one step
+	// past that sentence, and it is not what the sentence licensed: what goes
+	// out is the host and the path together.
+	//
+	// It is left as it is because the counter-cases are real and common --
+	// `AC/DC`, `TCP/IP`, `and/or`, `24/7`, `km/h` are all two short alphabetic
+	// segments and are indistinguishable in shape from `router/admin`. There
+	// is no syntactic rule that separates them, so this is a product decision
+	// rather than a defect with an obvious fix; see project.md.
+	//
+	// Pinned here so that whichever way it is settled, the change is
+	// deliberate: these assertions fail the moment the classifier moves.
+	section("single-label hosts with a path -- the open question");
+	{
+		is_search("router/admin");
+		is_search("nas/share");
+		is_search("intranet/wiki/Main_Page");
+		is_search("printer/status?job=1");
+		// The three that are already addresses and must stay that way, so a
+		// change aimed at the four above cannot quietly move these too.
+		is_address("localhost/admin");
+		is_address("192.168.1.1/admin");
+		is_address("internal.corp.example/secret");
+		// And the prose the four above cannot be told apart from.
+		is_search("AC/DC");
+		is_search("TCP/IP");
+		is_search("and/or");
 	}
 
 	section("building the search url");
