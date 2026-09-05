@@ -8,10 +8,23 @@
 //
 // It grabs each widget in-process with `QWidget::grab()` -- never a screen
 // capture, never a tool that can grab the X pointer, which froze this desktop
-// once. Offscreen is the default and it is honest about what that costs: with
-// no platform theme the icon search paths differ, so icons render as Qt's
-// built-ins rather than the desktop's. Layout, spacing, wording and empty
-// states are faithful; colours and icons are not.
+// once. Offscreen is the default and it is honest about what that costs:
+// layout, spacing, wording and empty states are faithful, colours are not.
+//
+// **The icons are faithful now, and the sentence that used to sit here gave
+// the wrong reason for their not being.** It blamed the platform theme --
+// "with no platform theme the icon search paths differ, so icons render as
+// Qt's built-ins" -- when the cause was that `icon/hydra.qrc` was compiled
+// into the application by qmake and into no test binary at all. Every driver
+// therefore fell back to the host theme, which is the exact dependency the
+// bundled svgs were added to remove, and offscreen that meant Qt's built-ins;
+// the shield has no built-in on Linux, so the toolbar drew the word "Shield"
+// beside seven pictures for months and this file photographed it.
+//
+// `test/Makefile` links the resource into the live drivers now. What is left
+// of the original caveat is real and much smaller: a *theme* icon, for any
+// caller that passes no bundled name, is still the offscreen default rather
+// than the desktop's.
 #include "auth_dialog.h"
 #include "cert_dialog.h"
 #include "permission_dialog.h"
@@ -352,6 +365,18 @@ int main(int argc, char *argv[]) {
 		site.show();
 		QApplication::processEvents();
 		save(&site, "auth-site");
+	}
+	{
+		// **The same dialog with the warning in it**, which the secure shot
+		// above cannot show. It is not a rare state: Android's WebView reports
+		// a challenge with a host and a realm and nothing else, so anything
+		// not provably on the page's own https origin is drawn like this --
+		// and a printer or a router asking for a password over plain HTTP is
+		// exactly what that path meets.
+		auth_dialog plain("printer.lan", "Configuration", false, &w);
+		plain.show();
+		QApplication::processEvents();
+		save(&plain, "auth-site-insecure");
 	}
 	{
 		auth_dialog proxy("proxy.corp.example", "Staff", false, &w,

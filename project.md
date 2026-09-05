@@ -18022,6 +18022,65 @@ Qt connection, and these two through a bare call and an inline definition.
 **The pattern finds calls through an object and nothing else**, which is a
 minority of the ways a C++ function is reached.
 
+## The toolbar in every screenshot was one nobody will ever see
+
+`try_look` exists to photograph every surface, and the first thing its picture
+of the main window shows is a toolbar with seven icons and the word **Shield**
+where the eighth should be.
+
+`icon/hydra.qrc` is in the application's `RESOURCES`, so qmake compiles it and
+`build/qrc_hydra.o` is 184 KB of svg. **Nothing in `test/Makefile` ran `rcc` at
+all**, so no test binary or driver carried the icons, and `themed_icon` fell
+through to the host icon theme for all ten -- which is precisely the
+dependency the bundled svgs were added to remove. Offscreen that means Qt's
+built-ins, and the shield's built-in is `SP_VistaShield`, empty on Linux; a
+`QToolButton` with a null icon draws its text, so the button said "Shield".
+
+The `icon: :/ui/*.svg did not render` warning fired **eleven times per run**
+and had been doing so in every suite that builds a window, which is how a real
+signal becomes noise nobody reads.
+
+    before   11 warnings, 19 shots, one button drawn as a word
+    after     0 warnings, 20 shots, the toolbar the application has
+
+The resource goes into the live drivers only: they are the ones that build the
+real window and whose output is a picture, and an offline suite asserting on
+text would pay 180 KB for something it never draws. The warnings still appear
+there, and that is now their only cause.
+
+### `try_look`'s header gave the wrong reason, which is why nobody looked
+
+It said the icons were Qt's built-ins because "with no platform theme the icon
+search paths differ" -- a true sentence about a real effect, attached to the
+wrong cause, and an explanation is what stops somebody investigating. The
+files were not in the binary. The header says that now, and what is left of
+the original caveat is much smaller: a *theme* icon, for a caller that passes
+no bundled name, is still the offscreen default rather than the desktop's.
+
+### And the fix walked into the trap this Makefile warns about
+
+The first version added the object to `.SECONDARY` along with the generated
+`.cpp`. Make does not rebuild a **missing** secondary when the thing depending
+on it already exists -- which is the paragraph `.SECONDARY` carries in that
+file, quoting the day an archive was left unchanged and every symbol in it
+undefined. So the driver relinked without the resource, said nothing, and the
+pictures were identical. Left to make's built-in `%.o: %.cpp` the object is an
+intermediate; an explicit rule makes it a target, and the trap does not apply.
+
+**What said so was the artifact, not the build.** `make` printed no error, the
+run produced its nineteen images, and the only thing that disagreed was
+`ls`: no `qrc_hydra.o`. A build that succeeds and a picture that has not
+changed are the same two halves of one result as a count and an exit code.
+
+### A surface that had never been photographed
+
+`auth_dialog` shows *"This connection is not encrypted"* for a site as well as
+for a proxy, and only the proxy shot had it -- the site shot passes `https`.
+That variant is now the common one: Android's WebView reports a challenge with
+a host and a realm and nothing else, so anything not provably on the page's own
+https origin is drawn with the warning, and a printer or a router asking for a
+password over plain HTTP is exactly what the new Android path meets.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

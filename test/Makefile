@@ -216,8 +216,42 @@ $(ENGINE_BINS): LDLIBS += $(ENGINE_LIBS)
 # and report nothing. Adding it here covers the driver somebody writes next
 # month, which a rule in a comment does not.
 LIVE_PATHS_OBJ := $(BUILD_DIR)/live_paths.o
-$(LIVE): EXTRA_OBJS = $(LIVE_PATHS_OBJ)
-$(LIVE): $(LIVE_PATHS_OBJ)
+
+# **The toolbar's own icons, which no test binary had.**
+#
+# `icon/hydra.qrc` is in the application's `RESOURCES` and qmake compiles it;
+# nothing here did, so every driver fell back to the host icon theme -- the
+# exact dependency the bundled svgs were added to remove. Offscreen that meant
+# Qt's built-ins, and for the shield it meant `SP_VistaShield`, which is empty
+# on Linux: the button drew the word "Shield" while every other one drew a
+# picture. `try_look` photographed that toolbar for months and its header
+# blamed the platform theme, which was the wrong cause -- the files were not in
+# the binary at all.
+#
+# Live drivers only. They are the ones that build the real window and the ones
+# whose output is a picture; an offline suite asserts on text and would pay
+# 180 KB for a resource it never draws. The `icon:` warnings still appear
+# there, and that is now their only cause.
+RCC := $(if $(QT_LIBEXECDIR),$(QT_LIBEXECDIR)/rcc,)
+QRC_SRC := $(BUILD_DIR)/qrc_hydra.cpp
+QRC_OBJ := $(BUILD_DIR)/qrc_hydra.o
+
+$(QRC_SRC): ../icon/hydra.qrc $(wildcard ../icon/ui/*.svg) | $(BUILD_DIR)
+	@test -n "$(RCC)" || { echo "no rcc: install Qt6Core's dev files" >&2; exit 1; }
+	$(RCC) --name hydra $< -o $@
+
+# **An explicit rule, and it has to be.** Left to make's built-in `%.o: %.cpp`
+# the object is an *intermediate*, and an intermediate named in `.SECONDARY` is
+# one make will not rebuild when it is missing and the thing depending on it
+# already exists. That is the trap `.SECONDARY` carries a paragraph about at
+# the bottom of this file, and the first version of this block walked into it:
+# the driver relinked without the resource, silently, and the icons were still
+# absent from the pictures.
+$(QRC_OBJ): $(QRC_SRC)
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+$(LIVE): EXTRA_OBJS = $(LIVE_PATHS_OBJ) $(QRC_OBJ)
+$(LIVE): $(LIVE_PATHS_OBJ) $(QRC_OBJ)
 
 # --- the upstream reproducer -----------------------------------------------
 # `live/repro_share.cpp` links Qt and nothing of this project, so that a
@@ -341,7 +375,8 @@ $(BUILD_DIR) $(BUILD_DIR)/app $(BUILD_DIR)/moc $(BUILD_DIR)/tmoc:
 # Named targets only: no wildcard sweep, no `rm -rf` of a directory. A clean
 # target is the one thing everybody runs without reading.
 clean:
-	@rm -f $(APP_OBJS) $(MOC_OBJS) $(MOC_SRCS) $(MOC_CPP_SRCS) \
+	@rm -f $(QRC_SRC) $(QRC_OBJ) \
+	       $(APP_OBJS) $(MOC_OBJS) $(MOC_SRCS) $(MOC_CPP_SRCS) \
 	       $(TMOC_INC) $(TMOC_SRCS) $(TMOC_OBJS) \
 	       $(OFFLINE) $(LIVE) $(LIVE_PATHS_OBJ) \
 	       $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(OFFLINE_SRCS)) \
