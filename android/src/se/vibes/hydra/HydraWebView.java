@@ -180,6 +180,18 @@ public class HydraWebView {
     public static native void onFullscreen(long id, boolean on);
 
     /**
+     * How many matches the page holds for the current search term, and which
+     * one is showing.
+     *
+     * `active` is 1-based here, and 0 when there is nothing found, which is
+     * what `web_view_backend::find_result` documents and what the desktop
+     * backend emits. Android counts from zero and reports -1 for none, so the
+     * conversion happens on this side rather than being a rule two backends
+     * have to remember separately.
+     */
+    public static native void onFindResult(long id, int matches, int active);
+
+    /**
      * Asks the shared request_filter about one request. Called on the WebView's
      * network thread, not the UI thread; the C++ side only reads the policy
      * engine, which documents itself as safe for that.
@@ -626,6 +638,19 @@ public class HydraWebView {
                                  : android.view.View.LAYER_TYPE_NONE, null);
                 // Before any load, so a page cannot start without it.
                 w.addJavascriptInterface(new Native(id), "hydraNative");
+                // **Reported only when the count is settled.** WebView calls
+                // this repeatedly while it is still counting, with a partial
+                // total, so forwarding every call made the bar's number climb
+                // and then fall back. `isDoneCounting` is the one that is true.
+                w.setFindListener(new WebView.FindListener() {
+                    @Override public void onFindResultReceived(int active,
+                                                                int matches,
+                                                                boolean done) {
+                        if (!done)
+                            return;
+                        onFindResult(id, matches, matches > 0 ? active + 1 : 0);
+                    }
+                });
                 w.setWebChromeClient(new WebChromeClient() {
                     /**
                      * The page said what it is called.
@@ -1719,6 +1744,44 @@ public class HydraWebView {
      * became Stop; adding those without this would have made it a lie
      * somebody could see.
      */
+    /**
+     * Find on the page.
+     *
+     * **The base class does nothing and reports no matches**, so before this
+     * the menu offered Find on Page, the bar opened, and it said "0 of 0"
+     * about every term on every page. That is the shape this project keeps
+     * removing: a control that looks like it works and cannot.
+     *
+     * `fresh` says the term changed. `findAllAsync` restarts the search;
+     * `findNext` walks the matches the previous call found, which is why the
+     * two are not interchangeable -- calling `findAllAsync` on every keystroke
+     * of the same term would put the highlight back on the first match every
+     * time somebody pressed Next.
+     *
+     * An empty term is a dismissal: `clearMatches` takes the highlighting off
+     * the page, and the result is reported as nothing found so the bar's own
+     * label agrees with the page.
+     */
+    public static void findText(final long id, final String text,
+                                 final boolean forward, final boolean fresh) {
+        onUi(new Runnable() {
+            @Override public void run() {
+                WebView w = VIEWS.get(id);
+                if (w == null)
+                    return;
+                if (text == null || text.isEmpty()) {
+                    w.clearMatches();
+                    onFindResult(id, 0, 0);
+                    return;
+                }
+                if (fresh)
+                    w.findAllAsync(text);
+                else
+                    w.findNext(forward);
+            }
+        });
+    }
+
     public static void stopLoading(final long id) {
         onUi(new Runnable() {
             @Override public void run() {

@@ -124,6 +124,12 @@ Java_se_vibes_hydra_HydraWebView_onFullscreen(JNIEnv *, jclass, jlong id,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onFindResult(JNIEnv *, jclass, jlong id,
+                                               jint matches, jint active) {
+	android_view::report_find(id, int(matches), int(active));
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_se_vibes_hydra_HydraWebView_onLoadProgress(JNIEnv *, jclass, jlong id,
                                                  jint percent) {
 	android_view::report_progress(id, int(percent));
@@ -887,6 +893,35 @@ void android_view::exit_fullscreen() {
 		return;
 	QJniObject::callStaticMethod<void>(k_cls, "exitFullscreen", "(J)V",
 	                                    jlong(m_id));
+}
+
+// **The base class reports no matches and does nothing**, so before this the
+// menu offered Find on Page, the bar opened, and it answered "0 of 0" about
+// every term on every page -- a control that looks like it works and cannot,
+// which is the shape this project keeps removing.
+//
+// `fresh` decides which Android call is used, and the two are not
+// interchangeable: `findAllAsync` restarts the search, `findNext` walks what
+// the last search found. Restarting on every press of Next would put the
+// highlight back on the first match each time.
+void android_view::find_text(const QString &text, bool forward, bool fresh) {
+	if (!m_native) {
+		// Same answer the base class gives, so a view with no WebView behind
+		// it still leaves the bar saying something true.
+		emit find_result(0, 0);
+		return;
+	}
+	QJniObject::callStaticMethod<void>(
+	  k_cls, "findText", "(JLjava/lang/String;ZZ)V", jlong(m_id),
+	  QJniObject::fromString(text).object<jstring>(), jboolean(forward),
+	  jboolean(fresh));
+}
+
+void android_view::report_find(qint64 id, int matches, int active) {
+	QMetaObject::invokeMethod(qApp, [id, matches, active] {
+		if (android_view *v = s_views.value(id))
+			emit v->find_result(matches, active);
+	}, Qt::QueuedConnection);
 }
 
 void android_view::report_render_gone(qint64 id, bool crashed) {

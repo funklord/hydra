@@ -17481,6 +17481,69 @@ five by host.
 Not deferred for want of an idea: deferred because it is four separate
 product questions wearing one refactor's clothes.
 
+## Find on Page answered "0 of 0" about everything, on Android
+
+`web_view_backend::find_text` is not pure, and its default is:
+
+    virtual void find_text(const QString &text, bool forward, bool fresh) {
+        emit find_result(0, 0);
+    }
+
+`android_view` never overrode it. So the Edit menu offered **Find on Page**,
+the bar opened, took the term, and said *nothing found* about every word on
+every page. The bar is not gated on anything -- there is no `can_find` -- so
+nothing looked unavailable and nothing explained itself. That is the shape
+this project keeps removing: a control that looks like it works and cannot.
+
+Android WebView can do this properly, so it does rather than being greyed out:
+`findAllAsync`, `findNext`, `clearMatches`, and a `WebView.FindListener`.
+
+Three details that are not obvious from the API:
+
+- **Report only when the count is settled.** `onFindResultReceived` fires
+  repeatedly while WebView is still counting, with a partial total. Forwarding
+  every call makes the bar's number climb and fall back. `isDoneCounting` is
+  the one to act on.
+- **`fresh` picks the call, and the two are not interchangeable.**
+  `findAllAsync` restarts the search; `findNext` walks what the last search
+  found. Restarting on every press of Next puts the highlight back on the
+  first match each time.
+- **The 1-based conversion happens in Java.** Android counts matches from zero
+  and reports -1 for none; `find_result` is documented as 1-based with zero
+  meaning nothing found. Converting on the Java side means the two backends
+  mean the same thing rather than the shell having to remember which is which.
+
+### What was checked, and what was not run
+
+Both builds pass, and `jni-check` resolves 22 native methods. Descriptors were
+read by hand, because that check matches names and **not** signatures:
+`onFindResult(long,int,int)` is `(JII)V` against
+`(JNIEnv*, jclass, jlong, jint, jint)`, and `findText` is
+`(JLjava/lang/String;ZZ)V` against `(long, String, boolean, boolean)`.
+
+**It has not been run on the device.** The phone was in use -- another
+application had focus and somebody was typing in it -- so the APK is installed
+and the behaviour is unexercised. Compilation and a name check are not a
+demonstration that a search finds anything, and this entry should not be read
+as one until somebody opens the bar and types.
+
+### The lens
+
+From `clear_site`: the half of a feature that is written and never wired.
+Swept mechanically for undo-shaped public methods -- clear, reset, remove,
+forget, unset, revoke, drop, discard, stop, abort, cancel, purge, prune -- with
+no call anywhere in `src/`. Twelve hits, and every one was accounted for:
+four signals, which are connected rather than called; one internal recursion
+the pattern could not see; `annoyance_log::clear_host`, which has no per-site
+surface to be called from; and the four remaining `clear_site` methods, now
+superseded by `clear_all`. **Nothing new, and the method is recorded so it is
+not run again.**
+
+What did pay was turning the same question on the *backend interface*:
+33 virtuals, 8 with no Android override. Seven are honest -- `can_print`
+returns false and the UI gates on it, the authenticator and certificate hooks
+have no Android surface yet -- and one was this.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

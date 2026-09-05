@@ -118,6 +118,9 @@ public:
 	// A page took the screen, or gave it back. The shell answers by entering
 	// or leaving kiosk, which is what hides its own chrome.
 	static void report_fullscreen(qint64 id, bool on);
+	// The count and the position, already 1-based -- see the Java side, which
+	// converts, so this side and the desktop one mean the same thing.
+	static void report_find(qint64 id, int matches, int active);
 
 	// Called from JNI, on the WebView's *network* thread -- not the UI thread and
 	// not Qt's. It consults the shared filter and touches nothing else, which is
@@ -256,6 +259,7 @@ public:
 	QString page_title() const override { return m_title; }
 	void stop() override;
 	void exit_fullscreen() override;
+	void find_text(const QString &text, bool forward, bool fresh) override;
 	void set_permission_decider(permission_decider fn) override { m_decider = std::move(fn); }
 	// **Accepted and never called, which is honest rather than lazy.** Android's
 	// WebView has no `getDisplayMedia` to answer, so there is nothing to choose
