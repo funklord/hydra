@@ -235,7 +235,7 @@ void download_manager::pause(int id) {
 	if (!j || !m_live.contains(id))
 		return;
 	download_source *s = source_by_id(j->source_id);
-	if (!s || !s->capabilities().resumable)
+	if (!s || !s->capabilities().pausable)
 		return;
 	s->pause(id);
 }
@@ -245,7 +245,7 @@ void download_manager::unpause(int id) {
 	if (!j)
 		return;
 	download_source *s = source_by_id(j->source_id);
-	if (!s || !s->capabilities().resumable)
+	if (!s || !s->capabilities().pausable)
 		return;
 	if (m_live.contains(id)) {
 		s->unpause(id);

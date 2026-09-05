@@ -16709,11 +16709,8 @@ written from a learned extractor's headers, in `media_dialog` and
 only `referer`, so a stream with no learned headers went out as Qt's network
 stack. Cookies remain unset and are recorded there as the harder half.
 
-**Pause is offered on HTTP downloads and does nothing.**
-`http_download_source` sets `resumable = true`, meaning Range-resume across
-restarts, and does not override `pause`. The manager and the dialog both gate
-the Pause button on that one flag, so it carries two meanings and only one is
-true.
+**~~Pause is offered on HTTP downloads and does nothing.~~ Fixed** -- see
+*One flag answering two questions* below.
 
 **The HLS scratch directory dies with the media dialog** while an external
 player still has the file open, so Watch works only while the dialog stays
@@ -17076,6 +17073,53 @@ carried into a context that is built synchronously at the moment a dialog
 opens. That is a different piece of work, and pretending otherwise by sending
 nothing while the comment claims three would be the defect this entry is
 about.
+
+## One flag answering two questions
+
+`source_capabilities::resumable` says, in its own comment, *"Can continue a
+partially-transferred job across restarts."* `download_source::pause` said a
+source that does not override it "cannot be paused, which the manager learns
+from `resumable`". Those are different questions, and `http_download_source`
+answers them differently: it is resumable -- it sends a `Range` against
+whatever is already on disk -- and it overrides neither `pause` nor
+`unpause`.
+
+So **every direct download offered a Pause button that called an empty
+virtual.** The bytes kept arriving, the job never entered `paused`, and
+Resume could therefore never become reachable either. The manager gated on
+that flag and so did the dialog.
+
+`pausable` is the second question, set by the sources that override the pair
+and inferred from nothing -- because inferring it from a neighbouring
+capability is precisely what went wrong.
+
+### The obvious assertion could not fail
+
+The first version checked that the job's status was not `paused` after
+pressing pause. That passes against the broken code just as well: the base
+class's `pause` is **empty**, so gating on the wrong flag and gating on the
+right one leave the status equally unchanged. Nothing about the job can tell
+the two apart.
+
+What separates them is *whether the manager called the source at all*, which
+is what the seam's comment asks for -- it learns from the capability "rather
+than by calling and watching nothing happen". So the fake counts the calls,
+and is **deliberately contradictory** to make that observable: it declares
+`pausable = false` while overriding `pause`. A real source that cannot pause
+simply does not override it, and then there is nothing to count.
+
+    ok  the manager does not call a source that says it cannot pause
+        (0 pause, 0 unpause)
+
+Sabotaged back to `resumable`, that reads `(1 pause, 1 unpause)`.
+
+### Not implemented: pause for HTTP
+
+The machinery is closer than it looks -- `start` already resumes with a
+`Range` against the partial file -- so pause could be an abort that keeps
+what is on disk, with unpause a fresh `start`. That is a feature rather than
+a defect, it wants a real transfer to test against, and it is recorded here
+rather than half-built. What is fixed is the button that lied.
 
 ## What is next (in order)
 

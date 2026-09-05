@@ -370,11 +370,14 @@ void downloads_dialog::update_buttons() {
 	}
 
 	download_source *src = m_downloads->source_by_id(job->source_id);
-	const bool resumable = src && src->capabilities().resumable;
+	// **`pausable`, not `resumable`.** The latter is about surviving a
+	// restart, and gating on it offered Pause for every direct download --
+	// where pressing it called an empty virtual and changed nothing.
+	const bool pausable = src && src->capabilities().pausable;
 
-	m_pause->setEnabled(resumable && !job->terminal() &&
+	m_pause->setEnabled(pausable && !job->terminal() &&
 	                     job->status != download_state::paused);
-	m_resume->setEnabled(resumable && job->status == download_state::paused);
+	m_resume->setEnabled(pausable && job->status == download_state::paused);
 	// Cancel covers a seeding job too: it is complete but still working, and
 	// stopping it is exactly what a user would expect Cancel to do there.
 	m_cancel->setEnabled(!job->terminal());

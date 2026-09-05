@@ -493,6 +493,74 @@ int main(int argc, char **argv) {
 	else
 		std::printf("\n(skipping http tests: no server URL given)\n");
 
+	// **Pause was offered on every direct download and did nothing.** The
+	// manager and the downloads dialog both gated it on `resumable`, whose
+	// own comment says it is about surviving a *restart* -- and
+	// `http_download_source` is resumable and overrides neither `pause` nor
+	// `unpause`. So the button was enabled, pressing it called the base
+	// class's empty body, the bytes kept arriving, the job never entered
+	// `paused`, and Resume could never become reachable either.
+	//
+	// One flag was answering two questions. `pausable` is the second one, and
+	// nothing infers it from the first, because inferring it from a
+	// neighbouring capability is exactly what went wrong.
+	section("pause is offered only where it does something");
+	{
+		download_manager m;
+		auto *plain = new fake_unpausable_source;   // resumable, not pausable
+		auto *rich  = new fake_plain_source;        // both
+		m.add_source(plain);
+		m.add_source(rich);
+
+		check(plain->capabilities().resumable && !plain->capabilities().pausable,
+		      "a source can be resumable and not pausable");
+		check(rich->capabilities().pausable,
+		      "while one that overrides pause says so");
+
+		// **The manager refuses rather than calling and watching nothing
+		// happen**, which is what the seam's own comment asks for.
+		QString err;
+		const int id = m.enqueue(QUrl("http://example.invalid/big.bin"),
+		                          QString(), &err);
+		check(id > 0, QString("a job is queued (%1, %2)").arg(id).arg(err));
+		spin(80);
+
+		auto status_of = [&](int want) {
+			for (const download_job &j : m.jobs())
+				if (j.id == want)
+					return int(j.status);
+			return -1;
+		};
+		auto source_of = [&](int want) {
+			for (const download_job &j : m.jobs())
+				if (j.id == want)
+					return j.source_id;
+			return QString();
+		};
+		check(source_of(id) == plain->id(),
+		      QString("it landed on the source that cannot pause (%1)")
+		          .arg(source_of(id)));
+
+		// **The manager must not call it at all**, which is what the seam's
+		// own comment asks for: it learns from the capability "rather than by
+		// calling and watching nothing happen".
+		//
+		// Asserting the job's status instead would prove nothing -- the base
+		// class's `pause` is empty, so gating on the wrong flag and gating on
+		// the right one leave the status equally unchanged. The call count is
+		// the only thing that separates them.
+		m.pause(id);
+		m.unpause(id);
+		spin(80);
+		check(plain->pause_calls == 0 && plain->unpause_calls == 0,
+		      QString("the manager does not call a source that says it cannot "
+		               "pause (%1 pause, %2 unpause)")
+		          .arg(plain->pause_calls).arg(plain->unpause_calls));
+		check(status_of(id) != int(download_state::paused),
+		      QString("and the job is not left claiming to be paused (%1)")
+		          .arg(status_of(id)));
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

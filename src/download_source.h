@@ -64,6 +64,22 @@ struct source_capabilities {
 	// Can continue a partially-transferred job across restarts.
 	bool resumable = false;
 
+	// **Can be stopped and picked up again while the browser is running**,
+	// which is a different question from the one above and was being answered
+	// by it.
+	//
+	// `http_download_source` is `resumable` -- it sends a `Range` against
+	// whatever is already on disk -- and overrides neither `pause` nor
+	// `unpause`. The manager and the downloads dialog both gated the Pause
+	// button on `resumable`, so every direct download offered a Pause that
+	// called the base class's empty body: the bytes kept arriving, the job
+	// never entered `paused`, and Resume could therefore never become
+	// reachable either.
+	//
+	// A source that overrides the two sets this. Nothing infers it, because
+	// inferring it from a neighbouring capability is exactly what went wrong.
+	bool pausable = false;
+
 	// How many jobs this source runs at once. HTTP keeps the existing serial
 	// behaviour (1); a torrent source is useless serialized, because a swarm
 	// that is not connected is a swarm that is not downloading.
@@ -154,8 +170,13 @@ public:
 	virtual void cancel(int id) = 0;
 
 	// Optional. A source that does not override these is one whose jobs cannot
-	// be paused, which the manager learns from `resumable` rather than by
+	// be paused, which the manager learns from `pausable` rather than by
 	// calling and watching nothing happen.
+	//
+	// **That used to say `resumable`**, whose own comment two dozen lines up
+	// says it is about surviving a *restart*. One flag was answering two
+	// questions and a source that could do the one and not the other offered
+	// a button that did nothing.
 	virtual void pause(int id) { Q_UNUSED(id) }
 	virtual void unpause(int id) { Q_UNUSED(id) }
 

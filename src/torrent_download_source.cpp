@@ -138,6 +138,9 @@ QStringList torrent_download_source::url_schemes() {
 source_capabilities torrent_download_source::capabilities() const {
 	source_capabilities c;
 	c.resumable            = true;
+	// pause()/unpause() are overridden here; see `pausable` for why this is
+	// not inferred from the line above.
+	c.pausable             = true;
 	c.seeds                = true;
 	c.multi_file           = true;
 	c.public_participation = true;

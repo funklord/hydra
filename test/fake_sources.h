@@ -22,6 +22,7 @@ public:
 	source_capabilities capabilities() const override {
 		source_capabilities c;
 		c.resumable            = true;
+		c.pausable             = true;   // pause() is overridden below
 		c.max_concurrent       = 3;
 		c.seeds                = true;
 		c.multi_file           = true;
@@ -134,6 +135,51 @@ private:
 
 // A source that fails synchronously inside start(), which lands in the
 // manager's on_finished() mid-pump. Exists to prove the re-entrancy guard.
+// **Shaped like `http_download_source`**: it can resume across a restart, by
+// asking for a `Range` against what is on disk, and it cannot be paused --
+// it overrides neither `pause` nor `unpause`. That pair is what the Pause
+// button was gated on for every direct download, so the button was offered
+// and called an empty virtual.
+class fake_unpausable_source : public download_source {
+	Q_OBJECT
+public:
+	using download_source::download_source;
+	QString id() const override { return "unpausable"; }
+	QString display_name() const override { return "Resumable, not pausable"; }
+	source_capabilities capabilities() const override {
+		source_capabilities c;
+		c.resumable = true;    // Range against a partial file, across restarts
+		c.pausable  = false;   // and no pause()/unpause() override
+		return c;
+	}
+	bool accepts(const QUrl &url, QString * = nullptr) const override {
+		return url.scheme().startsWith("http");
+	}
+	bool start(const download_request &req, QString *) override {
+		++started;
+		m_live.insert(req.id, req);
+		return true;
+	}
+	void cancel(int id) override { m_live.remove(id); emit finished(id, false, "Cancelled."); }
+
+	// **Deliberately contradictory, and that is the instrument.** A real
+	// source that cannot pause simply does not override this, and then
+	// nothing can observe whether the manager called it -- the base body is
+	// empty either way, so gating on the wrong flag and gating on the right
+	// one produce identical behaviour. Counting the calls is the only way to
+	// see *which capability the manager consulted*, which is the thing under
+	// test.
+	void pause(int id) override { Q_UNUSED(id) ++pause_calls; }
+	void unpause(int id) override { Q_UNUSED(id) ++unpause_calls; }
+
+	int started = 0;
+	int pause_calls = 0;
+	int unpause_calls = 0;
+
+private:
+	QHash<int, download_request> m_live;
+};
+
 class exploding_source : public download_source {
 	Q_OBJECT
 public:
@@ -162,6 +208,7 @@ public:
 	source_capabilities capabilities() const override {
 		source_capabilities c;
 		c.resumable = true;
+		c.pausable  = true;   // pause() is overridden below
 		c.max_concurrent = 4;
 		return c;
 	}
