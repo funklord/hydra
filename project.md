@@ -16693,10 +16693,8 @@ of these appear in that list**:
 - ~~`render_process_gone` is never emitted and the Java has no
   `onRenderProcessGone`.~~ **Fixed** -- see *A dead renderer took the whole
   browser with it* below.
-- `title_changed` is never emitted and there is no `onReceivedTitle`, so
-  `page_title()` returns empty. **Every tab in the tree and every window title
-  on Android is a host, never the page's name** -- and `main_window` sets the
-  node's title from that signal.
+- ~~`title_changed` is never emitted and there is no `onReceivedTitle`.~~
+  **Fixed** -- see *Every tab on Android was named after its host* below.
 - `load_progress` / `load_finished` are never emitted, so `m_loading` is
   permanently false: no progress bar, and the "could not be loaded" message
   never runs. A failed load leaves the previous page up with nothing said.
@@ -16871,6 +16869,52 @@ than something to do from inside this one. Make warns that the recipe is
 overridden, and that warning is correct and worth seeing.
 
 
+
+## Every tab on Android was named after its host
+
+`main_window` titles a tree row from `title_changed` and falls back to
+`url().host()` when nothing arrives. On Android nothing ever arrived: no
+`onReceivedTitle`, no emit, and `page_title()` left at the base's empty
+string. So the fallback was not a fallback, it was the only case -- every row
+in the tree and every window title said `example.com` where the desktop says
+what the page calls itself.
+
+`onReceivedTitle` is the only hook a plain WebView offers, and it fires again
+when a page changes its own title, which is what the desktop's signal does
+too. It goes to a new native, then through `report_title` onto the Qt thread,
+which is the shape the two reports either side of it already use.
+`page_title()` is overridden to return the last one, since the seam declares
+it and the base returns nothing.
+
+### Verified on the handset, and the first reading was wrong
+
+The observable is the tree file itself: the shell writes a node's title when
+this signal changes it, so the file on the device says whether it arrived.
+
+**The first run said it had not.** The row stayed `New tab` after eighteen
+seconds and after eight minutes. That reading was of a disturbed session --
+the app had restored a `chrome://crash` tab from the previous test, which
+killed the renderer on launch, and the run never recovered its footing.
+Probes on both sides of the boundary settled it in one build:
+
+    hydra   : PROBE title view 2: Example Domain
+    default : PROBE report_title id=2 view=0x74af6a2fc0 title=Example Domain
+
+Java fires, C++ receives it, and the view lookup succeeds. The probes came
+straight back out and the clean build was re-run.
+
+**On a page whose title cannot be confused with its host**, which is the part
+that makes the check worth anything -- `example.com` titled *Example Domain*
+is a weak witness, since a fallback and a real title look alike:
+
+    - [t-17] open | Example Domains | https://www.iana.org/help/example-domains
+
+Host `www.iana.org`, title `Example Domains`. That can only have come from the
+page.
+
+**And the litter was cleaned up.** Two `chrome://crash` tabs from the previous
+test were left in the device's tree and would have killed the renderer on
+every launch. Removed from the device, since they were mine.
 
 ## What is next (in order)
 

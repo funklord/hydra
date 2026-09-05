@@ -165,6 +165,9 @@ public class HydraWebView {
      */
     public static native void onRenderGone(long id, boolean crashed);
 
+    /** What the page calls itself, as `onReceivedTitle` reported it. */
+    public static native void onTitleChanged(long id, String title);
+
     /**
      * Asks the shared request_filter about one request. Called on the WebView's
      * network thread, not the UI thread; the C++ side only reads the policy
@@ -505,6 +508,26 @@ public class HydraWebView {
                 // Before any load, so a page cannot start without it.
                 w.addJavascriptInterface(new Native(id), "hydraNative");
                 w.setWebChromeClient(new WebChromeClient() {
+                    /**
+                     * The page said what it is called.
+                     *
+                     * **Without this every tab in the tree is a hostname.**
+                     * The shell sets a node's title from `title_changed` and
+                     * falls back to `url().host()` when nothing arrives, so
+                     * on Android the fallback was the only case: every row in
+                     * the tree, and the window title, said `example.com`
+                     * where the desktop says what the page calls itself.
+                     *
+                     * `onReceivedTitle` is the only hook a plain WebView
+                     * offers for this, and it fires again when a page changes
+                     * its own title, which is what the desktop backend's
+                     * signal does too.
+                     */
+                    @Override
+                    public void onReceivedTitle(WebView v, String title) {
+                        onTitleChanged(id, title == null ? "" : title);
+                    }
+
                     /**
                      * A page asked for the camera or the microphone.
                      *

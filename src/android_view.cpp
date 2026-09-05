@@ -117,6 +117,15 @@ Java_se_vibes_hydra_HydraWebView_onRenderGone(JNIEnv *, jclass, jlong id,
 	android_view::report_render_gone(id, crashed == JNI_TRUE);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_se_vibes_hydra_HydraWebView_onTitleChanged(JNIEnv *env, jclass, jlong id,
+                                                 jstring title) {
+	const char *utf = env->GetStringUTFChars(title, nullptr);
+	const QString s = QString::fromUtf8(utf);
+	env->ReleaseStringUTFChars(title, utf);
+	android_view::report_title(id, s);
+}
+
 // Called from Java on the WebView's network thread, once per request. Returning
 // true makes the Java side answer with an empty response, which is how a
 // WebView blocks: there is no "cancel this request" to call.
@@ -804,6 +813,17 @@ void android_view::report_nav_state(qint64 id, bool back, bool forward) {
 	QMetaObject::invokeMethod(qApp, [id, back, forward] {
 		if (android_view *v = s_views.value(id))
 			v->on_nav_state_from_java(back, forward);
+	}, Qt::QueuedConnection);
+}
+
+void android_view::report_title(qint64 id, const QString &title) {
+	// Onto the Qt thread, like the reports either side of it.
+	QMetaObject::invokeMethod(qApp, [id, title] {
+		android_view *v = s_views.value(id);
+		if (!v || v->m_title == title)
+			return;
+		v->m_title = title;
+		emit v->title_changed(title);
 	}, Qt::QueuedConnection);
 }
 

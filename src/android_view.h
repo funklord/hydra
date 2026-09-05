@@ -105,6 +105,10 @@ public:
 	// process, and the desktop backend treats the same event as a page that
 	// stopped responding.
 	static void report_render_gone(qint64 id, bool crashed);
+	// What the page calls itself. The shell titles a tree row from this and
+	// falls back to the host when nothing arrives -- which, until this
+	// existed, was every row on Android.
+	static void report_title(qint64 id, const QString &title);
 
 	// Called from JNI, on the WebView's *network* thread -- not the UI thread and
 	// not Qt's. It consults the shared filter and touches nothing else, which is
@@ -240,6 +244,7 @@ public:
 	// written down beside the definitions and in `HydraWebView.applySettings`
 	// -- including the one that is deliberately still not honoured.
 	void apply_settings(const view_settings &s) override;
+	QString page_title() const override { return m_title; }
 	void set_permission_decider(permission_decider fn) override { m_decider = std::move(fn); }
 	// **Accepted and never called, which is honest rather than lazy.** Android's
 	// WebView has no `getDisplayMedia` to answer, so there is nothing to choose
@@ -301,6 +306,7 @@ private:
 
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;
+	QString m_title;   // last reported by onReceivedTitle; see page_title()
 	permission_decider m_decider;
 	capture_chooser    m_capture_chooser;
 	bool               m_desktop_site = false;
