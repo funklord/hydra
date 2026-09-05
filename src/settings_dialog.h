@@ -291,4 +291,10 @@ void          set_appearance(theme::choice c);
 QString search_engine();
 void    set_search_engine(const QString &tmpl);
 
+// The shipped template, named because three places want it: the fallback this
+// store reads when nothing is set, the placeholder the field shows, and
+// Restore Defaults. Two of those already held their own copy of the string,
+// and the third did not reset the control at all.
+QString default_search_engine();
+
 }  // namespace settings_store

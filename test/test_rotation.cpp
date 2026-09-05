@@ -67,6 +67,7 @@
 #include <QLabel>
 #include <QSignalSpy>
 #include <QLayout>
+#include <QListWidget>
 #include <QLineEdit>
 #include <QSplitter>
 #include <QTimer>
@@ -1387,6 +1388,39 @@ int main(int argc, char **argv) {
 		check(badge.count() > 0 &&
 		       badge.last().at(1).toInt() == 0,
 		       "the badge is told, rather than being left showing a count");
+	}
+
+	section("Restore Privacy defaults restores the search engine too");
+	{
+		// The button is labelled with the page it acts on, and the privacy
+		// page's own comment calls the search template "the one setting here
+		// that sends what they typed to a third party". `restore_page_defaults`
+		// reset the feature combos and left it alone, so the control somebody
+		// is most likely to have pressed that button to undo was the one it did
+		// not touch.
+		main_window w12(&factory, &policy, &filter);
+		settings_dialog dlg(w12.m_players, w12.m_downloads, w12.m_torrents,
+		                     w12.m_local_ai, w12.m_external_ai, w12.m_policy,
+		                     w12.m_filters, w12.m_filters_path, w12.m_consent,
+		                     w12.m_site_rules_path, &w12, w12.m_factory,
+		                     w12.m_annoyances);
+		auto *engine = dlg.findChild<QLineEdit *>("search_engine");
+		auto *cats   = dlg.findChild<QListWidget *>("categories");
+		auto *restore = dlg.findChild<QPushButton *>("restore_defaults");
+		check(engine && cats && restore,
+		       "the privacy page has the field, the list and the button");
+		if (engine && cats && restore) {
+			const QString shipped = settings_store::default_search_engine();
+			engine->setText("https://tracker.invalid/?q=%1");
+			cats->setCurrentRow(0);
+			check(restore->text().contains("Privacy"),
+			       QString("the button names the page it will act on (%1)")
+			           .arg(restore->text()));
+			restore->click();
+			check(engine->text() == shipped,
+			       QString("and the search engine goes back to the shipped one "
+			                "(%1)").arg(engine->text()));
+		}
 	}
 
 	section("\"Local only\" describes the endpoint that is in the box");

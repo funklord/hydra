@@ -208,7 +208,11 @@ QString search_engine() {
 	// search is one line in the settings file, and neither would ever be worth
 	// adding to a menu.
 	QSettings s = open_settings();
-	return s.value("ui/searchEngine", "https://duckduckgo.com/?q=%1").toString();
+	return s.value("ui/searchEngine", default_search_engine()).toString();
+}
+
+QString default_search_engine() {
+	return QStringLiteral("https://duckduckgo.com/?q=%1");
 }
 
 void set_search_engine(const QString &tmpl) {
@@ -1186,7 +1190,7 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	v->addWidget(section_heading("Search", page));
 	m_search_engine = new QLineEdit(settings_store::search_engine(), page);
 	m_search_engine->setObjectName("search_engine");
-	m_search_engine->setPlaceholderText("https://duckduckgo.com/?q=%1");
+	m_search_engine->setPlaceholderText(settings_store::default_search_engine());
 	v->addWidget(settings_row(
 	  "Search engine",
 	  "Where the address bar sends what you type when it is not an address. "
@@ -1342,6 +1346,13 @@ void settings_dialog::restore_page_defaults(int page) {
 			const int at = c->findData(int(want));
 			c->setCurrentIndex(at >= 0 ? at : 0);
 		}
+		// **The search engine is on this page and was not being reset.**
+		// The button says "Restore Privacy & security defaults" and left the
+		// one control on it that sends what somebody typed to a third party
+		// exactly where it was -- which is the setting they would most likely
+		// have pressed that button to undo.
+		if (m_search_engine)
+			m_search_engine->setText(settings_store::default_search_engine());
 		// Site exceptions are deliberately left alone. They are decisions about
 		// particular sites rather than defaults, they each have their own
 		// Remove, and quietly discarding them behind a button labelled

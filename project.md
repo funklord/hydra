@@ -17764,6 +17764,50 @@ no evidence beyond the shape of my own mistake; reading the two patterns took
 one command. **The lesson a hand search taught is not automatically a lesson
 about the tool.**
 
+## Restore Privacy defaults left the search engine alone
+
+The button is labelled with the page it acts on -- *"Restore Privacy &
+security defaults"* -- and the privacy page's own comment calls the search
+template **"the one setting here that sends what they typed to a third
+party"**. `restore_page_defaults` reset the feature combos and did not touch
+it.
+
+So the control somebody is most likely to have pressed that button to undo was
+the one it did not undo, and nothing said so.
+
+    ok    the button names the page it will act on (Restore Privacy && security defaults)
+    ok    and the search engine goes back to the shipped one (https://duckduckgo.com/?q=%1)
+
+With the one line removed the second reads `https://tracker.invalid/?q=%1`.
+
+### The string was already written twice, so it is named now
+
+`settings_store::default_search_engine()` -- the fallback the store reads when
+nothing is set, the placeholder the field shows, and now the reset. Two copies
+of a URL and a third place that needed it is how this function's own comment
+says not to do it:
+
+    Reading them from a new instance rather than from a second table of
+    constants is what keeps the two from drifting apart.
+
+Every other page already obeys that: Downloads reads a fresh
+`download_manager` and `torrent_download_source`, Kiosk reads
+`kiosk_config`'s own initialisers, AI reads a fresh `ollama_provider`. The
+privacy page had nowhere to read from, because the value lived in two string
+literals rather than in an object.
+
+### The rest of the sweep, and the method
+
+Every settable control on the dialog was listed from the header and checked
+against `restore_page_defaults`. Seven pages, and all seven are accounted for:
+Filters is deliberately not resettable -- it holds learned rules rather than
+preferences, and the button says why it is off -- and the other six are
+handled. Within them the only gap was this one.
+
+Two controls are deliberately untouched and stay that way: the Claude API key,
+which was never stored so has no default to return to, and the four Clear
+checkboxes, which are the state of a destructive action rather than settings.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
