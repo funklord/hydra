@@ -16495,6 +16495,57 @@ there, and would take the tag as the url. Downgrade is not a path this project
 supports and nothing here depends on it -- but the trailing-key format has
 that property, and it is better written down than rediscovered.
 
+## The safety net dropped what it was there to save
+
+Derived from the tags find by asking the obvious follow-up: **where else is a
+node copied field by field?** Two places make nodes in `tree_diff`. One builds
+a folder the model asked for, which has no prior state to keep. The other is
+Pass 2 of `check_and_repair` -- *"re-attach any original leaf the model
+omitted"* -- and it listed five fields:
+
+    copy->id  copy->type  copy->title  copy->url  copy->tags
+
+So a tab the model dropped came back **unlocked**, un-renamed, with no dates
+and no history. `locked` is a pin the person set; `renamed` is what stops a
+page title overwriting the title they chose; `history` is the past the tab
+arrived with, which the header beside it calls content rather than runtime
+weight. All silently replaced by the struct's defaults.
+
+**In a safety net**, which is the part that makes it expensive: this code runs
+precisely when something has already gone wrong, so it is the least watched
+path in the feature, and its whole job is to lose nothing.
+
+The copy is `new node(*orig)` now, with only the three fields that describe
+where it sits set afterwards. **Exhaustive by construction** -- a field added
+to `node` comes along without anybody remembering this line, which is the same
+answer as `view_settings`' pinned size and a better one, because it needs
+nobody to be told.
+
+The existing test asserted that a dropped leaf comes back and lands in the
+right parent. It said nothing about what came back *with* it. Sabotaged, the
+new section fails on exactly the five that were lost and leaves the tags,
+the parent and the empty-subtree checks green -- those were already right.
+
+### The lens, and where it has now been run
+
+**A struct with in-class defaults, filled in field by field somewhere else,**
+is a place where a field can be forgotten silently. Nine swept:
+
+    QPalette          FOUND   five shading roles left at another scheme's
+    kiosk_config      FOUND   alignment, in neither half nor on the page
+    node              FOUND   tags, in neither half of the tree file
+    node (tree_diff)  FOUND   five fields in the drop-recovery copy
+    view_settings     clean   and now pinned, having paid once with scrollbars
+    site_rule         clean   `generic()` is a method, not a stored field
+    filter_rule       clean   cosmetic and scope are derived from the text
+    annoyance_report  clean   all seven fields round-trip
+    tab_history       clean   entries and index both encoded
+
+Four of nine. **The method is: list the struct's fields, list what the writer
+emits, and read the difference** -- every clean row above is a difference that
+turned out to be derived or deliberate, and each deliberate one has a comment
+saying so. That is what made the four stand out: nothing explained them.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

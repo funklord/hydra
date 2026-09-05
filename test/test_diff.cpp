@@ -13,6 +13,7 @@
 //
 // Nothing checked any of it.
 #include "tree_diff.h"
+#include "tab_history.h"
 #include "node.h"
 
 #include <QCoreApplication>
@@ -267,6 +268,63 @@ int main(int argc, char **argv) {
 		      QString("every leaf is present, in the original order (%1)")
 		          .arg(tree_diff::leaf_ids(orig).join(",")));
 		delete orig;
+	}
+
+	// **The net was dropping what it was there to save.** The section above
+	// checks that a forgotten leaf comes back and lands in the right parent.
+	// It said nothing about what came back *with* it, and the answer was: id,
+	// type, title, url and tags, because the copy listed five fields by hand.
+	//
+	// So a tab the model omitted returned **unlocked**, un-renamed, with no
+	// dates and no history -- each of those either a decision the person made
+	// or content the tab arrived with. In a safety net, which runs exactly
+	// when something has already gone wrong.
+	section("a leaf put back keeps what the person decided about it");
+	{
+		node *orig = build_original();
+		node *a2 = find(orig, "a2");
+		check(a2 != nullptr, "the original has the tab this is about");
+		a2->locked   = true;
+		a2->renamed  = true;
+		a2->tags     = QStringList{ "keep" };
+		a2->created  = QDateTime(QDate(2020, 1, 2), QTime(3, 4, 5));
+		a2->last_seen = QDateTime(QDate(2021, 6, 7), QTime(8, 9, 10));
+		a2->history.entries << history_entry{ "https://example.com/old",
+		                                       "Where it had been" };
+		a2->history.index = 0;
+
+		node *prop = root_of();
+		node *f = add(prop, mk("f1", true, "Work"));
+		add(f, mk("a1", false, "One"));
+		// a2 dropped by the model, exactly as in the section above.
+
+		const proposal_report rep = tree_diff::check_and_repair(orig, prop);
+		check(rep.dropped_ids.contains("a2"), "the tab is reported dropped");
+
+		node *back = find(prop, "a2");
+		check(back != nullptr, "and put back");
+		if (back) {
+			check(back->locked,
+			      "it is still locked — a pin the person set, not the model's");
+			check(back->renamed,
+			      "still marked renamed, so the page title cannot overwrite "
+			      "the title they chose");
+			check(back->tags == (QStringList{ "keep" }), "with its tags");
+			check(back->created == a2->created, "the date it was created");
+			check(back->last_seen == a2->last_seen, "and when it was last seen");
+			check(back->history.entries.size() == 1 && back->history.index == 0,
+			      QString("and the past it arrived with (%1 entr(y/ies))")
+			          .arg(back->history.entries.size()));
+			// The two the section above already covers, asserted here as well
+			// because a copy made wholesale could get the structure wrong in
+			// the other direction.
+			check(back->parent && back->parent->id == "f1",
+			      "and it is still in the parent it had");
+			check(back->children.isEmpty(),
+			      "with no subtree dragged along by the copy");
+		}
+		delete orig;
+		delete prop;
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

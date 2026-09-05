@@ -122,12 +122,23 @@ proposal_report check_and_repair(node *original, node *proposal) {
 				if (cand->id == orig->parent->id) { dest = cand; break; }
 			}
 		}
-		node *copy   = new node;
-		copy->id     = orig->id;
-		copy->type   = orig->type;
-		copy->title  = orig->title;
-		copy->url    = orig->url;
-		copy->tags   = orig->tags;
+		// **Copied whole, then re-parented**, rather than field by field.
+		// The list here was id, type, title, url and tags -- so a tab this
+		// net rescued came back **unlocked**, un-renamed, with no dates and
+		// no history. Every one of those is either a decision the person made
+		// or content: `locked` pins a tab beside its siblings, `renamed` is
+		// what stops a page title overwriting the one they chose, and
+		// `history` is the past this tab arrived with.
+		//
+		// Worst of all in a *safety net*, which runs precisely when something
+		// has already gone wrong and is therefore the code least likely to be
+		// watched.
+		//
+		// Copying the struct makes it exhaustive by construction: a field
+		// added to `node` comes along without anybody remembering this line.
+		// Only the three that describe where it sits are then set.
+		node *copy = new node(*orig);
+		copy->children.clear();   // a leaf, and its subtree is not ours to move
 		copy->parent = dest;
 		copy->order  = dest->children.size();
 		dest->children.push_back(copy);
