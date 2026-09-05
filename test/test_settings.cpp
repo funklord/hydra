@@ -58,8 +58,17 @@ int main(int argc, char **argv) {
 		      QString("per-torrent cap defaults high (%1)")
 		          .arg(tor->connection_limit_per_torrent()));
 		check(qFuzzyCompare(tor->seed_ratio(), 1.0), "seed ratio defaults to 1.0");
-		check(!p.selected().isEmpty() || p.installed().isEmpty(),
-		      "a player is resolved from what is installed");
+		// **Says which branch it took**, because the implication is vacuous
+		// on a machine with no player installed -- the bare container CI runs
+		// in, for one -- and nothing in the output distinguished "resolved
+		// one" from "there was nothing to resolve".
+		if (p.installed().isEmpty())
+			std::printf("  --    no player installed here, so there is "
+			             "nothing to resolve\n");
+		else
+			check(!p.selected().isEmpty(),
+			      QString("a player is resolved from what is installed (%1 of "
+			               "%2)").arg(p.selected()).arg(p.installed().size()));
 	}
 
 	section("round trip");

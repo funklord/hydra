@@ -576,8 +576,13 @@ int main(int argc, char **argv) {
 		// enough: a second dialog must not receive the first one's answer.
 		extractor_dialog second(&sig, &store, &prov, "site.example", page);
 		spin(150);
+		// **Asserted on a widget that is there.** `!script || empty` is true
+		// for a widget that does not exist, so renaming that objectName would
+		// turn the only check that a second dialog is not handed the first
+		// one's answer into a silent pass.
 		auto *script = second.findChild<QPlainTextEdit *>("proposal");
-		check(!script || script->toPlainText().isEmpty(),
+		check(script != nullptr, "the second dialog has a proposal box");
+		check(script && script->toPlainText().isEmpty(),
 		      QString("and the next dialog is not handed it (%1)")
 		          .arg(script ? script->toPlainText().left(40) : QString()));
 	}

@@ -61,8 +61,17 @@ int main(int argc, char **argv) {
 		      "the outcome lands on the most recent report for that site");
 		check(rs.first().outcome.isEmpty(),
 		      "and not on the earlier one, which stands as filed");
+		// **`check(true)` tested that this did not crash and nothing else.**
+		// "Does nothing" has two halves and neither was asserted: that no
+		// phantom record appears for a host nobody filed against, and that
+		// the sites which do have records are left alone.
+		const int before = log.all().size();
 		log.set_outcome("nobody.test", "zapped");
-		check(true, "setting an outcome for a site with no reports does nothing");
+		check(log.for_host("nobody.test").isEmpty(),
+		      "an outcome for a site with no reports invents no record");
+		check(log.all().size() == before,
+		      QString("and touches nothing else (%1, was %2)")
+		          .arg(log.all().size()).arg(before));
 	}
 
 	section("a round trip through disk");

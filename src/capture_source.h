@@ -37,7 +37,8 @@ public:
 	// handing the manager an address.
 	bool accepts(const QUrl &, QString *why_not = nullptr) const override {
 		if (why_not)
-			*why_not = "Captures are started from Tools ▸ Capture Playing Video.";
+			*why_not = "Captures are started from Tools ▸ Media ▸ Capture "
+			             "Playing Video.";
 		return false;
 	}
 	bool start(const download_request &, QString *error) override {

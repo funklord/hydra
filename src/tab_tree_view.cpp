@@ -425,7 +425,27 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	else if (chosen == del_a) {
 		// Deleting a folder takes what is in it, so the count goes in the
 		// question rather than being discovered afterwards.
-		const int kids = n->children.size();
+		// **Every descendant, not the direct children.** `remove_node` does
+		// `delete n`, and its own comment says that takes the whole subtree --
+		// "deleting a folder in a file manager takes what is in it. The
+		// caller is responsible for having asked first." This is that caller,
+		// and it was asking about a different number: a folder holding two
+		// sub-folders of twenty tabs said "and the 2 items inside it?" and
+		// removed forty-two.
+		//
+		// The comment above exists to say the count is here so it is not
+		// discovered afterwards, and a direct count cannot deliver that for
+		// any nested tree -- which is the ordinary case, since the context
+		// menu offers "New Folder Here" inside a folder.
+		int kids = 0;
+		{
+			QList<node *> stack = n->children;
+			while (!stack.isEmpty()) {
+				node *k = stack.takeLast();
+				++kids;
+				stack << k->children;
+			}
+		}
 		const QString what = kids > 0
 		  ? QString("Delete \"%1\" and the %2 item%3 inside it?")
 		        .arg(n->title).arg(kids).arg(kids == 1 ? "" : "s")

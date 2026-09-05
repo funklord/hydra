@@ -591,8 +591,22 @@ int main(int argc, char **argv) {
 		const extractor_verdict n = site_extractor::check(runtime_note, page, ev);
 		check(!n.usable, "a script reading `serves` at run time is refused");
 		check(n.reads_note, "and says that is why");
-		check(!n.result.ok || n.result.url.isEmpty() || true,
-		      "rather than reporting that it found nothing");
+		// **This read `|| true` and was therefore a constant**, and it could
+		// not have failed without that either: `check()` returns before
+		// `run()` when `reads_serves` fires, so `result` is a
+		// default-constructed `extraction` and both disjuncts hold by
+		// construction. The line's own claim -- that a refusal does not
+		// masquerade as "ran and found nothing" -- went untested.
+		//
+		// What discriminates is that the script was never executed at all: a
+		// script that genuinely ran and found nothing comes back with
+		// `result.error` set by `run()`. So this fails if the `reads_serves`
+		// gate is ever moved below the run, which is the regression it exists
+		// for.
+		check(n.result.error.isEmpty() && !n.result.ok &&
+		          n.result.url.isEmpty(),
+		      QString("and was refused before running, not after finding "
+		               "nothing (error=%1)").arg(n.result.error.left(40)));
 		check(n.message.contains("column"),
 		      "explaining that the note was shown, not passed");
 		// The bracket spelling too, since a model that is told not to write one

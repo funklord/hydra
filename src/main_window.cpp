@@ -1849,7 +1849,8 @@ void main_window::refresh_media_affordance(const QString &site_host) {
 	m_media_action->setText("Media (playing)");
 	m_media_action->setToolTip(
 	  QString("This page is playing video (%1 buffered, %2), but no stream "
-	           "URL was detected — try Tools ▸ Find Media on This Page.")
+	           "URL was detected — try Tools ▸ Media ▸ Find Media on This "
+	           "Page.")
 	      .arg(QLocale().formattedDataSize(buffered), mime));
 }
 
@@ -2656,8 +2657,8 @@ void main_window::refresh_placeholder_text() {
 	// and the button that reveals it had just appeared, unexplained, in a
 	// toolbar the person had been using without it.
 	m_placeholder->setText(m_drawer_mode
-	    ? "No tab open.\n\nThe list of tabs is behind the button left of "
-	       "the address bar."
+	    ? "No tab open.\n\nThe list of tabs is behind the button at the left "
+	       "end of the toolbar."
 	    : "Select a tab from the tree");
 }
 
@@ -4582,6 +4583,13 @@ void main_window::find_media_with_ytdlp() {
 			                                                 : media_kind::direct;
 			item.url       = f.url;
 			item.site_host = host;
+			// **The headers yt-dlp said the CDN checks.** Parsed into
+			// `media_format::headers` from `http_headers` and then dropped
+			// here, while the extractor path does `item.headers =
+			// v.result.headers` with the comment "the whole point of asking
+			// for them". A download of a yt-dlp stream went out naked and
+			// collected the 403 this field exists to prevent.
+			item.headers   = f.headers;
 			item.label     = QString("%1 %2%3")
 			                     .arg(m.title.isEmpty() ? host : m.title,
 			                          f.height ? QString::number(f.height) + "p"

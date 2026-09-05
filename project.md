@@ -16630,6 +16630,123 @@ object, so the object is the identity. Between them that is the whole
 population: `ai_provider` was the only request/reply broadcast in this tree
 without one.
 
+## Four lenses at once, and what came back
+
+Run in parallel as read-only sweeps, each pointed at a part of the tree the
+recent work had not touched. Reported here in full because most of it is not
+mine to act on, and a finding nobody records is a finding somebody re-derives.
+
+**Everything below was re-verified against the code before being written
+down.** The reports were good; that is not a reason to quote them.
+
+### Acted on
+
+- **The delete confirmation under-counted a nested folder.** `remove_node`
+  does `delete n`, and its own comment says that takes the whole subtree --
+  *"the caller is responsible for having asked first"*. This is that caller,
+  and it asked about `n->children.size()`. A folder holding two sub-folders of
+  twenty tabs said **"and the 2 items inside it?"** and removed forty-two. The
+  comment above it says the count is there so it is not discovered afterwards,
+  which a direct count cannot deliver for any nested tree -- and nesting is
+  the ordinary case, since the same menu offers "New Folder Here" inside a
+  folder.
+- **yt-dlp's per-format headers were parsed and dropped.**
+  `ytdlp_resolver.cpp` fills `media_format::headers` from `http_headers`; the
+  consumer built a `media_item` field by field and never assigned them. Four
+  lines away the extractor path does `item.headers = v.result.headers;` with
+  the comment *"the whole point of asking for them"*. A download of a yt-dlp
+  stream went out without the headers the CDN checks.
+- **Two messages named a menu path that had moved.** *"Tools ▸ Find Media on
+  This Page"* and *"Tools ▸ Capture Playing Video"* both live under a **Media**
+  submenu now. The sweep that found them checked all nine menu references in
+  `src/`: seven were correct, and **the only two that were wrong are the only
+  two naming an item inside a submenu.**
+- **The empty page pointed at the wrong button.** *"behind the button left of
+  the address bar"* -- the button left of the address bar is Reload; the tab
+  tree is four positions away at the left end. Wrong when written rather than
+  stale.
+- **Five assertions that could not fail**, in the test suite itself. One was a
+  literal `|| true`. One was `check(true, "…does nothing")`, which tested only
+  that it did not crash. Two were vacuous on a machine with nothing installed
+  -- the bare CI container -- and one of those is the sharpest of the set: its
+  neighbour twelve lines above has the *identical* empty-list hazard, was
+  caught, guarded and commented, and this one passed silently **because its
+  flag starts `true` rather than `false`.** Same container, same empty list,
+  opposite polarity, and only the loud one was ever noticed.
+
+**Not covered:** the descendant count sits inside a context-menu handler that
+opens a modal, so no offline test reaches it. The walk is four lines and
+local; that is an argument, not evidence, and it is written here rather than
+implied.
+
+### Reported, not acted on
+
+These are real and verified, and several are the copyright holder's call
+rather than a defect to quietly fix.
+
+**Android implements two of the seam's thirteen signals.** `android_view`
+emits `history_changed` and `url_changed`; `qtwebengine_view` emits eleven.
+Its header is otherwise scrupulous about listing what it ignores and why --
+the capture chooser, downloads, `window.open`, isolated worlds -- and **none
+of these appear in that list**:
+
+- `render_process_gone` is never emitted and the Java has no
+  `onRenderProcessGone`. On `targetSdk >= 26` a `WebViewClient` that does not
+  override it lets the system **kill the app process** when a renderer dies.
+  The desktop shows "the page crashed, Reload"; Android would lose the window
+  and everything since the last debounced save.
+- `title_changed` is never emitted and there is no `onReceivedTitle`, so
+  `page_title()` returns empty. **Every tab in the tree and every window title
+  on Android is a host, never the page's name** -- and `main_window` sets the
+  node's title from that signal.
+- `load_progress` / `load_finished` are never emitted, so `m_loading` is
+  permanently false: no progress bar, and the "could not be loaded" message
+  never runs. A failed load leaves the previous page up with nothing said.
+- `stop()` is unimplemented, and is *latent* only because the above keeps the
+  Stop button from ever appearing. **Fixing the progress signals alone would
+  turn it into a visible lie** -- the button would say Stop, the bar would
+  vanish, the status bar would say "Stopped.", and the page would carry on.
+- HTML5 fullscreen does nothing: no `fullscreen_requested`, no
+  `onShowCustomView` -- on the platform where a fullscreen video matters most.
+
+**`stream_context::user_agent` and `::cookies` have four readers and no
+writer.** `local_proxy`, `hls_assembler`, `stream_probe` and `network_fetcher`
+all read them; every shell-originated context sets only `referer`. The
+proxy's own header says its purpose is that *"the CDN expects the same
+Referer, cookies and User-Agent the page carried"*, and it supplies one of the
+three -- while this browser has a deliberately corrected User-Agent that never
+reaches them.
+
+**Pause is offered on HTTP downloads and does nothing.**
+`http_download_source` sets `resumable = true`, meaning Range-resume across
+restarts, and does not override `pause`. The manager and the dialog both gate
+the Pause button on that one flag, so it carries two meanings and only one is
+true.
+
+**The HLS scratch directory dies with the media dialog** while an external
+player still has the file open, so Watch works only while the dialog stays
+open. Download is unaffected: it writes to the downloads directory.
+
+**KeePassXC request tags are keyed by action rather than by request**, and the
+protocol carries no request id. A reply to an earlier `get-logins`, arriving
+after a second was sent, is emitted under the second's tag -- the same
+shape as the AI dialogs, in a subsystem that moves credentials. Believed, not
+established: it needs the stubbed-bridge experiment the report names.
+
+**`local_proxy::failed` is connected nowhere and `start()`'s result is
+discarded**, so a proxy that cannot bind is silent; and `unpublish_all()` has
+no caller, so every stream watched in a session stays published on loopback
+for the life of the process, each holding the page's cookies and Referer.
+
+**`media_detector::clear_site` has no caller anywhere**, not even a test, so
+per-site media counts accumulate for the process lifetime and a site's badge
+is computed from an earlier visit.
+
+**`policy.cpp`'s autofill description names an HTTPS-only switch with no
+surface** -- `set_https_only`'s only caller is a test -- and the kiosk status
+tip promises *"Esc returns"* while `allow_escape` is a saved setting the
+settings page warns may leave *"no way out except ending the process"*.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

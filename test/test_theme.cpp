@@ -372,19 +372,39 @@ int main(int argc, char **argv) {
 		      "and calling it twice changes nothing");
 
 		// Every candidate names a theme that is really there.
+		//
+		// **Guarded on the empty case, like the check twelve lines above it,
+		// and for exactly the same reason.** `has_system` there starts
+		// `false`, so a machine with no icon theme -- the `debian:trixie`
+		// container this file's own comment describes -- made it fail loudly
+		// and it was given a skip. `all_present` starts `true`, so the same
+		// empty list sailed through here in silence. One list, one container,
+		// opposite polarity, and only the loud one was noticed.
+		//
+		// It is also worth knowing what this can and cannot say when it does
+		// run: the predicate below is the one `detect_icon_themes` used to
+		// build the list, over the same search paths, so agreement is close
+		// to guaranteed. It catches a producer that stops filtering, and
+		// nothing else -- which is why the block further down, asking whether
+		// the chosen theme can actually *draw*, is the load-bearing one.
 		const QStringList found = theme::detect_icon_themes();
-		bool all_present = true;
-		for (const QString &t : found) {
-			bool here = false;
-			for (const QString &dir : QIcon::themeSearchPaths())
-				if (QFile::exists(dir + "/" + t + "/index.theme"))
-					here = true;
-			if (!here)
-				all_present = false;
+		if (found.isEmpty()) {
+			std::printf("  --    no icon themes on this machine; there are no "
+			             "candidates to check\n");
+		} else {
+			bool all_present = true;
+			for (const QString &t : found) {
+				bool here = false;
+				for (const QString &dir : QIcon::themeSearchPaths())
+					if (QFile::exists(dir + "/" + t + "/index.theme"))
+						here = true;
+				if (!here)
+					all_present = false;
+			}
+			check(all_present,
+			      QString("every candidate is installed (%1)")
+			          .arg(found.join(", ")));
 		}
-		check(all_present,
-		      QString("every candidate is installed (%1)")
-		          .arg(found.join(", ")));
 
 		// **The invariant that broke, and the reason this loops rather than
 		// taking the first hit.** Being installed is not being able to draw:
