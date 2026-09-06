@@ -1842,6 +1842,12 @@ void main_window::on_media_found(const QString &site_host, int count) {
 	refresh_media_affordance(site_host);
 }
 
+// **Also called from `page_changed` now, which is what makes the affordance
+// follow the tab.** That reaches here before any detection has happened, and
+// it is safe because `page_changed` returns early until `m_stack` exists --
+// built after both `m_media` and `m_media_action`. Moving that construction
+// earlier would turn this into a crash rather than a wrong badge, so the
+// dependency is written down rather than left to be rediscovered.
 void main_window::refresh_media_affordance(const QString &site_host) {
 	web_view_backend *v = current_view();
 	if (!v || v->url().host() != site_host)
@@ -3649,6 +3655,14 @@ void main_window::page_changed() {
 	// Measured with a navigation to 192.0.2.1, which is routed nowhere: the
 	// button went back to Reload on return and stayed there while the tab
 	// went on loading.
+	//
+	// The media affordance is the same claim in the toolbar and was the sixth
+	// piece of state this function did not re-derive.
+	// `refresh_media_affordance` runs only when something is *detected*, and a
+	// page with no media raises no detection -- so a tab that had found two
+	// streams left "Media (2)" on the toolbar of every page switched to
+	// afterwards, offering a list belonging to a site no longer on screen.
+	// The count is kept per host, which is why asking it again is enough.
 	if (web_view_backend *v = current_view()) {
 		const auto at = m_loading_views.constFind(v);
 		if (at != m_loading_views.constEnd()) {
@@ -3658,6 +3672,12 @@ void main_window::page_changed() {
 				m_progress->show();
 			}
 		}
+		refresh_media_affordance(v->url().host());
+	} else if (m_media_action) {
+		// No page at all, so there is nothing to offer media for. Said
+		// separately because `refresh_media_affordance` asks the current view
+		// for its host and there is not one.
+		m_media_action->setVisible(false);
 	}
 	if (m_find)
 		m_find->clear_result();

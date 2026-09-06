@@ -10,6 +10,7 @@
 // Split out of `try_navigate`, which had grown to sixty-nine checks across
 // three subjects: a failure named the driver and meant any of them.
 #include "shell_fixture.h"
+#include "media_fixture.h"
 
 #include "auth_dialog.h"
 #include "cert_dialog.h"
@@ -20,6 +21,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QProgressBar>
+#include <QSortFilterProxyModel>
 #include <QPushButton>
 #include <QStatusBar>
 
@@ -327,6 +329,128 @@ int main(int argc, char *argv[]) {
 			      QString("nor does the link target (%1)").arg(sb->currentMessage()));
 			check(w.windowTitle().contains("two") || w.windowTitle().contains("Two"),
 			      QString("and the title is the new page's (%1)").arg(w.windowTitle()));
+		}
+	}
+
+	section("switching back to a loading tab still says it is loading");
+	{
+		// `page_changed` resets the chrome for the page in front of you, and
+		// it resets `m_loading` to false unconditionally -- then never asks
+		// the tab it has just switched to whether it is, in fact, still
+		// loading. Its comment records the direction that was fixed, "the bar
+		// would otherwise report the last tab's load against this one", and
+		// this is the other one: a tab that IS loading reports as idle, so
+		// the progress bar is gone and the button offers Reload where the
+		// only useful thing to do is Stop.
+		//
+		// The slow page needs no server and no DNS. 192.0.2.1 is TEST-NET-1,
+		// reserved by RFC 5737 and routed nowhere, so the connection hangs
+		// rather than being refused -- measured here at ten seconds with no
+		// answer, against a `curl -m 10` that timed out rather than failing.
+		//
+		// **The main frame, not a subresource.** The first attempt was a
+		// local page holding `<img src="http://192.0.2.1/x.png">`, and it
+		// finished loading immediately: Chromium blocks an http subresource
+		// of a `file://` document outright, so the image errored at once and
+		// the load completed. Hanging the navigation itself is the version
+		// that cannot be short-circuited by a policy.
+		auto *ch_model = w.findChild<tab_tree_model *>();
+		node *ch_folder = ch_model->root()->children.first();
+		node *slow_row = ch_model->add_tab(ch_folder, "slow",
+		                                    "http://192.0.2.1/slow.html");
+		tv->expandAll();
+		auto *ch_proxy = qobject_cast<QSortFilterProxyModel *>(tv->model());
+		emit tv->activated(ch_proxy->mapFromSource(
+		  ch_model->index_for_node(slow_row)));
+		check(wait_for(address, "192.0.2.1"),
+		       "a page that will not finish is open");
+		spin(800);
+		// The premise. If this fails the rest says nothing: the page finished,
+		// or never started, and there is no loading tab to switch away from.
+		const bool still_loading = reload->text().contains("Stop");
+		check(still_loading,
+		       QString("and it is still loading (%1)").arg(reload->text()));
+
+		if (still_loading) {
+			check(f.open_tab(0, "one.html"), "switching away to another tab");
+			check(reload->text().contains("Reload"),
+			       QString("which is not loading, so the button is Reload (%1)")
+			           .arg(reload->text()));
+
+			// Back to it. The load has not finished -- nothing has been given
+			// a chance to -- so the chrome has to say so again.
+			emit tv->activated(ch_proxy->mapFromSource(
+			  ch_model->index_for_node(slow_row)));
+			spin(800);
+			check(reload->text().contains("Stop"),
+			       QString("and coming back to the loading tab offers Stop "
+			                "again (%1)").arg(reload->text()));
+			QProgressBar *bar = w.findChild<QProgressBar *>("load_progress");
+			check(bar && bar->isVisible(),
+			       "with the progress bar back beside it");
+			// Stop it, so the sections after this are not racing a load.
+			reload->trigger();
+			spin(200);
+		}
+	}
+
+	section("the media affordance belongs to the page too");
+	{
+		// The sixth piece of state, and the one `page_changed` did not
+		// re-derive. `refresh_media_affordance` is called only when something
+		// is *detected*, and it early-returns unless the detection is for the
+		// page in front of you -- so a tab with media left the toolbar saying
+		// "Media (2)", and switching to a page with none left it saying so.
+		// Nothing on the new page would ever correct it, because a page with
+		// no media raises no detection.
+		//
+		// **Two hosts are what makes this askable**, and the media fixture
+		// already answers on both for its own reasons: the count is kept per
+		// host, so two `file://` pages -- which have no host at all -- would
+		// share one count and the affordance would be right by accident.
+		media_fixture::server srv;
+		const QString base = srv.start();
+		check(!base.isEmpty(), "the media fixture is listening");
+		if (!base.isEmpty()) {
+			auto *model = w.findChild<tab_tree_model *>();
+			node *folder = model->root()->children.first();
+			node *media_tab = model->add_tab(folder, "media", base);
+			node *plain_tab = model->add_tab(
+			  folder, "plain", srv.third_party() + "ads/banner.gif");
+			tv->expandAll();
+			// Through the tree, the way a person opens one -- `open_node` is
+			// the window's own and not reachable from here.
+			auto *proxy = qobject_cast<QSortFilterProxyModel *>(tv->model());
+			auto activate = [&](node *n) {
+				emit tv->activated(proxy->mapFromSource(model->index_for_node(n)));
+			};
+			activate(media_tab);
+			check(wait_for(address, "127.0.0.1"), "a page with media is open");
+
+			QAction *media_act = nullptr;
+			for (QAction *a : w.findChildren<QAction *>())
+				if (a->text().startsWith("Media"))
+					media_act = a;
+			check(media_act != nullptr, "the toolbar has a media affordance");
+
+			for (int i = 0; i < 40 && media_act && !media_act->isVisible(); ++i)
+				spin(200);
+			// The premise: without it the check below passes on a toolbar that
+			// never had anything to forget.
+			const bool showed = media_act && media_act->isVisible();
+			check(showed,
+			       QString("which the toolbar offers (%1)")
+			           .arg(media_act ? media_act->text() : QString()));
+
+			if (showed) {
+				activate(plain_tab);
+				check(wait_for(address, "127.0.0.2"),
+				       "switching to a page on another host with none");
+				spin(600);
+				check(!media_act->isVisible(),
+				       QString("takes the offer away (%1)")
+				           .arg(media_act->text()));
+			}
 		}
 	}
 

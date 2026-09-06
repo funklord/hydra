@@ -19205,6 +19205,49 @@ anything else: if the page is not still loading when the switch happens,
 the section says so rather than passing on a tab that had nothing to
 report.
 
+## The sixth piece of state, and the driver that already named the class
+
+`try_chrome`'s header opens: "Five separate pieces of state -- the title, the
+loading bar, the find count, the link target and whatever went wrong -- each
+assert something about the current page, and each was hooked into the four
+moments that change it one addition at a time. Two of them were never hooked
+into all four and had become lies; `page_changed` re-derives the lot in one
+place, and this is what holds it to that."
+
+**There are six, and the sixth was not being re-derived.** The media
+affordance -- the toolbar's "Media (2)" -- is refreshed only when something
+is *detected*, and `refresh_media_affordance` early-returns unless the
+detection belongs to the page in front of you. A page with no media raises
+no detection, so nothing on the new page could ever correct it: a tab that
+had found streams left the offer sitting on the toolbar of every page
+switched to afterwards, opening a list belonging to a site no longer on
+screen.
+
+`page_changed` asks for it now, and hides it outright when there is no page
+at all, which the detection path cannot express because it asks the current
+view for its host and there is not one.
+
+**Two hosts are what makes the question askable, and the fixture already
+had them.** The count is kept per host, so two `file://` pages -- which have
+no host at all -- share one count and the affordance is right by accident.
+`media_fixture` answers on 127.0.0.1 and 127.0.0.2 for its own reason, to
+produce a third-party request, and that is exactly the second host this
+needs: the media page on one, a bare gif on the other.
+
+The loading-state check written the same day moved here from `try_navigate`
+with it. Both are claims the window makes about the page in front of it,
+which is this driver's whole subject and is why it was split out of
+`try_navigate` in the first place -- and `try_navigate` was where the second
+one had landed by habit.
+
+**Four instances now, from one lens.** The status bar's two clearers, the
+address bar over a half-typed address, the loading state on a tab switched
+back to, and this. Each was a shared surface or a shared claim with no
+arbitration, and in three of the four the class was named in a comment
+beside code that had closed exactly one of its instances. The lens is not
+"look for bugs in the chrome"; it is **read what a comment says was fixed,
+and go and count the places that shape occurs.**
+
 ## Open: a blocked-popup notice can be overwritten by a stale load failure
 
 `try_navigate`'s "out loud, not silently" check asserts that refusing a
