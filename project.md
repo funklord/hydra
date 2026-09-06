@@ -18864,7 +18864,42 @@ Three details that are not mechanical:
   scoped to `*` and registered once. Sharing the map would have meant one
   overwriting the other.
 
-### Built, and not seen working
+### Seen working, with the control that makes it mean something
+
+Run on **SM-F926B, Android 15**, against the fixture below -- the top page as
+`localhost:8731`, the banner in an iframe from `127.0.0.1:8731`, a genuine
+cross-origin frame through one `adb reverse`.
+
+    REQ "GET /frametop HTTP/1.1" 200 -
+    REQ "GET /banner HTTP/1.1" 200 -
+    BANNER CLICKED /clicked?b=reject
+    REQ "GET /clicked?b=reject HTTP/1.1" 200 -
+
+**`b=reject`, not `b=accept`.** The banner offers both, so that line says three
+things at once: the script ran inside a cross-origin iframe, it recognised a
+fixed-position box whose text matches `CONSENTISH` as a banner, and it took the
+reject tier first. None of it is the browser reporting on itself.
+
+**And the control is what makes it mean anything.** Forcing
+`document_start_supported()` to return false takes the fallback path, which is
+precisely the behaviour before this change -- the script back in the
+`onPageStarted` batch, main frame only. Same fixture, same device, same run
+shape, one variable:
+
+    REQ "GET /frametop HTTP/1.1" 200 -
+    REQ "GET /banner HTTP/1.1" 200 -
+    REQ "GET /favicon.ico HTTP/1.1" 200 -
+                                          <- no click, at all
+
+The pages load, the frame loads, and nothing touches the banner. Restoring the
+real check and reinstalling reproduced the click.
+
+**The control earns its cost twice**, which is why it was worth two rebuilds:
+it is the negative half of the demonstration, *and* it is the only exercise the
+fallback path will ever get on a device whose provider does support the
+feature. A phone with an old WebView takes that branch and nobody here has one.
+
+### What was built, and how it was checked
 
 Both builds pass. `jni-check` still resolves 23 natives -- unchanged, because
 the two new methods are calls *into* Java rather than natives, which that check
@@ -18872,9 +18907,8 @@ does not cover, so their descriptors were read by hand:
 `documentStartSupported` is `()Z` and `setFrameScript` is
 `(JLjava/lang/String;)V`.
 
-**The device disconnected mid-verification**, after the code was written and
-before the fixture could be loaded. The fixture is ready and is the honest
-proof rather than a look at the screen: `devsrv.py` serves `/frametop` as
+The fixture is the honest proof rather than a look at the screen: `devsrv.py`
+serves `/frametop` as
 `localhost:8731` carrying an iframe from `127.0.0.1:8731` -- a genuine
 cross-origin frame through one `adb reverse` -- and `/banner` is a fixed-position
 box saying *"We use cookies and similar tracking technologies"* with **Reject
