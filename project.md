@@ -19631,6 +19631,45 @@ on the first run. Measured, fixed to split on any whitespace, and recorded
 in the code: the sample that agreed with the broken parser was, once again,
 the one written on a single line.
 
+## A print that dies with its view took the report with it
+
+`Print` was one of the twenty-six menu actions no test names, and reading it
+found the path careful in every respect but one: a second print while the
+first is unfinished is refused, a cancelled dialog deletes the printer and
+reports `print_finished(false)`, and the waiting connection is
+`SingleShotConnection` so it cannot fire twice.
+
+**The `delete` lived in the lambda that waits for `printFinished`, and that
+lambda is bound with `this` as its context.** A view destroyed before the
+printer answers therefore never runs it: the connection is disconnected
+rather than delivered. `QPrinter` is not a QObject and cannot be parented,
+so nothing else was going to close it.
+
+That death is not hypothetical. The live-view cap suspends the least
+recently used tab, and a tab stops being current the moment somebody
+switches away from it -- which is a reasonable thing to do while a long
+document prints. `suspend_node` protects only the view a kiosk session is
+presenting.
+
+Two things were lost with it, and the second is the one a person notices.
+The printer leaked. And the shell turns `print_finished` into "Printed." or
+"Nothing was printed.", so the run vanished without either sentence: the
+paper did not come and neither did the explanation.
+
+The printer is a `std::unique_ptr` member now, which closes the leak by
+construction rather than by anybody remembering, and the destructor emits
+`print_finished(false)` when a print was in flight -- from its own body
+rather than leaving it to `~QObject`, because connections are alive until
+the base destructor runs.
+
+**Not covered by a test, and the reason is worth stating rather than
+leaving as a gap somebody re-derives.** The path opens a modal
+`QPrintDialog` and needs a printer to answer it; a driver cannot reach it
+without a fake, and faking the dialog would test the fake. What is
+structural here -- ownership -- needs no test to hold, and what is
+behavioural is one line in a destructor that a reader can check. The gap is
+the modal, not the reasoning.
+
 ## A comment said it had been signalled, and it had not
 
 Every build of this project prints two lines that nobody reads:

@@ -14,6 +14,9 @@
 
 #include <QPointer>
 
+#include <memory>
+
+class QPrinter;
 class QWebEngineView;
 class QWebEnginePage;
 class QWebEngineProfile;
@@ -29,6 +32,10 @@ class qtwebengine_view : public web_view_backend {
 	Q_OBJECT
 public:
 	explicit qtwebengine_view(QWebEngineProfile *profile, QWidget *parent = nullptr);
+	// Out of line because `m_printer` holds a forward-declared type, and
+	// because a view that dies mid-print has something to say -- see the
+	// definition.
+	~qtwebengine_view() override;
 
 	QWidget *widget() override;
 	QUrl url() const override;
@@ -98,6 +105,15 @@ private:
 	// window.print(), which a page may do in a loop, and Qt warns and drops a
 	// second QWebEngineView::print() while the first is unfinished.
 	bool m_printing = false;
+	// **Owned here rather than by the lambda that waits for the printer.**
+	// `printFinished` deletes it on the ordinary path, and that path does not
+	// run when this object dies first -- the connection is made with `this` as
+	// context, so it is disconnected rather than delivered. A view can die
+	// mid-print: the live-view cap suspends the least recently used tab, and
+	// the tab that is printing stops being current the moment somebody
+	// switches away from it. `QPrinter` is not a QObject and cannot be
+	// parented, so ownership is the only thing that closes it.
+	std::unique_ptr<QPrinter> m_printer;
 	QPointer<webauth_dialog> m_webauth_dialog;
 	QPointer<QWebEngineWebAuthUxRequest> m_webauth_request;
 	// A modal question is already on screen. The two requests that ask one --

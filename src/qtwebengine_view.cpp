@@ -1142,6 +1142,19 @@ bool qtwebengine_view::can_print() const {
 // start a job at all -- and cancelling is reported as a finish that produced
 // nothing, since from the shell's side "you did not print" is one outcome
 // however it was reached.
+// **A print that dies with its view is still a print that did not happen.**
+// The shell turns `print_finished` into "Printed." or "Nothing was printed.",
+// and without this the second sentence is the one nobody gets: the waiting
+// connection is disconnected rather than delivered, so a tab suspended by the
+// live-view cap while printing takes the paper *and* the report with it.
+//
+// Emitted from this body rather than left to `~QObject`, which is what makes
+// it work: connections are still live until the base destructor runs.
+qtwebengine_view::~qtwebengine_view() {
+	if (m_printing)
+		emit print_finished(false);
+}
+
 void qtwebengine_view::print() {
 	if (!m_view)
 		return;
@@ -1151,23 +1164,29 @@ void qtwebengine_view::print() {
 	if (m_printing)
 		return;
 
-	auto *printer = new QPrinter(QPrinter::HighResolution);
-	QPrintDialog dialog(printer, m_view);
+	// **Held by this object, not by the lambda.** The waiting connection is
+	// made with `this` as its context, so a view destroyed mid-print never
+	// delivers `printFinished` and the `delete` that used to live in the
+	// lambda never ran. That is not a theoretical death: the live-view cap
+	// suspends the least recently used tab, and a tab stops being current the
+	// moment somebody switches away from it while it prints.
+	m_printer = std::make_unique<QPrinter>(QPrinter::HighResolution);
+	QPrintDialog dialog(m_printer.get(), m_view);
 	dialog.setWindowTitle("Print Page");
 	if (dialog.exec() != QDialog::Accepted) {
-		delete printer;
+		m_printer.reset();
 		emit print_finished(false);
 		return;
 	}
 
 	m_printing = true;
 	connect(m_view, &QWebEngineView::printFinished, this,
-	         [this, printer](bool ok) {
+	         [this](bool ok) {
 		m_printing = false;
-		delete printer;
+		m_printer.reset();
 		emit print_finished(ok);
 	}, Qt::SingleShotConnection);
-	m_view->print(printer);
+	m_view->print(m_printer.get());
 }
 
 void qtwebengine_view::set_authenticator(authenticator fn) {
