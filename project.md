@@ -18723,7 +18723,66 @@ fixtures for both are one file -- a page with a known word repeated seven times
 and a path that answers 401 -- and it needs `adb reverse tcp:8731 tcp:8731`,
 the server, and two navigations.
 
-## The handset is locked, which is the actual blocker
+## Both Android features seen working, on the handset, 2026-09-06
+
+Verified on **SM-F926B, Android 15**, with the phone unlocked and
+`stay_on_while_plugged_in` set to `usb` for the run and put back to `0`
+afterwards. Every input was preceded by a `topResumedActivity` check in the
+same command, so nothing could land in another application between the
+reading and the tap.
+
+### Find on page
+
+Fixture: a page saying **hydra** on seven of its eight lines, so the count is
+an answer rather than a sign of life.
+
+    Find: [hydra]   ^  v   1 of 7
+
+with the matches highlighted on the page. Two presses of Next:
+
+    Find: [hydra]   ^  v   3 of 7
+
+**Which is the assertion that mattered**, and it is the one the design turned
+on: `findNext` walks the matches the previous search found, where
+`findAllAsync` would have restarted and pinned it at "1 of 7" for ever. The
+`fresh` flag chooses between them and it chooses correctly.
+
+### HTTP authentication
+
+Navigating to the 401 path raised the prompt, carrying all three things it is
+built to carry:
+
+    127.0.0.1 is asking for a username and password.
+    For: Hydra Test Realm
+    This connection is not encrypted. A password sent to it can be read by
+    anything between you and the site.
+
+The realm came off the `WWW-Authenticate` header. The warning is the
+conservative `secure = false` path -- correct here, since the origin is plain
+HTTP -- and it is the sentence `try_look` had never photographed until this
+week.
+
+`alice` / `secret`, then the IME's action key, and **the server's own log is
+the evidence**:
+
+    REQ "GET /auth HTTP/1.1" 401 -
+    AUTH OK
+    REQ "GET /auth HTTP/1.1" 200 -
+    REQ "GET /favicon.ico HTTP/1.1" 200 -
+
+A 401, then the same request with credentials the server accepted, then a
+page load. **None of those lines is the browser reporting on itself**, which
+is what the whole fixture was for.
+
+### What was not seen
+
+The rendered "signed in" page. The find bar and the keyboard were still up
+over it, and the two Back presses meant to dismiss them took the application
+out of the foreground instead. The server says the 200 and the favicon were
+fetched, so the load happened; whether it painted is unchecked, and is a
+question about layout rather than about authentication.
+
+## Superseded: the handset was locked, which was the blocker
 
 Second attempt at verifying find-on-page and HTTP authentication, with the
 device free. Neither was verified, and the reason turned out not to be the one
