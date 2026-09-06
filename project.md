@@ -19623,7 +19623,78 @@ on the first run. Measured, fixed to split on any whitespace, and recorded
 in the code: the sample that agreed with the broken parser was, once again,
 the one written on a single line.
 
-## Open: a blocked-popup notice can be overwritten by a stale load failure
+## A wall-clock threshold that failed for the machine, not the code
+
+`make check` went red on `test_bundle` while another build was running in
+this tree: "a request is decided in 578.3 us", against a 100us budget. Idle,
+minutes later, the same suite reported 6.3 us. The candidate explanation was
+load, and a candidate is not a conclusion -- so the experiment that would
+confirm it was run, and it did.
+
+**The assertion's own comment had the reasoning backwards, and the numbers
+say so.** It read: "Not a ratio, which would vary with the machine: what is
+asserted is that a request is answered in a time that can sit on the network
+path."
+
+    loaded   indexed 578.3 us   scan 258172 us      446x
+    idle     indexed   6.3 us   scan 250990 us    39840x
+
+The *scan* barely moved. A quarter of a second averages scheduling noise
+out; a few microseconds is nothing but scheduling noise. So the absolute is
+the load-sensitive half and the ratio is the survivable one -- and 446x
+under thirteen concurrent compilers is still an emphatic pass at any
+threshold worth setting.
+
+The suite asserts `scan / indexed > 50` now and prints both absolutes
+without asserting either. Not `check(true, ...)`: a line in the output that
+cannot fail is the thing this tree keeps removing.
+
+**Sabotaged, and the first attempt was not a sabotage.** Making `index_one`
+drop every rule into the untokenised list broke matching outright -- two
+other checks failed and the timing became meaningless, so the ratio check
+was never put to the question. The one that works keeps every verdict
+identical and answers from a linear walk over `m_compiled`: 5x instead of
+7142x, one failure and only one, which is a performance assertion failing
+for performance while correctness stands.
+
+## The other half of the status bar: which of two messages matters more
+
+The first finding of this pass fixed the two clearers that wiped the bar
+without asking who owned the message. It left the other half open and said
+so: **the status bar has no notion of which of two messages matters more.**
+That entry has been standing as "Open" through five commits, with an
+intermittent test failure attached to it. This closes it.
+
+`on_load_finished` says "%1 could not be loaded" whenever a navigation gives
+up, and it says it over whatever is on the bar. The certificate case had
+already been carved out with the right argument -- "the specific answer
+wins, for the page it was about", because replacing "its certificate could
+not be trusted" with "could not be loaded" loses the only part that said
+what to do differently. The same argument covers far more than certificates.
+
+**The rule is recency of the event, not of the notification.** A notice that
+arrived *while this load was still running* is about something the person
+just did -- pressed Stop, was refused a popup, was told a setting could not
+be saved -- and the load's own complaint is about a navigation that had
+already given up before any of that happened. So `m_loading_views` records
+when each load began, the status bar stamps itself through a single
+`messageChanged` connection rather than at ninety-odd call sites, and a
+failure notice stands down when what is showing is newer than the load it
+would talk over.
+
+Driven deterministically through Stop, which is the same shape and needs no
+resolver: a page that will not arrive, stopped on purpose, must go on saying
+it was stopped. Sabotaged -- with the rule removed, `Stopped.` is replaced by
+`192.0.2.1 could not be loaded.` within the same beat, which is a person
+pressing Stop and being told the page failed.
+
+**What this does not do is build a priority scheme**, and that is deliberate.
+Ninety-eight call sites write to that bar; ranking them would be a
+convention for the whole window, decided in passing, on the strength of one
+defect. The rule here needs no ranking because it asks a question with an
+answer already in the data: which happened first.
+
+## Closed: a blocked-popup notice could be overwritten by a stale load failure
 
 `try_navigate`'s "out loud, not silently" check asserts that refusing a
 script-opened window is said out loud. On 2026-09-06 it failed four times in
@@ -19638,15 +19709,17 @@ reserved TLD never resolves, which is the test's design, and the notice
 arrives whenever the resolver gives up. Whether it lands before or after the
 "Blocked" message is the resolver's business.
 
-Two readings, and they want different fixes. As a test it is a race, and
-polling for the message would settle it. As behaviour it is real: somebody
-who has just had a popup refused can be shown an unrelated load error
-instead of the reason, and the status bar has no notion of which of two
-messages matters more. That is the same family as the two clearers above --
-a shared surface with no owner -- and it does not stop being true on the
-runs where the timing happens to favour it. Left open rather than papered
-over with a poll, which would remove the symptom in the one place anybody is
-watching for it.
+Two readings, and they wanted different fixes. As a test it is a race, and
+polling for the message would have settled it. As behaviour it was real:
+somebody who has just had a popup refused could be shown an unrelated load
+error instead of the reason.
+
+**Fixed as behaviour rather than papered over as a race** -- see *The other
+half of the status bar* above. A load-failure notice now stands down when
+what is on the bar arrived after that load began, which is exactly this
+case: the popup was refused while the failing navigation was still running.
+The test was left as it was rather than made to poll, because a poll would
+have removed the symptom in the one place anybody was watching for it.
 
 ## What is next (in order)
 

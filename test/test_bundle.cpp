@@ -556,13 +556,35 @@ int main(int argc, char **argv) {
 		             "scan %lld us\n", hosts + subs,
 		             double(fast_us) / urls.size(), (long long)slow_us);
 
-		// Not a ratio, which would vary with the machine: what is asserted is
-		// that a request is answered in a time that can sit on the network
-		// path. 100us is already generous for one hash lookup and a few
-		// substring tests.
-		check(double(fast_us) / urls.size() < 100.0,
-		       QString("a request is decided in %1 us")
-		           .arg(double(fast_us) / urls.size(), 0, 'f', 1));
+		// **A ratio after all, and the premise this used to carry was
+		// backwards.** It said an absolute budget was the stable measure
+		// because "a ratio would vary with the machine". Measured on one
+		// machine minutes apart, under thirteen concurrent compilers and then
+		// idle:
+		//
+		//     loaded   indexed 578.3 us   scan 258172 us
+		//     idle     indexed   6.3 us   scan 250990 us
+		//
+		// The *scan* barely moved and the indexed figure moved ninety-fold,
+		// because a few microseconds is all scheduling noise and a quarter of
+		// a second averages it out. So the absolute is the load-sensitive
+		// half, and it failed this suite for the machine rather than for the
+		// code -- in a tree where more than one session builds at once, which
+		// is not a rare condition.
+		//
+		// What the feature actually claims is that the index answers instead
+		// of the scan, and 50x is far under the 446x the loaded run still
+		// managed while asserting nothing about the microseconds. The two
+		// absolutes are printed above and stay worth reading.
+		const double ratio = slow_us / qMax(0.001, double(fast_us) / urls.size());
+		check(ratio > 50.0,
+		       QString("the index answers rather than the scan (%1x)")
+		           .arg(ratio, 0, 'f', 0));
+		// Printed, not checked. A `check(true, ...)` would be a line in the
+		// output that cannot fail, which is the thing this suite exists to
+		// refuse.
+		std::printf("        a request is decided in %.1f us\n",
+		             double(fast_us) / urls.size());
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
