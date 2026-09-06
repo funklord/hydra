@@ -18235,6 +18235,46 @@ those is in this picture set today.
 Kept, because the cost is four lines and the class is real. Recorded as
 unproven, because a check that has never spoken is a check nobody has heard.
 
+## A sweep for countable claims in the source, and the one it found was mine
+
+`evidence.md` names the sentence that rots: a **present-tense countable claim
+about the tree's own shape**. Neither half discriminates alone -- present tense
+is ordinary, a count next to a noun is ordinary -- and the conjunction is rare
+and settled by one command. This tree's comments are unusually full of them, so
+it was worth pointing at `src/` rather than at a document.
+
+Two patterns, read by hand: exclusivity (*the only caller*, *nothing calls*,
+*the one place*) and counts (*two copies*, *three call sites*, *four places*).
+
+**Twenty-odd hits, one rotted, and it rotted today.** `ollama_provider::name()`
+said every use of it is "three dialog banners and an `Asking %1...` status".
+That was true until `provider_note()` collected the three banners into one --
+a commit earlier in this session, which had no reason to open that file. The
+comment now says one banner and three statuses, and says why the number moved.
+
+**The rot rate is not uniform: consolidation is what falsifies these.** A
+commit that merges N copies into one invalidates every comment that counted
+the copies, and those comments are by definition somewhere else. Nothing in
+the merging commit points at them.
+
+### What was checked and held, so it is not re-checked
+
+- **"The only place in the tree that names a concrete web view backend"**
+  (`main.cpp`, the sec 19.2 seam). Verified strictly: every file mentioning
+  `qtwebengine_*` or `android_*` outside `main.cpp` and the backends
+  themselves does so **only in a comment**. Five such files, zero code
+  references. The seam holds.
+- **`page_changed()` "the same four places"** -- four call sites, confirmed.
+- **`qtwebengine_view`'s "four places to stop and three of them look
+  identical"** -- a description of a code path's shape rather than a count of
+  files, and stable.
+- **The two "two copies" notes in `main_window.h`** -- both past tense, saying
+  why a thing was named once. Those cannot rot; they are history.
+
+The discriminator that emerged: **a count of things that exist now rots; a
+count of things that used to exist does not.** Most of this tree's numbers are
+the second kind, which is why twenty hits yielded one.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

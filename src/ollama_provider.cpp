@@ -33,9 +33,15 @@ bool ollama_provider::endpoint_is_local(const QUrl &url) {
 
 QString ollama_provider::name() const {
 	// **Says when the configured model is not there.** Every use of this is a
-	// label a person reads -- three dialog banners and an "Asking %1..."
-	// status -- so the state belongs in it rather than in three copies of a
-	// check. Without this the reorganizer announced "Local model (Ollama,
+	// label a person reads -- one shared provider banner and the three
+	// "Asking %1..." statuses beneath it -- so the state belongs in it rather
+	// than in a copy of the check beside each.
+	//
+	// The count in that sentence used to be "three dialog banners", and it was
+	// true until `provider_note()` collected them into one. Nothing in the
+	// commit that did it had any reason to read this file: a present-tense
+	// count of how many places do something is a claim about the shape of the
+	// tree, and the tree moves without telling the comment. Without this the reorganizer announced "Local model (Ollama,
 	// llama3)" on a machine holding only qwen, and the first anyone knew was a
 	// failed request after pressing Send.
 	//
