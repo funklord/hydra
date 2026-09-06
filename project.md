@@ -19300,6 +19300,79 @@ indexed by it; `tab_tree_model`'s `column_count` has no per-column table
 behind it, and every other per-enum lookup here is a `switch`, where the
 compiler's own exhaustiveness warning is already the guard.
 
+## A measurement that was wrong, copied into three files with "measured" beside it
+
+The lens again, and this time it caught a false fact rather than a missing
+check.
+
+Three loaders — `policy_engine::load`, `site_rules::load` and
+`settings_bundle::read` — tell their own file from somebody else's by a
+`hydra/kind` marker, and each carried a `QSettings::status()` check beside
+it. Two of them carried an identical comment saying the check had once sat
+above the first access, where it was inert, and had been fixed by reading
+the marker first: "`value()` parses, and the status means something
+afterwards. Measured -- `allKeys()` and `value()` force it, `childGroups()`
+does not."
+
+**`value()` does not force the parse.** Measured here, four files against
+three access points:
+
+    file                 status()   after value()   after allKeys()
+    a line of prose      NoError    NoError         FormatError
+    prose with an `=`    NoError    NoError         FormatError
+    a JSON document      NoError    NoError         FormatError
+    a valid INI          NoError    NoError         NoError
+
+So the fix those two comments describe did not work, and the status check
+was still inert in all three loaders — in `annoyance_log`, which is the one
+that calls `allKeys()`, it was right all along. **A wrong measurement
+propagated by copy is worse than no measurement**, because each copy reads
+as independent corroboration and the word "measured" is what stops anybody
+re-taking it.
+
+**The marker looks like it covers the gap, and it does not.** That is why
+the inert check mattered rather than being merely untidy. A file damaged in
+the *middle* keeps its `[hydra]` header, so the marker still reads — and
+QSettings hands back the entries it managed to parse. Measured: two site
+rules with a broken line between them come back as two, with FormatError
+that nothing was asking for. The loader then cleared what it held,
+repopulated from the partial parse, and the next save wrote the surviving
+half back over the file. **A rule on a line the parser choked on is gone,
+silently**, which is precisely the failure the marker was believed to
+prevent.
+
+All three call `allKeys()` before asking now. Both fixes were sabotaged and
+watched: with the call removed, the damaged policy file is accepted and the
+engine's rules are wiped, and the damaged rules file replaces fifteen held
+rules with sixteen parsed ones. `settings_bundle` is the mild case — the
+marker turned a damaged file away anyway, with the wrong sentence, telling
+somebody their backup belongs to another program when it is their backup and
+it is broken — so its test asserts *which* message, because "it was refused"
+cannot tell a working check from one that has never run.
+
+**Two things about the fixtures are worth carrying.** The damage was taken
+from `test_annoyance` rather than invented: that suite measured six inputs to
+find one QSettings actually refuses, and binary NULs are *tolerated* while a
+plain line of prose is not. And the rules fixture is written by the real
+writer and then corrupted, because a hand-built INI that does not match what
+`save` emits would test the fixture rather than the loader.
+
+**And one slip of my own, in the test that catches all this.** A check
+written as one expression called `back.load(path)` in its condition and
+`back.all().size()` in its message; C++ does not specify which argument is
+evaluated first, and the message was computed before the load, printing "0
+rules" beside a check that had passed. Load, measure, then assert, in
+separate statements.
+
+**Swept and left: `filter_list::load`.** It clears its rules before parsing
+and returns true whenever the file opened, which is the ordering the three
+above were fixed out of. It stays as it is for now because its format
+cannot express damage — every line is either a rule or ignored, and a line
+of prose is a valid substring rule — so the only loss case is an I/O failure
+after a successful open, which nothing here can induce. An untestable edit
+in the same breath as three tested ones is how a sabotage-proof change gets
+mistaken for a proven one.
+
 ## Open: a blocked-popup notice can be overwritten by a stale load failure
 
 `try_navigate`'s "out loud, not silently" check asserts that refusing a

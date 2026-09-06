@@ -125,6 +125,21 @@ summary read(const QString &path, policy_engine *policy_out, filter_list *filter
 	}
 
 	QSettings f(path, QSettings::IniFormat);
+	// **`status()` is lazy, and only `allKeys()` forces the parse.** This
+	// check sat above the first access and could never fire; what refused a
+	// damaged file was the marker comparison below, since an unparseable INI
+	// answers every `value()` with the default, the format reads 0, and the
+	// unmarked-file arm turns it away -- correctly, and with the wrong
+	// sentence, telling somebody their backup belongs to another program when
+	// it is their backup and it is broken.
+	//
+	// Measured on this Qt against four files -- a line of prose, prose
+	// carrying an `=`, a JSON document and a valid INI: `status()` is NoError
+	// before any access AND after `value()` for all four, and becomes
+	// FormatError after `allKeys()` for the three that are not INI. The
+	// version of this note that used to stand in three files said `value()`
+	// forced it, with "measured" beside it, and it did not.
+	f.allKeys();
 	if (f.status() != QSettings::NoError) {
 		out.error = "That file is not readable as settings.";
 		return out;

@@ -677,6 +677,79 @@ int main(int argc, char **argv) {
 			               "(%1 bytes, was %2)").arg(now.size()).arg(junk.size()));
 		}
 
+		// **And the case the marker does not cover.** The loader tells its own
+		// file from somebody else's by a `hydra/kind` marker, and a file
+		// damaged in the *middle* still has its header -- so the marker reads,
+		// and QSettings hands back the rules it managed to parse. Measured on
+		// this Qt: two entries with a broken line between them come back as
+		// two, with `status()` reporting FormatError that nothing was asking
+		// for, because `status()` only becomes meaningful after `allKeys()`
+		// forces the parse. The loader would then have replaced what it held
+		// with the surviving half.
+		//
+		// Written by the real writer and then corrupted, rather than typed
+		// out here: a hand-built INI that does not match what `save` emits
+		// would test the fixture rather than the loader.
+		{
+			const QString d = dir + "-half";
+			QDir(d).removeRecursively();
+			QDir().mkpath(d);
+			const QString path = d + "/site-rules.ini";
+
+			site_rules written = site_rules::defaults();
+			site_rule one;
+			one.kind = "container"; one.value = "#banner"; one.host = "a.example";
+			site_rule two;
+			two.kind = "reject";    two.value = "No thanks"; two.host = "b.example";
+			written.add(one);
+			written.add(two);
+			check(written.save(path), "a rules file is written by its own writer");
+
+			QFile src(path);
+			src.open(QIODevice::ReadOnly);
+			QByteArray body = src.readAll();
+			src.close();
+			const int cut = body.indexOf("\n2\\");
+			check(cut > 0, "with a second entry to damage the file between");
+			if (cut > 0) {
+				body.insert(cut + 1, "this line is broken\n");
+				QFile out(path);
+				out.open(QIODevice::WriteOnly | QIODevice::Truncate);
+				out.write(body);
+			}
+
+			site_rules held = site_rules::defaults();
+			site_rule keep;
+			keep.kind = "container"; keep.value = "#keep"; keep.host = "c.example";
+			held.add(keep);
+			const int before = held.all().size();
+			check(!held.load(path),
+			      "a rules file damaged in the middle is refused, marker or no");
+			check(held.all().size() == before,
+			      QString("and what was held is untouched (%1 -> %2)")
+			          .arg(before).arg(held.all().size()));
+
+			// The control: the undamaged file must load, or the refusal above
+			// is a loader that refuses everything.
+			site_rules fresh;
+			check(fresh.load(d + "/site-rules-good.ini") == false,
+			      "a path with no file is refused too");
+			check(written.save(d + "/site-rules-good.ini"),
+			      "the same rules written again, undamaged");
+			// **Loaded, then measured, then asserted -- in that order and in
+			// separate statements.** Written as one expression this read
+			// `back.all().size()` for the message and called `back.load()` in
+			// the condition, and C++ does not say which runs first: the first
+			// draft printed "0 rules" beside a check that had passed, because
+			// the message was computed before the load.
+			site_rules back;
+			const bool loaded = back.load(d + "/site-rules-good.ini");
+			const int got = back.all().size();
+			check(loaded && got == written.all().size(),
+			      QString("and that one loads whole (%1 of %2 rules)")
+			          .arg(got).arg(written.all().size()));
+		}
+
 		// **The control.** Same button, same dialog, a path that was kept --
 		// and the file deleted first, so its reappearance is proof the click
 		// reaches a writer at all.

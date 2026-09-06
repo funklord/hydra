@@ -559,6 +559,72 @@ int main(int argc, char **argv) {
 	// right hazard and it was asserted for exactly one of the twenty-odd
 	// features -- the one being added at the time. A test named after a
 	// member cannot fail for a member added later.
+	// **A damaged file whose marker still reads.** The INI loaders refuse a
+	// file that is not theirs by comparing a `hydra/kind` marker, and they
+	// each carried a `status()` check beside it that had never fired --
+	// `QSettings::status()` is lazy, and measured on this Qt only `allKeys()`
+	// forces the parse: it answers NoError before any access and after
+	// `value()` for a line of prose, for prose carrying an `=`, and for a JSON
+	// document, and reports FormatError for all three only after `allKeys()`.
+	// The comment that stood in three files said `value()` forced it.
+	//
+	// The marker looks like it covers the gap and does not. A file damaged in
+	// the middle keeps its `[hydra]` header, so the marker reads, the status
+	// is ignored, and QSettings hands back **the rules it could parse** --
+	// measured: two site rules with a broken line between them come back as
+	// two rules and FormatError. The loader then cleared what it held,
+	// repopulated from the partial parse, and the next save wrote the
+	// truncated set back over the file. A rule on a line the parser choked on
+	// is gone, silently, which is the failure the marker was thought to
+	// prevent.
+	section("a policy file damaged in the middle is not read as a short one");
+	{
+		const QString dir = QDir::tempPath() + "/hydra-policy-damaged";
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+
+		const QString bad = dir + "/policy.ini";
+		{
+			QFile f(bad);
+			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			f.write("[hydra]\nkind=policy\n\n"
+			         "[sites]\nexample.com=javascript:block\n"
+			         "this line is broken\n"
+			         "other.example=cookies:block\n");
+		}
+
+		policy_engine e;
+		e.set_setting("keep.example", policy::feature::javascript,
+		               policy::setting::block);
+		check(!e.load(bad), "a partly damaged policy file is refused");
+		check(e.setting_for("keep.example", policy::feature::javascript) ==
+		        policy::setting::block,
+		      "and what was already in memory is left alone");
+
+		// **The control, and it is what makes the refusal mean anything.**
+		// The same file without the broken line must load and bring both
+		// rules with it -- otherwise the check above passes on a loader that
+		// refuses everything.
+		const QString good = dir + "/good.ini";
+		{
+			QFile f(good);
+			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			f.write("[hydra]\nkind=policy\n\n"
+			         "[sites]\nexample.com=javascript:block\n"
+			         "other.example=cookies:block\n");
+		}
+		policy_engine ok;
+		check(ok.load(good), "the same file without the damage loads");
+		check(ok.setting_for("example.com", policy::feature::javascript) ==
+		        policy::setting::block &&
+		      ok.setting_for("other.example", policy::feature::cookies) ==
+		        policy::setting::block,
+		      "with both rules, which is what the damaged one would have "
+		      "silently halved");
+
+		QDir(dir).removeRecursively();
+	}
+
 	section("every feature carries the words the rest of the program needs");
 	{
 		int blank_name = 0, blank_label = 0, blank_help = 0, no_round_trip = 0;

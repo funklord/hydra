@@ -175,6 +175,40 @@ int main(int argc, char **argv) {
 		check(!newer.ok() && newer.error.contains("newer version"),
 		      QString("and a file from a later build, rather than half-applying it "
 		               "(%1)").arg(newer.error));
+
+		// **A damaged file, and the message is the whole point of the check.**
+		// Refusing it was never in doubt: an unparseable INI answers every
+		// `value()` with the default, so the format marker reads 0 and the
+		// unmarked-file arm turns it away. What that hides is that the status
+		// check above it is inert -- `QSettings::status()` is lazy and answers
+		// NoError until something forces the parse, so asked before the first
+		// access it has never fired and could not.
+		//
+		// `annoyance_log`, `policy_engine` and `site_rules` each carry that
+		// lesson in a comment, having each been written the wrong way round
+		// first. This is the fourth site and the only one where the wrong
+		// answer is merely a wrong sentence rather than a lost file -- so the
+		// assertion is on which sentence, because "it was refused" cannot tell
+		// a working check from one that has never run.
+		// **The damage is `test_annoyance`'s, taken rather than invented.**
+		// That suite measured six inputs to find one QSettings actually
+		// refuses: binary NULs are tolerated and report NoError, while a plain
+		// line of prose gives FormatError. The first draft here was three
+		// lines of prose and QSettings accepted it -- one of the lines carried
+		// an `=`, which is enough for its parser to recover -- so this test
+		// passed a damaged file and would have reported the fix broken.
+		const QString damaged = dir + "/damaged.ini";
+		{
+			QFile bad(damaged);
+			bad.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			bad.write("this is not an ini file at all\n");
+		}
+		const settings_bundle::summary broken =
+		  settings_bundle::read(damaged, &p, &fl);
+		check(!broken.ok(), "a damaged file is refused");
+		check(broken.error.contains("not readable"),
+		      QString("and told apart from someone else's INI, which is what "
+		               "says the status check ran at all (%1)").arg(broken.error));
 	}
 
 	section("a hand-edited file is still read");

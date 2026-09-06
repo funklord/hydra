@@ -284,13 +284,20 @@ bool policy_engine::load(const QString &path) {
 	// possible way to make a file more readable.
 	if (QFileInfo::exists(path)) {
 		QSettings f(path, QSettings::IniFormat);
-		// **`status()` is lazy and answers NoError until something forces
-		// the parse**, so a status check written above the first access is
-		// inert -- and this one was, for as long as it has existed. What
-		// actually refused a damaged file was the marker comparison beside
-		// it. Read the marker first: `value()` parses, and the status means
-		// something afterwards. Measured -- `allKeys()` and `value()` force
-		// it, `childGroups()` does not.
+		// **`status()` is lazy, and only `allKeys()` forces the parse.**
+		// Measured on this Qt against four files -- a line of prose, prose
+		// carrying an `=`, a JSON document and a valid INI: `status()` is
+		// NoError before any access AND after `value()` for all four, and
+		// becomes FormatError after `allKeys()` for the three that are not
+		// INI. So a status check written above the first access is inert, and
+		// one written after a `value()` is inert too.
+		//
+		// This comment used to say `value()` forced it, in three files at
+		// once, with "measured" beside it. It was not: what refused a damaged
+		// file here was the marker comparison below, and the status check had
+		// never fired in any of them. `annoyance_log` is the one that had it
+		// right, and it is the one that calls `allKeys()`.
+		f.allKeys();
 		const QString kind = f.value("hydra/kind").toString();
 		if (f.status() == QSettings::NoError && kind == "policy") {
 			m_rules.clear();
