@@ -174,6 +174,7 @@ OBJS_test_bundle = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/policy_engine.o \
 	$(BUILD_DIR)/app/settings_bundle.o \
+	$(BUILD_DIR)/app/cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/policy.o
 

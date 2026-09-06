@@ -34,6 +34,12 @@ QStringList cosmetic_filters::selectors_for(const filter_list *list,
 		// the check that exists to stop exactly that.
 		if (r.scope.isEmpty())
 			continue;
+		// **And it has to be a selector**, checked here as well as at accept
+		// time and for the same reason the scope is: a rule that reached the
+		// file by any route other than the review must not reach the page.
+		if (!filter_list::why_selector_unsafe(
+		         r.text.mid(r.text.indexOf("##") + 2).trimmed()).isEmpty())
+			continue;
 		if (host != r.scope && !host.endsWith("." + r.scope))
 			continue;
 		const int hash = r.text.indexOf("##");
@@ -86,7 +92,26 @@ QString cosmetic_filters::script_source() {
           el.id = id;
           (document.head || document.documentElement).appendChild(el);
         }
-        el.textContent = sel.join(',\n') + '{display:none !important}';
+        // **One rule per selector, through the CSS parser.**
+        //
+        // This was `sel.join(',\n') + '{display:none !important}'`, and the
+        // string was the whole stylesheet. Two things follow from that and
+        // both are fixed by inserting rules instead. A selector carrying `}`
+        // closed the rule and everything after it became CSS of its own
+        // choosing -- `filter_list::why_selector_unsafe` refuses those now,
+        // and this is the second half, so that neither check has to be the
+        // only one. And in CSS a single invalid selector invalidates the
+        // *entire* rule it appears in, so one malformed entry silently
+        // disabled cosmetic filtering for the whole site; here the engine
+        // refuses that one and keeps the rest.
+        while (el.sheet && el.sheet.cssRules.length)
+          el.sheet.deleteRule(0);
+        for (var i = 0; i < sel.length; i++) {
+          try {
+            el.sheet.insertRule(sel[i] + '{display:none !important}',
+                                el.sheet.cssRules.length);
+          } catch (e) { /* the engine refused it; the others still apply */ }
+        }
       };
       apply();
     });

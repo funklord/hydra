@@ -68,6 +68,29 @@ bool filter_list::matches(const QString &pattern, const QString &url) {
 	return !p.isEmpty() && url.contains(p);
 }
 
+QString filter_list::why_selector_unsafe(const QString &selector) {
+	const QString v = selector.trimmed();
+	if (v.isEmpty())
+		return QStringLiteral("empty selector");
+	// The same ceiling `site_rules::why_unsafe` uses, and for the same reason:
+	// a rule nobody can read is a rule nobody reviewed.
+	if (v.size() > 200)
+		return QStringLiteral("absurdly long");
+	// **The characters that end a selector and start something else.** `{` and
+	// `}` are the escape; `;` ends a declaration once escaped; `@` begins an
+	// at-rule; `/*` hides the rest of the line from the parser, closing brace
+	// included. A CSS selector needs none of them.
+	for (const QChar c : v) {
+		if (c == '{' || c == '}' || c == ';' || c == '@' || c == '\\')
+			return QString("a selector cannot contain \"%1\"").arg(c);
+		if (c.category() == QChar::Other_Control)
+			return QStringLiteral("a selector cannot contain control characters");
+	}
+	if (v.contains(QLatin1String("/*")) || v.contains(QLatin1String("*/")))
+		return QStringLiteral("a selector cannot contain a comment");
+	return QString();
+}
+
 bool filter_list::cosmetic_matches(const QString &selector, const picked_element &e) {
 	if (!e.is_valid())
 		return false;
@@ -133,6 +156,12 @@ dry_run filter_list::evaluate(const filter_rule &r, const QStringList &observed,
 				                   .arg(selector);
 				return out;
 			}
+		}
+		const QString unsafe = why_selector_unsafe(selector);
+		if (!unsafe.isEmpty()) {
+			out.rejected = true;
+			out.reason   = QString("Not a selector: %1.").arg(unsafe);
+			return out;
 		}
 	} else {
 		QString host = r.scope;

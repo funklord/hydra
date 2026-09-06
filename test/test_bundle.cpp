@@ -7,6 +7,7 @@
 // since an import that quietly applies nothing looks exactly like one that
 // worked.
 #include "settings_bundle.h"
+#include "cosmetic_filters.h"
 #include "filter_list.h"
 #include "policy_engine.h"
 #include "site_rules.h"
@@ -398,6 +399,50 @@ int main(int argc, char **argv) {
 		// property `QFile::remove` gave up and `clear()` keeps.
 		check(QFileInfo::exists(path),
 		      "and the policy file exists throughout, never removed to be rewritten");
+	}
+
+	section("a cosmetic selector cannot say anything but which element");
+	{
+		// The selectors end up in a stylesheet on the page. One carrying `}`
+		// closes the rule it was placed in and everything after it becomes CSS
+		// of its own choosing: an `@import` from a remote host, a full-page
+		// overlay, a `background: url(...)` that sends somewhere what an
+		// attribute selector matched. Not code execution, and a great deal more
+		// than hiding an element.
+		//
+		// Unreachable today -- the only source is the evolution loop, one rule
+		// at a time, accepted by a person. It stops being unreachable the
+		// moment rules arrive from anywhere else.
+		check(filter_list::why_selector_unsafe(".ad-banner").isEmpty(),
+		       "an ordinary selector is a selector");
+		check(filter_list::why_selector_unsafe(
+		         "#a > .b:not(.c)[data-x=\"y\"]").isEmpty(),
+		       "and so is a complicated one");
+		check(!filter_list::why_selector_unsafe(
+		          "x{}*{background:url(https://evil.invalid/)}").isEmpty(),
+		       "one that closes the rule and opens another is not");
+		check(!filter_list::why_selector_unsafe("x/*").isEmpty(),
+		       "nor one that comments out the brace that would have stopped it");
+		check(!filter_list::why_selector_unsafe("@import url(x)").isEmpty(),
+		       "nor an at-rule");
+
+		// The accept-time gate and the delivery-time one, because a rule can
+		// reach the file without passing the first.
+		filter_list fl;
+		filter_rule r;
+		check(filter_list::parse_rule(
+		         "evil.example##x{}*{background:url(https://evil.invalid/)}", &r),
+		       "the hostile rule parses, which is why a syntax check is not one");
+		const dry_run v = filter_list::evaluate(r, {}, "other.example");
+		check(v.rejected, "and the review refuses it");
+		check(v.reason.contains("selector"),
+		       QString("saying what is wrong (%1)").arg(v.reason));
+
+		fl.add(r);
+		const QStringList shipped =
+		  cosmetic_filters::selectors_for(&fl, "evil.example");
+		check(shipped.isEmpty(),
+		       "and if it is in the file anyway, nothing ships it to the page");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

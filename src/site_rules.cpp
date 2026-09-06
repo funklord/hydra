@@ -1,5 +1,7 @@
 #include "site_rules.h"
 
+#include <QElapsedTimer>
+
 #include <QFile>
 #include <QSettings>
 #include <QFileInfo>
@@ -137,6 +139,36 @@ QString site_rules::why_unsafe(const site_rule &r) {
 		const QString decoy = QString::fromUtf8(d);
 		if (re.match(decoy).hasMatch())
 			return QString("would also press \"%1\"").arg(decoy);
+	}
+
+	// **And it has to decide quickly**, because this pattern is compiled into
+	// a `RegExp` inside the page -- see `consent_blocker`'s script -- and run
+	// against every button label on it.
+	//
+	// A pattern like `(a+)+$` is perfectly valid, matches neither the empty
+	// string nor any decoy, and takes exponential time on a label that nearly
+	// matches. In the page that is a renderer that stops responding, and no
+	// `try/catch` catches it: it is not an error, it is work. Qt offers no
+	// match timeout, so the check is a measurement rather than a syntactic
+	// guess -- run it against a label built to backtrack and refuse anything
+	// that takes longer than a person would ever wait for one button.
+	//
+	// The bound is deliberately loose. A rule that needs more than a
+	// millisecond per label on this input is not a rule anybody wrote to press
+	// a cookie button, and the honest failure of a loose bound is that a
+	// pathological pattern slips through on a fast machine -- which is why
+	// this is one layer and reviewing what arrives is the other.
+	{
+		// Long, repetitive, and ending in something that fails: the shape that
+		// makes a nested quantifier explore every partition before giving up.
+		const QString bait = QString('a').repeated(40) + QChar('!');
+		QElapsedTimer clock;
+		clock.start();
+		re.match(bait);
+		const qint64 ms = clock.elapsed();
+		if (ms > k_pattern_budget_ms)
+			return QString("takes %1 ms to decide one label, which would stop "
+			                "the page").arg(ms);
 	}
 	return QString();
 }

@@ -118,6 +118,11 @@ public:
 	// The breadth check, exposed because it is the whole safety story and
 	// deserves to be testable on its own. Empty return means the rule is safe to
 	// offer; otherwise it is the reason to refuse.
+	// How long a consent pattern may take to decide one button label before it
+	// is refused. See `why_unsafe`; the number is a ceiling on somebody else's
+	// regex, not a performance target for ours.
+	static constexpr int k_pattern_budget_ms = 25;
+
 	static QString why_unsafe(const site_rule &r);
 
 	// Kept for the exchange document, which is a different thing from storage:

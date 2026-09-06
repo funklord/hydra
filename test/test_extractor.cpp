@@ -477,6 +477,22 @@ int main(int argc, char **argv) {
 		      "and the reason names the button it would have pressed");
 		check(!refused("reject", "[unclosed").isEmpty(),
 		      "an uncompilable pattern is refused rather than silently ignored");
+
+		// **A valid pattern that never finishes.** This is compiled into a
+		// `RegExp` inside the page and run against every button label, so a
+		// nested quantifier is a renderer that stops responding -- and no
+		// try/catch catches it, because it is not an error, it is work.
+		//
+		// The control is the pair: the hostile one must be refused *and* an
+		// ordinary one with the same shape of alternation must still pass, or
+		// the check is a ban on parentheses rather than a bound on cost.
+		const QString slow = refused("reject", "^(a+)+$");
+		check(!slow.isEmpty(),
+		       "a pattern that backtracks exponentially is refused");
+		check(slow.contains("ms") && slow.contains("stop the page"),
+		       QString("and the reason says why (%1)").arg(slow));
+		check(refused("reject", "^(reject|decline|refuse)( all)?$").isEmpty(),
+		       "while an ordinary grouped pattern is not caught by that bound");
 		check(!refused("detector", "ad").isEmpty(),
 		      "a two-letter detector name is refused — it would accuse half the "
 		      "web, and the message tells someone to lower their protection");

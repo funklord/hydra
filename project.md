@@ -18352,6 +18352,103 @@ measured but unaddressed, and the first is bigger than everything above:
   grows linearly with a person's exceptions, since `effective_setting` scans
   every rule for every feature for every request.
 
+## Before filters can be shared, what a shared rule is allowed to do
+
+Instructed by the copyright holder: filters should become shareable over a
+crypto-network, probably **fuzznet**, in three phases -- own hosts first, then
+trusted people, then a global scheme "which cannot compromise the machine,
+not sure it's possible".
+
+The last clause is the right worry and it decides the order of the work. **A
+filter rule is not data; it is a small amount of power over a page.** So
+before any sharing exists, this is what the three rule kinds can currently do
+with text that arrived from elsewhere.
+
+### Network rules: safe, and the reason is worth keeping
+
+`filter_list::matches` is a substring test with one wildcard, and
+`blocks()` is a linear scan. No regex, no interpolation, nothing compiled. The
+worst a hostile network rule can do is block something -- annoying, visible,
+and bounded. **This is the only one of the three that needs nothing.**
+
+### Cosmetic rules: could write arbitrary CSS on the page
+
+Selectors are delivered as JSON, parsed with `JSON.parse`, and were then
+concatenated:
+
+    el.textContent = sel.join(',\n') + '{display:none !important}';
+
+A selector carrying `}` closes that rule and everything after it is CSS of the
+sender's choosing on that site: `@import` from a remote host, a full-page
+overlay over a bank's warning, `background: url(...)` on an attribute selector
+to send elsewhere what a field matched. Not code execution -- and a great deal
+more than hiding an element.
+
+Two halves, so that neither has to be the only one:
+
+- `filter_list::why_selector_unsafe` refuses `{`, `}`, `;`, `@`, a backslash,
+  control characters and `/*`, at accept time **and** in
+  `cosmetic_filters::selectors_for` on the way to the page -- the second for
+  the same reason the scope is re-checked there, which that function's comment
+  already gives: a rule that reached the file by another route must not reach
+  the page.
+- the script inserts **one rule per selector** through `insertRule` in a
+  try/catch, so a selector that slipped through cannot merge with its
+  neighbours.
+
+**And the second half fixes a bug that has nothing to do with security.** In
+CSS a single invalid selector invalidates the *entire* rule it sits in, so one
+malformed accepted selector silently disabled cosmetic filtering for the whole
+site. Per-rule insertion drops that one and keeps the rest.
+
+### Consent rules: could hang the renderer, and try/catch cannot help
+
+`reject` and `accept` are joined into an alternation, handed to the page and
+compiled with `new RegExp(p, 'i')`, then run against every button label.
+`why_unsafe` already refused an uncompilable pattern, one matching the empty
+string, and any that would press a decoy button -- a good gate, and blind to
+cost. `^(a+)+$` passes all three and takes exponential time on a label that
+nearly matches. In the page that is a renderer that stops responding, and the
+`try/catch` around the compile does not catch it: **it is not an error, it is
+work.**
+
+Qt offers no match timeout, so the bound is a measurement rather than a
+syntactic guess: compile it here, run it against a bait string built to
+backtrack, and refuse anything over 25 ms. Measured, `^(a+)+$` takes **59 ms**
+and is refused; `^(reject|decline|refuse)( all)?$` is not. **The pair is the
+test** -- a bound that refused both would be a ban on parentheses.
+
+The bound is deliberately loose, and its honest failure is a pathological
+pattern slipping through on a fast machine. That is why it is one layer and
+review is the other.
+
+### What this does not answer
+
+The phases the holder named need more than a safe parser, and the third may
+need something this design cannot give:
+
+- **Own hosts.** The rules are already a file with a stable shape
+  (`site_rules::to_json`, and `filters-ai.txt` for the network half). Sharing
+  between one person's machines is a transport and an identity, and the
+  content trust question does not arise: it is the same person.
+- **Trusted people.** Signatures plus the gates above. `judge_import` already
+  refuses a document's self-description -- *"a file that names itself
+  'Trusted community rules' is describing itself, which is worth exactly
+  nothing"* -- and records where a rule came from, which is the half that
+  makes revocation possible later.
+- **Globally.** The unsolved one. Every gate above answers *can this rule do
+  something other than what its kind is for*. None answers *is this rule
+  honest*: a syntactically perfect network rule that blocks a bank's fraud
+  script is indistinguishable from one that blocks an advert. That is not a
+  parser problem, and no amount of validation reaches it. What can be built is
+  the ability to attribute and withdraw -- which is why `origin` on every
+  imported rule and `forget_imported()` matter more here than they look.
+
+**fuzznet is a different project.** Nothing here depends on it yet and nothing
+here should reach into it; when a wire format is wanted, it is asked for by
+naming its constants -- see the cross-tree rule in `evidence.md`, which this
+workspace paid for once already.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

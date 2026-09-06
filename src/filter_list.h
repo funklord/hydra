@@ -79,6 +79,25 @@ public:
 	// Does a single network rule pattern match a URL?
 	static bool matches(const QString &pattern, const QString &url);
 
+	// **Whether a cosmetic selector can be put in a stylesheet without being
+	// able to say anything else.**
+	//
+	// The selectors are delivered to the page and end up in CSS. A selector
+	// carrying `}` closes the rule it was placed in, and everything after it
+	// is then arbitrary CSS on that site -- `@import` from a remote host, a
+	// full-page overlay, `background: url(...)` on an attribute selector to
+	// send what somebody typed somewhere else. None of that is code
+	// execution, and all of it is more than hiding an element.
+	//
+	// Nothing can reach this today: the only source of a cosmetic rule is the
+	// evolution loop, which a person accepts one rule at a time. It stops
+	// being latent the moment rules arrive from anywhere else, which is the
+	// point of the sharing work -- so the check lands before the sharing does,
+	// not after.
+	//
+	// Empty means safe; otherwise the reason.
+	static QString why_selector_unsafe(const QString &selector);
+
 private:
 	bool contains_locked(const QString &text) const;
 
