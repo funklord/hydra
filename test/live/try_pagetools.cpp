@@ -148,6 +148,51 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	section("viewing a page's source, and the greying that goes with it");
+	{
+		// Another of the menu actions no test named. The wiring is right by
+		// reading -- `update_navigation` re-enables it per page from
+		// `has_viewable_source`, which admits http, https and file -- and what
+		// is worth holding is the *pair*: the entry offers itself on a page
+		// that has a source, and greys itself on the one it just opened,
+		// because `view-source:` is not a scheme that has one.
+		//
+		// A control that stays lit and then refuses is the shape this window
+		// spent a pass removing; this is the assertion that keeps it removed.
+		auto *model = w.findChild<tab_tree_model *>();
+		node *folder = model->root()->children.first();
+		check(f.open_tab(0, "one.html"), "a page with a source is showing");
+
+		QAction *source = nullptr;
+		for (QAction *a : w.findChildren<QAction *>())
+			if (QString(a->text()).remove('&') == "View Page Source")
+				source = a;
+		check(source != nullptr, "the View menu offers it");
+		check(source && source->isEnabled(),
+		       "and offers it as available on an ordinary page");
+
+		if (source && source->isEnabled()) {
+			const int before = folder->children.first()->children.size();
+			source->trigger();
+			spin(1200);
+			f.wait_idle();
+			node *tab = folder->children.first();
+			check(tab->children.size() == before + 1,
+			       QString("it opens a sub-tab under the page it came from "
+			                "(%1 -> %2)").arg(before).arg(tab->children.size()));
+			if (tab->children.size() > before) {
+				const QString made = tab->children.last()->url;
+				check(made.startsWith("view-source:"),
+				       QString("filed at the view-source address (%1)")
+				           .arg(made.left(40)));
+			}
+			// The greying half. Whatever the engine renders, the tab now
+			// showing has no source of its own, and the entry has to say so.
+			check(!source->isEnabled(),
+			       "and greys itself on the source tab, which has no source");
+		}
+	}
+
 	section("copying the address of the page you are looking at");
 	{
 		// **A node's `url` is where the tab was filed and does not follow a
