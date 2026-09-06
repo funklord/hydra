@@ -156,11 +156,20 @@ int main(int argc, char **argv) {
 	// would fail for reasons that are not this project's. What is asserted is
 	// the shape: coming back to an evicted tab is not free, and coming back to
 	// a live one is.
-	check(live_ms < 250,
-	       QString("a live switch is immediate (%1 ms)").arg(live_ms));
-	check(cold_ms > live_ms,
-	       QString("and an evicted one is not (%1 ms against %2)")
-	           .arg(cold_ms).arg(live_ms));
+	//
+	// **And the line under that comment used to pin one anyway** --
+	// `live_ms < 250`, which is the machine's number and not this project's,
+	// exactly as the sentence above says. `test_bundle` lost the same kind of
+	// assertion the same day, for the same reason and with the measurement:
+	// its microsecond figure moved ninety-fold under a concurrent build while
+	// the long one beside it barely moved. A ratio survives that, because both
+	// halves are slowed together.
+	//
+	// Three is far under the twenty to thirty measured here, and it is what a
+	// live switch secretly doing a restore would fail.
+	check(cold_ms > live_ms * 3,
+	       QString("an evicted tab costs several times a live one "
+	                "(%1 ms against %2)").arg(cold_ms).arg(live_ms));
 
 	// ## The eviction that could not write its blob
 	//

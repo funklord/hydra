@@ -19657,6 +19657,27 @@ identical and answers from a linear walk over `m_compiled`: 5x instead of
 7142x, one failure and only one, which is a performance assertion failing
 for performance while correctness stands.
 
+**Swept for the rest, and the risk turns out to be the scale of the
+measurement rather than the size of the margin.** Six assertions in the
+suites read a clock or a byte count. Four are network or filesystem
+timeouts with two orders of magnitude of headroom, and `test_tree_scale`
+loads a large tree in 166 ms against a 5000 ms ceiling -- a measurement long
+enough to average scheduling noise out, which is exactly why it does not
+move under load. The one that broke was the one measured in microseconds,
+and it had the *largest* proportional margin of any of them at 16x. **A few
+microseconds is scheduling noise with a number attached**; nothing about a
+generous multiplier protects it.
+
+**The sixth was `try_tabswitch`, which stated the rule and broke it one line
+later.** Its comment reads "Not asserted as a threshold... a number pinned
+here would fail for reasons that are not this project's", and the next line
+was `check(live_ms < 250)`. It asserts the relationship now -- an evicted
+tab costs several times a live one -- and the sabotage is the environment
+rather than the code: running with `HYDRA_MAX_LIVE_VIEWS=1` makes the
+"live" tab a restored one, and the ratio collapses to 277 ms against 314.
+The check fails for exactly the thing it names, a live switch secretly doing
+a restore.
+
 ## The other half of the status bar: which of two messages matters more
 
 The first finding of this pass fixed the two clearers that wiped the bar
