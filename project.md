@@ -19017,6 +19017,143 @@ an answer.
 here so the question is asked once rather than re-derived each time the
 sharing work is picked up.
 
+## The two saves nobody read, and the two clearers that ate the answer
+
+`saved_or_said` was written for a class this project had already paid for:
+"a save that failed used to look exactly like one that worked", where
+`filter_list::save`, `policy_engine::save` and their siblings had been made
+to report honestly and every caller discarded the answer. Six stores were
+wired up to it. **`state_store` was not, and it is the one where the answer
+matters most.**
+
+Both of its callers threw the result away:
+
+* `suspend_node` called `m_state->save(n->id, view->save_state())` and
+  destroyed the view four statements later. The blob is the only copy of
+  where that tab had been, so a write that did not land is the back/forward
+  history gone — and the tab comes back next launch at its address with
+  nothing behind it. Silently, and on the eviction path that runs every time
+  the live-view cap bites, so on a full disk it is every tab.
+* `persist_histories` called `save_history` and ignored it. The header calls
+  that file a permanent record; a permanent record that failed to be written
+  is worse than a transient one that did.
+
+Both are reported now. `suspend_node` says what was lost rather than
+`saved_or_said`'s standard line, because that line — "the change is in this
+session only" — is true of every other store and false of this one: there is
+no session copy left, the view is about to be destroyed. It is destroyed
+anyway, deliberately. Refusing to suspend on a full disk leaves the cap
+unable to evict anything, which is unbounded memory on a machine that is
+already in trouble; the url survives in the tree either way, so the message
+names the history rather than the tab. `persist_histories` returns a count
+and the debounced flush announces it once, behind the same latch
+`m_tree_save_failed` uses and for the same reason: a disk that has filled
+would otherwise repaint the warning every few seconds.
+
+**And then the test would not go green, which is where the interesting half
+is.** The message was posted — a `messageChanged` trace showed it — and
+wiped a beat later, twice over, by two clearers that had nothing to do with
+this feature:
+
+* `on_load_progress` cleared the status bar unconditionally on every
+  navigation. Its comment says why it exists — to retire the sticky
+  renderer-crash notice — and it was doing that plus everything else. The
+  eviction message is posted from inside `open_node`, one beat before the
+  tab it made room for starts loading, so it was destroyed **every single
+  time by the very load that caused it.**
+* `show_link_target` cleared the bar whenever it was handed an empty url.
+  The pointer leaving a link is one way to get that; an ordinary page load
+  is another, and the code could not tell them apart.
+
+Both now clear only what they put there. `on_load_progress` consults a
+`m_page_note` flag, set by the two sticky page-scoped lines it is entitled
+to retire — the crash notice and the startup "Ready" — and
+`show_link_target` clears only if a target was actually on screen.
+`page_changed` had drawn exactly this distinction years earlier with
+`m_link_shown`, and says in its own comment that "clearing unconditionally
+would wipe whatever else the status bar was saying". The rule was right and
+was applied in one of the three places that needed it.
+
+**This is wider than the eviction notice.** Any message posted in the
+moments before a navigation was wiped before anybody could read it, which
+includes every `saved_or_said` line — the answer to a permission prompt
+saved as the page reloads is precisely the case `saved_or_said`'s own
+comment calls the sharpest.
+
+`try_tabswitch` covers it, and covers it in both directions: an eviction
+with the state directory writable must leave the bar empty, and the same
+eviction with the directory at 0500 must fill it. Each half asserts that a
+view actually left `m_views_by_id` first, because a switch to a tab that was
+already live evicts nothing, saves nothing and says nothing — which would
+pass the control and pass the read-only case for the same empty reason. The
+store's own capacity to fail on that directory is asserted separately, so
+"the store would have succeeded anyway" is ruled out before the wiring is
+judged. Skipped under uid 0, the way `test_state` skips, because root writes
+into a read-only directory without complaint. Sabotaged afterwards —
+`suspend_node`'s report removed, the check red, restored, green.
+
+## No action: nothing prunes `state/`, and on this profile nothing needs to
+
+`state_store`'s header names the hazard itself: "otherwise `state/<id>.blob`
+outlives the tab for ever, and an id that is later reused — `unused_id` only
+avoids collisions with what is *in the tree* — would inherit somebody else's
+scroll position and form contents." Nothing prunes the directory, `tree.txt`
+is documented as human-editable, and ids are handed out lowest-free-first,
+so reuse is routine rather than exotic.
+
+Measured on this profile: **1378 ids in the tree, 1154 blob stems in
+`state/`, 1154 of them with a node, 0 orphaned, 2.1 MB.** So the gap is real
+and the population is empty. The method, because a bare figure here would
+be a claim about a directory that changes: ids are every `^\s*-\s*\[([^\]]+)\]`
+in `~/.local/share/Hydra/tree.txt`, stems are every filename in
+`~/.local/share/Hydra/state` up to its last dot, and the orphans are the
+stems that are not ids.
+
+It is also bounded in a way the header does not say. `open_node` restores a
+blob only when `n->type == node_type::suspended_tab && m_state->has_state(n->id)`,
+so a stale blob sitting under a reused id is not read into a tab that was
+never opened — the reuse has to coincide with the node being suspended
+before anything crosses over.
+
+Left alone deliberately. A prune is a delete keyed on a mapping that is not
+invertible: `path_for` sanitises and truncates, and appends a digest when it
+does, so recovering "which id is this file" from the filename is exactly the
+direction the mapping does not go. A sweep that deletes what it cannot match
+is a data-loss path added to fix 0 bytes of waste. If it is ever wanted, the
+shape that does not have this problem is a manifest written beside the
+blobs.
+
+**Recorded with the instrument error, because the first answer was
+confident and wrong.** The first parse of `tree.txt` looked for `id=` and
+reported **1154 orphans** — the format is `- [a1] unopened | ...`, so it had
+matched no ids at all and every stem looked orphaned. Re-measured against
+the real format: 0. It is the same shape as the `project.md` truncation
+caught earlier in the week, where the style gate printed `0 heading(s), 0
+path(s)` over a file that had just been emptied. Both were caught by a count
+that could not possibly be right, and neither by anything checking the
+method.
+
+## Open: a blocked-popup notice is overwritten by a stale load failure
+
+`try_navigate` fails one check, and it fails at `HEAD` as well as with the
+status-bar work above — measured both ways, by building the test against
+`git show HEAD:src/main_window.cpp`. The check asserts that refusing a
+script-opened window is said out loud; what the bar actually holds 300 ms
+later is `example.test could not be loaded.`
+
+That is the DNS failure for the *previous*, allowed popup landing after the
+"Blocked" line. The reserved TLD never resolves, which is the test's
+design, and the failure notice arrives whenever the resolver gives up.
+
+Two readings, and they want different fixes. As a test it is a race, and
+polling for the message would settle it. As behaviour it is a real defect:
+somebody who has just had a popup refused sees an unrelated load error
+instead of the reason, and the status bar has no notion of which of two
+messages matters more. The second is the same family as the two clearers
+above — a shared surface with no owner — and is not a race to be waited out.
+Left open rather than fixed with a poll, which would make the symptom go
+away in the one place anybody is watching for it.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

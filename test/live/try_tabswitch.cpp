@@ -24,14 +24,20 @@
 #include "shell_fixture.h"
 
 #include "node.h"
+#include "state_store.h"
 #include "tab_tree_model.h"
 #include "web_view_backend.h"
 
 #include <QApplication>
 #include <QElapsedTimer>
+#include <QDir>
+#include <QFileInfo>
+#include <QFile>
 #include <QSortFilterProxyModel>
+#include <QStatusBar>
 #include <QTreeView>
 #include <cstdio>
+#include <unistd.h>
 
 namespace {
 using shell::spin;
@@ -62,6 +68,15 @@ qint64 activate_and_wait(shell::fixture &f, node *n, const QString &want_title,
 	}
 	*timed_out = clock.elapsed() >= 20000;
 	return clock.elapsed();
+}
+
+// Which of `before`'s ids no longer has a live view.
+QStringList evicted(shell::fixture &f, const QStringList &before) {
+	QStringList gone;
+	for (const QString &id : before)
+		if (!f.window.m_views_by_id.contains(id))
+			gone << id;
+	return gone;
 }
 
 }  // namespace
@@ -146,6 +161,78 @@ int main(int argc, char **argv) {
 	check(cold_ms > live_ms,
 	       QString("and an evicted one is not (%1 ms against %2)")
 	           .arg(cold_ms).arg(live_ms));
+
+	// ## The eviction that could not write its blob
+	//
+	// Suspending is where a tab's back/forward history stops being in memory
+	// and starts being a file, and `state_store::save` has reported honestly
+	// on a disk it cannot write since it was written -- `test_state` proves
+	// that much with a read-only blob. What nothing proved is that anybody
+	// reads the answer, and until now nobody did: `suspend_node` called
+	// `save`, discarded the result and destroyed the view two statements
+	// later, so a full disk lost the history in silence and the tab came back
+	// next launch at its address with nothing behind it.
+	//
+	// **The control is the first half and it is what makes the second mean
+	// anything.** An eviction with a writable state directory must leave the
+	// status bar empty; the same eviction with the directory read-only must
+	// fill it. One without the other is a check that cannot fail -- a message
+	// that is always there, or an absence that was never disturbed.
+	section("an eviction that cannot write says so");
+	QStatusBar *status = f.window.findChild<QStatusBar *>();
+	check(status != nullptr, "the status bar is reachable");
+	const QString state_dir = f.out + "/state";
+	check(QDir(state_dir).exists(),
+	       QString("the state directory exists (%1)").arg(state_dir));
+
+	if (::geteuid() == 0) {
+		// The same skip `test_state` takes, for the same reason: uid 0 writes
+		// into a 0500 directory without complaint, so the failure this
+		// section needs cannot be produced and the assertions below would
+		// fail against correct code.
+		std::printf("  --    running as root: a read-only directory is still "
+		             "writable, so the failed-save checks are skipped\n");
+	} else if (status) {
+		// Control: evict with the directory writable. **An eviction has to be
+		// seen to happen in both halves** -- a switch to a tab that was
+		// already live evicts nothing, saves nothing and says nothing, which
+		// would pass the control and pass the read-only case for the same
+		// empty reason.
+		status->clearMessage();
+		QStringList before = f.window.m_views_by_id.keys();
+		bool ctl_late = false;
+		activate_and_wait(f, tabs[1], titles[1], &ctl_late);
+		check(!evicted(f, before).isEmpty(),
+		       QString("a tab was evicted to make room (%1)")
+		           .arg(evicted(f, before).join(",")));
+		check(status->currentMessage().isEmpty(),
+		       QString("and a normal eviction says nothing (\"%1\")")
+		           .arg(status->currentMessage()));
+
+		// And again with nowhere to write. QSaveFile puts its temporary
+		// beside the target, so a directory it cannot create in is enough --
+		// no existing blob has to be found and chmodded.
+		QFile::setPermissions(state_dir, QFile::ReadOwner | QFile::ExeOwner);
+		// The mechanism, before the wiring: this whole section means nothing
+		// if the store would have succeeded anyway. `test_state` proves the
+		// store reports honestly on a read-only *file*; this proves it on the
+		// directory these two evictions are about to be pointed at.
+		check(!f.window.m_state->save("probe", QByteArray("x")),
+		       "the store cannot write into the read-only directory");
+		before = f.window.m_views_by_id.keys();
+		status->clearMessage();
+		bool ro_late = false;
+		activate_and_wait(f, tabs[2], titles[2], &ro_late);
+		const QString said = status->currentMessage();
+		QFile::setPermissions(state_dir, QFile::ReadOwner | QFile::WriteOwner |
+		                                  QFile::ExeOwner);
+		check(!evicted(f, before).isEmpty(),
+		       QString("a tab was evicted here too (%1)")
+		           .arg(evicted(f, before).join(",")));
+		check(said.contains("history"),
+		       QString("and an eviction that could not write says so (\"%1\")")
+		           .arg(said));
+	}
 
 	return report();
 }

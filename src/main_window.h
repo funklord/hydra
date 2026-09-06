@@ -153,7 +153,7 @@ private slots:
 	// The imported back/forward records, which live beside the tree file
 	// rather than in it. Both walk the whole tree from the root when called
 	// with no argument.
-	void persist_histories(node *from = nullptr);
+	int  persist_histories(node *from = nullptr);
 	void restore_histories(node *from = nullptr);
 	void new_tab();
 	void new_folder();
@@ -547,6 +547,12 @@ public:
 	// Whether the last debounced tree write failed, so a disk that has filled
 	// says so once instead of once per keystroke.
 	bool                m_tree_save_failed = false;
+	bool                m_history_save_failed = false;
+	// Whether the status bar is showing a line a *page* put there -- the
+	// startup "Ready" and the renderer-crash notice, both of which are sticky
+	// and are retired when the next navigation starts. Anything else the
+	// window says stays until it times out. See `on_load_progress`.
+	bool                m_page_note = false;
 	QTimer             *m_view_timer    = nullptr;
 	QTimer             *m_blob_timer    = nullptr;
 	// Node ids whose history has moved since the last blob flush. Ids rather

@@ -1143,6 +1143,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_status->addPermanentWidget(m_progress);
 	m_status->addPermanentWidget(m_tab_counts);
 	m_status->showMessage("Ready");
+	m_page_note = true;
 	m_find = new find_bar(this);
 	outer->addWidget(m_find);
 	connect(m_find, &find_bar::search, this,
@@ -3564,6 +3565,7 @@ void main_window::report_render_crash(const QString &host) {
 	                                            "Reload to try again.")
 	                          : QString("%1 stopped responding. Reload to try "
 	                                     "again.").arg(host));
+	m_page_note = true;
 
 	// **And hold fewer pages from here on.** A renderer that died is most often
 	// a machine that ran out of memory, and the browser's answer to that must
@@ -3586,11 +3588,20 @@ void main_window::report_render_crash(const QString &host) {
 }
 
 void main_window::show_link_target(const QUrl &url) {
+	// **Only when a target was actually on screen**, which this did not check.
+	// An engine emits an empty `linkHovered` on an ordinary page load as well
+	// as when the pointer leaves a link, so clearing unconditionally wiped
+	// whatever else the status bar was saying every time a page came up --
+	// including `suspend_node`'s "could not save this tab's history", which is
+	// posted one beat before the tab it made room for starts loading. Same
+	// rule as `page_changed` below, which is where `m_link_shown` came from.
+	const bool was_shown = m_link_shown;
 	m_link_shown = !url.isEmpty();
 	if (url.isEmpty()) {
 		// Not a timed message: the pointer left the link, and a target left on
 		// screen after that is a claim about where the pointer is now.
-		m_status->clearMessage();
+		if (was_shown)
+			m_status->clearMessage();
 		return;
 	}
 	const QString text = url.toString();
@@ -3645,8 +3656,21 @@ void main_window::set_loading(bool loading) {
 void main_window::on_load_progress(int percent) {
 	// Something is loading, so whatever the status bar was saying about the
 	// last page -- a crash notice, in particular -- has been acted on.
-	if (!m_loading)
+	//
+	// **Only what a page put there, which this used to ignore.** The two
+	// sticky lines it exists to retire are the crash notice and the startup
+	// "Ready"; it was clearing the bar unconditionally, so any message posted
+	// in the moments before a navigation was wiped before anybody could read
+	// it. That is not hypothetical -- `suspend_node`'s "could not save this
+	// tab's history" is posted from inside `open_node`, one beat before the
+	// tab it made room for starts loading, so the notice was destroyed every
+	// single time by the very load that caused it. `page_changed` above
+	// already draws this distinction with `m_link_shown` and says why;
+	// this is the same rule, applied to the other clearer.
+	if (!m_loading && m_page_note) {
 		m_status->clearMessage();
+		m_page_note = false;
+	}
 	set_loading(true);
 	m_progress->setValue(percent);
 	if (!m_progress->isVisible())
@@ -3731,8 +3755,24 @@ void main_window::suspend_node(node *n) {
 	if (m_kiosk && m_kiosk->active() && m_kiosk->view() == view)
 		return;
 
-	if (m_state)
-		m_state->save(n->id, view->save_state());
+	// **The one save whose failure cannot be "in this session only".** Every
+	// other store keeps its copy in memory when a write fails, so
+	// `saved_or_said`'s line is true there. Here the view is torn down four
+	// statements below and the blob is the only copy of where this tab had
+	// been: a write that did not land is the back/forward history gone, and
+	// the tab comes back next launch at its address with nothing behind it.
+	//
+	// Torn down anyway, because the alternative is worse. Refusing to suspend
+	// on a full disk leaves the live-view cap unable to evict anything, which
+	// is unbounded memory on a machine that is already in trouble. The url
+	// survives in the tree either way; what is lost is the history, so that
+	// is what the message names.
+	if (m_state && !m_state->save(n->id, view->save_state()) && m_status)
+		m_status->showMessage(
+		    QString("Could not save this tab's history — %1 will come back at "
+		             "its address with nothing behind it.")
+		        .arg(n->title.isEmpty() ? QStringLiteral("the tab") : n->title),
+		    12000);
 
 	if (view == current_view())
 		m_stack->setCurrentIndex(0);  // back to placeholder
@@ -4903,7 +4943,13 @@ void main_window::flush_tree() {
 			saved_or_said(false, "the tab tree");
 		m_tree_save_failed = !ok;
 	}
-	persist_histories();
+	// Same latch, same reason: this is reached from the same debounced flush,
+	// and a disk that has filled would repaint the warning every few seconds.
+	const int lost = persist_histories();
+	if (lost > 0 && !m_history_save_failed)
+		saved_or_said(false, QString("%1 imported histor%2")
+		                          .arg(lost).arg(lost == 1 ? "y" : "ies"));
+	m_history_save_failed = lost > 0;
 }
 
 // Write the imported back/forward records that are not on disk yet.
@@ -4914,21 +4960,26 @@ void main_window::flush_tree() {
 // rewriting a few hundred small files every time a row is renamed. It also
 // leaves a file somebody has edited by hand alone, which the format is
 // human-readable in order to allow.
-void main_window::persist_histories(node *from) {
+// Returns the number of histories that could not be written, so that a full
+// disk is said out loud once rather than losing a permanent record in silence.
+int main_window::persist_histories(node *from) {
 	if (!m_state)
-		return;
+		return 0;
 	node *n = from ? from : (m_model ? m_model->root() : nullptr);
 	if (!n)
-		return;
+		return 0;
 	// A mirror is somebody else's session and is never written to the tree, so
 	// writing its histories would leave state/ full of blobs keyed to ids that
 	// no saved tree mentions.
 	if (!n->mirror.isEmpty())
-		return;
+		return 0;
+	int failed = 0;
 	if (!n->history.is_empty() && !n->id.isEmpty() && !m_state->has_history(n->id))
-		m_state->save_history(n->id, tab_history_codec::encode(n->history));
+		if (!m_state->save_history(n->id, tab_history_codec::encode(n->history)))
+			++failed;
 	for (node *c : n->children)
-		persist_histories(c);
+		failed += persist_histories(c);
+	return failed;
 }
 
 // And the other direction, once the tree is in memory.
