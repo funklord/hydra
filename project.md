@@ -10609,6 +10609,14 @@ that they produce no link set under a 2026-08-25 HEAD build from a cleared
 cache while the packaged 1.0 handles them. It is a sibling project, so that is
 signalled rather than fixed from here.
 
+**~~signalled~~ It was not, for eleven days.** The sentence above recorded an
+intention as though it were an act: nothing had been written into fmake's
+tree, where `harmonization.md` says a fault in a sibling goes. It is there
+now as their §177, with the reproduction, the cleared-cache control and the
+two fmake builds. Found by sweeping this project for claims of having
+signalled something, which is a lens the `android-run` entry below suggested
+-- and that is two for two.
+
 ### `BIN=` on the sweep's command line does nothing, and starts a real sweep
 
 **Measured by doing it.** `test/live/sweep.sh` reads
@@ -19650,6 +19658,15 @@ adopters, bbq-predictor, beerssh and fuzzypickles all declare Qt's stock
 activity and match the fragment; hydra is the only one that does not. The
 Makefile comment names where the signal lives, so the claim can be checked
 rather than believed.
+
+**And the lens it suggested paid immediately.** Sweeping this document for
+other claims of having signalled something found one more: the five targets
+fmake produced no link set for, recorded here as "signalled rather than
+fixed from here" and never written into fmake's tree. It is their §177 now.
+**Two claims of the kind, two of them false** -- which is what makes this a
+class rather than an oversight. A signal is an act with an artifact in
+another repository, and the sentence claiming it lives where nobody who
+could falsify it will ever read it.
 
 ## Escape, which the guard on the address bar made necessary
 
