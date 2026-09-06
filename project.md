@@ -18723,6 +18723,50 @@ fixtures for both are one file -- a page with a known word repeated seven times
 and a path that answers 401 -- and it needs `adb reverse tcp:8731 tcp:8731`,
 the server, and two navigations.
 
+## The handset is locked, which is the actual blocker
+
+Second attempt at verifying find-on-page and HTTP authentication, with the
+device free. Neither was verified, and the reason turned out not to be the one
+recorded an hour earlier.
+
+The sequence that settled it: hydra was raised and **held the foreground for
+about ten seconds**, then went to `none` -- and beerssh, the task beneath it,
+appeared in the next screenshot. Read as an app stealing focus, which is what
+the previous entry concluded. Sampling `topResumedActivity` every two seconds
+showed the pattern, and one further call showed the cause:
+
+    mWakefulness=Dozing        mScreenState=OFF        isKeyguardShowing=true
+
+**The display was going to sleep, and the phone is locked with a credential.**
+Waking it (`input keyevent KEYCODE_WAKEUP`) gives a lock screen with a padlock,
+which is where this stops: the credential is the owner's and is not something
+to work around.
+
+`stay_on_while_plugged_in` was set to `usb` while investigating and is **back
+to `0`**, its previous value read before it was changed. The `adb reverse` is
+removed and the fixture server is stopped; nothing of this is left on the
+device or the machine.
+
+### What it would take
+
+Both fixtures are one file, `devsrv.py` in this session's scratch directory:
+`/find` serves a page saying **hydra** on exactly seven of its eight lines, and
+`/auth` answers `401` with `WWW-Authenticate: Basic realm="Hydra Test Realm"`
+until it sees `alice` / `secret`.
+
+    adb reverse tcp:8731 tcp:8731
+    python3 devsrv.py &
+    adb shell am start -a android.intent.action.VIEW \
+        -d http://127.0.0.1:8731/find -n se.vibes.hydra/.HydraActivity
+
+Then, with the phone unlocked and awake: **Edit -> Find on Page**, type
+`hydra`, and the bar should say seven matches -- the number is in the fixture
+so the answer is checkable rather than merely present. Then the address bar to
+`/auth`, which should raise the prompt with *"This connection is not
+encrypted"* on it, since the origin is plain HTTP; `alice` and `secret` should
+produce the page, and the server's own log should say `AUTH OK`. **The server
+log is the half that is not the browser reporting on itself.**
+
 ## Open: who pays for trust, and can a local model be the auditor
 
 Two questions from the copyright holder while the filter work was in flight,
