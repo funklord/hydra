@@ -19631,6 +19631,59 @@ on the first run. Measured, fixed to split on any whitespace, and recorded
 in the code: the sample that agreed with the broken parser was, once again,
 the one written on a single line.
 
+## The sweep believed a tally over an exit code, and a stale binary over the tree
+
+A sweep of the six drivers this session touched reported two failures. Both
+were **my own sabotage binaries**: `try_chrome` and `try_pagetools` had been
+rebuilt against deliberate sabotages, the sabotages reverted in the source,
+and nothing rebuilt them -- `make check` builds the offline suites and not
+the live drivers. The sweep faithfully reported code that had been deleted,
+and it read exactly like two defects.
+
+That is `evidence.md`'s "never conclude that a test passes or fails from a
+binary the build step did not rebuild", met from the direction the rule does
+not mention: the binary was not merely stale, it contained a fault that had
+been *put there on purpose* and then removed everywhere except in it.
+
+**Two guards, and the second was found while proving the first.**
+
+`sweep.sh` already refused to run when drivers were *missing*, with a
+comment explaining that a count well under the sources means the summary is
+about something else. It had nothing to say about a driver that is present
+and old. It compares each driver against the objects it links now, and
+refuses with the command that fixes it.
+
+Compared against the **objects**, not against `src/`, and the first version
+got that wrong: comparing to sources marks every driver stale the moment
+anything in `src/` is touched, and `make drivers` does not clear it, because
+make rebuilds from objects that are current only when something asked for
+them. A guard that demands a rebuild make considers unnecessary is one
+people learn to pass with the override.
+
+**And the sweep counted a crashing driver as `ok`.** It read the trailing
+tally whenever there was one and ignored the status -- so a driver that
+prints "0 failed" and then dies on the way out passed. Measured while
+checking the guard: `try_navigate` and `try_pagetools` both exit **139**
+after passing every check, and had been doing so unnoticed. A tally and an
+exit code are halves of one result; the tally says whether the checks passed
+and the status says whether the program finished, and neither answers for
+the other. They report as `CRASH` now.
+
+## Open: the drivers that make web views segfault on the way out
+
+Found by the guard above rather than by anybody looking for it, and
+**pre-existing**: reproduced with `qtwebengine_view.cpp` and `.h` checked
+out at the commit before this session's print change, rebuilt, and run --
+same `exit 139` after the same 42 passing checks. `try_menus`, which builds
+no web view, exits 0.
+
+So it is teardown of a real engine view rather than anything this session
+did, it costs nothing visible today, and it is exactly the kind of thing
+that hides a lifetime bug: a crash during destruction is a use-after-free
+that happened to be harmless this run. Recorded rather than chased, because
+chasing it wants a debugger against Chromium's teardown and the sweep now
+says so on every run rather than swallowing it.
+
 ## A print that dies with its view took the report with it
 
 `Print` was one of the twenty-six menu actions no test names, and reading it

@@ -157,6 +157,47 @@ if [ -z "${*:-}" ]; then
 	fi
 fi
 
+# **And a driver older than the code it links is a result about code that no
+# longer exists.** The count guard above asks whether a binary is *there*;
+# this asks whether it is *this tree*. They are different questions, and the
+# gap between them cost a real hour: two drivers were rebuilt against a
+# deliberate sabotage, the sabotage was reverted in the source, and nothing
+# rebuilt them -- `make check` builds the offline suites and not these. The
+# next sweep reported two failures that were faithful reports of code that had
+# been deleted, and they read exactly like defects.
+#
+# **Compared against the objects, not against `src/`.** Comparing to the
+# sources was the first version and it is unusable: editing anything in `src/`
+# marks every driver stale, and `make drivers` does not clear it, because make
+# rebuilds from objects that are themselves current only when something asked
+# for them. A guard that demands a rebuild make considers unnecessary is one
+# people learn to pass with the override.
+#
+# The objects are what a driver actually links, so a driver older than the
+# newest of them is genuinely reporting on code it does not contain -- which is
+# the case this exists for: two drivers built against a deliberate sabotage,
+# the sabotage reverted, `make check` rebuilding the objects and not the
+# drivers, and the next sweep reporting two failures that were faithful reports
+# of code that had been deleted.
+newest=$(ls -t "$BIN"/app/*.o "$BIN"/*.o 2>/dev/null | head -1)
+stale=""
+for d in $drivers; do
+	src="test/live/$d.cpp"
+	[ -f "$src" ] || continue
+	if [ "$src" -nt "$BIN/$d" ] || \
+	   { [ -n "$newest" ] && [ "$newest" -nt "$BIN/$d" ]; }; then
+		stale="$stale $d"
+	fi
+done
+if [ -n "$stale" ]; then
+	echo "these drivers are older than the code they link:"
+	for d in $stale; do echo "  $d"; done
+	echo "A sweep of those reports on a tree that has moved. Rebuild with:"
+	echo "    make drivers"
+	echo "or set SWEEP_STALE_OK=1 to run them anyway."
+	[ -n "${SWEEP_STALE_OK:-}" ] || exit 1
+fi
+
 pass=0 fail=0 report=0 failed=""
 # Drivers that are tools rather than tests: they take arguments, or they need a
 # network the sweep has no business assuming. Named with the reason, because
@@ -291,8 +332,23 @@ for d in $drivers; do
 	rc=$?
 	last=$(grep -E 'passed,' "$log" | tail -1)
 	if [ -n "$last" ]; then
-		if echo "$last" | grep -q ', 0 failed'; then
+		# **A tally and an exit code are halves of one result.** This judged
+		# the tally alone whenever there was one, so a driver that printed
+		# "0 failed" and then died on the way out was counted `ok` -- measured
+		# 2026-09-06, `try_navigate` and `try_pagetools` both exit 139 after
+		# passing every check, and had been doing so unnoticed. The tally is
+		# still what says whether the checks passed; the status is what says
+		# whether the program finished, and neither answers for the other.
+		#
+		# 124 is `timeout`'s own, and it is reported by the arm below rather
+		# than here: a driver killed at the deadline has no complete tally to
+		# believe in the first place.
+		if echo "$last" | grep -q ', 0 failed' && [ "$rc" -eq 0 ]; then
 			pass=$((pass+1)); printf '  ok     %-16s %s\n' "$d" "$last"
+		elif echo "$last" | grep -q ', 0 failed'; then
+			fail=$((fail+1)); failed="$failed $d"
+			printf '  CRASH  %-16s %s (exit %s after passing)\n' \
+			        "$d" "$last" "$rc"
 		else
 			fail=$((fail+1)); failed="$failed $d"
 			printf '  FAIL   %-16s %s\n' "$d" "$last"
