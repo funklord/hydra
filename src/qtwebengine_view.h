@@ -45,6 +45,8 @@ public:
 	void set_capture_chooser(capture_chooser fn) override;
 
 private:
+	// Drop any script already inserted under `name`; see the definition.
+	void forget_script(const QString &name);
 	// Rebuilt before every main-frame navigation, because the shield's answer is
 	// per site and a script inserted once would carry the first page's answer
 	// everywhere after it.
@@ -65,6 +67,7 @@ public:
 	bool can_go_back() const override;
 	bool can_go_forward() const override;
 	void set_script_bridge(QObject *object, const QString &name) override;
+	void remove_script(const QString &name) override;
 	QByteArray save_state() const override;
 	bool       restore_state(const QByteArray &blob) override;
 

@@ -4569,6 +4569,10 @@ void main_window::learn_this_site() {
 	refresh_media_affordance(host);
 }
 
+// The one name the capture hook is injected and removed under. Written twice
+// before, which is two chances for a removal to miss what an injection made.
+static const char k_capture_script[] = "hydra-mse-capture";
+
 void main_window::toggle_capture() {
 	web_view_backend *v = current_view();
 	if (!v) {
@@ -4585,6 +4589,15 @@ void main_window::toggle_capture() {
 		const qint64 got = m_local_proxy->captured_bytes(m_capture_url);
 		m_local_proxy->close_capture(m_capture_url);
 		m_capture_url.clear();
+		// **And take the hook out.** Closing the endpoint stopped the writing;
+		// the script stayed, wrapping `MediaSource` and posting to a closed
+		// address on every page this view loaded afterwards, for the life of
+		// the view. Removed from the view that was *armed* rather than the one
+		// showing now: capture is the window's and the hook is a view's, so
+		// stopping from another tab used to leave it where it was.
+		if (m_capture_view)
+			m_capture_view->remove_script(k_capture_script);
+		m_capture_view = nullptr;
 		m_capture_action->setChecked(false);
 
 		if (m_capture_src && m_capture_job) {
@@ -4638,8 +4651,9 @@ void main_window::toggle_capture() {
 	// The hook has to be in place before the player builds its MediaSource, so
 	// arming means injecting and reloading. Catching a stream mid-playback
 	// would miss the init segment and produce a file nothing can decode.
-	v->inject_main_world_script("hydra-mse-capture",
+	v->inject_main_world_script(k_capture_script,
 	                             mse_tap::capture_source(m_capture_url));
+	m_capture_view = v;
 	m_capture_action->setChecked(true);
 	m_status->showMessage("Capturing — reloading so the recorder is in place "
 	                       "before playback starts. Press play, then turn this "

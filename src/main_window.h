@@ -8,6 +8,7 @@
 #include <QWidget>
 #include <QHash>
 #include <QElapsedTimer>
+#include <QPointer>
 #include <QUrl>
 #include <QSet>
 #include <QStringList>
@@ -476,6 +477,11 @@ public:
 	QAction            *m_capture_action = nullptr;
 	QUrl                m_capture_url;      // the proxy endpoint, while capturing
 	QString             m_capture_path;
+	// **Which view was armed**, because the hook is that view's and the stop
+	// can come from another tab. A `QPointer` because the live-view cap may
+	// have destroyed it in between, and a capture that outlived its view has
+	// nothing to take the hook out of.
+	QPointer<web_view_backend> m_capture_view;
 	QTimer             *m_capture_timer = nullptr;
 	QElapsedTimer       m_capture_clock;
 	qint64              m_capture_last  = 0;

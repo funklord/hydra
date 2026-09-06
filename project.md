@@ -18562,6 +18562,62 @@ request over 25,000 rules -- and what is not built is anything that puts one
 there. The narrow local step, if it is ever wanted before fuzznet, is a file
 this browser reads and nothing else: no fetching, no updating, no sharing.
 
+## The capture hook was never taken out, and injection had no inverse
+
+Looking for what the injected scripts cost turned up something that is not
+about cost at all.
+
+Arming a media capture injects `hydra-mse-capture` into the page's own world,
+carrying the endpoint it should post segments to. Stopping closes the endpoint
+-- and leaves the script. It goes on wrapping `MediaSource` and posting to a
+closed address **on every page that view loads afterwards, for the life of the
+view**, and nothing says so.
+
+Arming a second time is worse. Neither injector replaced by name:
+
+    m_page->scripts().insert(s);            // desktop
+    m_script_names << name;                 // android
+    m_script_sources << source;
+
+`QWebEngineScriptCollection` keeps everything inserted into it, so a second
+arming left **two** hooks with two different endpoints, both running. Android's
+lists appended unconditionally, so the same.
+
+**The hazard is written down thirty lines above the desktop injector**, in
+`refresh_permissions_shim`: *"QWebEngineScriptCollection keeps every script
+inserted into it, so leaving the old one behind would mean two overrides
+racing on the next page, and the loser would be whichever was inserted
+first."* That function learned it and fixed it locally; the two injectors
+beside it did not, and the one caller that injects more than once per view
+paid.
+
+Three parts:
+
+- **Both injectors replace by name**, which is what every caller already
+  assumed -- they call once per view and name -- and what neither did.
+  `refresh_permissions_shim` uses the same helper now instead of its own copy.
+- **`web_view_backend::remove_script`**, because injection had no inverse and
+  a caller needed one. Not pure: a backend that cannot do it does nothing.
+- **The stop path removes the hook from the view that was *armed***, not the
+  one showing now. Capture is the window's and the hook is a view's, so
+  stopping from another tab used to leave it where it was. Held in a
+  `QPointer`, since the live-view cap may have destroyed that view meanwhile.
+
+    ok    arming injects the hook
+    ok    and stopping takes it out again
+    ok    leaving exactly the scripts it found
+    ok    and a second round leaves no residue either
+
+With the removal taken out, the last three fail.
+
+**And the first version of that section could not have failed usefully.** It
+asserted "arming either injects the hook or refuses out loud", which passes
+whether or not arming worked -- and if it had been refused, every assertion
+after it was inside `if (armed)` and would have been skipped silently. It
+asserts `armed` outright now and prints a note naming what did not run if it
+ever is refused. Confirmed by reading the output: the proxy listens in the
+suite and the hook is really injected, so all four run.
+
 ## Open: who pays for trust, and can a local model be the auditor
 
 Two questions from the copyright holder while the filter work was in flight,

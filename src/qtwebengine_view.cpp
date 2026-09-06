@@ -964,8 +964,26 @@ bool qtwebengine_view::restore_state(const QByteArray &blob) {
 	return ds.status() == QDataStream::Ok;
 }
 
+// **Every injector replaces by name**, which is what its callers already
+// assume and what `QWebEngineScriptCollection` does not do for them: it keeps
+// every script inserted into it, so a second call with the same name leaves
+// two scripts running on the next page and the loser is whichever was
+// inserted first. `refresh_permissions_shim` learned that and did it locally;
+// the two injectors beside it did not, and the media capture hook paid for it.
+void qtwebengine_view::forget_script(const QString &name) {
+	if (!m_page)
+		return;
+	for (const QWebEngineScript &old : m_page->scripts().find(name))
+		m_page->scripts().remove(old);
+}
+
+void qtwebengine_view::remove_script(const QString &name) {
+	forget_script(name);
+}
+
 void qtwebengine_view::inject_script(const QString &name, const QString &source,
                                       bool subframes) {
+	forget_script(name);
 	QWebEngineScript s;
 	s.setName(name);
 	s.setSourceCode(source);
@@ -1001,8 +1019,7 @@ void qtwebengine_view::refresh_permissions_shim(const QUrl &origin) {
 	// overrides racing on the next page, and the loser would be whichever was
 	// inserted first -- a per-site answer carried onto the wrong site.
 	const QString name = QStringLiteral("hydra-permissions");
-	for (const QWebEngineScript &old : m_page->scripts().find(name))
-		m_page->scripts().remove(old);
+	forget_script(name);
 
 	QWebEngineScript s;
 	s.setName(name);
@@ -1017,6 +1034,7 @@ void qtwebengine_view::refresh_permissions_shim(const QUrl &origin) {
 
 void qtwebengine_view::inject_main_world_script(const QString &name,
                                                  const QString &source) {
+	forget_script(name);
 	QWebEngineScript s;
 	s.setName(name);
 	s.setSourceCode(source);

@@ -290,6 +290,21 @@ public:
 	// nullptr withdraws it.
 	virtual void set_script_bridge(QObject *object, const QString &name) = 0;
 
+	// Take an injected script back out, by the name it was given.
+	//
+	// **Injection had no inverse, and one caller needed one.** Arming a media
+	// capture injects a hook carrying the endpoint it should post to; stopping
+	// closed the endpoint and left the hook in place, so it went on wrapping
+	// `MediaSource` and posting to a closed address on every page that view
+	// loaded afterwards, for the life of the view. Arming a second time added
+	// a second hook beside the first rather than replacing it, each with a
+	// different endpoint -- which is the hazard `refresh_permissions_shim`
+	// carries a paragraph about, met by the injector next to it.
+	//
+	// Not pure: a backend with no notion of removing a script does nothing,
+	// and the caller is no worse off than before this existed.
+	virtual void remove_script(const QString &name) { Q_UNUSED(name) }
+
 	// Session state -- navigation history and whatever else the engine can
 	// serialize. Opaque to the shell, which only stores and returns the blob
 	// (state_store keys it by node id, architecture doc sec 4.2).

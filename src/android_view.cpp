@@ -1328,8 +1328,7 @@ void android_view::inject_script(const QString &name, const QString &source,
 	// therefore sees less here than on the desktop, which is a gap to close with
 	// per-frame injection, not a flag to pretend about.
 	Q_UNUSED(subframes)
-	m_script_names << name;
-	m_script_sources << source;
+	set_script(name, source);
 }
 
 void android_view::inject_main_world_script(const QString &name,
@@ -1337,8 +1336,29 @@ void android_view::inject_main_world_script(const QString &name,
 	// The same thing here. Android has one world, so the distinction the desktop
 	// draws between an isolated script and a main-world one does not exist, and
 	// both land in the page's own globals.
+	set_script(name, source);
+}
+
+// **Replace, never append**, for the reason the desktop injector gives: these
+// two lists were appended to unconditionally, so arming a media capture twice
+// left two scripts of one name with two different endpoints, both evaluated on
+// every page.
+void android_view::set_script(const QString &name, const QString &source) {
+	const int at = m_script_names.indexOf(name);
+	if (at >= 0) {
+		m_script_sources[at] = source;
+		return;
+	}
 	m_script_names << name;
 	m_script_sources << source;
+}
+
+void android_view::remove_script(const QString &name) {
+	const int at = m_script_names.indexOf(name);
+	if (at < 0)
+		return;
+	m_script_names.removeAt(at);
+	m_script_sources.removeAt(at);
 }
 
 void android_view::set_script_bridge(QObject *object, const QString &name) {

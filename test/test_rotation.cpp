@@ -154,8 +154,18 @@ public:
 	double zoom = 1.0;
 	void   set_zoom_factor(double f) override { zoom = f; }
 	double zoom_factor() const override { return zoom; }
-	void inject_script(const QString &, const QString &, bool) override {}
-	void inject_main_world_script(const QString &, const QString &) override {}
+	// Recorded, for the same reason `last_settings` is: a no-op injector means
+	// the shell can arm and disarm a page script and the suite cannot see
+	// either. Replace-by-name here mirrors what both real backends do, so what
+	// the test reads is the set a page would end up running.
+	QStringList scripts;
+	void inject_script(const QString &n, const QString &, bool) override {
+		if (!scripts.contains(n)) scripts << n;
+	}
+	void inject_main_world_script(const QString &n, const QString &) override {
+		if (!scripts.contains(n)) scripts << n;
+	}
+	void remove_script(const QString &n) override { scripts.removeAll(n); }
 	void set_script_bridge(QObject *, const QString &) override {}
 	QByteArray save_state() const override { return {}; }
 	bool restore_state(const QByteArray &) override { return false; }
@@ -1217,6 +1227,60 @@ int main(int argc, char **argv) {
 
 		c.allow_escape = was;
 		settings_store::set_kiosk(c);
+	}
+
+	section("stopping a capture takes its hook out of the page");
+	{
+		// Arming injects a hook carrying the endpoint to post to. Stopping
+		// closed the endpoint and left the hook, so it went on wrapping
+		// MediaSource and posting to a closed address on every page that view
+		// loaded afterwards -- and arming again added a second hook beside the
+		// first, with a different endpoint, because neither injector replaced
+		// by name.
+		main_window w16(&factory, &policy, &filter);
+		node *t = w16.m_model->add_tab(nullptr, "cap", "http://cap.example/");
+		check(t != nullptr, "a tab to capture from");
+		if (t) {
+			QMetaObject::invokeMethod(
+			  &w16, "on_tree_activated",
+			  Q_ARG(QModelIndex,
+			         w16.m_proxy->mapFromSource(w16.m_model->index_for_node(t))));
+			// `static_cast`, because `fake_view` carries no Q_OBJECT and the
+			// factory in this file makes nothing else.
+			auto *v = static_cast<fake_view *>(
+			  w16.m_views_by_id.value(t->id, nullptr));
+			check(v != nullptr, "with a view behind it");
+			if (v) {
+				const int before = v->scripts.size();
+				check(!v->scripts.contains("hydra-mse-capture"),
+				       "no capture hook before anything is armed");
+
+				QMetaObject::invokeMethod(&w16, "toggle_capture");
+				const bool armed = v->scripts.contains("hydra-mse-capture");
+				// **Which branch ran, said out loud.** "It armed or it
+				// refused" passes either way, and if arming is refused here
+				// -- no proxy, no downloads directory -- every assertion
+				// below is skipped and the section proves nothing while
+				// reading green.
+				if (!armed)
+					std::printf("        [note] arming refused; the three "
+					             "assertions below did not run\n");
+				check(armed, "arming injects the hook");
+				if (armed) {
+					QMetaObject::invokeMethod(&w16, "toggle_capture");
+					check(!v->scripts.contains("hydra-mse-capture"),
+					       "and stopping takes it out again");
+					check(v->scripts.size() == before,
+					       "leaving exactly the scripts it found");
+
+					// Twice, which is the case that used to leave two.
+					QMetaObject::invokeMethod(&w16, "toggle_capture");
+					QMetaObject::invokeMethod(&w16, "toggle_capture");
+					check(v->scripts.size() == before,
+					       "and a second round leaves no residue either");
+				}
+			}
+		}
 	}
 
 	section("a deleted tab does not lend its zoom to the next one");
