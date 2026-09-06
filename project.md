@@ -19623,6 +19623,34 @@ on the first run. Measured, fixed to split on any whitespace, and recorded
 in the code: the sample that agreed with the broken parser was, once again,
 the one written on a single line.
 
+## A comment said it had been signalled, and it had not
+
+Every build of this project prints two lines that nobody reads:
+
+    Makefile:299: warning: overriding recipe for target 'android-run'
+    tool/android.mk:514: warning: ignoring old recipe for target 'android-run'
+
+The override is deliberate. The shared fragment ends `android-run` with
+`am start -n $(APP_ID)/org.qtproject.qt.android.bindings.QtActivity`, and
+this project's manifest declares `se.vibes.hydra.HydraActivity` because it
+subclasses Qt's. The Makefile explains that, and says the fragment wants an
+`ANDROID_ACTIVITY` variable, which is a change to a file copied into four
+projects and therefore a cross-project pass's work -- "signalled rather than
+made".
+
+**There was no signal.** `ANDROID_ACTIVITY` appeared nowhere in
+`claude-guidelines`, which is where `harmonization.md` says such an
+observation goes. The sentence recorded an intention as though it were an
+act, and nothing in the ordinary course of work would ever have brought the
+two together -- the same shape as a gap claim that outlives its gap, in the
+one place designed to stop a question being asked six times.
+
+Written now, with the measurement it should have carried: of the four
+adopters, bbq-predictor, beerssh and fuzzypickles all declare Qt's stock
+activity and match the fragment; hydra is the only one that does not. The
+Makefile comment names where the signal lives, so the claim can be checked
+rather than believed.
+
 ## Escape, which the guard on the address bar made necessary
 
 Leaving a modified address field alone so a redirect cannot eat what somebody

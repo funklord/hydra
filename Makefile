@@ -295,6 +295,13 @@ include tool/android.mk
 # inside this one -- signalled rather than made. Make warns that this
 # overrides the fragment's recipe, and that warning is correct and worth
 # seeing.
+#
+# **The signal is in `claude-guidelines`' `project.md`, under Open signals**,
+# with the measurement: of the four adopters of the fragment, three declare
+# Qt's stock activity in their manifests and this one declares its own,
+# because it subclasses. It is named here so the claim above can be checked
+# rather than believed -- when this comment was written the signal did not
+# exist, and "signalled rather than made" was true of the intention only.
 android-run: android-install
 	$(ANDROID_ADB) shell am start -n $(APP_ID)/se.vibes.hydra.HydraActivity
 
