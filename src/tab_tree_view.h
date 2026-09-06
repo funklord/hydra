@@ -40,6 +40,11 @@ public:
 	// which is what a hand reaches for. A shell wanting it on a toolbar would
 	// use the same entry.
 	void edit_properties(node *n);
+	// Ask before removing a node, and remove it if the answer is yes. Public
+	// because both ways of asking for a deletion -- this view's context menu
+	// and the window's Edit menu, which also owns the Delete key -- must put
+	// the same question. Returns whether anything was removed.
+	bool confirm_and_remove(node *n);
 
 	// Make `n` the current row: expanded to, highlighted, scrolled into view.
 	//

@@ -19943,6 +19943,58 @@ corrected by accident now needs a control. A change that makes something
 sticky owes the reader the way to unstick it, and the place to look for that
 debt is the sentence describing what the change now refuses to do.
 
+## Delete had two spellings, and only one of them asked
+
+The worst defect of this session, found by the lens the last one suggested:
+**two spellings of one action drift.** `Copy Address` and `Open in Another
+App` had disagreed about which address a row has; the tree's context menu
+and the Edit menu disagreed about something considerably more expensive.
+
+`tab_tree_model::remove_node` does `delete n`, and its own comment says that
+takes the whole subtree: *"deleting a folder in a file manager takes what is
+in it. The caller is responsible for having asked first."*
+
+    context menu   counts every descendant, asks
+                   "Delete "Work" and the 42 items inside it?"
+    Edit menu      m_model->remove_node(n)
+
+The Edit menu binds `QKeySequence::Delete`, so that second row is also **what
+the Delete key does**. A selected folder and every tab inside it went without
+a word, and the only undo in this window is `Undo Reorganize`.
+
+**The safety property was written down in a third file, which is what let it
+rot.** `tab_tree_view::keyPressEvent` declines to bind Delete itself, and
+says why: "a stray key should not remove a folder and everything in it, **and
+the menu entry asks first**." The first half is a real decision and still
+holds. The second was a claim about a different file, it was false, and the
+key it was protecting against was bound at the window instead -- so the
+hazard the comment describes was live by the exact route the comment ruled
+out.
+
+`confirm_and_remove` is one function on the view now, and both callers use
+it. **A safety property that one file states and another has to provide is
+one that drifts**, which is the general form of every finding in this
+stretch -- the address of a row, the loading state of a tab, the wording of
+a refusal.
+
+**Tested through the modal, which is the part that makes it an assertion
+rather than a reading.** `QMessageBox::question` runs its own event loop, so
+the answer is posted from a timer that finds `activeModalWidget()` and
+clicks. Both directions are checked: answering **no** must leave the folder
+where it was, and answering **yes** must take it -- the second is what stops
+the first passing on an entry that does nothing at all. Sabotaged back to the
+direct `remove_node`: "answering no" reports 1 -> 0, the folder destroyed
+before anybody was asked.
+
+**And the test's own first draft broke the driver, in the way this session
+has spent all day naming.** It deleted the *fixture's* folder, so the next
+section dereferenced a node that was gone and the run segfaulted -- while
+the two checks above it had already printed `ok`, so reading them alone said
+the section passed. That is the tally-without-the-status rule, skipped by
+the author of the guard that now enforces it in `sweep.sh`, about two hours
+after writing it. The section builds its own scratch folder to destroy now,
+and the run is read as `rc=0` **and** `14 passed, 0 failed`.
+
 ## Copy Address handed you the page you started from
 
 Found by asking which menu actions no test names -- twenty-six of fifty-two,

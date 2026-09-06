@@ -437,22 +437,49 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 		// discovered afterwards, and a direct count cannot deliver that for
 		// any nested tree -- which is the ordinary case, since the context
 		// menu offers "New Folder Here" inside a folder.
-		int kids = 0;
-		{
-			QList<node *> stack = n->children;
-			while (!stack.isEmpty()) {
-				node *k = stack.takeLast();
-				++kids;
-				stack << k->children;
-			}
-		}
-		const QString what = kids > 0
-		  ? QString("Delete \"%1\" and the %2 item%3 inside it?")
-		        .arg(n->title).arg(kids).arg(kids == 1 ? "" : "s")
-		  : QString("Delete \"%1\"?").arg(n->title);
-		if (QMessageBox::question(this, "Delete", what) == QMessageBox::Yes)
-			m->remove_node(n);
+		confirm_and_remove(n);
 	}
+}
+
+// **The question, in one place, because there are two ways to ask for a
+// deletion and only one of them used to put it.**
+//
+// `remove_node` does `delete n`, and its own comment says that takes the
+// whole subtree: "The caller is responsible for having asked first." The
+// context menu asked. The Edit menu's `&Delete` -- which also binds
+// `QKeySequence::Delete`, so it is what the Delete key reaches -- called
+// `remove_node` directly, so a selected folder and every tab in it went
+// without a word, and the only undo in this window is for Reorganize.
+//
+// `keyPressEvent` below declines to bind Delete on the stated grounds that
+// "a stray key should not remove a folder and everything in it, and the menu
+// entry asks first". The first half was a real decision; the second was not
+// true, and the key was bound at the window instead. A safety property that
+// one file states and another file has to provide is one that drifts.
+bool tab_tree_view::confirm_and_remove(node *n) {
+	tab_tree_model *m = source_model();
+	if (!n || !m)
+		return false;
+
+	// **Every descendant, not the direct children.** A folder holding two
+	// sub-folders of twenty tabs said "and the 2 items inside it?" and removed
+	// forty-two. The count goes in the question rather than being discovered
+	// afterwards, which is the whole point of asking.
+	int kids = 0;
+	QList<node *> stack = n->children;
+	while (!stack.isEmpty()) {
+		node *k = stack.takeLast();
+		++kids;
+		stack << k->children;
+	}
+	const QString what = kids > 0
+	  ? QString("Delete \"%1\" and the %2 item%3 inside it?")
+	        .arg(n->title).arg(kids).arg(kids == 1 ? "" : "s")
+	  : QString("Delete \"%1\"?").arg(n->title);
+	if (QMessageBox::question(this, "Delete", what) != QMessageBox::Yes)
+		return false;
+	m->remove_node(n);
+	return true;
 }
 
 void tab_tree_view::keyPressEvent(QKeyEvent *event) {

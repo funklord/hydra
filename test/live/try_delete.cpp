@@ -20,12 +20,15 @@
 #include "state_store.h"
 #include "tab_tree_model.h"
 
+#include <QMessageBox>
+#include <QAbstractButton>
 #include <QApplication>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
 #include <QLabel>
 #include <QRegularExpression>
+#include <QSortFilterProxyModel>
 #include <QTimer>
 #include <QTreeView>
 #include <cstdio>
@@ -50,6 +53,16 @@ static int live_count(QWidget *w) {
 }
 
 // Open the tab at `row` under the first folder, the way a click does.
+// A row's index in the view's coordinates, through whatever proxy is in the
+// way. Written once because the alternative is `index(0, 0)` and a comment
+// about which row that is today.
+static QModelIndex index_for(QTreeView *tree, tab_tree_model *model, node *n) {
+	const QModelIndex src = model->index_for_node(n);
+	if (auto *proxy = qobject_cast<QSortFilterProxyModel *>(tree->model()))
+		return proxy->mapFromSource(src);
+	return src;
+}
+
 static void open_row(QTreeView *tree, int row) {
 	const QModelIndex folder = tree->model()->index(0, 0);
 	emit tree->activated(tree->model()->index(row, 0, folder));
@@ -121,6 +134,78 @@ int main(int argc, char *argv[]) {
 	state_store store(out + "/state");
 	// The first tab opened is the first suspended, and suspending is what saves.
 	check(store.has_state("a1"), "the suspended tab left a state blob behind");
+
+	section("the Delete menu entry asks before it takes a folder");
+	{
+		// **The defect this covers destroyed data silently.** `remove_node`
+		// deletes the whole subtree and its comment says the caller must have
+		// asked first; the context menu asked, and the Edit menu -- which also
+		// binds the Delete key -- called it directly. A selected folder and
+		// every tab in it went without a word, and the only undo in this
+		// window is for Reorganize.
+		//
+		// The tree view's own `keyPressEvent` declines to bind Delete "because
+		// the menu entry asks first", so the safety one file stated was
+		// supposed to be provided by another, and was not.
+		//
+		// **Answered from a timer, because the question is modal.** The driver
+		// cannot reach the box any other way: `QMessageBox::question` runs its
+		// own event loop, so the answer has to be posted from inside it.
+		auto answer_modal = [](QMessageBox::StandardButton with) {
+			QTimer::singleShot(400, [with] {
+				auto *box = qobject_cast<QMessageBox *>(
+				  QApplication::activeModalWidget());
+				if (!box)
+					return;
+				if (QAbstractButton *b = box->button(with))
+					b->click();
+			});
+		};
+
+		QAction *del = nullptr;
+		for (QAction *a : w.findChildren<QAction *>())
+			if (QString(a->text()).remove('&') == "Delete")
+				del = a;
+		check(del != nullptr, "the Edit menu offers Delete");
+
+		// **Its own folder, because the yes-case destroys what it deletes and
+		// every section after this one needs the fixture.** The first draft
+		// deleted the fixture's folder and the driver segfaulted in the next
+		// section on a node that was gone -- and the two checks here had
+		// already printed `ok`, so reading them alone said the section passed.
+		// A tally and an exit status are halves of one result; that is the
+		// rule this driver's own sweep now enforces, skipped here by its
+		// author.
+		node *victim = model->add_folder(nullptr, "Scratch");
+		model->add_tab(victim, "Inside", "about:blank");
+		spin(100);
+		const int before = model->root()->children.size();
+		const QString name = victim->title;
+
+		if (del) {
+			// Refused: the folder must survive. If nothing asks, it does not,
+			// which is the whole assertion -- a silent delete cannot pass this
+			// by luck.
+			tree->setCurrentIndex(index_for(tree, model, victim));
+			answer_modal(QMessageBox::No);
+			del->trigger();
+			spin(900);
+			check(model->root()->children.size() == before,
+			       QString("answering no leaves \"%1\" where it was (%2 -> %3)")
+			           .arg(name).arg(before)
+			           .arg(model->root()->children.size()));
+
+			// And accepted, so the check above is not passing because the
+			// entry does nothing at all.
+			tree->setCurrentIndex(index_for(tree, model, victim));
+			answer_modal(QMessageBox::Yes);
+			del->trigger();
+			spin(900);
+			check(model->root()->children.size() == before - 1,
+			       QString("and answering yes takes it (%1 -> %2)")
+			           .arg(before).arg(model->root()->children.size()));
+		}
+	}
 
 	section("deleting a suspended tab takes its blob");
 	{

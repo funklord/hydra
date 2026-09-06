@@ -1401,10 +1401,21 @@ QMenuBar *main_window::build_menu_bar() {
 			m_tree->edit_properties(n);
 	});
 	ren_act->setStatusTip("Edit the selection's title, address and notes");
+	// **Through the tree's own question**, which is the same one its context
+	// menu puts. This called `remove_node` directly, and that function deletes
+	// the whole subtree -- its comment says "the caller is responsible for
+	// having asked first" -- so a selected folder and every tab inside it went
+	// without a word, from a menu entry that also owns the Delete key. The
+	// only undo in this window is for Reorganize.
+	//
+	// The tree view's `keyPressEvent` declines to bind Delete itself, on the
+	// stated grounds that "a stray key should not remove a folder and
+	// everything in it, and the menu entry asks first" -- so this is the entry
+	// that sentence was relying on.
 	QAction *del_act = edit_menu->addAction("&Delete", QKeySequence::Delete, this,
 	                                         [this] {
 		if (node *n = selected_node())
-			m_model->remove_node(n);
+			m_tree->confirm_and_remove(n);
 	});
 	del_act->setStatusTip("Remove the selection and everything inside it");
 	edit_menu->addSeparator();
