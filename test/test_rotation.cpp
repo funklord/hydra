@@ -56,6 +56,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QSettings>
 #include <QMouseEvent>
 #include <QScrollBar>
 #include <QDir>
@@ -389,6 +390,98 @@ int main(int argc, char **argv) {
 		check(next.drawer ? parent == &w : parent == split,
 		      QString("%1: the sidebar is parented where that mode keeps it")
 		              .arg(QString::fromUtf8(next.what)));
+	}
+
+	section("a dragged drawer width comes back the width it was");
+
+	// **The round trip nothing covered.** The width is written by
+	// `save_view_state` and read by `restore_view_state`, and both halves
+	// existing is not the same as the value arriving in time to be used:
+	// `restore_view_state` calls `restoreGeometry` first, and a saved geometry
+	// that is already narrow puts the window into drawer mode *during* that
+	// call -- fifteen lines before `drawer_width` is read. The drawer is then
+	// laid out from the formula, and the width somebody dragged is applied
+	// only if something happens to lay it out again later.
+	//
+	// Driven through a real file rather than by calling the two functions,
+	// because the ordering is the whole question and calling them in the order
+	// you want proves nothing about the order the window uses.
+	{
+		const QString dir = QDir::temp().filePath("hydra-rotation-drawer");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString tree = dir + "/tree.txt";
+		{
+			QFile f(tree);
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("- [t1] unopened_tab | A tab | https://example.com/\n");
+		}
+		{
+			QSettings v(dir + "/view.ini", QSettings::IniFormat);
+			// A window that was already narrow when it was put away, which is
+			// the case that reads the width too late -- and a width the
+			// formula would never produce, so agreement cannot be luck:
+			// 0.82 * 360 is 295 and the cap is 420.
+			QByteArray geom;
+			{
+				main_window sizer(&factory, &policy, &filter);
+				sizer.setGeometry(0, 0, 360, 800);
+				geom = sizer.saveGeometry();
+			}
+			v.setValue("geometry", QString::fromLatin1(geom.toBase64()));
+			v.setValue("drawer_width", 250);
+			v.setValue("tree_visible", true);
+			v.sync();
+		}
+
+		main_window back(&factory, &policy, &filter);
+		back.setGeometry(0, 0, 360, 800);
+		check(back.load_tree(tree), "a window restored from a saved narrow view");
+		back.show();
+		spin(300);
+		check(back.m_drawer_mode,
+		      QString("came back narrow (%1 wide)").arg(back.width()));
+		check(back.m_drawer_width == 250,
+		      QString("and read the width that was saved (%1)")
+		              .arg(back.m_drawer_width));
+		check(back.m_sidebar && back.m_sidebar->width() == 250,
+		      QString("and the drawer is that wide rather than the formula's "
+		               "%1 (got %2)")
+		              .arg(qMin(int(back.width() * 0.82), 420))
+		              .arg(back.m_sidebar ? back.m_sidebar->width() : -1));
+		back.close();
+		spin(100);
+
+		// **And the same load into a window that is already on screen**, which
+		// is the case that does not get rescued. Above, the width arrives late
+		// -- `restoreGeometry` puts the window into drawer mode fifteen lines
+		// before `drawer_width` is read -- and the `show()` that follows
+		// resizes, which lays the drawer out again with the value by then in
+		// hand. A window that is already shown gets no such second chance, so
+		// this asks the same question with the side effect removed.
+		//
+		// The tree is loadable from the menu at any time, so this is a path a
+		// person takes rather than a hypothetical.
+		{
+			main_window live(&factory, &policy, &filter);
+			live.setGeometry(0, 0, 360, 800);
+			live.show();
+			spin(200);
+			check(live.m_drawer_mode, "a window already on screen and narrow");
+			check(live.load_tree(tree), "loads a saved view into it");
+			spin(200);
+			check(live.m_drawer_width == 250,
+			      QString("the width is read (%1)").arg(live.m_drawer_width));
+			check(live.m_sidebar && live.m_sidebar->width() == 250,
+			      QString("and applied without waiting for a resize (got %1, "
+			               "formula %2)")
+			              .arg(live.m_sidebar ? live.m_sidebar->width() : -1)
+			              .arg(qMin(int(live.width() * 0.82), 420)));
+			live.close();
+			spin(100);
+		}
+
+		QDir(dir).removeRecursively();
 	}
 
 	section("what happens to an open drawer when the window changes");

@@ -563,8 +563,23 @@ public:
 	// behaviour unchanged.
 	int                 m_drawer_width  = 0;
 	// The grip along that edge. Parented to the sidebar and positioned with
-	// it; wide enough for a finger, because the window it appears in is the
-	// one being used on a phone.
+	// it, and fourteen pixels wide.
+	//
+	// **Not "wide enough for a finger", which is what this said and could not
+	// support.** Android asks for 48dp of tap target and fourteen is about a
+	// fifth of that. It is not widened, because the grip is invisible and its
+	// width is purely the area it takes AWAY from the tree: every pixel of it
+	// is a pixel of row that answers a press with a drag of zero rather than
+	// by selecting the tab. An edge is aimed at rather than hit, which is why
+	// system drawers use a strip of this order.
+	//
+	// The option not taken, so it is not re-derived: straddle the edge --
+	// eight pixels inside and sixteen out over the page -- which doubles the
+	// target and costs the tree nothing, because the strip it takes is the
+	// tap-to-close area rather than a row. It needs the grip parented to the
+	// window instead of the sidebar, hidden when the drawer is closed, and a
+	// tap there forwarded to the close. That is a new interaction rather than
+	// a placement, so it waits for somebody to say the edge is hard to grab.
 	class QWidget      *m_drawer_grip   = nullptr;
 	int                 m_grip_from     = 0;   // press x, in window coordinates
 	int                 m_grip_width    = 0;   // drawer width at the press

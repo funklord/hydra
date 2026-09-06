@@ -5500,6 +5500,23 @@ void main_window::restore_view_state() {
 				on_tree_activated(idx);
 		}
 	}
+
+	// **Apply what was just read, rather than waiting for something to resize
+	// the window.** `restoreGeometry` above runs fifteen lines before
+	// `drawer_width` is read, so a window restored into drawer mode is laid
+	// out from the formula and the saved width arrives too late. At startup
+	// the `show()` that follows resizes and hides it -- which is why the
+	// obvious test passed -- but a tree loaded into a window that is already
+	// on screen gets no such second chance, and the drawer came back 295 wide
+	// with 250 sitting in the member. That is a path a person takes: the tree
+	// is loadable from the menu at any time.
+	//
+	// Moving the reads above `restoreGeometry` would not fix it. A window
+	// already the saved size gets no resize event from restoring that size, so
+	// there is nothing for an earlier read to be in time FOR. What the case
+	// needs is the layout itself, which is what this asks for; it returns at
+	// once when the window is wide.
+	layout_drawer();
 }
 
 // Everything that has to be on disk before this process stops existing.

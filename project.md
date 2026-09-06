@@ -20432,6 +20432,45 @@ implementations that each looked right.** That is better evidence than a
 synthetic sabotage would have been, and it cost nothing to collect because
 the assertion was written before the fix.
 
+## A restored drawer width that only arrived because show() resized
+
+Written expecting a failure and finding a pass, which is the interesting
+half. The dragged width is written by `save_view_state` and read by
+`restore_view_state`, and the read happens **fifteen lines after**
+`restoreGeometry` -- so a window restored straight into drawer mode is laid
+out from the formula while `m_drawer_width` is still zero. That looked like
+a defect on reading, and the first test said it was not: a window built,
+loaded and shown came back 250 wide against a formula that would have given
+295.
+
+**It passed for a side effect.** `set_drawer_open` only moves the sidebar;
+it never resizes it. What applied the width was the `show()` after
+`load_tree`, whose resize laid the drawer out again with the value by then
+in hand. *A consumer that is right by coincidence looks exactly like a wired
+one*, and every further passing case would have raised confidence in the
+wrong thing.
+
+**So the test moved to the path where the coincidence is absent** -- a tree
+loaded into a window that is already on screen, which is a path a person
+takes, because the tree is loadable from the menu at any time:
+
+    ok    the width is read (250)
+    FAIL  and applied without waiting for a resize (got 295, formula 295)
+
+The value was in the member and the drawer was the formula's width. Real,
+and invisible to the obvious test.
+
+**The obvious repair does not work, which is worth recording.** Moving the
+two reads above `restoreGeometry` sounds like the fix and is not: a window
+already the saved size gets no resize event from being restored to that
+size, so there is nothing for an earlier read to be in time for. What the
+case needs is the layout itself, so `restore_view_state` now ends by calling
+`layout_drawer`, which returns at once when the window is wide.
+
+**Both cases are kept.** The startup one passes either way and is not
+redundant: it is what would notice if the `show()` rescue were ever the only
+thing holding the behaviour up again.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
