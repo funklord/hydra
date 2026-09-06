@@ -2911,10 +2911,23 @@ void main_window::open_node(node *n, bool load_now) {
 				m_find->set_result(matches, active);
 		});
 		connect(view, &web_view_backend::load_progress, this, [this, view](int p) {
+			// **Recorded for every view, shown only for the current one.**
+			// The chrome belongs to the tab in front of you; whether a tab is
+			// loading is a fact about that tab, and `page_changed` needs it
+			// for a tab it is switching *to*, which by definition was not
+			// current when its last progress arrived.
+			m_loading_views.insert(view, p);
 			if (view == current_view())
 				on_load_progress(p);
 		});
+		connect(view, &QObject::destroyed, this, [this, view] {
+			// The pointer is the key and the object is going; leaving it here
+			// would make the next view allocated at the same address look
+			// like it was already loading.
+			m_loading_views.remove(view);
+		});
 		connect(view, &web_view_backend::load_finished, this, [this, view](bool ok) {
+			m_loading_views.remove(view);
 			if (view == current_view())
 				on_load_finished(ok);
 			// **Every view, not only the current one**, which is the whole
@@ -3622,6 +3635,29 @@ void main_window::page_changed() {
 	if (m_progress) {
 		m_progress->hide();
 		m_progress->setValue(0);
+	}
+	// **And then ask the tab actually in front of you.** The reset above is
+	// right for the tab being left and was applied to the tab being arrived
+	// at as well, so switching back to a page still on its way showed no
+	// progress bar and a Reload button where the only useful thing to do is
+	// Stop -- and pressing it restarted the load rather than stopping it.
+	// `open_node` records the direction that was fixed, where it calls this:
+	// "the bar would otherwise report the last tab's load against this one".
+	// That is the same claim, made false the other way round -- and it
+	// survived the fix that named it.
+	//
+	// Measured with a navigation to 192.0.2.1, which is routed nowhere: the
+	// button went back to Reload on return and stayed there while the tab
+	// went on loading.
+	if (web_view_backend *v = current_view()) {
+		const auto at = m_loading_views.constFind(v);
+		if (at != m_loading_views.constEnd()) {
+			set_loading(true);
+			if (m_progress) {
+				m_progress->setValue(*at);
+				m_progress->show();
+			}
+		}
 	}
 	if (m_find)
 		m_find->clear_result();

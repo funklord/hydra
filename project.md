@@ -19164,6 +19164,47 @@ person just asked. Those pass `force`. **Both directions are asserted**,
 because the guard without its release is a hang rather than a fix -- a typed
 address would sit in the bar through every tab switch, describing nothing.
 
+## Coming back to a loading tab said it was idle
+
+Third instance of the same shape, and the one that shows the lens is worth
+keeping: **a claim the chrome makes about "the page in front of you", reset
+for the tab being left and never asked of the tab being arrived at.**
+
+`page_changed` sets `m_loading` false, hides the progress bar and zeroes it.
+That is right for the tab being left. It was also applied to the tab being
+switched *to*, and nothing then asked that tab whether it was still loading
+— so coming back to a page still on its way showed no progress bar and a
+**Reload** button, where the only useful thing to do is Stop. Pressing it
+restarted the load rather than stopping it.
+
+`open_node` records the direction that was fixed, at the point where it
+calls this: "the bar would otherwise report the last tab's load against
+this one". This is the
+same claim made false the other way round, and it survived the fix that
+named it — as the two status-bar clearers survived `update_address`'s.
+**Three times now, a class has been identified in a comment and closed in
+one of the places it occurs.** That is the argument for finishing a lens
+rather than stopping at the first instance.
+
+Whether a tab is loading is now a fact about the tab: `m_loading_views`
+records it for every view with its last progress, entered from
+`load_progress` outside the `current_view()` guard and left on
+`load_finished` or on the view's destruction. `page_changed` consults it
+after the reset. The destruction half matters because the key is the
+pointer: a view evicted mid-load would otherwise leave an entry that the
+next view allocated at that address would inherit.
+
+**The reproduction took two attempts and the first one is the useful
+record.** A local page holding `<img src="http://192.0.2.1/x.png">` — 192.0.2.1
+being TEST-NET-1, routed nowhere, measured hanging for a full `curl -m 10`
+rather than being refused — finished loading immediately, because Chromium
+blocks an http subresource of a `file://` document outright and the image
+errored at once. Hanging the main frame's own navigation is the version no
+policy can short-circuit. The test asserts the premise before it asserts
+anything else: if the page is not still loading when the switch happens,
+the section says so rather than passing on a tab that had nothing to
+report.
+
 ## Open: a blocked-popup notice can be overwritten by a stale load failure
 
 `try_navigate`'s "out loud, not silently" check asserts that refusing a

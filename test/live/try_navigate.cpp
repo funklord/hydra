@@ -22,6 +22,7 @@
 #include "web_view_backend.h"
 
 #include <QFile>
+#include <QProgressBar>
 #include <QSortFilterProxyModel>
 #include <QApplication>
 #include <QStatusBar>
@@ -251,6 +252,64 @@ int main(int argc, char *argv[]) {
 			check(fresh->title != "New tab",
 			      QString("and the new row took the page's title (%1)")
 			          .arg(fresh->title));
+		}
+	}
+
+	section("switching back to a loading tab still says it is loading");
+	{
+		// `page_changed` resets the chrome for the page in front of you, and
+		// it resets `m_loading` to false unconditionally -- then never asks
+		// the tab it has just switched to whether it is, in fact, still
+		// loading. Its comment records the direction that was fixed, "the bar
+		// would otherwise report the last tab's load against this one", and
+		// this is the other one: a tab that IS loading reports as idle, so
+		// the progress bar is gone and the button offers Reload where the
+		// only useful thing to do is Stop.
+		//
+		// The slow page needs no server and no DNS. 192.0.2.1 is TEST-NET-1,
+		// reserved by RFC 5737 and routed nowhere, so the connection hangs
+		// rather than being refused -- measured here at ten seconds with no
+		// answer, against a `curl -m 10` that timed out rather than failing.
+		//
+		// **The main frame, not a subresource.** The first attempt was a
+		// local page holding `<img src="http://192.0.2.1/x.png">`, and it
+		// finished loading immediately: Chromium blocks an http subresource
+		// of a `file://` document outright, so the image errored at once and
+		// the load completed. Hanging the navigation itself is the version
+		// that cannot be short-circuited by a policy.
+		w.open_url(QUrl("http://192.0.2.1/slow.html"));
+		check(wait_for(address, "192.0.2.1"),
+		       "a page that will not finish is open");
+		spin(800);
+		// The premise. If this fails the rest says nothing: the page finished,
+		// or never started, and there is no loading tab to switch away from.
+		const bool still_loading = reload->text().contains("Stop");
+		check(still_loading,
+		       QString("and it is still loading (%1)").arg(reload->text()));
+
+		if (still_loading) {
+			check(f.open_tab(0, "one.html"), "switching away to another tab");
+			check(reload->text().contains("Reload"),
+			       QString("which is not loading, so the button is Reload (%1)")
+			           .arg(reload->text()));
+
+			// Back to it. The load has not finished -- nothing has been given
+			// a chance to -- so the chrome has to say so again.
+			auto *nav_model = w.findChild<tab_tree_model *>();
+			node *slow_row = nav_model->root()->children.last();
+			auto *proxy = qobject_cast<QSortFilterProxyModel *>(tv->model());
+			emit tv->activated(proxy->mapFromSource(
+			  nav_model->index_for_node(slow_row)));
+			spin(800);
+			check(reload->text().contains("Stop"),
+			       QString("and coming back to the loading tab offers Stop "
+			                "again (%1)").arg(reload->text()));
+			QProgressBar *bar = w.findChild<QProgressBar *>("load_progress");
+			check(bar && bar->isVisible(),
+			       "with the progress bar back beside it");
+			// Stop it, so the sections after this are not racing a load.
+			reload->trigger();
+			spin(200);
 		}
 	}
 

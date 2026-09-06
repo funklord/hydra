@@ -576,5 +576,10 @@ public:
 	QHash<QString, bool> m_session_permissions;
 
 	QHash<QString, web_view_backend *> m_views_by_id;  // node id -> live view
+	// Which views are part way through a load, and how far. Kept for every
+	// view rather than the current one, because the question is asked about a
+	// tab at the moment it becomes current. Entries leave on `load_finished`
+	// and on the view's destruction; see `page_changed`.
+	QHash<web_view_backend *, int> m_loading_views;
 	QStringList                        m_lru;          // most-recent id at front
 };
