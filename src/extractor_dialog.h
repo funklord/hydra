@@ -128,6 +128,16 @@ private:
 	QStackedWidget *m_pages   = nullptr;
 	QPlainTextEdit *m_payload = nullptr;
 	QPlainTextEdit *m_script  = nullptr;
+	// **Where the payload is going, in a label nothing else writes to.**
+	//
+	// This used to be `m_status`'s first text, and `m_status` is also the
+	// working line -- "Asking...", a probe result, a failure. The extractor
+	// probes its candidates the moment it opens, so by the time anybody read
+	// the screen the sentence naming the provider had been replaced by a
+	// count of addresses, on the one dialog whose payload is every address
+	// the page requested. A sentence that has to be read before pressing Send
+	// cannot share a widget with progress.
+	QLabel         *m_provider_note = nullptr;
 	QLabel         *m_status  = nullptr;
 	QLabel         *m_result  = nullptr;
 	QPlainTextEdit *m_transcript = nullptr;

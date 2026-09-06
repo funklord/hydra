@@ -109,6 +109,34 @@ static void audit(QWidget *w, const QString &name) {
 		}
 	}
 
+	// **The sentence that says where the payload is going, still saying it.**
+	//
+	// The three review dialogs put it in a label of its own precisely because
+	// it used to share `m_status` with the working line -- and the extractor
+	// probes its candidates the moment it opens, so the provider sentence was
+	// replaced by a count of addresses before anybody could read it. That is
+	// invisible to every structural check: the label was present, correctly
+	// worded when it was set, and showing something else by the time the
+	// screen settled.
+	//
+	// Checked here because this driver photographs each surface *after* it has
+	// settled, which is the only moment the question can be asked.
+	//
+	// **Visible, not merely present.** The first version asked only about the
+	// text, and the sabotage that was supposed to prove it -- pointing the
+	// note at the status label -- left the original widget in place with its
+	// name and its correct text, hidden. `findChild` returned that one and the
+	// audit passed. A privacy sentence nobody can see is the same as an absent
+	// one, so the check now asks the question a reader would.
+	if (QLabel *note = w->findChild<QLabel *>("provider_note")) {
+		if (!note->isVisible() || !note->text().contains("provider")) {
+			std::printf("    ! %s: the provider note says \"%s\"\n",
+			             qPrintable(name),
+			             qPrintable(note->text().left(60)));
+			++g_problems;
+		}
+	}
+
 	// **Text that does not fit the space it was given.** A label narrower than
 	// its own `sizeHint()` is drawn cut off or elided, which is the exact
 	// failure this driver exists to catch and the one no structural check can:

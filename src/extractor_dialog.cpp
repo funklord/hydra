@@ -506,11 +506,16 @@ void extractor_dialog::rebuild_payload() {
 void extractor_dialog::build_ui() {
 	auto *outer = new QVBoxLayout(this);
 
-	m_status = new QLabel(this);
-	m_status->setWordWrap(true);
-	m_status->setText(provider_note(
+	m_provider_note = new QLabel(this);
+	m_provider_note->setObjectName("provider_note");
+	m_provider_note->setWordWrap(true);
+	m_provider_note->setText(provider_note(
 	  m_provider, "This is the list of addresses this page requested; read it "
 	               "before sending."));
+	outer->addWidget(m_provider_note);
+
+	m_status = new QLabel(this);
+	m_status->setWordWrap(true);
 	outer->addWidget(m_status);
 
 	m_pages = new QStackedWidget(this);

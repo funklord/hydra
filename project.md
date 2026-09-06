@@ -18081,6 +18081,60 @@ a host and a realm and nothing else, so anything not provably on the page's own
 https origin is drawn with the warning, and a printer or a router asking for a
 password over plain HTTP is exactly what the new Android path meets.
 
+## The privacy sentence was gone before anybody could read it
+
+Photographing the extractor dialog with the toolbar icons fixed showed the
+next thing: its banner reads
+
+    2 of those addresses said what they serve, and that is in the list below.
+
+and not a word about which provider or whether anything leaves the machine.
+
+`provider_note()` was written into `m_status`, and `m_status` is also the
+working line -- *"Asking..."*, a probe result, a failure. **The extractor
+probes its candidates the moment it opens**, so on that dialog the provider
+sentence was never what anybody read: it was replaced automatically, before
+any decision, on the one of the three whose payload is *every address the page
+requested*.
+
+`filter_dialog` has a milder version -- `rebuild_payload` overwrites it when
+there is nothing to propose -- and `reorganize_dialog` is only overwritten by
+pressing Send, which is after the decision rather than before it.
+
+All three have a `provider_note` label of their own now, written once and by
+nothing else. A sentence that has to be read before pressing Send cannot share
+a widget with progress.
+
+### The audit rule that would have caught it, and the sabotage that did not
+
+`try_look` photographs each surface **after it has settled**, which is the only
+moment this question can be asked -- so the check belongs in its audit rather
+than in a unit test:
+
+    if (QLabel *note = w->findChild<QLabel *>("provider_note"))
+        if (!note->isVisible() || !note->text().contains("provider"))
+            ... a problem
+
+**The first version omitted `isVisible()`, and the sabotage passed.** Pointing
+the note at the status label left the original widget in place -- hidden, but
+keeping its object name and its correct text -- so `findChild` returned that
+one and the audit reported nothing. Two faults at once: my sabotage was wrong
+(two widgets answering to one name) and the check was too weak to care.
+
+Both are fixed, and the second is the one worth keeping: **a privacy sentence
+nobody can see is the same as an absent one**, so the check asks the question a
+reader would. With the dialog put back to one shared label it now says
+
+    ! extractor-loaded: the provider note says "2 of those addresses said..."
+
+and the run exits 1.
+
+**This is the second time in two changes that a green result meant the check
+had not run.** The Makefile one was a missing object make declined to rebuild;
+this one was a hidden widget with the right name. Neither was visible in a
+status line, and both were found by looking at what the run produced rather
+than at whether it succeeded.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
