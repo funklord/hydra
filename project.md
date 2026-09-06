@@ -20380,6 +20380,58 @@ sweep does not re-derive them:
   the desktop and the system WebView's behaviour on Android -- a platform
   default in both, not a gap this tree left.
 
+## The grip I added took the scrollbar's presses
+
+Found by asking what the last fix could have broken, before anything else.
+The drawer grip is raised above the tree so that a press lands on it rather
+than on a row -- that is what makes the drag work, and **it is exactly what
+takes a scrollbar's presses away.** A phone with more tabs than fit puts a
+vertical bar at the right of the tree, and a fourteen-pixel grip on the
+drawer's right edge sits on top of it:
+
+    grip 458..471, scrollbar 453..466
+
+So a person with enough tabs to need the bar -- which is the person most
+likely to have the drawer open -- would drag the bar and resize the drawer
+instead of scrolling it. **The fix for the reported bug had quietly created
+a second one of the same kind**, an affordance present in one arrangement
+and taken away in another.
+
+**Asked with forty rows, because with none the bar is hidden and the
+question cannot arise.** A check that passes for want of the condition it
+tests is this file's most-repeated failure, and the rows are what keep this
+one honest -- the section asserts the bar is visible before it asserts
+anything about the grip.
+
+### Three wrong placements, each caught by the check
+
+Worth keeping, because each was reasonable and each was wrong for a
+different reason:
+
+- **Step aside by the bar's width when `isVisible()`.** Moved nothing: the
+  handler runs from `rangeChanged`, and Qt shows the bar in the layout that
+  FOLLOWS the range change, so the answer is always "no". Same numbers as
+  before the fix, which is what made it obvious.
+- **Measure the viewport's right edge instead.** Correct with a bar and
+  wrong without one -- it is inset by the tree's frame, so the grip sat at
+  391..405 of a 410-wide drawer, leaving five undraggable pixels at the one
+  place a finger aims.
+- **Subtract the bar's width from the drawer's, with the call queued.** The
+  edge case came right and the bar case did not: the sidebar holds the tree
+  six pixels in from its own edge, so `w - grip - width` landed at 444..457
+  across a bar at 453..466 and still took its presses.
+
+What works is asking where the bar **is** -- `mapTo(m_sidebar)` -- and
+putting the grip's right edge there, falling back to the drawer's edge when
+no bar is showing. Both facts come from a layout that has already happened,
+which is the difference from the first attempt; the queued connection is
+what makes that true, and it stays.
+
+**The check was seen to fail three times, through itself, on three
+implementations that each looked right.** That is better evidence than a
+synthetic sabotage would have been, and it cost nothing to collect because
+the assertion was written before the fix.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

@@ -72,6 +72,7 @@
 #include <QResizeEvent>
 #include <QItemSelectionModel>
 #include <QTreeView>
+#include <QScrollBar>
 #include <QSettings>
 #include <QStackedWidget>
 #include <QHBoxLayout>
@@ -982,6 +983,16 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_tree->setAccessibleDescription(
 	  "Open tabs and folders; a row opens the page it names");
 	m_tree->setModel(m_proxy);
+	// **The grip's position depends on whether the scrollbar is there**, and
+	// the bar arrives when a tab is opened rather than when the window is
+	// resized -- so laying the drawer out only on resize would leave the grip
+	// sitting on a bar that appeared afterwards. `layout_drawer` returns at
+	// once when the window is wide, so this costs nothing on a desktop.
+	// Queued, because the bar is shown by the layout that FOLLOWS the range
+	// change: running inline reads the geometry as it was and puts the grip
+	// back where it already is.
+	connect(m_tree->verticalScrollBar(), &QScrollBar::rangeChanged, this,
+	         [this] { layout_drawer(); }, Qt::QueuedConnection);
 	// One place to persist, however the change was made -- a drag, a rename, a
 	// new folder. The tree file is the canonical record and a change that
 	// survived only until the next launch would be worse than a refusal.
@@ -2551,8 +2562,44 @@ void main_window::layout_drawer() {
 	if (m_drawer_grip) {
 		// Along the inside of the right edge, full height, and raised so the
 		// tree cannot take the press.
+		//
+		// **Standing clear of the scrollbar, which is on that edge too.** The
+		// raise is what makes the drag work and it is exactly what would take
+		// a scrollbar's presses away: a phone with more tabs than fit puts a
+		// vertical bar at the right of the tree, and the first version of this
+		// sat on top of it -- grip 458..471 over a bar at 453..466, so
+		// dragging the bar resized the drawer instead of scrolling it. A
+		// person with enough tabs to need the bar is exactly the person who
+		// has the drawer open.
+		//
+		// So the grip steps inside the bar while the bar is there. It costs a
+		// sliver of each row's right end, which is a count rather than
+		// anything you press, and it costs nothing at all when the tree fits.
+		//
+		// **The bar's own width, asked after the layout that shows it.** The
+		// first attempt asked `isVisible()` inline from `rangeChanged` and got
+		// "no" every time, because Qt shows the bar in the layout that
+		// follows -- so the grip never moved. The second measured the
+		// viewport's right edge instead, which is accurate and also inset by
+		// the tree's frame, leaving five undraggable pixels at the one place a
+		// finger aims. The queued connection below is what makes the simple
+		// question answerable, and the simple question is the right one.
+		// Three arrangements were tried and the numbers are why this one:
+		// subtracting the bar's WIDTH from the drawer's assumes the tree
+		// reaches the drawer's edge, and it does not -- the sidebar holds it
+		// six pixels in, so the grip landed at 444..457 across a bar at
+		// 453..466 and still took its presses. Asking where the bar IS
+		// answers for whatever the layout did.
 		const int grip = 14;
-		m_drawer_grip->setGeometry(w - grip, 0, grip, m_sidebar->height());
+		QScrollBar *const bar = m_tree ? m_tree->verticalScrollBar() : nullptr;
+		int right = w;
+		if (bar && bar->isVisible()) {
+			const int at = bar->mapTo(m_sidebar, QPoint(0, 0)).x();
+			if (at > grip && at <= w)
+				right = at;
+		}
+		m_drawer_grip->setGeometry(qMax(0, right - grip), 0, grip,
+		                            m_sidebar->height());
 		m_drawer_grip->raise();
 	}
 }

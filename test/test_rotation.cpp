@@ -57,6 +57,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QMouseEvent>
+#include <QScrollBar>
 #include <QDir>
 #include <QFileInfo>
 #include <QCheckBox>
@@ -499,6 +500,36 @@ int main(int argc, char **argv) {
 			check(w.m_sidebar->width() <= w.width() - 48,
 			      QString("dragged past the window it stops with page left to "
 			               "tap: %1 of %2").arg(w.m_sidebar->width()).arg(w.width()));
+
+			// **The grip is on the edge the scrollbar is also on**, and it is
+			// raised above the tree so that a press lands on it rather than on
+			// a row. That is what makes the drag work and it is exactly what
+			// would take a scrollbar's presses away: a phone with more tabs
+			// than fit has a vertical scrollbar at the right edge of the tree,
+			// which is where a 14-pixel grip sits.
+			//
+			// Asked with enough rows to force the bar to appear, because with
+			// none it is hidden and the question cannot arise -- the shape of
+			// a check that passes for the wrong reason.
+			for (int i = 0; i < 40; ++i)
+				w.m_model->add_tab(nullptr, QString("row %1").arg(i),
+				                    QString("http://e%1.example/").arg(i));
+			spin(120);
+			QScrollBar *bar = w.m_tree->verticalScrollBar();
+			check(bar && bar->isVisible(),
+			      QString("40 rows put a scrollbar on the tree (visible=%1)")
+			              .arg(bar && bar->isVisible()));
+			if (bar && bar->isVisible()) {
+				const QRect grip_at(grip->mapTo(w.m_sidebar, QPoint(0, 0)),
+				                     grip->size());
+				const QRect bar_at(bar->mapTo(w.m_sidebar, QPoint(0, 0)),
+				                    bar->size());
+				check(!grip_at.intersects(bar_at),
+				      QString("and the grip does not sit on top of it "
+				               "(grip x=%1..%2, scrollbar x=%3..%4)")
+				              .arg(grip_at.left()).arg(grip_at.right())
+				              .arg(bar_at.left()).arg(bar_at.right()));
+			}
 		}
 	}
 
