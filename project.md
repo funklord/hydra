@@ -18673,6 +18673,56 @@ widens where a script runs, which is not a change to ship blind on top of two
 Android features from this session that are themselves still unrun. The design
 is here so that whoever has the handset can do it in an afternoon.
 
+## A handset came back, and what an hour on it did and did not establish
+
+The device attached again -- a different one: **SM-F926B, Android 15**, where
+every earlier Android measurement in this document was taken on an SM-N960F.
+That difference is not decoration; one of the results below only exists because
+the handsets disagree.
+
+### Established
+
+- **`ACTION_VIEW` handoff works.** `force-stop`, then `am start` with the url,
+  and the fixture server received `GET /find` and `GET /favicon.ico` from the
+  phone. The page rendered with all its content. This **closes the suspicion**
+  recorded earlier that a handed url created a tree node without navigating --
+  it was wrong, as reading `open_url` had suggested and as this now shows.
+- **Find on Page is reachable.** The Edit menu opens on the phone and lists it,
+  with its Ctrl+F hint, beside seven other entries.
+- **Nothing crashed.** `logcat` shows the process still scheduled a minute
+  after the last interaction.
+
+### Not established, and the reason is the interesting part
+
+**Find itself is still unverified, and so is HTTP auth.** The tap on *Find on
+Page* was followed by a screenshot showing **a different application in the
+foreground** -- fuzzypickles, unchanged and unrelated -- so whether the find
+bar opened is unknown. hydra had not crashed; it was simply no longer in front.
+
+**The device is attended.** Somebody is using it, and a sequence of
+screenshot-then-tap races them: the state read in the screenshot is not the
+state the tap lands in. The `adb shell input text hydra` that followed went to
+whatever had focus, which was not this browser.
+
+**That is the second time in this session** that input intended for hydra
+landed in somebody else's application. The first was recorded as an accident;
+twice is a method problem. Two things follow, and the second matters more:
+
+- **Check focus immediately before every input, not once at the start.**
+  `dumpsys window | grep mCurrentFocus` costs nothing and answers exactly the
+  question a screenshot cannot: what will receive this tap.
+- **An attended device is not a test rig.** Driving one means competing for it
+  with a person, and the failure mode is not a bad measurement -- it is typing
+  into their work. The honest options are to ask for the device, or to leave
+  the verification to whoever is holding it.
+
+So the Android backlog is unchanged in substance: **find-on-page and HTTP
+authentication are built, both builds pass, `jni-check` resolves every native,
+the descriptors were read by hand, and neither has been seen to work.** The
+fixtures for both are one file -- a page with a known word repeated seven times
+and a path that answers 401 -- and it needs `adb reverse tcp:8731 tcp:8731`,
+the server, and two navigations.
+
 ## Open: who pays for trust, and can a local model be the auditor
 
 Two questions from the copyright holder while the filter work was in flight,
