@@ -66,7 +66,7 @@ struct shield_row { policy::feature f; const char *group; };
 // exception in the group: it is enforced outright in `main_window`, needs no
 // list, and sits here because it belongs with the other two in a reader's mind
 // rather than in the implementation's.
-const shield_row k_shield_layout[] = {
+constexpr shield_row k_shield_layout[] = {
 	{ policy::feature::javascript,          "Content" },
 	{ policy::feature::images,              "Content" },
 	{ policy::feature::autoplay,            "Content" },
@@ -99,25 +99,44 @@ const shield_row k_shield_layout[] = {
 };
 
 // **A hand-written list under a name that quantifies is a claim that ages.**
-// `settings_dialog`'s equivalent table is missing four features today, and
-// nothing reports it -- a feature added to the enum simply stops appearing in
-// that dialog, silently, because no assertion can fail about a row nobody
-// wrote. This one is checked against the enum at construction: every feature
-// exactly once, or the panel is wrong and says so where somebody will see it.
-bool layout_covers_every_feature() {
-	const int n = policy::feature_count();
-	QList<int> seen(n, 0);
+// A feature added to the enum and not to this table simply stops appearing in
+// the panel, silently, because no assertion can fail about a row nobody wrote.
+// So the table is checked against the enum: every feature exactly once.
+//
+// This paragraph used to end by saying `settings_dialog`'s equivalent table
+// was "missing four features today, and nothing reports it". That was true
+// when it was written and has not been for some time -- that page grew its
+// own completeness check, and both are compile-time now. The sentence is
+// rewritten rather than struck through: a gap claim that outlives its gap
+// sends the next reader at work already done, and it is the one kind of
+// sentence whose falsifier is a commit nobody connects to it.
+constexpr bool layout_covers_every_feature() {
+	bool seen[static_cast<size_t>(policy::feature::count)] = {};
 	for (const shield_row &r : k_shield_layout) {
-		const int i = static_cast<int>(r.f);
-		if (i < 0 || i >= n)
-			return false;
-		++seen[i];
+		const size_t i = static_cast<size_t>(r.f);
+		if (i >= std::size(seen) || seen[i])
+			return false;      // out of range, or listed twice
+		seen[i] = true;
 	}
-	for (int i = 0; i < n; ++i)
-		if (seen[i] != 1)
+	for (const bool one : seen)
+		if (!one)
 			return false;
-	return static_cast<int>(std::size(k_shield_layout)) == n;
+	return true;
 }
+
+// **A compile error rather than a warning nobody reads.** This was a
+// `qWarning` at construction, which is the right thing to say and the wrong
+// place to say it: the panel is built when somebody opens the shield, the
+// message goes to stderr, and the cost of being wrong is a per-site control
+// that silently does not exist. Nothing in the suite constructed this dialog
+// either, so the check had never been seen to fire.
+//
+// The pairing is between two lists in one translation unit, which is what a
+// static assertion can see -- the same move `policy.cpp` makes for the enum
+// and its words table, and for the same reason.
+static_assert(layout_covers_every_feature(),
+               "every policy::feature needs exactly one row in "
+               "k_shield_layout");
 
 }  // namespace
 
@@ -157,11 +176,6 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 	// Checked here rather than trusted: the cost of the table being short by one
 	// is a control that silently cannot be reached from the shield, which is
 	// exactly the failure that is invisible from inside the dialog.
-	if (!layout_covers_every_feature())
-		qWarning("site_policy_dialog: the shield layout does not cover every "
-		          "policy feature exactly once -- a control is missing from "
-		          "this panel");
-
 	int row = 0;
 	const char *open_group = nullptr;
 	for (const shield_row &r : k_shield_layout) {

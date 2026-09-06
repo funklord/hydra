@@ -19492,6 +19492,42 @@ written from either draft would have filed five defects in a security prompt
 that has none. **When a result surprises you, the apparatus is where the
 error usually is** -- and it was, twice, before it was anywhere else.
 
+## Two warnings nobody reads, promoted to two compile errors
+
+Finishing the lens from the last pass rather than stopping at its one find.
+`site_policy_dialog` was the last of the six units nothing names, and reading
+it settled two questions at once.
+
+**It already had the right check, in the wrong place.** The shield draws one
+row per feature from a hand-written table, and a feature added to the enum
+and not to that table simply has no per-site control -- silently, because no
+assertion can fail about a row nobody wrote. The file knew this and checked
+it, with a `qWarning` at construction. The settings page had grown the same
+check, the same way, for the same reason.
+
+Both were the right thing said in the wrong place. The panel is built when
+somebody opens the shield; the message goes to stderr; the cost of being
+wrong is a control that does not exist. And **nothing in the suite
+constructs either dialog**, so neither check had ever been seen to fire --
+which is how the sweep found them at all.
+
+They are `static_assert`s now, over `constexpr` tables. It is the same move
+`policy.cpp` took for the enum and its words table earlier in the day, and
+it is available for the same reason: the pairing is between two lists in one
+translation unit, which is precisely what a static assertion can see and
+what no runtime check placed in a dialog can be relied on to report.
+Sabotaged both: a row removed from the shield, and a feature listed both on
+the settings page and in its "deliberately not on this page" list -- each a
+compile error naming its own table.
+
+**And a stale gap claim went with them.** The shield's comment said
+`settings_dialog`'s equivalent table was "missing four features today, and
+nothing reports it". True when written; that page has since grown its own
+check, and both are now compile-time. Rewritten rather than struck through,
+because a gap claim that outlives its gap sends the next reader at work
+already done -- and it is the one kind of sentence whose falsifier is a
+commit nobody connects to it.
+
 ## Open: a blocked-popup notice can be overwritten by a stale load failure
 
 `try_navigate`'s "out loud, not silently" check asserts that refusing a

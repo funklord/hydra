@@ -361,7 +361,7 @@ namespace {
 // in a week.
 struct feature_group { policy::feature f; const char *group; };
 
-const feature_group k_privacy_layout[] = {
+constexpr feature_group k_privacy_layout[] = {
 	{ policy::feature::javascript,          "Content" },
 	{ policy::feature::images,              "Content" },
 	{ policy::feature::autoplay,            "Content" },
@@ -401,7 +401,7 @@ const feature_group k_privacy_layout[] = {
 // The list exists so that leaving a feature off is a decision somebody wrote
 // down, rather than the silence that has already cost this table four missing
 // rows. A feature added to the enum and put in neither place now says so.
-const policy::feature k_not_on_this_page[] = {
+constexpr policy::feature k_not_on_this_page[] = {
 	// Belongs with the extractor's own settings, where the tier it governs is
 	// explained; a bare "Extractor may fetch" here means nothing to anybody who
 	// has not read that page.
@@ -419,26 +419,33 @@ const policy::feature k_not_on_this_page[] = {
 // features in a day. This page had no equivalent, and the comment beside that
 // one said so: a feature added to the enum simply stopped appearing here,
 // silently, because no assertion can fail about a row nobody wrote.
-bool privacy_layout_is_complete() {
-	const int n = policy::feature_count();
-	QList<int> seen(n, 0);
+constexpr bool privacy_layout_is_complete() {
+	bool seen[static_cast<size_t>(policy::feature::count)] = {};
 	for (const feature_group &fg : k_privacy_layout) {
-		const int i = static_cast<int>(fg.f);
-		if (i < 0 || i >= n)
-			return false;
-		++seen[i];
+		const size_t i = static_cast<size_t>(fg.f);
+		if (i >= std::size(seen) || seen[i])
+			return false;      // out of range, or listed twice
+		seen[i] = true;
 	}
-	for (policy::feature f : k_not_on_this_page) {
-		const int i = static_cast<int>(f);
-		if (i < 0 || i >= n)
-			return false;
-		++seen[i];
+	for (const policy::feature f : k_not_on_this_page) {
+		const size_t i = static_cast<size_t>(f);
+		if (i >= std::size(seen) || seen[i])
+			return false;      // excused and also listed
+		seen[i] = true;
 	}
-	for (int i = 0; i < n; ++i)
-		if (seen[i] != 1)
+	for (const bool one : seen)
+		if (!one)
 			return false;
 	return true;
 }
+
+// A compile error rather than a warning nobody reads, for the reason the
+// shield's own copy of this now gives: the page is built when somebody opens
+// the settings window, the message goes to stderr, and being wrong costs a
+// setting that silently cannot be reached.
+static_assert(privacy_layout_is_complete(),
+               "every policy::feature needs a row in k_privacy_layout or an "
+               "entry in k_not_on_this_page, and exactly one of the two");
 
 }  // namespace
 
@@ -1134,11 +1141,6 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	// Checked rather than trusted, for the reason the shield's twin gives: the
 	// cost of the table being short by one is a setting that silently cannot be
 	// reached from this page, which is invisible from inside it.
-	if (!privacy_layout_is_complete())
-		qWarning("settings_dialog: the privacy layout does not account for every "
-		          "policy feature exactly once -- a setting is missing from this "
-		          "page, or is listed both here and as excluded");
-
 	for (const QString &group_name : order) {
 		QList<policy::feature> in_group;
 		for (int i = 0; i < policy::feature_count(); ++i) {
