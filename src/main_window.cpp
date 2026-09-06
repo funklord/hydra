@@ -2526,13 +2526,34 @@ void main_window::resizeEvent(QResizeEvent *event) {
 	QWidget::resizeEvent(event);
 	save_view_soon();
 	update_layout_mode();
-	if (m_drawer_mode && m_sidebar) {
-		// Keep the drawer the right size and where it belongs, whichever state
-		// it is in -- a rotation while it is open must not leave it half off.
-		const int w = qMin(int(width() * 0.82), 420);
-		const int top = m_splitter ? m_splitter->y() : 0;
-		m_sidebar->resize(w, height() - top - (m_status ? m_status->height() : 0));
-		m_sidebar->move(m_drawer_open ? 0 : -w, top);
+	layout_drawer();
+}
+
+// Where the drawer sits and how wide it is, in one place because three
+// callers need it: a resize, a rotation, and the grip being dragged.
+void main_window::layout_drawer() {
+	if (!m_drawer_mode || !m_sidebar)
+		return;
+	// Keep the drawer the right size and where it belongs, whichever state it
+	// is in -- a rotation while it is open must not leave it half off.
+	//
+	// **The dragged width wins where there is one**, clamped to the window it
+	// is in: a profile carried from a tablet to a phone must not open a drawer
+	// wider than the screen, and the formula is what a profile that has never
+	// been dragged still gets.
+	const int fitted = qMin(int(width() * 0.82), 420);
+	const int w = m_drawer_width > 0
+	                  ? qBound(160, m_drawer_width, width() - 48)
+	                  : fitted;
+	const int top = m_splitter ? m_splitter->y() : 0;
+	m_sidebar->resize(w, height() - top - (m_status ? m_status->height() : 0));
+	m_sidebar->move(m_drawer_open ? 0 : -w, top);
+	if (m_drawer_grip) {
+		// Along the inside of the right edge, full height, and raised so the
+		// tree cannot take the press.
+		const int grip = 14;
+		m_drawer_grip->setGeometry(w - grip, 0, grip, m_sidebar->height());
+		m_drawer_grip->raise();
 	}
 }
 
@@ -2556,10 +2577,32 @@ void main_window::update_layout_mode() {
 		m_sidebar->setParent(this);
 		m_sidebar->setAutoFillBackground(true);
 		m_sidebar->raise();
+		// **The handle the splitter used to provide.** A pane has one and an
+		// overlay does not, so the edge that was draggable a pixel ago stops
+		// being draggable when the window narrows -- which is what "I can't
+		// resize the right side of the tab window when in mobile mode"
+		// describes. Made once and kept: it belongs to the sidebar, which
+		// survives both directions of the switch.
+		if (!m_drawer_grip) {
+			m_drawer_grip = new QWidget(m_sidebar);
+			m_drawer_grip->setObjectName("drawer_grip");
+			m_drawer_grip->setCursor(Qt::SizeHorCursor);
+			// Nothing is drawn: the tree's own frame already ends there, and a
+			// line of chrome on a 360-pixel screen is a line of page lost.
+			// What it is for is the cursor and the drag.
+			m_drawer_grip->installEventFilter(this);
+		}
+		m_drawer_grip->setParent(m_sidebar);
+		m_drawer_grip->show();
 		set_drawer_open(false, false);
 		m_sidebar->show();
+		layout_drawer();
 	} else {
-		// Back where it came from, at the position it had.
+		// Back where it came from, at the position it had. The grip goes with
+		// it -- hidden rather than destroyed, because the window can be
+		// narrowed again and a splitter pane has its own handle.
+		if (m_drawer_grip)
+			m_drawer_grip->hide();
 		m_splitter->insertWidget(0, m_sidebar);
 		m_sidebar->move(0, 0);
 		m_drawer_open = false;
@@ -2602,6 +2645,40 @@ void main_window::set_tree_visible(bool visible) {
 }
 
 bool main_window::eventFilter(QObject *watched, QEvent *event) {
+	// **The drawer's right edge, which had no handle at all.** In drawer mode
+	// the sidebar is an overlay rather than a splitter pane, so the splitter's
+	// handle is not there to drag -- reported from use as "I can't resize the
+	// right side of the tab window when in mobile mode", and the width was a
+	// formula recomputed on every resize.
+	//
+	// Filtered here rather than subclassed: the grip is a plain `QWidget` whose
+	// only job is to be dragged, and three event types is less than a class.
+	// The width is stored in window coordinates because that is what
+	// `resizeEvent` positions with, and the press is remembered so the drag is
+	// relative -- tracking the absolute pointer instead makes the edge jump to
+	// the finger on the first move.
+	if (m_drawer_grip && watched == m_drawer_grip) {
+		if (event->type() == QEvent::MouseButtonPress) {
+			auto *m = static_cast<QMouseEvent *>(event);
+			m_grip_from  = m->globalPosition().toPoint().x();
+			m_grip_width = m_sidebar ? m_sidebar->width() : 0;
+			return true;
+		}
+		if (event->type() == QEvent::MouseMove && m_sidebar) {
+			auto *m = static_cast<QMouseEvent *>(event);
+			const int by = m->globalPosition().toPoint().x() - m_grip_from;
+			// **Bounded on both sides, and the lower bound is not zero.** A
+			// drawer narrower than its own toolbar is one nobody can grab
+			// again, and one wider than the window leaves no page to tap on to
+			// close it -- which is the only way back on a phone.
+			m_drawer_width = qBound(160, m_grip_width + by, width() - 48);
+			layout_drawer();
+			save_view_soon();
+			return true;
+		}
+	}
+
+
 #ifdef Q_OS_ANDROID
 	// **Press only.** Consuming the release as well is not needed and would be
 	// one more thing to get wrong; Qt raises the activity's back handling from
@@ -5311,6 +5388,10 @@ void main_window::save_view_state() const {
 	// the end does not lose what it had when it was wide.
 	v.setValue("tree_visible", m_tree_visible);
 	v.setValue("tree_width", m_tree_width);
+	// Written even when zero, which is the "never dragged" value: a profile
+	// that says nothing and one that says "follow the formula" should read
+	// back the same.
+	v.setValue("drawer_width", m_drawer_width);
 }
 
 void main_window::restore_view_state() {
@@ -5338,6 +5419,10 @@ void main_window::restore_view_state() {
 	// makes them agree is the one the button uses -- writing the fields here
 	// as well would be a second place that has to be kept in step with it.
 	m_tree_width = qMax(120, v.value("tree_width", m_tree_width).toInt());
+	// Not clamped here, because the window it has to fit inside is not built
+	// yet -- `layout_drawer` bounds it against the width it actually has, which
+	// is what makes a width carried from a tablet safe on a phone.
+	m_drawer_width = qMax(0, v.value("drawer_width", m_drawer_width).toInt());
 	set_tree_visible(v.value("tree_visible", true).toBool());
 
 	// Collapse first, then open what was open. Without the collapse this would

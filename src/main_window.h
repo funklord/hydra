@@ -452,6 +452,9 @@ public:
 	// whether the drawer is covering it. One place decides, because the two
 	// callers used to disagree about whether the drawer was open.
 	void refresh_placeholder_text();
+	// Size and place the drawer, and the grip on its edge. Called from a
+	// resize, from the mode switch, and from the grip's own drag.
+	void layout_drawer();
 	bool             m_drawer_open = false;
 	QStackedWidget  *m_stack = nullptr;
 
@@ -551,6 +554,20 @@ public:
 	// person had sized, rather than a default that undoes their drag.
 	bool                m_tree_visible  = true;
 	int                 m_tree_width    = 280;
+	// **The drawer's width, which used to be a formula and nothing else.**
+	// In drawer mode the sidebar is an overlay rather than a splitter pane, so
+	// it has no handle -- and its width was `min(82% of the window, 420)`,
+	// computed on every resize. Reported from use: the right edge cannot be
+	// dragged in mobile mode. Zero means "follow the formula", which is what a
+	// profile that has never been dragged holds and what makes the default
+	// behaviour unchanged.
+	int                 m_drawer_width  = 0;
+	// The grip along that edge. Parented to the sidebar and positioned with
+	// it; wide enough for a finger, because the window it appears in is the
+	// one being used on a phone.
+	class QWidget      *m_drawer_grip   = nullptr;
+	int                 m_grip_from     = 0;   // press x, in window coordinates
+	int                 m_grip_width    = 0;   // drawer width at the press
 	// Whether the last debounced tree write failed, so a disk that has filled
 	// says so once instead of once per keystroke.
 	bool                m_tree_save_failed = false;

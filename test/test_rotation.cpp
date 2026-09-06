@@ -56,6 +56,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QMouseEvent>
 #include <QDir>
 #include <QFileInfo>
 #include <QCheckBox>
@@ -438,6 +439,67 @@ int main(int argc, char **argv) {
 		check(after.bottom() <= w.height(),
 		      QString("and does not run off the bottom: y=%1..%2 of %3")
 		              .arg(after.top()).arg(after.bottom()).arg(w.height()));
+
+		// **Reported from use: "I can't resize the right side of the tab
+		// window when in mobile mode."** A splitter pane has a handle and an
+		// overlay has none, so the edge that is draggable at 700 pixels stops
+		// being draggable at 500 -- and the width was a formula recomputed on
+		// every resize, with nothing able to change it.
+		//
+		// Driven by sending the grip the events a finger sends, because that
+		// is the whole of the feature: a widget on the edge that turns a drag
+		// into a width.
+		QWidget *grip = w.m_sidebar->findChild<QWidget *>("drawer_grip");
+		check(grip != nullptr, "the drawer has a grip on its right edge");
+		if (grip) {
+			check(grip->isVisible() && grip->x() + grip->width() == after.width(),
+			      QString("sitting on that edge: x=%1..%2 of a drawer %3 wide")
+			              .arg(grip->x()).arg(grip->x() + grip->width())
+			              .arg(after.width()));
+
+			const int was = w.m_sidebar->width();
+			const QPoint from(grip->mapToGlobal(QPoint(grip->width() / 2, 20)));
+			QMouseEvent press(QEvent::MouseButtonPress, QPointF(2, 20), from,
+			                   Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+			QApplication::sendEvent(grip, &press);
+			QMouseEvent drag(QEvent::MouseMove, QPointF(2, 20),
+			                  from + QPoint(-90, 0),
+			                  Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+			QApplication::sendEvent(grip, &drag);
+			spin(60);
+			check(w.m_sidebar->width() == was - 90,
+			      QString("dragging it narrows the drawer by what was dragged "
+			               "(%1 -> %2, wanted %3)")
+			              .arg(was).arg(w.m_sidebar->width()).arg(was - 90));
+
+			// **And the width survives the next resize**, which is the half a
+			// formula would undo: before this, every `resizeEvent` recomputed
+			// the drawer from the window and any chosen width was gone at the
+			// next rotation.
+			const int chosen = w.m_sidebar->width();
+			w.resize(520, 700);
+			spin(120);
+			check(w.m_sidebar->width() == chosen,
+			      QString("and survives a resize rather than being recomputed "
+			               "(%1 after a change to %2 wide)")
+			              .arg(w.m_sidebar->width()).arg(w.width()));
+
+			// Bounded, because a drawer dragged to nothing cannot be grabbed
+			// again and one dragged past the window leaves no page to tap on
+			// to close it -- the only way back on a phone.
+			QMouseEvent press2(QEvent::MouseButtonPress, QPointF(2, 20),
+			                    grip->mapToGlobal(QPoint(2, 20)),
+			                    Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+			QApplication::sendEvent(grip, &press2);
+			QMouseEvent huge(QEvent::MouseMove, QPointF(2, 20),
+			                  grip->mapToGlobal(QPoint(2, 20)) + QPoint(9000, 0),
+			                  Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+			QApplication::sendEvent(grip, &huge);
+			spin(60);
+			check(w.m_sidebar->width() <= w.width() - 48,
+			      QString("dragged past the window it stops with page left to "
+			               "tap: %1 of %2").arg(w.m_sidebar->width()).arg(w.width()));
+		}
 	}
 
 	section("leaving drawer mode closes it, and it can be opened again");

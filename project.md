@@ -19729,6 +19729,15 @@ added beside it said so out loud instead of falling through to a second
 guess. A lookup with a fallback would have failed the same way twice and
 blamed the placeholder again. 120 of 120.
 
+**Run again after the day's fixes: 26 passed, 8 report-only, 0 failed.** No
+`FAIL` and no `CRASH` in forty-two drivers, with `try_delete` and
+`try_phone` repaired, the teardown segfault gone, and `try_files` -- the
+aggregate flake above -- passing on this run as it does alone. That is the
+first clean sweep this tree has had, and it is worth stating as a
+measurement rather than a mood: it was taken after `make drivers`, so the
+staleness guard had nothing to say, and every driver in it contains the code
+that is committed.
+
 **What the three have in common is not flakiness.** Two of them are tests
 that encoded a value -- a cap of four, a glyph on a button -- that the
 program then changed for a good reason, and both then accused the program of
@@ -19986,6 +19995,19 @@ the first passing on an entry that does nothing at all. Sabotaged back to the
 direct `remove_node`: "answering no" reports 1 -> 0, the folder destroyed
 before anybody was asked.
 
+**Swept for the same asymmetry elsewhere, and it is the only one.** The
+question was: which destructive actions are reachable from two places, and
+does every route ask? Four candidates, and each is deliberate rather than
+lucky. *Forget imported* has no confirmation on purpose -- it is the safety
+valve for a hostile rule set, it must be one action rather than a hunt, it
+cannot touch what the user learned themselves, and it reports the count it
+removed. *Restore defaults* moves widgets only, so Cancel undoes it, and it
+leaves site exceptions alone with a comment saying quietly discarding them
+behind a button labelled "defaults" is the surprise this project keeps out.
+Clearing browsing data is reached from kiosk and from the settings page, and
+both go through one function that says what it cleared. Deletion was the
+outlier, and it is the one with no undo.
+
 **And the test's own first draft broke the driver, in the way this session
 has spent all day naming.** It deleted the *fixture's* folder, so the next
 section dereferenced a node that was gone and the run segfaulted -- while
@@ -20204,6 +20226,66 @@ what is on the bar arrived after that load began, which is exactly this
 case: the popup was refused while the failing navigation was still running.
 The test was left as it was rather than made to poll, because a poll would
 have removed the symptom in the one place anybody was watching for it.
+
+## Reported from use: the drawer's edge could not be dragged
+
+> I can't resize the right side of the tab window when in mobile mode.
+
+True, and it had never been possible. The tab tree is a pane in a
+`QSplitter` on a desktop, and below `k_drawer_threshold` -- 620 logical
+pixels -- `update_layout_mode` reparents it out of the splitter and onto the
+window as an overlay, so that it can slide over the page rather than take
+width from it. **A splitter pane has a handle and an overlay has none**, so
+the edge that is draggable at 700 pixels silently stops being draggable at
+500. There was no widget on that edge at all.
+
+Nor was there anything a drag could have changed. `resizeEvent` recomputed
+the width from the window every time:
+
+    m_sidebar->resize(qMin(int(width() * 0.82), 420), ...)
+
+so even a working handle would have lost its width at the next rotation.
+Both halves had to move: a grip to drag, and a stored width for it to write
+into.
+
+**What the fix is.** A fourteen-pixel child of the drawer, `drawer_grip`,
+pinned to its right edge with `Qt::SizeHorCursor`, filtered by the window;
+`m_drawer_width` starting at 0 meaning "follow the formula"; and
+`layout_drawer()` lifted out of `resizeEvent` so the drag and the resize
+place the drawer through one function rather than two that must agree. The
+width persists with the rest of the view state, so a drawer sized on a phone
+is the same width after a restart.
+
+**Bounded at both ends, and the bounds are not decoration.** `qBound(160,
+w, width() - 48)`. A drawer dragged to nothing leaves no grip to grab it
+back by, and one dragged past the window edge leaves no page to tap on --
+and tapping the page is the only way to close the drawer on a handset, so
+that end is a lockout rather than an inconvenience. The clamp is applied at
+layout time rather than at save time, which is what lets a width chosen on a
+tablet arrive on a phone and be narrowed rather than refused.
+
+**Tested offline, because the whole feature is reachable without a
+handset.** `test_rotation` already drives drawer mode at 500x800 with no
+display; the new section sends the grip the events a finger sends -- press,
+then a move ninety pixels left -- and asserts the drawer is ninety pixels
+narrower, that the width survives a resize to 520, and that a 9000-pixel
+drag still leaves page to tap on. 193 passed, 0 failed.
+
+**Sabotaged, and it failed through the checks under test** rather than
+beside them: with `layout_drawer` reverted to the formula
+(`const int w = fitted;`) the run reports 191 passed, 2 failed --
+"dragging it narrows the drawer by what was dragged (410 -> 410, wanted
+320)" and "survives a resize rather than being recomputed (420 after a
+change to 520 wide)". The grip-exists check still passes there, which is
+correct and worth saying: the grip is not what was broken, the width was.
+
+**What this does not cover.** The drag is mouse events, and a finger on
+Android arrives as a synthesised mouse press by default, which is why the
+grip is filtered for `MouseButtonPress`/`MouseMove` rather than for
+`QEvent::TouchBegin`. That is the same assumption the rest of this window
+already makes and it is not separately proved here; a handset session that
+drags the edge is what would prove it, and the check to run is simply
+whether the drawer follows the finger.
 
 ## What is next (in order)
 
