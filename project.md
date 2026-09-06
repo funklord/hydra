@@ -18449,6 +18449,151 @@ here should reach into it; when a wire format is wanted, it is asked for by
 naming its constants -- see the cross-tree rule in `evidence.md`, which this
 workspace paid for once already.
 
+## A real filter list could not have been loaded, and now can
+
+The performance half of the tab-speed report: this profile has no filter rules
+at all, so every ad, tracker and beacon is fetched. **The reason a real list
+could not simply be dropped in is that `blocks()` could not have answered it.**
+
+It was a linear scan over every rule calling `matches()`, and `matches()`
+copied the pattern and built a whole **`QUrl` per rule** to test a
+host-anchored one. On the handful the evolution loop produces that is free. On
+a subscription it is the URL parsed tens of thousands of times, per request.
+
+Measured against the algorithm it replaces, kept in the test as the oracle:
+
+    25000 rules: per request indexed 3.4 us, scan 21756 us
+
+**Six thousand times, and the parity check is the part that matters**: every
+url gets the same verdict from the index as from the scan. A fast wrong answer
+is not an improvement, so the old algorithm stays in the suite and both have
+to agree.
+
+Twenty-two milliseconds per request is why the list was empty. A page making a
+hundred requests would have spent two seconds inside the filter before
+fetching anything.
+
+### What the index is, and why these two structures
+
+Chosen from what the syntax actually contains rather than from a general idea
+about matching:
+
+- **Host-anchored rules** (`||ads.example^`) are the large majority and are an
+  exact host test. Keyed by host; a URL is checked by walking its own suffixes
+  -- `a.b.example` asks for `a.b.example`, then `b.example`, then `example`.
+  Three or four hash lookups whatever the list holds.
+- **Everything else** is a substring or a wildcard, bucketed by one token: its
+  longest run of letters and digits, four characters minimum. A URL is
+  tokenised the same way and only the buckets its own tokens name are tested.
+  A pattern that can contribute no token goes in `m_untokenised` and is always
+  tested -- rare, and the honest place for the ones the trick does not cover.
+
+The URL is parsed **once** per `blocks()` call rather than once per rule,
+which is the single biggest thing the old version got wrong.
+
+### The benchmark found a quadratic loader in the fix itself
+
+The first version rebuilt the whole index inside `add()`. Correct, free for
+the dozen rules that path normally sees, and **O(N²) for a subscription** --
+adding 25,000 rules took minutes, and the suite went from four seconds to over
+two, with no failure to point at it.
+
+`index_one()` appends a single rule to the right bucket; `reindex()` is now
+only for `remove()`, which moves the indices under everything. **Nothing but
+the benchmark would have found this**: every correctness test passes either
+way, and the load path is not on any timed assertion.
+
+## Open: who pays for trust, and can a local model be the auditor
+
+Two questions from the copyright holder while the filter work was in flight,
+both about the global phase. They are one thread, so they are recorded
+together.
+
+### "A fuzznet account is too cheap for a ban to mean anything"
+
+Correct, and it is the Sybil problem stated exactly. A reputation system needs
+identity to be scarce or a ban costs the attacker one signup.
+
+**But a price on identity buys less than it looks like it buys.** It raises
+the cost of *re-entry after being caught*, not the cost of the first attack.
+The question is whether the damage one account can do before it is noticed is
+worth more than the price of an account -- and for a filter list the damage is
+potentially a bank's fraud script blocked on thousands of machines, which no
+subscription price approaches.
+
+**Paid auditing has a scaling problem of its own.** EasyList is on the order
+of eighty thousand rules with continuous churn; auditing rules is not fundable
+at any plausible subscription. What is fundable is auditing **publishers** --
+of whom there are few -- which is the model the web already settled on:
+nobody trusts an individual EasyList rule, they trust the EasyList project.
+
+That points at a global scheme that needs no payment at all: **a market of
+named publishers you choose between**, with the crypto-network distributing
+publisher lists rather than loose rules. Identity cost then matters only for
+publishers, and a publisher's incentive is to be right because their whole
+list is dropped when they are not.
+
+**And payment has a cost this browser in particular should weigh.** A payment
+ties a person's browsing filters to a real-world identity, in a browser whose
+first section is about data staying on the machine. It also creates an
+incentive to retain subscribers, which is not the same as being correct.
+
+### "Could llama do the auditing on each host, on each update?"
+
+It attacks the right gap. Every gate now in place answers *can this rule do
+something other than what its kind is for*; none answers *is this rule
+honest*, and `||fraud-detect.bank.example^` is syntactically identical to
+`||ads.example^`. Judging that needs world knowledge, which is the one thing a
+model has and a parser does not.
+
+Three things stand between that and a security control, and the first is
+measured **in this tree**:
+
+- **The compliance rate is already known and it is not a gate's.** The
+  extractor loop's prompt has said *"write two tests, not one"* since August,
+  and the measurement is that it gets two **about two thirds of the time**;
+  the loop scores 3 of 5 on one site and 2 of 5 on another. That is a
+  reasonable proposer and it is not a control. The failure is asymmetric: a
+  wrong refusal costs a filter, a wrong acceptance is the thing the audit
+  existed to prevent, and nothing downstream catches it.
+- **The auditor would be reading the attacker's text.** A rule arrives with a
+  `note` and an `origin`; a list arrives with a name. `judge_import` already
+  refuses to believe a document's self-description -- *"a file that names
+  itself 'Trusted community rules' is describing itself, which is worth
+  exactly nothing"* -- and feeding that same prose to a model that decides
+  whether to trust it is that failure one layer up. **If a model ever audits,
+  it sees the normalised rule and nothing else**: kind, host, pattern. No
+  note, no origin, no list title.
+- **Volume is plausible only for a delta.** A subscription's daily churn is
+  hundreds of rules, not eighty thousand -- but this tree has measured runs of
+  its 14B model that *never answered inside fifteen minutes* on a loaded
+  machine. Per-rule prompting is out; batching is back to the compliance
+  question.
+
+So: **a triage, not a gate.** Over-reporting is the right shape for an
+instrument a person reads, and the wrong shape for one that runs unattended --
+which is this workspace's own rule about probes, and it puts a local model on
+the "surface the odd ones for a human" side of it.
+
+### The lever that is neither payment nor a model
+
+**A network rule's claim is testable on your own traffic.** `dry_run` already
+simulates a rule against observed requests -- that is how the evolution loop
+shows what a proposal would have blocked before anyone accepts it. A shared
+rule can arrive with the claim its author made and be **re-simulated locally**
+before it takes effect: does it block what it says it blocks, and does it
+touch anything on the first-party origin.
+
+That converts part of "do I trust the author" into "does it do what it claims
+on my traffic", it is deterministic, it costs no money and no model, and the
+machinery exists. It does not cover a rule that blocks nothing today and
+something important next month -- so it is a layer, like the others, and not
+an answer.
+
+**None of this is decided.** It is the copyright holder's, and it is recorded
+here so the question is asked once rather than re-derived each time the
+sharing work is picked up.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

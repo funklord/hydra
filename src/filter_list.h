@@ -2,6 +2,7 @@
 
 #include "element_picker.h"
 
+#include <QHash>
 #include <QList>
 #include <QReadWriteLock>
 #include <QString>
@@ -100,6 +101,50 @@ public:
 
 private:
 	bool contains_locked(const QString &text) const;
+
+	// --- The index, which is what makes a real list usable -------------
+	//
+	// `blocks()` was a linear scan calling `matches()` on every rule, and
+	// `matches()` copied the pattern and built a whole `QUrl` **per rule**. On
+	// the handful of rules the evolution loop produces that is free. On a
+	// subscription list it is not: every request would parse the URL tens of
+	// thousands of times.
+	//
+	// Two structures, chosen from what the syntax actually contains rather
+	// than from a general idea about matching:
+	//
+	//  * **Host-anchored rules** (`||ads.example^`) are the large majority and
+	//    they are an exact host test. Keyed by host, and a URL is checked by
+	//    walking its own suffixes -- `a.b.example` asks for `a.b.example`,
+	//    `b.example`, `example`. Three or four hash lookups whatever the list
+	//    holds.
+	//  * **Everything else** is a substring or a wildcard, and is bucketed by
+	//    one token taken from the pattern: its longest run of letters and
+	//    digits. A URL is tokenised the same way and only the buckets its own
+	//    tokens name are tested. This is what every real blocker does, and the
+	//    reason it works is that a pattern which cannot contribute a token is
+	//    rare -- those go in `m_untokenised` and are always tested.
+	//
+	// Rebuilt whenever the rules change, under the same write lock.
+	struct compiled {
+		enum class kind { host, substring, wildcard } k = kind::substring;
+		QString     host;    // for `host`: the bare domain, lowercased
+		QString     needle;  // for `substring`: the pattern as written
+		QStringList parts;   // for `wildcard`: the pieces between the stars
+	};
+	void reindex();
+	// **One rule, appended.** `add()` used to call `reindex()`, which rebuilt
+	// the whole index per rule -- fine for the handful the evolution loop
+	// produces, quadratic for a subscription. Measured: adding 25,000 rules
+	// that way took minutes; the benchmark that found it is in `test_bundle`.
+	void index_one(int i);
+	static QString token_of(const QString &pattern);
+	static QStringList tokens_in(const QString &url);
+
+	QList<compiled>            m_compiled;    // parallel to m_rules
+	QHash<QString, QList<int>> m_by_host;
+	QHash<QString, QList<int>> m_by_token;
+	QList<int>                 m_untokenised;
 
 	QList<filter_rule> m_rules;
 	// Guards m_rules across the one thread boundary this class has: rules are

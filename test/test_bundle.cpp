@@ -14,6 +14,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QSettings>
@@ -443,6 +444,91 @@ int main(int argc, char **argv) {
 		  cosmetic_filters::selectors_for(&fl, "evil.example");
 		check(shipped.isEmpty(),
 		       "and if it is in the file anyway, nothing ships it to the page");
+	}
+
+	section("a real list has to be answerable per request");
+	{
+		// `blocks()` was a linear scan calling `matches()` on every rule, and
+		// `matches()` built a whole `QUrl` for each host-anchored one. On the
+		// handful of rules the evolution loop produces that is free; on a
+		// subscription it is a URL parsed tens of thousands of times per
+		// request. This is the measurement that decides whether a real list can
+		// be loaded at all.
+		filter_list fl;
+		const int hosts = 20000, subs = 5000;
+		for (int i = 0; i < hosts; ++i) {
+			filter_rule r;
+			filter_list::parse_rule(QString("||ads%1.example^").arg(i), &r);
+			fl.add(r);
+		}
+		for (int i = 0; i < subs; ++i) {
+			filter_rule r;
+			filter_list::parse_rule(QString("/banner%1/track").arg(i), &r);
+			fl.add(r);
+		}
+		check(fl.rules().size() == hosts + subs,
+		       QString("%1 rules loaded").arg(fl.rules().size()));
+
+		// **Forty, not two hundred.** The oracle below is the algorithm this
+		// replaced, and it costs 30 ms per url -- the whole point of the
+		// measurement -- so checking parity on two hundred of them added six
+		// seconds to every run of the suite to prove nothing the fortieth had
+		// not already proved.
+		QStringList urls;
+		for (int i = 0; i < 40; ++i)
+			urls << QString("https://cdn%1.site.example/a/b/c?q=%2").arg(i).arg(i);
+		urls << "https://ads17.example/x" << "https://x.example/banner42/track";
+
+		// **The control is the old algorithm, run here.** A time on its own
+		// says nothing, and a fast wrong answer is not an improvement -- so the
+		// naive scan is kept as the oracle and every URL has to agree.
+		auto naive = [&](const QString &u) {
+			for (const filter_rule &r : fl.rules()) {
+				if (r.cosmetic)
+					continue;
+				if (filter_list::matches(r.text, u))
+					return true;
+			}
+			return false;
+		};
+
+		int disagreements = 0, blocked = 0;
+		for (const QString &u : urls) {
+			const bool a = fl.blocks(u, QString());
+			const bool b = naive(u);
+			if (a != b) ++disagreements;
+			if (a) ++blocked;
+		}
+		check(disagreements == 0,
+		       QString("the index agrees with the scan on every url (%1 blocked)")
+		           .arg(blocked));
+		check(blocked == 2, "and the two that should block, do");
+
+		QElapsedTimer t;
+		t.start();
+		for (const QString &u : urls)
+			fl.blocks(u, QString());
+		const qint64 fast_us = t.nsecsElapsed() / 1000;
+		// Timed over a handful, because each one is 30 ms.
+		t.restart();
+		int timed = 0;
+		for (const QString &u : urls) {
+			if (timed++ >= 5) break;
+			naive(u);
+		}
+		const qint64 slow_us = t.nsecsElapsed() / 1000 / qMax(1, timed);
+
+		std::printf("        %d rules: per request indexed %.1f us, "
+		             "scan %lld us\n", hosts + subs,
+		             double(fast_us) / urls.size(), (long long)slow_us);
+
+		// Not a ratio, which would vary with the machine: what is asserted is
+		// that a request is answered in a time that can sit on the network
+		// path. 100us is already generous for one hash lookup and a few
+		// substring tests.
+		check(double(fast_us) / urls.size() < 100.0,
+		       QString("a request is decided in %1 us")
+		           .arg(double(fast_us) / urls.size(), 0, 'f', 1));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

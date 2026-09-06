@@ -206,6 +206,7 @@ bool filter_list::remove(const QString &text) {
 		if (m_rules[i].text != text)
 			continue;
 		m_rules.removeAt(i);
+		reindex();
 		return true;
 	}
 	return false;
@@ -227,8 +228,98 @@ bool filter_list::contains_locked(const QString &text) const {
 
 void filter_list::add(const filter_rule &r) {
 	QWriteLocker locker(&m_lock);
-	if (!contains_locked(r.text))
+	if (!contains_locked(r.text)) {
 		m_rules.push_back(r);
+		index_one(m_rules.size() - 1);
+	}
+}
+
+// The longest run of letters and digits in a pattern, lowercased -- the token a
+// rule is filed under. Four characters is the floor: shorter than that and the
+// bucket holds most of the list, which is the linear scan again with a hash in
+// front of it.
+QString filter_list::token_of(const QString &pattern) {
+	QString best, run;
+	for (const QChar c : pattern) {
+		if (c.isLetterOrNumber()) {
+			run.append(c.toLower());
+		} else {
+			if (run.size() > best.size()) best = run;
+			run.clear();
+		}
+	}
+	if (run.size() > best.size()) best = run;
+	return best.size() >= 4 ? best : QString();
+}
+
+// The same decomposition of a URL: every run of four or more, so a rule filed
+// under any of them is reached. Deliberately every run rather than the longest
+// -- the rule chose its own token and this side does not know which.
+QStringList filter_list::tokens_in(const QString &url) {
+	QStringList out;
+	QString run;
+	for (const QChar c : url) {
+		if (c.isLetterOrNumber()) {
+			run.append(c.toLower());
+		} else {
+			if (run.size() >= 4) out << run;
+			run.clear();
+		}
+	}
+	if (run.size() >= 4) out << run;
+	return out;
+}
+
+// Called with the write lock held. `m_compiled[i]` must not exist yet.
+void filter_list::index_one(int i) {
+	const filter_rule &r = m_rules[i];
+	compiled c;
+	if (r.cosmetic) {
+		// Present so the two lists stay index-parallel; never consulted by
+		// `blocks()`, which skips cosmetic rules.
+		m_compiled.push_back(c);
+		return;
+	}
+	QString p = r.text;
+	if (p.startsWith(QLatin1String("||"))) {
+		p.remove(0, 2);
+		const int caret = p.indexOf('^');
+		if (caret >= 0)
+			p = p.left(caret);
+		c.k    = compiled::kind::host;
+		c.host = p.toLower();
+		m_compiled.push_back(c);
+		if (!c.host.isEmpty())
+			m_by_host[c.host].append(i);
+		return;
+	}
+	if (p.contains('*')) {
+		c.k     = compiled::kind::wildcard;
+		c.parts = p.split('*', Qt::SkipEmptyParts);
+	} else {
+		c.k      = compiled::kind::substring;
+		c.needle = p;
+	}
+	m_compiled.push_back(c);
+	if (p.isEmpty())
+		return;
+	const QString tok = token_of(p);
+	if (tok.isEmpty())
+		m_untokenised.append(i);
+	else
+		m_by_token[tok].append(i);
+}
+
+// Called with the write lock held. Whole-list, for the paths that move indices
+// under the existing entries -- which is `remove()` and nothing else.
+void filter_list::reindex() {
+	m_compiled.clear();
+	m_by_host.clear();
+	m_by_token.clear();
+	m_untokenised.clear();
+	m_compiled.reserve(m_rules.size());
+	for (int i = 0; i < m_rules.size(); ++i)
+		index_one(i);
 }
 
 bool filter_list::blocks(const QString &url, const QString &site_host) const {
@@ -255,10 +346,50 @@ bool filter_list::blocks(const QString &url, const QString &site_host) const {
 	// setting, which `request_filter` checks before ever calling this.
 	Q_UNUSED(site_host);
 	QReadLocker locker(&m_lock);
-	for (const filter_rule &r : m_rules) {
-		if (r.cosmetic)
-			continue;   // cosmetic rules need DOM injection, not request blocking
-		if (matches(r.text, url))
+	if (m_compiled.size() != m_rules.size())
+		return false;   // never seen; the index is rebuilt with every change
+
+	// **The URL is parsed once**, which is the single biggest thing this
+	// function used to get wrong: `matches()` built a `QUrl` for every
+	// host-anchored rule it tried.
+	const QString host = QUrl(url).host().toLower();
+
+	// Host-anchored: the URL's own host and each parent domain.
+	for (int at = 0; at >= 0 && at < host.size();
+	      at = host.indexOf('.', at + 1) + 1) {
+		const auto it = m_by_host.constFind(host.mid(at));
+		if (it != m_by_host.cend() && !it->isEmpty())
+			return true;
+		if (host.indexOf('.', at) < 0)
+			break;
+	}
+
+	auto try_rules = [&](const QList<int> &ids) {
+		for (int i : ids) {
+			const compiled &c = m_compiled[i];
+			if (c.k == compiled::kind::substring) {
+				if (!c.needle.isEmpty() && url.contains(c.needle))
+					return true;
+			} else if (c.k == compiled::kind::wildcard) {
+				int cursor = 0;
+				bool all = true;
+				for (const QString &part : c.parts) {
+					cursor = url.indexOf(part, cursor);
+					if (cursor < 0) { all = false; break; }
+					cursor += part.size();
+				}
+				if (all && !c.parts.isEmpty())
+					return true;
+			}
+		}
+		return false;
+	};
+
+	if (try_rules(m_untokenised))
+		return true;
+	for (const QString &tok : tokens_in(url)) {
+		const auto it = m_by_token.constFind(tok);
+		if (it != m_by_token.cend() && try_rules(*it))
 			return true;
 	}
 	return false;
@@ -270,11 +401,17 @@ bool filter_list::load(const QString &path) {
 		return false;
 	QWriteLocker locker(&m_lock);
 	m_rules.clear();
+	m_compiled.clear();
+	m_by_host.clear();
+	m_by_token.clear();
+	m_untokenised.clear();
 	QTextStream in(&f);
 	while (!in.atEnd()) {
 		filter_rule r;
-		if (parse_rule(in.readLine(), &r))
+		if (parse_rule(in.readLine(), &r)) {
 			m_rules.push_back(r);
+			index_one(m_rules.size() - 1);
+		}
 	}
 	return true;
 }
