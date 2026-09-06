@@ -41,10 +41,13 @@
 #include "site_extractor.h"
 #include "tab_tree_model.h"
 #include "cert_dialog.h"
+#include "webauth_dialog.h"
 #include "main_window.h"
 #include "web_view_backend.h"
 
 #include <QApplication>
+#include <QAbstractButton>
+#include <QButtonGroup>
 #include <QDialog>
 #include <QDir>
 #include <QLayout>
@@ -234,6 +237,37 @@ static void measure(QWidget *dlg, const QString &name) {
 			else
 				++asleep;
 		}
+
+		// **A radio group is one Tab stop, and the arrows move inside it.**
+		// That is Qt's behaviour and the platform convention, not something a
+		// dialog chooses -- so requiring Tab to reach every member reports a
+		// defect against correct code. Measured with a probe holding none of
+		// this program's classes: two auto-exclusive radios in a scroll area,
+		// none checked, both reporting `TabFocus`, and Tab reaches exactly one
+		// of them while Down reaches the other. Bare in a dialog Qt does not
+		// even offer the second as focusable, which is why this had never
+		// shown up before -- the settings pages hold the tree's only other
+		// radios and they are not in a scroll area.
+		//
+		// So the group is folded to one representative and the members are
+		// checked by the route that actually reaches them. This asks MORE than
+		// the version it replaces, which never established that the arrow key
+		// worked at all.
+		QHash<QButtonGroup *, QList<QAbstractButton *>> groups;
+		for (QWidget *c : want) {
+			auto *b = qobject_cast<QAbstractButton *>(c);
+			if (!b || !b->autoExclusive())
+				continue;
+			if (auto *g = b->group())
+				groups[g].append(b);
+		}
+		for (auto it = groups.cbegin(); it != groups.cend(); ++it) {
+			if (it.value().size() < 2)
+				continue;
+			for (QAbstractButton *b : it.value())
+				want.remove(b);
+			want.insert(it.value().first());
+		}
 		// A real Tab key rather than `focusNextChild()`, which is protected --
 		// and which would be the wrong thing anyway. Pressing the key is what
 		// somebody does, and it goes through the same focus machinery a widget
@@ -260,6 +294,29 @@ static void measure(QWidget *dlg, const QString &name) {
 				                                              : c->objectName(),
 				                    c->metaObject()->className());
 		}
+		// The other half of folding the group: every member has to be
+		// reachable by the arrow, from whichever member Tab landed on.
+		for (auto it = groups.cbegin(); it != groups.cend(); ++it) {
+			if (it.value().size() < 2)
+				continue;
+			QAbstractButton *from = it.value().first();
+			QSet<QWidget *> by_arrow;
+			from->setFocus();
+			for (int i = 0; i < it.value().size() * 2 + 4; ++i) {
+				QWidget *f = dlg->focusWidget();
+				if (!f)
+					break;
+				by_arrow.insert(f);
+				QTest::keyClick(f, Qt::Key_Down);
+			}
+			for (QAbstractButton *b : it.value())
+				if (!by_arrow.contains(b) && stranded.size() < 4)
+					stranded << QString("%1 (%2, not reachable by arrow either)")
+					              .arg(b->objectName().isEmpty() ? "unnamed"
+					                                              : b->objectName(),
+					                    b->metaObject()->className());
+		}
+
 		verdict(stranded.isEmpty(),
 		         stranded.isEmpty()
 		             ? QString("%1: Tab reaches all %2 focusable control(s)%3")
@@ -472,6 +529,41 @@ int main(int argc, char *argv[]) {
 		mic.show();
 		QApplication::processEvents();
 		measure(&mic, "permission-microphone");
+	}
+
+	// **The passkey prompt, which neither driver had ever measured.** Found by
+	// counting the `QDialog` subclasses in `src/` rather than reading the list
+	// this driver walks: fourteen exist, thirteen were measured, and the
+	// section above calls itself "every dialog". A floor guards the count and
+	// could not have caught this -- it was derived from the same list.
+	//
+	// It belongs with the two above rather than with the menu-opened ones: a
+	// page calls `navigator.credentials.get()` and the window arrives, so
+	// nobody chose to open it and there is no slot that reaches it.
+	//
+	// Two states, because each `ask_*` call rebuilds the window and the widest
+	// two are not the same shape. The account chooser grows a scroll area of
+	// radio buttons carrying names a relying party chose; setting a PIN grows a
+	// second field, its label, and a line of trouble text.
+	{
+		webauth_dialog pick("accounts.example", &f.window);
+		pick.ask_for_account({"ada@example.invalid",
+		                       "a.lovelace+passkeys@analytical.example.invalid"});
+		pick.show();
+		QApplication::processEvents();
+		measure(&pick, "webauth-account");
+	}
+	{
+		webauth_dialog pin("accounts.example", &f.window);
+		webauth_dialog::pin_prompt p;
+		p.reason = webauth_dialog::pin_reason::set;
+		p.error = webauth_dialog::pin_error::too_short;
+		p.min_length = 6;
+		p.remaining_attempts = 3;
+		pin.ask_for_pin(p);
+		pin.show();
+		QApplication::processEvents();
+		measure(&pin, "webauth-pin");
 	}
 
 	// The screen picker, against fake models.
@@ -689,13 +781,20 @@ int main(int argc, char *argv[]) {
 	// dialog above can decline to open -- three of the shell's do, for want of
 	// a page or a model -- and a driver that measured none of them would
 	// otherwise print a clean sweep of an empty list.
-	// Four opened by a slot, plus nine reached other ways: the window itself,
-	// the two the network raises, the certificate chooser, the annoyance
-	// report, the three that ask a model, and the media dialog behind a tab.
+	// Four opened by a slot, plus eleven reached other ways: the window itself,
+	// the two the network raises, the passkey prompt in its two widest states,
+	// the certificate chooser, the annoyance report, the three that ask a
+	// model, and the media dialog behind a tab.
+	//
+	// **Eleven is derived from the same list it guards, which is the weakness
+	// this number cannot fix.** It caught nothing when a fourteenth dialog
+	// existed and thirteen were walked. What catches that is counting the
+	// `QDialog` subclasses in `src/` and comparing -- a different question,
+	// asked of the tree rather than of this file.
 	// Exact rather than comfortable -- a floor one below the real count lets a
 	// dialog go missing without anything saying so, which is the failure this
 	// guard exists to prevent rather than a smaller version of it.
-	const int expected = int(sizeof(dialogs) / sizeof(dialogs[0])) + 9;
+	const int expected = int(sizeof(dialogs) / sizeof(dialogs[0])) + 11;
 	if (g_measured < expected) {
 		std::printf("\nonly %d of %d dialogs were measured; that is not a "
 		             "check of anything\n", g_measured, expected);

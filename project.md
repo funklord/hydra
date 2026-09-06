@@ -20287,6 +20287,99 @@ already makes and it is not separately proved here; a handset session that
 drags the edge is what would prove it, and the check to run is simply
 whether the drawer follows the finger.
 
+## A dialog nothing had ever measured, found by counting the population
+
+`try_phone` measures every dialog at 360x640 and guards the count with a
+floor: four opened by a slot plus nine reached other ways, and a run that
+measures fewer says so and fails. The section calls itself "every dialog".
+
+It was not every dialog. **The tree holds fourteen `QDialog` subclasses and
+thirteen were measured** -- `webauth_dialog`, the passkey prompt, was in
+neither driver. The floor could not have caught it, because the floor was
+derived from the same list it guards: *A name that claims exhaustiveness is
+not a check that achieved it*, with the quantifier wrong rather than the
+assertion.
+
+    grep -l "public QDialog" src/*.h | wc -l      14
+    measured by try_phone                         13
+
+**What found it was asking the tree rather than the file.** The count that
+matters is not the one the driver walks; it is the one a different question
+produces. Two of the three names my first grep reported as unmeasured --
+`consent_dialog` and `site_policy_dialog` -- are measured through a slot
+name rather than a class name, so the instrument over-reported and reading
+the slots settled it. One survived, and it is the one that belongs to the
+category the driver already singles out: nobody opens a passkey prompt, a
+page calls `navigator.credentials.get()` and it arrives.
+
+### Measured, it had a real fault and a false one
+
+Two states, because each `ask_*` call rebuilds the window and the widest two
+are different shapes. The first run:
+
+    FAIL  webauth-account: Tab never reaches 1 -- webauth_account_1
+    FAIL  webauth-pin: 2 label(s) stretched past their text --
+          "<b>Set a PIN for your se…" (192 tall for 17 of text)
+
+**The second is real and is this tree's own recorded fault.** `auth_dialog`
+carries the fix and the reason: a dialog handed the whole screen has more
+height than its contents asked for, and with nothing willing to absorb the
+difference a word-wrapped label does. webauth's outer column had no trailing
+stretch, so in the PIN state -- where the scroll area, the one expanding
+widget, is hidden -- the heading and the detail took 192 and 191 pixels for
+17 and 34 pixels of text, with the fields pushed to the bottom edge.
+
+The fix is `auth_dialog`'s with one difference: the stretch is set per state,
+because this window has a state where a real widget should take the height
+instead. A scrolling account list given only its size hint while a spacer
+eats the rest is a short box with a gap under it. `clear_to_empty` arms the
+spacer, `ask_for_account` stands it down and gives the list the stretch.
+
+**The first was the check, and a control settled it in one command.** A
+probe holding none of this program's classes -- two auto-exclusive radios in
+a `QScrollArea`, none checked:
+
+    bare, none checked          want 1, reached 1, stranded 0
+    bare, first checked         want 1, reached 1, stranded 0
+    scroll area, none checked   want 3, reached 2, stranded 1,
+                                reached-by-arrow 1
+
+So Qt treats a radio group as one Tab stop and moves inside it with the
+arrows, which is the platform convention. Bare in a dialog it does not even
+offer the second radio as focusable, which is why this had never appeared
+before: the settings pages hold the tree's only other radios and they are
+not in a scroll area. **The check had never met a radio group where it could
+be wrong**, and the first one it met, it accused.
+
+*Suspect the check before the code* -- and the remedy is not to weaken it.
+The group is folded to one representative for the Tab walk, and every member
+is then required to be reachable by the arrow, **which the old version never
+established at all**. Sabotaged with an event filter that swallows Key_Down
+on the radios, it reports "webauth_account_1 (QRadioButton, not reachable by
+arrow either)" -- a sentence only the new path can produce, so the new half
+has been seen to fail through itself.
+
+**And the floor is now eleven and still cannot catch its own successor.**
+That is written beside it: what catches a fifteenth dialog is counting the
+`QDialog` subclasses in `src/`, which is a question asked of the tree rather
+than of the driver.
+
+### What was checked and was not a fault
+
+Two things the same sweep put up and neither is one, recorded so the next
+sweep does not re-derive them:
+
+- **`webauth_dialog` and `cert_dialog` both `setMinimumWidth(460)`**, which
+  on a 360-pixel screen looks like a dialog that cannot fit. The gate zeroes
+  the widget minimum before measuring, and that is not the gate being
+  generous: `android_dialogs.cpp` does exactly the same thing to every
+  dialog on Show, for the reason its comment gives. The model was checked
+  against the shipping filter rather than assumed.
+- **Neither web view installs a page context menu**, so a long press on a
+  page gets whatever the backend does. That is Qt WebEngine's own menu on
+  the desktop and the system WebView's behaviour on Android -- a platform
+  default in both, not a gap this tree left.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

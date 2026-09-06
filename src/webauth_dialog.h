@@ -116,6 +116,10 @@ private:
 	// that sets a new PIN.
 	bool m_confirming = false;
 
+	// Where the spacer that absorbs spare height sits in the outer column. Its
+	// stretch is set per state, so the index has to survive between calls.
+	int m_slack_row = 0;
+
 	QLabel *m_heading = nullptr;
 	QLabel *m_detail = nullptr;
 	QScrollArea *m_accounts_area = nullptr;

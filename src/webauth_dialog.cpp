@@ -157,7 +157,9 @@ webauth_dialog::webauth_dialog(const QString &relying_party, QWidget *parent)
 	m_accounts_area->setObjectName("webauth_accounts_area");
 	m_accounts_area->setWidgetResizable(true);
 	m_accounts_area->setWidget(m_accounts);
-	column->addWidget(m_accounts_area);
+	// Stretch 1, so that when the list is on screen it is the thing that grows.
+	// It competes with the spacer below, which is set to nothing in that state.
+	column->addWidget(m_accounts_area, 1);
 
 	m_account_group = new QButtonGroup(this);
 
@@ -182,6 +184,22 @@ webauth_dialog::webauth_dialog(const QString &relying_party, QWidget *parent)
 	m_pin_trouble->setWordWrap(true);
 	pin_rows->addRow(m_pin_trouble);
 	column->addWidget(m_pin_box);
+
+	// **Spare height goes here, not between the sentences.** The same fault
+	// `auth_dialog` records and fixes the same way: on a desktop the window is
+	// the height its contents ask for and this changes nothing, while on
+	// Android it is handed the whole screen and something has to take the
+	// difference. With nothing willing to, a word-wrapped label does -- so the
+	// PIN question arrived with its heading 192 pixels tall for 17 pixels of
+	// text and the fields pushed to the bottom edge.
+	//
+	// Its stretch is set per state rather than fixed, because this window has
+	// one state where a real widget should take the height instead: the account
+	// list scrolls, and a list given its size hint while a spacer eats the rest
+	// is a short box with a gap under it. `clear_to_empty` arms the spacer and
+	// `ask_for_account` stands it down.
+	m_slack_row = column->count();
+	column->addStretch(1);
 
 	m_buttons = new QDialogButtonBox(this);
 	m_buttons->setObjectName("webauth_buttons");
@@ -270,6 +288,12 @@ void webauth_dialog::clear_to_empty() {
 	m_cancel->setText("Cancel");
 	m_heading->clear();
 	m_detail->clear();
+
+	// Armed by default: three of the four states are a paragraph and a control
+	// or two, and in those the spacer is the only thing that will take the
+	// screen's spare height.
+	if (auto *column = qobject_cast<QVBoxLayout *>(layout()))
+		column->setStretch(m_slack_row, 1);
 }
 
 void webauth_dialog::refresh_accept() {
@@ -315,6 +339,9 @@ void webauth_dialog::ask_for_account(const QStringList &names) {
 		++id;
 	}
 	m_accounts_area->setVisible(true);
+	// The list takes the height in this one state; see the spacer above.
+	if (auto *column = qobject_cast<QVBoxLayout *>(layout()))
+		column->setStretch(m_slack_row, 0);
 
 	// **Nothing selected to begin with**, for the reason `cert_dialog` gives
 	// for the same choice: a preselected identity next to a default button is
