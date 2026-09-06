@@ -38,6 +38,7 @@ OBJSETS_SOURCES = \
 	test/test_helpers.cpp \
 	test/test_helpers_live.cpp \
 	test/test_hls.cpp \
+	test/test_instance.cpp \
 	test/test_invariants.cpp \
 	test/test_kiosk.cpp \
 	test/test_live_model.cpp \
@@ -270,6 +271,9 @@ OBJS_test_helpers_live = \
 
 OBJS_test_hls = \
 	$(BUILD_DIR)/app/hls_playlist.o
+
+OBJS_test_instance = \
+	$(BUILD_DIR)/app/single_instance.o
 
 OBJS_test_invariants = \
 	$(BUILD_DIR)/app/tree_outline.o \
@@ -4844,6 +4848,7 @@ OBJS_try_subframe = \
 
 OBJS_try_tabswitch = \
 	$(BUILD_DIR)/app/main_window.o \
+	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/app/policy_engine.o \
 	$(BUILD_DIR)/app/request_filter.o \
 	$(BUILD_DIR)/app/settings_dialog.o \
@@ -4888,7 +4893,6 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/app/local_proxy.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o \
 	$(BUILD_DIR)/moc/moc_main_window.o \
-	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
 	$(BUILD_DIR)/app/annoyance_log.o \

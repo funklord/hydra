@@ -22,8 +22,20 @@
 #endif
 // The single place that names a concrete backend (architecture doc sec 19.2). The
 // whole point of the seam is that this is the only file that has to know, and
-// that is now measured rather than asserted: the other fifty-one translation
-// units compile for arm64 unchanged.
+// that is measured rather than asserted -- every other translation unit
+// compiles for arm64 unchanged.
+//
+// **The property, not a count, because the count rots and the property does
+// not.** This said "the other fifty-one translation units" and the tree has
+// since grown to seventy-six, which is the shape of stale claim that nobody
+// re-derives because it reads as settled. What is worth checking is the seam
+// itself, and one command does it:
+//
+//     grep -l '#include "\(qtwebengine_\|android_view\)' src/*.cpp src/*.h
+//
+// It must answer with this file and the backend implementations themselves --
+// nothing else. Two other files mention a backend by name in a comment, which
+// is prose about the seam rather than a dependency on it.
 #ifdef Q_OS_ANDROID
 #include "android_view.h"
 #else

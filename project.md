@@ -19373,6 +19373,71 @@ after a successful open, which nothing here can induce. An untestable edit
 in the same breath as three tested ones is how a sabotage-proof change gets
 mistaken for a proven one.
 
+## Re-taking the measured claims, and the guard that had none
+
+The QSettings finding suggested its own next lens: **a claim recorded once as
+"measured" is a claim nobody re-takes.** There are 107 of them in `src/`, so
+the sweep was not exhaustive; it was pointed at the two kinds where being
+wrong would cost something — a claim about a *library's* behaviour, and a
+present-tense *count* of the tree's own shape.
+
+**One count was stale.** `main.cpp` said the backend seam was measured rather
+than asserted, "the other fifty-one translation units compile for arm64
+unchanged". The property still holds and was re-derived; the number is 76.
+The sentence now states the property and carries the command that re-derives
+it, because a count in a comment is quoted and never recounted:
+
+    grep -l '#include "\(qtwebengine_\|android_view\)' src/*.cpp src/*.h
+
+It must answer with `main.cpp` and the backend implementations, and nothing
+else. Two files mention a backend by name in a comment, which is prose about
+the seam rather than a dependency on it — worth knowing, because the looser
+grep everybody reaches for first returns them and looks like a violation.
+
+**One library claim was true, and the sweep's value was what it exposed
+beside it.** `single_instance` is what keeps two browsers out of one profile
+directory, and it **had no test at all** — the whole guard rested on a
+comment. Its load-bearing claim is about Qt rather than about this project:
+`QLockFile` decides a lock is stale by comparing the *executable* name it
+wrote against what the system reports for that pid. Were it the
+*application* name, "Hydra" would never match the `hydra` in /proc, every
+live owner would be declared stale, and a second instance would walk
+straight in — silently, and exactly when two are running.
+
+Re-measured with a probe that sets an application name differing from the
+executable's: the lock file's second line is the executable. The claim
+holds. `test_instance` now holds it, by the same trick — the suite sets
+`Hydra` as its application name and asserts the owner string names
+`test_instance` and does not name `Hydra`, so a Qt that ever switches breaks
+a test rather than the guard.
+
+Nineteen checks, covering what had none: a second instance on the same
+directory is refused and told who holds it, two different directories are
+two applications, a destroyed holder releases, a refused instance hands its
+argument over and an *empty* message is delivered rather than dropped —
+that one being the "launched again with nothing to open" case, whose loss
+would make a second launch do nothing at all.
+
+Both halves were sabotaged. Reporting the application name instead of the
+lock's fails the two Qt-premise checks; a `hand_over` that returns true
+without sending fails the three delivery checks **and** the control that
+says handing over to an empty directory must fail — which is what keeps the
+delivery assertions from passing on a stub.
+
+**Left unheld, deliberately: taking over a lock left by a killed process.**
+Inducing it needs a child to kill or a lock file hand-written in
+`QLockFile`'s own format, and a test that hard-codes another library's file
+format tests the format rather than the guard. It is recorded in
+`single_instance.cpp` and remains a claim.
+
+**And a note on the cost, because the next person will meet it.** Adding a
+suite means regenerating `test/objsets.mk`, which fmake refuses to do with
+an Android build tree present -- it compiles from the repository root and
+those hold moc output from the Android kit's Qt. Moving the 436 MB tree
+aside and back is the whole of it, six minutes of fmake at `-j 2`, and the
+tree must go back to `/home` rather than being left in `/tmp`: `/tmp` here
+is on the root filesystem, which is the smaller and fuller of the two.
+
 ## Open: a blocked-popup notice can be overwritten by a stale load failure
 
 `try_navigate`'s "out loud, not silently" check asserts that refusing a
