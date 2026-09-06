@@ -1113,6 +1113,15 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 
 	// --- Status bar ------------------------------------------------------
 	m_status = new QStatusBar(this);
+	m_clock.start();
+	// **One connection rather than a stamp at every `showMessage`.** What
+	// `on_load_finished` needs to know is whether what is on the bar arrived
+	// after the load it is about to complain about began, and every writer --
+	// including any added later -- goes through this signal.
+	connect(m_status, &QStatusBar::messageChanged, this,
+	        [this](const QString &text) {
+		m_status_at = text.isEmpty() ? 0 : m_clock.elapsed();
+	});
 
 	// **Loaded here rather than with the other stores at the top, because the
 	// guard has something to say and needs somewhere to say it.** Nothing
@@ -2922,7 +2931,10 @@ void main_window::open_node(node *n, bool load_now) {
 			// loading is a fact about that tab, and `page_changed` needs it
 			// for a tab it is switching *to*, which by definition was not
 			// current when its last progress arrived.
-			m_loading_views.insert(view, p);
+			load_state &st = m_loading_views[view];
+			if (st.started == 0)
+				st.started = m_clock.elapsed();
+			st.percent = p;
 			if (view == current_view())
 				on_load_progress(p);
 		});
@@ -2933,9 +2945,11 @@ void main_window::open_node(node *n, bool load_now) {
 			m_loading_views.remove(view);
 		});
 		connect(view, &web_view_backend::load_finished, this, [this, view](bool ok) {
-			m_loading_views.remove(view);
+			// Removed *after* the chrome is told, because
+			// `on_load_finished` reads when this load began.
 			if (view == current_view())
 				on_load_finished(ok);
+			m_loading_views.remove(view);
 			// **Every view, not only the current one**, which is the whole
 			// reason this is not inside the branch above. A background tab
 			// finishing a load has moved its history exactly as much as the
@@ -3668,7 +3682,7 @@ void main_window::page_changed() {
 		if (at != m_loading_views.constEnd()) {
 			set_loading(true);
 			if (m_progress) {
-				m_progress->setValue(*at);
+				m_progress->setValue(at->percent);
 				m_progress->show();
 			}
 		}
@@ -3760,6 +3774,25 @@ void main_window::on_load_finished(bool ok) {
 		return;
 	}
 	web_view_backend *v = current_view();
+
+	// **And a notice that arrived while this load was still running wins for
+	// the same reason the certificate one does: it is more specific.** The
+	// person pressed Stop, or refused a popup, or was told a setting could not
+	// be saved -- all of those are about something they just did, and "it
+	// could not be loaded" is about a navigation that had already given up.
+	//
+	// Measured as an intermittent in `try_navigate`: a blocked popup says so,
+	// and a DNS failure for a *previous* navigation lands a moment later and
+	// replaces the only sentence that said why the window did not open. Which
+	// of the two a person sees was decided by a resolver.
+	//
+	// Only while the load's own start is known -- a load that never reported
+	// progress leaves no entry, and then this says its piece as before.
+	const auto at = v ? m_loading_views.constFind(v) : m_loading_views.constEnd();
+	if (at != m_loading_views.constEnd() && at->started > 0 &&
+	     m_status_at > at->started && !m_status->currentMessage().isEmpty())
+		return;
+
 	const QString host = v ? v->url().host() : QString();
 	m_status->showMessage(host.isEmpty()
 	                          ? QStringLiteral("That page could not be loaded.")

@@ -336,6 +336,46 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	section("pressing Stop is not overwritten by the load it stopped");
+	{
+		// **The status bar had no notion of which of two messages matters
+		// more.** A load that gives up says "could not be loaded", and it says
+		// it whenever the network happens to finish -- over the top of
+		// whatever the person's own action had just put there. Measured as an
+		// intermittent in `try_navigate`, where a blocked popup says so and a
+		// DNS failure for the *previous* navigation replaces the only sentence
+		// that explained why no window opened.
+		//
+		// Stop is the same shape and can be driven exactly: a page that will
+		// not arrive, stopped on purpose, must go on saying it was stopped.
+		auto *sb_model = w.findChild<tab_tree_model *>();
+		node *sb_folder = sb_model->root()->children.first();
+		node *hangs = sb_model->add_tab(sb_folder, "hangs",
+		                                 "http://192.0.2.1/stop-me.html");
+		tv->expandAll();
+		auto *sb_proxy = qobject_cast<QSortFilterProxyModel *>(tv->model());
+		emit tv->activated(sb_proxy->mapFromSource(
+		  sb_model->index_for_node(hangs)));
+		check(wait_for(address, "192.0.2.1"), "a page that will not arrive");
+		spin(800);
+
+		QStatusBar *sb = w.findChild<QStatusBar *>();
+		const bool loading = reload->text().contains("Stop");
+		check(loading, QString("is still loading, so there is something to "
+		                        "stop (%1)").arg(reload->text()));
+		if (loading && sb) {
+			reload->trigger();          // the Stop half of the same button
+			check(sb->currentMessage().contains("Stopped"),
+			       QString("stopping says so (%1)").arg(sb->currentMessage()));
+			// The load's own failure arrives after this; before the fix it
+			// replaced the sentence above within the same beat.
+			spin(1500);
+			check(sb->currentMessage().contains("Stopped"),
+			       QString("and the load it stopped does not talk over it "
+			                "(%1)").arg(sb->currentMessage()));
+		}
+	}
+
 	section("signing in with a passkey");
 	{
 		// **415 lines, a state machine, and nothing named it.** `webauth_dialog`

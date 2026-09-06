@@ -576,10 +576,22 @@ public:
 	QHash<QString, bool> m_session_permissions;
 
 	QHash<QString, web_view_backend *> m_views_by_id;  // node id -> live view
-	// Which views are part way through a load, and how far. Kept for every
-	// view rather than the current one, because the question is asked about a
-	// tab at the moment it becomes current. Entries leave on `load_finished`
-	// and on the view's destruction; see `page_changed`.
-	QHash<web_view_backend *, int> m_loading_views;
+	// Which views are part way through a load, how far, and when it began.
+	// Kept for every view rather than the current one, because the question is
+	// asked about a tab at the moment it becomes current. Entries leave on
+	// `load_finished` and on the view's destruction; see `page_changed`.
+	//
+	// `started` is what lets `on_load_finished` tell a notice about *this*
+	// load from one somebody's own action put on the bar while it was still
+	// running.
+	struct load_state { int percent = 0; qint64 started = 0; };
+	QHash<web_view_backend *, load_state> m_loading_views;
+
+	// A monotonic clock for the window, and when the status bar last changed.
+	// Stamped from `QStatusBar::messageChanged` rather than at each of the
+	// ninety-odd `showMessage` calls: one connection catches every writer,
+	// including the ones added after this was written.
+	QElapsedTimer       m_clock;
+	qint64              m_status_at = 0;
 	QStringList                        m_lru;          // most-recent id at front
 };
