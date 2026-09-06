@@ -18618,6 +18618,61 @@ asserts `armed` outright now and prints a note naming what did not run if it
 ever is refused. Confirmed by reading the output: the proxy listens in the
 suite and the hook is really injected, so all four run.
 
+## Two empty sweeps from the capture-hook lens, and one real gap on Android
+
+The capture hook was an **API that accumulates, called more than once**. Two
+sweeps for siblings of that, both empty, recorded with their method so neither
+is run again.
+
+**Repeated `connect()`.** Every `connect(` inside a member function whose name
+says it runs more than once -- `refresh`, `update`, `open_`, `on_`, `toggle`,
+`apply`, `start`, `set_` -- with no `UniqueConnection`, `SingleShotConnection`
+or `disconnect` nearby. Twelve candidates across eleven functions, and every
+one is accounted for: `open_node`'s thirteen are inside `if (!view)` and so run
+once per view; the dialogs' are to stack objects that die with them;
+`media_dialog::repopulate` connects buttons it has just created after clearing
+the old ones; `local_proxy::start`, `keepass_bridge::start` and
+`toggle_capture` each guard with `if (!m_x)` before creating the object they
+connect to; and the drawer animation uses `Qt::SingleShotConnection` with a
+comment saying exactly why.
+
+**Other accumulating inserts.** `bridge_invoker::add` is a `QHash::insert` and
+replaces by key. `QWebChannel::registerObject` is called once per name per
+view. `installUrlSchemeHandler` runs once at profile setup. The only member of
+this family that appended was the script collection, which is fixed.
+
+### The gap: on Android the consent script never reaches an iframe
+
+`android_view::inject_script` ignores its `subframes` argument and says so --
+*"a gap to close with per-frame injection, not a flag to pretend about"* -- and
+the general scripts go through `evaluateJavascript` in `onPageStarted`, which
+is the main frame only and after the page's own inline scripts have run.
+
+That matters for exactly one of them. **CMPs are shipped as iframes**, which is
+why the desktop passes `subframes = true` for the consent script alone, and the
+script is built for it: a subframe copy posts `__hydra_consent_need` to
+`window.top`, the top frame answers `__hydra_consent_rules`, and the subframe
+reports back `__hydra_consent_did`. All of that machinery exists and none of it
+is reachable on the phone, because the script is never in the iframe.
+
+**The mechanism is already in that file for another purpose.**
+`WebViewCompat.addDocumentStartJavaScript` is used for the permissions shim,
+scoped to the page's own origin. The same call with an all-origins rule puts a
+script at document start in every frame, and Android's bridge --
+`addJavascriptInterface` -- is present in every frame too, so the relay would
+have something to talk to.
+
+**Only the consent script qualifies, and that is the whole design.** The
+desktop's default is `subframes = false` for a stated reason: credentials and
+picked elements must not be reachable from a third-party iframe. Porting this
+means moving exactly the scripts the desktop already marks, and leaving
+autofill, the picker, cosmetic and the MSE relay where they are.
+
+**Not built.** It cannot be exercised here -- no device is attached -- and it
+widens where a script runs, which is not a change to ship blind on top of two
+Android features from this session that are themselves still unrun. The design
+is here so that whoever has the handset can do it in an afternoon.
+
 ## Open: who pays for trust, and can a local model be the auditor
 
 Two questions from the copyright holder while the filter work was in flight,
