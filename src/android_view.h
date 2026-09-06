@@ -308,7 +308,22 @@ public:
 	void set_script_bridge(QObject *object, const QString &name) override;
 	void remove_script(const QString &name) override;
 	// Insert or replace one document-start script; see the definition.
-	void set_script(const QString &name, const QString &source);
+	void set_script(const QString &name, const QString &source,
+	                 bool subframes = false);
+
+	// The subframe-eligible sources, concatenated, or empty. Handed to Java
+	// for `addDocumentStartJavaScript` with an all-origins rule.
+	static QString frame_scripts(qint64 id);
+
+	// Whether this device's WebView provider implements document-start
+	// scripts. Asked once and cached: without it the subframe scripts stay in
+	// the `onPageStarted` batch, which is late and main-frame-only but is
+	// exactly what happened before any of this.
+	static bool document_start_supported();
+
+	// Push the current subframe set at Java. Called whenever it changes,
+	// which in practice is once, when the view is built.
+	void push_frame_scripts();
 
 	QByteArray save_state() const override;
 	bool       restore_state(const QByteArray &blob) override;
@@ -346,6 +361,14 @@ private:
 	bridge_invoker m_bridges;
 	QStringList    m_script_names;   // named, so a test can see what was asked for
 	QStringList    m_script_sources; // in registration order, which is load order
+	// **Which of them belong in every frame**, parallel to the two above.
+	//
+	// The desktop passes `subframes` and this backend used to drop it. Exactly
+	// one script sets it -- the consent blocker -- and it is the one that
+	// needs it: CMPs are shipped as iframes, and the script is built for that
+	// with a top-frame relay, so on the phone the whole mechanism existed and
+	// was never in the frame it was written for.
+	QList<bool>    m_script_frames;
 };
 
 // The factory half. Same shape as the desktop one, so `main()` differs by two

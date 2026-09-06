@@ -829,8 +829,16 @@ QString android_view::injected_scripts(qint64 id) {
 	QString out = QString::fromUtf8(k_bridge_bootstrap);
 	for (const QString &name : v->m_bridges.names())
 		out += QStringLiteral("\nwindow.hydraRegisterBridge(%1);\n").arg(js_literal(name));
-	for (const QString &src : v->m_script_sources)
-		out += "\n;(function(){\n" + src + "\n})();\n";
+	// **Everything except what the document-start channel is carrying.**
+	// Including a frame script here as well would give the top frame two
+	// copies: two message listeners, two runs of `begin()`. Where the provider
+	// has no document-start support nothing is carried there, and this is the
+	// whole set exactly as before.
+	for (int i = 0; i < v->m_script_sources.size(); ++i) {
+		if (v->m_script_frames.value(i, false) && document_start_supported())
+			continue;
+		out += "\n;(function(){\n" + v->m_script_sources[i] + "\n})();\n";
+	}
 	// Last, so it overrides anything a page script may have captured first.
 	out += build_permissions_shim(v, v->url());
 	return out;
@@ -1323,12 +1331,13 @@ void android_view::set_zoom_factor(double factor) {
 
 void android_view::inject_script(const QString &name, const QString &source,
                                   bool subframes) {
-	// `subframes` is not honoured and cannot be: evaluateJavascript runs in the
-	// main frame. A script that only matters in an iframe -- the consent one --
-	// therefore sees less here than on the desktop, which is a gap to close with
-	// per-frame injection, not a flag to pretend about.
-	Q_UNUSED(subframes)
-	set_script(name, source);
+	// **`subframes` is honoured now.** It was dropped, with a note calling it
+	// a gap to close with per-frame injection rather than a flag to pretend
+	// about -- and `WebViewCompat.addDocumentStartJavaScript` is that
+	// injection. A script marked for frames goes there with an all-origins
+	// rule and comes out of the `onPageStarted` batch, so the top frame does
+	// not run two copies.
+	set_script(name, source, subframes);
 }
 
 void android_view::inject_main_world_script(const QString &name,
@@ -1343,22 +1352,69 @@ void android_view::inject_main_world_script(const QString &name,
 // two lists were appended to unconditionally, so arming a media capture twice
 // left two scripts of one name with two different endpoints, both evaluated on
 // every page.
-void android_view::set_script(const QString &name, const QString &source) {
+void android_view::set_script(const QString &name, const QString &source,
+                               bool subframes) {
 	const int at = m_script_names.indexOf(name);
 	if (at >= 0) {
 		m_script_sources[at] = source;
-		return;
+		m_script_frames[at]  = subframes;
+	} else {
+		m_script_names << name;
+		m_script_sources << source;
+		m_script_frames << subframes;
 	}
-	m_script_names << name;
-	m_script_sources << source;
+	if (subframes)
+		push_frame_scripts();
 }
 
 void android_view::remove_script(const QString &name) {
 	const int at = m_script_names.indexOf(name);
 	if (at < 0)
 		return;
+	const bool was_frame = m_script_frames.value(at, false);
 	m_script_names.removeAt(at);
 	m_script_sources.removeAt(at);
+	m_script_frames.removeAt(at);
+	if (was_frame)
+		push_frame_scripts();
+}
+
+// **Asked once and cached.** `DOCUMENT_START_SCRIPT` depends on the WebView
+// provider installed on the device rather than on the androidx dependency
+// being compiled in, so a phone with an old provider has to keep the old
+// behaviour -- late and main-frame-only, which is what it had.
+bool android_view::document_start_supported() {
+	static const bool answer = QJniObject::callStaticMethod<jboolean>(
+	                              k_cls, "documentStartSupported", "()Z")
+	                            == JNI_TRUE;
+	return answer;
+}
+
+QString android_view::frame_scripts(qint64 id) {
+	android_view *v = s_views.value(id);
+	if (!v || !document_start_supported())
+		return QString();
+	QString out;
+	for (int i = 0; i < v->m_script_sources.size(); ++i) {
+		if (!v->m_script_frames.value(i, false))
+			continue;
+		// **No bridge bootstrap and no permissions shim.** A subframe copy
+		// needs neither: the script's own non-top path talks to the top frame
+		// rather than to C++, and the top frame's copy waits for
+		// `window.hydraChannel` to turn up, which the `onPageStarted` batch
+		// still installs.
+		out += "\n;(function(){\n" + v->m_script_sources[i] + "\n})();\n";
+	}
+	return out;
+}
+
+void android_view::push_frame_scripts() {
+	if (!m_native || !document_start_supported())
+		return;
+	const QString js = frame_scripts(m_id);
+	QJniObject::callStaticMethod<void>(
+	  k_cls, "setFrameScript", "(JLjava/lang/String;)V", jlong(m_id),
+	  QJniObject::fromString(js).object<jstring>());
 }
 
 void android_view::set_script_bridge(QObject *object, const QString &name) {

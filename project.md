@@ -18826,6 +18826,72 @@ encrypted"* on it, since the origin is plain HTTP; `alice` and `secret` should
 produce the page, and the server's own log should say `AUTH OK`. **The server
 log is the half that is not the browser reporting on itself.**
 
+## The consent script reaches an iframe now, and one copy of it does
+
+`android_view::inject_script` honours `subframes`. A script marked for frames
+goes to `WebViewCompat.addDocumentStartJavaScript` with an all-origins rule --
+the API this file already uses for the permissions shim, scoped there to one
+origin -- and **comes out of the `onPageStarted` batch**, which is the part
+that is easy to get wrong: registering it in both would give the top frame two
+copies, two message listeners and two runs of `begin()`.
+
+Exactly one script is marked, and matching that is the whole feature. The
+desktop's default is `subframes = false` because credentials and picked
+elements must not be reachable from a third-party iframe; widening this beyond
+the consent blocker would undo that on the platform with fewer defences, not
+more.
+
+**The script needs no adaptation, which is the evidence the design was
+right.** Its non-top path returns early after starting a `postMessage` loop
+and never touches `window.hydraChannel`; the top frame's copy waits for the
+channel to appear, which the `onPageStarted` batch still installs afterwards.
+So moving the top copy to document start makes it *earlier* than it was, which
+is what it wanted.
+
+Three details that are not mechanical:
+
+- **Feature-detected and cached.** `DOCUMENT_START_SCRIPT` depends on the
+  WebView provider on the device rather than on the androidx dependency being
+  compiled in. Where it is missing, `push_frame_scripts` registers nothing and
+  `injected_scripts` keeps the script in the old batch -- late and main-frame
+  only, exactly as before. Both consult the same cached answer, so they cannot
+  disagree.
+- **Removed first, unconditionally**, and cleared on `destroy()`. A
+  `ScriptHandler` outlives navigations, which is what makes it the right shape
+  here and what would stack copies if it were left.
+- **`FRAME_SCRIPTS` is its own map.** `START_SCRIPTS` carries the permissions
+  shim, scoped to one origin and replaced on every navigation; this one is
+  scoped to `*` and registered once. Sharing the map would have meant one
+  overwriting the other.
+
+### Built, and not seen working
+
+Both builds pass. `jni-check` still resolves 23 natives -- unchanged, because
+the two new methods are calls *into* Java rather than natives, which that check
+does not cover, so their descriptors were read by hand:
+`documentStartSupported` is `()Z` and `setFrameScript` is
+`(JLjava/lang/String;)V`.
+
+**The device disconnected mid-verification**, after the code was written and
+before the fixture could be loaded. The fixture is ready and is the honest
+proof rather than a look at the screen: `devsrv.py` serves `/frametop` as
+`localhost:8731` carrying an iframe from `127.0.0.1:8731` -- a genuine
+cross-origin frame through one `adb reverse` -- and `/banner` is a fixed-position
+box saying *"We use cookies and similar tracking technologies"* with **Reject
+all** and **Accept all** buttons, each of which `fetch`es `/clicked?b=...`.
+
+    adb reverse tcp:8731 tcp:8731
+    python3 devsrv.py &
+    adb shell am start -a android.intent.action.VIEW \
+        -d http://localhost:8731/frametop -n se.vibes.hydra/.HydraActivity
+
+**`BANNER CLICKED /clicked?b=reject` in the server's log is the whole test.**
+It says the script ran inside a cross-origin iframe, found the banner, matched
+the built-in reject pattern -- `^(reject|decline|refuse|deny)( all)?...` --
+and pressed the button, none of which the browser is reporting about itself.
+`b=accept` would mean the tier order is wrong; silence would mean the script
+never got there.
+
 ## Open: who pays for trust, and can a local model be the auditor
 
 Two questions from the copyright holder while the filter work was in flight,

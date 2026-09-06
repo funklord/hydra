@@ -63,6 +63,22 @@ public class HydraWebView {
      * and answer with the origin of whichever ran first.
      */
     private static final Map<Long, ScriptHandler> START_SCRIPTS = new HashMap<>();
+
+    /**
+     * The document-start script that runs in **every frame**, per view.
+     *
+     * Separate from START_SCRIPTS, which carries the permissions shim scoped
+     * to one origin and is replaced on every navigation. This one is scoped to
+     * `*` and is registered once, because what it carries -- the consent
+     * blocker -- is the same on every page and is built to work in a frame: a
+     * child asks the top frame for the rules and hands its dismissals back.
+     *
+     * Vendors ship CMPs as iframes, which is why the desktop marks that script
+     * for subframes and nothing else. Matching that here is the whole feature;
+     * widening it would put a script that can read forms into third-party
+     * frames, which is what the desktop's default of `false` exists to stop.
+     */
+    private static final Map<Long, ScriptHandler> FRAME_SCRIPTS = new HashMap<>();
     /**
      * getUserMedia requests waiting on an answer.
      *
@@ -1904,6 +1920,52 @@ public class HydraWebView {
         });
     }
 
+    /**
+     * Whether this device's WebView provider implements document-start
+     * scripts. The androidx dependency being compiled in does not answer it.
+     */
+    public static boolean documentStartSupported() {
+        return WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
+    }
+
+    /**
+     * Register (or clear) the all-frames document-start script for one view.
+     *
+     * **Removed first and unconditionally**, for the reason `armDocumentStart`
+     * gives about its own handler: the registration outlives navigations, so
+     * leaving the old one would stack a script per call.
+     *
+     * An empty string clears it, which is what a view with nothing marked for
+     * frames should have.
+     */
+    public static void setFrameScript(final long id, final String js) {
+        onUi(new Runnable() {
+            @Override public void run() {
+                ScriptHandler old = FRAME_SCRIPTS.remove(Long.valueOf(id));
+                if (old != null) {
+                    try { old.remove(); } catch (RuntimeException e) { /* gone */ }
+                }
+                WebView w = VIEWS.get(id);
+                if (w == null || js == null || js.isEmpty())
+                    return;
+                if (!documentStartSupported()) {
+                    Log.d(PERM_TAG, "frame script: provider has no "
+                                     + "document-start support");
+                    return;
+                }
+                try {
+                    FRAME_SCRIPTS.put(Long.valueOf(id),
+                        WebViewCompat.addDocumentStartJavaScript(
+                            w, js, Collections.<String>singleton("*")));
+                    Log.d(PERM_TAG, "frame script armed for every frame ("
+                                     + js.length() + " chars)");
+                } catch (IllegalArgumentException e) {
+                    Log.d(PERM_TAG, "frame script refused: " + e.getMessage());
+                }
+            }
+        });
+    }
+
     public static void stopLoading(final long id) {
         onUi(new Runnable() {
             @Override public void run() {
@@ -1957,6 +2019,13 @@ public class HydraWebView {
                 ScriptHandler gone = START_SCRIPTS.remove(id);
                 if (gone != null) {
                     try { gone.remove(); } catch (RuntimeException e) { /* already gone */ }
+                }
+                // The all-frames one goes the same way and for the same
+                // reason: it is the WebView's, so it is dropped before the
+                // view is destroyed rather than after.
+                ScriptHandler frames = FRAME_SCRIPTS.remove(Long.valueOf(id));
+                if (frames != null) {
+                    try { frames.remove(); } catch (RuntimeException e) { /* gone */ }
                 }
                 ViewGroup p = (ViewGroup) w.getParent();
                 if (p != null)
