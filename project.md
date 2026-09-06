@@ -19623,6 +19623,37 @@ on the first run. Measured, fixed to split on any whitespace, and recorded
 in the code: the sample that agreed with the broken parser was, once again,
 the one written on a single line.
 
+## Escape, which the guard on the address bar made necessary
+
+Leaving a modified address field alone so a redirect cannot eat what somebody
+is typing has a consequence worth naming rather than discovering: **nothing
+puts the true address back either.** Before that change any `url_changed`
+would overwrite an abandoned edit -- badly, which was the defect -- and the
+bar returned to the truth as a side effect of the bug. After it, typing that
+is never submitted sits in the bar describing a page the window is no longer
+on, until a tab switch.
+
+That is the state every browser answers with Escape, and this one now does.
+`address_line` emits `abandoned()`, the window puts the current view's url
+back with `force`, and the keyboard goes to the page -- which is where
+somebody who has just given up on typing an address wants it.
+
+**Only when something has been typed**, and the condition is deliberately the
+same one the guard asks. Escape has other jobs in this window -- leaving
+kiosk is the one that matters -- and swallowing the key whenever the bar
+happens to hold focus would take one of them away. `isModified()` captures
+the key in exactly the state the guard creates and passes it on otherwise.
+
+Sabotaged by letting Escape fall through: the bar keeps `half-typed
+nonsense` and the field stays an edit in progress, which is the state the
+guard would then hold open indefinitely.
+
+**The general point is about closing a hole one's own fix opens.** The guard
+was right and it moved a cost rather than removing it: what used to be
+corrected by accident now needs a control. A change that makes something
+sticky owes the reader the way to unstick it, and the place to look for that
+debt is the sentence describing what the change now refuses to do.
+
 ## Copy Address handed you the page you started from
 
 Found by asking which menu actions no test names -- twenty-six of fifty-two,

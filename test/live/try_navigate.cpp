@@ -22,6 +22,7 @@
 #include "web_view_backend.h"
 
 #include <QFile>
+#include <QKeyEvent>
 #include <QSortFilterProxyModel>
 #include <QApplication>
 #include <QStatusBar>
@@ -317,6 +318,26 @@ int main(int argc, char *argv[]) {
 		check(address->text().contains("one.html"),
 		       QString("and the bar follows rather than keeping the typing "
 		                "(%1)").arg(address->text()));
+
+		// **And Escape, which the guard above makes necessary.** Leaving a
+		// modified field alone means nothing puts the true address back
+		// either, so an abandoned edit would sit there describing a page the
+		// window is not on. Every browser answers that with Escape, and this
+		// one now does.
+		address->setFocus();
+		address->clear();
+		address->insert("half-typed nonsense");
+		check(address->text() == "half-typed nonsense",
+		       "with something half-typed in the bar again");
+		QKeyEvent esc(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+		QApplication::sendEvent(address, &esc);
+		spin(100);
+		check(address->text().contains("one.html"),
+		       QString("Escape puts the page's own address back (%1)")
+		           .arg(address->text()));
+		check(!address->isModified(),
+		       "and the field is no longer an edit in progress, so the next "
+		       "navigation may write to it");
 	}
 
 	return report();

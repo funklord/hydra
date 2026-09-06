@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QKeyEvent>
 #include <QLineEdit>
 
 class QString;
@@ -28,6 +29,33 @@ public:
 		if (query == Qt::ImEnterKeyType)
 			return int(Qt::EnterKeyGo);
 		return QLineEdit::inputMethodQuery(query);
+	}
+
+signals:
+	// Escape, with something typed: the person has changed their mind. The
+	// window puts the page's own address back.
+	void abandoned();
+
+protected:
+	// **The escape hatch from a half-typed address, and it is needed now in a
+	// way it was not before.** `update_address` leaves a modified field alone
+	// so that a redirect cannot eat what somebody is typing -- which means
+	// nothing puts the true address back either, and an abandoned edit would
+	// sit in the bar describing a page the window is no longer on. Every
+	// browser answers that with Escape.
+	//
+	// **Only when something has been typed.** Escape has other jobs in this
+	// window -- leaving kiosk is the one that matters -- and swallowing the
+	// key whenever the bar happens to hold focus would take one of them away.
+	// `isModified()` is the same question `update_address` asks, so the key is
+	// captured in exactly the state the guard creates and passed on otherwise.
+	void keyPressEvent(QKeyEvent *event) override {
+		if (event->key() == Qt::Key_Escape && isModified()) {
+			emit abandoned();
+			event->accept();
+			return;
+		}
+		QLineEdit::keyPressEvent(event);
 	}
 };
 

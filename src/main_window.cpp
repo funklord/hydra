@@ -805,7 +805,21 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// An `address_line` rather than a plain `QLineEdit`, so the on-screen
 	// keyboard is asked for a Go key -- see `address_input.h` for why a hint
 	// cannot do it.
-	m_address = new address_line(this);
+	auto *address_field = new address_line(this);
+	m_address = address_field;
+	// Escape with something typed: put the page's own address back and hand
+	// the keyboard to the page, which is where somebody who has just given up
+	// on typing an address wants it.
+	connect(address_field, &address_line::abandoned, this, [this] {
+		m_address->setModified(false);
+		if (web_view_backend *v = current_view()) {
+			update_address(v->url().toString(), /*force=*/true);
+			if (QWidget *w = v->widget())
+				w->setFocus(Qt::OtherFocusReason);
+		} else {
+			update_address(QString(), /*force=*/true);
+		}
+	});
 	// **A line edit with no name is "edit box" and nothing else.** Qt names a
 	// widget from its label, and this one has none -- there is no room on a
 	// toolbar for the word "Address" and sighted users do not need it. So the
