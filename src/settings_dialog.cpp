@@ -1348,8 +1348,23 @@ void settings_dialog::update_restore_button() {
 	// it doubled, which is why the escaping belongs here rather than in the name.
 	QString label = name;
 	label.replace("&", "&&");
-	m_restore->setText(resettable ? QString("Restore %1 defaults").arg(label)
-	                               : QStringLiteral("Restore defaults"));
+	// **The page name comes out of the button in the narrow layout**, because
+	// there it is already on screen: the categories are a dropdown sitting
+	// directly above this control, with the current page's name in it. The
+	// button repeats it in the one mode with the least room.
+	//
+	// **It does not fix what it was written for, and saying so is the point.**
+	// This is the widest control on the dialog -- 201px with "Restore Privacy
+	// & security defaults" on it, against 116 for the next -- so it looked
+	// like what sets the window's 395px minimum width, which is wider than a
+	// 360-logical-pixel phone. Shortening it to 99px moved that minimum by
+	// **nothing**: still 395. The `QDialogButtonBox` alone reports 271, and
+	// what accounts for the rest has not been established. See project.md; the
+	// number stands as a measurement and the cause does not.
+	const bool narrow = m_category_pick && m_category_pick->isVisible();
+	m_restore->setText(resettable && !narrow
+	                     ? QString("Restore %1 defaults").arg(label)
+	                     : QStringLiteral("Restore defaults"));
 	m_restore->setToolTip(
 	  resettable
 	    ? QString("Put the %1 page back to a fresh install's settings. "
@@ -2596,6 +2611,10 @@ void settings_dialog::update_layout_mode() {
 		return;
 	m_category_pick->setVisible(narrow);
 	m_categories->setVisible(!narrow);
+	// The Restore button names the page, and in this mode the page's name is
+	// already on screen in the dropdown directly above it. See
+	// `update_restore_button` for why that matters more than tidiness.
+	update_restore_button();
 }
 
 void settings_dialog::accept() {

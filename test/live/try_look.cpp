@@ -153,6 +153,26 @@ static void audit(QWidget *w, const QString &name) {
 		}
 	}
 
+	// **A button whose own text does not fit it**, which the label rule above
+	// cannot see and which is the same failure: Qt elides the text and the
+	// button still looks like a button. It matters most at a phone's width,
+	// where "Restore Privacy & security defaults" is the widest string this
+	// dialog can put on a control -- the name of the page is in it, so the
+	// worst case belongs to whichever page has the longest name rather than to
+	// anything anybody sized.
+	//
+	// Same four-pixel margin and the same reason as below.
+	for (QAbstractButton *b : w->findChildren<QAbstractButton *>()) {
+		if (!b->isVisible() || b->text().trimmed().isEmpty())
+			continue;
+		if (b->sizeHint().width() > b->width() + 4) {
+			std::printf("    ! %s: \"%s\" needs %dpx and has %d\n",
+			             qPrintable(name), qPrintable(b->text().remove('&')),
+			             b->sizeHint().width(), b->width());
+			++g_problems;
+		}
+	}
+
 	// **Text that does not fit the space it was given.** A label narrower than
 	// its own `sizeHint()` is drawn cut off or elided, which is the exact
 	// failure this driver exists to catch and the one no structural check can:
@@ -206,12 +226,26 @@ static void save(QWidget *w, const QString &name) {
 
 // Open a modal through its slot, photograph it while it is up, then close it.
 // Captured by value; this returns before the dialog exists.
-static void shoot_modal(main_window *w, const QString &slot, const QString &name) {
-	QTimer::singleShot(900, [name] {
+// `narrow` resizes the dialog before capturing it, for the surfaces that
+// change shape rather than merely getting smaller. The window is photographed
+// at two widths already; a dialog with a layout switch in it deserves the
+// same, and the settings page has one -- below `k_narrow_threshold` its
+// category list becomes a dropdown, which is a code path nothing had ever
+// looked at.
+static void shoot_modal(main_window *w, const QString &slot, const QString &name,
+                         QSize narrow = QSize()) {
+	QTimer::singleShot(900, [name, narrow] {
 		for (QWidget *x : QApplication::topLevelWidgets()) {
 			auto *d = qobject_cast<QDialog *>(x);
 			if (!d || !d->isVisible())
 				continue;
+			if (narrow.isValid()) {
+				d->resize(narrow);
+				// The layout switch happens on a resize event, so the dialog
+				// has to be let run before it is worth photographing.
+				QApplication::processEvents();
+				spin(200);
+			}
 			save(d, name);
 			d->reject();
 			return;
@@ -344,6 +378,10 @@ int main(int argc, char *argv[]) {
 	};
 	for (const auto &m : modals)
 		shoot_modal(&w, m.slot, m.name);
+
+	// The settings dialog again, at a phone's width, where its category list
+	// stops being a sidebar.
+	shoot_modal(&w, "open_settings", "settings-narrow", QSize(380, 700));
 
 	// **The surfaces that need a page**, which is why they were blank or absent
 	// in the first pass: the media dialog lists what a page is playing, and the

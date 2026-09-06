@@ -18176,6 +18176,61 @@ had looked alarming in one glance.
 and empty states faithfully; it does not carry state that is expressed as a
 shade. Where the question is about state, the driver has to say it in words.
 
+## Open: the settings dialog cannot be narrower than 395px
+
+`try_look` photographs the window at two widths and every dialog at one.
+The settings dialog has a **layout switch** in it -- below
+`k_narrow_threshold` its category list becomes a dropdown -- and nothing had
+ever looked at that path, so it is photographed at 380 now.
+
+It works: the dropdown replaces the sidebar, the search box stays, the content
+scrolls, the buttons fit.
+
+**What the attempt to photograph it at 320 found is that it will not go
+there.** Asked for 320, the dialog comes back 395 wide, and its
+`minimumSizeHint()` says 395. A phone is 360 logical pixels wide -- and the
+narrow layout exists *because* phones are a target, in a comment about a
+setting that "was reachable on a desktop and invisible on a phone". So the
+settings dialog does not fit on the device the narrow mode was written for.
+
+**The obvious cause is not the cause, and that is the useful half.** The
+Restore button is by a wide margin the biggest control on the dialog:
+
+    201px  "Restore Privacy & security defaults"
+    116px  "Export all settings..."
+    103px  "Remove selected"
+    102px  "Import settings..."
+
+The page's name is in that string, so its width is set by whichever page has
+the longest name rather than by anything anybody sized. It now drops the name
+in the narrow layout -- where the dropdown directly above it is already
+showing that name -- and the button falls to **99px**.
+
+The dialog's minimum stayed at **395**.
+
+So the widest control was not what bound it. The `QDialogButtonBox` reports
+271; the search field 40, the dropdown 129, the page stack 68. What accounts
+for the remaining 124 has not been established, and this entry records a
+measurement rather than a diagnosis. The button change is kept because it is
+right on its own terms -- a name repeated in the one mode with the least room
+for it -- and explicitly not because it fixed anything.
+
+### The button-fit check has not been seen to fail, and may not be able to
+
+Added beside the label-eliding rule: a visible button whose `sizeHint()` is
+wider than the button is drawn elided, and no structural check sees it. It
+reports nothing across 21 surfaces and 97 buttons.
+
+That is not evidence it works. On a dialog whose layout can grow, Qt raises
+the **window's** minimum instead of clipping the button -- which is exactly
+what 395 is -- so on these surfaces the failure it looks for cannot occur.
+Where it could fire is a widget whose width is genuinely constrained: a
+fixed-width panel, a table cell, a toolbar with more in it than fits. None of
+those is in this picture set today.
+
+Kept, because the cost is four lines and the class is real. Recorded as
+unproven, because a check that has never spoken is a check nobody has heard.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
