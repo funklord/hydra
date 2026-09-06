@@ -19528,6 +19528,56 @@ because a gap claim that outlives its gap sends the next reader at work
 already done -- and it is the one kind of sentence whose falsifier is a
 commit nobody connects to it.
 
+## The half of the JNI check that was never checked
+
+`tool/jni_check.py` exists because this tree once renamed its application id,
+moved the Java, and left seven JNI entry points behind: the build, the
+package and the signature were all fine and every native call in the WebView
+backend would have failed. Its docstring says the two sides "are joined at
+runtime by string equality. This is that equality, checked at rest."
+
+**True of the name, and the arguments are joined by nothing at all.** JNI
+binds on the symbol name alone, so a C++ entry point whose parameters
+disagree with the Java declaration is still bound and still called -- with
+the arguments read as whatever the C++ says they are. There is no
+`UnsatisfiedLinkError` for that and no diagnostic anywhere: an `int` arriving
+where a `jstring` is declared is a pointer built from a small integer, and
+then dereferenced. It is a worse failure than the one the tool was written
+for, and it was the half nothing looked at.
+
+Parameter types and the return type are compared now. Exact for primitives
+and for `String`; an array of objects may be written as the bare `jobject` it
+is, because refusing that would be a checker demanding a spelling nobody
+uses. Measured across the tree before anything was changed: 23 methods, 23
+entry points, no arity or type disagreement -- so this guards the next change
+rather than fixing a present fault.
+
+**Which is exactly why it carries its own controls and runs them first.** A
+detector over a corpus that has always been clean is a green light with no
+demonstrated ability to be anything else. `self_test` parses deliberately
+broken samples -- an argument added, two swapped, a return type changed, a
+Java method with no C++ side, a C++ symbol nobody wants -- and if any is
+classified wrongly the tool prints "the control failed, so nothing below
+would mean anything" and refuses to read the real tree.
+
+**It earned that on its first run, twice.** The control caught the return
+type being parsed as `JNICALL` -- the last word of `JNIEXPORT void JNICALL`
+rather than the type -- before any real file was read. And then the real tree
+reported all 23 methods missing, because the new pattern wanted the return
+type on the same line as the symbol while every entry point here writes
+`extern "C" JNIEXPORT void JNICALL` and puts the symbol at column 0 on the
+next. **The samples agreed with the wrong pattern because they were written
+on one line**, which is a stand-in reproducing the half of the real thing its
+author had in view -- the failure `evidence.md` names, met while building the
+control that is supposed to prevent it.
+
+Three sabotages afterwards, on the real tree and on the tool: a C++
+parameter changed from `jstring` to `jint` is caught as argument 2; an extra
+argument added to a Java native is caught as an arity fault; and
+`compatible()` forced to return true makes the **control** fail, so the tool
+refuses to report at all rather than printing a green line over a detector
+that cannot speak.
+
 ## Open: a blocked-popup notice can be overwritten by a stale load failure
 
 `try_navigate`'s "out loud, not silently" check asserts that refusing a
