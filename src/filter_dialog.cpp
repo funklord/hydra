@@ -64,7 +64,7 @@ filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
 	m_payload->setPlainText(payload);
 
 	if (suspects.isEmpty() && !m_picked.is_valid())
-		m_status->setText("Nothing ad-shaped slipped through on this page, and "
+		say("Nothing ad-shaped slipped through on this page, and "
 		                  "no element was picked — there is nothing to propose "
 		                  "against.");
 }
@@ -72,6 +72,13 @@ filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
 filter_dialog::~filter_dialog() {
 	if (m_provider)
 		m_provider->cancel();
+}
+
+void filter_dialog::say(const QString &text) {
+	if (!m_status)
+		return;
+	m_status->setText(text);
+	m_status->setVisible(!text.trimmed().isEmpty());
 }
 
 void filter_dialog::build_ui() {
@@ -87,6 +94,7 @@ void filter_dialog::build_ui() {
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
 	outer->addWidget(m_status);
+	m_status->hide();
 
 	m_pages = new QStackedWidget(this);
 
@@ -123,13 +131,13 @@ void filter_dialog::build_ui() {
 
 void filter_dialog::on_send() {
 	m_send->setEnabled(false);
-	m_status->setText(QString("Asking %1…").arg(m_provider->name()));
+	say(QString("Asking %1…").arg(m_provider->name()));
 	m_provider->send(QString::fromLatin1(k_system_prompt), m_payload->toPlainText());
 }
 
 void filter_dialog::on_failed(const QString &error) {
 	m_send->setEnabled(true);
-	m_status->setText("<b>Failed:</b> " + error.toHtmlEscaped());
+	say("<b>Failed:</b> " + error.toHtmlEscaped());
 }
 
 void filter_dialog::on_reply(const QString &text) {
@@ -158,7 +166,7 @@ void filter_dialog::on_reply(const QString &text) {
 	}
 
 	if (proposed.isEmpty()) {
-		m_status->setText("<b>Nothing usable:</b> the reply contained no rules.");
+		say("<b>Nothing usable:</b> the reply contained no rules.");
 		return;
 	}
 	show_proposals(proposed);
@@ -215,7 +223,7 @@ void filter_dialog::show_proposals(const QList<filter_rule> &rules) {
 	m_rules->resizeColumnToContents(1);
 	m_pages->setCurrentIndex(1);
 	m_apply->setEnabled(!m_accepted.isEmpty());
-	m_status->setText(QString("%1 rule(s) proposed, %2 rejected as unsafe. "
+	say(QString("%1 rule(s) proposed, %2 rejected as unsafe. "
 	                          "Expand a row to see what it would block.")
 	                      .arg(rules.size()).arg(rejected));
 }
@@ -234,6 +242,6 @@ void filter_dialog::on_accept() {
 			}
 		}
 	}
-	m_status->setText(QString("Accepted %1 rule%2.").arg(added).arg(added == 1 ? "" : "s"));
+	say(QString("Accepted %1 rule%2.").arg(added).arg(added == 1 ? "" : "s"));
 	accept();
 }

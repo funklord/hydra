@@ -18135,6 +18135,47 @@ this one was a hidden widget with the right name. Neither was visible in a
 status line, and both were found by looking at what the run produced rather
 than at whether it succeeded.
 
+## Two more from the same pictures: a gap I had just made, and a question a picture cannot answer
+
+### The empty status line reserved a line
+
+Splitting the provider sentence out left `m_status` empty on a freshly opened
+dialog, and an empty `QLabel` still occupies a line: a blank strip appeared
+above the payload in all three. Visible in the very next screenshot, against
+the one taken twenty minutes earlier.
+
+Every write goes through one `say()` per dialog now -- twenty-two call sites
+rewritten mechanically, ten, six and six -- which sets the text and hides the
+label when there is nothing to say. The rule belongs to the widget rather than
+to whoever remembers it at each of twenty-two places.
+
+### A picture cannot tell a greyed button from an enabled one
+
+The downloads dialog with an empty list shows five actions -- Watch, Pause,
+Resume, Cancel, Open Folder -- and offscreen the disabled shade is close
+enough to the enabled one that they read as pressable. If they were, that
+would be this project's own rule broken on a dialog it has been applied to
+repeatedly.
+
+They are correctly disabled: `refresh()` runs at construction and ends in
+`update_buttons()`, whose first branch turns all five off when nothing is
+selected. **Reading the code settled it, and the log should have.** So the
+audit prints the greyed set for each surface:
+
+    downloads       greyed: Pause, Resume, Cancel, Open Folder, Watch
+    site-rules      greyed: This button refuses, This button accepts
+    the window      greyed: Back, Forward, Reload, Key
+    reorganizer     greyed: Send, Apply Selected
+
+Not a problem count -- a statement of what the surface is, printed beside the
+picture so that whoever reads it next does not squint. The second line above
+is the consent dialog with nothing recorded, and it answered a question that
+had looked alarming in one glance.
+
+**The lens has a limit and this is it.** A photograph carries layout, wording
+and empty states faithfully; it does not carry state that is expressed as a
+shade. Where the question is about state, the driver has to say it in words.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

@@ -89,6 +89,22 @@ static void audit(QWidget *w, const QString &name) {
 	// cannot both be visible and which Qt would never confuse, since it skips
 	// hidden widgets when matching a mnemonic. An audit that cries wolf about
 	// pages is an audit somebody turns off.
+	// **Which buttons are greyed, said in words.**
+	//
+	// A picture cannot answer it. Offscreen, a disabled button differs from an
+	// enabled one by a shade that does not survive being looked at -- the
+	// downloads dialog's five actions were read as "enabled with nothing
+	// selected", which would have been this project's own rule broken, and
+	// they are correctly disabled. Reading the code settled it; the log should
+	// have. Not a problem count: this is the state of the surface, printed so
+	// that whoever reads the picture next does not have to guess.
+	QStringList greyed;
+	for (QAbstractButton *b : w->findChildren<QAbstractButton *>())
+		if (b->isVisible() && !b->isEnabled())
+			greyed << b->text().remove('&');
+	if (!greyed.isEmpty())
+		std::printf("      greyed: %s\n", qPrintable(greyed.join(", ")));
+
 	QHash<QChar, QString> claimed;
 	for (QAbstractButton *b : w->findChildren<QAbstractButton *>()) {
 		if (!b->isVisible())

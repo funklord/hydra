@@ -349,7 +349,7 @@ extractor_dialog::extractor_dialog(extractor_signals *signals_source,
 	gate_send(m_send, m_provider);
 
 	if (m_evidence.isEmpty()) {
-		m_status->setText("No requests recorded for this page yet. Many sites "
+		say("No requests recorded for this page yet. Many sites "
 		                  "fetch nothing until their player starts, so press "
 		                  "play first, then try again.");
 		m_send->setEnabled(false);
@@ -503,6 +503,13 @@ void extractor_dialog::rebuild_payload() {
 	m_payload->setPlainText(payload);
 }
 
+void extractor_dialog::say(const QString &text) {
+	if (!m_status)
+		return;
+	m_status->setText(text);
+	m_status->setVisible(!text.trimmed().isEmpty());
+}
+
 void extractor_dialog::build_ui() {
 	auto *outer = new QVBoxLayout(this);
 
@@ -517,6 +524,7 @@ void extractor_dialog::build_ui() {
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
 	outer->addWidget(m_status);
+	m_status->hide();
 
 	m_pages = new QStackedWidget(this);
 
@@ -584,13 +592,13 @@ void extractor_dialog::build_ui() {
 
 void extractor_dialog::on_send() {
 	m_send->setEnabled(false);
-	m_status->setText(QString("Asking %1…").arg(m_provider->name()));
+	say(QString("Asking %1…").arg(m_provider->name()));
 	m_provider->send(QString::fromLatin1(k_system_prompt), m_payload->toPlainText());
 }
 
 void extractor_dialog::on_failed(const QString &error) {
 	m_send->setEnabled(true);
-	m_status->setText("<b>Failed:</b> " + error.toHtmlEscaped());
+	say("<b>Failed:</b> " + error.toHtmlEscaped());
 }
 
 void extractor_dialog::on_reply(const QString &text) {
@@ -606,7 +614,7 @@ void extractor_dialog::on_reply(const QString &text) {
 	// same path: a runaway script is bounded by the watchdog either way, and one
 	// path is easier to reason about than two.
 	m_apply->setEnabled(false);
-	m_status->setText("Judging the proposal…");
+	say("Judging the proposal…");
 
 	const QString  src  = m_proposal;
 	const QUrl     page = m_page;
@@ -664,7 +672,7 @@ void extractor_dialog::on_judged(const extractor_verdict &verdict) {
 			m_last_refused_source = m_script->toPlainText().left(1200);
 		m_last_refused_reason = m_verdict.message;
 		rebuild_payload();   // so the next send carries the correction
-		m_status->setText("The proposal was rejected. Sending again now tells the "
+		say("The proposal was rejected. Sending again now tells the "
 		                   "model what was wrong with it.");
 		return;
 	}
@@ -677,7 +685,7 @@ void extractor_dialog::on_judged(const extractor_verdict &verdict) {
 	      .arg(m_verdict.message.toHtmlEscaped(),
 	           m_verdict.result.url.toString().left(200).toHtmlEscaped(),
 	           m_site.toHtmlEscaped()));
-	m_status->setText("Reviewed and validated. Nothing is saved until you accept.");
+	say("Reviewed and validated. Nothing is saved until you accept.");
 
 	confirm_by_fetching();
 }
@@ -702,7 +710,7 @@ void extractor_dialog::probe_candidates() {
 
 	m_pending = int(picks.size());
 	m_send->setEnabled(false);
-	m_status->setText(QString("Asking the server what %1 of these addresses "
+	say(QString("Asking the server what %1 of these addresses "
 	                           "actually serve…").arg(m_pending));
 
 	for (const evidence_request &r : picks) {
@@ -737,7 +745,7 @@ void extractor_dialog::probe_candidates() {
 			int found = 0;
 			for (const QString &v : std::as_const(m_served))
 				if (!v.contains("not established")) ++found;
-			m_status->setText(found
+			say(found
 			  ? QString("%1 of those addresses said what they serve, and that "
 			             "is in the list below. Nothing leaves until you press "
 			             "Send.").arg(found)
@@ -771,7 +779,7 @@ void extractor_dialog::confirm_by_fetching() {
 	}
 
 	const QUrl picked = m_verdict.result.url;
-	m_status->setText("Reviewed and validated. Checking what that address "
+	say("Reviewed and validated. Checking what that address "
 	                   "actually serves…");
 
 	m_probe->probe(picked, ctx, [this, picked](const probe_result &r) {
@@ -795,7 +803,7 @@ void extractor_dialog::confirm_by_fetching() {
 				note += " That is the disguise this exists to see through.";
 		}
 		m_result->setText(m_result->text() + "<br><br>" + note);
-		m_status->setText(m_apply->isEnabled()
+		say(m_apply->isEnabled()
 		  ? "Reviewed, validated and checked. Nothing is saved until you accept."
 		  : "The address does not serve a stream, so it cannot be accepted.");
 	});

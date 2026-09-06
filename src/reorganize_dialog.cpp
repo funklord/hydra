@@ -53,6 +53,13 @@ reorganize_dialog::~reorganize_dialog() {
 	delete m_proposal;   // the shadow tree never outlives the dialog
 }
 
+void reorganize_dialog::say(const QString &text) {
+	if (!m_status)
+		return;
+	m_status->setText(text);
+	m_status->setVisible(!text.trimmed().isEmpty());
+}
+
 void reorganize_dialog::build_ui() {
 	auto *outer = new QVBoxLayout(this);
 
@@ -67,6 +74,7 @@ void reorganize_dialog::build_ui() {
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
 	outer->addWidget(m_status);
+	m_status->hide();
 
 	m_pages = new QStackedWidget(this);
 
@@ -101,13 +109,13 @@ void reorganize_dialog::build_ui() {
 
 void reorganize_dialog::on_send() {
 	m_send->setEnabled(false);
-	m_status->setText(QString("Asking %1…").arg(m_provider->name()));
+	say(QString("Asking %1…").arg(m_provider->name()));
 	m_provider->send(QString::fromLatin1(k_system_prompt), m_payload->toPlainText());
 }
 
 void reorganize_dialog::on_failed(const QString &error) {
 	m_send->setEnabled(true);
-	m_status->setText("<b>Failed:</b> " + error.toHtmlEscaped());
+	say("<b>Failed:</b> " + error.toHtmlEscaped());
 }
 
 void reorganize_dialog::on_reply(const QString &text) {
@@ -116,7 +124,7 @@ void reorganize_dialog::on_reply(const QString &text) {
 	delete m_proposal;
 	m_proposal = tree_serializer::parse_proposal(text);
 	if (!m_proposal) {
-		m_status->setText("<b>Failed:</b> the reply contained no outline.");
+		say("<b>Failed:</b> the reply contained no outline.");
 		return;
 	}
 
@@ -125,7 +133,7 @@ void reorganize_dialog::on_reply(const QString &text) {
 	if (!rep.usable) {
 		delete m_proposal;
 		m_proposal = nullptr;
-		m_status->setText("<b>Rejected:</b> " + rep.message.toHtmlEscaped());
+		say("<b>Rejected:</b> " + rep.message.toHtmlEscaped());
 		return;
 	}
 
@@ -166,7 +174,7 @@ void reorganize_dialog::show_diff() {
 	}
 	m_pages->setCurrentIndex(1);
 	m_apply->setEnabled(!m_change_list.isEmpty());
-	m_status->setText("Reviewing proposal. The tree is unchanged until you apply.");
+	say("Reviewing proposal. The tree is unchanged until you apply.");
 }
 
 void reorganize_dialog::on_accept() {
@@ -174,6 +182,6 @@ void reorganize_dialog::on_accept() {
 		m_change_list[i].accepted = (m_changes->item(i)->checkState() == Qt::Checked);
 
 	const int applied = m_model->apply_reorganization(m_change_list);
-	m_status->setText(QString("Applied %1 change%2.").arg(applied).arg(applied == 1 ? "" : "s"));
+	say(QString("Applied %1 change%2.").arg(applied).arg(applied == 1 ? "" : "s"));
 	accept();
 }

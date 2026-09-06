@@ -68,6 +68,15 @@ private:
 	// the page requested. A sentence that has to be read before pressing Send
 	// cannot share a widget with progress.
 	QLabel         *m_provider_note = nullptr;
+	// **The status line, which takes no room when it has nothing to say.**
+	//
+	// Splitting the provider sentence into its own label left this one empty
+	// on a freshly opened dialog, and an empty `QLabel` still reserves a line:
+	// a blank strip appeared above the payload in all three. Going through one
+	// method rather than calling `setText` in a dozen places is what makes the
+	// rule -- empty means hidden -- a property of the widget instead of
+	// something every caller has to remember.
+	void say(const QString &text);
 	QLabel         *m_status  = nullptr;
 	QTreeWidget    *m_rules   = nullptr;
 	QPushButton    *m_send    = nullptr;
