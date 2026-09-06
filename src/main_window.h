@@ -576,16 +576,26 @@ public:
 	QHash<QString, bool> m_session_permissions;
 
 	QHash<QString, web_view_backend *> m_views_by_id;  // node id -> live view
-	// Which views are part way through a load, how far, and when it began.
+	// Which tabs are part way through a load, how far, and when it began.
 	// Kept for every view rather than the current one, because the question is
 	// asked about a tab at the moment it becomes current. Entries leave on
-	// `load_finished` and on the view's destruction; see `page_changed`.
+	// `load_finished` and with the node, through `forget_node_state`.
 	//
 	// `started` is what lets `on_load_finished` tell a notice about *this*
 	// load from one somebody's own action put on the bar while it was still
 	// running.
+	//
+	// **Keyed by node id, and the first version was keyed by the view
+	// pointer.** That needed a `QObject::destroyed` handler to drop the entry
+	// when a view died, and that handler is a use-after-free by construction:
+	// a member is destroyed before the base class, so `~QWidget` deletes the
+	// child views *after* this hash is gone and the handler writes into it.
+	// It segfaulted every driver that builds a real view, on the way out,
+	// after every check had passed. An id is a value, needs no handler, and
+	// is dropped by the same function that already forgets everything else
+	// about a node.
 	struct load_state { int percent = 0; qint64 started = 0; };
-	QHash<web_view_backend *, load_state> m_loading_views;
+	QHash<QString, load_state> m_loading_views;
 
 	// A monotonic clock for the window, and when the status bar last changed.
 	// Stamped from `QStatusBar::messageChanged` rather than at each of the

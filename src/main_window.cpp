@@ -2965,25 +2965,19 @@ void main_window::open_node(node *n, bool load_now) {
 			// loading is a fact about that tab, and `page_changed` needs it
 			// for a tab it is switching *to*, which by definition was not
 			// current when its last progress arrived.
-			load_state &st = m_loading_views[view];
+			load_state &st = m_loading_views[m_views_by_id.key(view)];
 			if (st.started == 0)
 				st.started = m_clock.elapsed();
 			st.percent = p;
 			if (view == current_view())
 				on_load_progress(p);
 		});
-		connect(view, &QObject::destroyed, this, [this, view] {
-			// The pointer is the key and the object is going; leaving it here
-			// would make the next view allocated at the same address look
-			// like it was already loading.
-			m_loading_views.remove(view);
-		});
 		connect(view, &web_view_backend::load_finished, this, [this, view](bool ok) {
 			// Removed *after* the chrome is told, because
 			// `on_load_finished` reads when this load began.
 			if (view == current_view())
 				on_load_finished(ok);
-			m_loading_views.remove(view);
+			m_loading_views.remove(m_views_by_id.key(view));
 			// **Every view, not only the current one**, which is the whole
 			// reason this is not inside the branch above. A background tab
 			// finishing a load has moved its history exactly as much as the
@@ -3712,7 +3706,7 @@ void main_window::page_changed() {
 	// afterwards, offering a list belonging to a site no longer on screen.
 	// The count is kept per host, which is why asking it again is enough.
 	if (web_view_backend *v = current_view()) {
-		const auto at = m_loading_views.constFind(v);
+		const auto at = m_loading_views.constFind(m_views_by_id.key(v));
 		if (at != m_loading_views.constEnd()) {
 			set_loading(true);
 			if (m_progress) {
@@ -3822,7 +3816,8 @@ void main_window::on_load_finished(bool ok) {
 	//
 	// Only while the load's own start is known -- a load that never reported
 	// progress leaves no entry, and then this says its piece as before.
-	const auto at = v ? m_loading_views.constFind(v) : m_loading_views.constEnd();
+	const auto at = v ? m_loading_views.constFind(m_views_by_id.key(v))
+	                  : m_loading_views.constEnd();
 	if (at != m_loading_views.constEnd() && at->started > 0 &&
 	     m_status_at > at->started && !m_status->currentMessage().isEmpty())
 		return;
@@ -4190,6 +4185,11 @@ void main_window::forget_node_state(const QString &id) {
 	m_lru.removeAll(id);
 	m_zoom.remove(id);
 	m_blobs_dirty.remove(id);
+	// Whether a tab was loading is state about that tab like the rest of this
+	// list, and it goes with it. This is also what replaced a
+	// `QObject::destroyed` handler that removed the entry by view pointer --
+	// see the member's own note.
+	m_loading_views.remove(id);
 	if (m_state)
 		m_state->remove(id);
 }
@@ -4218,6 +4218,8 @@ void main_window::rekey_node_state(const QString &was, const QString &now) {
 		m_zoom.insert(now, m_zoom.take(was));
 	if (m_blobs_dirty.remove(was))
 		m_blobs_dirty.insert(now);
+	if (m_loading_views.contains(was))
+		m_loading_views.insert(now, m_loading_views.take(was));
 	if (m_state && m_state->has_state(was)) {
 		m_state->save(now, m_state->load(was));
 		m_state->remove(was);

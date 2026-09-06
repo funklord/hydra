@@ -19669,20 +19669,47 @@ exit code are halves of one result; the tally says whether the checks passed
 and the status says whether the program finished, and neither answers for
 the other. They report as `CRASH` now.
 
-## Open: the drivers that make web views segfault on the way out
+## The teardown segfault was mine, and my control could not have said so
 
-Found by the guard above rather than by anybody looking for it, and
-**pre-existing**: reproduced with `qtwebengine_view.cpp` and `.h` checked
-out at the commit before this session's print change, rebuilt, and run --
-same `exit 139` after the same 42 passing checks. `try_menus`, which builds
-no web view, exits 0.
+Found by the guard above rather than by anybody looking for it. I recorded
+it as **pre-existing**, on the strength of a control: `qtwebengine_view.cpp`
+and `.h` checked out at the commit before this session's print change,
+rebuilt, run -- same `exit 139` after the same 42 passing checks.
 
-So it is teardown of a real engine view rather than anything this session
-did, it costs nothing visible today, and it is exactly the kind of thing
-that hides a lifetime bug: a crash during destruction is a use-after-free
-that happened to be harmless this run. Recorded rather than chased, because
-chasing it wants a debugger against Chromium's teardown and the sweep now
-says so on every run rather than swallowing it.
+**That control could not have failed.** The crash had nothing to do with
+`qtwebengine_view`; it was in `main_window`, which the control left exactly
+where it was. It is `evidence.md`'s own rule -- *a control has to be able to
+fail the way the thing it controls for fails* -- and I wrote the wrong one
+because I had a suspect in mind rather than a symptom.
+
+One backtrace settled it in a minute, which is the other lesson: the
+apparatus was available the whole time and the conclusion was reached
+without it.
+
+    #1  QHash<web_view_backend*, main_window::load_state>::removeImpl
+    #3  QObject::destroyed(QObject*)
+    #5  qtwebengine_view::~qtwebengine_view
+    #17 main_window::~main_window
+
+`m_loading_views` is the hash added earlier the same day for the loading
+state, keyed by view pointer, with a `QObject::destroyed` handler to drop an
+entry when a view died. **That handler is a use-after-free by
+construction**: a class's members are destroyed before its base, so
+`~QWidget` deletes the child views *after* the hash is gone, `destroyed`
+fires, and the handler writes into freed memory. Every driver that builds a
+real view crashed on the way out, after every check had passed --
+`try_menus`, which builds none, exited 0 throughout.
+
+It is keyed by node id now and the handler is gone. An id is a value, needs
+no notification to stay valid, and leaves through `forget_node_state` and
+`rekey_node_state` with everything else a node carries -- which is where the
+other four per-node maps already live, and where this one should have been
+written in the first place. All three drivers exit 0 and the sweep reports
+`ok`.
+
+**The shipped browser destroys its views the same way at quit**, so this was
+not confined to the drivers: it was a crash on exit, after the tree had been
+saved, invisible to anybody who did not look at the exit status.
 
 ## A print that dies with its view took the report with it
 
