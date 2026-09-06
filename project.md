@@ -19438,6 +19438,60 @@ aside and back is the whole of it, six minutes of fmake at `-j 2`, and the
 tree must go back to `/home` rather than being left in `/tmp`: `/tmp` here
 is on the root filesystem, which is the smaller and fuller of the two.
 
+## Which units nothing names, and the passkey dialog that was one
+
+`single_instance` having had no test at all suggested the next lens
+directly: **enumerate the source units and ask which ones no test so much as
+names.** Two instruments, and the difference between them is the finding.
+
+    linked into some test binary          77 of 82   (only main and the four android_* are not)
+    named by a test's own `#include`      72 of 82
+
+Linkage is the weaker question and answers almost everything, because
+`objsets` closes over symbols and drags a unit in behind whatever calls it —
+which is exactly how `single_instance` sat in link sets while nothing
+asserted anything about it. The six desktop units nothing names are
+`capture_source`, `find_bar`, `qtwebengine_interceptor`, `site_policy_dialog`
+and `webauth_dialog`.
+
+**Three of those are named-by-proxy rather than untested**, and saying so is
+the point of writing the list down: `find_bar` is reached through
+`findChild` by object name in `try_chrome`, and `capture_source` and
+`qtwebengine_interceptor` are measured behaviourally — `try_cookies` asks a
+real server what headers it stopped receiving, which is a better test of an
+interceptor than naming it would be. **A name-based proxy over-reports, and
+the remedy is reading the hits rather than counting them.**
+
+**`webauth_dialog` was the real one.** 415 lines, a state machine, the
+window a `navigator.credentials.get()` puts in front of somebody — choose an
+account, type the PIN, touch the key — and nothing constructed it, in a
+driver that already constructs the password prompt and the certificate
+chooser and asserts their wording. Thirteen checks now, every one of them a
+trap its own header names: the account list rebuilt rather than stacked, the
+PIN confirmation required on a window that has never been shown, a PIN
+shorter than the key will take refused before it is sent, zero tries left
+told apart from a key that did not say, an unrecognised failure still
+producing a sentence, and `cancelled()` emitted on close so the caller can
+withdraw a request that would otherwise hold the authenticator until it
+times out.
+
+Two sabotages, both reproducing what the header warns of: reading
+`m_confirm->isVisible()` instead of the kept flag skips the confirmation for
+exactly the first question — the one that sets a PIN nobody would then know
+— and hiding the account radios instead of deleting them offers three names
+where one was asked for.
+
+**And nine false failures on the way there, from two wrong instruments in a
+row.** The first draft found the accept button by its label, which is set
+per state, so the pointer was null before the state that names it and five
+checks failed their null test. The second found it by `AcceptRole` — which
+Retry also carries, and Retry is added second, so the loop kept the wrong
+button and four checks still failed. `button(QDialogButtonBox::Ok)` names
+the one the dialog enables. The dialog was correct throughout; a report
+written from either draft would have filed five defects in a security prompt
+that has none. **When a result surprises you, the apparatus is where the
+error usually is** -- and it was, twice, before it was anywhere else.
+
 ## Open: a blocked-popup notice can be overwritten by a stale load failure
 
 `try_navigate`'s "out loud, not silently" check asserts that refusing a

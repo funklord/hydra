@@ -14,6 +14,7 @@
 
 #include "auth_dialog.h"
 #include "cert_dialog.h"
+#include "webauth_dialog.h"
 #include "node.h"
 #include "tab_tree_model.h"
 #include <QAbstractButton>
@@ -22,7 +23,10 @@
 #include <QListWidget>
 #include <QProgressBar>
 #include <QSortFilterProxyModel>
+#include <QDialogButtonBox>
 #include <QPushButton>
+#include <QRegularExpression>
+#include <QSignalSpy>
 #include <QStatusBar>
 
 int main(int argc, char *argv[]) {
@@ -330,6 +334,119 @@ int main(int argc, char *argv[]) {
 			check(w.windowTitle().contains("two") || w.windowTitle().contains("Two"),
 			      QString("and the title is the new page's (%1)").arg(w.windowTitle()));
 		}
+	}
+
+	section("signing in with a passkey");
+	{
+		// **415 lines, a state machine, and nothing named it.** `webauth_dialog`
+		// is the window a `navigator.credentials.get()` puts in front of
+		// somebody -- choose an account, type the PIN, touch the key -- and it
+		// was the one dialog in this file's subject with no test at all, found
+		// by asking which units in `src/` no test or driver so much as
+		// includes. Built directly and never exec'd, the way the auth and
+		// certificate prompts above are, because what is worth checking is
+		// what it says and what it will let you press before anybody types.
+		//
+		// Every check below is a trap its own header names.
+		webauth_dialog dlg("bank.example", &w);
+		auto *heading = dlg.findChild<QLabel *>("webauth_heading");
+		auto *detail  = dlg.findChild<QLabel *>("webauth_detail");
+		auto *pin     = dlg.findChild<QLineEdit *>("webauth_pin");
+		auto *confirm = dlg.findChild<QLineEdit *>("webauth_confirm");
+		auto *trouble = dlg.findChild<QLabel *>("webauth_pin_trouble");
+		// **By standard button, and it took two wrong instruments to get
+		// here.** Looking it up by what it says finds nothing until the state
+		// that says it, because the label is set per state -- five checks then
+		// passed their null test and reported defects that were not there.
+		// Looking it up by `AcceptRole` finds Retry as well, which carries the
+		// same role and is added after Ok, so the loop kept the wrong button
+		// and four checks still failed. `button(Ok)` names the one the dialog
+		// enables and disables.
+		QPushButton *accept = nullptr;
+		if (auto *box = dlg.findChild<QDialogButtonBox *>("webauth_buttons"))
+			accept = qobject_cast<QPushButton *>(
+			  box->button(QDialogButtonBox::Ok));
+		check(heading && detail && pin && confirm && trouble && accept,
+		       "the window is built and its parts are reachable");
+
+		// The account list is rebuilt per request. A set left standing would
+		// offer names from a sign-in that has already moved on.
+		dlg.ask_for_account({ "ada@example", "grace@example" });
+		check(dlg.findChildren<QAbstractButton *>(
+		        QRegularExpression("^webauth_account_")).size() == 2,
+		       "two accounts are offered");
+		dlg.ask_for_account({ "solo@example" });
+		const auto again = dlg.findChildren<QAbstractButton *>(
+		  QRegularExpression("^webauth_account_"));
+		check(again.size() == 1,
+		       QString("and a second request replaces them rather than stacking "
+		                "(%1 offered)").arg(again.size()));
+
+		// **The confirmation trap, which is the sharpest one here.** A new PIN
+		// has to be typed twice, and the flag saying so is kept rather than
+		// read back from the widget -- `isVisible()` is false for every child
+		// of a window that has not been shown, so asking the widget would skip
+		// the check for exactly the first question, the one that sets a PIN
+		// nobody would then know.
+		webauth_dialog::pin_prompt setting;
+		setting.reason = webauth_dialog::pin_reason::set;
+		setting.min_length = 4;
+		dlg.ask_for_pin(setting);
+		check(accept && !accept->isEnabled(),
+		       "a fresh PIN question offers nothing to press");
+		pin->setText("1234");
+		check(accept && !accept->isEnabled(),
+		       "and still nothing with only the first field filled, on a "
+		       "window that was never shown");
+		confirm->setText("12345");
+		check(accept && !accept->isEnabled(), "nor when the two disagree");
+		confirm->setText("1234");
+		check(accept && accept->isEnabled(),
+		       "and offers Next once they match");
+
+		// Long enough for the key, checked here rather than on click: a button
+		// that is available and then refuses has spent one of a small number of
+		// tries before the key locks itself.
+		pin->setText("12");
+		confirm->setText("12");
+		check(accept && !accept->isEnabled(),
+		       "a PIN shorter than the key will take is refused before it is "
+		       "sent, not after");
+
+		// **Zero tries left is a real answer and an alarming one**, so it must
+		// not share a spelling with "the key did not say".
+		webauth_dialog::pin_prompt none_left;
+		none_left.remaining_attempts = 0;
+		dlg.ask_for_pin(none_left);
+		const QString zero_says = trouble->text();
+		webauth_dialog::pin_prompt silent;
+		silent.remaining_attempts = -1;
+		dlg.ask_for_pin(silent);
+		check(zero_says.contains("0 tries left"),
+		       QString("no tries left is said out loud (%1)").arg(zero_says));
+		check(!trouble->text().contains("tries left"),
+		       QString("while a key that did not say is not made to say zero "
+		                "(%1)").arg(trouble->text()));
+
+		// A reason this build has never heard of still has to produce a
+		// sentence: a window with nothing in it is the failure the whole file
+		// exists to remove.
+		dlg.report_failure(webauth_dialog::failure::unknown);
+		check(!detail->text().trimmed().isEmpty(),
+		       QString("an unrecognised failure still says something (%1)")
+		           .arg(detail->text()));
+		dlg.report_failure(webauth_dialog::failure::hard_pin_block);
+		check(detail->text() != QString(),
+		       "and a known one says its own thing");
+
+		// Closing withdraws nothing by itself, so the signal the caller passes
+		// to the engine has to be emitted -- a request nobody withdraws holds
+		// the authenticator until it times out.
+		QSignalSpy gave_up(&dlg, &webauth_dialog::cancelled);
+		dlg.reject();
+		check(gave_up.count() == 1,
+		       QString("closing the window reports it, so the engine can be "
+		                "told (%1)").arg(gave_up.count()));
 	}
 
 	section("switching back to a loading tab still says it is loading");
