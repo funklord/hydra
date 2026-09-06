@@ -4376,7 +4376,15 @@ died on the first `open_node`, because that is the first virtual dispatch onto
 a backend: with no page open `update_navigation` short-circuits before any
 virtual call.
 
-**The false proof is the lesson.** It was declared pre-existing on an A/B: the
+**The false proof is the lesson, and it did not take.** It happened again on
+2026-09-06 -- the same driver, the same verdict, a different mechanism -- and
+the second time by a session that had this section available throughout. See
+*The teardown segfault was mine, and my control could not have said so*
+below, and read the two together: what generalises is not "write a control"
+but that a control varies what you *suspect*, and both of these varied
+something adjacent to the cause while leaving the cause in place.
+
+It was declared pre-existing on an A/B: the
 change stashed, driver rebuilt, same crash; change restored, same crash. That
 looked conclusive and was worthless, because neither arm ever reached a
 consistent build. In the stashed arm the header lost `set_obscured` while
@@ -19784,6 +19792,25 @@ One backtrace settled it in a minute, which is the other lesson: the
 apparatus was available the whole time and the conclusion was reached
 without it.
 
+**And this project has been here before, which is the part that should
+trouble whoever reads it next.** *A crash that was the build, and a false
+proof that it was not*, above, is `try_navigate` segfaulting, declared
+pre-existing on an A/B -- change stashed, same crash; change restored, same
+crash -- where neither arm ever reached a consistent build and both relinked
+the same bad object. Different mechanism, same shape, same driver, same
+wrong verdict, and the second time by somebody who had that section in front
+of them all session.
+
+So the generalisation is not "write a control", which both of us did. It is
+that **a control varies the thing you suspect, and a suspicion is exactly
+what is least reliable at that moment.** Both controls changed something
+*adjacent* to the cause and left the cause untouched: there a header the two
+objects disagreed about, here a file the crash never mentioned. The check
+that would have caught both is the same one, and it is cheap: **before
+believing an A/B, ask what the two arms differ by, and whether the symptom
+could depend on it.** A backtrace answers that without being asked, which is
+why it belongs before the control rather than after it.
+
     #1  QHash<web_view_backend*, main_window::load_state>::removeImpl
     #3  QObject::destroyed(QObject*)
     #5  qtwebengine_view::~qtwebengine_view
@@ -20351,6 +20378,28 @@ carried along as amendments to a list item.
    while closing one — so an entry that says where a sweep *ended* is a claim a
    later addition falsifies silently. Read as "what remains is mostly
    device-bound", not as an inventory.
+
+   **And it went stale again the same way, which is the entry proving its own
+   point.** A second sweep asked a different question -- not "which files has
+   nobody tested" but **"which files does no test so much as name"** -- and
+   the two instruments disagree, because `objsets.mk` closes over symbols and
+   drags a unit into a link set behind whatever calls it. Linked into some
+   test binary is 77 of 82; named by a test's own include is 72.
+
+   Two of the six left over were real. `single_instance`, which keeps two
+   browsers out of one profile directory, had **no test at all** -- its
+   correctness rested on a comment about how `QLockFile` decides a lock is
+   stale, and `test_instance` holds that now, nineteen checks. `webauth_dialog`
+   is 415 lines and a state machine, the window a passkey sign-in puts in front
+   of somebody, and nothing constructed it -- `try_chrome` does, thirteen
+   checks, each one a trap its own header names.
+
+   The other three were named by proxy rather than untested, and saying so is
+   the point: `find_bar` is reached through `findChild`, and `capture_source`
+   and `qtwebengine_interceptor` are measured behaviourally by asking a real
+   server what headers it stopped receiving. **A name-based proxy
+   over-reports, and the remedy is reading the hits rather than counting
+   them.**
 
    What remains genuinely out of reach here is the WebEngine backend and the
    thin adapters around it, which need a page rather than a fixture, and are
