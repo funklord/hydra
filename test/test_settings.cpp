@@ -20,6 +20,7 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
+#include <QSet>
 #include <QSettings>
 #include <QTimer>
 #include <cstdio>
@@ -550,6 +551,64 @@ int main(int argc, char **argv) {
 	// so the packing needed nothing -- but a feature added to the enum and
 	// forgotten in the words table is a control with a blank label, and one
 	// forgotten in `settings_to_line` is a rule that cannot be written down.
+	// **The population, not a member of it.** The section below checks that
+	// one feature has a name, a label and a round trip, and the comment above
+	// it says why: "a feature added to the enum and forgotten in the words
+	// table is a control with a blank label, and one forgotten in
+	// `settings_to_line` is a rule that cannot be written down." That is the
+	// right hazard and it was asserted for exactly one of the twenty-odd
+	// features -- the one being added at the time. A test named after a
+	// member cannot fail for a member added later.
+	section("every feature carries the words the rest of the program needs");
+	{
+		int blank_name = 0, blank_label = 0, blank_help = 0, no_round_trip = 0;
+		QSet<QString> names;
+		int duplicate_names = 0;
+		for (int i = 0; i < policy::feature_count(); ++i) {
+			const auto f = static_cast<policy::feature>(i);
+			const QString name = QString::fromLatin1(policy::feature_name(f));
+			if (name.isEmpty())
+				++blank_name;
+			if (QString::fromLatin1(policy::feature_label(f)).isEmpty())
+				++blank_label;
+			if (QString::fromLatin1(policy::feature_help(f)).isEmpty())
+				++blank_help;
+			// The machine name is what a policy file stores, so a name that
+			// does not come back is a rule that cannot be read after it is
+			// written -- and a *duplicate* name is worse: the earlier feature
+			// swallows the later one's rules with nothing to see.
+			if (policy::feature_from_name(name) != f)
+				++no_round_trip;
+			if (names.contains(name))
+				++duplicate_names;
+			names.insert(name);
+		}
+		check(blank_name == 0,
+		      QString("every feature has a machine name (%1 blank)").arg(blank_name));
+		check(blank_label == 0,
+		      QString("and a label for the settings page (%1 blank)").arg(blank_label));
+		check(blank_help == 0,
+		      QString("and a line saying what it governs (%1 blank)").arg(blank_help));
+		check(duplicate_names == 0,
+		      QString("no two share a machine name (%1 clash)").arg(duplicate_names));
+		check(no_round_trip == 0,
+		      QString("and each name reads back as its own feature (%1 do not)")
+		          .arg(no_round_trip));
+
+		// And through the encoding a policy file actually uses, which is the
+		// half `settings_to_line` is named in. Every feature set to `block` at
+		// once, written, read back, and compared -- a feature missing from the
+		// writer or the reader loses its bit and shows up here rather than as
+		// a rule that silently stops applying.
+		quint64 bits = 0;
+		for (int i = 0; i < policy::feature_count(); ++i)
+			bits = policy::with_setting(bits, static_cast<policy::feature>(i),
+			                             policy::setting::block);
+		const QString line = policy::settings_to_line(bits);
+		check(policy::settings_from_line(line) == bits,
+		      "every feature survives the line a policy file is written as");
+	}
+
 	section("screen sharing is a feature like the others");
 	{
 		policy_engine e;

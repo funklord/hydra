@@ -111,6 +111,25 @@ const info k_info[] = {
 		nullptr },
 };
 
+// **The pairing that nothing was holding.** Every accessor below bounds its
+// index against `feature_count()` -- the size of the *enum* -- and then reads
+// `k_info`, whose size is the number of rows written here. Those are two
+// different numbers and they were kept equal by nobody: a feature added to the
+// enum without a row makes the second smaller than the first, and the bounds
+// check passes an index straight off the end of the array.
+//
+// The existing test said the cost of forgetting a row was "a control with a
+// blank label". That was the optimistic reading. It is an out-of-bounds read,
+// and it would first show up as a label that is whatever follows the table in
+// memory.
+//
+// A compile error is the right home for it: the failure is a pairing between
+// two lists in one translation unit, which is exactly what a static assertion
+// can see and no runtime check can prevent.
+static_assert(sizeof(k_info) / sizeof(k_info[0]) ==
+                static_cast<size_t>(feature::count),
+               "every policy::feature needs a row in k_info, in enum order");
+
 }  // namespace
 
 const char *feature_name(feature f) {

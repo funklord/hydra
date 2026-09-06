@@ -19248,6 +19248,58 @@ beside code that had closed exactly one of its instances. The lens is not
 "look for bugs in the chrome"; it is **read what a comment says was fixed,
 and go and count the places that shape occurs.**
 
+## Two lists nobody was holding equal, and a test named after one member
+
+The lens again, this time pointed at a comment in the test suite rather than
+in the source. `test_settings` says, above the section that added screen
+sharing: "a feature added to the enum and forgotten in the words table is a
+control with a blank label, and one forgotten in `settings_to_line` is a
+rule that cannot be written down."
+
+Right hazard, and asserted for exactly one feature — the one being added
+that day. **A test named after a member cannot fail for a member added
+later**, which is the same shape as the affordance that was re-derived for
+five pieces of state and not the sixth.
+
+Two things came out of it.
+
+**The cost was understated, and it is not a blank label.** Every accessor in
+`policy.cpp` bounds its index against `feature_count()`, which is the size
+of the *enum*, and then reads `k_info`, whose size is the number of rows
+written in that file. Two different numbers, kept equal by nobody. A feature
+added to the enum without a row makes the array shorter than the bound, and
+the check passes an index straight off the end — an out-of-bounds read whose
+first symptom would be a label made of whatever follows the table.
+
+That belongs in the compiler, not in a test, because it is a pairing between
+two lists in one translation unit:
+
+    static_assert(sizeof(k_info) / sizeof(k_info[0]) ==
+                    static_cast<size_t>(feature::count), ...)
+
+**And the population is asserted now rather than a member of it.** Every
+feature must have a non-empty machine name, label and help line; no two may
+share a machine name; each name must read back as its own feature; and the
+whole set, every bit set to `block`, must survive `settings_to_line` and
+`settings_from_line`. That last one is the file format: a feature missing
+from either half loses its bit, which on disk is a rule that silently stops
+applying.
+
+All of it passes today, which is the state an all-clean corpus is always in
+and is no evidence at all. Three sabotages, each caught by a different
+instrument and none by the others:
+
+    a table row removed      compile error; the test cannot see it
+    a label blanked          the test; the static assert cannot see it
+    a machine name duplicated  three checks, including the file round trip
+
+**And the sweep for the same pairing elsewhere came back empty, which is
+worth recording so the next person does not repeat it.** `policy::feature`
+is the only enum in `src/` terminated by a `count` member with a table
+indexed by it; `tab_tree_model`'s `column_count` has no per-column table
+behind it, and every other per-enum lookup here is a `switch`, where the
+compiler's own exhaustiveness warning is already the guard.
+
 ## Open: a blocked-popup notice can be overwritten by a stale load failure
 
 `try_navigate`'s "out loud, not silently" check asserts that refusing a
