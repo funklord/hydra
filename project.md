@@ -19578,6 +19578,51 @@ argument added to a Java native is caught as an arity fault; and
 refuses to report at all rather than printing a green line over a detector
 that cannot speak.
 
+## The other direction, which is the one the original incident broke
+
+Having closed the argument half of the Java-to-C++ direction, the same
+question turns round. `QJniObject::callStaticMethod<T>(class, "name",
+"(descriptor)ret", ...)` is joined to the Java by string equality exactly as
+the entry points are, and nothing checked it either. A renamed method or a
+changed parameter throws a Java exception at the moment somebody uses the
+feature, on a device, with nothing at build time to say so.
+
+**And this is the direction the incident that produced the tool actually
+broke.** The application id was renamed, the class paths in C++ are string
+literals carrying it, and a grep found those -- the entry points were the
+ones the grep missed, so the tool was written for them and the direction
+that had visibly failed was left to greps.
+
+25 calls, across `android_view`, `android_intents` and `android_downloads`,
+against the static methods the Java declares. Measured before anything was
+changed: all 25 match. So this too guards the next change rather than fixing
+a present fault, which is why it goes in behind the same control.
+
+**One thing it says that a checker usually will not: what it could not
+check.** A Java parameter whose class cannot be resolved produces a `?`
+descriptor, and a comparison against a `?` has not happened. Rather than
+letting that pass as agreement, the tool counts them and prints "1 java
+signature(s) unresolved and not compared". The one is
+`showFullscreen(long, View, WebChromeClient.CustomViewCallback)` -- a nested
+type -- and it is **not called from C++**, so nothing on the paths that
+matter is unchecked. `java.lang` types were resolved rather than reported,
+since they need no import and would otherwise be permanent noise.
+
+Three sabotages, and the third is the one worth having: a Java method
+renamed in the C++ call is reported as a method the class does not declare;
+a descriptor changed from `(J)V` to `(JZ)V` is reported with both spellings;
+and the comparison itself disabled makes the **control** fail -- two
+complaints, including "2 call faults reported, want exactly 3", which is the
+line that catches a checker that has stopped discriminating rather than one
+that has stopped speaking.
+
+**A note on the fixture, because it is the third time today.** The Java
+parameter parser split on `" "` and the real files are tab-indented across
+wrapped parameter lists, so every one of the 25 calls read as unresolvable
+on the first run. Measured, fixed to split on any whitespace, and recorded
+in the code: the sample that agreed with the broken parser was, once again,
+the one written on a single line.
+
 ## Open: a blocked-popup notice can be overwritten by a stale load failure
 
 `try_navigate`'s "out loud, not silently" check asserts that refusing a

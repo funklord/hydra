@@ -182,6 +182,136 @@ def cpp_symbols():
 	return found
 
 
+# --- the other direction: C++ calling into Java -----------------------------
+#
+# `QJniObject::callStaticMethod<T>(class, "name", "(descriptor)ret", ...)` is
+# joined to the Java by string equality exactly as the entry points are, and
+# nothing checked it either. A renamed method or a changed parameter throws a
+# Java exception at the moment somebody uses the feature, on a device, with
+# nothing at build time to say so -- and this is the direction the incident
+# that produced this tool actually broke, since the class paths are string
+# literals carrying the old application id.
+
+RE_IMPORT = re.compile(r"^\s*import\s+([\w.]+)\s*;", re.M)
+RE_JAVA_STATIC = re.compile(
+  r"\b(?:public|private|protected)?\s*static\s+(?:final\s+)?"
+  r"([\w.<>\[\]]+)\s+(\w+)\s*\(([^)]*)\)\s*\{", re.M)
+RE_CPP_CALL = re.compile(
+  r"callStaticMethod<\s*[\w:]+\s*>\s*\(\s*([\w:]+|\"[^\"]+\")\s*,\s*"
+  r"\"([^\"]+)\"\s*,\s*\"([^\"]+)\"", re.S)
+RE_CLASS_CONST = re.compile(r"(\w+)\s*=\s*\"([\w]+(?:/[\w]+)+)\"")
+
+DESCRIPTOR_OF = {
+	"void": "V", "boolean": "Z", "byte": "B", "char": "C", "short": "S",
+	"int": "I", "long": "J", "float": "F", "double": "D",
+	"String": "Ljava/lang/String;", "Object": "Ljava/lang/Object;",
+	# `java.lang` needs no import, so these never appear in the import map and
+	# would otherwise read as unresolvable.
+	"Runnable": "Ljava/lang/Runnable;", "CharSequence": "Ljava/lang/CharSequence;",
+	"Integer": "Ljava/lang/Integer;", "Long": "Ljava/lang/Long;",
+	"Boolean": "Ljava/lang/Boolean;", "Throwable": "Ljava/lang/Throwable;",
+}
+
+
+def descriptor(java, imports):
+	"""The JVM descriptor for a Java type, or None when it cannot be resolved.
+
+	None rather than a guess: a checker that invents a descriptor reports
+	agreement it never established, which is worse than saying it could not
+	look.
+	"""
+	java = java.strip()
+	if java.endswith("[]"):
+		inner = descriptor(java[:-2], imports)
+		return None if inner is None else "[" + inner
+	if java in DESCRIPTOR_OF:
+		return DESCRIPTOR_OF[java]
+	if java in imports:
+		return "L" + imports[java].replace(".", "/") + ";"
+	return None
+
+
+def parse_java_statics(text, class_path):
+	"""{class path: {method: [descriptor, ...]}} for one file's static methods."""
+	imports = {}
+	for full in RE_IMPORT.findall(text):
+		imports[full.rsplit(".", 1)[-1]] = full
+	out = {}
+	for ret, method, args in RE_JAVA_STATIC.findall(text):
+		params = []
+		for arg in args.split(","):
+			arg = arg.strip()
+			if not arg:
+				continue
+			# **Split on any whitespace, not on a space.** A parameter list
+			# wrapped across lines carries tabs, and splitting on " " took the
+			# whole of "long<tab>id" as a type nothing could resolve -- every
+			# one of the 25 calls then read as unresolvable. Measured while
+			# writing this.
+			params.append(re.split(r"\s+", arg)[-2])
+		sig = "".join(descriptor(p, imports) or "?" for p in params)
+		out.setdefault(method, []).append(
+		  "(%s)%s" % (sig, descriptor(ret, imports) or "?"))
+	return {class_path: out}
+
+
+def java_statics():
+	"""Every static method of every class under android/src, by class path."""
+	classes = {}
+	if not os.path.isdir(JAVA):
+		return classes
+	for base, _, names in os.walk(JAVA):
+		for name in names:
+			if not name.endswith(".java"):
+				continue
+			with open(os.path.join(base, name)) as fh:
+				text = fh.read()
+			pkg = RE_PACKAGE.search(text)
+			if not pkg:
+				continue
+			path = pkg.group(1).replace(".", "/") + "/" + name[:-5]
+			classes.update(parse_java_statics(text, path))
+	return classes
+
+
+def parse_cpp_calls(text, where):
+	"""[(where, class path, method, descriptor)] for one file's calls out."""
+	consts = dict(RE_CLASS_CONST.findall(text))
+	out = []
+	for cls, method, sig in RE_CPP_CALL.findall(text):
+		out.append((where, consts.get(cls, cls.strip('"')), method, sig))
+	return out
+
+
+def cpp_calls():
+	calls = []
+	for name in sorted(os.listdir(CPP)):
+		if not name.endswith(".cpp"):
+			continue
+		with open(os.path.join(CPP, name)) as fh:
+			calls.extend(parse_cpp_calls(fh.read(), name))
+	return calls
+
+
+def call_faults(calls, classes):
+	"""[(what, sentence)] for every call that no Java method answers."""
+	for where, cls, method, sig in calls:
+		if cls not in classes:
+			yield ("%s.%s" % (cls, method),
+			        "src/%s calls into a class android/src does not define"
+			        % where)
+			continue
+		offered = classes[cls].get(method)
+		if not offered:
+			yield ("%s.%s" % (cls, method),
+			        "src/%s names a method that class does not declare static"
+			        % where)
+		elif sig not in offered:
+			yield ("%s.%s" % (cls, method),
+			        "src/%s asks for %s; the Java offers %s"
+			        % (where, sig, " or ".join(offered)))
+
+
 # --- the control ------------------------------------------------------------
 #
 # Deliberately broken samples, classified before any real file is read. A
@@ -214,6 +344,33 @@ JNIEXPORT void JNICALL Java_se_vibes_hydra_Sample_nobodyWants(JNIEnv *, jobject)
 # What the samples above must produce. Each names one way the checker claims
 # to be able to fail; a checker that cannot produce these is not one whose
 # silence on the real tree means anything.
+# The other direction's samples: a class the Java defines, and calls out to it
+# that are right, renamed, and wrongly typed.
+CONTROL_JAVA_STATICS = """
+package se.vibes.hydra;
+import android.app.Activity;
+class Sample {
+	public static void fine(long id, String url) {}
+	public static boolean open(Activity a, String url) { return true; }
+}
+"""
+
+CONTROL_CPP_CALLS = """
+static const char *k_cls = "se/vibes/hydra/Sample";
+void a() { QJniObject::callStaticMethod<void>(k_cls, "fine",
+                                               "(JLjava/lang/String;)V", 1); }
+void b() { QJniObject::callStaticMethod<void>(k_cls, "renamed", "(J)V", 1); }
+void c() { QJniObject::callStaticMethod<void>(k_cls, "fine", "(JI)V", 1); }
+void d() { QJniObject::callStaticMethod<jboolean>("se/vibes/hydra/Nowhere",
+                                                   "open", "()Z"); }
+"""
+
+CONTROL_CALLS_EXPECT = {
+	"se/vibes/hydra/Sample.fine": "asks for",          # wrong descriptor
+	"se/vibes/hydra/Sample.renamed": "does not declare",
+	"se/vibes/hydra/Nowhere.open": "does not define",
+}
+
 CONTROL_EXPECT = {
 	"Java_se_vibes_hydra_Sample_ok": None,
 	"Java_se_vibes_hydra_Sample_extraArg": "argument",
@@ -236,6 +393,25 @@ def self_test():
 		complaints.append("a method with no C++ side was somehow found")
 	if "Java_se_vibes_hydra_Sample_nobodyWants" in wanted:
 		complaints.append("an orphan C++ symbol was somehow wanted")
+
+	# The other direction, same discipline.
+	statics = parse_java_statics(CONTROL_JAVA_STATICS, "se/vibes/hydra/Sample")
+	calls = parse_cpp_calls(CONTROL_CPP_CALLS, "control.cpp")
+	if len(calls) != 4:
+		return ["the call samples did not parse: %d found, want 4" % len(calls)]
+	out = dict(call_faults(calls, statics))
+	for what, expect in CONTROL_CALLS_EXPECT.items():
+		got = out.get(what)
+		if got is None:
+			complaints.append("%s is broken and was not reported" % what)
+		elif expect not in got:
+			complaints.append("%s was reported for the wrong reason: %s"
+			                   % (what, got))
+	# The one that is correct must be silent -- with three faults expected out
+	# of four calls, a checker that complained about everything would satisfy
+	# every line above.
+	if len(out) != 3:
+		complaints.append("%d call faults reported, want exactly 3" % len(out))
 
 	faults = dict(signature_faults(wanted, found))
 	for symbol, expect in CONTROL_EXPECT.items():
@@ -301,6 +477,10 @@ def main():
 		print("  android/src is missing, or nothing in it declares one.")
 		return 1
 
+	classes = java_statics()
+	calls = cpp_calls()
+	outbound = sorted(call_faults(calls, classes))
+
 	missing = sorted(s for s in wanted if s not in found)
 	orphan = sorted(s for s in found if s not in wanted)
 	crossed = sorted(signature_faults(wanted, found))
@@ -319,14 +499,34 @@ def main():
 		print("          JNI binds on the name alone, so this is called with "
 		       "the arguments read as the C++ says")
 
-	if missing or orphan or crossed:
+	for what, why in outbound:
+		print("CALL     %s" % what)
+		print("         %s" % why)
+		print("         this throws in Java the moment the feature is used, "
+		       "on a device, with nothing at build time to say so")
+
+	if missing or orphan or crossed or outbound:
 		print()
-		print("%d native method(s) checked, %d unmatched"
-		      % (len(wanted), len(missing) + len(orphan) + len(crossed)))
+		print("%d native method(s) and %d call(s) into Java checked, "
+		       "%d unmatched"
+		      % (len(wanted), len(calls),
+		          len(missing) + len(orphan) + len(crossed) + len(outbound)))
 		return 1
 
-	print("jni-check: %d native method(s), every one resolvable and matching"
-	      % len(wanted))
+	# **The descriptors that could not be resolved are counted and said.** A
+	# Java parameter whose class this tool cannot map produces a `?`, and a
+	# call compared against a `?` has not been checked -- reporting it as
+	# verified would be the vacuous pass this file's own control exists to
+	# refuse.
+	unresolved = sum(1 for methods in classes.values()
+	                  for sigs in methods.values()
+	                  for sig in sigs if "?" in sig)
+	note = ""
+	if unresolved:
+		note = ", %d java signature(s) unresolved and not compared" % unresolved
+	print("jni-check: %d native method(s) and %d call(s) into Java, "
+	       "every one resolvable and matching%s"
+	      % (len(wanted), len(calls), note))
 	return 0
 
 
