@@ -1050,8 +1050,16 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	});
 	connect(m_tree, &tab_tree_view::suspend_requested, this, &main_window::suspend_node);
 	connect(m_tree, &tab_tree_view::lock_requested, this, &main_window::toggle_lock);
+	// The live address, for the same reason Copy Address takes it: handing
+	// another application the page somebody came in at, while the window shows
+	// the one they are on, is the same wrongness one step further away -- it
+	// opens in a different program, where it is harder to notice.
 	connect(m_tree, &tab_tree_view::open_externally_requested, this,
-	        [this](node *n) { if (n) open_url_externally(QUrl(n->url)); });
+	        [this](node *n) {
+		const QString address = address_of(n);
+		if (!address.isEmpty())
+			open_url_externally(QUrl(address));
+	});
 	m_tree->expandAll();
 	connect(m_tree, &QTreeView::activated, this, &main_window::on_tree_activated);
 	// A tap is not a double-click, and `activated` is what a double-click emits
@@ -1375,15 +1383,7 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *copy_addr = edit_menu->addAction("&Copy Address",
 	                                           QKeySequence("Ctrl+Shift+C"), this,
 	                                           [this] {
-		node *n = selected_node();
-		if (!n)
-			return;
-		QString address = n->url;
-		if (web_view_backend *v = m_views_by_id.value(n->id, nullptr)) {
-			const QString live = v->url().toString();
-			if (!live.isEmpty() && live != QLatin1String("about:blank"))
-				address = live;
-		}
+		const QString address = address_of(selected_node());
 		if (!address.isEmpty())
 			QGuiApplication::clipboard()->setText(address);
 	});
@@ -4180,6 +4180,32 @@ void main_window::open_url_externally(const QUrl &url) {
 // `m_blobs_dirty` was harmless where it stood -- `flush_blobs` looks each id
 // up in `m_views_by_id` and finds nothing -- but it is a note about a node
 // that no longer exists, and the id is about to belong to another one.
+// **Where a row actually is, rather than where it was filed.**
+//
+// A node's `url` is the address the tab was created at and does not follow a
+// navigation -- the title does, which is the dual meaning `project.md`
+// records as the copyright holder's, because the tab lock's pin lives in the
+// same field. Anything reporting a row's address to a person wants the page
+// in front of them; a row with no live view has only the stored answer, and
+// there it is not stale but the only one there is.
+//
+// **One function because there are two callers and there was nearly a
+// third.** Copy Address read the filed url, which handed somebody the page
+// they came in at while the address bar beside it showed where they were.
+// "Open in Another App" from the tree's context menu had the same bug, and
+// the File menu's copy of that entry did not -- it asks `current_view()`. Two
+// spellings of one question is how they drift.
+QString main_window::address_of(const node *n) const {
+	if (!n)
+		return QString();
+	if (web_view_backend *v = m_views_by_id.value(n->id, nullptr)) {
+		const QString live = v->url().toString();
+		if (!live.isEmpty() && live != QLatin1String("about:blank"))
+			return live;
+	}
+	return n->url;
+}
+
 void main_window::forget_node_state(const QString &id) {
 	m_views_by_id.remove(id);
 	m_lru.removeAll(id);

@@ -19963,6 +19963,21 @@ view's own url, and nothing stops the action reading it. A suspended or
 unopened row has no view, and there the stored url is not a stale answer but
 the only one there is -- so that path is unchanged.
 
+**And there was a second one, found by asking the question the first
+answered: where else does the shell read a stored field where a live one
+exists?** The tree's context menu entry *Open in Another App* passed
+`n->url` -- the filed address -- while the File menu's copy of the same
+entry asks `current_view()`. So the two spellings of one action disagreed,
+and the tree's was the wrong one: it hands another program the page somebody
+came in at, which is the same wrongness one step further away, in a window
+where it is harder to notice.
+
+Both callers go through one `address_of(node *)` now, which is where the
+rule belongs: the live view's address where the row has one, the filed
+address where it has not -- not stale there but the only answer there is.
+Two spellings of one question is how they drifted in the first place, and a
+third was one edit away.
+
 `try_pagetools` covers it, and the middle check is the one that makes the
 other two mean anything: it asserts that the row still holds the address it
 was filed at, so the section is measuring the disagreement rather than a

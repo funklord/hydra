@@ -227,6 +227,10 @@ private:
 	// is called from the handlers that save, and returns what it was told so a
 	// caller can still branch on it.
 	bool saved_or_said(bool ok, const QString &what);
+	// Where a row actually is: its live view's address where it has one, and
+	// the address it was filed at where it has not. See the definition for why
+	// the two differ and which callers need which.
+	QString address_of(const node *n) const;
 	// Show or hide the tab tree, whichever shape the window is in. On a narrow
 	// window that is the drawer sliding over the page; on a wide one it is the
 	// splitter's first pane. One entry point for both, because the button is
