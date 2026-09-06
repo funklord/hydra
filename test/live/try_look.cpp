@@ -47,6 +47,7 @@
 #include <QApplication>
 #include <QDialog>
 #include <QLabel>
+#include <QLayout>
 #include <QTreeView>
 #include <QDir>
 #include <QEventLoop>
@@ -245,6 +246,13 @@ static void shoot_modal(main_window *w, const QString &slot, const QString &name
 				// has to be let run before it is worth photographing.
 				QApplication::processEvents();
 				spin(200);
+				// **Twice.** The first resize is clamped by the minimum the
+				// dialog has in its *wide* layout; switching to the narrow one
+				// lowers that minimum, and nothing re-applies the request. One
+				// resize therefore photographs a dialog wider than it was
+				// asked for -- and reads as a floor it does not have.
+				d->resize(narrow);
+				QApplication::processEvents();
 			}
 			save(d, name);
 			d->reject();

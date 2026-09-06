@@ -1353,14 +1353,18 @@ void settings_dialog::update_restore_button() {
 	// directly above this control, with the current page's name in it. The
 	// button repeats it in the one mode with the least room.
 	//
-	// **It does not fix what it was written for, and saying so is the point.**
-	// This is the widest control on the dialog -- 201px with "Restore Privacy
-	// & security defaults" on it, against 116 for the next -- so it looked
-	// like what sets the window's 395px minimum width, which is wider than a
-	// 360-logical-pixel phone. Shortening it to 99px moved that minimum by
-	// **nothing**: still 395. The `QDialogButtonBox` alone reports 271, and
-	// what accounts for the rest has not been established. See project.md; the
-	// number stands as a measurement and the cause does not.
+	// **And it is what decides whether this dialog fits on a phone.** Measured
+	// with a control -- the same dialog, the same narrow layout, the label
+	// forced long:
+	//
+	//     "Restore Privacy & security defaults"  201px   dialog minimum 395
+	//     "Restore defaults"                      99px   dialog minimum 293
+	//
+	// The button box is the widest thing in the outer layout, this button is
+	// the widest thing in the button box, and the page's name is in it -- so
+	// the floor of the whole window was set by whichever page happened to have
+	// the longest name. A phone is 360 logical pixels: at 395 the dialog did
+	// not fit on one, and at 293 it does.
 	const bool narrow = m_category_pick && m_category_pick->isVisible();
 	m_restore->setText(resettable && !narrow
 	                     ? QString("Restore %1 defaults").arg(label)

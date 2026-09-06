@@ -18176,44 +18176,48 @@ had looked alarming in one glance.
 and empty states faithfully; it does not carry state that is expressed as a
 shade. Where the question is about state, the driver has to say it in words.
 
-## Open: the settings dialog cannot be narrower than 395px
+## The settings dialog did not fit on a phone, and the first two answers were wrong
 
-`try_look` photographs the window at two widths and every dialog at one.
-The settings dialog has a **layout switch** in it -- below
-`k_narrow_threshold` its category list becomes a dropdown -- and nothing had
-ever looked at that path, so it is photographed at 380 now.
+`try_look` photographs the window at two widths and every dialog at one. The
+settings dialog has a **layout switch** in it -- below `k_narrow_threshold`
+its category list becomes a dropdown -- and nothing had ever looked at that
+path. It is photographed at 380 now, and it works.
 
-It works: the dropdown replaces the sidebar, the search box stays, the content
-scrolls, the buttons fit.
+**The finding, with a control.** The Restore button carries the page's name,
+so its width is set by whichever page has the longest one. The same dialog,
+the same narrow layout, the label forced long against short:
 
-**What the attempt to photograph it at 320 found is that it will not go
-there.** Asked for 320, the dialog comes back 395 wide, and its
-`minimumSizeHint()` says 395. A phone is 360 logical pixels wide -- and the
-narrow layout exists *because* phones are a target, in a comment about a
-setting that "was reachable on a desktop and invisible on a phone". So the
-settings dialog does not fit on the device the narrow mode was written for.
+    "Restore Privacy & security defaults"   201px    dialog minimum 395
+    "Restore defaults"                       99px    dialog minimum 293
 
-**The obvious cause is not the cause, and that is the useful half.** The
-Restore button is by a wide margin the biggest control on the dialog:
+The button box is the widest item in the outer layout and this button is the
+widest item in the button box, so the floor of the entire window was set by a
+page name. A phone is 360 logical pixels. At 395 the settings dialog did not
+fit on one; at 293 it does. It drops the name in the narrow layout, where the
+dropdown directly above is already showing it.
 
-    201px  "Restore Privacy & security defaults"
-    116px  "Export all settings..."
-    103px  "Remove selected"
-    102px  "Import settings..."
+### Two wrong answers were published first, from one instrument fault
 
-The page's name is in that string, so its width is set by whichever page has
-the longest name rather than by anything anybody sized. It now drops the name
-in the narrow layout -- where the dropdown directly above it is already
-showing that name -- and the button falls to **99px**.
+This entry said, and the commit before it said, that the minimum was 395, that
+a phone could not show the dialog, and that shortening the button **moved that
+number by nothing**. All three were wrong, and all three came from measuring
+at the wrong moment:
 
-The dialog's minimum stayed at **395**.
+- `minimumSizeHint()` was read *before* `processEvents()`, so it was the
+  wide-layout value -- the sidebar still visible, the label still long. The
+  reading was of a dialog that had not yet become narrow.
+- `resize()` was called once, and was **clamped** by that wide-layout minimum.
+  Switching to the narrow layout lowers the minimum and nothing re-applies the
+  request, so the dialog stayed 395 wide and read as a floor it did not have.
+  The driver resizes twice now, and the shot is genuinely 380.
 
-So the widest control was not what bound it. The `QDialogButtonBox` reports
-271; the search field 40, the dropdown 129, the page stack 68. What accounts
-for the remaining 124 has not been established, and this entry records a
-measurement rather than a diagnosis. The button change is kept because it is
-right on its own terms -- a name repeated in the one mode with the least room
-for it -- and explicitly not because it fixed anything.
+So "shortening it changed nothing" was a comparison of two numbers that were
+both stale, and it was written up as a virtue -- *the obvious cause is not the
+cause* -- which is the most confident a wrong finding gets. What settled it was
+a control: force the long label in the narrow layout and measure again. 395.
+
+**Measure after the thing you changed, and in the state you are claiming
+about.** Both failures are that one sentence, twice in one investigation.
 
 ### The button-fit check has not been seen to fail, and may not be able to
 
