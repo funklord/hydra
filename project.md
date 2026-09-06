@@ -19623,6 +19623,55 @@ on the first run. Measured, fixed to split on any whitespace, and recorded
 in the code: the sample that agreed with the broken parser was, once again,
 the one written on a single line.
 
+## The saved policy overrules a capability, and one comment already says it must not
+
+Item 1 of *What is next* records an upgrade problem the copyright holder
+owns: a saved `policy.ini` pins every default that was current when it was
+written, so no later default change reaches anybody who has run a previous
+build. That is a policy question. **What is new here is that the mechanism
+already breaks a contract stated in this tree**, which changes how urgent
+the question is rather than answering it.
+
+`main.cpp` raises the notifications default to `ask` when a notification
+presenter installs, deliberately before the policy file is read, and says
+why: "anything saved -- including a deliberate block -- overwrites this. It
+raises a default, it does not overrule a decision." The floor is `block`
+because Chromium treats a missing presenter as success, so a page's
+notification resolves and goes nowhere; blocking is the honest answer where
+nothing can present.
+
+`policy_engine::save` writes **every** global default as a concrete word,
+resolved through `global_default()`, whether or not anybody chose it. So the
+file cannot tell a decision from a floor. Measured with a probe built
+against the real classes:
+
+    run 1  built-in notifications            block
+    run 1  saved
+    run 2  after main() raises it            ask
+    run 2  after loading the file            block
+
+A machine with no session bus writes `block` on its first run; the day a
+presenter works, the raise happens and the file puts the floor straight back
+over it. Nobody chose that value, and it now overrules the capability
+detection permanently -- which is the exact thing the comment says the file
+must not do.
+
+**Recorded rather than fixed, and the reason is which decision it is.** The
+narrow repair -- do not write a default that equals the built-in one -- is
+the general upgrade change, and that is the holder's item. The shape that
+would settle it properly is a third tier the model does not have: built-in
+floor, capability-derived default, and a decision somebody made, with only
+the last one written. Choosing that is design work, and *working-practice*
+says a discrepancy between a document and the code is held open rather than
+resolved in either direction, because the right answer is often neither of
+the two on offer.
+
+What is not deferred is the evidence. `test_settings` pins the present
+behaviour with the reproduction attached, and says in as many words that it
+asserts what happens rather than what should -- so whoever settles the
+question inherits a failing case rather than a paragraph, and nobody
+"fixes" the test by mistake.
+
 ## A wall-clock threshold that failed for the machine, not the code
 
 `make check` went red on `test_bundle` while another build was running in
@@ -19761,6 +19810,14 @@ carried along as amendments to a list item.
    copyright holder's: a saved `policy.ini` pins every default that was current
    when it was written, so no future default change reaches anybody who has run
    a previous build.
+
+   **And it is already breaking a contract this tree states**, which is worth
+   knowing before deciding it — see *The saved policy overrules a capability*
+   above. `main.cpp` raises the notifications default when a presenter
+   installs and says the file "raises a default, it does not overrule a
+   decision"; measured, a file written on a machine with no presenter puts the
+   `block` floor back over that raise for ever, and nobody chose the floor.
+   The reproduction is pinned in `test_settings`.
 
    **And meet a real `getDisplayMedia`, which is now blocked on Qt rather than
    on a compositor.** Everything up to the engine call is proven against fakes

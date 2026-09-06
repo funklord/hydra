@@ -577,6 +577,64 @@ int main(int argc, char **argv) {
 	// truncated set back over the file. A rule on a line the parser choked on
 	// is gone, silently, which is the failure the marker was thought to
 	// prevent.
+	// **Present behaviour, pinned deliberately, and it is not what the code
+	// beside it says should happen.** `main.cpp` raises the notifications
+	// default to `ask` when a notification presenter installs, and its comment
+	// states the contract: "anything saved -- including a deliberate block --
+	// overwrites this. It raises a default, it does not overrule a decision."
+	//
+	// The saved file cannot honour that, because `policy_engine::save` writes
+	// *every* global default as a concrete word, whether or not anybody chose
+	// it. So a run on a machine with no presenter writes `notifications=block`
+	// -- the built-in floor, chosen by nobody -- and a later run where the
+	// presenter does install has that floor put back over the raise. The file
+	// overrules a capability detection with a non-decision, which is precisely
+	// what the comment says must not happen.
+	//
+	// **This test asserts what happens today, not what should.** Whether a
+	// saved default should follow the build is on the copyright holder's list
+	// as an upgrade question; what is recorded here is that one consumer's
+	// stated contract is already broken by it, with the reproduction ready for
+	// whoever settles it. When it is settled, the second half below becomes
+	// `ask` and this comment goes.
+	section("a saved default overrules the capability that raised it");
+	{
+		const QString dir = QDir::tempPath() + "/hydra-policy-pinned";
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString path = dir + "/policy.ini";
+
+		// Run one: no presenter, so nothing raises the floor. The person
+		// changes something else entirely, and the file is written.
+		{
+			policy_engine e;
+			check(e.global_default(policy::feature::notifications) ==
+			        policy::setting::block,
+			      "with no presenter the built-in floor is block");
+			e.set_setting("example.com", policy::feature::javascript,
+			               policy::setting::block);
+			check(e.save(path), "and a save writes the whole set of defaults");
+		}
+
+		// Run two: the presenter installs, `main()` raises the default before
+		// the window loads the file, and then the window loads the file.
+		{
+			policy_engine e;
+			e.set_global_default(policy::feature::notifications,
+			                      policy::setting::ask);
+			check(e.global_default(policy::feature::notifications) ==
+			        policy::setting::ask,
+			      "a presenter raises it to ask, as main() does");
+			check(e.load(path), "the saved policy loads");
+			check(e.global_default(policy::feature::notifications) ==
+			        policy::setting::block,
+			      "and puts the floor back over it -- a value nobody chose "
+			      "overruling a capability the machine now has");
+		}
+
+		QDir(dir).removeRecursively();
+	}
+
 	section("a policy file damaged in the middle is not read as a short one");
 	{
 		const QString dir = QDir::tempPath() + "/hydra-policy-damaged";
