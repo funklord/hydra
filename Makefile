@@ -234,7 +234,13 @@ SUITES     = $(filter-out $(NEEDS_MORE),$(ALL_SUITES))
 # accumulated here since 14 August, which a name nobody removes is how. Absolute
 # because a suite is free to chdir and a relative TMPDIR would follow it.
 TEST_TMP = $(TESTS_DIR)/tmp
-TEST_ENV = QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test \
+# **Hostile on purpose.** The shipped live-view cap is 8; the suite and every
+# driver run at 2, so that suspend-and-restore -- where tab state gets lost --
+# happens constantly rather than only for somebody with nine tabs open. Raising
+# a default for users must not quietly stop exercising the paths the low number
+# was finding.
+HYDRA_TEST_LIVE_VIEWS ?= 2
+TEST_ENV = HYDRA_MAX_LIVE_VIEWS=$(HYDRA_TEST_LIVE_VIEWS) QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test \
            QTWEBENGINE_CHROMIUM_FLAGS=--mute-audio \
            TMPDIR=$(CURDIR)/$(TEST_TMP)
 

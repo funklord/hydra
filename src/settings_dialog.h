@@ -120,6 +120,7 @@ private:
 	void clear_browsing_data();
 	void build_appearance_page(QWidget *page);
 	void build_kiosk_page(QWidget *page);
+	void build_tabs_page(QWidget *page);
 	void build_filter_page(QWidget *page);
 	void rebuild_filter_list();
 	// The per-site exceptions list on the privacy page: what the shield has been
@@ -247,6 +248,7 @@ private:
 	enum class probe_state { unknown, checking, reachable, unreachable };
 	probe_state   m_probe_state = probe_state::unknown;
 	QLineEdit    *m_claude_model = nullptr;
+	QSpinBox     *m_live_views   = nullptr;
 	QLineEdit    *m_claude_key   = nullptr;
 	QLabel       *m_ai_status    = nullptr;
 };
@@ -311,5 +313,12 @@ QString default_search_engine();
 // filling a password over plain HTTP puts it on the wire.
 bool autofill_https_only();
 void set_autofill_https_only(bool on);
+
+// How many tabs keep a live engine view. Beyond this the least-recently-used
+// one is written to a state blob and its view destroyed, so coming back to it
+// is a page load rather than a switch -- see `main_window::live_view_cap`,
+// which is the one that decides and which this is only the stored half of.
+int  live_view_cap();
+void set_live_view_cap(int n);
 
 }  // namespace settings_store

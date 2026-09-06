@@ -18275,6 +18275,83 @@ The discriminator that emerged: **a count of things that exist now rots; a
 count of things that used to exist does not.** Most of this tree's numbers are
 the second kind, which is why twenty hits yielded one.
 
+## Tabs kept loaded: a hard-coded 4, now a setting, and what eviction costs
+
+Reported by the copyright holder: *"it takes a longer time to load a tab than
+other browsers."*
+
+`k_max_live_views` was a compile-time `4`. Beyond it `enforce_live_cap` writes
+the least-recently-used tab's history into a state blob and **destroys its
+`QWebEnginePage`**. Coming back to that tab is not a switch: it builds a fresh
+page, re-wires about fifteen callbacks, re-injects eight `DocumentCreation`
+scripts and calls `restore_state`, which re-runs the load. Every other browser
+keeps a background tab resident.
+
+### The measurement
+
+`try_tabswitch` builds `cap + 2` tabs on local files, opens each once so the
+cap has something to evict, then times two switches on the same window in the
+same run -- **asserting which path each takes before timing it**, because a
+time alone cannot say whether a view was live.
+
+    live view cap: 2
+    live switch       1 ms
+    after eviction   39 ms
+
+Identical at cap 8. **That 38ms is the floor, not the answer**: these are
+one-line `file://` documents with no script, no images and no network. It is
+the shell's fixed cost for rebuilding a page. A real site adds its own entire
+load on top -- which is the point, because eviction re-runs all of it.
+
+The driver asserts the shape rather than a threshold: a live switch is
+immediate, an evicted one is not. A number pinned here would fail for reasons
+that are not this project's.
+
+### Three things decide the cap now, in order
+
+- **`HYDRA_MAX_LIVE_VIEWS`**, so development and the suite can run *hostile*.
+  `make test` sets it to 2 through `HYDRA_TEST_LIVE_VIEWS`, so every
+  suspend-and-restore path runs constantly rather than only for somebody with
+  nine tabs open. **Raising a default for users must not quietly stop
+  exercising the paths the low number was finding**, which is the holder's
+  own instruction and the reason this is not simply a bigger constant.
+- **A renderer crash**, which halves the ceiling for the rest of the session
+  down to a floor of 2 and says so in the log. A page whose process died is
+  usually a machine short of memory, and holding the same number of engine
+  processes is the wrong response. Never written to the settings file: it is a
+  fact about this machine today, not a choice.
+- **The stored setting**, on a new **Tabs** page, 1 to 64, default 8.
+
+The suite passes at cap 2 -- 35 suites, no failures -- which is the state that
+was being relied on before and is now the state it is deliberately held in.
+
+### The instrument was wrong first, and said so loudly
+
+Every open reported `20004 ms (TIMED OUT)` while the pages were in fact
+loading in about fifty. `shell_fixture::write_page(path, body)` builds the
+whole document and uses its argument **as the title**; passing markup made the
+title the markup, so the wait for `page_title() == "page 0"` could never match.
+
+Worth noting because it failed in the honest direction: a wait that never
+matches reports a timeout, which is a loud wrong answer rather than a quiet
+one. Had the condition been "close enough" it would have reported plausible
+nonsense.
+
+### What was not done, and is the larger number
+
+Eviction is the shell's contribution. Three other things on the load path are
+measured but unaddressed, and the first is bigger than everything above:
+
+- **This profile has no filter rules at all** -- no `filters-ai.txt` in
+  `~/.local/share/Hydra` -- so every ad, tracker and beacon is fetched. Most
+  of the speed of a browser with a blocker is the requests it never makes.
+- **Eight scripts injected at `DocumentCreation`**, two in the main world, in
+  every frame of every page, whether or not the feature can act there.
+- **Five observers plus about five policy lookups per request**, on
+  WebEngine's IO thread. Cheap here -- `policy.ini` has 3 rules -- and it
+  grows linearly with a person's exceptions, since `effective_setting` scans
+  every rule for every feature for every request.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

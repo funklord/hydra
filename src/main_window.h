@@ -396,7 +396,38 @@ public:
 
 	static constexpr int k_drawer_threshold = 620;   // logical px
 
-	static constexpr int k_max_live_views = 4;
+	// **How many tabs keep a live engine view**, and it is a setting rather
+	// than a constant now.
+	//
+	// It was 4, and a fifth tab evicted the least-recently-used one: its
+	// history went to a state blob and its `QWebEnginePage` was destroyed, so
+	// coming back to it built a fresh page, re-wired every callback, re-ran
+	// every injected script and re-loaded the document. Every other browser
+	// keeps a background tab resident, which is why this browser felt slow at
+	// exactly the thing browsers are expected to be instant at. Measured in
+	// `try_tabswitch`.
+	//
+	// Three things decide the number, in this order:
+	//
+	//  * `HYDRA_MAX_LIVE_VIEWS`, which exists so that development and the test
+	//    suite can run *hostile* -- a cap of 2 makes every suspend-and-restore
+	//    path run constantly, and those are where state gets lost. `make test`
+	//    sets it. A default raised for users must not quietly stop exercising
+	//    them.
+	//  * a renderer crash, which lowers the ceiling for the rest of the
+	//    session: a page whose process died is usually a machine short of
+	//    memory, and holding four more of them is the wrong answer.
+	//  * the stored setting, which is what a person chose.
+	static constexpr int k_default_live_views = 8;
+	static constexpr int k_crash_floor        = 2;
+
+	// The number in force right now, which is the only one worth asking for.
+	int live_view_cap() const;
+
+private:
+	// Zero until a renderer dies; then the session's ceiling, never stored.
+	int m_crash_cap = 0;
+public:
 
 	tab_tree_model  *m_model = nullptr;
 	tree_sort_proxy *m_proxy = nullptr;

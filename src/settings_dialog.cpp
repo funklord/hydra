@@ -3,6 +3,7 @@
 #include "download_manager.h"
 #include "flow_layout.h"
 #include "autofill_controller.h"
+#include "main_window.h"
 #include "ollama_provider.h"
 #include "player_launcher.h"
 #include "torrent_download_source.h"
@@ -214,6 +215,17 @@ QString search_engine() {
 
 QString default_search_engine() {
 	return QStringLiteral("https://duckduckgo.com/?q=%1");
+}
+
+int live_view_cap() {
+	QSettings s = open_settings();
+	return s.value("tabs/liveViews", main_window::k_default_live_views).toInt();
+}
+
+void set_live_view_cap(int n) {
+	QSettings s = open_settings();
+	s.setValue("tabs/liveViews", qBound(1, n, 64));
+	s.sync();
 }
 
 bool autofill_https_only() {
@@ -514,6 +526,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 	// QWidgets -- which is the question again, not an answer.
 	auto *privacy_page = new QWidget;
 	auto *appearance_page = new QWidget;
+	auto *tabs_page  = new QWidget(stack);
 	auto *kiosk_page  = new QWidget;
 	auto *filter_page = new QWidget;
 	auto *player_page = new QWidget;
@@ -528,6 +541,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 	ai_page->setObjectName("page_ai");
 	build_privacy_page(privacy_page);
 	build_appearance_page(appearance_page);
+	build_tabs_page(tabs_page);
 	build_kiosk_page(kiosk_page);
 	build_filter_page(filter_page);
 	build_player_page(player_page);
@@ -575,6 +589,7 @@ settings_dialog::settings_dialog(player_launcher *players,
 	add_page(wrap(player_page), "Media & players");
 	add_page(wrap(dl_page), "Downloads");
 	add_page(wrap(filter_page), "Filters");
+	add_page(wrap(tabs_page), "Tabs");
 	add_page(wrap(kiosk_page), "Kiosk");
 
 	// The AI page scrolls, but its status line does not. It is the answer to
@@ -1444,6 +1459,9 @@ void settings_dialog::restore_page_defaults(int page) {
 			m_interfaces->setText(fresh_t.listen_interfaces());
 			m_sequential->setChecked(fresh_t.sequential());
 		}
+	} else if (name.startsWith("Tabs")) {
+		if (m_live_views)
+			m_live_views->setValue(main_window::k_default_live_views);
 	} else if (name.startsWith("Kiosk")) {
 		const kiosk_config d;   // the struct's own initialisers are the defaults
 		m_kiosk_home->setText(d.home.toString());
@@ -1893,6 +1911,29 @@ void settings_dialog::rebuild_filter_list() {
 	          .arg(m_filters_path.isEmpty() ? QString("memory only")
 	                                         : m_filters_path));
 	m_filter_remove->setEnabled(false);
+}
+
+// **One setting, and it earns a page.** It is not appearance, not privacy and
+// not a download; it is about how the tree behaves, which is this browser's
+// whole subject and will not stay one row for long.
+void settings_dialog::build_tabs_page(QWidget *page) {
+	auto *v = new QVBoxLayout(page);
+	v->setAlignment(Qt::AlignTop);
+	v->addWidget(section_heading("Memory", page));
+
+	m_live_views = new QSpinBox(page);
+	m_live_views->setObjectName("live_views");
+	m_live_views->setRange(1, 64);
+	v->addWidget(settings_row(
+	  "Tabs kept loaded",
+	  "How many tabs keep a running page behind them. Beyond this the "
+	  "least-recently-used one is put to sleep, and coming back to it reloads "
+	  "the page rather than simply showing it — which is why a low number "
+	  "feels slow. Each loaded tab costs memory, so this is the trade. "
+	  "A page whose process crashes lowers the number for the rest of the "
+	  "session, because that is usually a machine running short.",
+	  m_live_views, page));
+	v->addStretch(1);
 }
 
 void settings_dialog::build_kiosk_page(QWidget *page) {
@@ -2510,6 +2551,8 @@ void settings_dialog::load() {
 
 	if (m_autofill_https)
 		m_autofill_https->setChecked(settings_store::autofill_https_only());
+	if (m_live_views)
+		m_live_views->setValue(settings_store::live_view_cap());
 
 	switch (settings_store::ai_mode()) {
 		case ai_choice::local_only: m_ai_local->setChecked(true); break;
@@ -2643,6 +2686,8 @@ void settings_dialog::apply() {
 	}
 	if (m_autofill_https)
 		settings_store::set_autofill_https_only(m_autofill_https->isChecked());
+	if (m_live_views)
+		settings_store::set_live_view_cap(m_live_views->value());
 	if (m_policy) {
 		// Exceptions the user removed. Every feature is set back to unset, which
 		// is what "falls through to the defaults" means in the policy model --

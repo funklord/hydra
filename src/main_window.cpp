@@ -2216,7 +2216,7 @@ void main_window::on_about() {
 
 void main_window::update_status() {
 	const int live = m_views_by_id.size();
-	m_tab_counts->setText(QString("%1 / %2 live").arg(live).arg(k_max_live_views));
+	m_tab_counts->setText(QString("%1 / %2 live").arg(live).arg(live_view_cap()));
 }
 
 bool main_window::event(QEvent *e) {
@@ -2757,7 +2757,7 @@ void main_window::set_drawer_open(bool open, bool animate) {
 }
 
 web_view_backend *main_window::current_view() const {
-	// Linear over at most k_max_live_views entries, which beats keeping a
+	// Linear over at most `live_view_cap()` entries, which beats keeping a
 	// second piece of state in sync with the stack.
 	QWidget *w = m_stack->currentWidget();
 	for (web_view_backend *v : m_views_by_id)
@@ -3564,6 +3564,25 @@ void main_window::report_render_crash(const QString &host) {
 	                                            "Reload to try again.")
 	                          : QString("%1 stopped responding. Reload to try "
 	                                     "again.").arg(host));
+
+	// **And hold fewer pages from here on.** A renderer that died is most often
+	// a machine that ran out of memory, and the browser's answer to that must
+	// not be to go on keeping the same number of engine processes alive. Halved
+	// per crash down to a floor, for the rest of the session only: it is a
+	// response to what this machine is doing today, not a decision about what
+	// the person wants, so it is never written to the settings file.
+	const int before = live_view_cap();
+	m_crash_cap = qMax(k_crash_floor, before / 2);
+	if (m_crash_cap < before) {
+		qWarning("live views: %d -> %d after a renderer crash", before,
+		          m_crash_cap);
+		// Keep whatever is showing; everything else is fair game.
+		QString showing;
+		if (web_view_backend *v = current_view())
+			showing = m_views_by_id.key(v);
+		enforce_live_cap(showing);
+		update_status();
+	}
 }
 
 void main_window::show_link_target(const QUrl &url) {
@@ -3735,8 +3754,24 @@ void main_window::touch_lru(const QString &id) {
 	m_lru.prepend(id);
 }
 
+// **Asked rather than stored**, because all three inputs can move while the
+// browser runs: the setting from the dialog, the crash ceiling from a renderer
+// dying, and the environment override which is fixed but read here so there is
+// one place that knows the order.
+int main_window::live_view_cap() const {
+	int n = settings_store::live_view_cap();
+	if (qEnvironmentVariableIsSet("HYDRA_MAX_LIVE_VIEWS")) {
+		const int forced = qEnvironmentVariableIntValue("HYDRA_MAX_LIVE_VIEWS");
+		if (forced > 0)
+			n = forced;
+	}
+	if (m_crash_cap > 0)
+		n = qMin(n, m_crash_cap);
+	return qBound(1, n, 64);
+}
+
 void main_window::enforce_live_cap(const QString &keep_id) {
-	while (m_views_by_id.size() > k_max_live_views) {
+	while (m_views_by_id.size() > live_view_cap()) {
 		QString victim;
 		for (auto it = m_lru.crbegin(); it != m_lru.crend(); ++it) {
 			if (*it != keep_id && m_views_by_id.contains(*it)) {
