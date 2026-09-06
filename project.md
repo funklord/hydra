@@ -18503,6 +18503,65 @@ only for `remove()`, which moves the indices under everything. **Nothing but
 the benchmark would have found this**: every correctness test passes either
 way, and the load path is not on any timed assertion.
 
+## Delayed: the subscription waits for fuzznet, and two things found while building it
+
+Stopped by the copyright holder part-way through, with the reasoning recorded
+because it decides where this lives rather than merely when:
+
+> this kind of subscription and anything we may decide to do with it (that
+> works) will probably be generic enough that it should be in fuzznet and
+> likely useful for other purposes and projects ... which incidentally might
+> be a great way to propagate tabs and certain other config to other hosts too
+
+That is `harmonization.md`'s rule applied before the cost was paid: a shared
+mechanism is not extracted in passing by whoever needed it first. A replicated,
+signed, revocable list of small records is not a filter feature -- it is the
+same shape as propagating a tab tree, a policy file or a set of site rules
+between one person's machines, and building it inside the browser would make
+the browser its owner.
+
+**The indexed matcher stays**, because it is not that mechanism: it is what
+makes any list answerable per request, it is measured, and every list this
+browser will ever hold goes through it. What was reverted is the wiring --
+`import_list`, a second `filter_list` on `main_window`, `request_filter`
+consulting both, and the settings page that was about to be written. The patch
+is not kept; the two findings below are, because they are facts about this
+browser's filter engine that matter the moment a list arrives by any route.
+
+### Importing a list would have made the browser block MORE, not less
+
+`@@||example.com^` is an **exception**: it means *do not block this*. Hydra's
+parser does not implement exceptions, and `parse_rule` does not reject them --
+`@@||x^` does not start with `||`, so it becomes a substring rule matching its
+own literal text. Inert, harmless-looking, and the exception it expressed is
+silently gone.
+
+A list that relies on exceptions to un-break the sites its broad rules would
+otherwise catch therefore **over-blocks** when imported here, and the symptom
+is a broken page that a person blames on the browser rather than on the list.
+Refusing and counting them is the honest handling; importing them is not.
+
+### And a rule with options is a different rule without them
+
+`||x.example^$script,third-party` narrows a rule to one resource kind from a
+third party. Hydra reads no options, and `parse_rule` takes everything up to
+the `^`, so the rule arrives meaning *block x.example for everything*. That is
+not partial support; it is a rule the list's author did not write.
+
+Both belong to the engine rather than to any transport, so whenever the shared
+mechanism does arrive, the ingestion side has to refuse these two classes and
+say how many it refused -- a person importing a real list and silently getting
+a third of it, differently-behaving, is worse served than one who is told.
+
+### The performance problem is therefore still open
+
+The measurement stands: this profile has no filter rules, so every ad and
+tracker is fetched, and that is the largest single item on the page-load path
+found so far. What is now true is that a list *could* be answered -- 3.4us per
+request over 25,000 rules -- and what is not built is anything that puts one
+there. The narrow local step, if it is ever wanted before fuzznet, is a file
+this browser reads and nothing else: no fetching, no updating, no sharing.
+
 ## Open: who pays for trust, and can a local model be the auditor
 
 Two questions from the copyright holder while the filter work was in flight,
