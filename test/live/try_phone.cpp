@@ -593,15 +593,31 @@ int main(int argc, char *argv[]) {
 	// width rather than a pane, so what matters is whether it covers enough to
 	// be usable without covering so much that there is no way back -- it takes
 	// 82% of the width, leaving a strip of page to tap on.
-	if (QAction *drawer = f.window.findChild<QAction *>("drawer")) {
+	// **By the name it now carries**, which is what a person reads on the
+	// button and what a screen reader announces.
+	//
+	// Not by tooltip: this action sets a *status* tip and no tooltip, so
+	// `QAction::toolTip` falls back to the text anyway -- the first attempt
+	// here matched the status tip's wording against `toolTip()` and found
+	// nothing, which the check below reported rather than hiding.
+	//
+	// It used to look for the button whose *text* was the hamburger glyph,
+	// U+2630, and that stopped finding anything when the drawer action was
+	// given a real name: the glyph was there only to be read aloud by a screen
+	// reader, it is not a word, and naming it was the point of that change.
+	// The lookup then failed silently, the drawer never opened, and the
+	// assertion below reported the empty-page hint as a defect -- while the
+	// hint was correct, because the drawer it defers to was shut.
+	//
+	// A lookup that cannot fail loudly is worth more than a fallback here, so
+	// there is no second guess: not finding it is a failure of its own.
+	QAction *drawer = nullptr;
+	for (QAction *a : f.window.findChildren<QAction *>())
+		if (a->text() == "Tab tree")
+			drawer = a;
+	shell::check(drawer != nullptr, "window-drawer: the drawer action is reachable");
+	if (drawer)
 		drawer->trigger();
-	} else {
-		// The action carries no object name, so reach it the way a person does:
-		// the toolbar button whose text is the drawer glyph.
-		for (QToolButton *b : f.window.findChildren<QToolButton *>())
-			if (b->isVisible() && b->text().contains(QChar(0x2630)))
-				b->click();
-	}
 	spin(600);
 
 	// **The hint behind the drawer says nothing while the drawer is open.**

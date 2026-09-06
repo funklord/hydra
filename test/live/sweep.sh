@@ -166,26 +166,36 @@ fi
 # next sweep reported two failures that were faithful reports of code that had
 # been deleted, and they read exactly like defects.
 #
-# **Compared against the objects, not against `src/`.** Comparing to the
-# sources was the first version and it is unusable: editing anything in `src/`
-# marks every driver stale, and `make drivers` does not clear it, because make
-# rebuilds from objects that are themselves current only when something asked
-# for them. A guard that demands a rebuild make considers unnecessary is one
-# people learn to pass with the override.
+# **Compared against the objects each driver links, which is what make
+# compares.** Two wrong versions came before this one and both are worth the
+# lines, because each is a way a guard can be confidently wrong:
 #
-# The objects are what a driver actually links, so a driver older than the
-# newest of them is genuinely reporting on code it does not contain -- which is
-# the case this exists for: two drivers built against a deliberate sabotage,
-# the sabotage reverted, `make check` rebuilding the objects and not the
-# drivers, and the next sweep reporting two failures that were faithful reports
-# of code that had been deleted.
-newest=$(ls -t "$BIN"/app/*.o "$BIN"/*.o 2>/dev/null | head -1)
+#   against `src/`        every driver goes stale the moment anything in
+#                         `src/` is touched, and `make drivers` does not
+#                         clear it -- a guard demanding a rebuild make
+#                         considers unnecessary is one people pass with the
+#                         override
+#   against the newest    flags drivers whose own dependencies did not
+#   object anywhere       change. Measured: it named five, `make drivers`
+#                         said there was nothing to do, and every one of the
+#                         five had a binary NEWER than every object it links
+#
+# `objsets.mk` holds the per-binary link sets, which is make's own answer to
+# "what does this depend on", so asking it is agreeing with make rather than
+# guessing alongside it. A driver with an empty set -- `try_frame` and
+# `try_mse` have one -- falls back to its own object, which always exists.
+objs_for() {
+	awk -v k="OBJS_$1" '$1==k{f=1} f{print; if(!/\\$/) exit}' test/objsets.mk 2>/dev/null \
+	  | grep -o '\$(BUILD_DIR)/[^ \\]*\.o' | sed "s|\$(BUILD_DIR)|$BIN|"
+}
 stale=""
 for d in $drivers; do
 	src="test/live/$d.cpp"
 	[ -f "$src" ] || continue
+	newest=$(objs_for "$d" | xargs -r ls -t 2>/dev/null | head -1)
+	[ -n "$newest" ] || newest="$BIN/$d.o"
 	if [ "$src" -nt "$BIN/$d" ] || \
-	   { [ -n "$newest" ] && [ "$newest" -nt "$BIN/$d" ]; }; then
+	   { [ -e "$newest" ] && [ "$newest" -nt "$BIN/$d" ]; }; then
 		stale="$stale $d"
 	fi
 done

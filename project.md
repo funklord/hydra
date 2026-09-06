@@ -10617,6 +10617,58 @@ two fmake builds. Found by sweeping this project for claims of having
 signalled something, which is a lens the `android-run` entry below suggested
 -- and that is two for two.
 
+**Answered the same day, and the half this tree inferred was wrong.** fmake
+measured both binaries against hydra `0a42ef0`, unpacked with `git archive`
+into a scratch directory: today's fmake and the last commit of 2026-08-25
+each returned rc 0, 91 targets, **all five present**. So "the failures
+belong to that HEAD build rather than to the release" -- written here as
+though the version were the variable -- is not what the evidence supports.
+Something in the working tree was, and a `git archive` has none of it. They
+state the limit of their own control too: a scratch build of HEAD is
+whatever the tree held, so this disproves "the two versions disagree about
+hydra" and not "the binary they ran did something different".
+
+**The mechanism was a real defect and is fixed there.** A file that scans as
+defining `main()` whose object does not export it was dropped with a
+warning, leaving fmake's `broken` list empty and the eject at rc 0 -- and
+the verdict is remembered against the file's hash, so the warning prints
+once and every eject afterwards omits the program *silently*, which is the
+run a generator on a schedule makes. Their §178 has it; `cf0d9e2` makes an
+eject that left a program out name it and exit non-zero.
+
+**And a second inference, refuted the same evening, that was worse than the
+first.** Regenerating `objsets.mk` produced two empty link sets --
+`OBJS_try_frame` and `OBJS_try_mse` -- and I offered them to fmake as
+possibly the same shape as the defect they had just fixed. They checked
+against the fragment they still held: fmake emits one object for each of
+those drivers, the driver's own, and `tool/objsets.py`'s `translate()`
+returns None for exactly that case, because the program's own object is
+already the first prerequisite of the link rule. **An empty `OBJS_` means
+"this driver needs nothing but itself", which is a true answer**, and the
+comment saying so is in this tree, in a file this project owns.
+
+So the distinguishing check, for whoever meets those two lines next: a
+target fmake *dropped* emits no block at all and lands in `objsets.py`'s
+`missing` list, which is the loud error of §177. A block that is present and
+translates to nothing is a self-contained driver. The two are already
+separated by the code -- which is why one produced an error and the other a
+quiet empty variable.
+
+The first inference was about somebody else's tool and only they could
+refute it. **This one was about the output of a script in this repository,
+and one grep here would have settled it before it was sent.**
+
+**What this end owes the record.** The relay held -- the reproduction, the
+cleared-cache control and the two builds were all theirs to check and all
+stood. The *inference* did not, and it is the same three-for-three shape
+`evidence.md` names: a claim written in the subject's voice about their
+tool, where a claim in mine ("what changed between the runs was which fmake
+ran") would have invited exactly the measurement that refuted it. Why those
+five, in that tree, on that day is open and is this tree's to answer, not
+theirs to guess: if it recurs the run can no longer be silent, because
+`objsets.py` writes fmake's stderr when the status is non-zero and now it
+is, and that stderr names the file nobody has.
+
 ### `BIN=` on the sweep's command line does nothing, and starts a real sweep
 
 **Measured by doing it.** `test/live/sweep.sh` reads
@@ -19630,6 +19682,52 @@ wrapped parameter lists, so every one of the 25 calls read as unresolvable
 on the first run. Measured, fixed to split on any whitespace, and recorded
 in the code: the sample that agreed with the broken parser was, once again,
 the one written on a single line.
+
+## The first full sweep, and what three failures turned out to be
+
+23 passed, 8 report-only, 3 failed -- and no `CRASH` lines, so the teardown
+segfault is gone across all 42 drivers rather than just the three it was
+found in. Each failure was re-run alone before being believed, which is this
+script's own rule, and the three answers were three different things.
+
+**`try_files`: a sweep flake.** 23 passed 8 failed under the sweep, **31
+passed 0 failed alone**, twice. The preamble says these drivers are
+intermittent in the aggregate and that chasing it costs more than it is
+worth; this is that, and the rule earned its keep by keeping an hour from
+going into it.
+
+**`try_delete`: mine, and stale against a deliberate change.** It asserts
+"five opened, four live" and "six more opened, still four live" -- counts
+that were exact when the live-view cap was a constant of four. The cap
+became a setting earlier in this session, defaulting to eight for measured
+reasons about how long a tab takes to come back, so the driver went from
+passing to reporting three defects on a browser that was behaving correctly.
+It sets `HYDRA_MAX_LIVE_VIEWS=4` for itself now, with the reason written
+where the next person will meet it. 11 of 11.
+
+**`try_phone`: stale against the accessibility work, and the fix took two
+attempts.** It reached the drawer button by matching the hamburger glyph
+U+2630 in the button's *text* -- and that glyph is gone, because naming that
+control was the point of the accessibility pass: it was the one control
+revealing the whole tab tree and it announced itself as a character. The
+lookup failed silently, the drawer never opened, and the assertion then
+reported the empty-page hint as a defect while the hint was correct: it
+defers to a drawer that was shut.
+
+The replacement matches the action's name, `Tab tree`. The first replacement
+matched its **tooltip** against the wording of its *status* tip and found
+nothing either -- and that is the part worth keeping, because the check
+added beside it said so out loud instead of falling through to a second
+guess. A lookup with a fallback would have failed the same way twice and
+blamed the placeholder again. 120 of 120.
+
+**What the three have in common is not flakiness.** Two of them are tests
+that encoded a value -- a cap of four, a glyph on a button -- that the
+program then changed for a good reason, and both then accused the program of
+a defect. It is the same shape as the wall-clock thresholds earlier in this
+session and the same remedy: state what you depend on, or assert the
+relationship rather than the value. A test that reads a default it never
+names is a test that will one day be wrong with great confidence.
 
 ## The sweep believed a tally over an exit code, and a stale binary over the tree
 

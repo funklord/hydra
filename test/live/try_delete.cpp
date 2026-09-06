@@ -61,6 +61,23 @@ int main(int argc, char *argv[]) {
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
 
+	// **The cap this driver asserts against, stated rather than assumed.**
+	// Every count below -- four live out of five opened, four again out of
+	// eleven -- is a claim about the live-view cap, and the cap was a constant
+	// when they were written. It is a setting now, defaulting to eight for
+	// measured reasons about how long a tab takes to come back, so a driver
+	// that assumed four went from passing to reporting three defects the day
+	// the default moved, and nothing was wrong with the browser.
+	//
+	// Forced rather than read, because these assertions are about *specific*
+	// counts and a relationship would say much less: what is being tested is
+	// that the cap is enforced at all, that a suspension writes a blob, and
+	// that deleting a node takes the blob with it.
+	//
+	// Set before the window exists. `live_view_cap()` reads the environment on
+	// every call, so later would work too and would be a worse habit.
+	qputenv("HYDRA_MAX_LIVE_VIEWS", "4");
+
 	const QString out = qEnvironmentVariableIsSet("HYDRA_TEST_OUT")
 	                        ? qgetenv("HYDRA_TEST_OUT") : QString("/tmp/hydra-delete");
 	QDir().mkpath(out);
