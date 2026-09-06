@@ -8,10 +8,16 @@
 // pages or describing one, and they are the sections most likely to grow.
 #include "shell_fixture.h"
 
+#include "node.h"
+#include "tab_tree_model.h"
 #include "qtwebengine_view.h"
 #include <QAbstractButton>
 #include <QApplication>
+#include <QClipboard>
+#include <QFileInfo>
+#include <QGuiApplication>
 #include <QLabel>
+#include <QSortFilterProxyModel>
 #include <QStatusBar>
 
 int main(int argc, char *argv[]) {
@@ -139,6 +145,52 @@ int main(int argc, char *argv[]) {
 			spin(200);
 			check(qFuzzyCompare(view->zoom_factor(), 1.0),
 			      "Actual Size is an absolute, not an undo");
+		}
+	}
+
+	section("copying the address of the page you are looking at");
+	{
+		// **A node's `url` is where the tab was filed and does not follow a
+		// navigation.** The title does -- that dual meaning is recorded in
+		// `project.md` as the copyright holder's to settle, because the tab
+		// lock's pin lives in the same field. What is not their question is
+		// which of the two Copy Address should read: the address bar shows the
+		// page you are on, and an action beside it that hands you the page you
+		// started from is two controls disagreeing about one tab.
+		auto *model = w.findChild<tab_tree_model *>();
+		node *folder = model->root()->children.first();
+		node *row = folder->children.first();
+		const QString filed = row->url;
+
+		check(f.open_tab(0, "one.html"), "the first tab is open at page one");
+		// Navigate *within* the tab, which is what leaves the two apart.
+		address->setText(QUrl::fromLocalFile(two).toString());
+		emit address->returnPressed();
+		check(wait_for(address, "two.html"), "and taken to another page inside it");
+		f.wait_idle();
+		check(row->url == filed,
+		       QString("the row still holds the address it was filed at (%1)")
+		           .arg(QFileInfo(row->url).fileName()));
+
+		QAction *copy = nullptr;
+		for (QAction *a : w.findChildren<QAction *>())
+			if (QString(a->text()).remove('&') == "Copy Address")
+				copy = a;
+		check(copy != nullptr, "the Edit menu offers Copy Address");
+
+		if (copy) {
+			QGuiApplication::clipboard()->setText("nothing yet");
+			// Select the row, which is what the action reads.
+			auto *proxy = qobject_cast<QSortFilterProxyModel *>(tv->model());
+			tv->setCurrentIndex(proxy->mapFromSource(model->index_for_node(row)));
+			copy->trigger();
+			const QString got = QGuiApplication::clipboard()->text();
+			check(got.contains("two.html"),
+			       QString("copies the page in front of you (%1)")
+			           .arg(QFileInfo(got).fileName()));
+			check(got == address->text(),
+			       "which is the address bar's answer, so the two controls "
+			       "agree about one tab");
 		}
 	}
 

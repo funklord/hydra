@@ -19623,6 +19623,33 @@ on the first run. Measured, fixed to split on any whitespace, and recorded
 in the code: the sample that agreed with the broken parser was, once again,
 the one written on a single line.
 
+## Copy Address handed you the page you started from
+
+Found by asking which menu actions no test names -- twenty-six of fifty-two,
+most of them reached by drivers through a tooltip or a slot rather than by
+label, which is the proxy over-reporting again. `Copy Address` was not one of
+those.
+
+It copied `n->url`, the address the row was **filed** at. A node's url does
+not follow a navigation -- the title does, and that dual meaning is recorded
+in `project.md` as the copyright holder's to settle, because the tab lock's
+pin lives in the same field. So after clicking through a site, the address
+bar showed where you were and Ctrl+Shift+C gave you where you came in. Two
+controls, one tab, different answers.
+
+**Which field to fix is the holder's question; which field this action reads
+is not.** For a row whose view is live, what the person is looking at is the
+view's own url, and nothing stops the action reading it. A suspended or
+unopened row has no view, and there the stored url is not a stale answer but
+the only one there is -- so that path is unchanged.
+
+`try_pagetools` covers it, and the middle check is the one that makes the
+other two mean anything: it asserts that the row still holds the address it
+was filed at, so the section is measuring the disagreement rather than a
+tree that happened to keep up. Sabotaged back to `n->url`: the clipboard
+holds `one.html` while the address bar reads `two.html`, which is the defect
+stated as an assertion.
+
 ## The saved policy overrules a capability, and one comment already says it must not
 
 Item 1 of *What is next* records an upgrade problem the copyright holder

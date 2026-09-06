@@ -1346,12 +1346,32 @@ QMenuBar *main_window::build_menu_bar() {
 	                             "last accepted reorganization");
 	edit_menu->addSeparator();
 
+	// **The address it is showing, not the address it was opened at.** A
+	// node's `url` is where the tab was filed and does not follow a
+	// navigation -- the title does, which is the dual meaning recorded in
+	// `project.md` and the tab lock's pin lives in the same field, so the
+	// field itself is not this action's to change. Nothing stops it *reading*
+	// the better source: for a row whose view is live, what the person is
+	// looking at is the view's own url, and copying anything else hands them
+	// the page they started from while the address bar beside it shows the one
+	// they are on.
+	//
+	// A suspended or unopened row has no view, and there the stored url is not
+	// a stale answer but the only one there is.
 	QAction *copy_addr = edit_menu->addAction("&Copy Address",
 	                                           QKeySequence("Ctrl+Shift+C"), this,
 	                                           [this] {
-		if (node *n = selected_node())
-			if (!n->url.isEmpty())
-				QGuiApplication::clipboard()->setText(n->url);
+		node *n = selected_node();
+		if (!n)
+			return;
+		QString address = n->url;
+		if (web_view_backend *v = m_views_by_id.value(n->id, nullptr)) {
+			const QString live = v->url().toString();
+			if (!live.isEmpty() && live != QLatin1String("about:blank"))
+				address = live;
+		}
+		if (!address.isEmpty())
+			QGuiApplication::clipboard()->setText(address);
 	});
 	copy_addr->setStatusTip("Copy the selected tab's address");
 	QAction *dup_act = edit_menu->addAction("Dup&licate", this, [this] {
