@@ -19,6 +19,9 @@
 #include "tab_tree_model.h"
 #include <QAbstractButton>
 #include <QAction>
+#include "web_view_backend.h"
+
+#include <QFile>
 #include <QSortFilterProxyModel>
 #include <QApplication>
 #include <QStatusBar>
@@ -249,6 +252,71 @@ int main(int argc, char *argv[]) {
 			      QString("and the new row took the page's title (%1)")
 			          .arg(fresh->title));
 		}
+	}
+
+	section("a redirect does not eat what somebody is typing");
+	{
+		// A page that moves on its own -- a meta refresh, a JavaScript
+		// redirect, a slow load that commits late -- emits `url_changed`
+		// whenever it gets there, and `update_address` wrote that straight
+		// into the field. If the person is in the middle of typing an address
+		// when it lands, their text is gone mid-keystroke.
+		//
+		// Written by hand rather than through `write_page`, which builds the
+		// whole document from its argument and uses it as the title too.
+		const QString slow = f.out + "/slow.html";
+		QFile sf(slow);
+		if (sf.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			sf.write(QString("<!doctype html><html><head><title>slow</title>"
+			                    "<meta http-equiv=\"refresh\" "
+			                    "content=\"2;url=%1\"></head>"
+			                    "<body><p>slow</p></body></html>\n")
+			               .arg(QUrl::fromLocalFile(two).toString()).toUtf8());
+			sf.close();
+		}
+
+		w.open_url(QUrl::fromLocalFile(slow));
+		check(wait_for(address, "slow.html"), "a self-redirecting page is open");
+		// The row `open_url` filed under the root, so the redirect can be
+		// observed on the view itself rather than on the field under test.
+		auto *nav_model = w.findChild<tab_tree_model *>();
+		node *redirecting = nav_model->root()->children.last();
+
+		// Typed, not assigned: `setText` clears the modified flag, and what
+		// separates "somebody is editing this" from "the browser filled it in"
+		// is exactly that flag.
+		address->setFocus();
+		address->clear();
+		address->insert("example.or");
+		check(address->text() == "example.or",
+		       "with a half-typed address in the bar");
+
+		// Long enough for the refresh to fire and commit.
+		for (int waited = 0; waited < 6000 && !address->text().isEmpty() &&
+		                      address->text() == "example.or"; waited += 200)
+			spin(200);
+		// It arrived, so the check below is about what the field kept rather
+		// than about a redirect that never happened.
+		web_view_backend *v =
+		  w.m_views_by_id.value(redirecting->id, nullptr);
+		const QString now = v ? v->url().toString() : QString();
+		check(now.contains("two.html"),
+		       QString("the redirect arrived (%1)").arg(now));
+		check(address->text() == "example.or",
+		       QString("and the half-typed address survived it (%1)")
+		           .arg(address->text()));
+
+		// **The other half, and it is what keeps the guard from stranding the
+		// bar.** Leaving a half-typed address alone is only right while the
+		// person is still on that page: moving to another tab is a different
+		// address and a question they just asked, so the field has to catch
+		// up. Without this the guard would be a hang -- the typed text would
+		// sit there through every tab switch, describing nothing.
+		check(f.open_tab(0, "one.html"),
+		       "switching to another tab loads it");
+		check(address->text().contains("one.html"),
+		       QString("and the bar follows rather than keeping the typing "
+		                "(%1)").arg(address->text()));
 	}
 
 	return report();

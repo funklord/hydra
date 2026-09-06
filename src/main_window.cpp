@@ -3127,7 +3127,7 @@ void main_window::open_node(node *n, bool load_now) {
 	// button would offer to stop a load that is not this tab's, and the find
 	// count would claim matches from a page this is not.
 	sync_page_context();
-	update_address(view->url().toString());
+	update_address(view->url().toString(), /*force=*/true);
 	page_changed();
 	touch_lru(n->id);
 	enforce_live_cap(n->id);
@@ -4228,7 +4228,7 @@ void main_window::open_url(const QUrl &url) {
 		return;
 	m_tree->expandAll();
 	open_node(t);
-	update_address(url.toString());
+	update_address(url.toString(), /*force=*/true);
 }
 
 void main_window::new_tab() {
@@ -4376,6 +4376,11 @@ void main_window::on_search_changed(const QString &text) {
 
 void main_window::navigate_to_address() {
 	const QString text = m_address->text().trimmed();
+	// The edit is finished, so `update_address` may have the field back: what
+	// comes next is this navigation's own url, canonicalised, and it should
+	// land. Cleared before anything can fail below, since every path out of
+	// here is the end of the typing either way.
+	m_address->setModified(false);
 
 	// A magnet link is not a page. Handing it to the engine would produce an
 	// error page, so route it to the download manager instead -- which is what
@@ -5002,7 +5007,28 @@ void main_window::restore_histories(node *from) {
 // refused certificate, a blocked popup and a dead renderer all say their piece
 // there, and all of them could be erased by the next url_changed. The status
 // bar is for what is *happening*; the address bar is for where you are.
-void main_window::update_address(const QString &url) {
+void main_window::update_address(const QString &url, bool force) {
+	// **And not over somebody's typing.** A page that moves on its own -- a
+	// meta refresh, a script redirect, a slow load that commits late -- emits
+	// `url_changed` whenever it gets there, which is not a moment anybody
+	// chose. Written straight into the field, that erases a half-typed address
+	// mid-keystroke: measured, `try_navigate` types `example.or` into a page
+	// carrying a two-second refresh and reads back the redirect target.
+	//
+	// `isModified` alone, and the focus of the field is deliberately not part
+	// of it. `isModified` is set by an edit and cleared by `setText`, so it
+	// says exactly "somebody has changed this since the browser last filled it
+	// in" -- which stays true when a notification steals focus mid-address,
+	// where a focus test would hand the field back to the next redirect.
+	//
+	// What ends the edit is therefore an event rather than a loss of focus:
+	// pressing return (`navigate_to_address` clears the flag), or moving to
+	// another tab, which is a different page and a different address. Those
+	// call this with `force`, because the bar is not reporting a navigation
+	// then -- it is answering a question the person just asked.
+	if (!force && m_address->isModified())
+		return;
+	m_address->setModified(false);
 	m_address->setText(url);
 }
 

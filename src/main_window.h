@@ -359,7 +359,10 @@ private:
 	void touch_lru(const QString &id);
 	void enforce_live_cap(const QString &keep_id);
 	void mark_dirty();
-	void update_address(const QString &url);
+	// `force` is for the moments the bar is answering the person rather than
+	// reporting a navigation -- a tab switch, an address just entered. Without
+	// it a half-typed address is left alone; see the definition.
+	void update_address(const QString &url, bool force = false);
 	void apply_policy(web_view_backend *view, const QString &host);
 
 	// sec 19.3's adaptive layout. A horizontal splitter is right on a desktop and

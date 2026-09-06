@@ -19133,26 +19133,61 @@ path(s)` over a file that had just been emptied. Both were caught by a count
 that could not possibly be right, and neither by anything checking the
 method.
 
-## Open: a blocked-popup notice is overwritten by a stale load failure
+## A redirect used to eat a half-typed address
 
-`try_navigate` fails one check, and it fails at `HEAD` as well as with the
-status-bar work above — measured both ways, by building the test against
-`git show HEAD:src/main_window.cpp`. The check asserts that refusing a
-script-opened window is said out loud; what the bar actually holds 300 ms
-later is `example.test could not be loaded.`
+The same lens one surface along. The status bar had three writers clearing
+it without asking who owned the message; the address bar has one writer and
+the same question -- `update_address` wrote every `url_changed` straight
+into the field.
 
-That is the DNS failure for the *previous*, allowed popup landing after the
-"Blocked" line. The reserved TLD never resolves, which is the test's
-design, and the failure notice arrives whenever the resolver gives up.
+A page that moves on its own emits that whenever it gets there, which is not
+a moment anybody chose: a meta refresh, a script redirect, a slow load that
+commits late. **Measured: `try_navigate` opens a page carrying a two-second
+refresh, types `example.or` into the bar, and reads back
+`file:///tmp/.../two.html`.** Half an address, gone mid-keystroke, and the
+next keypress continues somebody else's url.
+
+The guard is `QLineEdit::isModified` alone, and the field's focus is
+deliberately not part of it. `isModified` is set by an edit and cleared by
+`setText`, so it says exactly "somebody has changed this since the browser
+last filled it in" -- which stays true when a notification steals focus
+mid-address, where a focus test would hand the field straight back to the
+next redirect. The first attempt was `hasFocus() && isModified()` and the
+driver failed it for a reason worth keeping: its window is not the active
+one, so `hasFocus()` is false while `isModified` is true. That is the
+alt-tab case arriving as a test environment.
+
+What ends the edit is therefore an event, not a loss of focus: pressing
+return, where `navigate_to_address` clears the flag before anything else can
+fail, and switching tabs, which is a different page and a question the
+person just asked. Those pass `force`. **Both directions are asserted**,
+because the guard without its release is a hang rather than a fix -- a typed
+address would sit in the bar through every tab switch, describing nothing.
+
+## Open: a blocked-popup notice can be overwritten by a stale load failure
+
+`try_navigate`'s "out loud, not silently" check asserts that refusing a
+script-opened window is said out loud. On 2026-09-06 it failed four times in
+a row -- twice with the status-bar work above, once against a build made
+from `git show HEAD:src/main_window.cpp`, once before any of it -- with the
+bar holding `example.test could not be loaded.` It has since passed five
+consecutive runs with nothing between them that touches either path, so what
+is recorded here is an intermittent, not a standing failure.
+
+The competing line is the DNS failure for the *previous*, allowed popup: the
+reserved TLD never resolves, which is the test's design, and the notice
+arrives whenever the resolver gives up. Whether it lands before or after the
+"Blocked" message is the resolver's business.
 
 Two readings, and they want different fixes. As a test it is a race, and
-polling for the message would settle it. As behaviour it is a real defect:
-somebody who has just had a popup refused sees an unrelated load error
+polling for the message would settle it. As behaviour it is real: somebody
+who has just had a popup refused can be shown an unrelated load error
 instead of the reason, and the status bar has no notion of which of two
-messages matters more. The second is the same family as the two clearers
-above — a shared surface with no owner — and is not a race to be waited out.
-Left open rather than fixed with a poll, which would make the symptom go
-away in the one place anybody is watching for it.
+messages matters more. That is the same family as the two clearers above --
+a shared surface with no owner -- and it does not stop being true on the
+runs where the timing happens to favour it. Left open rather than papered
+over with a poll, which would remove the symptom in the one place anybody is
+watching for it.
 
 ## What is next (in order)
 
