@@ -20992,6 +20992,52 @@ carried it, and the rule is this tree's own: never conclude a test passed
 from a binary the build step did not rebuild. Two lines below it,
 `build rc=2` said so and was read past.
 
+## The on-screen sweep, run and then made runnable
+
+`sweep.sh`'s header says an on-screen run is **worth doing rather than
+avoiding** -- offscreen hid three real defects the first one found at once
+-- and gives a three-line recipe. Run for the day's twelve commits:
+
+    offscreen   passed=26  report-only=8  failed=0
+    on screen   passed=27  report-only=8  failed=0
+
+**No new defects, and the one difference is the one the header predicts:**
+`try_handoff` is skipped offscreen and passes on a real display. That is the
+recorded claim reproduced rather than a new finding, which is what a
+verification run is for.
+
+**The staleness guard fired first, and was right.** The first attempt called
+`sweep.sh` directly and it refused -- every driver older than the code it
+links, because the day's commits had touched `src/`. `make sweep` builds
+first. A guard that turned a stale on-screen sweep into a refusal is the one
+built earlier this session doing exactly its job.
+
+### The recipe is a script now, because the omission it invites is silent
+
+The line everybody leaves out is the window manager, and its absence lies
+loudly rather than failing: a bare X server has nothing to assign input
+focus, so every dialog opens with `focusWidget()` null and `try_phone`
+reports "there is no keyboard way in" against each one in turn -- seven
+times in one run, for seven unrelated dialogs.
+
+So `test/live/onscreen.sh` starts the display and a window manager, waits
+for each, runs the sweep and cleans up. It **refuses rather than reports**
+when either is missing, and both refusals were tested by running it on a
+PATH without them: no Xvfb says how to run offscreen instead, and no window
+manager says why a run without one would be measuring the environment. It
+takes driver names through, so `onscreen.sh try_phone` is one driver on a
+real display.
+
+Cleanup is by PID, written to a file before anything starts. `pkill -f Xvfb`
+would match the script's own command line -- the self-matching trap this
+workspace has paid for -- and a trap catches a signal while a task-kill is
+not a signal it gets to catch, so the file is what makes cleanup possible
+from another shell. Verified: after a run, no Xvfb and no window manager
+remain.
+
+Nothing touches the desktop somebody is sitting at: the display is :77
+unless `HYDRA_DISPLAY` says otherwise.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
