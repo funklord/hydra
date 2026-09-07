@@ -5159,6 +5159,19 @@ void main_window::open_settings() {
 	for (auto it = m_views_by_id.cbegin(); it != m_views_by_id.cend(); ++it)
 		if (it.value())
 			apply_policy(it.value(), it.value()->url().host());
+
+	// **And the number of pages held live, which is the same rule again and
+	// was the one setting here that did not follow it.** `enforce_live_cap`
+	// ran when a tab was opened and after a renderer crash, and nowhere else
+	// -- so somebody who lowered the cap because the machine was struggling
+	// got no relief until they opened another tab, which is the opposite of
+	// what they were trying to do. Idempotent, so running it after a Cancel
+	// that changed nothing costs a comparison.
+	QString showing;
+	if (web_view_backend *v = current_view())
+		showing = m_views_by_id.key(v);
+	enforce_live_cap(showing);
+	update_status();
 }
 
 void main_window::open_downloads() {

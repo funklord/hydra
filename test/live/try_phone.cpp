@@ -812,6 +812,56 @@ int main(int argc, char *argv[]) {
 	//
 	// Last in the run and it restores what it found, because changing the
 	// scheme repaints every widget and everything above this is photographed.
+	// **The live-view cap, which is the same question as the scheme.** A
+	// setting the dialog owns and the window has to act on: `enforce_live_cap`
+	// ran when a tab was opened and after a renderer crash, so lowering the cap
+	// did nothing until the next tab -- the opposite of what somebody lowering
+	// it wants.
+	//
+	// Forced through the environment rather than by writing a settings file,
+	// because this suite has no redirected settings path and must not touch the
+	// one belonging to whoever is running it. `live_view_cap()` reads the
+	// variable on every call, which is what makes the question askable at all.
+	std::printf("\n== and the pages it agrees to hold ==\n");
+	{
+		const bool two = f.open_tab(0, "one.html") && f.open_tab(1, "two.html");
+		if (!two) {
+			std::printf("  skip  live-cap      needed two pages and could not "
+			             "load them\n");
+		} else {
+			shell::check(f.window.m_views_by_id.size() >= 2,
+			              QString("two pages are live to start with (%1)")
+			                .arg(f.window.m_views_by_id.size()));
+			qputenv("HYDRA_MAX_LIVE_VIEWS", "1");
+			shell::check(f.window.live_view_cap() == 1,
+			              QString("the cap is lowered to 1 (reads %1)")
+			                .arg(f.window.live_view_cap()));
+			// Nothing has happened yet: this is the state the defect leaves
+			// somebody in, and asserting it is what stops the check below
+			// passing because the cap was never exceeded.
+			shell::check(f.window.m_views_by_id.size() > f.window.live_view_cap(),
+			              QString("and is over it until something acts (%1 > %2)")
+			                .arg(f.window.m_views_by_id.size())
+			                .arg(f.window.live_view_cap()));
+
+			QTimer::singleShot(900, [] {
+				for (QWidget *x : QApplication::topLevelWidgets())
+					if (auto *d = qobject_cast<QDialog *>(x); d && d->isVisible()) {
+						d->reject();
+						return;
+					}
+			});
+			QMetaObject::invokeMethod(&f.window, "open_settings");
+			shell::spin(1600);
+			shell::check(f.window.m_views_by_id.size() <= f.window.live_view_cap(),
+			              QString("closing the settings dialog brings it down "
+			                       "to the cap (%1 of %2)")
+			                .arg(f.window.m_views_by_id.size())
+			                .arg(f.window.live_view_cap()));
+			qunsetenv("HYDRA_MAX_LIVE_VIEWS");
+		}
+	}
+
 	std::printf("\n== and the scheme the dialog chooses ==\n");
 	{
 		theme::watcher watch;

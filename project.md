@@ -20536,6 +20536,46 @@ rather than the symptom chased: ten runs clean, five of them under forced
 `QT_HASH_SEED` values, which is sampling the order space deliberately rather
 than hoping.
 
+## The one setting `open_settings` did not act on
+
+Found by following the last defect's shape rather than by looking again at
+the same place: a value with two writers where only one of them reaches the
+thing that has to act. `open_settings` already re-applies three settings
+after the dialog closes, and says why in a comment -- *"or the setting
+appears not to have taken until the page is reloaded"*. The number of pages
+held live was the one that did not follow its own rule.
+
+`enforce_live_cap` ran in exactly two places: when a tab was opened, and
+after a renderer crash. So somebody who lowered the cap because the machine
+was struggling got no relief **until they opened another tab**, which is the
+opposite of what they were doing it for. The counter went on reading
+`5 / 2 live` in the meantime.
+
+One call after the dialog, plus the status refresh, next to the three that
+were already there. Idempotent, so running it after a Cancel that changed
+nothing costs a comparison.
+
+### The precondition is what stops it passing for nothing
+
+The check is `views <= cap` after the dialog closes, and that is true of a
+window which never exceeded the cap -- so on its own it would pass with the
+defect intact and no pages open. The section asserts the state it needs
+first: two pages live, the cap lowered to one, **and the window over it**.
+
+    ok    two pages are live to start with (2)
+    ok    the cap is lowered to 1 (reads 1)
+    ok    and is over it until something acts (2 > 1)
+    ok    closing the settings dialog brings it down to the cap (1 of 1)
+
+Sabotaged by removing the call, the run reports `2 of 1` and nothing else
+changes: 139 passed, 1 failed.
+
+**Forced through `HYDRA_MAX_LIVE_VIEWS` rather than by writing a settings
+file**, because this suite has no redirected settings path and must not
+touch the one belonging to whoever runs it. `live_view_cap()` reads the
+variable on every call, which is what makes the question askable from a
+driver at all -- and it is the same lever `try_delete` already uses.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
