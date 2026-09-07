@@ -21129,6 +21129,62 @@ until something re-lays-out, and the layout wins the moment anything does.
 The number is printed beside the verdict so a later reader sees it climbing
 back before it crosses.
 
+## The settings dialog opens 35 pixels off the edge of a phone
+
+Followed from the same table as the window's floor, on the one line that
+disagreed with itself: `settings asked 360x640, **got 395x640**`, with a
+layout floor of 293. A dialog that will not go to 360 while claiming a
+minimum of 293 is a contradiction, and the check that decides the outcome
+was reading the 293.
+
+Measured, and the first guess was wrong. `minimumSizeHint()` is 293 too, so
+no minimum is holding it -- and a second resize applied immediately does not
+help either:
+
+    settings_dialog   once 395   settled 395   twice(immediate) 395
+    settings_dialog   once 395   settled 395   twice(after 250ms) 360
+
+**The sequence is the whole of it.** The first `setGeometry(360)` is clamped
+by the WIDE layout's minimum; that resize is what switches the dialog to its
+narrow layout, which lowers the minimum; and nothing re-applies the request,
+so it stays at the clamped 395. A second apply, once the switch has
+happened, gets it to 360.
+
+`android_dialogs.cpp` applies the geometry **once**, on Show. So on a
+360-pixel phone this dialog opens 395 wide -- 35 pixels off the right edge.
+Every other dialog reaches 360 on the first apply, because this is the only
+one with a layout that changes shape as it narrows.
+
+### And the off-edge buttons are the same fault, not the recorded one
+
+The gap note beside it says the button box needs 373 "because the Restore
+label names the page it acts on", called a deliberate choice. **With the
+second apply the four buttons that hang off the edge come back on screen**
+-- `&Clear now…`, `&Remove selected`, `E&xport all settings…`,
+`Im&port settings…` -- so what puts them off the edge is the 35 pixels, not
+the label. The deliberate choice may still be true of the 373; it is not
+what this check was reporting.
+
+### The gate was reading the number that does not decide
+
+`try_phone` printed both the floor and what the widget IS, asserted on the
+floor, and the floor passed at 293 while the dialog sat at 395. That is a
+check passing a dialog which opens off the screen -- the wrong-population
+fault with two numbers side by side, one of them right.
+
+It asserts on the width after the sizer has run now, beside the floor
+check rather than instead of it: the floor answers "can the layout accept
+this width" and the new one answers "did the device path leave it on the
+screen", and they are different questions. Thirteen dialogs pass both;
+settings is `KNOWN` on both, with the note carrying the measurement.
+
+**The fix is not written.** It is a second apply in `android_dialogs.cpp`,
+which this machine cannot build -- forcing `Q_OS_ANDROID` makes Qt's own
+headers ask for `qjnitypes.h`, so the file cannot even be syntax-checked
+here. Writing it blind is what this tree keeps declining to do, and the gate
+now fails on the symptom rather than passing it, which is the part that was
+missing.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

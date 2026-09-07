@@ -114,7 +114,19 @@ static QString known_gap(const QString &name) {
 		return "its seven pages fit now; what is left is the button box, which "
 		        "needs 373 because the Restore label names the page it acts "
 		        "on. That is a deliberate choice, and on a device the label "
-		        "elides rather than anything being unreachable.";
+		        "elides rather than anything being unreachable. **And it is "
+		        "395 wide here rather than 360**, which is a different fault "
+		        "and not deliberate: the first setGeometry is clamped by the "
+		        "wide layout's minimum, the switch to narrow then lowers that "
+		        "minimum, and android_dialogs.cpp applies the geometry once so "
+		        "nothing re-applies it. Measured: once 395, settled 395, twice "
+		        "360. **And the button check below is the same fault**, not the "
+		        "Restore label: with the second apply the four buttons that "
+		        "hang off the edge come back on screen, measured. The fix is a "
+		        "second apply in `android_dialogs.cpp`, which is Android code "
+		        "this machine cannot build -- forcing Q_OS_ANDROID makes Qt's "
+		        "own headers ask for qjnitypes.h, so it cannot even be "
+		        "syntax-checked here.";
 	return QString();
 }
 
@@ -159,6 +171,23 @@ static void measure(QWidget *dlg, const QString &name) {
 	// layout wins the moment anything does, and on a device something always
 	// does. So the question is what the layout will accept, which is what
 	// `minimumSize()` reports.
+	// **And what the sizer actually left on screen**, which is not the same
+	// question and had no check at all. The floor is what the layout will
+	// accept; this is what the widget IS after the one `setGeometry` the
+	// Android filter performs. They agree for every dialog here except the one
+	// with a responsive layout: measured, `settings` reports floor 293 and
+	// sits at 395, because the first request is clamped by the WIDE layout's
+	// minimum, the resize then switches it to narrow and lowers that minimum,
+	// and nothing re-applies the request. A second `setGeometry` gets it to
+	// 360 -- once 395, settled 395, twice 360.
+	//
+	// So the floor check passed a dialog that opens 35 pixels off the right
+	// edge of a 360-pixel screen. A number that decides the outcome has to be
+	// the number the device produces.
+	verdict(dlg->width() <= k_phone.width(),
+	      QString("%1 is on the screen after the sizer has run (%2 of %3)")
+	          .arg(name).arg(dlg->width()).arg(k_phone.width()));
+
 	verdict(floor.width() <= k_phone.width(),
 	      QString("%1 can shrink to the width (floor %2)")
 	          .arg(name).arg(floor.width()));
