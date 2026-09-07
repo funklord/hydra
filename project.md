@@ -21388,6 +21388,53 @@ exercised it is not a curiosity, it is the log being from a different
 build.** `sweep.sh` honours `HYDRA_SWEEP_OUT`, so a private directory per
 run costs nothing and removes the shared-path ambiguity entirely.
 
+## The search box was 90 pixels, and so was the label beside it
+
+The address bar's lens, one row down. `find_bar` gives its input the
+leftover space -- `addWidget(m_input, 1)` -- so every fixed width in that
+row comes out of what a person types into. Measured:
+
+    window 320   search box  90 px    count label  90 px
+    window 360   search box 130 px    count label  90 px
+    window 420   search box 190 px    count label  90 px
+
+**On a 320-wide phone the box you type a search into was the same width as
+the label showing "1 of 9".**
+
+The label does need a stable width, and that is not the fault: it changes
+on every keystroke and everything to its right moves with it. The fault is
+that 90 was a round number with no reason recorded, and the widest string
+this label can ever show is `No matches` at **67 px** in this font --
+`999 of 9999` is 66, just inside it.
+
+**The number is wrong in both directions, which is the part worth
+keeping.** Too wide here, taking 23 px from the field. Too NARROW on a
+device whose font is larger, where 90 would elide the very message it was
+sized for -- and Android is exactly that device. A constant cannot be
+right for both, so the floor is derived from the string instead:
+
+    m_count->setMinimumWidth(
+      m_count->fontMetrics().horizontalAdvance(k_no_matches) + 4);
+
+The search box is **109 px** at 320 now, measured rather than inferred from
+the arithmetic.
+
+`k_no_matches` exists because deriving the width put a second copy of
+`"No matches"` in the file, and a reworded message that left one behind
+would size the floor to a sentence nothing shows. One name, both uses.
+
+**The test asserts the relationship, not either number**, since pinning 71
+would go stale the first time anything about the font changed -- which is
+the failure being fixed. Two assertions, and the sabotages show why
+neither is enough alone:
+
+    sabotage              floor fits   takes no more
+    back to 90             ok           FAIL (90 for 67)
+    a floor of 40          FAIL         ok
+
+A count longer than `No matches` still grows the label through its own size
+hint; this floor only stops it shrinking below the string it has to show.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

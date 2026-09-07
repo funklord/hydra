@@ -397,6 +397,47 @@ int main(int argc, char **argv) {
 		              .arg(QString::fromUtf8(next.what)));
 	}
 
+	section("the find bar spends its width on the field, not on a round number");
+
+	// **The same fault as the address bar, one row down.** `find_bar` gives
+	// its input the leftover space (`addWidget(m_input, 1)`), so every fixed
+	// width beside it comes out of what a person types into. On a 320-wide
+	// phone that left the search box at 90 px, and 90 px of that row was a
+	// label showing "1 of 9".
+	//
+	// The count label does need a stable width -- it changes on every
+	// keystroke and everything to its right moves with it -- but 90 was a
+	// round number with no reason recorded, and it is wrong in both
+	// directions: too wide for the string in this font, and too NARROW on a
+	// device whose font is larger, where it would elide the very message it
+	// was sized for.
+	//
+	// So this asserts the RELATIONSHIP rather than either number: the floor
+	// is what the widest fixed string needs and no more. A pinned 71 would go
+	// stale the first time anything about the font changed, which is the
+	// failure being fixed.
+	{
+		main_window phone(&factory, &policy, &filter);
+		phone.setGeometry(0, 0, 320, 640);
+		phone.show();
+		spin(150);
+
+		QLabel *count = phone.findChild<QLabel *>("find_count");
+		check(count != nullptr, "the find bar has its count label");
+		if (count) {
+			const int needs =
+			  count->fontMetrics().horizontalAdvance(QStringLiteral("No matches"));
+			check(count->minimumWidth() >= needs,
+			       QString("whose floor fits the widest thing it shows "
+			                "(%1 for %2)")
+			         .arg(count->minimumWidth()).arg(needs));
+			check(count->minimumWidth() <= needs + 8,
+			       QString("and does not take more of the row than that "
+			                "(%1 for %2)")
+			         .arg(count->minimumWidth()).arg(needs));
+		}
+	}
+
 	section("a phone leaves the address bar readable, and the buttons reachable");
 
 	// **The address bar had no minimum, so it got whatever the buttons left.**
