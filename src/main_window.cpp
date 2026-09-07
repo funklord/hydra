@@ -1099,6 +1099,19 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_placeholder = new QLabel("Select a tab from the tree", this);
 	m_placeholder->setObjectName("placeholder");
 	m_placeholder->setAlignment(Qt::AlignCenter);
+	// **Wrapped, and it is the whole window's minimum width that says why.**
+	// An unwrapped QLabel asks for its longest line in one piece, and this one
+	// is a page of the stack -- so its request travelled up through the stack
+	// and the splitter and became the window's own floor: measured at 353
+	// pixels, against a phone that is 360 and a smaller one that is 320. The
+	// browser could not lay itself out on a narrow screen because of a
+	// sentence telling somebody where the tab list is.
+	//
+	// The second half is the sentence itself. Unwrapped it is clipped rather
+	// than reflowed, which is exactly the failure already recorded for the
+	// drawer covering it -- "lress bar." floating beside the tree. A hint
+	// nobody can read is not a hint.
+	m_placeholder->setWordWrap(true);
 	m_stack->addWidget(m_placeholder);
 
 	// Sort and Search filter the *tree*, so they belong above the tree rather

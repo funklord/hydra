@@ -394,6 +394,41 @@ int main(int argc, char **argv) {
 		              .arg(QString::fromUtf8(next.what)));
 	}
 
+	section("the window fits a small phone, and a hint does not decide that");
+
+	// **A sentence was setting the browser's minimum width.** The empty-page
+	// hint is a page of the stack, and an unwrapped QLabel asks for its
+	// longest line in one piece -- so its request travelled up through the
+	// stack and the splitter and became the window's own floor. Measured at
+	// **353** against a 360-pixel phone, and against 320 for a smaller one or
+	// a split screen, it did not fit at all.
+	//
+	// Asserted on the layout's minimum rather than on the widget's size,
+	// because `resize` is honoured until something re-lays-out and the layout
+	// wins the moment anything does -- the same reason `try_phone` reads the
+	// floor rather than what it just assigned.
+	{
+		main_window narrow(&factory, &policy, &filter);
+		narrow.setGeometry(0, 0, 320, 640);
+		narrow.show();
+		spin(150);
+
+		QLabel *hint = narrow.findChild<QLabel *>("placeholder");
+		check(hint != nullptr, "the window has its empty-page hint");
+		check(hint && hint->wordWrap(),
+		       "which wraps, so its minimum is a word and not a sentence");
+
+		const QSize floor = narrow.layout() ? narrow.layout()->minimumSize()
+		                                     : QSize(-1, -1);
+		check(floor.width() > 0 && floor.width() <= 320,
+		       QString("and the window can lay itself out on a 320-pixel "
+		                "screen (floor %1)").arg(floor.width()));
+		// The number that made the case, kept beside the verdict so a later
+		// reader sees it drifting back up before it crosses.
+		std::printf("        window layout floor %dx%d\n",
+		             floor.width(), floor.height());
+	}
+
 	section("a dragged drawer width comes back the width it was");
 
 	// **The round trip nothing covered.** The width is written by

@@ -21088,6 +21088,47 @@ It failed rather than passing wrongly, which is the only reason it was
 caught -- and it is the same shape as the day's other instrument faults: the
 tool answered a question next to the one being asked.
 
+## A sentence was setting the browser's minimum width
+
+Found by reading `try_phone`'s own numbers rather than by guessing at the
+GUI. It measures every dialog at 360x640 and prints each layout floor, and
+the tightest thing in the list is not a dialog:
+
+    window           floor 353x134      <- seven pixels under a 360 phone
+    settings         floor 293x214
+    extractor        floor 304x192
+    reorganizer      floor 284x187
+
+**353 against a 360-pixel phone, and against 320 for a smaller one or a
+split screen.** Measured per child, the whole of it came from one widget:
+
+    placeholder      QLabel          min  353
+    QStackedWidget                   min  353
+    QSplitter                        min  353
+
+The empty-page hint is a **page of the stack**, and an unwrapped `QLabel`
+asks for its longest line in one piece -- so its request travelled up
+through the stack and the splitter and became the window's own floor. The
+browser could not lay itself out on a narrow screen because of a sentence
+telling somebody where the tab list is.
+
+**And the sentence was the other casualty.** Unwrapped it is clipped rather
+than reflowed, which is exactly the failure already recorded for the drawer
+covering it -- *"lress bar." floating beside the tree*. That fix silenced
+the hint while the drawer is over it; with the drawer closed on a 360-pixel
+phone it was still being cut. A hint nobody can read is not a hint.
+
+One line -- `setWordWrap(true)` -- and the floor goes **353 to 223**, which
+fits a 320-pixel screen with 97 to spare. Sabotaged back, the check reports
+`the window can lay itself out on a 320-pixel screen (floor 353)`,
+reproducing the original number exactly.
+
+**Asserted on the layout's minimum rather than on the widget's size**, for
+the reason `try_phone` gives about its own reading: `resize` is honoured
+until something re-lays-out, and the layout wins the moment anything does.
+The number is printed beside the verdict so a later reader sees it climbing
+back before it crosses.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
