@@ -2019,8 +2019,13 @@ void main_window::report_annoyance() {
 	// worse version of the tools it is meant to feed.
 	if (m_annoyances) {
 		m_annoyances->add(r);
+		// Through `saved_or_said` like every other store here: a report filed
+		// against a site is the corpus a rule gets simulated against later, so
+		// one that never reached the disk is worth a sentence rather than a
+		// dropped return.
 		if (!m_annoyances_path.isEmpty())
-			m_annoyances->save(m_annoyances_path);
+			saved_or_said(m_annoyances->save(m_annoyances_path),
+			               "the annoyance report");
 	}
 
 	annoyed_dialog dlg(r, this);
@@ -2029,7 +2034,8 @@ void main_window::report_annoyance() {
 	if (m_annoyances) {
 		m_annoyances->set_outcome(host, annoyed_dialog::name_of(chose));
 		if (!m_annoyances_path.isEmpty())
-			m_annoyances->save(m_annoyances_path);
+			saved_or_said(m_annoyances->save(m_annoyances_path),
+			               "what you chose about this report");
 	}
 
 	switch (chose) {
@@ -4428,8 +4434,15 @@ void main_window::rekey_node_state(const QString &was, const QString &now) {
 	if (m_loading_views.contains(was))
 		m_loading_views.insert(now, m_loading_views.take(was));
 	if (m_state && m_state->has_state(was)) {
-		m_state->save(now, m_state->load(was));
-		m_state->remove(was);
+		// **Removed only if the copy landed.** This wrote the blob under the
+		// new id and dropped the old one whichever way the write went, so a
+		// full disk turned a rename into a deletion: the tab's back and
+		// forward history gone from both ids, silently, on a path nobody
+		// associates with saving anything. Keeping the old one costs an entry
+		// nothing reads until the id is reused, and losing it costs the
+		// history.
+		if (m_state->save(now, m_state->load(was)))
+			m_state->remove(was);
 	}
 }
 
@@ -4512,13 +4525,33 @@ void main_window::flush_blobs() {
 		return;
 	const QSet<QString> ids = m_blobs_dirty;
 	m_blobs_dirty.clear();
+	int lost = 0;
 	for (const QString &id : ids) {
 		// A tab suspended between the navigation and this firing has already
 		// had its blob written by `suspend_node`, and has no live view to ask.
 		// Not an error, and the commonest way an id here goes stale.
-		if (web_view_backend *view = m_views_by_id.value(id, nullptr))
-			m_state->save(id, view->save_state());
+		web_view_backend *view = m_views_by_id.value(id, nullptr);
+		if (!view)
+			continue;
+		// **A write that did not land leaves the tab dirty.** The set was
+		// cleared before the loop, so a failure here used to mean the
+		// checkpoint was simply skipped until that tab navigated again --
+		// which on a tab somebody is reading is never. Put it back and the
+		// next tick retries; the view is still live, so there is still
+		// something to ask.
+		if (!m_state->save(id, view->save_state())) {
+			m_blobs_dirty.insert(id);
+			++lost;
+		}
 	}
+	// Same latch and the same reason as the tree and the imported histories:
+	// this is debounced off navigation, so a disk that has filled would
+	// otherwise repaint the warning every few seconds, and a message that is
+	// always there is one nobody reads.
+	if (lost > 0 && !m_blob_save_failed)
+		saved_or_said(false, QString("%1 tab%2 worth of history")
+		                          .arg(lost).arg(lost == 1 ? "" : "s"));
+	m_blob_save_failed = lost > 0;
 }
 
 // The row itself, where `selected_parent` answers "where would a new child go".

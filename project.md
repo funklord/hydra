@@ -20727,6 +20727,44 @@ refused, and is not offered again.
 flag cleared, the same tab *is* suspended. Without that line the first two
 checks would pass for a window that simply never enforced its cap.
 
+## Three saves whose answer nobody read, and one of them deleted the file
+
+The hang above came from a caller assuming an operation succeeded when it
+can decline. The same question asked of every `bool`-returning call whose
+result is dropped found three, and the detector's own control is the part
+worth keeping.
+
+**The sweep's first answer was zero, and it was worthless.** The pattern
+`[\w\.\->\[\]]` reads `.` to `>` as a RANGE, so a literal `-` is not in
+the class and `->` never matched -- every member call in the tree was
+invisible to it. A positive control of two lines that must match reported
+neither, which took seconds and is the only reason the zero was not
+believed. Fixed (the `-` last, where it is literal) it reports 216 sites,
+mostly `clear`/`remove`/`start` colliding with Qt's names. Over-reporting is
+the right direction for a sweep read once by the person who ran it.
+
+Three of the 216 are real:
+
+- **`rekey_node_state` deleted the blob it had failed to copy.** It wrote
+  the history under the new id and removed the old one whichever way the
+  write went, so a full disk turned a rename into a **deletion**: the tab's
+  back and forward history gone from both ids, silently, on a path nobody
+  associates with saving anything. The removal is conditional now.
+- **`flush_blobs` cleared the dirty set before writing**, so a failed
+  checkpoint was not retried until that tab navigated again -- which on a
+  tab somebody is reading is never. A failure puts the id back and the next
+  tick tries again, and the count is reported once through the same latch
+  the tree and the imported histories already use.
+- **Two annoyance-log saves dropped their result**, where the sibling call
+  in `open_settings` goes through `saved_or_said`. A report filed against a
+  site is the corpus a rule is simulated against later, so one that never
+  reached the disk is worth a sentence.
+
+**What this sweep does not cover**, so nobody reads more into the zero that
+follows it: the detector only sees a whole call on one line ending in `);`,
+so a call split across lines or wrapped in a cast is invisible to it, and it
+only knows names declared `bool` in this project's own headers.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

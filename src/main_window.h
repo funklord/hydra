@@ -587,6 +587,9 @@ public:
 	// says so once instead of once per keystroke.
 	bool                m_tree_save_failed = false;
 	bool                m_history_save_failed = false;
+	// And the third store the debounced flush writes: the per-tab history
+	// blobs. Same latch, same reason as the two above.
+	bool                m_blob_save_failed = false;
 	// Whether the status bar is showing a line a *page* put there -- the
 	// startup "Ready" and the renderer-crash notice, both of which are sticky
 	// and are retired when the next navigation starts. Anything else the
