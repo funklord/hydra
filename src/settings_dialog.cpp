@@ -894,6 +894,25 @@ QString describe_clear(const web_view_factory::clear_report &r) {
 // It also fixes something that followed from the misplacement: "Restore Privacy
 // & security defaults" never touched the scheme, so the one setting on that
 // page which was not a permission was also the one its restore button ignored.
+
+// **Through the watcher, not straight to `theme::apply`.** The scheme has two
+// writers -- the desktop through the portal, and this dialog -- and only the
+// first went through the object that remembers which choice is in force. So
+// picking Dark here repainted the window and left the watcher believing the
+// choice was whatever it had been at launch, and the next thing the desktop
+// did reapplied THAT: a machine that switches at sunset took an explicit Dark
+// away again. The same staleness runs the other way through `m_last`, where a
+// value left over from launch makes the next genuine change a no-op.
+//
+// `theme::apply` remains the fallback for a process with no watcher, which is
+// every suite that builds this dialog.
+static void choose_scheme(theme::choice c) {
+	if (theme::watcher *w = theme::active())
+		w->set_choice(c);
+	else
+		theme::apply(c);
+}
+
 void settings_dialog::build_appearance_page(QWidget *page) {
 	auto *v = new QVBoxLayout(page);
 	v->setSpacing(0);
@@ -916,7 +935,8 @@ void settings_dialog::build_appearance_page(QWidget *page) {
 	// it is how you decide whether you want it. Cancel puts back what was
 	// stored, which is what makes trying one safe.
 	connect(m_appearance, &QComboBox::currentIndexChanged, this, [this] {
-		theme::apply(static_cast<theme::choice>(m_appearance->currentData().toInt()));
+		choose_scheme(
+		  static_cast<theme::choice>(m_appearance->currentData().toInt()));
 	});
 	v->addWidget(settings_row(
 	  "Colour scheme",
@@ -2638,7 +2658,7 @@ void settings_dialog::reject() {
 	// The colour scheme was applied while the user was choosing it, so Cancel
 	// has to undo that too -- otherwise "Cancel" leaves the window in a theme
 	// nobody agreed to keep.
-	theme::apply(settings_store::appearance());
+	choose_scheme(settings_store::appearance());
 	QDialog::reject();
 }
 

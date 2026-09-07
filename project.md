@@ -20471,6 +20471,71 @@ case needs is the layout itself, so `restore_view_state` now ends by calling
 redundant: it is what would notice if the `show()` rescue were ever the only
 thing holding the behaviour up again.
 
+## Two writers for the colour scheme, one of which had no memory
+
+The scheme is changed by the desktop -- through the portal, or Qt's own
+`colorSchemeChanged` -- and by the settings dialog. Only the first went
+through `theme::watcher`. The dialog called `theme::apply` directly, both
+for the live preview as the combo moves and for the undo on Cancel, so the
+watcher's `m_choice` stayed at whatever `main` had given it at launch and
+its `m_last` with it.
+
+**Two failures follow, in opposite directions.** `reapply()` resolves the
+watcher's own choice, so a desktop that switches at sunset reapplies the
+STALE one and takes an explicit Dark away. And a `m_last` left saying Dark
+makes the next genuine change to Dark a no-op -- the window stays light
+while the desktop is not.
+
+Nothing looks wrong at the time, which is why this survived: the preview is
+correct, and the window only diverges later, when the desktop does something
+and nobody connects that to a setting they changed an hour ago.
+
+**The fix is that every change to the choice goes through the one object
+that remembers it.** `theme::active()` returns the watcher this process is
+using, registered by its constructor and cleared by its destructor, and the
+dialog's `choose_scheme` uses it -- falling back to `theme::apply` where
+there is no watcher, which is every offline suite.
+
+### The unit test could not have caught it, and said so before it was written
+
+`test_theme` builds a watcher, drives it, and fires `portal_changed` through
+the meta-object -- the only way to reach a private slot on a machine with no
+portal running, which this one is. Seven checks, all passing.
+
+**And every one would still pass with the defect in place**, because they
+call `set_choice` themselves. *A test that calls the helper it is verifying
+cannot see a wrong caller.* What had to be asserted is that CHOOSING a
+scheme in the real dialog reaches the watcher, and that needs the dialog,
+which needs a window -- so it is in `try_phone`, which has both: build a
+watcher, open the settings dialog, move the combo, and read the watcher.
+Cancel is asserted too, being the dialog's other route into the same place.
+
+Sabotaged by restoring `choose_scheme` to a bare `theme::apply`, it reports
+`picked 2, watcher 0`. The unit test stayed green throughout, which is the
+demonstration.
+
+### The sabotage run found a second defect, in a check written an hour before
+
+Under sabotage the passkey dialog also failed -- `Tab never reaches 2` --
+having passed minutes earlier. Nothing about the colour scheme can touch
+that, so it was **the radio-group fold being order-dependent**: it nominated
+`it.value().first()` as the member Tab must reach, and that list is built by
+iterating a `QSet`, whose order Qt randomises per process. On the runs where
+the nominee was not the member Qt actually puts in the focus chain, the
+check accused correct code.
+
+**A flaky check is worse than no check**, and this one was mine, one hour
+old, written to fix another check that accused correct code. It now asks
+about what happened rather than about a nominee: no member is required on
+the Tab chain, the group must be entered somewhere, and every member must be
+reachable by arrow from whichever member Tab actually landed on -- pressing
+both directions, since a group entered at its last member walks up.
+
+**Non-reproduction would not have settled it**, so the mechanism was removed
+rather than the symptom chased: ten runs clean, five of them under forced
+`QT_HASH_SEED` values, which is sampling the order space deliberately rather
+than hoping.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

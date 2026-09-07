@@ -46,6 +46,8 @@
 #include "web_view_backend.h"
 
 #include <QApplication>
+#include <QComboBox>
+#include "theme.h"
 #include <QAbstractButton>
 #include <QButtonGroup>
 #include <QDialog>
@@ -261,13 +263,19 @@ static void measure(QWidget *dlg, const QString &name) {
 			if (auto *g = b->group())
 				groups[g].append(b);
 		}
-		for (auto it = groups.cbegin(); it != groups.cend(); ++it) {
-			if (it.value().size() < 2)
-				continue;
-			for (QAbstractButton *b : it.value())
-				want.remove(b);
-			want.insert(it.value().first());
-		}
+		// Every member comes out of the Tab requirement; which one Qt puts in
+		// the chain is Qt's business and is asked about below instead.
+		//
+		// **Nominating one of them here was wrong and was flaky with it.**
+		// `want` is a QSet, whose iteration order Qt randomises per process,
+		// so "the first" was an arbitrary member -- and on the runs where it
+		// was not the one Qt actually puts in the chain, this reported a
+		// stranded radio against correct code. It passed for two runs and
+		// failed on the third, which is the worst way to find out.
+		for (auto it = groups.cbegin(); it != groups.cend(); ++it)
+			if (it.value().size() >= 2)
+				for (QAbstractButton *b : it.value())
+					want.remove(b);
 		// A real Tab key rather than `focusNextChild()`, which is protected --
 		// and which would be the wrong thing anyway. Pressing the key is what
 		// somebody does, and it goes through the same focus machinery a widget
@@ -294,20 +302,38 @@ static void measure(QWidget *dlg, const QString &name) {
 				                                              : c->objectName(),
 				                    c->metaObject()->className());
 		}
-		// The other half of folding the group: every member has to be
-		// reachable by the arrow, from whichever member Tab landed on.
+		// The other half: the group must be ON the chain somewhere, and every
+		// member reachable by the arrows once you are in it. Both questions are
+		// asked of what actually happened rather than of a nominee -- the
+		// starting point is whichever member Tab reached, and both directions
+		// are pressed, because a group entered at its last member walks up.
 		for (auto it = groups.cbegin(); it != groups.cend(); ++it) {
 			if (it.value().size() < 2)
 				continue;
-			QAbstractButton *from = it.value().first();
-			QSet<QWidget *> by_arrow;
-			from->setFocus();
-			for (int i = 0; i < it.value().size() * 2 + 4; ++i) {
-				QWidget *f = dlg->focusWidget();
-				if (!f)
+			QAbstractButton *landed = nullptr;
+			for (QAbstractButton *b : it.value())
+				if (seen.contains(b)) {
+					landed = b;
 					break;
-				by_arrow.insert(f);
-				QTest::keyClick(f, Qt::Key_Down);
+				}
+			if (!landed) {
+				if (stranded.size() < 4)
+					stranded << QString("a group of %1 that Tab never enters "
+					                     "(%2)")
+					              .arg(it.value().size())
+					              .arg(it.value().first()->objectName());
+				continue;
+			}
+			QSet<QWidget *> by_arrow;
+			for (Qt::Key arrow : { Qt::Key_Down, Qt::Key_Up }) {
+				landed->setFocus();
+				for (int i = 0; i < it.value().size() * 2 + 4; ++i) {
+					QWidget *f = dlg->focusWidget();
+					if (!f)
+						break;
+					by_arrow.insert(f);
+					QTest::keyClick(f, arrow);
+				}
 			}
 			for (QAbstractButton *b : it.value())
 				if (!by_arrow.contains(b) && stranded.size() < 4)
@@ -775,6 +801,69 @@ int main(int argc, char *argv[]) {
 		dlg.show();
 		QApplication::processEvents();
 		measure(&dlg, "reorganizer");
+	}
+
+	// **The caller, which no unit test can reach.** `test_theme` proves the
+	// accessor and the watcher, and it proves them by calling `set_choice`
+	// itself -- so it would go on passing with the settings dialog still
+	// calling `theme::apply` directly, which is the defect. What has to be
+	// asserted is that CHOOSING a scheme in the real dialog reaches the
+	// watcher, and that needs the dialog, which needs a window.
+	//
+	// Last in the run and it restores what it found, because changing the
+	// scheme repaints every widget and everything above this is photographed.
+	std::printf("\n== and the scheme the dialog chooses ==\n");
+	{
+		theme::watcher watch;
+		const theme::choice was = settings_store::appearance();
+		watch.set_choice(was);
+
+		QTimer::singleShot(900, [was] {
+			for (QWidget *x : QApplication::topLevelWidgets()) {
+				auto *d = qobject_cast<QDialog *>(x);
+				if (!d || !d->isVisible())
+					continue;
+				auto *combo = d->findChild<QComboBox *>("appearance");
+				if (!combo) {
+					std::printf("  skip  the settings dialog has no appearance "
+					             "control here\n");
+					d->reject();
+					return;
+				}
+				// Whichever entry is not the one in force, so the assertion
+				// cannot pass by the value never having had to change.
+				const int want = combo->findData(
+				  int(was == theme::choice::dark ? theme::choice::light
+				                                  : theme::choice::dark));
+				combo->setCurrentIndex(want);
+				QApplication::processEvents();
+				const theme::choice picked =
+				  static_cast<theme::choice>(combo->currentData().toInt());
+				shell::check(theme::active() &&
+				               theme::active()->current() == picked,
+				             QString("choosing a scheme in the dialog reaches "
+				                      "the watcher (picked %1, watcher %2)")
+				               .arg(int(picked))
+				               .arg(theme::active()
+				                      ? int(theme::active()->current()) : -1));
+				// And Cancel, which is the dialog's other route into the same
+				// place -- it puts back what was stored, and has to tell the
+				// watcher that too or the undo is the thing that goes stale.
+				d->reject();
+				QApplication::processEvents();
+				shell::check(theme::active() &&
+				               theme::active()->current() == was,
+				             QString("and Cancel puts the stored one back "
+				                      "(%1, watcher %2)")
+				               .arg(int(was))
+				               .arg(theme::active()
+				                      ? int(theme::active()->current()) : -1));
+				return;
+			}
+			std::printf("  skip  the settings dialog did not open here\n");
+		});
+		QMetaObject::invokeMethod(&f.window, "open_settings");
+		shell::spin(1400);
 	}
 
 	// **A floor, so a run that opened nothing cannot report success.** Every

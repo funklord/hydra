@@ -229,7 +229,26 @@ choice from_name(const QString &name) {
 	return choice::system;
 }
 
+namespace {
+// Set by the constructor and cleared by the destructor, so a suite that builds
+// one on the stack does not leave a dangling answer behind it.
+watcher *g_active = nullptr;
+}  // namespace
+
+watcher *active() {
+	return g_active;
+}
+
+watcher::~watcher() {
+	if (g_active == this)
+		g_active = nullptr;
+}
+
 watcher::watcher(QObject *parent) : QObject(parent) {
+	// The one this process asks. Last one wins, which is what a suite that
+	// builds several in a row wants and is the only case that has several.
+	g_active = this;
+
 	// Qt's own signal, for the platforms where Qt does the detecting.
 	if (QStyleHints *h = QGuiApplication::styleHints())
 		connect(h, &QStyleHints::colorSchemeChanged, this,

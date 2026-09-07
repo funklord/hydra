@@ -177,6 +177,7 @@ class watcher : public QObject {
 	Q_OBJECT
 public:
 	explicit watcher(QObject *parent = nullptr);
+	~watcher() override;
 	void set_choice(choice c);
 	choice current() const { return m_choice; }
 
@@ -198,5 +199,24 @@ private:
 	choice          m_choice = choice::system;
 	Qt::ColorScheme m_last   = Qt::ColorScheme::Unknown;
 };
+
+// The watcher this process is using, or null before one exists.
+//
+// **Why an accessor rather than passing it down.** The colour scheme has two
+// writers -- the desktop, through the portal, and the settings dialog -- and
+// only one of them was going through the watcher. The dialog called `apply`
+// directly, so the watcher's idea of the choice went stale the moment somebody
+// picked one, and its `m_last` with it. Two failures follow, in opposite
+// directions: a desktop that switches at sunset reapplies the STALE choice and
+// overrides an explicit Dark, and a `m_last` left saying Dark makes the next
+// genuine change to Dark a no-op, so the window stays light while the desktop
+// is not.
+//
+// Passing a pointer would mean threading it from `main` through the window to
+// a dialog built per invocation, for one setting. The accessor keeps the rule
+// that matters -- every change to the choice goes through the one object that
+// remembers it -- with a null answer for the case that has no watcher, which
+// is the suites.
+watcher *active();
 
 }  // namespace theme

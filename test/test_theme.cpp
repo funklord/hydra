@@ -16,6 +16,7 @@
 #include <QDir>
 
 #include <QApplication>
+#include <QDBusVariant>
 #include <QIcon>
 #include <QStandardPaths>
 #include <QBrush>
@@ -656,6 +657,61 @@ int main(int argc, char **argv) {
 		          .arg(dark_values.value(2)).arg(dark_values.value(3))
 		          .arg(dark_values.value(4)));
 	}
+
+	section("the watcher is the one place the choice lives");
+
+	// **Two writers, one memory.** The colour scheme is changed by the desktop
+	// (through the portal, or Qt's own `colorSchemeChanged`) and by the
+	// settings dialog. Only the first went through `theme::watcher`; the
+	// dialog called `theme::apply` directly, so the watcher's `m_choice` was
+	// whatever it had been at launch and its `m_last` with it.
+	//
+	// Nothing in the appearance of the window says so at the time -- the
+	// preview looks right -- which is why this is asserted on the watcher
+	// rather than on a palette. The palette check below is the consequence.
+	{
+		theme::watcher w;
+		w.set_choice(theme::choice::system);
+		check(theme::active() == &w,
+		      "a watcher registers itself as the one this process asks");
+		check(w.current() == theme::choice::system,
+		      "and starts on the choice it was given");
+
+		// What the dialog does when somebody picks Dark. Routed the way the
+		// dialog routes it, which is the whole point: calling `set_choice`
+		// here would prove nothing about the caller.
+		if (theme::watcher *a = theme::active())
+			a->set_choice(theme::choice::dark);
+		check(w.current() == theme::choice::dark,
+		      QString("choosing Dark reaches the watcher (it holds %1)")
+		              .arg(int(w.current())));
+
+		// **The consequence, and the reason this matters at all.** The next
+		// thing the desktop does calls `reapply`, which resolves the watcher's
+		// OWN choice. With a stale `system` in there, a desktop that switched
+		// at sunset would reapply the desktop's scheme and take the explicit
+		// Dark away.
+		//
+		// `portal_changed` is a private slot, so it is invoked by name through
+		// the meta-object -- which is exactly how the portal reaches it, and
+		// is the only way to reach it on a machine with no portal running.
+		// This one has none: measured, no org.freedesktop.portal.Desktop.
+		const bool fired = QMetaObject::invokeMethod(
+		  &w, "portal_changed", Qt::DirectConnection,
+		  Q_ARG(QString, "org.freedesktop.appearance"),
+		  Q_ARG(QString, "color-scheme"), Q_ARG(QDBusVariant, QDBusVariant(1)));
+		check(fired, "a desktop scheme change reaches the watcher");
+		check(w.current() == theme::choice::dark,
+		      "and does not overwrite the choice somebody made");
+		check(theme::resolve(w.current()) == Qt::ColorScheme::Dark,
+		      QString("so the scheme in force is still dark (%1)")
+		              .arg(int(theme::resolve(w.current()))));
+	}
+
+	// And it lets go: a suite builds these on the stack, and an accessor
+	// answering with a destroyed object is worse than one answering null.
+	check(theme::active() == nullptr,
+	      "the accessor forgets a watcher that has gone");
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
