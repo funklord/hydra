@@ -287,12 +287,27 @@ skip_reason() {
 }
 
 for d in $drivers; do
+	log="$OUT/$d.log"
 	why=$(skip_reason "$d")
 	if [ -n "$why" ] && [ -z "${SWEEP_ALL:-}" ]; then
+		# **A skipped driver must leave no log, not last run's.**
+		#
+		# The truncation below covers every driver that RUNS, and the note on
+		# it records what that cost: a log from two weeks earlier read as a
+		# result. The skip path reached `continue` before it, so the remedy
+		# stopped one line short of the case where nothing overwrites the file
+		# at all -- and a stale log at the path a reader greps is
+		# indistinguishable from a pass. Eight of the drivers skip on a
+		# machine with no network, no model and no KeePassXC, so it is the
+		# common path rather than a corner.
+		#
+		# Removed by name -- the file this run owns -- rather than by a glob
+		# over $OUT, which on the shared default path is another session's
+		# live sweep.
+		rm -f "$log"
 		printf '  skip   %-16s %s\n' "$d" "$why"
 		continue
 	fi
-	log="$OUT/$d.log"
 	# **Truncated before the run, and the sweep stops for this driver if it
 	# cannot be.** Without this the run below fails to redirect, writes nothing,
 	# and the `grep` further down reads *whatever is already at that path* --

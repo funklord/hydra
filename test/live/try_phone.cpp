@@ -57,6 +57,8 @@
 #include <QSet>
 #include <QTest>
 #include <QLabel>
+#include <QStyle>
+#include <QStyleOptionComboBox>
 #include <QListWidget>
 #include <QPushButton>
 #include <QToolButton>
@@ -80,6 +82,7 @@ static QString g_out;
 // **What the cut-off check actually measured.** Zero cut labels over zero
 // labels reads like zero over four hundred, and only one is a result.
 static int     g_labels_measured = 0;
+static int     g_combos_measured = 0;
 
 static void save(QWidget *w, const QString &name) {
 	const QString path = QString("%1/%2-%3.png")
@@ -437,11 +440,27 @@ static void measure(QWidget *dlg, const QString &name) {
 	for (QLabel *l : dlg->findChildren<QLabel *>()) {
 		if (!l->isVisible() || !l->wordWrap() || l->width() <= 0)
 			continue;
-		// `empty_state`'s overlay is *meant* to take the whole viewport -- it
-		// is a message centred in an empty list, and centring is the point. It
-		// was the first thing this check reported, on two dialogs, and the
-		// check was the thing that was wrong.
-		if (l->objectName() == "empty_state")
+		// **A centred message is meant to take the space it is given, and
+		// that is a property of the widget rather than a list of names.**
+		//
+		// `empty_state`'s overlay was the first thing this check reported, on
+		// two dialogs, and the check was the thing that was wrong: it is a
+		// message centred in an empty list, and centring is the point. It was
+		// exempted by object name, and the second such label -- the window's
+		// own empty-page hint, once it was made to wrap -- arrived as a fresh
+		// failure for the identical reason. A name list needs an entry per
+		// widget and gets one only after somebody has been misled.
+		//
+		// So the test is what the label was asked to do. Both are
+		// `Qt::AlignCenter`, which subsumes the name.
+		//
+		// **The horizontal half is the discriminator, and it has to be.**
+		// Measured rather than recalled: a QLabel's default alignment is
+		// already `AlignLeft | AlignVCenter` (0x81), so exempting on
+		// `AlignVCenter` would exempt every label in the tree and leave a
+		// check that cannot fire. `AlignHCenter` is 0x4 and is set only where
+		// somebody asked for it.
+		if (l->alignment() & Qt::AlignHCenter)
 			continue;
 		const int wants = l->heightForWidth(l->width());
 		if (wants > 0 && l->height() > wants + l->fontMetrics().height()) {
@@ -482,6 +501,45 @@ static void measure(QWidget *dlg, const QString &name) {
 				               .arg(l->width()).arg(hint.width());
 		}
 	}
+	// **And the class neither check was looking at.** Both loops above take
+	// `QLabel`, and the button check takes `QAbstractButton`; a `QComboBox`
+	// belongs to neither, so it could elide its current item on a 360-wide
+	// phone and be counted as nothing at all. That is the same shape as the
+	// address bar taking whatever the toolbar's buttons left over -- a widget
+	// sized by what is spare rather than by what it has to show -- met here in
+	// the class the audit had no loop for.
+	//
+	// The comparison is the current item against the field the style draws it
+	// in, not `sizeHint()`, which for a combo is its widest entry: a
+	// deliberately narrow box holding one long item would be reported for
+	// ever, and a check nobody can satisfy is one that gets ignored.
+	int cutcombo = 0;
+	QStringList combos;
+	for (QComboBox *c : dlg->findChildren<QComboBox *>()) {
+		if (!c->isVisible() || c->currentText().trimmed().isEmpty())
+			continue;
+		++g_combos_measured;
+		QStyleOptionComboBox opt;
+		opt.initFrom(c);
+		opt.editable = c->isEditable();
+		const int room = c->style()
+		                     ->subControlRect(QStyle::CC_ComboBox, &opt,
+		                                       QStyle::SC_ComboBoxEditField, c)
+		                     .width();
+		const int need = c->fontMetrics().horizontalAdvance(c->currentText());
+		if (need > room + 4) {
+			++cutcombo;
+			if (combos.size() < 3)
+				combos << QString("\"%1\" (%2 of %3)")
+				            .arg(c->currentText().left(28))
+				            .arg(room).arg(need);
+		}
+	}
+	verdict(cutcombo == 0, cutcombo == 0
+	          ? QString("%1: and no dropdown is cut off").arg(name)
+	          : QString("%1: %2 dropdown(s) cut off -- %3")
+	                .arg(name).arg(cutcombo).arg(combos.join("; ")));
+
 	verdict(clipped == 0, clipped == 0
 	          ? QString("%1: and no label is cut off").arg(name)
 	          : QString("%1: %2 label(s) cut off -- %3")
@@ -974,7 +1032,7 @@ int main(int argc, char *argv[]) {
 	// "no label is cut off" is worth exactly as much as the number of labels it
 	// looked at, and that number belongs beside the verdict rather than in
 	// somebody's assumption.
-	std::printf("%d label(s) measured against their own width\n",
-	             g_labels_measured);
+	std::printf("%d label(s) and %d dropdown(s) measured against their own "
+	             "width\n", g_labels_measured, g_combos_measured);
 	return shell::report();
 }

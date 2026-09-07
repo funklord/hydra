@@ -21252,6 +21252,142 @@ every width*, was the useful one precisely because it was the same at 420:
 a count that does not change with the variable under test is measuring
 something else.
 
+## The audit had no loop for dropdowns, and wrapping a label broke a driver
+
+Two findings, from one lens. The last one's shape was **a widget sized by
+what was spare rather than by what it has to show**, so the question was
+where else that could hide. It hides in a class nobody looks at: the
+appearance audit counts buttons and labels, and `try_phone` counts labels
+alone. A `QComboBox` belongs to neither, so one could elide its current item
+and be reported as nothing at all.
+
+Both drivers audit them now -- 66 in `try_look`, 43 in `try_phone`, and
+**none is cut**. That is an empty result, so what it is worth is the method:
+the comparison is the *current item* against `SC_ComboBoxEditField`, the
+field the style actually draws it in, arrow and frame taken out. Not
+`sizeHint()`, which for a combo is its widest entry -- a deliberately narrow
+box holding one long item would be reported for ever, and a check nobody can
+satisfy is one that gets ignored.
+
+**`try_look` refuses to report at all until the check has been seen to
+work.** The count in the summary proves the loop ran; it cannot prove the
+comparison inside it can come out false, and this one has a real way of
+being permanently silent -- `SC_ComboBoxEditField` is the *style's* answer,
+and a style returning the whole widget rect for it would leave `need > room`
+unable to fire while the audit went on saying "0 problems" in exactly the
+words it uses when there are none. Two fixtures, because one shows only that
+the check can refuse and the other that it does not refuse everything;
+either failing exits 2 before a single surface is audited. Both were broken
+on purpose and both messages seen.
+
+### And the driver was already red, from a fix of ours
+
+Running it turned up a failure that had nothing to do with the combos:
+
+    FAIL  window: 1 label(s) stretched past their text -- "No tab open.
+
+That is `m_placeholder`, and it is red because of *A sentence was setting
+the browser's minimum width* -- the commit that gave it `setWordWrap(true)`
+to get the window's floor from 353 to 223. `try_phone` owns wrapped labels
+with a check for a paragraph absorbing spare height, so the fix walked
+straight into it.
+
+**Nothing reported this for two commits, because the live drivers are not in
+`make check`.** The suite was green each time and said nothing, which is the
+shape where a check that runs in only one place stops running at all. Worth
+knowing about this tree specifically: a change to a widget's *layout
+behaviour* is not covered by the target that gets run.
+
+The check was the thing that was wrong, and it already knew it. It exempts
+`empty_state` by object name, with a comment saying that overlay is a
+message centred in an empty list and centring is the point. The placeholder
+is the same widget in the same sense -- `Qt::AlignCenter`, alone on an empty
+page -- and it arrived as a fresh failure for the identical reason, because
+**a name list needs an entry per widget and gets one only after somebody has
+been misled.**
+
+So the exemption is now what the label was asked to do rather than what it
+is called, which subsumes the name: both are `Qt::AlignCenter`.
+
+**The horizontal half is the discriminator, and it had to be measured.** The
+obvious spelling is `AlignVCenter`, and it would have gutted the check:
+
+    QLabel default alignment   0x81   AlignLeft | AlignVCenter
+    Qt::AlignCenter            0x84   AlignHCenter | AlignVCenter
+
+Every label in the tree carries `AlignVCenter` already, so exempting on it
+exempts everything. `AlignHCenter` is set only where somebody asked for it.
+
+The control for the narrowed exemption is the placeholder itself: with its
+`setAlignment` removed the check fires again on the very same label, so what
+was added discriminates rather than silences.
+
+## Two checks that reported something other than what they said
+
+### A visible button is not reachability
+
+The assertion added beside the address-bar floor read
+
+    N button(s) left the bar, and the extension button is there to
+    reach them
+
+and what it tested was that a widget called `qt_toolbar_ext_button` was on
+screen. Those are different facts, and the gap between them is the whole of
+this section: **a menu Qt filled with nothing passes in the same words,
+with three actions gone from the interface.**
+
+It matters here rather than as a general caution. Before the field was
+given a floor nothing overflowed at 320; now three actions do. So the check
+certifies a consequence of that change and never looked at it.
+
+**Measured rather than recalled, because the wrong guess fails silently in
+the shape of a finding.** The button is a `QToolBarExtension`, its
+`defaultAction()` is **null**, and the actions live on `menu()`. Reaching
+for the default action returns a null menu and an empty list -- which reads
+exactly like the defect being hunted, and would have been reported as one.
+
+It now asserts every off-bar action is in that menu by identity, and
+carries the control that makes it worth anything: **nothing still on the
+bar may also be in the spill.** Both were broken on purpose, and the pair
+is the point:
+
+    sabotage                        first check   control
+    consult defaultAction()->menu()  FAIL (0/3)    ok
+    a menu holding every action      ok (3/3)      FAIL (5 doubled)
+
+**Neither sabotage is caught by both.** The second one -- a menu that
+contains everything -- passes the reachability assertion completely, and
+only the control sees it. A check with one half would have been green for
+it.
+
+### A skipped driver left the last run's log
+
+`sweep.sh` truncates a driver's log before running it, and the note on that
+line records what it cost: a log from two weeks earlier read as a result,
+the sweep reporting "7 passed, 4 failed" for a driver that had just been
+changed. **The skip path reaches `continue` before that truncation**, so
+nothing overwrites the file at all and the previous run's log stays at the
+path a reader greps.
+
+Eight of the drivers skip on a machine with no network, no model and no
+KeePassXC, so it is the common path rather than a corner. Demonstrated
+rather than argued, by planting one:
+
+    before   skip try_extract   log still reads "STALE ... 99 passed"
+    after    skip try_extract   no log at all
+
+Removed **by name** -- the file this run owns -- rather than by a glob over
+the output directory, which on the shared default path is another session's
+live sweep.
+
+**This is not hypothetical, and the reason it was looked for is that it had
+just happened.** A sweep log twelve hours old and two gate logs older still
+were read as evidence for a change they predated, and reported as such. The
+tell was in the timestamps: **a binary newer than the log that supposedly
+exercised it is not a curiosity, it is the log being from a different
+build.** `sweep.sh` honours `HYDRA_SWEEP_OUT`, so a private directory per
+run costs nothing and removes the shared-path ambiguity entirely.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

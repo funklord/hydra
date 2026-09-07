@@ -72,6 +72,8 @@
 #include <QFile>
 #include <QLabel>
 #include <QToolBar>
+#include <QMenu>
+#include <QToolButton>
 #include <QSignalSpy>
 #include <QLayout>
 #include <QListWidget>
@@ -433,17 +435,55 @@ int main(int argc, char **argv) {
 		// Reachability: an action is either on the bar or in the extension
 		// menu, and the extension button has to be there for the second.
 		int off = 0;
+		QList<QAction *> gone;
 		for (QAction *a : bar ? bar->actions() : QList<QAction *>()) {
 			if (a->isSeparator() || !a->isVisible()) continue;
 			QWidget *w = bar->widgetForAction(a);
-			if (!w || !w->isVisible()) ++off;
+			if (!w || !w->isVisible()) { ++off; gone << a; }
 		}
-		QWidget *ext = bar ? bar->findChild<QWidget *>("qt_toolbar_ext_button")
-		                    : nullptr;
-		check(off == 0 || (ext && ext->isVisible()),
-		       QString("%1 button(s) left the bar, and the extension button is "
-		                "there to reach them")
-		         .arg(off));
+		// **A visible extension button is not reachability, and the first
+		// version of this asserted it as though it were.** The verdict said
+		// the buttons could be reached and the condition tested that a widget
+		// called `qt_toolbar_ext_button` was on screen -- so a menu Qt filled
+		// with nothing would have passed in the same words, with three
+		// actions gone from the interface. It matters here rather than in
+		// general: before the address bar was given a floor nothing
+		// overflowed at 320, so this check certifies a consequence of that
+		// change and has to look at it.
+		//
+		// Measured rather than recalled, because the wrong guess fails
+		// silently in the shape of a finding: the extension button is a
+		// `QToolBarExtension`, its `defaultAction()` is **null**, and the
+		// actions live on `menu()`. Reaching for the default action would
+		// have given a null menu and an empty list, which reads exactly like
+		// the defect being hunted.
+		QToolButton *ext =
+		  bar ? bar->findChild<QToolButton *>("qt_toolbar_ext_button") : nullptr;
+		QMenu *const spill = ext ? ext->menu() : nullptr;
+		int reachable = 0;
+		for (QAction *a : gone)
+			if (spill && spill->actions().contains(a))
+				++reachable;
+		check(off == 0 || (ext && ext->isVisible() && reachable == off),
+		       QString("%1 button(s) left the bar, and all %2 are in the "
+		                "extension menu")
+		         .arg(off).arg(reachable));
+
+		// The control, without which the check above passes for a menu
+		// holding every action there is: what is still on the bar must not
+		// also be in the spill. Measured at 0 on a bar with ten actions and
+		// two of them showing.
+		int doubled = 0;
+		for (QAction *a : bar ? bar->actions() : QList<QAction *>()) {
+			if (a->isSeparator() || !a->isVisible()) continue;
+			QWidget *g = bar->widgetForAction(a);
+			if (g && g->isVisible() && spill && spill->actions().contains(a))
+				++doubled;
+		}
+		check(doubled == 0,
+		       QString("and the menu holds only what left, not everything "
+		                "(%1 on the bar and in the menu)")
+		         .arg(doubled));
 
 		check(phone.layout()
 		       && phone.layout()->minimumSize().width() <= 223,

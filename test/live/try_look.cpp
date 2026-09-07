@@ -47,6 +47,9 @@
 #include <QApplication>
 #include <QDialog>
 #include <QLabel>
+#include <QStyle>
+#include <QStyleOptionComboBox>
+#include <QComboBox>
 #include <QLayout>
 #include <QTreeView>
 #include <QDir>
@@ -76,6 +79,66 @@ static int g_problems = 0;
 // counts are printed with the verdict so the verdict means something.
 static int g_buttons_seen = 0;
 static int g_labels_seen  = 0;
+static int g_combos_seen  = 0;
+// **Does the current item fit the field the style draws it in?**
+//
+// Factored out so that the control below runs the same comparison the audit
+// runs. A check written twice is a check whose control tests the other copy.
+static bool combo_fits(QComboBox *c, int *need, int *room) {
+	QStyleOptionComboBox opt;
+	opt.initFrom(c);
+	opt.editable = c->isEditable();
+	*room = c->style()
+	            ->subControlRect(QStyle::CC_ComboBox, &opt,
+	                              QStyle::SC_ComboBoxEditField, c)
+	            .width();
+	*need = c->fontMetrics().horizontalAdvance(c->currentText());
+	return *need <= *room + 4;
+}
+
+// **The combo check has a way of being permanently silent, so it is made to
+// speak before anything is audited.**
+//
+// `SC_ComboBoxEditField` is the style's answer, not this driver's. A style
+// that returned the whole widget rect for it -- or a Qt that changed what the
+// sub-control means -- would leave `need > room` unable to fire, and the audit
+// would report zero combo problems for ever in exactly the words it uses when
+// there are none. The count in the summary proves the loop ran; it cannot
+// prove the comparison inside it can come out false.
+//
+// Two fixtures, because one of them only shows the check is capable of
+// refusing and the other that it does not refuse everything: a box far too
+// narrow for its item must be reported, and the same box given room must not.
+// A control that can only fail one way is a constant.
+//
+// It refuses the run rather than counting a problem. A control failure means
+// no result below means anything, which is not something to report as a
+// finding among the findings.
+static bool combo_control() {
+	QComboBox narrow;
+	narrow.addItem("a considerably longer item than this box can show");
+	narrow.resize(40, narrow.sizeHint().height());
+	int need = 0, room = 0;
+	if (combo_fits(&narrow, &need, &room)) {
+		std::printf("control: a %dpx combo showing a %dpx item was called a "
+		             "fit (field %dpx) -- the combo check cannot refuse "
+		             "anything, so no result below means anything\n",
+		             narrow.width(), need, room);
+		return false;
+	}
+	QComboBox roomy;
+	roomy.addItem("short");
+	roomy.resize(400, roomy.sizeHint().height());
+	if (!combo_fits(&roomy, &need, &room)) {
+		std::printf("control: a 400px combo showing a %dpx item was called a "
+		             "cut-off (field %dpx) -- the combo check refuses "
+		             "everything, so no result below means anything\n",
+		             need, room);
+		return false;
+	}
+	return true;
+}
+
 static void audit(QWidget *w, const QString &name) {
 	if (!w)
 		return;
@@ -174,6 +237,33 @@ static void audit(QWidget *w, const QString &name) {
 		}
 	}
 
+	// **The class the audit was not looking at.** It counted buttons and
+	// labels, so a `QComboBox` could elide its current item and be reported as
+	// nothing at all -- the same shape as the address bar taking whatever the
+	// toolbar's buttons left over, met in a different widget.
+	//
+	// The comparison is not `sizeHint()`, which for a combo is the widest item
+	// it holds: a deliberately narrow box with one long entry would be
+	// reported for ever, and a check nobody can satisfy is a check that gets
+	// ignored. What a person cannot read is the CURRENT item, so this measures
+	// that string against the field the style actually draws it in -- which is
+	// `SC_ComboBoxEditField`, arrow and frame already taken out.
+	//
+	// Same four-pixel margin as above, and the same reason: Qt rounds font
+	// metrics, and one pixel over is arithmetic rather than a cut-off word.
+	for (QComboBox *c : w->findChildren<QComboBox *>()) {
+		if (!c->isVisible() || c->currentText().trimmed().isEmpty())
+			continue;
+		++g_combos_seen;
+		int need = 0, room = 0;
+		if (!combo_fits(c, &need, &room)) {
+			std::printf("    ! %s: combo \"%s\" needs %dpx and has %d\n",
+			             qPrintable(name), qPrintable(c->currentText()),
+			             need, room);
+			++g_problems;
+		}
+	}
+
 	// **Text that does not fit the space it was given.** A label narrower than
 	// its own `sizeHint()` is drawn cut off or elided, which is the exact
 	// failure this driver exists to catch and the one no structural check can:
@@ -268,6 +358,9 @@ int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
+
+	if (!combo_control())
+		return 2;
 
 	g_out = qEnvironmentVariableIsSet("HYDRA_SHOTS")
 	            ? QString::fromLocal8Bit(qgetenv("HYDRA_SHOTS"))
@@ -512,8 +605,9 @@ int main(int argc, char *argv[]) {
 
 	std::printf("\n%d image(s) in %s\n", g_shots, qPrintable(g_out));
 	std::printf("%d problem(s) found by the audit of %d surface(s), "
-	             "%d button(s) and %d label(s)\n",
-	             g_problems, g_shots, g_buttons_seen, g_labels_seen);
+	             "%d button(s), %d label(s) and %d combo(s)\n",
+	             g_problems, g_shots, g_buttons_seen, g_labels_seen,
+	             g_combos_seen);
 
 	// **A run that photographed nothing is a failed run, not a clean one.**
 	//
