@@ -20949,6 +20949,49 @@ Both directions are measured rather than argued: a stray include in
 `main_window.cpp` is named with its line and the reason it matters, and the
 tree as it stands passes over 165 files.
 
+## What the crypto suite cannot say, said in the suite
+
+The load-bearing-code rule sends a sweep at crypto, parsing and
+authorization; `box_crypto` is the one place this program does crypto, and
+the finding is not a defect. The suite is thorough -- sizes, distinctness,
+public-half-is-not-the-secret-half, empty plaintext, negative counts, every
+way a wrong-length buffer can reach libsodium -- and it was **missing the
+sentence about its own limits**.
+
+**Everything in it is this code agreeing with itself.** The round trips seal
+and open through the same shim, so a shim that called libsodium
+consistently wrongly would pass every one of them. What that cannot
+establish is the half the password manager depends on: that these bytes are
+what a standard `crypto_box` produces, and therefore what KeePassXC will
+accept.
+
+**Two things there do carry independent weight**, named so the limit is not
+read as wider than it is. Sizes are checked against literals -- 32, 24, 16
+-- while `box_crypto.cpp` takes every one from libsodium's own constants, so
+those compare the library's numbers against the specification's rather than
+against themselves. And the ciphertext must be exactly the plaintext plus a
+16-byte tag, which is `crypto_box_easy`'s layout: a shim that added framing
+of its own fails there.
+
+**What would close the rest is a published vector**, both directions, with a
+byte perturbed to show it is compared rather than present. It is not written
+because none is available on this machine and recalling one is inventing it
+-- a wrong vector is worse than none, since it would be believed. Fetched
+from libsodium's own tests or the NaCl specification, it needs no KeePassXC,
+no account and no vault, which makes it the cheaper half of the KeePassXC
+gap already recorded: it separates an interoperability failure from a
+protocol one before anybody spends an evening on the socket.
+
+### And a stale binary reported a pass, in the middle of writing this
+
+The first build of the changed suite failed -- a `\n` eaten by the tool
+writing the file, so the C++ string literal ran off its line -- and the run
+that followed printed `30 passed, 0 failed` **from the binary already on
+disk**. The tell was the note line missing from output that should have
+carried it, and the rule is this tree's own: never conclude a test passed
+from a binary the build step did not rebuild. Two lines below it,
+`build rc=2` said so and was read past.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

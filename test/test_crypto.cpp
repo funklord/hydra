@@ -64,6 +64,40 @@ int main(int argc, char **argv) {
 		check(box_crypto::random_bytes(-1).isEmpty(), "and so is a negative count");
 	}
 
+	section("what this suite cannot say, said here rather than assumed");
+
+	// **Everything below is this code agreeing with itself.** The round trips
+	// seal and open with the same shim, and a shim that called libsodium
+	// consistently wrongly would pass every one of them. What that cannot
+	// establish is the half the password manager actually depends on: that
+	// these bytes are what a standard `crypto_box` produces, and therefore
+	// what KeePassXC will accept.
+	//
+	// Two things do carry independent weight and are worth naming so this
+	// limit is not read as wider than it is. The sizes are checked against
+	// literals -- 32, 24, 16 -- while `box_crypto.cpp` takes every one from
+	// libsodium's own constants, so those assertions compare the library's
+	// numbers against the specification's rather than against themselves. And
+	// the ciphertext is required to be exactly the plaintext plus a 16-byte
+	// tag, which is `crypto_box_easy`'s layout: a shim that added framing of
+	// its own would fail here, and would be rejected on the wire.
+	//
+	// **What would close the rest is a published vector**, checked in both
+	// directions -- seal to the publication's ciphertext and tag, and open the
+	// publication's own ciphertext under its own tag -- with one byte
+	// perturbed to show the vector is compared rather than merely present.
+	// It is not written here because none is available on this machine and
+	// recalling one from memory is inventing it: a wrong vector is worse than
+	// no vector, since it would be believed. Fetch it from libsodium's own
+	// test suite or the NaCl specification.
+	//
+	// This is the cheaper half of the KeePassXC gap `project.md` records: the
+	// vector needs no KeePassXC, no account and no vault, and it is what would
+	// tell an interoperability failure apart from a protocol one before
+	// anybody spends an evening on the socket.
+	std::printf("  note   the checks below prove self-consistency; no "
+	             "published vector is compared here\n");
+
 	section("a message from A to B, and back");
 	{
 		const QByteArray nonce = box_crypto::random_nonce();
