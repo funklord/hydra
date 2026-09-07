@@ -198,6 +198,58 @@ int main(int argc, char **argv) {
 		delete back;
 	}
 
+	section("the payload carries what may leave the machine and nothing else");
+
+	// **The rule was written and unchecked.** `tree_serializer.h` says sec 9.3
+	// fixes exactly what may leave this machine -- id, depth, title, url, type,
+	// tags -- and the test above asserts only that those survive a round trip.
+	// Nothing asserted the other half, so a field added to `write_node` in good
+	// faith would have widened what is sent to a model with nothing going red.
+	//
+	// That is not a hypothetical shape. Reading `tree_serializer.cpp` alone,
+	// `locked` and `renamed` look like fields the writer forgot -- `node.h`
+	// says of `locked` that "it has to survive being written to the outline
+	// file and read back", which reads as a bug until you notice the canonical
+	// writer is `tree_outline`, and that this one is a different format with a
+	// different job. **The obvious repair here is a privacy regression**, so it
+	// is worth a check rather than a comment.
+	{
+		node root;
+		root.type = node_type::folder;
+		auto *p = new node;
+		p->id       = "s1";
+		p->type     = node_type::unopened_tab;
+		p->title    = "A page";
+		p->url      = "https://x.example/";
+		p->tags     = QStringList{"keep"};
+		// Everything the payload must not carry, set to something findable.
+		p->locked   = true;
+		p->renamed  = true;
+		p->mirror   = "firefox-0";
+		p->created  = QDateTime::fromSecsSinceEpoch(1700000000);
+		p->last_seen = QDateTime::fromSecsSinceEpoch(1700009999);
+		p->parent   = &root;
+		root.children.push_back(p);
+
+		const QString payload = tree_serializer::to_payload(&root);
+		struct { const char *needle; const char *what; } banned[] = {
+			{ "locked",     "the lock flag" },
+			{ "renamed",    "whether a person chose the title" },
+			{ "firefox-0",  "the mirror id" },
+			{ "created",    "when the tab was made" },
+			{ "seen",       "when it was last looked at" },
+			{ "1700000000", "the creation timestamp" },
+			{ "1700009999", "the last-seen timestamp" },
+		};
+		for (const auto &b : banned)
+			check(!payload.contains(QLatin1String(b.needle)),
+			       QString("the payload does not carry %1").arg(b.what));
+		// And the control: it does carry what it is supposed to, so the seven
+		// checks above are not passing because the payload is empty.
+		check(payload.contains("https://x.example/") && payload.contains("keep"),
+		       "while still carrying the url and the tags it exists to send");
+	}
+
 	section("a proposal wrapped in prose, as a model actually answers");
 	{
 		const QString reply =

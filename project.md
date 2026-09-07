@@ -20869,6 +20869,47 @@ be dropped by reading one, and `for_host` returns every generic rule as well
 as the host's own. The premise was wrong rather than the store, and the two
 numbers said which before any reading did.
 
+## The rule about what may leave the machine is checked now
+
+Two lenses came up empty and the second one produced this, which is worth
+more than either would have been.
+
+**Asking whether a tree survives a round trip field for field**,
+`tree_serializer::to_payload` writes id, type, title, url and tags -- and
+not `locked`, `renamed`, `mirror` or the timestamps. `node.h` says of
+`locked` that "it has to survive being written to the outline file and read
+back", which reads as a serializer that forgot two fields.
+
+**It is not.** `tree_outline` is the canonical writer and does persist both;
+`tree_serializer` is a different format with a different job, and its own
+header says so: sec 9.3 fixes exactly what may leave this machine, and this
+carries those and nothing else. Reading one file and not the other is what
+made it look like a bug.
+
+**So the danger here is not the omission but its repair.** A later reader
+meeting the same half-picture would add the fields in good faith and widen
+what is sent to a model, and nothing would have gone red: the existing test
+asserts only that title, url and tags survive the round trip -- what the
+payload KEEPS. Nothing asserted what it must not carry.
+
+That is the asymmetry this file keeps finding, on a rule about somebody's
+browsing rather than about a widget. It is a check now: every excluded field
+set to something findable, seven assertions that the payload does not
+contain it, and a control asserting the url and tags ARE there so the seven
+cannot pass on an empty string. Sabotaged by adding `locked=1` to
+`write_node` -- one line, exactly the good-faith repair -- it reports **the
+payload does not carry the lock flag**.
+
+### And the reorganizer's other end was already defended
+
+The same pass asked what happens when a model's proposal drops or duplicates
+an id, since applying one is a re-parenting by id and a lost id would be a
+lost tab. `tree_diff::check_and_repair` runs before anything is shown and
+can reject the whole proposal, and the dialog's own comment records a
+narrower finding already fixed -- duplicate rows were offered as ticked
+changes whose apply arm did nothing. Empty sweep, recorded so the next
+person spends their lens elsewhere.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
