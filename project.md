@@ -20765,6 +20765,66 @@ follows it: the detector only sees a whole call on one line ending in `);`,
 so a call split across lines or wrapped in a cast is invisible to it, and it
 only knows names declared `bool` in this project's own headers.
 
+## The android-run override is gone, and two silent seam gaps are not
+
+**Settled rather than worked around.** The Makefile redefined `android-run`
+because the shared fragment hard-coded Qt's activity class and this app
+subclasses it -- which worked, and was the wrong shape: make takes the last
+definition, so the fragment's recipe was discarded and every build printed
+two warnings saying so. That is `harmonization.md`'s silent-override hazard,
+made audible.
+
+`claude-guidelines` settled the signal in the pass of 2026-09-07: `a45b0fe`
+added `ANDROID_ACTIVITY ?=` with Qt's class as the default, and this tree
+already carried the new fragment. So the override is deleted and the
+variable set instead. Verified rather than assumed: `make -n android-run`
+prints **no** warnings now and still ends
+`se.vibes.hydra/se.vibes.hydra.HydraActivity`, and the other five android
+targets still resolve -- tested with `grep -q 'No rule to make target'`,
+which is the form that can actually fail, rather than by reading an exit
+code make returns 2 for.
+
+The comment above it was **rewritten rather than appended to**. What stopped
+being true is the paragraph saying the variable was "signalled rather than
+made" and that the warning was correct and worth seeing; what stays true is
+why redefining a shared target is the wrong shape, which is now what the
+fragment's own comment says.
+
+### The sweep that found it also found two gaps nobody had written down
+
+Asked of the seam: which `web_view_backend` virtuals have a default body that
+`android_view` never overrides? Six, and four are benign:
+
+- `can_print`/`print` default to false and empty, and the shell greys the
+  action on `can_print()`. Printing is *disabled* on Android rather than
+  silently doing nothing, which is the graceful answer and is what the
+  comment beside it already claims.
+- `set_capability_note`/`set_capability_peek` look unoverridden and are not a
+  gap at all: the base body IS the implementation -- it stores the callback
+  in a protected member, and both backends read it. **A detector counting
+  overrides cannot tell a missing implementation from one that lives in the
+  base class**, which is worth remembering before trusting its next answer.
+
+The other two are real, and the reason they went unnoticed is that they say
+nothing:
+
+- **`set_proxy_authenticator` discards its callback on Android**, so a proxy
+  demanding credentials is answered by nobody and the load fails with no
+  prompt.
+- **`set_certificate_chooser` likewise**, and the WebView's default for
+  `onReceivedClientCertRequest` is to cancel -- so a site asking for a client
+  certificate is refused rather than asked about. Safe direction, and exactly
+  the "none was the only outcome available" state that callback's own comment
+  says it exists to end.
+
+Neither is implemented here: `android_view.cpp` does not compile on this
+machine and there is no handset, so writing the JNI blind is the thing this
+tree keeps declining to do. **What was fixed is the silence.**
+`set_navigation_decider` already says "Android's WebView has the hook and is
+not wired to it yet"; these two now say the same in the same place. From
+outside, an unstated gap and an absent one look identical, and the second
+reader pays either way.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

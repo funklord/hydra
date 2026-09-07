@@ -289,21 +289,20 @@ include tool/android.mk
 # its own libraries, so the app dies in `onResume` with an
 # `UnsatisfiedLinkError`. The manifest carries the measurement.
 #
-# So the class is named here. The fragment wants an `ANDROID_ACTIVITY`
-# variable, which is a change to one file copied into four projects and
-# therefore a deliberate cross-project pass rather than something to do from
-# inside this one -- signalled rather than made. Make warns that this
-# overrides the fragment's recipe, and that warning is correct and worth
-# seeing.
+# So the class is named here -- as a variable the shared fragment reads, not
+# by redefining the shared target. Redefining it worked and was the wrong
+# shape: make takes the last definition, so the fragment's recipe was
+# discarded and every build printed two warnings about it, which is the
+# silent-override hazard `harmonization.md` names, made audible.
 #
-# **The signal is in `claude-guidelines`' `project.md`, under Open signals**,
-# with the measurement: of the four adopters of the fragment, three declare
-# Qt's stock activity in their manifests and this one declares its own,
-# because it subclasses. It is named here so the claim above can be checked
-# rather than believed -- when this comment was written the signal did not
-# exist, and "signalled rather than made" was true of the intention only.
-android-run: android-install
-	$(ANDROID_ADB) shell am start -n $(APP_ID)/se.vibes.hydra.HydraActivity
+# **The variable exists because this was signalled rather than patched in.**
+# Of the four adopters of the fragment, three declare Qt's stock activity in
+# their manifests and this one declares its own, because it subclasses;
+# `claude-guidelines` settled it in the pass of 2026-09-07 and `a45b0fe`
+# added `ANDROID_ACTIVITY ?=` with Qt's class as the default. A change to one
+# file copied into four projects is a deliberate cross-project pass, and
+# waiting for it cost two warnings a build and nothing else.
+ANDROID_ACTIVITY = se.vibes.hydra.HydraActivity
 
 # **Run against a copy, not the tracked sample.** The app saves its tree on
 # exit, so pointing it at `sample-tree.txt` means merely starting the browser

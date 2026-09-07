@@ -195,6 +195,14 @@ public:
 	                                                const QString &realm,
 	                                                QString *user,
 	                                                QString *password)>;
+	//
+	// **Not wired on Android, and the default discards the callback.** Said
+	// here because the absence is otherwise invisible: `android_view` does not
+	// override this, so a proxy demanding credentials is answered by nobody
+	// and the load fails with no prompt. The WebView's own hook is
+	// `onReceivedHttpAuthRequest`, whose `host`/`realm` pair covers the site
+	// case that IS wired; telling the two apart is the work, and it is the
+	// whole reason this callback is separate from `authenticator` above.
 	virtual void set_proxy_authenticator(proxy_authenticator fn) { Q_UNUSED(fn) }
 
 	// One certificate a site is willing to accept, described in plain strings.
@@ -221,6 +229,14 @@ public:
 	// has been abandoned.
 	using certificate_chooser =
 	  std::function<int(const QUrl &url, const QList<certificate_offer> &offered)>;
+	//
+	// **Not wired on Android either, and it fails closed rather than open.**
+	// `android_view` does not override this, so the chooser is discarded and
+	// the WebView's `onReceivedClientCertRequest` takes its default, which is
+	// to cancel: a site asking for a client certificate is refused rather than
+	// asked about. That is the safe direction -- nothing is sent -- but it is
+	// the "none was the only outcome available" state the paragraph above says
+	// this exists to end, so it is a gap rather than a decision.
 	virtual void set_certificate_chooser(certificate_chooser fn) { Q_UNUSED(fn) }
 
 	// Whether this view may go somewhere. **A decider and not a signal**, for
