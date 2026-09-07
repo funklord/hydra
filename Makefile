@@ -740,10 +740,17 @@ help:
 # shipped a rename that broke seven of them. Costs milliseconds and needs no
 # Android tooling, so it runs with the other gates rather than only when
 # somebody builds an APK.
-style: style-source style-docs jni
+style: style-source style-docs jni seam
 
 jni:
 	@python3 tool/jni_check.py
+
+# The web-view seam, checked rather than asserted. A stray engine include in
+# the shell compiles here and breaks the Android build, which drops the
+# qtwebengine_ files -- so the machine that would catch it is the one nobody
+# builds on. See tool/seam_check.py.
+seam:
+	@python3 tool/seam_check.py
 
 style-source:
 	python3 tool/style_gate.py check

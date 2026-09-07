@@ -20910,6 +20910,45 @@ narrower finding already fixed -- duplicate rows were offered as ticked
 changes whose apply arm did nothing. Empty sweep, recorded so the next
 person spends their lens elsewhere.
 
+## The seam is checked now, and the check had an inert control
+
+Same lens as the payload boundary above: a written rule that nothing
+enforces. Architecture doc sec 19.2 says the shell talks to a page through
+`web_view_backend` and knows nothing about Qt WebEngine, and only the
+`src/qtwebengine_*` files may name the engine.
+
+**Measured first: the rule holds.** Zero engine includes and zero
+`QWebEngine*` uses outside the backend. Every other mention -- fourteen
+files by a plain grep -- is prose, and several of them must be: the seam
+header explains what it is a seam from. Stripping comments and string
+literals before looking is the difference between a check and that grep.
+
+**Why it earns a gate anyway.** `hydra.pro` drops `src/qtwebengine_*.cpp`
+and `.h` from the Android build, so a stray `#include <QWebEngineProfile>`
+in the shell compiles cleanly here and breaks the build **nobody on this
+machine can run**. That is `evidence.md`'s gate-weakest-where-it-matters
+exactly: the violation gets written on the machine that cannot detect it.
+`make style` runs `tool/seam_check.py` now, beside the JNI and docs checks.
+
+### The gate's own control was inert, and only sabotaging it said so
+
+`jni_check.py`'s shape was copied deliberately -- controls first, and a
+checker whose controls misclassify reports nothing. Then the detector was
+deliberately blinded to includes, and **it still printed a clean pass**.
+
+The bad sample was `#include <QWebEngineProfile>`, whose text the TYPE
+pattern matches as well: with the include half gone the control was still
+satisfied by the other half, so it could not tell which one was working.
+*A control has to be able to fail the way the thing it controls for fails.*
+The sample names `<QtWebEngineCore/qwebengineprofile.h>` now -- an include
+no type pattern can match -- and with the same sabotage the gate reports
+`CONTROL FAILED -- missed an include; no result below means anything` and
+exits 2.
+
+Both directions are measured rather than argued: a stray include in
+`main_window.cpp` is named with its line and the reason it matters, and the
+tree as it stands passes over 165 files.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
