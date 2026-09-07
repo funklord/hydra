@@ -4027,6 +4027,23 @@ void main_window::suspend_node(node *n) {
 		        .arg(n->title.isEmpty() ? QStringLiteral("the tab") : n->title),
 		    12000);
 
+	// **The zoom the window did not set itself.** `step_zoom` records what it
+	// applies, so a zoom chosen from the menu survives a suspend. Chromium
+	// also zooms on Ctrl+wheel, on its own and without telling anybody --
+	// measured on a bare QWebEngineView, 1.00 to 1.10 from one notch -- and
+	// that route wrote only the engine's own factor. So the same feature was
+	// remembered by one of its two routes: `apply_zoom` restored 1.0 on the
+	// way back and the page came back unzoomed.
+	//
+	// Read here rather than watched for, because this is the moment the value
+	// is about to stop existing, which is the same reason the blob above is
+	// written here. 100% is the absence of a setting rather than a setting, as
+	// in `step_zoom`, or every tab ever looked at grows an entry.
+	if (const double z = view->zoom_factor(); qFuzzyCompare(z, 1.0))
+		m_zoom.remove(n->id);
+	else
+		m_zoom.insert(n->id, z);
+
 	if (view == current_view())
 		m_stack->setCurrentIndex(0);  // back to placeholder
 	QWidget *w = view->widget();

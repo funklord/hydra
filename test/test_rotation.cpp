@@ -1599,6 +1599,67 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	section("a zoom the window did not set itself survives a suspend");
+
+	// **Two routes into one feature, and only one was remembered.**
+	// `step_zoom` records what it applies, so the menu's zoom comes back after
+	// a suspend. Chromium also zooms on Ctrl+wheel, by itself and without
+	// telling anybody -- measured on a bare QWebEngineView with none of this
+	// program's code in it, 1.00 to 1.10 from a single notch -- and that route
+	// left `m_zoom` empty, so `apply_zoom` restored 1.0 and the page came back
+	// unzoomed.
+	//
+	// Modelled by calling `set_zoom_factor` on the backend directly, which is
+	// exactly what the engine does: the point is a factor the window never
+	// chose. Going through the menu here would test the route that already
+	// worked.
+	{
+		main_window wz(&factory, &policy, &filter);
+		wz.resize(900, 700);
+		wz.show();
+		spin(120);
+
+		// Suspended by the live-view cap rather than by calling the private
+		// suspender: that is the path a person meets, and it is the one that
+		// runs on a phone every time a third tab is opened.
+		qputenv("HYDRA_MAX_LIVE_VIEWS", "1");
+
+		node *t = wz.m_model->add_tab(nullptr, "zoomed", "http://z.example/");
+		node *other = wz.m_model->add_tab(nullptr, "other", "http://o.example/");
+		check(t && other, "two tabs, one of which will be pushed out");
+		if (t && other) {
+			const QString id = t->id;
+			const QModelIndex idx =
+			  wz.m_proxy->mapFromSource(wz.m_model->index_for_node(t));
+			emit wz.m_tree->activated(idx);
+			spin(150);
+
+			web_view_backend *v = wz.m_views_by_id.value(id, nullptr);
+			check(v != nullptr, "the first opens a live view");
+			if (v) {
+				v->set_zoom_factor(1.25);   // what Ctrl+wheel does
+				check(qFuzzyCompare(v->zoom_factor(), 1.25),
+				      QString("the engine is at 125% (%1)")
+				              .arg(v->zoom_factor()));
+
+				emit wz.m_tree->activated(
+				  wz.m_proxy->mapFromSource(wz.m_model->index_for_node(other)));
+				spin(200);
+				check(!wz.m_views_by_id.contains(id),
+				      "opening the second pushes the first out at a cap of 1");
+
+				emit wz.m_tree->activated(idx);
+				spin(250);
+				web_view_backend *back = wz.m_views_by_id.value(id, nullptr);
+				check(back != nullptr, "and going back makes a new view");
+				check(back && qFuzzyCompare(back->zoom_factor(), 1.25),
+				      QString("which comes back at the zoom it had (%1)")
+				              .arg(back ? back->zoom_factor() : -1.0));
+			}
+		}
+		qunsetenv("HYDRA_MAX_LIVE_VIEWS");
+	}
+
 	section("a tab dragged out of a mirror keeps its zoom, and leaves none behind");
 	{
 		// The twin of the section above, and the one with the faster

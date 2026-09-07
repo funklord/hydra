@@ -20576,6 +20576,55 @@ touch the one belonging to whoever runs it. `live_view_cap()` reads the
 variable on every call, which is what makes the question askable from a
 driver at all -- and it is the same lever `try_delete` already uses.
 
+## Zoom had two routes in and one of them was remembered
+
+The same lens again -- a value with two writers where only one reaches the
+place that remembers it -- pointed at a feature rather than a setting.
+
+`step_zoom` applies a factor and records it in `m_zoom`, so a zoom chosen
+from the View menu comes back after the tab is suspended. **Chromium also
+zooms on Ctrl+wheel, by itself, and tells nobody.** Measured with a probe
+holding none of this program's code -- a bare `QWebEngineView`, one
+synthesised notch with Control held:
+
+    ctrl+wheel: before 1.00, after 1.10  -> CHANGED
+
+That route wrote the engine's own factor and nothing else, so `m_zoom` had
+no entry, and `apply_zoom` restored 1.0 when the view was rebuilt. **The
+page came back unzoomed**, and only for the route most people actually use.
+
+It is not a rare path. The live-view cap suspends the least recently used
+tab whenever a new one is opened over the limit, which on a phone is
+constantly -- so the zoom survived exactly until the third tab.
+
+**Read at the suspend rather than watched for.** `suspend_node` is the
+moment the value stops existing, which is the same reason the history blob
+is written there; a signal would need the backend seam to grow one for
+something the engine already knows. 100% removes the entry rather than
+storing it, as in `step_zoom`, or every tab ever looked at grows one.
+
+### The test uses the route that was broken, and the path that breaks it
+
+Modelled by calling `set_zoom_factor` on the backend directly, which is
+exactly what the engine does: the point is a factor **the window never
+chose**, and going through the menu would have tested the route that
+already worked. Suspension is triggered by lowering the cap to one and
+opening a second tab rather than by calling the suspender, which is private
+and, more to the point, is not how anybody meets this.
+
+    ok    the engine is at 125% (1.25)
+    ok    opening the second pushes the first out at a cap of 1
+    ok    which comes back at the zoom it had (1.25)
+
+Sabotaged by removing the capture: `which comes back at the zoom it had
+(1)`, 208 passed and 1 failed.
+
+**What this does not fix.** `m_zoom` is still a `QHash` in memory, so no
+zoom of either kind survives a restart. That is the shipped behaviour and
+was not what this entry set out to change; it is written down here because
+the two halves look alike from outside and somebody will otherwise measure
+one and conclude the other.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
