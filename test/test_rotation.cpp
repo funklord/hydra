@@ -71,6 +71,7 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QLabel>
+#include <QToolBar>
 #include <QSignalSpy>
 #include <QLayout>
 #include <QListWidget>
@@ -392,6 +393,64 @@ int main(int argc, char **argv) {
 		check(next.drawer ? parent == &w : parent == split,
 		      QString("%1: the sidebar is parented where that mode keeps it")
 		              .arg(QString::fromUtf8(next.what)));
+	}
+
+	section("a phone leaves the address bar readable, and the buttons reachable");
+
+	// **The address bar had no minimum, so it got whatever the buttons left.**
+	// On a 320-wide phone that was 65 px -- about eight characters of the one
+	// control a browser is mostly made of -- while eight icon buttons kept
+	// their full width beside it.
+	//
+	// `k_address_min` gives it a floor, which spends the toolbar's overflow on
+	// the buttons instead. That is only an improvement if the overflowed
+	// buttons are still reachable, so this asserts both halves: the field is
+	// wide enough to read a hostname in, and nothing has fallen off the bar
+	// without the extension button appearing to hold it.
+	//
+	// The floor is asserted not to move the window's own minimum. It does not,
+	// because the overflow happens inside the toolbar -- but that is a
+	// property of `QToolBar` rather than something this code arranges, so it
+	// is checked rather than assumed.
+	{
+		main_window phone(&factory, &policy, &filter);
+		phone.setGeometry(0, 0, 320, 640);
+		phone.show();
+		spin(200);
+
+		QToolBar *bar = phone.findChild<QToolBar *>();
+		check(bar != nullptr, "the window has its toolbar");
+		QLineEdit *addr = bar ? bar->findChild<QLineEdit *>() : nullptr;
+		check(addr != nullptr, "which carries the address bar");
+
+		// 105 px is the widest hostname measured (`www.example.com`) and 48 px
+		// is what two inline actions take on Android -- see `k_address_min`.
+		check(addr && addr->width() >= 105 + 48,
+		       QString("the address bar keeps room for a hostname on a "
+		                "320-wide phone (%1 px)")
+		         .arg(addr ? addr->width() : -1));
+
+		// Reachability: an action is either on the bar or in the extension
+		// menu, and the extension button has to be there for the second.
+		int off = 0;
+		for (QAction *a : bar ? bar->actions() : QList<QAction *>()) {
+			if (a->isSeparator() || !a->isVisible()) continue;
+			QWidget *w = bar->widgetForAction(a);
+			if (!w || !w->isVisible()) ++off;
+		}
+		QWidget *ext = bar ? bar->findChild<QWidget *>("qt_toolbar_ext_button")
+		                    : nullptr;
+		check(off == 0 || (ext && ext->isVisible()),
+		       QString("%1 button(s) left the bar, and the extension button is "
+		                "there to reach them")
+		         .arg(off));
+
+		check(phone.layout()
+		       && phone.layout()->minimumSize().width() <= 223,
+		       QString("the floor the address bar sets does not become the "
+		                "window's (%1)")
+		         .arg(phone.layout() ? phone.layout()->minimumSize().width()
+		                              : -1));
 	}
 
 	section("the window fits a small phone, and a hint does not decide that");

@@ -404,6 +404,32 @@ public:
 
 	static constexpr int k_drawer_threshold = 620;   // logical px
 
+	// **The narrowest the address bar is allowed to get**, in logical px.
+	//
+	// It had no minimum, so the toolbar handed it whatever the buttons left
+	// over: 65 px on a 320-wide phone, about eight characters, for the one
+	// control a browser is mostly made of. Eight icon buttons kept their full
+	// width beside it. A `QToolBar` overflows its trailing actions into the
+	// extension menu when they no longer fit, so giving the field a floor
+	// spends that overflow on the buttons instead -- which is the right way
+	// round, since a button in the extension menu is two taps away and a
+	// hostname you cannot read is not anywhere.
+	//
+	// Measured rather than chosen, in the toolbar's own font and against the
+	// worst case, which is Android:
+	//
+	//     www.example.com                       105 px of text
+	//     two inline actions (clear, and Go)     48 px  -- Android has both
+	//     frame                                  2 px
+	//                                           ---
+	//                                           155 px, rounded to 160
+	//
+	// `www.example.com` is the widest of the hostnames measured; the desktop
+	// carries only the clear action, so it has 24 px more than this allows
+	// for. The floor costs nothing structurally -- the window's own minimum
+	// stays 223 either way, because the overflow happens inside the toolbar.
+	static constexpr int k_address_min = 160;        // logical px
+
 	// **How many tabs keep a live engine view**, and it is a setting rather
 	// than a constant now.
 	//

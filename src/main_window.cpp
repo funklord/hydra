@@ -874,6 +874,9 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(go, &QAction::triggered, this, &main_window::navigate_to_address);
 #endif
 	connect(m_address, &QLineEdit::returnPressed, this, &main_window::navigate_to_address);
+	// A floor, so that a narrow window overflows the buttons rather than
+	// crushing the field -- see `k_address_min` for the measurement.
+	m_address->setMinimumWidth(k_address_min);
 	bar->addWidget(m_address);
 
 	// The media affordance sits next to the policy shield and stays hidden

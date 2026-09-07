@@ -21185,6 +21185,73 @@ here. Writing it blind is what this tree keeps declining to do, and the gate
 now fails on the symptom rather than passing it, which is the part that was
 missing.
 
+## The address bar was down to eight characters on a phone
+
+`try_phone` and the appearance audit were both clean, so the next lens came
+from the toolbar: at 320 wide, how much of it is actually reachable. The
+first measurement said 8 of 10 actions -- and the same 8 of 10 at 420, where
+there is room to spare, so the two missing ones were **Media** and **Still
+working?**, both hidden until something makes them appear. Nothing wrong.
+
+Forcing every action visible is the case nobody had measured, and it is
+fine too: the extension button appears and takes the overflow.
+
+What the same run showed on its way past is the finding:
+
+    window 320   address bar  65 px    8 icon buttons at full width
+    window 360   address bar  72 px
+    window 420   address bar  96 px
+
+**Sixty-five pixels, about eight characters, for the one control a browser
+is mostly made of.** `m_address` had no minimum width and no size policy, so
+the toolbar handed it whatever the buttons had finished with -- and a
+`QToolBar` gives a widget-action the leftovers rather than a share.
+
+The fix is a floor, `k_address_min`. A toolbar overflows its trailing
+actions into the extension menu when they stop fitting, so a floor on the
+field spends that overflow on the buttons instead. That is the right way
+round: a button in the extension menu is two taps away, and a hostname you
+cannot read is not anywhere.
+
+**The number is measured rather than chosen**, in the toolbar's own font and
+against the worst case, which is Android:
+
+    www.example.com                       105 px of text
+    two inline actions (clear, and Go)     48 px  -- Android has both
+    frame                                   2 px
+                                          ---
+                                          155 px, rounded to 160
+
+`www.example.com` was the widest of four hostnames measured; the desktop
+carries only the clear action, so it has 24 px more than this allows for.
+
+Swept before choosing, because a floor that raised the window's own minimum
+would have undone *A sentence was setting the browser's minimum width*:
+
+    minimum   address at 320   buttons on bar   window floor
+       none        65                8              223
+        120       134                6              223
+        160       167                5              223
+        200       200                4              223
+
+The floor does not move, at any candidate -- the overflow happens inside the
+toolbar. That is `QToolBar`'s behaviour rather than anything this code
+arranges, so the test asserts it instead of trusting it.
+
+**The test asserts both halves, because the fix is only an improvement if
+the buttons it displaces are still reachable**: the field keeps room for a
+hostname, and every visible action is either on the bar or the extension
+button is there to hold it. Reverting the one line takes the first to
+`FAIL ... (62 px)` and the suite to rc=1.
+
+Two things worth keeping. **The buttons that overflow first are the ones
+added last** -- Shield, then Still working? -- which is Qt's order and not a
+judgement about which matters; if that ordering is ever wrong, it is the
+`addAction` order that decides it. And the earlier reading, *8 of 10 at
+every width*, was the useful one precisely because it was the same at 420:
+a count that does not change with the variable under test is measuring
+something else.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
