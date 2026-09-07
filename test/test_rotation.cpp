@@ -1660,6 +1660,69 @@ int main(int argc, char **argv) {
 		qunsetenv("HYDRA_MAX_LIVE_VIEWS");
 	}
 
+	section("the tab that is recording is not the one the cap throws away");
+
+	// **Capture is armed on a view and left running while you use other
+	// tabs**, which `toggle_capture` states by removing the hook from the view
+	// that was armed rather than the one on screen. That makes the capturing
+	// tab exactly the tab the LRU offers up first -- and suspending it
+	// destroys the view and the injected MediaSource hook with it, so bytes
+	// stop arriving while the action stays checked and the window says, twelve
+	// seconds later, that the page stopped feeding its player. It blames the
+	// page for something the browser did.
+	//
+	// `suspend_node` already declines for a kiosk view. This asks for the same
+	// answer, through the cap rather than by calling the suspender.
+	{
+		main_window wc(&factory, &policy, &filter);
+		wc.resize(900, 700);
+		wc.show();
+		spin(120);
+		qputenv("HYDRA_MAX_LIVE_VIEWS", "1");
+
+		node *rec = wc.m_model->add_tab(nullptr, "recording", "http://r.example/");
+		node *rest = wc.m_model->add_tab(nullptr, "elsewhere", "http://e.example/");
+		check(rec && rest, "a tab to record and a tab to walk off to");
+		if (rec && rest) {
+			const QModelIndex rec_at =
+			  wc.m_proxy->mapFromSource(wc.m_model->index_for_node(rec));
+			emit wc.m_tree->activated(rec_at);
+			spin(150);
+			web_view_backend *v = wc.m_views_by_id.value(rec->id, nullptr);
+			check(v != nullptr, "the recording tab has a live view");
+
+			// What `toggle_capture` sets once a capture is running. Set here
+			// rather than by starting one, which needs a listening proxy this
+			// suite has no business standing up: the question is whether the
+			// cap respects the flag, not how the flag comes to be set.
+			wc.m_capture_url = QUrl("http://127.0.0.1:1/capture");
+			wc.m_capture_view = v;
+
+			emit wc.m_tree->activated(
+			  wc.m_proxy->mapFromSource(wc.m_model->index_for_node(rest)));
+			spin(250);
+
+			check(wc.m_views_by_id.contains(rec->id),
+			      "opening another tab at a cap of 1 leaves the recorder alone");
+			check(wc.m_views_by_id.value(rec->id, nullptr) == v,
+			      "and it is the same view, not a rebuilt one");
+
+			// The control: with the flag cleared it goes, so the check above
+			// is about the flag rather than about something else keeping the
+			// view alive.
+			wc.m_capture_url.clear();
+			wc.m_capture_view = nullptr;
+			emit wc.m_tree->activated(rec_at);
+			spin(200);
+			emit wc.m_tree->activated(
+			  wc.m_proxy->mapFromSource(wc.m_model->index_for_node(rest)));
+			spin(250);
+			check(!wc.m_views_by_id.contains(rec->id),
+			      "and with nothing recording it is suspended as usual");
+		}
+		qunsetenv("HYDRA_MAX_LIVE_VIEWS");
+	}
+
 	section("a tab dragged out of a mirror keeps its zoom, and leaves none behind");
 	{
 		// The twin of the section above, and the one with the faster

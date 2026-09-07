@@ -20691,6 +20691,42 @@ Sabotaged by removing the arming, three checks fail together -- no answer,
 no message, and the resolver still busy -- which is the defect stated three
 ways.
 
+## The tab that is recording was the first one the cap threw away
+
+The second half of the same sweep. `Capturing %1 (%2)` is the other status
+message posted without a timeout, and both stop paths replace it, so the
+message itself is fine. The tab underneath it was not.
+
+**Capture is armed on a view and left running while you use other tabs** --
+`toggle_capture` says so, removing the hook from the view that was *armed*
+rather than the one on screen. That makes the capturing tab exactly the tab
+the LRU offers up first. Suspending it destroys the view and the injected
+`MediaSource` hook with it: bytes stop arriving, the action stays checked,
+and twelve seconds later the window says *"the page has stopped feeding its
+player"* -- **blaming the page for something the browser did.**
+
+`suspend_node` already declines for a view a kiosk session is presenting.
+This is the same case and gets the same answer: the cap's job is to reclaim
+memory from tabs nobody is using, and a tab writing a file is being used.
+
+### And the guard turned a hang on, which had been waiting since kiosk
+
+`enforce_live_cap` picks the oldest view, calls `suspend_node`, and
+`continue`s. **A `suspend_node` that declines leaves the same victim to be
+picked again**, so the loop spins on the UI thread for ever. That has been
+latent since the kiosk guard was written -- kiosk active, over the cap, the
+presented view oldest -- and adding a second reason to decline made it
+reachable at once.
+
+**Found by a test that hung rather than failed**, which is how this class
+announces itself and why the run was bounded by `timeout` from outside as
+well. A victim that is still there after being asked is recorded as having
+refused, and is not offered again.
+
+**The control is what makes the section mean anything**: with the capture
+flag cleared, the same tab *is* suspended. Without that line the first two
+checks would pass for a window that simply never enforced its cap.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

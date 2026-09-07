@@ -4008,6 +4008,22 @@ void main_window::suspend_node(node *n) {
 	if (m_kiosk && m_kiosk->active() && m_kiosk->view() == view)
 		return;
 
+	// **Nor the one that is recording**, which is the same case and was not
+	// covered. Capture is armed on a view and left to run while you use other
+	// tabs -- `toggle_capture` says so, removing the hook from the view that
+	// was armed rather than the one showing -- so the capturing tab is exactly
+	// the tab the LRU picks first. Suspending it destroys the view, and with
+	// it the injected `MediaSource` hook that feeds the proxy: bytes stop
+	// arriving, the action stays checked, and twelve seconds later the window
+	// says "the page has stopped feeding its player", which blames the page
+	// for something the browser did.
+	//
+	// Declined rather than stopped-and-reported, matching kiosk above: the
+	// cap's job is to reclaim memory from tabs nobody is using, and a tab
+	// writing a file is being used.
+	if (!m_capture_url.isEmpty() && m_capture_view == view)
+		return;
+
 	// **The one save whose failure cannot be "in this session only".** Every
 	// other store keeps its copy in memory when a write fails, so
 	// `saved_or_said`'s line is true there. Here the view is torn down four
@@ -4081,10 +4097,13 @@ int main_window::live_view_cap() const {
 }
 
 void main_window::enforce_live_cap(const QString &keep_id) {
+	// Victims that declined, so the loop cannot offer the same one twice.
+	QSet<QString> refused;
 	while (m_views_by_id.size() > live_view_cap()) {
 		QString victim;
 		for (auto it = m_lru.crbegin(); it != m_lru.crend(); ++it) {
-			if (*it != keep_id && m_views_by_id.contains(*it)) {
+			if (*it != keep_id && !refused.contains(*it) &&
+			     m_views_by_id.contains(*it)) {
 				victim = *it;
 				break;
 			}
@@ -4093,6 +4112,16 @@ void main_window::enforce_live_cap(const QString &keep_id) {
 			break;
 		if (node *n = m_model->node_by_id(victim)) {
 			suspend_node(n);
+			// **It goes only if it agreed to go.** `suspend_node` declines for
+			// a view a kiosk session is presenting and for one that is
+			// recording, and this `continue` used to hand the loop the same id
+			// again: over the cap with a protected view as the oldest entry,
+			// it spun on the UI thread for ever. Latent since the kiosk guard
+			// was written and reachable the moment a second reason to decline
+			// existed -- found by a test that hung rather than failed, which is
+			// how this class announces itself.
+			if (m_views_by_id.contains(victim))
+				refused.insert(victim);
 			continue;
 		}
 		// A victim the tree no longer knows. This used to `break`, which meant
