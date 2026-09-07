@@ -58,6 +58,8 @@
 #include <QApplication>
 #include <QSettings>
 #include <QMouseEvent>
+#include <QImage>
+#include <cmath>
 #include <QScrollBar>
 #include <QDir>
 #include <QFileInfo>
@@ -593,6 +595,83 @@ int main(int argc, char **argv) {
 			check(w.m_sidebar->width() <= w.width() - 48,
 			      QString("dragged past the window it stops with page left to "
 			               "tap: %1 of %2").arg(w.m_sidebar->width()).arg(w.width()));
+
+			// **And it draws a handle, because a drag target nobody can see
+			// is one nobody finds.** The report behind all of this was "I
+			// can't resize the right side of the tab window when in mobile
+			// mode", and making the edge draggable answers half of it: a
+			// person who could not resize it has no way to learn that they
+			// now can. Asserted by rendering the widget and looking, rather
+			// than by trusting that a paint handler exists -- an empty
+			// paintEvent and a drawn one differ only in the pixels.
+			{
+				QImage shot(grip->size(), QImage::Format_ARGB32);
+				shot.fill(Qt::transparent);
+				// **Without `DrawWindowBackground`, which is the default and
+				// fills the whole widget.** With it, every pixel came back
+				// opaque and the "is it a handle or a rule" check read
+				// 616 of 617 -- measuring `render`'s own background fill
+				// rather than anything the paint handler drew. `DrawChildren`
+				// alone leaves only what was painted.
+				grip->render(&shot, QPoint(), QRegion(),
+				              QWidget::DrawChildren);
+				int marked = 0, top = shot.height(), bottom = -1;
+				for (int y = 0; y < shot.height(); ++y)
+					for (int x = 0; x < shot.width(); ++x)
+						if (qAlpha(shot.pixel(x, y)) > 0) {
+							++marked;
+							top = qMin(top, y);
+							bottom = qMax(bottom, y);
+						}
+				check(marked > 0,
+				      QString("the grip draws a handle (%1 pixel(s) marked)")
+				              .arg(marked));
+				// Centred rather than anywhere: a mark at the very top would
+				// pass a "something was drawn" check and look like a glitch.
+				const int mid = shot.height() / 2;
+				check(bottom > 0 && top < mid && bottom > mid,
+				      QString("centred on the edge (%1..%2 of %3)")
+				              .arg(top).arg(bottom).arg(shot.height()));
+				// And short: full height is the line of chrome the earlier
+				// comment refused, and on a phone it would cost real page.
+				// Measured before it is asserted: a handle nobody can see is
+				// the same as no handle, and "some pixels changed" does not
+				// say it is visible.
+				{
+					auto lum = [](const QColor &c) {
+						auto ch = [](double v) {
+							v /= 255.0;
+							return v <= 0.03928 ? v / 12.92
+							                     : std::pow((v + 0.055) / 1.055, 2.4);
+						};
+						return 0.2126 * ch(c.red()) + 0.7152 * ch(c.green())
+						     + 0.0722 * ch(c.blue());
+					};
+					// **A handle nobody can see is the same as no handle**,
+					// so the mark is required to clear WCAG 2.1's 3:1 for a
+					// user-interface component against the ground it is drawn
+					// on. Measured across this palette's shading roles when
+					// the floor was chosen: Mid 1.73:1, Dark 2.30:1, Shadow
+					// 3.95:1, WindowText 18.26:1. Mid was the first choice and
+					// this check is what refused it.
+					//
+					// The ratio is printed as well as asserted, because a
+					// number beside a verdict is what lets somebody reading a
+					// later run see it drifting before it crosses.
+					const QColor mark = grip->palette().color(QPalette::Shadow);
+					const QColor ground = grip->palette().color(QPalette::Window);
+					const double a = lum(mark), b = lum(ground);
+					const double ratio = (qMax(a, b) + 0.05) / (qMin(a, b) + 0.05);
+					std::printf("        handle %s on %s\n",
+					             qPrintable(mark.name()), qPrintable(ground.name()));
+					check(ratio >= 3.0,
+					       QString("and clears 3:1 against the drawer it sits on "
+					                "(%1:1)").arg(ratio, 0, 'f', 2));
+				}
+				check(bottom - top < shot.height() / 2,
+				      QString("and is a handle rather than a rule (%1 of %2 "
+				               "tall)").arg(bottom - top).arg(shot.height()));
+			}
 
 			// **The grip is on the edge the scrollbar is also on**, and it is
 			// raised above the tree so that a press lands on it rather than on

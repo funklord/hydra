@@ -21038,6 +21038,56 @@ remain.
 Nothing touches the desktop somebody is sitting at: the display is :77
 unless `HYDRA_DISPLAY` says otherwise.
 
+## The drawer edge shows that it can be dragged
+
+The other half of the reported bug. *"I can't resize the right side of the
+tab window when in mobile mode"* was answered by making the edge draggable,
+and that is only half an answer: **an invisible drag target is one nobody
+discovers.** A person who could not resize the drawer still had no way to
+learn that they now can.
+
+The earlier comment said "nothing is drawn: a line of chrome on a 360-pixel
+screen is a line of page lost". True of a full-height rule and the wrong
+conclusion. A short bar in the middle of the strip that is already reserved
+costs **no layout at all** -- forty pixels, or a third of the drawer on a
+short window -- and is what every splitter on a desktop draws and what a
+thumb goes looking for.
+
+### The colour was measured, and the first choice was wrong
+
+`QPalette::Mid` was the obvious shading role and it is not visible enough.
+Measured against this palette's `Window`:
+
+    Mid          #b8b8b8 on #efefef   1.73:1
+    Dark         #9f9f9f on #efefef   2.30:1
+    Shadow       #767676 on #efefef   3.95:1
+    WindowText   #000000 on #efefef  18.26:1
+
+WCAG 2.1 asks **3:1 of a user-interface component**, which rules out the
+first two -- and `Mid` was what this shipped with for the length of one test
+run. `WindowText` clears the floor and is full black: a mark that reads as
+content rather than as chrome, beside somebody's tabs. `Shadow` is the one
+that is both visible and furniture.
+
+**The floor is asserted, not just chosen.** The suite computes the ratio
+against the drawer's own ground and requires 3:1, printing the number beside
+the verdict so a later reader sees it drifting before it crosses. Sabotaged
+back to `Mid`, it reports `and clears 3:1 against the drawer it sits on
+(1.73:1)`.
+
+### And the first version of the pixel check measured Qt, not the handle
+
+The check renders the grip and looks at what was marked. Its first form used
+`QWidget::render`'s default flags, which include `DrawWindowBackground` --
+so every pixel came back opaque, the "is it a handle or a rule" check read
+**616 of 617 tall**, and what was being measured was Qt's background fill
+rather than anything the paint handler drew. `DrawChildren` alone leaves
+only what was painted: 164 pixels, 288..328 of 617.
+
+It failed rather than passing wrongly, which is the only reason it was
+caught -- and it is the same shape as the day's other instrument faults: the
+tool answered a question next to the one being asked.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

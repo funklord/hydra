@@ -83,6 +83,7 @@
 #include <QComboBox>
 #include <QHeaderView>
 #include <QImage>
+#include <QPainter>
 #include <QPalette>
 #include <QPixmap>
 #include <QLabel>
@@ -2640,9 +2641,20 @@ void main_window::update_layout_mode() {
 			m_drawer_grip = new QWidget(m_sidebar);
 			m_drawer_grip->setObjectName("drawer_grip");
 			m_drawer_grip->setCursor(Qt::SizeHorCursor);
-			// Nothing is drawn: the tree's own frame already ends there, and a
-			// line of chrome on a 360-pixel screen is a line of page lost.
-			// What it is for is the cursor and the drag.
+			// **It draws a handle now, and the earlier reasoning was half an
+			// answer.** This said "nothing is drawn: a line of chrome on a
+			// 360-pixel screen is a line of page lost", which is true of a
+			// full-height rule and was the wrong conclusion. The report that
+			// started this was "I can't resize the right side of the tab
+			// window when in mobile mode" -- and making it draggable answers
+			// only half of that, because an invisible drag target is one
+			// nobody discovers. A person who could not resize it still has no
+			// way to learn that they now can.
+			//
+			// So: a short bar, in the strip already reserved, costing no
+			// layout at all. Full height would be the line of chrome; forty
+			// pixels in the middle is a handle, which is what every other
+			// splitter on a desktop draws and what a thumb goes looking for.
 			m_drawer_grip->installEventFilter(this);
 		}
 		m_drawer_grip->setParent(m_sidebar);
@@ -2711,6 +2723,36 @@ bool main_window::eventFilter(QObject *watched, QEvent *event) {
 	// relative -- tracking the absolute pointer instead makes the edge jump to
 	// the finger on the first move.
 	if (m_drawer_grip && watched == m_drawer_grip) {
+		if (event->type() == QEvent::Paint) {
+			// **Palette colours, not a picked grey.** `harmonization.md`
+			// settles that a program detects whether the desktop is dark and
+			// paints its own scheme rather than sampling the desktop's hue --
+			// and the ground here is the drawer's own, so `Mid` against
+			// `Window` is a pair the style already guarantees is visible in
+			// both schemes. A literal grey is how an earlier control in this
+			// tree ended up dark-on-dark.
+			QPainter p(m_drawer_grip);
+			p.setRenderHint(QPainter::Antialiasing, true);
+			const int w = m_drawer_grip->width();
+			const int h = m_drawer_grip->height();
+			// Forty pixels or a third of the drawer, whichever is smaller, so
+			// a short window gets a proportionate mark rather than a rule.
+			const int bar = qMin(40, h / 3);
+			const int thick = 3;
+			const QRectF at((w - thick) / 2.0, (h - bar) / 2.0, thick, bar);
+			p.setPen(Qt::NoPen);
+			// **`Shadow`, chosen by measuring rather than by eye.** Against
+			// this palette's `Window` the shading roles come out Mid 1.73:1,
+			// Dark 2.30:1, Shadow 3.95:1, and WindowText 18.26:1. WCAG 2.1
+			// asks 3:1 of a user-interface component, which rules out the
+			// first two -- and Mid was the first choice, so the number is why
+			// this is not it. WindowText clears the floor and is full black:
+			// that is a mark that reads as content rather than as chrome, on
+			// a strip beside somebody's tabs.
+			p.setBrush(m_drawer_grip->palette().color(QPalette::Shadow));
+			p.drawRoundedRect(at, thick / 2.0, thick / 2.0);
+			return true;
+		}
 		if (event->type() == QEvent::MouseButtonPress) {
 			auto *m = static_cast<QMouseEvent *>(event);
 			m_grip_from  = m->globalPosition().toPoint().x();
