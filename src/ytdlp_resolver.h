@@ -8,6 +8,7 @@
 #include <QUrl>
 
 class QProcess;
+#include <QTimer>
 
 // One playable rendition yt-dlp reported.
 struct media_format {
@@ -97,4 +98,14 @@ private:
 	// description(), which used to name a cause it had not tested.
 	QString  m_why;
 	QPointer<QProcess> m_proc;
+	// **A bound on a process this program starts, inside the program.** yt-dlp
+	// is given `--socket-timeout`, which bounds its network reads and nothing
+	// else: a stuck extractor, a DNS wait or a build that stops for input never
+	// reaches `finished`, so neither `resolved` nor `failed` is emitted. The
+	// shell's "Asking yt-dlp about ..." has no timeout of its own -- deliberately,
+	// because an answer replaces it -- so a request that never ends leaves that
+	// sentence on the status bar for good, and `busy()` stays true, which makes
+	// every later attempt answer "Still looking..." for the rest of the session.
+	// One wedged process therefore takes the feature with it.
+	QTimer            *m_watchdog = nullptr;
 };

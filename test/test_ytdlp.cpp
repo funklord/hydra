@@ -1,6 +1,9 @@
 // Parsing yt-dlp's answer, and the format preference. Offline: the risky part
 // is reading the JSON correctly, not running the process.
 #include "ytdlp_resolver.h"
+#include <QUrl>
+#include <QTest>
+#include <QFile>
 
 #include <QCoreApplication>
 #include <QDir>
@@ -235,6 +238,88 @@ int main(int argc, char **argv) {
 			note("skipped: no vendored checkout here, so the submodule advice "
 			      "is the right advice and there is nothing to distinguish");
 		}
+	}
+
+	section("a yt-dlp that never answers is stopped rather than waited for");
+
+	// **The condition, not the mechanism.** `--socket-timeout` bounds yt-dlp's
+	// network reads and nothing else, so a stuck extractor, a DNS wait or a
+	// build that stops for input never reaches `finished` -- and neither
+	// `resolved` nor `failed` is emitted. The shell's "Asking yt-dlp about
+	// ..." carries no timeout of its own, deliberately, because an answer
+	// replaces it; so a request that never ends leaves that sentence on the
+	// status bar for good and `busy()` true, which makes every later attempt
+	// answer "Still looking..." for the rest of the session. One wedged
+	// process took the feature with it.
+	//
+	// Driven with a stand-in that hangs, because that is the whole condition:
+	// a program that answers, however badly, exercises the paths that already
+	// worked.
+	//
+	// **The stand-in is a fake CHECKOUT, not a fake program**, because that is
+	// what `HYDRA_YTDLP` names -- a directory the resolver accepts when it
+	// holds `yt_dlp/__main__.py`, which it then runs as `python3 -m yt_dlp`.
+	// The first version of this pointed the variable at a shell script, the
+	// resolver ignored it as not-a-checkout, and the run went off to the real
+	// yt-dlp and the real network: it passed, on a timeout of somebody else's
+	// process, and left a python3 behind. Reading the variable's meaning is
+	// what fixed it.
+	{
+		const QString dir = QDir::temp().filePath("hydra-ytdlp-watchdog");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir + "/yt_dlp");
+		{
+			QFile f(dir + "/yt_dlp/__main__.py");
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			// Long enough that only the watchdog can end this, short enough
+			// that a stray copy is gone within the minute.
+			f.write("import time\ntime.sleep(45)\n");
+			f.close();
+		}
+		{
+			QFile f(dir + "/yt_dlp/__init__.py");
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.close();
+		}
+		qputenv("HYDRA_YTDLP", dir.toUtf8());
+		qputenv("HYDRA_YTDLP_TIMEOUT_MS", "700");
+
+		ytdlp_resolver r;
+		r.refresh();
+		// The premise, stated rather than assumed: without it the checks below
+		// would be about whatever else the resolver found, which is exactly
+		// how the first version of this went wrong.
+		check(r.description().contains(dir),
+		       QString("the fake checkout is what the resolver found (%1)")
+		           .arg(r.description()));
+
+		QString said;
+		bool answered = false;
+		QObject::connect(&r, &ytdlp_resolver::failed,
+		                  [&](const QString &e) { said = e; answered = true; });
+		QObject::connect(&r, &ytdlp_resolver::resolved,
+		                  [&](const resolved_media &) { answered = true; });
+
+		r.resolve(QUrl("http://example.invalid/watch"));
+		check(r.busy(), "it starts and the resolver reports itself busy");
+
+		// Comfortably past the bound and nowhere near the sleep.
+		for (int waited = 0; waited < 6000 && !answered; waited += 50)
+			QTest::qWait(50);
+
+		check(answered, "an answer arrives rather than none at all");
+		check(said.contains("did not answer"),
+		       QString("and it says the wait was given up on (\"%1\")")
+		           .arg(said));
+		check(!said.contains(" 0 second"),
+		       QString("naming a whole number of seconds rather than none "
+		                "(\"%1\")").arg(said));
+		check(!r.busy(),
+		       "the resolver is free again, so the next request is not refused");
+
+		qunsetenv("HYDRA_YTDLP");
+		qunsetenv("HYDRA_YTDLP_TIMEOUT_MS");
+		QDir(dir).removeRecursively();
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

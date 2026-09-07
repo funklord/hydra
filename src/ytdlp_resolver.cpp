@@ -125,7 +125,28 @@ bool ytdlp_resolver::busy() const {
 	return m_proc && m_proc->state() != QProcess::NotRunning;
 }
 
+// How long a resolve may take before it is called a failure. yt-dlp on a slow
+// site with a big playlist page is a few seconds; ninety is not a performance
+// budget but the point past which "it is still working" stops being the
+// likeliest explanation. Named so the number is arguable rather than buried.
+static constexpr int k_watchdog_ms = 90 * 1000;
+
+// The same lever `HYDRA_YTDLP` is: a bound that cannot be shortened cannot be
+// tested, and a test that waits ninety seconds is one nobody runs. Values
+// outside a sane range are ignored rather than obeyed, so a stray `0` in an
+// environment does not turn every request into an instant failure.
+static int watchdog_ms() {
+	if (qEnvironmentVariableIsSet("HYDRA_YTDLP_TIMEOUT_MS")) {
+		const int ms = qEnvironmentVariableIntValue("HYDRA_YTDLP_TIMEOUT_MS");
+		if (ms >= 50 && ms <= 10 * 60 * 1000)
+			return ms;
+	}
+	return k_watchdog_ms;
+}
+
 void ytdlp_resolver::cancel() {
+	if (m_watchdog)
+		m_watchdog->stop();
 	if (!m_proc)
 		return;
 	m_proc->disconnect(this);
@@ -162,6 +183,8 @@ void ytdlp_resolver::resolve(const QUrl &page_url) {
 
 	connect(proc, &QProcess::finished, this,
 	         [this, proc](int code, QProcess::ExitStatus) {
+		if (m_watchdog)
+			m_watchdog->stop();
 		const QByteArray out = proc->readAllStandardOutput();
 		const QByteArray err = proc->readAllStandardError();
 		proc->deleteLater();
@@ -187,12 +210,50 @@ void ytdlp_resolver::resolve(const QUrl &page_url) {
 		emit resolved(m);
 	});
 	connect(proc, &QProcess::errorOccurred, this, [this, proc](QProcess::ProcessError) {
+		if (m_watchdog)
+			m_watchdog->stop();
 		const QString msg = proc->errorString();
 		proc->deleteLater();
 		if (m_proc == proc)
 			m_proc = nullptr;
 		emit failed("Could not run yt-dlp: " + msg);
 	});
+
+	// Armed after the connections and before the start, so there is no window
+	// in which a process is running unwatched.
+	if (!m_watchdog) {
+		m_watchdog = new QTimer(this);
+		m_watchdog->setSingleShot(true);
+		connect(m_watchdog, &QTimer::timeout, this, [this] {
+			if (!m_proc)
+				return;
+			QProcess *proc = m_proc;
+			// Disconnected first: `kill()` makes `finished` fire, and letting
+			// it through would emit a second answer after this one -- against
+			// a `SingleShotConnection` in the shell that has already been
+			// spent, so the second answer would go nowhere and the first would
+			// be this failure. Cheaper to have one answer than to reason about
+			// which of two arrives.
+			proc->disconnect(this);
+			proc->kill();
+			// **Reaped before the object goes.** `kill()` only delivers the
+			// signal; destroying a QProcess whose child has not been waited
+			// for prints "Destroyed while process is still running" and leaves
+			// the child to init. `cancel()` above already waits for this
+			// reason, and this path is the same path.
+			proc->waitForFinished(1500);
+			proc->deleteLater();
+			m_proc = nullptr;
+			// Rounded up, never zero: the message is a sentence a person
+			// reads, and "did not answer in 0 seconds" is what a short bound
+			// produced while this said `/ 1000`.
+			emit failed(QString("yt-dlp did not answer in %1 second%2; it was "
+			                     "stopped.")
+			              .arg((watchdog_ms() + 999) / 1000)
+			              .arg((watchdog_ms() + 999) / 1000 == 1 ? "" : "s"));
+		});
+	}
+	m_watchdog->start(watchdog_ms());
 
 	proc->start();
 }

@@ -20619,11 +20619,77 @@ and, more to the point, is not how anybody meets this.
 Sabotaged by removing the capture: `which comes back at the zoom it had
 (1)`, 208 passed and 1 failed.
 
+**Android captures what the shell asked for, not what a pinch did.**
+`android_view::zoom_factor()` returns the last factor `set_zoom_factor` was
+given, so the suspend-time read is correct there -- but the WebView's own
+pinch scale is never reported back, so a pinch is not captured the way a
+Ctrl+wheel now is. Recorded because the desktop half is fixed and somebody
+will otherwise assume the phone half is too. (Checked in the `.cpp` first,
+which does not carry the override; it is inline in the header, and reading
+only the source file nearly produced a "regression" that was not there.)
+
 **What this does not fix.** `m_zoom` is still a `QHash` in memory, so no
 zoom of either kind survives a restart. That is the shipped behaviour and
 was not what this entry set out to change; it is written down here because
 the two halves look alike from outside and somebody will otherwise measure
 one and conclude the other.
+
+## An external process this program starts had no bound at all
+
+Found by asking which status-bar messages are posted with no timeout, and
+then which of those nothing is guaranteed to replace. Five of the seven are
+the idle line or a notice meant to persist. Two are progress, and one of
+them can stick for ever.
+
+`ask_ytdlp` posts `Asking yt-dlp about <host>...` with no timeout,
+deliberately -- an answer replaces it. Both answers do: `resolved` and
+`failed` each post a timed message. **The question is whether one of them
+always arrives**, and it is not: yt-dlp is given `--socket-timeout 20`,
+which bounds its network reads and nothing else. A stuck extractor, a DNS
+wait, or a build that stops for input never reaches `finished`, so neither
+signal is emitted, `busy()` stays true, and every later attempt answers
+"Still looking..." **for the rest of the session**. One wedged process took
+the feature with it, and the status bar went on claiming work was happening.
+
+`running-code.md` says to bound what you start and to put the bound inside
+the program rather than in a wrapper, because the wrapper only guards the
+way somebody did not run it. There was no bound anywhere. There is a
+ninety-second watchdog now: it kills the process, reaps it, and emits
+`failed` with a sentence saying so, which is the one outcome that both
+frees the resolver and replaces the message.
+
+**Overridable by `HYDRA_YTDLP_TIMEOUT_MS`**, in the range 50ms to ten
+minutes, because a bound that cannot be shortened cannot be tested and a
+test that waits ninety seconds is one nobody runs. Out-of-range values are
+ignored rather than obeyed, so a stray `0` in an environment does not turn
+every request into an instant failure.
+
+### The first version of the test passed, and was measuring somebody else
+
+Three things were wrong and the run said all three, in output that would
+have been thrown away by a summary line:
+
+- **`did not answer in 0 seconds`.** The message divided by 1000, which is
+  fine at ninety seconds and nonsense at the short bound a test uses. It
+  rounds up now and never says zero, which is its own assertion.
+- **`QProcess: Destroyed while process ("/usr/bin/python3") is still
+  running.`** `kill()` delivers a signal; it does not reap. The watchdog
+  waits now, as `cancel()` already did for the same reason.
+- **The stand-in was ignored.** `HYDRA_YTDLP` names a vendored *checkout* --
+  a directory holding `yt_dlp/__main__.py` -- and the test pointed it at a
+  shell script. The resolver rejected it, fell through to the real yt-dlp,
+  and ran it against the real network from an offline suite. It passed, on
+  the timeout of a process nobody meant to start.
+
+So the fixture is a fake checkout now, `python3 -m yt_dlp` against a
+`__main__.py` that sleeps, and **the premise is asserted rather than
+assumed**: `description()` must name the temporary directory before any of
+the rest is believed. That check is the one that would have caught the
+first version.
+
+Sabotaged by removing the arming, three checks fail together -- no answer,
+no message, and the resolver still busy -- which is the defect stated three
+ways.
 
 ## What is next (in order)
 
