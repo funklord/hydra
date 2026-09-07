@@ -587,6 +587,92 @@ int main(int argc, char **argv) {
 		             double(fast_us) / urls.size());
 	}
 
+	section("a save drops what an older format left behind");
+
+	// **What `clear()` is for, pinned so a rewrite cannot lose it.**
+	// `setValue` alone adds and overwrites and never removes, so a save that
+	// did nothing else would leave a rule the person deleted sitting in the
+	// file. Both this store and `policy_engine` drop the old keys first; the
+	// difference, and the reason this one changed, is HOW: it used
+	// `QFile::remove`, which unlinks the file immediately and leaves the
+	// machine with no consent rules at all until `sync()` -- a process killed
+	// in that window comes back having forgotten every banner ever dismissed.
+	//
+	// **This assertion does not discriminate that window**, and saying so
+	// matters: it passes with either implementation. The argument for the
+	// change is `policy_engine::save`'s own recorded reasoning in the same
+	// tree, not this check. What this check defends is the erasure itself,
+	// which the change must not lose while fixing the hole.
+	{
+		const QString dir = QDir::temp().filePath("hydra-rules-clear");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString path = dir + "/site-rules.ini";
+
+		site_rules first;
+		site_rule a; a.kind = "reject"; a.value = "#cookie-wall"; a.host = "a.test";
+		site_rule b; b.kind = "accept"; b.value = "#ok";          b.host = "b.test";
+		first.add(a); first.add(b);
+		check(first.save(path), "two rules saved");
+
+		site_rules second;
+		second.add(a);
+		check(second.save(path), "and then one rule saved over them");
+
+		site_rules back;
+		check(back.load(path), "the file still loads");
+
+		// **Counted by host on `all()`, not through `for_host`.** The first
+		// version of this asked `for_host("a.test").all().size() == 1` and got
+		// 15, because `load` starts from `site_rules::defaults()` -- built-ins
+		// are not in the file and must not be dropped by reading one -- and
+		// `for_host` includes every generic rule as well as the host's own.
+		// The premise was wrong, not the store; the numbers said so by being
+		// 15 and 14 rather than 1 and 0, one apart, which is the shape of "the
+		// same shared set plus one".
+		auto for_exactly = [&back](const QString &host) {
+			int n = 0;
+			for (const site_rule &r : back.all())
+				if (r.host.compare(host, Qt::CaseInsensitive) == 0)
+					++n;
+			return n;
+		};
+		check(for_exactly("a.test") == 1,
+		       QString("the rule that stayed is there (%1)")
+		           .arg(for_exactly("a.test")));
+		check(for_exactly("b.test") == 0,
+		       QString("and the one dropped is gone rather than left behind "
+		                "(%1)").arg(for_exactly("b.test")));
+
+		// **And the half that can actually fail.** The two checks above pass
+		// with the erasure removed entirely -- sabotaged and measured, 85
+		// passed either way -- because `beginWriteArray` drops the previous
+		// array itself, so nothing in `rules` depends on `clear()`. A check
+		// that cannot fail is not a check, and the honest question is what
+		// `clear()` is FOR: keys outside the array, which `setValue` alone
+		// would leave sitting there. A file this store used to write in
+		// another shape is exactly that.
+		{
+			{
+				QSettings stale(path, QSettings::IniFormat);
+				stale.setValue("legacy/leftover", "from an older format");
+				stale.sync();
+			}
+			site_rules third;
+			third.add(a);
+			check(third.save(path), "saved again over a file with a stray key");
+
+			QSettings after(path, QSettings::IniFormat);
+			after.allKeys();
+			check(!after.contains("legacy/leftover"),
+			       QString("the stray key is gone (%1)")
+			           .arg(after.value("legacy/leftover").toString()));
+			check(after.value("hydra/kind").toString() == "siteRules",
+			       "and the file is still this store's own");
+		}
+		QDir(dir).removeRecursively();
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

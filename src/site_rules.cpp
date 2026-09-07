@@ -351,8 +351,23 @@ bool site_rules::load(const QString &path) {
 }
 
 bool site_rules::save(const QString &path) const {
-	QFile::remove(path);
+	// **`clear()` rather than removing the file**, which is the decision
+	// `policy_engine::save` records and this store never took. Both want the
+	// same thing -- drop keys a previous save wrote and this one does not,
+	// since `setValue` alone only adds and overwrites -- and they differ in
+	// when the old contents stop existing. `QFile::remove` unlinks them at
+	// once, so from there until `sync()` the machine has no consent rules at
+	// all, and a process killed inside that window comes back having forgotten
+	// every banner the person ever dismissed. `clear()` queues the same
+	// erasure inside the QSettings object and `sync()` writes the result
+	// through QSaveFile in one rename: the old rules are never gone until the
+	// new ones are there.
+	//
+	// It also stops lying to the QSettings cache, which keys a shared
+	// QConfFile on the path -- removing the file behind its back leaves the
+	// cached object describing a file that is not there.
 	QSettings f(path, QSettings::IniFormat);
+	f.clear();
 	f.setValue("hydra/format", 1);
 	f.setValue("hydra/kind", "siteRules");
 

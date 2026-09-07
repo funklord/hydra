@@ -20825,6 +20825,50 @@ not wired to it yet"; these two now say the same in the same place. From
 outside, an unstated gap and an absent one look identical, and the second
 reader pays either way.
 
+## Two stores unlinked the file before writing the replacement
+
+Found by asking, after the `rekey_node_state` fix, where else a delete
+follows a step that can fail. Nine `QFile::remove` sites; two of the same
+shape, and one of them holds user data.
+
+`site_rules::save` and `settings_bundle`'s export both opened with
+`QFile::remove(path)` and then wrote through QSettings. **`policy_engine`
+had already met this and written the answer out**: removing unlinks the old
+contents at once, so from there until `sync()` the machine has no file at
+all, and a process killed inside that window comes back with nothing --
+"every site on its defaults" for the policy, and for the consent rules,
+every banner the person ever dismissed forgotten. `clear()` queues the same
+erasure inside the QSettings object and `sync()` writes the result through
+QSaveFile in one rename: the old file is never gone until the new one is
+there.
+
+So this is not a fix somebody had to invent. It is the same decision, taken
+in one store and never carried to the other two -- *a working sibling
+explaining itself is a cheaper source of a project's decisions than the
+document is*, and this is that sentence with three stores in it.
+
+### The first test passed with the fix removed, and the numbers said so
+
+Written as "saving rules twice leaves only the second set", it asserted the
+erasure and did not test it: **sabotaged with `clear()` deleted entirely, 85
+passed either way**. `beginWriteArray` drops the previous array itself, so
+nothing about the rules depends on `clear()` at all.
+
+That is the vacuous pass, in a check written by somebody who had spent the
+day finding them. What the sabotage bought was the real question -- what is
+`clear()` FOR? -- and the answer is keys *outside* the array, which
+`setValue` alone leaves sitting there: exactly what a file written in an
+older shape is made of. The section asks that now, and with `clear()`
+removed it reports `the stray key is gone (from an older format)`.
+
+**An earlier draft failed for a third reason worth keeping.** It asked
+`for_host("a.test").all().size() == 1` and got 15, with b.test at 14. One
+apart is the shape of "the same shared set plus one": `load` starts from
+`site_rules::defaults()`, because built-ins are not in the file and must not
+be dropped by reading one, and `for_host` returns every generic rule as well
+as the host's own. The premise was wrong rather than the store, and the two
+numbers said which before any reading did.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

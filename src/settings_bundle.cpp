@@ -55,8 +55,13 @@ summary write(const QString &path, const policy_engine *policy_in,
 	// A fresh file rather than a merge into whatever was there: an export is a
 	// picture of this machine now, and half of an older one underneath it would
 	// be a picture of nothing.
-	QFile::remove(path);
+	// `clear()` rather than `QFile::remove`, for the reason `policy_engine`
+	// and `site_rules` both give: removing unlinks the old file immediately,
+	// so an export written over a previous one leaves nothing at all if this
+	// write then fails. Same erasure, queued, and written through QSaveFile in
+	// one rename.
 	QSettings f(path, QSettings::IniFormat);
+	f.clear();
 
 	f.beginGroup(k_group_head);
 	f.setValue("format", current_format());
