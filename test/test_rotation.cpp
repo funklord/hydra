@@ -307,6 +307,33 @@ int main(int argc, char **argv) {
 		check(w.m_drawer_action && w.m_drawer_action->text() == "Tab tree",
 		      QString("the drawer button is named rather than a glyph (\"%1\")")
 		          .arg(w.m_drawer_action ? w.m_drawer_action->text() : "none"));
+
+		// **And the same question asked of the population, not of a list.**
+		//
+		// The four checks above name four controls, so no assertion in them
+		// can fail about a fifth -- and two had appeared: the sidebar's search
+		// box and its sort dropdown, which announced as an unnamed edit box
+		// and an unnamed combo box. `project.md` said "exactly three did not",
+		// measured once, and nothing re-derived it.
+		//
+		// This derives its list instead. It is the check that keeps working
+		// when somebody adds a control, and the four above are what pin the
+		// exact words; neither does the other's job.
+		QStringList nameless;
+		for (QWidget *c : w.findChildren<QWidget *>()) {
+			if (!c->isVisible() || c->focusPolicy() == Qt::NoFocus)
+				continue;
+			if (c->accessibleName().isEmpty())
+				nameless << QString("%1(%2)")
+				              .arg(c->metaObject()->className())
+				              .arg(c->objectName().isEmpty() ? QString("-")
+				                                              : c->objectName());
+		}
+		check(nameless.isEmpty(),
+		      QString("every focusable control in the window says what it is "
+		               "(%1)")
+		        .arg(nameless.isEmpty() ? QString("none unnamed")
+		                                 : nameless.join(", ")));
 	}
 
 	section("a narrow window puts the sidebar in a drawer");

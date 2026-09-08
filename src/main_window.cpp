@@ -1130,6 +1130,15 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 
 	m_search = new QLineEdit(sidebar);
 	m_search->setPlaceholderText("Search tree");
+	// **A placeholder is not a name.** Qt reads a QLineEdit's accessible name
+	// from nothing at all -- it has no default -- so this announced as an
+	// unnamed edit box, and the placeholder is not part of what a screen
+	// reader is handed. Found by counting the population rather than by the
+	// check that was meant to cover it: that check names three controls, so
+	// it could not fail about a fourth.
+	m_search->setAccessibleName("Search tabs");
+	m_search->setAccessibleDescription(
+	  "Filter the tab tree to rows whose title or address contains this");
 	m_search->setClearButtonEnabled(true);
 	connect(m_search, &QLineEdit::textChanged, this, &main_window::on_search_changed);
 	side->addWidget(m_search);
@@ -1139,6 +1148,10 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	sort_row->setSpacing(4);
 	sort_row->addWidget(new QLabel("Sort:", sidebar));
 	m_sort_box = new QComboBox(sidebar);
+	// Named for the same reason as the search box above: a QComboBox carries
+	// its current item as its value, and nothing says what the choice is
+	// about, so it announced as an unnamed combo box holding "Tree order".
+	m_sort_box->setAccessibleName("Sort tabs by");
 	m_sort_box->addItem("Tree order");
 	m_sort_box->addItem("Title A–Z");
 	m_sort_box->addItem("Newest");

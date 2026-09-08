@@ -21681,6 +21681,49 @@ part worth reading: the audit still ran and still inspected everything, and
 what the guard caught was the fixture going thin rather than the audit
 going quiet. Those two look identical in a problem count of zero.
 
+## A named check cannot see the control it does not name
+
+*What is next* item 3 carried a count -- **"Exactly three did not"**
+announce themselves -- measured once, in a document that is quoted rather
+than re-derived, about the shape of a tree that keeps changing. The kind
+of sentence that rots quietly.
+
+Re-derived by counting the population rather than reading the list:
+
+    focusable widgets   named 2   unnamed 2
+    actions             with text 66   without 7
+
+**The two unnamed are the sidebar's search box and its sort dropdown.**
+`m_search` announced as an unnamed edit box -- a placeholder is not a name,
+and Qt hands a screen reader nothing from one -- and `m_sort_box` as an
+unnamed combo box holding "Tree order", which is the value with no question
+attached. Both are controls somebody needs in order to filter and sort
+their own tabs.
+
+**The check that exists could not have caught them.** It names four
+controls, so no assertion in it can fail about a fifth. That is the shape
+`evidence.md` describes: the enumeration and the claim drift apart in
+silence, and the check's own name is what stops anybody looking again.
+
+So it derives its list now, and keeps the four named assertions beside it:
+one pins the exact words, the other keeps working when somebody adds a
+control. Sabotaged by dropping one name:
+
+    the address bar is named ("Address")                      ok
+    the tab tree is named ("Tab tree")                        ok
+    the drawer button is named rather than a glyph            ok
+    every focusable control says what it is (QComboBox(-))    FAIL
+
+**The four stay green and only the derived one moves**, which is the whole
+argument for carrying both.
+
+**Four textless actions are left unexplained rather than asserted on** --
+two parented to a `QMenu` and two to a `QToolBar`, with no icon, shortcut
+or tooltip between them, and three others that are Qt's own
+`_q_qlineeditclearaction`. They are recorded because a count nobody can
+explain is worth more written down than rounded off, and not asserted on
+because I have not established what they are.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
@@ -21761,6 +21804,15 @@ carried along as amendments to a list item.
    Named, and asserted in `test_rotation` because the gap survived precisely as
    long as nothing asked: 51 checks became 55 with none of the existing ones
    moving.
+
+   **"Exactly three" was true when measured and is not a fact about the tree.**
+   Re-derived later by counting the population instead of reading the list:
+   **two more had no name at all** -- the sidebar's search box and its sort
+   dropdown, which announced as an unnamed edit box and an unnamed combo box
+   holding "Tree order". Both are named now. The check could not have caught
+   them, because it enumerates the controls it knows and no assertion in it
+   can fail about one it does not name; it derives its list as well now. See
+   *A named check cannot see the control it does not name* below.
 
    **What is still open is the whole of the original question.** Naming controls
    is not a screen reader being able to reach them, the Qt bridge questions
