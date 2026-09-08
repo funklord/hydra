@@ -72,6 +72,7 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QLabel>
+#include <QTest>
 #include <QHeaderView>
 #include <QToolBar>
 #include <QWidgetAction>
@@ -486,6 +487,89 @@ int main(int argc, char **argv) {
 		check(next.drawer ? parent == &w : parent == split,
 		      QString("%1: the sidebar is parented where that mode keeps it")
 		              .arg(QString::fromUtf8(next.what)));
+	}
+
+	section("a shut drawer is out of the keyboard's way, and can be opened by it");
+
+	// **Two halves of one gap: the tab tree could not be opened from the
+	// keyboard, and could be tabbed into while shut.**
+	//
+	// Measured on a 360-wide window before the fix. The toolbar button is
+	// `NoFocus` under this style, so Tab never lands on it -- the chain was
+	// tree, search, sort, address and round again, with the toolbar not in it
+	// -- and the action carried no shortcut and appeared in no menu. The tab
+	// tree, which is what this browser is, could be opened only with a
+	// pointer.
+	//
+	// The same chain shows the other half: `tab_tree_view` was in it with the
+	// drawer SHUT, because closing moves the sidebar to `-w` and leaves it
+	// visible. One Tab from the address bar landed in a tree 295 pixels off
+	// the left edge.
+	//
+	// That is the focus handover in the section below arriving by the other
+	// road -- the handover covers the moment the drawer closes, this covers
+	// every moment after it.
+	{
+		main_window m(&factory, &policy, &filter);
+		m.setGeometry(0, 0, 360, 640);
+		m.show();
+		spin(250);
+		check(m.m_drawer_mode, "360 pixels puts the window in drawer mode");
+
+		check(m.m_drawer_action
+		       && !m.m_drawer_action->shortcut().isEmpty(),
+		       QString("the tab tree has a shortcut (%1)")
+		         .arg(m.m_drawer_action
+		                ? m.m_drawer_action->shortcut().toString() : "none"));
+
+		// In a menu as well, because a shortcut nobody can discover is only
+		// half an answer. The SAME action, so the two cannot disagree.
+		bool in_menu = false;
+		for (QMenu *mm : m.findChildren<QMenu *>())
+			if (mm->actions().contains(m.m_drawer_action))
+				in_menu = true;
+		check(in_menu, "and is in a menu, where somebody can find it");
+
+		// **That it is set is not that it works.** A QAction's shortcut is
+		// `Qt::WindowShortcut` by default, which fires only for an action
+		// reachable from the active window -- and this window is a QWidget,
+		// not a QMainWindow, so the usual assumptions about where a toolbar
+		// lives do not apply. Asserting the key sequence and stopping there
+		// would pin the string and leave the feature untested.
+		const bool was_open = m.m_drawer_open;
+		QTest::keySequence(&m, QKeySequence("Ctrl+B"));
+		spin(400);
+		check(m.m_drawer_open != was_open,
+		       QString("and pressing it actually opens the drawer (%1 -> %2)")
+		         .arg(was_open ? "open" : "shut")
+		         .arg(m.m_drawer_open ? "open" : "shut"));
+		if (m.m_drawer_open)
+			m.m_drawer_action->trigger();   // back to shut for what follows
+		spin(400);
+
+		// Shut: nothing of the sidebar is reachable by Tab.
+		if (m.m_address) m.m_address->setFocus();
+		spin(80);
+		QStringList chain;
+		bool in_sidebar = false;
+		for (int i = 0; i < 12; ++i) {
+			QTest::keyClick(QApplication::focusWidget(), Qt::Key_Tab);
+			spin(20);
+			QWidget *f = QApplication::focusWidget();
+			if (!f) break;
+			chain << f->metaObject()->className();
+			if (m.m_sidebar->isAncestorOf(f)) in_sidebar = true;
+		}
+		check(!in_sidebar,
+		       QString("a shut drawer is not in the tab chain (%1)")
+		         .arg(chain.isEmpty() ? QString("nothing focusable")
+		                               : chain.mid(0, 4).join(" -> ")));
+
+		// Open: it is reachable again, or the fix has cost what it protects.
+		if (m.m_drawer_action) m.m_drawer_action->trigger();
+		spin(400);
+		check(m.m_sidebar->isEnabled(),
+		       "and an open one is back in it");
 	}
 
 	section("the drawer takes the keyboard with it, both ways");

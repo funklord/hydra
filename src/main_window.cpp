@@ -737,6 +737,13 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	outer->setContentsMargins(0, 0, 0, 0);
 	outer->setSpacing(0);
 
+	// **Before the menu bar, because the menu bar puts it in the View menu.**
+	// It used to be created by `bar->addAction` further down, so at this point
+	// it was null and the menu entry was skipped -- silently, by a guard that
+	// turned a missing action into a no-op. The toolbar adds this same object
+	// below; one action cannot disagree with itself about whether the tree is
+	// showing.
+	m_drawer_action = new QAction("Tab tree", this);
 	outer->addWidget(build_menu_bar());
 
 	// --- Toolbar --------------------------------------------------------
@@ -772,7 +779,15 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// character. The toolbar is `ToolButtonIconOnly` and the icon is set two
 	// lines below with a `QStyle` fallback, so this text is never drawn; it
 	// exists to be read aloud.
-	m_drawer_action = bar->addAction("Tab tree");
+	bar->addAction(m_drawer_action);
+	// **A shortcut, because the button cannot be reached without one.** A
+	// QToolButton is `NoFocus` under this style, so Tab never lands on it --
+	// measured, the chain is tree, search, sort, address and back again, and
+	// the toolbar is not in it. With no shortcut and no menu entry, the tab
+	// tree, which is what this browser is, could be opened only with a
+	// pointer. Ctrl+B is what a sidebar toggle is called elsewhere and was
+	// free here; the other 21 shortcuts are listed by `test_rotation`.
+	m_drawer_action->setShortcut(QKeySequence("Ctrl+B"));
 	bar->addAction(back_act);
 	bar->addAction(fwd_act);
 	bar->addAction(reload_act);
@@ -1504,6 +1519,13 @@ QMenuBar *main_window::build_menu_bar() {
 		sort_group->addAction(a);
 		connect(a, &QAction::triggered, this, [this, i] { m_sort_box->setCurrentIndex(i); });
 	}
+	view_menu->addSeparator();
+	// **The same action, not a second one.** A menu entry that toggled the
+	// tree independently would be two consumers of one piece of state, which
+	// is the shape `set_drawer_open` already carries a note about. One
+	// QAction on both the toolbar and the menu cannot disagree with itself.
+	if (m_drawer_action)
+		view_menu->addAction(m_drawer_action);
 	view_menu->addSeparator();
 	view_menu->addAction("&Expand All", this, [this] { m_tree->expandAll(); });
 	view_menu->addAction("&Collapse All", this, [this] { m_tree->collapseAll(); });
@@ -2699,6 +2721,10 @@ void main_window::update_layout_mode() {
 			m_drawer_grip->hide();
 		m_splitter->insertWidget(0, m_sidebar);
 		m_sidebar->move(0, 0);
+		// Back in the splitter it is on screen again, so it takes the keyboard
+		// back too -- a drawer that was shut when the window widened would
+		// otherwise leave the pane permanently unreachable by Tab.
+		m_sidebar->setEnabled(true);
 		m_drawer_open = false;
 		// Whatever it was before the window was narrowed. A window dragged
 		// wide again should show the tree it was showing, and one that had it
@@ -3010,6 +3036,13 @@ void main_window::set_drawer_open(bool open, bool animate) {
 	// holding it, so a drawer closed while somebody was typing somewhere else
 	// does not steal it.
 	if (open) {
+		// **Enabled first, because `setFocus` on a disabled widget does
+		// nothing.** Taking the shut drawer out of the tab chain below is
+		// what made this ordering matter: the handover was written when the
+		// sidebar was always enabled, and with the enable left further down
+		// it silently stopped working -- the keyboard stayed on the find
+		// bar, which is the fault the handover exists to fix.
+		m_sidebar->setEnabled(true);
 		if (m_tree)
 			m_tree->setFocus(Qt::OtherFocusReason);
 	} else if (QWidget *had = QApplication::focusWidget()) {
@@ -3026,10 +3059,30 @@ void main_window::set_drawer_open(bool open, bool animate) {
 	// refresh_placeholder_text().
 	refresh_placeholder_text();
 
+	// **A closed drawer is off the screen and was still in the tab chain.**
+	//
+	// Closing moves the sidebar to `-w`; it stays `isVisible()`, because
+	// nothing hid it, so Qt goes on offering its children to Tab. Measured
+	// from the address bar on a 360-wide window with the drawer shut, one Tab
+	// landed in the tree -- invisible, 295 pixels off the left edge, holding
+	// the keyboard.
+	//
+	// That is the same fault the focus handover above fixes, arriving by the
+	// other road: the handover covers the moment the drawer closes, and this
+	// covers every moment afterwards. Fixing one and not the other leaves a
+	// window that behaves correctly when the drawer shuts and wrongly on the
+	// next Tab.
+	//
+	// `setEnabled(false)` takes the whole subtree out of the chain, which is
+	// what `setFocusPolicy` on the container would not do. It is applied when
+	// the drawer has finished sliding rather than at the start, so the tree
+	// is not drawn greyed on its way out.
 	const int w = m_sidebar->width();
 	const int to = open ? 0 : -w;
 	if (!animate) {
 		m_sidebar->move(to, m_sidebar->y());
+		if (!open)
+			m_sidebar->setEnabled(false);
 		return;
 	}
 	if (!m_drawer_anim)
@@ -3047,6 +3100,10 @@ void main_window::set_drawer_open(bool open, bool animate) {
 			web_view_backend *v = m_drawer_open ? nullptr : current_view();
 			if (v)
 				v->set_obscured(false);
+			// Guarded the same way, so a drawer reopened mid-slide is not
+			// disabled by the animation it interrupted.
+			if (!m_drawer_open && m_sidebar)
+				m_sidebar->setEnabled(false);
 		}, Qt::SingleShotConnection);
 	}
 	m_drawer_anim->start();

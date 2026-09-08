@@ -21756,6 +21756,87 @@ toggle by pointer -- makes the same sabotage read:
 
     every action of ours carries text for it ((unnamed) in QToolBar) FAIL
 
+## The tab tree could not be opened from the keyboard, or escaped by it
+
+Two halves of one gap, and the second was a hole in the fix above it.
+
+**The toolbar button is `NoFocus` under this style**, so Tab never lands on
+it. Measured on a 360-wide window, the chain was
+
+    tab_tree_view -> QLineEdit -> QComboBox -> address_line -> (repeat)
+
+with the toolbar not in it at all. The action carried no shortcut and
+appeared in no menu, while 21 other actions had one. **So the tab tree,
+which is what this browser is, could be opened only with a pointer.**
+
+It has `Ctrl+B` now -- free here, and what a sidebar toggle is called
+elsewhere -- and a View menu entry, because a shortcut nobody can discover
+is half an answer. **The menu holds the same `QAction` rather than a second
+one**: two checkable actions over one piece of state is the shape
+`set_drawer_open` already carries a warning about.
+
+### The same chain showed the other half
+
+`tab_tree_view` is in that list with the drawer **shut**. Closing moves the
+sidebar to `-w` and leaves it visible, so Qt goes on offering its children
+to Tab: one press from the address bar landed in a tree 295 pixels off the
+left edge.
+
+That is *The drawer covered the keyboard's target* arriving by the other
+road. The handover fixes the moment the drawer closes; this fixes every
+moment after it, and having one without the other is worse than neither,
+because the window behaves correctly when the drawer shuts and wrongly on
+the next Tab.
+
+`setEnabled(false)` takes the whole subtree out of the chain, which
+`setFocusPolicy` on the container does not. Applied when the slide
+finishes, so nothing is drawn greyed on its way out, and guarded on
+`m_drawer_open` like the obscured flag, so a drawer reopened mid-slide is
+not disabled by the animation it interrupted.
+
+### Both of my own mistakes were caught by tests, not by reading
+
+**The new `setEnabled(false)` silently disabled the earlier focus fix.**
+`setFocus` on a disabled widget does nothing, and the re-enable sat below
+the handover, so opening the drawer left the keyboard on the find bar
+again -- exactly the fault the handover exists to remove. The handover was
+written when the sidebar was always enabled: a true, unstated precondition,
+invalidated by the next change. The enable is above it now.
+
+**And the menu entry never happened, hidden by a guard I wrote.**
+`build_menu_bar()` runs before the toolbar, so `m_drawer_action` was null
+and `if (m_drawer_action)` turned the whole thing into a no-op. A helper
+that is not there reporting success, written by hand, in the same hour as
+reading the rule about it. The action is created before the menu bar now
+and the toolbar merely adds it.
+
+The four assertions each fail on their own sabotage, and the last one earns
+its place: without *an open one is back in it*, disabling everywhere would
+pass the other three while making the tree permanently unreachable.
+
+    sabotage                  fails
+    no shortcut               the tab tree has a shortcut ()
+    leave it in the chain     not in the tab chain (tab_tree_view -> ...)
+
+**And a shortcut being SET is not a shortcut that fires.** The first
+version of this section asserted the key sequence and stopped, which pins a
+string and leaves the feature untested -- `Qt::WindowShortcut` is the
+default context, and this window is a `QWidget` rather than a
+`QMainWindow`, so where the action lives is exactly the thing that could
+make it inert.
+
+Pressing it is asserted now, and the sabotage that justifies the pair
+leaves the shortcut in place and scopes it so it can never fire
+(`Qt::WidgetShortcut`, on a button that is `NoFocus`):
+
+    the tab tree has a shortcut (Ctrl+B)             ok
+    and is in a menu, where somebody can find it     ok
+    and pressing it actually opens the drawer        FAIL (shut -> shut)
+
+Both older checks stay green while the key does nothing. Same shape as the
+extension menu above: one assertion proves a value was stored, the other
+proves the feature works, and only the second can see the gap.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
