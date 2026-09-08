@@ -2725,6 +2725,10 @@ void main_window::update_layout_mode() {
 		// back too -- a drawer that was shut when the window widened would
 		// otherwise leave the pane permanently unreachable by Tab.
 		m_sidebar->setEnabled(true);
+		// This path does not go through `set_drawer_open` -- `m_drawer_mode`
+		// is already false above, so it would return at its guard -- and the
+		// drawer is gone, so nothing it was covering is covered any more.
+		set_drawer_cover(false);
 		m_drawer_open = false;
 		// Whatever it was before the window was narrowed. A window dragged
 		// wide again should show the tree it was showing, and one that had it
@@ -2982,6 +2986,15 @@ void main_window::refresh_placeholder_text() {
 	    : "Select a tab from the tree");
 }
 
+void main_window::set_drawer_cover(bool covered) {
+	// Only the find bar for now. The page stack is the other thing under the
+	// drawer and is deliberately not here: disabling it reaches the engine
+	// view, whose focus and compositing are the backend's, and `set_obscured`
+	// is the channel that exists for telling the page.
+	if (m_find)
+		m_find->setEnabled(!covered);
+}
+
 void main_window::set_drawer_open(bool open, bool animate) {
 	if (!m_drawer_mode || !m_sidebar)
 		return;
@@ -3062,15 +3075,13 @@ void main_window::set_drawer_open(bool open, bool animate) {
 		// view, whose focus and compositing are the backend's business --
 		// `set_obscured` above is how the page is told instead. The find bar
 		// is this project's own widget and safe to take out of the chain.
-		if (m_find)
-			m_find->setEnabled(false);
+		set_drawer_cover(true);
 		if (m_tree)
 			m_tree->setFocus(Qt::OtherFocusReason);
 	} else {
 		// Handed back when the drawer shuts, and before the handover below,
 		// so a find bar that was open is usable again immediately.
-		if (m_find)
-			m_find->setEnabled(true);
+		set_drawer_cover(false);
 		QWidget *const had = QApplication::focusWidget();
 		if (had && m_sidebar->isAncestorOf(had)) {
 			web_view_backend *v = current_view();

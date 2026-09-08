@@ -629,6 +629,27 @@ int main(int argc, char **argv) {
 			       "asking to find on the page closes the drawer");
 			check(fb->isEnabled(),
 			       "and leaves a find bar somebody can actually type in");
+
+			// **Widening out of drawer mode with the drawer open.** That path
+			// assigns `m_drawer_open` directly rather than calling
+			// `set_drawer_open` -- `m_drawer_mode` is already false by then,
+			// so it would return at the guard -- and so it restored the
+			// sidebar by hand while knowing nothing about the find bar.
+			// Measured before the fix: sidebar enabled, find bar still
+			// disabled, `Ctrl+F` dead for the rest of the session with
+			// nothing on screen to say why.
+			//
+			// The ordinary gesture, too: open the tab tree on a phone, then
+			// turn it landscape.
+			m.m_drawer_action->trigger();
+			spin(400);
+			check(m.m_drawer_open, "with the drawer open once more");
+			check(!fb->isEnabled(), "and the find bar under it again");
+			m.setGeometry(0, 0, 1100, 720);
+			spin(400);
+			check(!m.m_drawer_mode, "a wide window leaves drawer mode");
+			check(fb->isEnabled(),
+			       "and the find bar comes back with the drawer gone");
 		}
 	}
 

@@ -21930,6 +21930,46 @@ consequences. The second assertion is there for a break this sabotage
 cannot produce -- a drawer that closes without handing the bar back -- so
 what it is worth is not measured by this experiment.
 
+## Widening the window left the find bar dead
+
+Taking the covered find bar out of the tab chain introduced a bug that the
+gesture reaches in two steps: **open the tab tree on a phone, then turn it
+landscape.** Measured:
+
+    narrow, drawer open          find enabled=0    correct
+    widened out of drawer mode   find enabled=0    sidebar enabled=1
+
+`Ctrl+F` dead for the rest of the session, with nothing on screen to say
+why.
+
+**It is structural rather than careless, which is why the fix is not a
+fourth `setEnabled`.** `set_drawer_open` owns what happens when the drawer
+opens and shuts, but a third path changes that state around it: leaving
+drawer mode assigns `m_drawer_open` directly, because `m_drawer_mode` is
+already false by then and `set_drawer_open` would return at its own guard.
+That path was already duplicating half the job -- re-enabling the sidebar
+by hand -- and this change added a half it knew nothing about.
+
+So `set_drawer_cover` owns what the drawer covers, and the three paths call
+it. Patching the third site would have removed the symptom and left the
+shape that produced it, so the next widget the drawer covers would
+reintroduce the same class of bug at whichever site somebody forgot.
+
+The sabotage is the literal pre-fix code rather than an invented variant,
+and only the assertion named for the restore fails:
+
+    and the find bar under it again                      ok
+    a wide window leaves drawer mode                     ok
+    and the find bar comes back with the drawer gone     FAIL
+
+**The mode switch still working is what makes the failing one worth
+having.** Two assertions red would have meant one fact tested twice.
+
+**Only the find bar is in `set_drawer_cover`.** The page stack is the other
+thing under the drawer and is deliberately out: disabling it reaches the
+engine view, whose focus and compositing are the backend's, and
+`set_obscured` is the channel that exists for telling the page.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

@@ -381,6 +381,21 @@ private:
 	void update_layout_mode();
 	void set_drawer_open(bool open, bool animate = true);
 
+	// **What the drawer covers, told in one place.**
+	//
+	// The drawer overlays the find bar, and a covered widget has to leave the
+	// tab chain or the keyboard walks behind the drawer. Three paths change
+	// that: opening, closing, and leaving drawer mode altogether -- and the
+	// third assigns `m_drawer_open` directly rather than calling
+	// `set_drawer_open`, because by then `m_drawer_mode` is already false and
+	// that function would return at its guard.
+	//
+	// So the first version of this left the find bar disabled for ever after
+	// a window was widened with the drawer open: `Ctrl+F` dead for the rest
+	// of the session, with nothing on screen to say why. One function the
+	// three paths share, rather than a third copy of the same two lines.
+	void set_drawer_cover(bool covered);
+
 	// Android's Back button, answered the way a browser has to answer it.
 	//
 	// **Nothing handled it, and Qt's default is to finish the activity** -- so
