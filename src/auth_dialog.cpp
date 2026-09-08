@@ -78,11 +78,19 @@ auth_dialog::auth_dialog(const QString &host, const QString &realm,
 	m_user = new QLineEdit(this);
 	m_user->setObjectName("auth_user");
 	m_user->setPlaceholderText("Username");
+	// **A placeholder is not a name.** These two fields have no label beside
+	// them -- the placeholder is the only thing that says which is which --
+	// and a screen reader is handed none of it, so a sign-in prompt announced
+	// as two unnamed edit boxes, telling apart only by order. Measured across
+	// every dialog: the fields with a `QFormLayout` label are named through
+	// their buddy, and these had neither.
+	m_user->setAccessibleName("Username");
 	column->addWidget(m_user);
 
 	m_password = new QLineEdit(this);
 	m_password->setObjectName("auth_password");
 	m_password->setPlaceholderText("Password");
+	m_password->setAccessibleName("Password");
 	m_password->setEchoMode(QLineEdit::Password);
 	column->addWidget(m_password);
 

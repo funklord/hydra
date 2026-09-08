@@ -178,6 +178,17 @@ webauth_dialog::webauth_dialog(const QString &relying_party, QWidget *parent)
 	m_confirm->setEchoMode(QLineEdit::Password);
 	m_confirm_label = new QLabel("Confirm PIN", m_pin_box);
 	m_confirm_label->setObjectName("webauth_confirm_label");
+	// **The label above sets a buddy and this one did not.**
+	// `QFormLayout::addRow(const QString &, QWidget *)` builds a label AND
+	// makes it the field's buddy, which is where Qt's accessibility layer
+	// finds the name; the `addRow(QWidget *, QWidget *)` overload used here
+	// does neither. Measured: `webauth_pin` came back named through its
+	// buddy "PIN" and `webauth_confirm` came back with nothing, one row
+	// apart, in the same layout.
+	//
+	// The buddy rather than `setAccessibleName("Confirm PIN")`, so the label
+	// somebody reads and the name a reader hears cannot drift apart.
+	m_confirm_label->setBuddy(m_confirm);
 	pin_rows->addRow(m_confirm_label, m_confirm);
 	m_pin_trouble = new QLabel(m_pin_box);
 	m_pin_trouble->setObjectName("webauth_pin_trouble");

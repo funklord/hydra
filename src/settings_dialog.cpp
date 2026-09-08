@@ -489,6 +489,10 @@ settings_dialog::settings_dialog(player_launcher *players,
 	m_search = new QLineEdit(this);
 	m_search->setObjectName("settings_search");
 	m_search->setPlaceholderText("Find a setting…");
+	// A placeholder is not a name -- the same gap the sidebar's search box
+	// had, and the reason this one was found is that it was hiding inside
+	// this dialog's known-gap marker for an unrelated width fault.
+	m_search->setAccessibleName("Find a setting");
 	m_search->setClearButtonEnabled(true);
 	outer->addWidget(m_search);
 

@@ -516,6 +516,45 @@ static void measure(QWidget *dlg, const QString &name) {
 	// in, not `sizeHint()`, which for a combo is its widest entry: a
 	// deliberately narrow box holding one long item would be reported for
 	// ever, and a check nobody can satisfy is one that gets ignored.
+	// **Every field somebody types a secret into says what it is.**
+	//
+	// Measured across all twenty surfaces: the main window is clean, and the
+	// sign-in prompt announced as two unnamed edit boxes -- username and
+	// password distinguishable only by order, the placeholder being no part
+	// of what a reader is handed. `webauth_confirm` was the same one row
+	// below a field that was fine, because
+	// `QFormLayout::addRow(const QString &, QWidget *)` makes its label a
+	// buddy and the `addRow(QWidget *, QWidget *)` overload does not.
+	//
+	// **A buddy counts.** Qt reads the name from the label at query time
+	// rather than from `accessibleName`, so a check that looks only at the
+	// latter reports well-labelled fields -- 30 of them in the settings
+	// dialog on the first pass, nearly all with buddies.
+	//
+	// Only text entries, and only visible ones: a list or a scroll area is a
+	// container whose items carry their own text, and naming those would be
+	// a sweep rather than a fix.
+	{
+		QStringList mute;
+		for (QLineEdit *e : dlg->findChildren<QLineEdit *>()) {
+			if (!e->isVisible() || !e->accessibleName().isEmpty())
+				continue;
+			bool has_buddy = false;
+			for (QLabel *l : dlg->findChildren<QLabel *>())
+				if (l->buddy() == e)
+					has_buddy = true;
+			if (!has_buddy)
+				mute << (e->objectName().isEmpty() ? QString("(unnamed)")
+				                                     : e->objectName());
+		}
+		verdict(mute.isEmpty(),
+		         mute.isEmpty()
+		           ? QString("%1: and every text field says what it is")
+		               .arg(name)
+		           : QString("%1: %2 text field(s) announce as nothing -- %3")
+		               .arg(name).arg(mute.size()).arg(mute.join(", ")));
+	}
+
 	int cutcombo = 0;
 	QStringList combos;
 	for (QComboBox *c : dlg->findChildren<QComboBox *>()) {

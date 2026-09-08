@@ -22194,6 +22194,64 @@ and there is no `Ctrl+W`, `Ctrl+Shift+T` or `Ctrl+Tab` in the window at
 all. Whether this browser wants them is a question about its tab model
 rather than a defect, and it is the copyright holder's.
 
+## The sign-in prompt announced as two unnamed boxes
+
+The derived accessibility check added for the main window covered only the
+window. Pointed at the dialogs, it found the credential prompts:
+
+    auth-site    QLineEdit(auth_user), QLineEdit(auth_password)
+    auth-proxy   same
+    webauth-pin  QLineEdit(webauth_confirm)
+
+**Username and password are told apart by order and nothing else.** They
+carry placeholders and no labels, and a placeholder is no part of what a
+reader is handed -- the same gap the sidebar's search box had. Named
+directly, since there is no label widget to point at.
+
+**`webauth_confirm` was in that state one row below a field that was
+fine**, and the difference is an overload:
+`QFormLayout::addRow(const QString &, QWidget *)` builds a label AND makes
+it the field's buddy, while `addRow(QWidget *, QWidget *)` does neither.
+So `PIN` was named through its buddy and `Confirm PIN`, whose label is a
+widget the code made itself, was not. Fixed with `setBuddy` rather than a
+name, so the label somebody reads and the name a reader hears cannot
+drift.
+
+### The probe was capable and misaimed, and the first count was wrong
+
+Counting fields whose `accessibleName` is empty reported **30 in the
+settings dialog alone** and 60-odd across nineteen surfaces. Nearly all
+were labelled: Qt reads the name from a buddy at query time, not from
+`accessibleName`, so the criterion could not see the mechanism most of
+this tree uses.
+
+**Acting on that number would have been a sweep of redundant changes** --
+a second copy of every label, on controls that were already correct -- and
+the kind of noise that teaches people to skip a check. The real set was
+three. The check counts a buddy as a name now, and is scoped to text
+entries: a list or a scroll area is a container whose items carry their
+own text.
+
+### And a known-gap marker was absorbing a second fault
+
+The failure for `settings_search` came back as `KNOWN`, inside the marker
+this dialog carries for its **395-pixel width** problem. A reader would
+have seen a familiar `KNOWN settings:` line and read it as the width issue
+they had already accepted.
+
+**An exception wider than its reason**, the same shape as an ASCII gate
+switched off for two status ticks and thereby switched off for every
+comment in the file. The marker names a dialog rather than a fault, so
+anything else failing there disappears into it. Naming the field removed
+the ambiguity instead of adding machinery to preserve it.
+
+    sabotage                        catches
+    drop setAccessibleName          auth-site + auth-proxy: auth_password
+    drop setBuddy                   webauth-pin: webauth_confirm
+
+Both mechanisms are caught, which matters because only one of them lives
+on the widget.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
