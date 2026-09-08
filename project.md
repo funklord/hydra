@@ -22020,6 +22020,34 @@ scrolls to it and closes the drawer, so without that the row would be
 visible for a reason this section is not about, and the check would pass
 whatever the code did.
 
+### And the mode switch had it too, with a case that must NOT scroll
+
+Enumerating the paths where the tree becomes visible found the same gap
+where a narrow window widens: drawer shut, pane shown, current row at y=665
+in a 573-tall viewport.
+
+**But the obvious fix is wrong.** A shut drawer becoming a pane is the tree
+going from hidden to shown, and it should reveal. An **open** drawer
+becoming a pane is not: the tree was on screen throughout, somebody may
+have scrolled it deliberately a second ago, and widening a window is not a
+request to go anywhere. The rule is *hidden to shown*, not *presentation
+changed*, and `was_showing` is captured before `m_drawer_open` is cleared
+to tell them apart.
+
+The negative assertion was written first, because the blanket version --
+what most people would write, and what this would have been without
+separating the cases -- passes the positive one:
+
+    sabotage: reveal unconditionally
+    an open drawer becoming a pane stays where it was   FAIL (0 then 6)
+    a shut drawer becoming a pane shows the current tab  ok
+
+**Six pixels**, under somebody who had just scrolled to the top. Nobody
+reports that as a bug; the tree simply feels slightly untrustworthy. It is
+also exactly what a single-direction test ships, since the obvious
+question -- does the pane show my current tab -- is answered yes either
+way.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

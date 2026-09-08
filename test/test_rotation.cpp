@@ -535,6 +535,42 @@ int main(int argc, char **argv) {
 			       QString("and opening the drawer brings it back into view "
 			                "(row y=%1, viewport %2 tall)")
 			         .arg(row.y()).arg(m.m_tree->viewport()->height()));
+
+			// **A window widened while the drawer is OPEN must not scroll.**
+			// The tree was on screen throughout, so this is a change of
+			// presentation rather than the tree being shown, and moving it
+			// under somebody who scrolled it a moment ago is the surprise
+			// rather than the fix. Asserted first, because a blanket
+			// `reveal_current` in the mode switch would pass the case below
+			// and quietly fail this one.
+			m.m_tree->scrollToTop();
+			spin(150);
+			const int top_before = m.m_tree->verticalScrollBar()->value();
+			m.setGeometry(0, 0, 1100, 720);
+			spin(400);
+			check(!m.m_drawer_mode, "a wide window leaves drawer mode");
+			check(m.m_tree->verticalScrollBar()->value() == top_before,
+			       QString("and an open drawer becoming a pane stays where it "
+			                "was (%1 then %2)")
+			         .arg(top_before)
+			         .arg(m.m_tree->verticalScrollBar()->value()));
+
+			// And the other way: shut the tree, go narrow, come back wide.
+			// The tree was hidden and is being shown, so it reveals.
+			m.setGeometry(0, 0, 360, 640);
+			spin(400);
+			check(m.m_drawer_mode && !m.m_drawer_open,
+			       "narrow again, with the drawer shut");
+			m.m_tree->scrollToTop();
+			spin(150);
+			m.setGeometry(0, 0, 1100, 720);
+			spin(400);
+			const QRect back = m.m_tree->visualRect(idx);
+			check(back.height() > 0
+			       && m.m_tree->viewport()->rect().intersects(back),
+			       QString("a shut drawer becoming a pane shows the current "
+			                "tab (row y=%1, viewport %2 tall)")
+			         .arg(back.y()).arg(m.m_tree->viewport()->height()));
 		}
 	}
 

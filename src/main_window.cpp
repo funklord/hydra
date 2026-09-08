@@ -2729,6 +2729,9 @@ void main_window::update_layout_mode() {
 		// is already false above, so it would return at its guard -- and the
 		// drawer is gone, so nothing it was covering is covered any more.
 		set_drawer_cover(false);
+		// **Whether the tree was on screen a moment ago**, captured before
+		// the flag is cleared, because it decides something below.
+		const bool was_showing = m_drawer_open;
 		m_drawer_open = false;
 		// Whatever it was before the window was narrowed. A window dragged
 		// wide again should show the tree it was showing, and one that had it
@@ -2737,6 +2740,17 @@ void main_window::update_layout_mode() {
 		if (m_tree_visible)
 			m_splitter->setSizes({m_tree_width,
 			                       qMax(400, width() - m_tree_width)});
+		// **Only when the tree was hidden and is now shown.** A shut drawer
+		// becoming a pane is exactly that, and it arrived at whatever scroll
+		// position it was left at -- measured, the current row at y=665 in a
+		// 573-tall viewport.
+		//
+		// An OPEN drawer becoming a pane is not: the tree was on screen the
+		// whole time, somebody may have scrolled it deliberately a moment
+		// ago, and moving it under them would be the surprise rather than the
+		// fix. Widening a window is not a request to go anywhere.
+		if (m_tree_visible && !was_showing && m_tree)
+			m_tree->reveal_current();
 	}
 	// The drawer starts closed and the pane starts as it was, so the button
 	// has to agree with whichever one is now on screen.
