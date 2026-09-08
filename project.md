@@ -22048,6 +22048,55 @@ also exactly what a single-direction test ships, since the obvious
 question -- does the pane show my current tab -- is answered yes either
 way.
 
+## try_files drops a synthetic click about one run in three
+
+Running the full sweep after seventeen commits -- `make check` never builds
+the live drivers, so none of that work had been through them -- found
+`try_phone` at 186 passed and `try_look` clean, and `try_files` red at 29
+passed, 2 failed where the previous sweep had 31 and 0.
+
+**The comfortable explanation was load**, the machine being at 47 with
+other sessions building, and `try_files` itself carries a note above
+`spin()` about exactly that: six failures once chased through four
+hypotheses and a bisection table before somebody noticed a load average of
+25, *"every row of that table a single run at an unknown load."*
+
+**And I made that mistake while testing for it.** Three isolated runs gave
+31/0, 25/6 and 31/0, and I read the load once at the END of the batch --
+5.97 -- and reported the load hypothesis disproved. The failing run was
+first, straight after the sweep, at a load nobody measured. Same error the
+note describes, in the file that describes it.
+
+Measured properly, with the load sampled at the start of each run:
+
+    load 5.28   31 passed, 0 failed
+    load 3.54   31 passed, 0 failed
+    load 7.37   29 passed, 2 failed
+    load 8.12   31 passed, 0 failed
+
+**The failing run was at a lower load than a passing one**, so load does
+not separate them here. That is a real test of the environmental story
+rather than a refusal to believe it, and it comes out negative.
+
+What the failures have in common is not a section but a **lost synthetic
+click**, which fails wherever the run happens to be:
+
+    sweep         section 3   2 failures   chooser and question counters
+    isolated r1   section 1   6 failures   cascade from the click itself
+    instrumented  section 5   2 failures   second click, two questions
+
+Section 1 is the one that says so outright -- *"a synthetic press and
+release reached the page's click handler"* -- and its own failure message
+tells the reader to check `uptime` before suspecting the engine.
+
+**Not chased further, and not this session's work**: nothing in the
+seventeen commits goes near the file chooser, the driver passed 31/0 in
+five of eight runs across two machines' worth of load, and deciding
+whether a dropped click is the driver's or the engine's is an
+investigation in a subsystem this session has not touched. Recorded with
+the reproduction so the next reader starts from a lost click rather than
+from the section that reported it.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

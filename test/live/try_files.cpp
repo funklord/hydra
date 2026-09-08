@@ -150,6 +150,23 @@ static void section(const char *n) { std::printf("\n== %s ==\n", n); }
 // compiling. Every row of that table was a single run at an unknown load. The
 // story is in `project.md`; the short version is that the environment is a
 // hypothesis too, and the cheapest one to test.
+//
+// **And it is a hypothesis, not the answer -- measured 2026-09-08.** Four runs
+// with the load sampled at the START of each, because the incident above is
+// what happens when it is not:
+//
+//     load 5.28   31 passed, 0 failed
+//     load 3.54   31 passed, 0 failed
+//     load 7.37   29 passed, 2 failed
+//     load 8.12   31 passed, 0 failed
+//
+// The failing run was at a LOWER load than a passing one, so load does not
+// separate the two here. Roughly one run in three or four drops a synthetic
+// click, and the failure lands in whichever section was running: section 1 in
+// one run, which cascades to six failures; section 3 in another; section 5 in
+// a third. **Check `uptime` first, as above -- and when it does not explain
+// the result, the next thing to suspect is a lost click rather than the
+// section that reported it.**
 static void spin(int ms) {
 	QEventLoop l;
 	QTimer::singleShot(ms, &l, &QEventLoop::quit);
