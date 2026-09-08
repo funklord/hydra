@@ -30,6 +30,7 @@
 // the same event, which is why none of this needs a device.
 #include "main_window.h"
 #include "settings_dialog.h"
+#include "find_bar.h"
 #include "filter_dialog.h"
 #include "filter_signals.h"
 #include "filter_list.h"
@@ -396,6 +397,73 @@ int main(int argc, char **argv) {
 		check(next.drawer ? parent == &w : parent == split,
 		      QString("%1: the sidebar is parented where that mode keeps it")
 		              .arg(QString::fromUtf8(next.what)));
+	}
+
+	section("the drawer takes the keyboard with it, both ways");
+
+	// **The drawer covers the find bar, and focus did not know.**
+	// `set_drawer_open` already syncs two consumers of its state -- the
+	// toolbar toggle and the page's obscured flag -- and its own comment
+	// names the family: two consumers and only the obvious one wired.
+	// Keyboard focus was the third. Measured on a 360-wide phone:
+	//
+	//     open    drawer 0,61 295x557 over the find bar at 0,587 360x31,
+	//             and `find_input` kept focus
+	//     close   sidebar at x=-295, fully off screen, focus still in it
+	//
+	// The second is the ordinary path: picking a tab is what closes the
+	// drawer, so every tab chosen on a phone left the keyboard on a tree
+	// nobody can see.
+	//
+	// Asserted as "which side of the sidebar boundary is focus on", not as a
+	// named widget, because what matters is that the keyboard is not pointed
+	// at something the user cannot see -- and the widget that should hold it
+	// differs between the two directions.
+	{
+		main_window m(&factory, &policy, &filter);
+		m.setGeometry(0, 0, 360, 640);
+		m.show();
+		spin(200);
+
+		check(m.m_drawer_mode, "360 pixels puts the window in drawer mode");
+
+		find_bar *fb = m.findChild<find_bar *>();
+		QLineEdit *in = fb ? fb->findChild<QLineEdit *>("find_input") : nullptr;
+		check(in != nullptr, "and the find bar is there to be covered");
+		if (fb) fb->show();
+		if (in) in->setFocus();
+		spin(150);
+		check(in && in->hasFocus(), "with the search field holding the keyboard");
+
+		if (m.m_drawer_action) m.m_drawer_action->trigger();
+		spin(400);
+
+		// The overlap is what makes the focus question matter, so it is
+		// asserted rather than assumed -- a drawer that stopped covering the
+		// find bar would make this section pass for the wrong reason.
+		const QRect drawer(m.m_sidebar->mapTo(&m, QPoint(0, 0)),
+		                    m.m_sidebar->size());
+		const QRect field = in ? QRect(in->mapTo(&m, QPoint(0, 0)), in->size())
+		                        : QRect();
+		check(drawer.intersects(field),
+		       "the open drawer does stand in front of that field");
+
+		QWidget *f = QApplication::focusWidget();
+		check(f && m.m_sidebar->isAncestorOf(f),
+		       QString("so opening moves the keyboard into the drawer (%1)")
+		         .arg(f ? f->metaObject()->className() : "none"));
+
+		if (m.m_drawer_action) m.m_drawer_action->trigger();
+		spin(400);
+		const QRect gone(m.m_sidebar->mapTo(&m, QPoint(0, 0)),
+		                  m.m_sidebar->size());
+		check(gone.right() < 0,
+		       QString("closing takes the sidebar off the screen (right edge "
+		                "at %1)").arg(gone.right()));
+		f = QApplication::focusWidget();
+		check(!f || !m.m_sidebar->isAncestorOf(f),
+		       QString("and the keyboard does not go with it (%1)")
+		         .arg(f ? f->metaObject()->className() : "none"));
 	}
 
 	section("the settings lists keep their rows when the font grows");

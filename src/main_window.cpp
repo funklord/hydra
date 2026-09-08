@@ -2973,6 +2973,42 @@ void main_window::set_drawer_open(bool open, bool animate) {
 			v->set_obscured(false);
 	}
 
+	// **Focus is the third consumer of this state, and it was not wired.**
+	//
+	// The note above says two consumers and only the obvious one; keyboard
+	// focus is the one that was still missing, and it fails in both
+	// directions. Measured on a 360-wide phone:
+	//
+	//     open    drawer 0,61 295x557 covers the find bar at 0,587 360x31,
+	//             and `find_input` KEEPS focus -- so what is typed goes to a
+	//             field the drawer is standing in front of, while the tree
+	//             the drawer was opened for gets none of it.
+	//     close   the sidebar moves to x=-295, fully off screen, and focus
+	//             stays inside it.
+	//
+	// The second is the ordinary path rather than a corner: picking a tab is
+	// what closes the drawer, so every tab chosen on a phone left the
+	// keyboard talking to a tree nobody can see.
+	//
+	// Opening gives the tree focus, which is what the drawer was opened for
+	// and makes the arrow keys work on it without a second tap. Closing hands
+	// focus back the way the find bar already does -- to the page, and to the
+	// address bar when there is no page -- but only when the sidebar is
+	// holding it, so a drawer closed while somebody was typing somewhere else
+	// does not steal it.
+	if (open) {
+		if (m_tree)
+			m_tree->setFocus(Qt::OtherFocusReason);
+	} else if (QWidget *had = QApplication::focusWidget()) {
+		if (m_sidebar->isAncestorOf(had)) {
+			web_view_backend *v = current_view();
+			if (v && v->widget())
+				v->widget()->setFocus(Qt::OtherFocusReason);
+			else if (m_address)
+				m_address->setFocus(Qt::OtherFocusReason);
+		}
+	}
+
 	// The hint behind the drawer is now both wrong and unreadable; see
 	// refresh_placeholder_text().
 	refresh_placeholder_text();

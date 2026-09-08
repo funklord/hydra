@@ -21557,6 +21557,52 @@ the font. **A section that reaches for a real dialog borrows whatever that
 dialog touches**, and a suite whose sections share one `QApplication` has
 no boundary that says so.
 
+## The drawer covered the keyboard's target, and did not tell it
+
+A different lens: not what a widget is sized to, but **what covers what**
+on a phone, and whether focus follows.
+
+`set_drawer_open` already syncs two consumers of its state -- the toolbar
+toggle and the page's obscured flag -- and its own comment names the
+family: *two consumers of one state and only the obvious one wired.*
+**Keyboard focus was the third, and it fails in both directions.**
+Measured on a 360-wide phone:
+
+    open    drawer 0,61 295x557 stands over the find bar at 0,587 360x31,
+            and find_input KEEPS focus
+    close   the sidebar moves to x=-295, fully off screen, and focus
+            stays inside it
+
+So typing went to a field the drawer was standing in front of, while the
+tree the drawer had just been opened for received none of it.
+
+**The closing case is the ordinary path rather than a corner**, which is
+what makes this worth more than it first looks: picking a tab is what
+closes the drawer, so *every tab chosen on a phone* left the keyboard
+pointed at a tree nobody can see. Nothing about it is visible -- the
+drawer slides away, the page appears, and the next keystroke goes
+somewhere else.
+
+Opening gives the tree focus, which is what the drawer was opened for and
+makes arrow keys work on it without a second tap. Closing hands focus back
+the way the find bar already does -- to the page, and to the address bar
+when there is no page -- but **only when the sidebar is holding it**, so a
+drawer closed while somebody was typing elsewhere does not steal it.
+
+The test asserts which side of the sidebar boundary focus is on rather
+than naming a widget, because the widget that should hold it differs
+between the two directions. **It also asserts the overlap itself**: a
+drawer that stopped covering the find bar would make the whole section
+pass for the wrong reason.
+
+    sabotage        opening check              closing check
+    open wiring     FAIL (QLineEdit)           ok
+    close wiring    ok (tab_tree_view)         FAIL (tab_tree_view)
+
+Each reproduces exactly the bug it was written for -- the find input still
+holding the keyboard behind the drawer, and the tree still holding it off
+screen.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
