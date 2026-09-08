@@ -422,6 +422,17 @@ int main(int argc, char **argv) {
 		phone.show();
 		spin(150);
 
+		QLineEdit *input = phone.findChild<QLineEdit *>("find_input");
+		check(input != nullptr, "the find bar has its input");
+		if (input) {
+			const int ph = input->fontMetrics().horizontalAdvance(
+			                 input->placeholderText());
+			check(input->minimumWidth() >= ph,
+			       QString("whose floor shows the placeholder it was given "
+			                "(%1 for %2)")
+			         .arg(input->minimumWidth()).arg(ph));
+		}
+
 		QLabel *count = phone.findChild<QLabel *>("find_count");
 		check(count != nullptr, "the find bar has its count label");
 		if (count) {

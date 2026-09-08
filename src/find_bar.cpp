@@ -25,6 +25,32 @@ find_bar::find_bar(QWidget *parent) : QWidget(parent) {
 	m_input->setObjectName("find_input");
 	m_input->setPlaceholderText("Text on this page");
 	m_input->setClearButtonEnabled(true);
+	// **A floor derived from the placeholder, for the same reason the address
+	// bar has one.**
+	//
+	// The input takes the leftover space, so its width is whatever the row's
+	// fixed widths happen to leave -- 90 px on a 320-wide phone before the
+	// count label was sized to what it shows, and 109 after. That 109 is
+	// incidental: it is the arithmetic of the widgets that happen to be in
+	// this row today, and the next one added takes it back silently.
+	//
+	// The placeholder is the author's own statement of what belongs in the
+	// field, so a field too narrow to show it is too narrow by the only
+	// standard the file itself carries. It is a weak floor rather than a
+	// generous one, and deliberately: it guards the width already reached
+	// instead of claiming a better one.
+	//
+	// **It is not a general rule for line edits, and was checked before being
+	// written here.** Against the two fields this workspace has actually
+	// found too narrow, the same criterion misses the worse of them: the
+	// address bar was 65 px with an "Address" placeholder needing 46, so
+	// nothing about its placeholder was wrong while URLs were unreadable.
+	// `k_address_min` is derived from a hostname for that reason. The rule
+	// that generalises is that a field which is the point of its row gets a
+	// floor from what it must show -- what "must show" means is the field's
+	// own, not a class-wide predicate.
+	m_input->setMinimumWidth(
+	  m_input->fontMetrics().horizontalAdvance(m_input->placeholderText()) + 4);
 	row->addWidget(m_input, 1);
 
 	// **Icons from the style, with a word as the text.** The toolbar started

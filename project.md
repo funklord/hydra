@@ -21435,6 +21435,82 @@ neither is enough alone:
 A count longer than `No matches` still grows the label through its own size
 hint; this floor only stops it shrinking below the string it has to show.
 
+## The class both defects lived in, and the check that would miss them
+
+Enumerating rather than sampling: every hard-coded pixel dimension in
+`src/`, ten sites, each read against what it has to show.
+
+    android_dialogs   setMinimumSize(0, 0)     deliberate, clears the rest
+    cert_dialog       setMinimumWidth(460)     neutralised on a phone
+    tab_tree_view     setMinimumWidth(460)     neutralised on a phone
+    webauth_dialog    setMinimumWidth(460)     neutralised on a phone
+    main_window       progress 120 x 12        a cap, not a demand
+    settings_dialog   categories max 190       reasoned in the line below it
+    settings_dialog   two list heights         list geometry
+    tab_tree_view     4 * fontMetrics + 24     already derived
+
+The three 460s would each be 100 px off the edge of a 360-wide phone, and
+are not, because `android_dialogs` clears every dialog's minimum and fits it
+to the screen -- with the reason recorded there. **The lens is spent**: one
+site was already derived, the rest are deliberate or neutralised where they
+would bite.
+
+What the sweep did surface is that **both defects this workspace has
+actually found too narrow were `QLineEdit`s -- the address bar and the find
+input -- and `QLineEdit` is the one class neither audit measures.**
+`try_look` reads buttons, labels and now combos; `try_phone` reads labels
+and combos. The only line-edit loop in either driver exists to *find* the
+search box so a scenario can type into it.
+
+### The obvious criterion was tested against the known cases, and failed
+
+A field should be able to show its own placeholder -- the author's own
+statement of what belongs there. Measured over every visible line edit at
+phone width, it gives one hit in ten, which is the signal-to-noise a
+criterion wants:
+
+    settings  w=154  room=154  placeholder=172
+    "https://duckduckgo.com/?q=%1"
+
+Then tested against the two defects that motivated auditing the class at
+all:
+
+    field         had    placeholder needs    criterion
+    address bar    65      "Address"      46   MISSES it
+    find input     90      "Text on..."   94   catches it, by 4 px
+
+**It misses the worse of the two entirely**, and catches the other by a
+margin thinner than the four pixels of slack every other check in these
+drivers allows for font rounding -- so in practice it misses both. Nothing
+about the address bar's placeholder was wrong while URLs were unreadable at
+eight characters.
+
+So there is no class-wide predicate here, and the check was not written.
+**What generalises is not a check but a rule for authors:** a field that is
+the point of its row gets a floor derived from what it must show, and what
+"must show" means is that field's own -- a hostname for the address bar, a
+placeholder for the find input, the widest fixed string for a count label.
+
+The one hit is left alone deliberately. `%1` is the part that clips, and it
+is the part that matters -- but the row's own description says "%1 stands
+for the terms, url-encoded" in text that wraps and is fully visible, so the
+information is not lost, and widening that dialog is the open item below
+rather than a fix.
+
+**Coverage, stated because the number invites over-reading:** one in ten is
+one in ten *visible*, and the settings dialog shows a single category page
+at a time. Seven other placeholder fields -- kiosk, media, network, the two
+AI pages -- were never in the population.
+
+### The find input's 109 px was incidental, and now is not
+
+`m_input` takes the leftover space, so its width is the arithmetic of
+whatever else is in that row: 90 px before the count label was sized to
+what it shows, 109 after. **The next widget added to the row takes it back,
+silently.** It has a floor from its own placeholder now -- a weak one, and
+deliberately so, guarding the width already reached rather than claiming a
+better one. Removing it takes the check to `FAIL (0 for 94)`.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
