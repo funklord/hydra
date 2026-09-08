@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QLineEdit>
 
 class QString;
@@ -57,6 +58,53 @@ protected:
 		}
 		QLineEdit::keyPressEvent(event);
 	}
+
+	// **Tapping the bar selects what is in it, which is what every browser
+	// does and this did not.** Measured: a tap put focus in the field and the
+	// cursor at character 30 of a URL with nothing selected, while `Ctrl+L`
+	// on the same field selected the lot. Reaching for the bar to go
+	// somewhere new meant clearing a long address by hand -- on a phone, on a
+	// touch keyboard, which is where it hurts.
+	//
+	// **Armed on focus, spent on the release.** A press cannot ask whether it
+	// is the one that focused the field: Qt grants focus BEFORE delivering
+	// the press, so `hasFocus()` in `mousePressEvent` is already true --
+	// measured, with a fixture that had genuinely cleared focus first. And
+	// selecting in `focusInEvent` is undone a moment later, because
+	// `QLineEdit::mousePressEvent` puts the cursor where the click landed and
+	// drops the selection. The reason is the only thing that says a click
+	// brought focus here, and the release is the only moment left to act on
+	// it.
+	//
+	// **`MouseFocusReason` alone.** Tab focus already selects the field, so
+	// re-selecting on a later click would take away the cursor placement a
+	// click is for; `ShortcutFocusReason` is Ctrl+L, which selects
+	// explicitly; and accepting `ActiveWindowFocusReason` would select the
+	// whole address on the first click after alt-tabbing back to the window,
+	// for a keystroke nobody made.
+	void focusInEvent(QFocusEvent *event) override {
+		QLineEdit::focusInEvent(event);
+		if (event->reason() == Qt::MouseFocusReason)
+			m_select_on_release = true;
+	}
+
+	void mouseReleaseEvent(QMouseEvent *event) override {
+		QLineEdit::mouseReleaseEvent(event);
+		if (!m_select_on_release)
+			return;
+		m_select_on_release = false;
+		// **A drag is somebody choosing their own selection**, and replacing
+		// it with everything would be worse than not selecting at all. Only a
+		// plain click, which leaves nothing selected, takes the whole field.
+		if (!hasSelectedText())
+			selectAll();
+	}
+
+private:
+	// Armed by a focus-in the mouse caused, spent on the release that
+	// follows -- so the first tap selects and a second, the field already
+	// focused, places the cursor as a second click should.
+	bool m_select_on_release = false;
 };
 
 // What the address bar does with what somebody typed.

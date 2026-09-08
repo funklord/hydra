@@ -22097,6 +22097,56 @@ investigation in a subsystem this session has not touched. Recorded with
 the reproduction so the next reader starts from a lost click rather than
 from the section that reported it.
 
+## Tapping the address bar put a cursor in the middle of the URL
+
+What every browser does and this did not. Measured through the real window:
+
+    tap     focus=1  selected=""  cursor=30
+    Ctrl+L  selected="https://example.inva..."
+
+The tap landed -- focus arrived, the cursor moved -- and selected nothing.
+So reaching for the bar to go somewhere new meant clearing a long address
+by hand, on a phone, on a touch keyboard.
+
+### Four wrong turns, all of them measurement rather than code
+
+**`hasFocus()` in `mousePressEvent` cannot answer "did this click focus
+us".** Qt grants focus BEFORE delivering the press: measured
+`press: hasFocus=1` with a fixture that had genuinely cleared focus first.
+
+**The offscreen platform never reports `MouseFocusReason`.** A synthetic
+click there arrives as `Qt::ActiveWindowFocusReason`, so the real gesture
+is not reproducible in this suite at all -- and the obvious repair, to
+accept that reason, is the one sabotage B now catches.
+
+**My own change broke the fixture.** It did `m_tree->setFocus()` to move
+focus away, and at 360 with the drawer shut this window disables the
+sidebar -- so the call was a no-op, focus stayed in the bar, and the
+"first tap" being measured was a second tap. The section asserts its
+precondition now.
+
+**And it read Qt's selection as ours.** `QLineEdit` selects its contents
+on Tab and Shortcut focus by itself, which is exactly why this widget
+ignores those reasons; the test was observing that and calling it a
+failure. It clears the selection after the focus event now, so what is
+measured is only what the RELEASE does.
+
+### Why the test drives events rather than clicking
+
+Since the platform cannot produce the input, the section asserts the
+widget's contract: a focus-in of each reason followed by a release. Four
+of the six assertions are negative, and they are the ones that pin the
+design:
+
+    sabotage                     positive   Tab / Ctrl+L / activation
+    no arming at all             FAIL       ok
+    arm on any focus reason      ok         FAIL
+
+**The second is the whole argument.** It is what a click-through test
+would have accepted, and it would have selected the entire address on the
+first click after every alt-tab -- a keystroke nobody made. The obvious
+assertion passes it; only the negatives see it.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

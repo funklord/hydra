@@ -30,6 +30,8 @@
 // the same event, which is why none of this needs a device.
 #include "main_window.h"
 #include "settings_dialog.h"
+#include <QFocusEvent>
+#include "address_input.h"
 #include "find_bar.h"
 #include "filter_dialog.h"
 #include "filter_signals.h"
@@ -487,6 +489,84 @@ int main(int argc, char **argv) {
 		check(next.drawer ? parent == &w : parent == split,
 		      QString("%1: the sidebar is parented where that mode keeps it")
 		              .arg(QString::fromUtf8(next.what)));
+	}
+
+	section("tapping the address bar selects what is in it");
+
+	// **What every browser does, and this did not.** Measured through the
+	// real window: a tap put focus in the field and the cursor at character
+	// 30 of a URL with nothing selected, while `Ctrl+L` on the same field
+	// selected the lot. Reaching for the bar to go somewhere new meant
+	// clearing a long address by hand, on a phone, on a touch keyboard.
+	//
+	// **Driven by events rather than by `QTest::mouseClick`, because the
+	// offscreen platform cannot produce the input this depends on.**
+	// Measured: a synthetic click there delivers focus as
+	// `Qt::ActiveWindowFocusReason`, never `MouseFocusReason`, so the real
+	// gesture is not reproducible here. Widening the widget to accept that
+	// reason would have made a click-through test pass and put a defect in
+	// the product -- alt-tab back to the window, click the bar, and the whole
+	// address selects for a keystroke nobody made.
+	//
+	// So this asserts the contract the widget actually implements: a
+	// mouse-caused focus followed by a release selects; other reasons do not;
+	// and a release that already carries a selection keeps it.
+	{
+		address_line bar;
+		bar.setText("https://example.invalid/a/long/path?q=1");
+		bar.show();
+		spin(80);
+
+		auto press_release = [&](Qt::FocusReason why, bool with_selection) {
+			bar.deselect();
+			bar.setCursorPosition(0);
+			QFocusEvent in(QEvent::FocusIn, why);
+			QApplication::sendEvent(&bar, &in);
+			// **Cleared after the focus event, before the release.** Qt
+			// selects the contents itself on Tab, Backtab and Shortcut focus
+			// -- which is exactly why this widget ignores those reasons --
+			// so leaving it would measure Qt's selection and call it ours.
+			// What is under test is only what the RELEASE does.
+			bar.deselect();
+			if (with_selection)
+				bar.setSelection(3, 5);
+			QMouseEvent up(QEvent::MouseButtonRelease, QPointF(20, 8),
+			                QPointF(20, 8), Qt::LeftButton, Qt::NoButton,
+			                Qt::NoModifier);
+			QApplication::sendEvent(&bar, &up);
+		};
+
+		press_release(Qt::MouseFocusReason, false);
+		check(bar.selectedText() == bar.text(),
+		       QString("a click that brings focus selects the whole address "
+		                "(%1 of %2 chars)")
+		         .arg(bar.selectedText().size()).arg(bar.text().size()));
+
+		// Spent: a second release, with no new focus, must not re-select.
+		bar.deselect();
+		QMouseEvent again(QEvent::MouseButtonRelease, QPointF(20, 8),
+		                   QPointF(20, 8), Qt::LeftButton, Qt::NoButton,
+		                   Qt::NoModifier);
+		QApplication::sendEvent(&bar, &again);
+		check(bar.selectedText().isEmpty(),
+		       "a second click leaves the cursor where it was put");
+
+		press_release(Qt::TabFocusReason, false);
+		check(bar.selectedText().isEmpty(),
+		       "arriving by Tab does not arm it -- Qt already selects there");
+
+		press_release(Qt::ShortcutFocusReason, false);
+		check(bar.selectedText().isEmpty(),
+		       "nor by Ctrl+L, which selects on its own");
+
+		press_release(Qt::ActiveWindowFocusReason, false);
+		check(bar.selectedText().isEmpty(),
+		       "nor by the window merely being activated");
+
+		press_release(Qt::MouseFocusReason, true);
+		check(bar.selectedText() != bar.text() && !bar.selectedText().isEmpty(),
+		       QString("and a drag keeps the part it chose (%1)")
+		         .arg(bar.selectedText()));
 	}
 
 	section("opening the tab tree shows the tab you are on");
