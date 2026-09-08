@@ -22147,6 +22147,53 @@ would have accepted, and it would have selected the entire address on the
 first click after every alt-tab -- a keystroke nobody made. The obvious
 assertion passes it; only the negatives see it.
 
+## Quit and Settings had no shortcut, and the source said they did
+
+Enumerating the window's shortcuts from the running window rather than
+from the source -- `addAction(text, shortcut, ...)` does not match a
+`setShortcut` grep -- turned up 22, and two menu items that should have
+been among them were not:
+
+    QKeySequence::Quit        -> ""
+    QKeySequence::Preferences -> ""
+    action "Quit"      shortcut=""
+    action "Settings…" shortcut=""
+
+**Qt defines both for macOS only.** On this platform they resolve to an
+empty sequence, so `addAction("&Quit", QKeySequence::Quit, ...)` built a
+menu item with no accelerator at all. Nothing warns: it compiles, the item
+works by mouse, and the key simply does not exist. Named explicitly now --
+`Ctrl+Q`, which is what every desktop here uses to leave an application,
+and `Ctrl+,` for Settings.
+
+**The same family as several things this session found**: a call that
+reads as doing something and does nothing. The guard that turned a missing
+menu entry into a no-op, a `reveal_current` that returned at its guard, a
+placeholder standing in for an accessible name. Each reads correctly, and
+each was found by asking the artifact instead of the source.
+
+### The check that keeps working is the one that derives its list
+
+Two named assertions cover the two actions that were broken, and **a list
+of two cannot see a third** -- the drift that let the accessibility check
+pass while two controls went unnamed. So the clash check groups every
+action by its shortcut and fails when a key has two owners:
+
+    sabotage                    Quit named   no two the same
+    back to QKeySequence::Quit  FAIL ("")    ok, 23 keys
+    Settings on Ctrl+J          ok           FAIL: Downloads… + Settings…
+
+**The second is the silent one.** Settings has a shortcut and the named
+assertions are content; it is stolen from Downloads, Qt resolves the
+ambiguity without complaint, and one of the two menu items stops answering
+its key with nothing on screen to say why. 24 keys now, none shared.
+
+**Not acted on, measured in passing**: `QKeySequence::Close` is `Ctrl+F4`
+here rather than `Ctrl+W`, so it would not serve as a close-tab binding;
+and there is no `Ctrl+W`, `Ctrl+Shift+T` or `Ctrl+Tab` in the window at
+all. Whether this browser wants them is a question about its tab model
+rather than a defect, and it is the copyright holder's.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

@@ -74,6 +74,7 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QLabel>
+#include <QHash>
 #include <QTest>
 #include <QHeaderView>
 #include <QToolBar>
@@ -489,6 +490,62 @@ int main(int argc, char **argv) {
 		check(next.drawer ? parent == &w : parent == split,
 		      QString("%1: the sidebar is parented where that mode keeps it")
 		              .arg(QString::fromUtf8(next.what)));
+	}
+
+	section("the menu's keys are real keys, and no two are the same");
+
+	// **A standard sequence can be empty, and the call that asks for one
+	// reads as though it worked.** `QKeySequence::Quit` and
+	// `::Preferences` are defined for macOS only; on this platform both
+	// resolve to `""`, so Quit and Settings were built with what looked like
+	// shortcuts and had none -- measured, `shortcut=""` on both, and no
+	// accelerator in the menu. Nothing warns: it compiles, the item works by
+	// mouse, and the key simply does not exist.
+	//
+	// The named ones are asserted because that is the fault that happened.
+	// The clash check below is the one that keeps working: it derives its
+	// list, so a future duplicate -- which would leave one of the two dead --
+	// is caught without anybody adding a case for it.
+	{
+		main_window w2(&factory, &policy, &filter);
+		w2.resize(1100, 720);
+		w2.show();
+		spin(200);
+
+		QHash<QString, QStringList> by_key;
+		int with = 0;
+		for (QAction *a : w2.findChildren<QAction *>()) {
+			if (a->shortcut().isEmpty())
+				continue;
+			++with;
+			by_key[a->shortcut().toString()]
+			  << (a->text().isEmpty() ? a->objectName()
+			                           : a->text().remove('&'));
+		}
+
+		auto named = [&](const QString &text) {
+			for (QAction *a : w2.findChildren<QAction *>())
+				if (a->text().remove('&') == text)
+					return a->shortcut().toString();
+			return QString("(no such action)");
+		};
+		check(!named("Quit").isEmpty(),
+		       QString("Quit has a key (%1)").arg(named("Quit")));
+		check(!named("Settings…").isEmpty(),
+		       QString("and so does Settings (%1)").arg(named("Settings…")));
+
+		QStringList clashes;
+		for (auto it = by_key.constBegin(); it != by_key.constEnd(); ++it)
+			if (it.value().size() > 1)
+				clashes << QString("%1: %2").arg(it.key())
+				                             .arg(it.value().join(" and "));
+		clashes.sort();
+		check(clashes.isEmpty(),
+		       QString("and no two actions answer to the same key (%1 keys, "
+		                "%2)")
+		         .arg(with)
+		         .arg(clashes.isEmpty() ? QString("none shared")
+		                                 : clashes.join("; ")));
 	}
 
 	section("tapping the address bar selects what is in it");

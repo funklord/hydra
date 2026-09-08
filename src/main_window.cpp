@@ -1404,7 +1404,15 @@ QMenuBar *main_window::build_menu_bar() {
 	                                         this, &main_window::flush_tree);
 	save_act->setStatusTip("Write the canonical tree file now");
 	file_menu->addSeparator();
-	QAction *quit_act = file_menu->addAction("&Quit", QKeySequence::Quit,
+	// **`QKeySequence::Quit` is empty on this platform**, so this read as
+	// though it bound a shortcut and bound nothing: measured, the action came
+	// out with `shortcut=""` and the menu showed no accelerator. Qt defines
+	// `Quit` and `Preferences` for macOS only; on X11 and Wayland they resolve
+	// to an empty sequence, silently, and nothing about the call says so.
+	//
+	// Named explicitly, because Ctrl+Q is what every desktop here uses to
+	// leave an application and the menu item is literally Quit.
+	QAction *quit_act = file_menu->addAction("&Quit", QKeySequence("Ctrl+Q"),
 	                                         this, &QWidget::close);
 	quit_act->setStatusTip("Suspend live tabs, save, and exit");
 
@@ -1775,7 +1783,10 @@ QMenuBar *main_window::build_menu_bar() {
 
 	tools_menu->addSeparator();
 	tools_menu->addAction("S&ite Controls…", this, &main_window::open_site_controls);
-	QAction *prefs = tools_menu->addAction("&Settings…", QKeySequence::Preferences,
+	// `QKeySequence::Preferences` is the same macOS-only case as `Quit`
+	// above -- measured empty here. Ctrl+comma is the convention this
+	// borrows, and nothing else in the window takes it.
+	QAction *prefs = tools_menu->addAction("&Settings…", QKeySequence("Ctrl+,"),
 	                                        this, &main_window::open_settings);
 	prefs->setStatusTip("Player, download folder and BitTorrent options");
 
