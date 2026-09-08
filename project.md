@@ -21645,6 +21645,42 @@ argument for it -- and the sabotage losing one row rather than both is a
 better demonstration than losing all of them, because a partly-filled
 fixture is what actually happens when a helper changes.
 
+## The same enumeration on the other driver found two more
+
+Having closed one coverage hole by comparing `try_phone`'s surfaces
+against the dialog classes in `src/`, the cheap thing was to run the same
+comparison on `try_look`. It photographs 21 surfaces and mentions neither
+`consent` nor `webauth` **anywhere in the file** -- zero occurrences of
+each, so absent rather than excluded, twice.
+
+**The passkey dialog is the sharper miss.** `try_phone` does measure it,
+which is exactly why it looked covered: that driver asks whether a thing
+fits a phone, and this one asks whether its words are readable and its
+mnemonics unique. Different questions, and only one of them had been put
+-- to a dialog whose stretch was got wrong once already and edited again
+this session.
+
+Both are in now: **23 surfaces and 105 buttons**, up from 21 and 97, and
+**0 problems**. The button delta is what says the audit actually walked
+them; the label and combo counts did not move, which fits, since the text
+in both is word-wrapped and the label check skips wrapped labels by
+design.
+
+The consent fixture carries the same population guard as the phone one and
+for the same reason -- `report_unhandled` returns silently when the
+blocker is not active for the host, and an empty dialog passes every check
+in the words a full one uses. Here it counts as a problem rather than a
+separate assertion, because this driver's verdict *is* its problem count.
+Sabotaged by blanking one host:
+
+    ! consent: 1 banner(s), so the audit below would be of an empty dialog
+    1 problem(s) found by the audit of 23 surface(s), 105 button(s)
+
+**The surface and button counts are unchanged in that run**, which is the
+part worth reading: the audit still ran and still inspected everything, and
+what the guard caught was the fixture going thin rather than the audit
+going quiet. Those two look identical in a problem count of zero.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

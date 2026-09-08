@@ -47,6 +47,10 @@
 #include <QApplication>
 #include <QDialog>
 #include <QLabel>
+#include <QTreeWidget>
+#include "consent_blocker.h"
+#include "consent_dialog.h"
+#include "webauth_dialog.h"
 #include <QStyle>
 #include <QStyleOptionComboBox>
 #include <QComboBox>
@@ -601,6 +605,54 @@ int main(int argc, char *argv[]) {
 		cert.show();
 		QApplication::processEvents();
 		save(&cert, "certificate");
+	}
+
+	// **Two dialogs this audit had never seen.** Comparing what it
+	// photographs against the dialog classes in `src/`, `consent_dialog` and
+	// `webauth_dialog` were absent rather than excluded -- neither name
+	// appeared anywhere in this file. `try_phone` measures the passkey dialog
+	// and now the cookie one, but that driver asks whether a thing fits a
+	// phone; this one asks whether its words are readable and its mnemonics
+	// unique, which is a different question and was never put.
+	{
+		webauth_dialog wa("login.beispiel.invalid", &w);
+		// The account list, because it is the state with the most text in it
+		// and the one whose stretch was got wrong once already.
+		wa.ask_for_account({ "ada@beispiel.invalid",
+		                      "ada.lovelace.work@ein-sehr-langer-name.invalid",
+		                      "Sicherheitsschlüssel (NFC)" });
+		wa.show();
+		QApplication::processEvents();
+		save(&wa, "webauth-account");
+	}
+	{
+		// Filled, for the reason the annoyance and consent fixtures give: an
+		// empty list makes any layout look fine. Recorded through the blocker
+		// rather than poked into the widget, so what is drawn is what the
+		// dialog builds from a real one -- and asserted below, because
+		// `report_unhandled` returns silently when the blocker is not active
+		// for the host and would leave this an empty window.
+		if (consent_blocker *b = w.m_consent) {
+			b->set_page_host("nachrichten.beispiel.invalid");
+			b->report_unhandled("Alle akzeptieren | Nur notwendige Cookies | "
+			                     "Einstellungen verwalten");
+			b->set_page_host("aviser.eksempel.invalid");
+			b->report_unhandled("Godta alle | Avvis alle | Administrer valg");
+			consent_dialog cd(b, g_out + "/look-consent-rules.json", &w);
+			cd.show();
+			QApplication::processEvents();
+			QTreeWidget *rows = cd.findChild<QTreeWidget *>("banners");
+			if (!rows || rows->topLevelItemCount() < 2) {
+				std::printf("    ! consent: %d banner(s), so the audit below "
+				             "would be of an empty dialog\n",
+				             rows ? rows->topLevelItemCount() : -1);
+				++g_problems;
+			}
+			save(&cd, "consent");
+		} else {
+			std::printf("    ! consent: no blocker on the window\n");
+			++g_problems;
+		}
 	}
 
 	std::printf("\n%d image(s) in %s\n", g_shots, qPrintable(g_out));
