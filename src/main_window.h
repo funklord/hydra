@@ -25,6 +25,7 @@ class QProgressBar;
 class find_bar;
 class QMenuBar;
 class QStatusBar;
+class QToolButton;
 class QAction;
 class QTimer;
 class QPoint;
@@ -506,6 +507,16 @@ public:
 
 	QStatusBar      *m_status     = nullptr;
 	QLabel          *m_tab_counts = nullptr;   // permanent widget, right side
+
+	// **Shown while anything is waiting to reach disk, and while nothing can.**
+	//
+	// Asked for after a session lost hours of tabs: the saves are debounced,
+	// and every writer is guarded on `m_tree_path` being set, so a tree that
+	// failed to load leaves all of them a silent no-op with nothing on screen
+	// to say so. A control that stays lit is the difference between "it saves
+	// in a moment" and "it has not saved and will not".
+	QToolButton     *m_save_hint  = nullptr;
+	void refresh_save_hint();
 	QProgressBar    *m_progress   = nullptr;   // beside it, only while loading
 	find_bar        *m_find       = nullptr;   // above the status bar, hidden
 

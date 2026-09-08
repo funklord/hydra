@@ -548,6 +548,65 @@ int main(int argc, char **argv) {
 		                                 : clashes.join("; ")));
 	}
 
+	section("the window says when nothing is reaching the disk");
+
+	// **A session kept tabs for hours and saved none of them.** Every writer
+	// is guarded on `m_tree_path`, which only a successful `load_tree` sets,
+	// so a tree that failed to load leaves `save_tree_soon`, `save_view_soon`
+	// and the blob flush all no-ops -- silently, with one line on stderr as
+	// the only sign.
+	//
+	// So the status bar says so. The state that matters is the third one:
+	// not "a write is due in a moment" but "no write is possible at all",
+	// which does not go out on its own and is the one somebody needs to see.
+	{
+		main_window w2(&factory, &policy, &filter);
+		w2.resize(900, 600);
+		w2.show();
+		spin(200);
+
+		auto *hint = w2.findChild<QToolButton *>("save_hint");
+		check(hint != nullptr, "the status bar has somewhere to say it");
+		// No `load_tree` here, so this window cannot write anything -- which
+		// is exactly the state the report came from.
+		check(hint && hint->isVisible(),
+		       "and says so while no tree file is open");
+		check(hint && hint->text() == "Not saving",
+		       QString("in as many words (\"%1\")")
+		         .arg(hint ? hint->text() : QString("(none)")));
+		check(hint && !hint->toolTip().isEmpty(),
+		       "with a tooltip that explains rather than just a word");
+
+		// **And it goes out when there is nothing to say**, which is the
+		// assertion that makes the four above worth anything: a hint that is
+		// always shown would pass every one of them and tell nobody
+		// anything. A window with a tree open and its debounces run out has
+		// nothing pending and nothing impossible.
+		const QString dir = QDir::temp().filePath("hydra-rotation-savehint");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString tree = dir + "/tree.txt";
+		{
+			QFile t(tree);
+			t.open(QIODevice::WriteOnly | QIODevice::Text);
+			t.write("- [h1] unopened_tab | A tab | https://example.com/\n");
+		}
+		main_window saved(&factory, &policy, &filter);
+		check(saved.load_tree(tree), "a window that can write its tree");
+		saved.resize(900, 600);
+		saved.show();
+		// Past both debounces -- 1500 ms for the tree, 2500 ms for the view.
+		spin(3000);
+		auto *ok_hint = saved.findChild<QToolButton *>("save_hint");
+		check(ok_hint && !ok_hint->isVisible(),
+		       QString("says nothing once the disk has caught up (%1)")
+		         .arg(!ok_hint ? QString("no hint")
+		                        : ok_hint->isVisible()
+		                            ? QString("still showing \"%1\"")
+		                                .arg(ok_hint->text())
+		                            : QString("hidden")));
+	}
+
 	section("tapping the address bar selects what is in it");
 
 	// **What every browser does, and this did not.** Measured through the

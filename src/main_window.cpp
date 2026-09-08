@@ -79,6 +79,7 @@
 #include <QVBoxLayout>
 #include <QIcon>
 #include <QToolBar>
+#include <QToolButton>
 #include <QLineEdit>
 #include <QComboBox>
 #include <QHeaderView>
@@ -660,6 +661,12 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_save_timer->setSingleShot(true);
 	m_save_timer->setInterval(1500);   // debounce structural saves
 	connect(m_save_timer, &QTimer::timeout, this, &main_window::flush_tree);
+	// **A second connection rather than a call inside the slot.** Qt runs
+	// these in the order they were made, so the hint is refreshed once the
+	// write has happened -- and `save_view_state` is `const`, so it could not
+	// have called a refresh itself anyway.
+	connect(m_save_timer, &QTimer::timeout, this,
+	         &main_window::refresh_save_hint);
 
 	// **The view's own debounce, and deliberately not the tree's.** The two
 	// are wired the same way and to the same purpose -- see the comment on
@@ -677,6 +684,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_view_timer->setSingleShot(true);
 	m_view_timer->setInterval(2500);
 	connect(m_view_timer, &QTimer::timeout, this, &main_window::save_view_state);
+	connect(m_view_timer, &QTimer::timeout, this,
+	         &main_window::refresh_save_hint);
 
 	// **And the third thing a crash used to take: the tabs' own pasts.**
 	// A blob reached disk only when its view was suspended, which happens on
@@ -1227,6 +1236,23 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_progress->setMaximumWidth(120);
 	m_progress->setMaximumHeight(12);
 	m_progress->hide();
+	// **Lit while anything is waiting to reach disk, and while nothing can.**
+	// See the note on `m_save_hint`. Pressing it writes everything now, which
+	// is the useful thing to be able to do when it is lit for the second
+	// reason and will not go out on its own.
+	m_save_hint = new QToolButton(this);
+	m_save_hint->setObjectName("save_hint");
+	m_save_hint->setAutoRaise(true);
+	m_save_hint->hide();
+	connect(m_save_hint, &QToolButton::clicked, this, [this] {
+		if (!save_everything())
+			m_status->showMessage(
+			  QString("Could not write the tab tree to %1")
+			    .arg(m_tree_path.isEmpty() ? QStringLiteral("(no file)")
+			                                : m_tree_path), 8000);
+		refresh_save_hint();
+	});
+	m_status->addPermanentWidget(m_save_hint);
 	m_status->addPermanentWidget(m_progress);
 	m_status->addPermanentWidget(m_tab_counts);
 	m_status->showMessage("Ready");
@@ -4775,6 +4801,34 @@ void main_window::reset_key_action() {
 void main_window::save_tree_soon() {
 	if (!m_tree_path.isEmpty() && m_save_timer)
 		m_save_timer->start();
+	// **Outside the guard, deliberately.** The guard is the whole problem
+	// this reports: with no tree path every writer here does nothing, and
+	// until now it did it in silence.
+	refresh_save_hint();
+}
+
+// **What the status bar says about the disk.**
+//
+// Three states, and the middle one is why this exists. Nothing pending: no
+// button. Something pending: a moment of "Saving..." while the debounce runs
+// out, which is honest rather than alarming. **Nothing possible**: it stays,
+// says so, and pressing it is the only way to find out where the file would
+// have gone -- a session once kept tabs for hours with every save a no-op and
+// one line on stderr as the only sign.
+void main_window::refresh_save_hint() {
+	if (!m_save_hint)
+		return;
+	const bool cannot = m_tree_path.isEmpty();
+	const bool pending = (m_save_timer && m_save_timer->isActive()) ||
+	                      (m_view_timer && m_view_timer->isActive()) ||
+	                      (m_blob_timer && m_blob_timer->isActive());
+	m_save_hint->setVisible(cannot || pending);
+	m_save_hint->setText(cannot ? "Not saving" : "Saving…");
+	m_save_hint->setAccessibleName(cannot ? "Not saving" : "Saving");
+	m_save_hint->setToolTip(
+	  cannot ? "No tree file is open, so nothing is being written to disk. "
+	            "Press to try saving now."
+	         : "Writing the tab tree shortly. Press to write it now.");
 }
 
 // The same shape as `save_tree_soon`, for the file beside the tree. Every
@@ -4785,6 +4839,7 @@ void main_window::save_tree_soon() {
 void main_window::save_view_soon() {
 	if (!m_view_path.isEmpty() && m_view_timer)
 		m_view_timer->start();
+	refresh_save_hint();
 }
 
 void main_window::save_blobs_soon(const QString &id) {
