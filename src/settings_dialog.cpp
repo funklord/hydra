@@ -515,6 +515,11 @@ settings_dialog::settings_dialog(player_launcher *players,
 	// `add_page` alongside the list, so the two cannot fall out of step.
 	m_category_pick = new QComboBox(this);
 	m_category_pick->setObjectName("categories_narrow");
+	// It replaces the category LIST on a narrow window, and a list announces
+	// what it is by being one. A combo announces its current item, so without
+	// this a phone heard "Privacy & security" with nothing saying it was the
+	// section picker rather than a setting.
+	m_category_pick->setAccessibleName("Settings section");
 	m_category_pick->hide();
 	outer->insertWidget(outer->indexOf(m_search) + 1, m_category_pick);
 

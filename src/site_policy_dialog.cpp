@@ -157,6 +157,11 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 
 	m_scope = new QComboBox(this);
 	m_scope->setObjectName("scope");
+	// **No label of its own** -- `m_host_label` above is the hostname in bold,
+	// not a caption for this choice -- so the name goes on the control. Its
+	// items are "This host", "This domain" and "Global default", which a
+	// reader would otherwise hear with nothing saying what they apply to.
+	m_scope->setAccessibleName("These settings apply to");
 	m_scope->addItem("This host");
 	m_scope->addItem("This domain");
 	m_scope->addItem("Global default");
@@ -192,7 +197,18 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 			open_group = r.group;
 		}
 		const int i = static_cast<int>(r.f);
-		grid->addWidget(new QLabel(policy::feature_label(r.f), this), row, 0);
+		// **Kept, so it can be the combo's buddy.** As a temporary this
+		// label was drawn and nothing else: a `QComboBox` announces its
+		// current item, so twenty rows of these read as "Allow", "Block",
+		// "Allow" with nothing saying which feature each one is about.
+		// Measured across every dialog -- this one held 21 of the 22 unnamed
+		// combos in the program.
+		//
+		// The settings dialog presents the same choices and is fine, because
+		// `QFormLayout::addRow` sets the buddy for it. A grid does not, so
+		// this says it.
+		auto *feature_label = new QLabel(policy::feature_label(r.f), this);
+		grid->addWidget(feature_label, row, 0);
 
 		auto *combo = new QComboBox(this);
 		// Text set by `refresh_default_labels()`, because what this entry
@@ -208,6 +224,9 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 		// table the prompt takes its words from -- so a feature is offerable
 		// here exactly when there is a sentence to put in front of somebody.
 		combo->addItem("Ask");
+		// The label beside it names it, rather than a second copy of the
+		// same string on the combo.
+		feature_label->setBuddy(combo);
 		if (!policy::can_ask(r.f))
 			if (auto *m = qobject_cast<QStandardItemModel *>(combo->model()))
 				if (QStandardItem *it = m->item(3))

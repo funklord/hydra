@@ -547,11 +547,31 @@ static void measure(QWidget *dlg, const QString &name) {
 				mute << (e->objectName().isEmpty() ? QString("(unnamed)")
 				                                     : e->objectName());
 		}
+		// **And the same question for dropdowns, which fail differently.** A
+		// text field with no name announces as an empty box; a combo
+		// announces its current ITEM, so an unnamed one is not silent but
+		// unattributed -- "Allow", "Block", "Allow" down a column with
+		// nothing saying which feature each belongs to. `site-controls` held
+		// 21 of the program's 22, because it lays its rows out in a grid
+		// while the settings dialog uses a QFormLayout, which sets the buddy
+		// for it.
+		for (QComboBox *c : dlg->findChildren<QComboBox *>()) {
+			if (!c->isVisible() || !c->accessibleName().isEmpty())
+				continue;
+			bool has_buddy = false;
+			for (QLabel *l : dlg->findChildren<QLabel *>())
+				if (l->buddy() == c)
+					has_buddy = true;
+			if (!has_buddy)
+				mute << (c->objectName().isEmpty()
+				           ? QString("combo:%1").arg(c->currentText())
+				           : c->objectName());
+		}
 		verdict(mute.isEmpty(),
 		         mute.isEmpty()
-		           ? QString("%1: and every text field says what it is")
+		           ? QString("%1: and every field and dropdown says what it is")
 		               .arg(name)
-		           : QString("%1: %2 text field(s) announce as nothing -- %3")
+		           : QString("%1: %2 control(s) announce as nothing -- %3")
 		               .arg(name).arg(mute.size()).arg(mute.join(", ")));
 	}
 

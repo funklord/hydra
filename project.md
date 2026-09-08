@@ -22252,6 +22252,51 @@ the ambiguity instead of adding machinery to preserve it.
 Both mechanisms are caught, which matters because only one of them lives
 on the widget.
 
+## Twenty dropdowns said "Allow" and none said what of
+
+Extending the dialog check from text fields to dropdowns, because the two
+fail differently: a field with no name announces as an empty box, while a
+combo announces its current ITEM -- so an unnamed one is not silent but
+**unattributed**. Measured across nineteen surfaces:
+
+    17 dialogs   0
+    settings     1   categories_narrow
+    site-controls 21  scope, and 20 reading "Allow" / "Block" / "Ask"
+
+**The site controls are a column of feature switches**, and a reader heard
+the column of answers without the questions.
+
+### The same choices, accessible in one dialog and not the other
+
+`settings_dialog` presents the same per-feature settings and is fine. The
+difference is a layout class: `QFormLayout::addRow` makes each label its
+field's buddy automatically, and `site_policy_dialog` uses a `QGridLayout`
+and built its label as a **temporary** -- drawn, then forgotten, so
+nothing named the combo beside it.
+
+That one difference accounts for **21 of the 22 unnamed combos in the
+program**, which is why the fix is one line inside the row loop rather
+than twenty edits. Keeping the existing label as the buddy also beats
+naming the combo: the caption somebody reads and the name a reader hears
+are the same string by construction, so a reworded feature cannot leave a
+stale name behind.
+
+`scope` and `categories_narrow` have no label to point at -- the bold text
+above `scope` is the hostname, and the category picker replaces a list --
+so those two carry names.
+
+### The sabotage shows the check scales with the population
+
+Removing the single `setBuddy` un-names twenty controls at once, and the
+check reports all of them:
+
+    site-controls: 20 control(s) announce as nothing -- combo:Allow,
+    combo:Allow, combo:Block, combo:Allow, combo:Block, combo:Ask, ...
+
+**That output is what a reader would hear.** It also says the check walks
+the dialog rather than recognising a list it knows, so the twenty-first
+feature added later is covered without anybody updating anything.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
