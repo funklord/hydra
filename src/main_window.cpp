@@ -3689,6 +3689,18 @@ void main_window::open_find() {
 		                       "search yet.", 5000);
 		return;
 	}
+	// **Searching the page means you want to see the page, so the drawer gets
+	// out of the way** -- the same reason picking a tab closes it, which
+	// `on_tree_activated` states in as many words.
+	//
+	// It is not only tidiness. The drawer covers the find bar, and the bar is
+	// disabled while it does, so without this Ctrl+F with the drawer open
+	// appeared to do nothing at all: a bar shown behind the drawer, inert,
+	// with nowhere for the focus to land. That was worse before this window
+	// took the covered bar out of the keyboard's reach -- then it was shown,
+	// enabled, invisible, and typing went into it.
+	if (m_drawer_mode && m_drawer_open)
+		set_drawer_open(false);
 	m_find->begin();
 }
 

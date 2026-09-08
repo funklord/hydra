@@ -589,6 +589,46 @@ int main(int argc, char **argv) {
 			spin(400);
 			check(fb->isEnabled(),
 			       "and hands back when the drawer shuts");
+
+			// **A page first, because `open_find` refuses without one** --
+			// "Open a page first, there is nothing to search yet" -- and the
+			// drawer close sits after that guard, correctly: with nothing to
+			// search, dismissing the drawer would be gratuitous. The first
+			// version of this section asserted against an empty window and
+			// failed for that reason rather than for the behaviour.
+			node *page = m.m_model->add_tab(nullptr, "a page",
+			                                 "http://find.example/");
+			check(page != nullptr, "a page to search");
+			if (page) {
+				const QModelIndex pidx =
+				  m.m_proxy->mapFromSource(m.m_model->index_for_node(page));
+				emit m.m_tree->activated(pidx);
+				spin(200);
+			}
+
+			// **Ctrl+F with the drawer open used to do nothing visible.**
+			// The bar is disabled while the drawer covers it, so `begin()`
+			// showed an inert bar behind the drawer with nowhere for focus
+			// to land. Searching the page means wanting to see the page, so
+			// the drawer gets out of the way -- the same rule picking a tab
+			// already follows.
+			m.m_drawer_action->trigger();
+			spin(400);
+			check(m.m_drawer_open, "with the drawer open again");
+			// Through the menu action, which is the door a person uses --
+			// and which tests that it is still wired to this.
+			QAction *find_act = nullptr;
+			for (QAction *a : m.findChildren<QAction *>())
+				if (a->text() == "Find on &Page")
+					find_act = a;
+			check(find_act != nullptr, "and Find on Page is on the menu");
+			if (find_act)
+				find_act->trigger();
+			spin(300);
+			check(!m.m_drawer_open,
+			       "asking to find on the page closes the drawer");
+			check(fb->isEnabled(),
+			       "and leaves a find bar somebody can actually type in");
 		}
 	}
 

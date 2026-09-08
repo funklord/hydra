@@ -21881,6 +21881,55 @@ watched.** The last change of this shape silently disabled the handover --
 keyboard into the drawer* and *the keyboard does not go with it* passing
 here is the result that mattered, not the two new ones.
 
+## Asking to search the page now gets the drawer out of the way
+
+Taking the covered find bar out of the tab chain left a state that was
+worse than the one it fixed: **Ctrl+F with the drawer open appeared to do
+nothing at all.** `open_find` showed a bar that was disabled and behind the
+drawer, with nowhere for the focus to land.
+
+That state existed before, in a different shape -- the bar was shown,
+enabled, invisible, and typing went into it -- so this is not a regression
+so much as the second half of the same fault. It is recorded here because
+the change above created the version a person would report.
+
+The tree had already decided this. `on_tree_activated` closes the drawer
+with *"Picking a tab is what the drawer was opened for, so it gets out of
+the way. Leaving it up would cover the page the user just asked for."*
+Asking to search the page is the same request about the same widget, so
+`open_find` does the same thing.
+
+**It sits after the no-page guard, and that ordering is the point.** With
+nothing to search, `open_find` refuses -- "Open a page first, there is
+nothing to search yet" -- and dismissing the drawer there would be
+gratuitous.
+
+### The test failed first for a reason that was not the code
+
+Both assertions went red against an empty window, which reads exactly like
+the fix not working. It was the fixture never reaching the fix: no page
+means `open_find` returns at the guard above. **Moving the drawer close
+above that guard would have turned the test green by deforming the code to
+suit a test aimed at the wrong state.** The fixture opens and activates a
+tab now, and says why.
+
+Two smaller things the compiler settled. `open_find` is private, so the
+test drives **Find on &Page** from the menu instead -- the door a person
+uses, and one that also asserts the action is still wired to the slot,
+which is how the drawer's own menu entry was found missing earlier.
+Widening the interface to suit the test was the alternative and the worse
+one.
+
+    sabotage: drop the drawer close
+    asking to find on the page closes the drawer            FAIL
+    and leaves a find bar somebody can actually type in      FAIL
+
+**Both fail together here and both still earn their place.** The drawer
+staying open and the bar staying disabled are one cause with two
+consequences. The second assertion is there for a break this sabotage
+cannot produce -- a drawer that closes without handing the bar back -- so
+what it is worth is not measured by this experiment.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
