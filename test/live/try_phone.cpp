@@ -22,6 +22,8 @@
 //
 // **`QWidget::grab()`, never `import`** -- it renders in-process and does not
 // touch the X server.
+#include "consent_dialog.h"
+#include "consent_blocker.h"
 #include "shell_fixture.h"
 
 #include "annoyance_log.h"
@@ -57,6 +59,7 @@
 #include <QSet>
 #include <QTest>
 #include <QLabel>
+#include <QTreeWidget>
 #include <QStyle>
 #include <QStyleOptionComboBox>
 #include <QListWidget>
@@ -777,6 +780,44 @@ int main(int argc, char *argv[]) {
 		dlg.show();
 		QApplication::processEvents();
 		measure(&dlg, "annoyance");
+	}
+
+	// **The cookie-banner dialog, which `try_phone` was not measuring at
+	// all.** Every other dialog in this tree is here; this one was absent
+	// rather than excluded, and on a phone it is the surface people meet
+	// most, since a consent banner is the first thing many pages put up.
+	//
+	// Filled with the worst case rather than an empty list, for the same
+	// reason the annoyance dialog above is: an empty list makes any layout
+	// look fine. A row is `host \t labels`, the labels being the buttons the
+	// blocker could not answer, and real banners run to several long ones in
+	// whatever language the site is in.
+	{
+		consent_blocker *b = f.window.m_consent;
+		shell::check(b != nullptr, "the shell has a consent blocker");
+		if (b) {
+			b->set_page_host("nachrichten.beispiel.invalid");
+			b->report_unhandled(
+			  "Alle akzeptieren | Nur notwendige Cookies | "
+			  "Einstellungen verwalten | Zwecke anzeigen");
+			b->set_page_host("aviser.eksempel.invalid");
+			b->report_unhandled("Godta alle | Avvis alle | Administrer valg");
+			consent_dialog dlg(b, f.out + "/phone-consent-rules.json",
+			                    &f.window);
+			dlg.show();
+			QApplication::processEvents();
+			// **That the list has rows in it, before anything is measured.**
+			// `report_unhandled` returns silently unless the blocker is
+			// active for the host, so the two calls above can record nothing
+			// at all -- and every check below would then pass over an empty
+			// dialog, in the same words it uses for a full one.
+			QTreeWidget *rows = dlg.findChild<QTreeWidget *>("banners");
+			shell::check(rows && rows->topLevelItemCount() >= 2,
+			              QString("the consent dialog has banners to lay out "
+			                       "(%1)")
+			                .arg(rows ? rows->topLevelItemCount() : -1));
+			measure(&dlg, "consent");
+		}
 	}
 
 	// **The three that ask a model.** In the shell these open only when

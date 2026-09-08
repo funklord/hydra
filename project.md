@@ -21603,6 +21603,48 @@ Each reproduces exactly the bug it was written for -- the find input still
 holding the keyboard behind the drawer, and the tree still holding it off
 screen.
 
+## The surface a phone meets most often was not being measured
+
+`try_phone` measures nineteen surfaces, and every dialog class in `src/`
+appears among them except one: **`consent_dialog` was absent rather than
+excluded** -- not mentioned anywhere in the driver. There is a
+`try_consent`, but it drives the blocker's behaviour end to end and says
+nothing about geometry.
+
+On a phone that is the wrong one to be missing. A cookie banner is the
+first thing many pages put up, so its dialog is the surface people meet
+most, and it is the one nobody had checked fits a 360-pixel screen.
+
+It does. Ten checks, all green: on screen at 360, a floor of 138, opens
+with something focused, Tab reaches every enabled control, no button off
+the edge, no label or dropdown cut, no paragraph absorbing height.
+
+### The check that makes the other ten mean anything
+
+The dialog is filled with a worst case before being measured, for the
+reason the annoyance dialog above already gives: **an empty list makes any
+layout look fine.** Real banners carry several long button labels, rarely
+in English, so the fixture uses four German ones and three Norwegian.
+
+**And the filling can silently do nothing.** `report_unhandled` returns
+early unless the blocker is active for the host, so those calls can record
+nothing at all -- and every one of the ten checks would then pass over an
+empty dialog, in exactly the words it uses for a full one. That is this
+document's own recurring failure, and it would have been written into a
+new check rather than found in an old one.
+
+So the row count is asserted before anything is measured. Sabotaged by
+blanking one host:
+
+    guard                         FAIL -- 2 banners expected, 1 present
+    consent: no label is cut off  ok
+
+**The layout checks stay green on a thinner dialog, in the same words.**
+Only the population guard can tell the two apart, which is the whole
+argument for it -- and the sabotage losing one row rather than both is a
+better demonstration than losing all of them, because a partly-filled
+fixture is what actually happens when a helper changes.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
