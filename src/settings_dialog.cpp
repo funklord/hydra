@@ -9,6 +9,7 @@
 #include "torrent_download_source.h"
 #include "web_view_factory.h"
 
+#include <QHeaderView>
 #include <QAbstractButton>
 #include <QCheckBox>
 #include <QDialogButtonBox>
@@ -618,7 +619,11 @@ settings_dialog::settings_dialog(player_launcher *players,
 
 	m_results = new QListWidget(this);
 	m_results->setObjectName("settings_results");
-	m_results->setMaximumHeight(140);
+	// **Eight rows**, and 140 was exactly eight of them at this font
+	// (8 x 17 + 4), so this is the number it already was, said in the units
+	// it was chosen in. See the note on the exceptions list above for why a
+	// pixel height stops meaning what it meant when the font moves.
+	m_results->setMaximumHeight(8 * m_results->fontMetrics().height() + 4);
 	m_results->hide();
 	// Directly under the box that fills it, which is now index 1.
 	outer->insertWidget(1, m_results);
@@ -1303,7 +1308,17 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	m_exceptions->setHeaderLabels({ "Site", "What differs from the defaults" });
 	m_exceptions->setRootIsDecorated(false);
 	m_exceptions->setSelectionMode(QAbstractItemView::ExtendedSelection);
-	m_exceptions->setMinimumHeight(120);
+	// **Five rows and a header, rather than 120 pixels of whatever fits.**
+	//
+	// 120 was five rows at this machine's font -- header 21 plus 5 x 17 plus
+	// the frame -- so this says what it already meant. What it did not
+	// survive is a font that is not this one: measured at 1.5x it showed
+	// three rows and at 2x it showed two, which is backwards, since somebody
+	// who has made the text bigger has not asked for a shorter list. Android
+	// and every desktop accessibility setting are exactly that case.
+	m_exceptions->setMinimumHeight(
+	  m_exceptions->header()->sizeHint().height()
+	  + 5 * m_exceptions->fontMetrics().height() + 8);
 	v->addWidget(m_exceptions);
 
 	m_exception_drop = new QPushButton("&Remove selected", page);

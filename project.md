@@ -21511,6 +21511,52 @@ silently.** It has a floor from its own placeholder now -- a weak one, and
 deliberately so, guarding the width already reached rather than claiming a
 better one. Removing it takes the check to `FAIL (0 for 94)`.
 
+## Two pixel heights that were row counts, and stopped being them
+
+The width sweep's vertical twin, and the tree already had the right idiom
+in one place: `tab_tree_view` sizes a history box as
+`4 * fontMetrics().height() + 24`. Two lists in the settings dialog did not.
+
+Measured before changing anything, at three font scales:
+
+    scale  font   exceptions (min 120)   results (max 140)
+      1.0    17   header + 5 rows        8 rows
+      1.5    24   header + 3 rows        5 rows
+      2.0    33   header + 2 rows        4 rows
+
+**Both numbers were row counts at this machine's font.** 140 is exactly
+eight rows (8 x 17 + 4); 120 is a header of 21 plus five rows of 17 plus
+the frame. So saying it in rows is what they already meant, not a change of
+intent -- which is the cheapest kind of fix to justify and the easiest to
+get wrong by inventing a new number instead.
+
+What they did not survive is a font that is not this one, and the direction
+is backwards: **somebody who has made the text bigger has not asked for a
+shorter list.** Android and every desktop accessibility setting are exactly
+that case, and at 2x the exceptions list showed two rows.
+
+The test asserts the row count at two font sizes rather than the pixels at
+either -- pinning 114 and 140 would be the same mistake with fresher
+numbers. Reverting both takes it to `5 then 2` and `8 then 4`.
+
+### The test broke a colour check 500 lines away
+
+Worth more than the fix. The section constructs a real `settings_dialog`,
+because the point is the dialog somebody actually gets. Constructing and
+rejecting one **applies a colour scheme through `theme::active()`** -- that
+is its job, and `reject()` restoring the stored scheme is behaviour this
+same file tests elsewhere.
+
+The cost is global. The first version left the application in the stored
+scheme, and the drawer handle's contrast check, in a different section
+five hundred lines below, went from **3.95:1 to 1.37:1** with nothing near
+it changed. It reads as a regression in the handle, and the handle is fine.
+
+The palette and the theme choice are saved and put back now, the same as
+the font. **A section that reaches for a real dialog borrows whatever that
+dialog touches**, and a suite whose sections share one `QApplication` has
+no boundary that says so.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

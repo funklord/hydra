@@ -71,6 +71,7 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QLabel>
+#include <QHeaderView>
 #include <QToolBar>
 #include <QMenu>
 #include <QToolButton>
@@ -395,6 +396,85 @@ int main(int argc, char **argv) {
 		check(next.drawer ? parent == &w : parent == split,
 		      QString("%1: the sidebar is parented where that mode keeps it")
 		              .arg(QString::fromUtf8(next.what)));
+	}
+
+	section("the settings lists keep their rows when the font grows");
+
+	// **A pixel height is a row count that stops being one.** Both numbers
+	// here were row counts at this machine's font -- 140 is exactly eight
+	// rows (8 x 17 + 4) and 120 is a header plus five -- and neither survived
+	// a font that is not this one. Measured before the change:
+	//
+	//     scale  font   exceptions (min 120)   results (max 140)
+	//       1.0    17   header + 5 rows        8 rows
+	//       1.5    24   header + 3 rows        5 rows
+	//       2.0    33   header + 2 rows        4 rows
+	//
+	// Backwards, since somebody who has made the text bigger has not asked
+	// for a shorter list -- and Android and every desktop accessibility
+	// setting are that case.
+	//
+	// So the assertion is the ROW COUNT at two font sizes, not the pixels at
+	// either. Pinning 120 and 140 is what was wrong; pinning 114 and 140
+	// would be the same mistake with fresher numbers.
+	{
+		// **The dialog changes application state, and the section that
+		// measures colours is 500 lines below this one.**
+		//
+		// Constructing and rejecting a `settings_dialog` applies a colour
+		// scheme through `theme::active()` -- that is its job, and `reject()`
+		// putting the stored one back is a behaviour this file tests
+		// elsewhere. The cost is global: the first version of this section
+		// left the application in the stored scheme, and the drawer handle's
+		// contrast check further down went from 3.95:1 to **1.37:1** without
+		// anything near it changing. It read as a regression in the handle.
+		//
+		// So the palette and the theme choice are saved and put back, the
+		// same as the font. A section that reaches for a real dialog borrows
+		// whatever that dialog touches.
+		auto rows_at = [&](double scale, int *exc, int *res) {
+			const QFont was = QApplication::font();
+			const QPalette was_palette = QApplication::palette();
+			const theme::choice was_choice =
+			  theme::active() ? theme::active()->current()
+			                   : theme::choice::system;
+			QFont f = was;
+			f.setPointSizeF(f.pointSizeF() * scale);
+			QApplication::setFont(f);
+
+			main_window w(&factory, &policy, &filter);
+			settings_dialog dlg(w.m_players, w.m_downloads, w.m_torrents,
+			                     w.m_local_ai, w.m_external_ai, w.m_policy,
+			                     w.m_filters, w.m_filters_path, w.m_consent,
+			                     w.m_site_rules_path, &w, w.m_factory,
+			                     w.m_annoyances);
+			dlg.show();
+			spin(200);
+
+			QTreeWidget *ex = dlg.findChild<QTreeWidget *>("site_exceptions");
+			QListWidget *rs = dlg.findChild<QListWidget *>("settings_results");
+			const int fh = dlg.fontMetrics().height();
+			*exc = (ex && fh) ? (ex->minimumHeight()
+			                      - ex->header()->sizeHint().height()) / fh
+			                   : -1;
+			*res = (rs && fh) ? rs->maximumHeight() / fh : -1;
+			dlg.reject();
+			QApplication::setFont(was);
+			if (theme::active())
+				theme::active()->set_choice(was_choice);
+			QApplication::setPalette(was_palette);
+		};
+
+		int e1 = 0, r1 = 0, e2 = 0, r2 = 0;
+		rows_at(1.0, &e1, &r1);
+		rows_at(2.0, &e2, &r2);
+
+		check(e1 >= 5 && e2 >= 5,
+		       QString("the exceptions list keeps five rows at both font "
+		                "sizes (%1 then %2)").arg(e1).arg(e2));
+		check(r1 >= 8 && r2 >= 8,
+		       QString("and the results list keeps eight (%1 then %2)")
+		         .arg(r1).arg(r2));
 	}
 
 	section("the find bar spends its width on the field, not on a round number");
