@@ -138,7 +138,13 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
                                     QWidget *parent)
   : QDialog(parent), m_downloads(downloads), m_players(players), m_proxy(proxy) {
 	setWindowTitle("Downloads");
-	resize(880, 460);
+	// Sized in text rather than pixels, for the same reason: about a hundred
+	// characters across and twenty-five rows deep, which is what 880x460 was
+	// at this machine's font and is what it stays at anybody else's.
+	{
+		const QFontMetrics fm = fontMetrics();
+		resize(fm.averageCharWidth() * 100, fm.height() * 25);
+	}
 	// A downloads window is something you leave open beside the browser.
 	setModal(false);
 	setWindowFlag(Qt::Window);
@@ -156,15 +162,46 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 	m_empty = new empty_state(m_list, this);
 	m_empty->set_text("No downloads yet.\n\nAnything you save, or hand to the "
 	                   "player, appears here.");
-	m_list->header()->setSectionResizeMode(col_name, QHeaderView::Stretch);
+	// **Every divider drags, and the widths start from the font.**
+	//
+	// Reported from use: the window "doesn't scale to text size and doesn't
+	// allow the user to adjust the field width". Both were true and they are
+	// separate faults. Measured before this: `any column draggable: no` --
+	// not one section was `Interactive`, and Qt moves a divider only for
+	// sections that are. Name was `Stretch`, three were `ResizeToContents`
+	// and Progress was `Fixed` at 170 px, so the table decided its own
+	// widths and refused every attempt to change them.
+	//
+	// `Interactive` for all of them, with the last section taking the slack
+	// so the table still fills the window -- that keeps the fill that
+	// `Stretch` was there for without freezing the column it was on.
+	QHeaderView *const head = m_list->header();
+	head->setSectionResizeMode(QHeaderView::Interactive);
+	head->setStretchLastSection(true);
 	// Source and Size must never be elided: a truncated "public" transfer
 	// marker -- the arrow glyph and the word together --
 	// defeats the entire point of showing it, and a truncated size is noise.
-	m_list->header()->setSectionResizeMode(col_source, QHeaderView::ResizeToContents);
-	m_list->header()->setSectionResizeMode(col_size, QHeaderView::ResizeToContents);
-	m_list->header()->setSectionResizeMode(col_status, QHeaderView::ResizeToContents);
-	m_list->header()->setSectionResizeMode(col_progress, QHeaderView::Fixed);
-	m_list->header()->resizeSection(col_progress, 170);
+	// **Starting widths in the units the contents are measured in.** 170 px
+	// of Progress is 170 px of a bar whose text grows with the font, and a
+	// window sized in pixels shows less of itself the larger somebody's text
+	// is -- the same fault the settings lists had, where five rows became two
+	// at double size.
+	//
+	// Each is the width of what that column actually holds, so the
+	// proportions at the default font are what they were and every one of
+	// them grows together afterwards.
+	const QFontMetrics fm = m_list->fontMetrics();
+	// **Name is the column somebody reads**, and it had been getting the
+	// leftover width through `Stretch`. A short representative string gave it
+	// 176 px where it used to sit at 260, so it is measured against a name of
+	// the length these actually run to -- the point is to keep the look this
+	// dialog had while making every divider movable.
+	head->resizeSection(
+	  col_name,
+	  fm.horizontalAdvance("A film with a reasonably long file name.mkv"));
+	head->resizeSection(col_source, fm.horizontalAdvance("bittorrent  "));
+	head->resizeSection(col_progress, fm.horizontalAdvance("100%") * 4);
+	head->resizeSection(col_size, fm.horizontalAdvance("1023.4 MB  "));
 	m_list->setItemDelegateForColumn(col_progress, new progress_delegate(this));
 	connect(m_list, &QTreeWidget::itemSelectionChanged,
 	         this, &downloads_dialog::update_buttons);

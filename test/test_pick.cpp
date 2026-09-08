@@ -10,6 +10,7 @@
 #include <QEventLoop>
 #include <QTimer>
 #include <QTreeWidget>
+#include <QHeaderView>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -61,6 +62,76 @@ int main(int argc, char **argv) {
 	dlg.resize(900, 400);
 	dlg.show();
 	spin(700);
+
+	// **Reported from use: the window "doesn't scale to text size and doesn't
+	// allow the user to adjust the field width".** Both were true and they
+	// are separate faults.
+	//
+	// Not one section was `Interactive`, and Qt moves a divider only for
+	// those: Name was `Stretch`, three were `ResizeToContents`, Progress was
+	// `Fixed` at 170 px. So the table chose its own widths and refused every
+	// attempt to change them -- measured as `any column draggable: no`.
+	//
+	// And the widths that were not chosen by content were pixels: 170 for
+	// Progress, 880x460 for the window. A bar whose text grows with the font
+	// inside a column that does not is the settings-lists fault again, where
+	// five rows became two at double size.
+	{
+		auto *t = dlg.findChild<QTreeWidget *>();
+		check(t != nullptr, "the downloads list is there");
+		QHeaderView *const h = t ? t->header() : nullptr;
+
+		int fixed = 0;
+		for (int c = 0; h && c < h->count(); ++c)
+			if (h->sectionResizeMode(c) != QHeaderView::Interactive)
+				++fixed;
+		check(h && fixed == 0,
+		       QString("every column can be dragged (%1 of %2 cannot)")
+		         .arg(fixed).arg(h ? h->count() : 0));
+
+		// **The widths move with the font.** Asserted as a relationship
+		// rather than against numbers: pinning 241 or 124 would go stale the
+		// first time anything about the font changed, which is the failure
+		// being fixed.
+		QList<int> before;
+		for (int c = 0; h && c < h->count(); ++c)
+			before << h->sectionSize(c);
+
+		const QFont was = QApplication::font();
+		QFont bigger = was;
+		bigger.setPointSizeF(was.pointSizeF() * 2);
+		QApplication::setFont(bigger);
+		downloads_dialog wide(&m, &players, &proxy);
+		wide.show();
+		spin(300);
+		auto *t2 = wide.findChild<QTreeWidget *>();
+		QHeaderView *const h2 = t2 ? t2->header() : nullptr;
+		// **Every column except the last, and "every" is the point.**
+		//
+		// The first version of this said `grew >= 4` of five, to leave room
+		// for the last section being sized by the window rather than the
+		// font. Sabotaged by putting the old `170` back on Progress, it
+		// passed: four still grew, because the pinned one was the fifth it
+		// was already excusing. A threshold that tolerates one failure
+		// cannot see one failure.
+		//
+		// The last section is genuinely the window's -- `stretchLastSection`
+		// gives it the slack -- so it is excluded by position rather than by
+		// a count, and every other column has to move.
+		QStringList stuck;
+		const int last = h2 ? h2->count() - 1 : 0;
+		for (int c = 0; h2 && c < last && c < before.size(); ++c)
+			if (h2->sectionSize(c) <= before.at(c))
+				stuck << t2->headerItem()->text(c);
+		check(h2 && stuck.isEmpty(),
+		       QString("and every column but the last grows when the text "
+		                "does (%1)")
+		         .arg(stuck.isEmpty() ? QString("all of them")
+		                               : QString("pinned: %1")
+		                                   .arg(stuck.join(", "))));
+		wide.close();
+		QApplication::setFont(was);
+	}
 
 	auto *tree = dlg.findChild<QTreeWidget *>();
 	check(tree && tree->topLevelItemCount() == 3, "three jobs listed");
