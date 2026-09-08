@@ -178,7 +178,22 @@ public:
 	// for a DocumentCreation script and `url_changed` is far too late.
 	std::function<void(const QUrl &)> before_navigate;
 
+	// Forwarded rather than emitted here: the signal belongs to the backend,
+	// and this class is a page.
+	std::function<void(int, const QString &, int, const QString &)> on_console;
+
 protected:
+	// **The only place the engine tells anybody why a script gave up.** A
+	// request log shows what was asked for; it cannot show a script that
+	// decided not to ask. See the note on `web_view_backend::console_message`.
+	void javaScriptConsoleMessage(JavaScriptConsoleMessageLevel level,
+	                               const QString &message, int line,
+	                               const QString &source) override {
+		if (on_console)
+			on_console(int(level), message, line, source);
+		QWebEnginePage::javaScriptConsoleMessage(level, message, line, source);
+	}
+
 	bool acceptNavigationRequest(const QUrl &url, NavigationType type,
 	                              bool is_main_frame) override {
 		if (decider) {
@@ -370,6 +385,10 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	// Through the derived type: `m_page` is held as a `QWebEnginePage *` because
 	// nothing else needs to know, and this is the one place that does.
 	page->before_navigate = [this](const QUrl &u) { refresh_permissions_shim(u); };
+	page->on_console = [this](int level, const QString &text, int line,
+	                           const QString &source) {
+		emit console_message(level, text, line, source);
+	};
 	connect(m_view, &QWebEngineView::loadStarted, this,
 	         [this] { emit load_progress(0); });
 	connect(m_view, &QWebEngineView::loadProgress, this,

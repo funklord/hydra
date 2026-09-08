@@ -17,6 +17,8 @@
 #include "node.h"
 #include "policy.h"
 #include "tab_tree_model.h"
+#include "tree_sort_proxy.h"
+#include "tab_tree_view.h"
 #include <QAbstractButton>
 #include <QAction>
 #include "web_view_backend.h"
@@ -338,6 +340,61 @@ int main(int argc, char *argv[]) {
 		check(!address->isModified(),
 		       "and the field is no longer an edit in progress, so the next "
 		       "navigation may write to it");
+	}
+
+	// **What the page said to its own console**, which nothing in this program
+	// could see until now.
+	//
+	// Added for a player that fails only when embedded: it printed "Failed to
+	// setup player" and never issued its first API call. Blocked requests
+	// still reach the observers, so the request log said nothing -- the call
+	// was absent rather than refused, and no request log can show a script
+	// deciding not to ask.
+	//
+	// **Asserted because the failure mode is silence.** `HYDRA_CONSOLE`
+	// printing nothing and a page saying nothing are the same thing from
+	// outside, so a signal that quietly never fires would send the next
+	// person looking in the wrong place with more confidence than before.
+	section("the page's own console reaches us");
+	{
+		node *talker = w.m_model->add_tab(nullptr, "talker", QString());
+		check(talker != nullptr, "a tab to talk from");
+		if (talker) {
+			const QModelIndex idx =
+			  w.m_proxy->mapFromSource(w.m_model->index_for_node(talker));
+			emit w.m_tree->activated(idx);
+			spin(600);
+
+			web_view_backend *v = w.m_views_by_id.value(talker->id, nullptr);
+			check(v != nullptr, "with a view behind it");
+			if (v) {
+				QStringList heard;
+				int worst = -1;
+				QObject::connect(v, &web_view_backend::console_message,
+				                  [&](int level, const QString &text, int,
+				                      const QString &) {
+					heard << text;
+					worst = qMax(worst, level);
+				});
+				// `error`, so the level travels as well as the text -- the
+				// engine's enum does not cross the seam and an int that is
+				// always zero would look exactly like one that works.
+				v->load(QUrl("data:text/html,<script>"
+				              "console.error('hydra-console-probe')"
+				              "</script>"));
+				for (int waited = 0; waited < 8000 && heard.isEmpty();
+				     waited += 200)
+					spin(200);
+
+				check(heard.contains("hydra-console-probe"),
+				       QString("a console.error arrives (%1)")
+				         .arg(heard.isEmpty() ? QStringLiteral("nothing heard")
+				                               : heard.join("; ")));
+				check(worst == 2,
+				       QString("at the level the page used (%1, error is 2)")
+				         .arg(worst));
+			}
+		}
 	}
 
 	return report();

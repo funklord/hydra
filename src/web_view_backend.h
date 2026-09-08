@@ -443,6 +443,24 @@ signals:
 
 	void render_process_gone();
 
+	// **What the page said to its own console.**
+	//
+	// Added for a player that fails only when embedded: on the watch page it
+	// printed "Failed to setup player" and never issued its first API call,
+	// while the same player loaded directly issued it immediately. Blocked
+	// requests still reach the observers, so the request log said nothing --
+	// the call was absent rather than refused, and a request log cannot see
+	// why a script stopped before making one. `project.md` records that
+	// investigation as unresolved and names console capture as the next step.
+	//
+	// `level` is an int rather than the engine's enum, which does not cross
+	// this seam: 0 info, 1 warning, 2 error, matching the order Qt uses.
+	//
+	// **Not wired on Android**, where the page is a native View and its
+	// console goes to logcat.
+	void console_message(int level, const QString &text, int line,
+	                      const QString &source);
+
 	// The page asked to fill the screen, or to stop. **Nothing handled this at
 	// all**, and an unhandled fullscreen request is not a refusal the page can
 	// see: `requestFullscreen()` is rejected by the engine before the shell is

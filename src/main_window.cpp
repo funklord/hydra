@@ -3318,6 +3318,42 @@ void main_window::open_node(node *n, bool load_now) {
 			if (view == current_view())
 				report_render_crash(view->url().host());
 		});
+
+		// **What the page told its own console, on request.**
+		//
+		// Off by default: a busy page writes hundreds of lines and none of
+		// them are this program's business. Behind `HYDRA_CONSOLE` for the
+		// same reason `HYDRA_FILTER_DEBUG` is -- a question somebody is
+		// asking deliberately, in a session where they want the answer.
+		//
+		// It exists because a request log cannot answer the question that is
+		// open: a player that fails only when embedded never issued its first
+		// API call, and blocked requests still reach the observers, so the
+		// call was absent rather than refused. Nothing this program logs can
+		// see a script deciding not to ask.
+		//
+		// The frame's own address is printed with it, since the interesting
+		// case is a message from an iframe rather than from the page somebody
+		// typed.
+		// Read once and captured, rather than a braceless `if` around the
+		// connect: that shape puts the lambda a level deeper than the style
+		// gate's brace model expects, and bracing it to suit the tool is the
+		// deformation `code-style.md` records having cost 22 lines across
+		// five projects. The cost is one captured bool per message, and only
+		// a page that logs sends any.
+		const bool want_console = qEnvironmentVariableIsSet("HYDRA_CONSOLE");
+		connect(view, &web_view_backend::console_message, this,
+		         [want_console](int level, const QString &text, int line,
+		                        const QString &source) {
+			if (!want_console)
+				return;
+			static const char *const names[] = { "info", "warn", "error" };
+			qWarning("console %-5s %s:%d  %s",
+			          names[level >= 0 && level <= 2 ? level : 0],
+			          qPrintable(source.isEmpty() ? QStringLiteral("(page)")
+			                                       : source),
+			          line, qPrintable(text));
+		});
 		connect(view, &web_view_backend::link_hovered, this,
 		         [this, view](const QUrl &u) {
 			if (view == current_view())

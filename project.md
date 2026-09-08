@@ -22297,6 +22297,57 @@ check reports all of them:
 the dialog rather than recognising a list it knows, so the twenty-first
 feature added later is covered without anybody updating anything.
 
+## The console, because a request log cannot see a script give up
+
+Reported from use: the Upnshare player on a dramafren watch page shows a
+white screen. That is the failure recorded above -- the player fails when
+embedded and works loaded directly, printing "Failed to setup player" and
+**never issuing its first API call**. Blocked requests still reach the
+observers, so the absence ruled out the interceptor: the call was never
+made rather than refused.
+
+**And nothing in this program could see why.** A request log shows what was
+asked for; it cannot show a script deciding not to ask. The record named
+console capture as the next step and there was none in the tree --
+`javaScriptConsoleMessage` appeared nowhere.
+
+It is a signal on the seam now, emitted from the page subclass that already
+carries the navigation hooks, and logged behind `HYDRA_CONSOLE` for the
+same reason `HYDRA_FILTER_DEBUG` is: a question somebody asks deliberately,
+in a session where they want the answer. The frame's own address is printed
+with each line, since the interesting messages come from an iframe rather
+than the page somebody typed.
+
+**The engine's level enum does not cross the seam**, so it is mapped to an
+int -- and the test asserts the level as well as the text, because an int
+stuck at zero would look exactly like a working one while labelling every
+error "info".
+
+**Asserted because the failure mode is silence.** `HYDRA_CONSOLE` printing
+nothing and a page saying nothing are the same thing from outside, so a
+signal that quietly never fired would send the next person looking in the
+wrong place with more confidence than before. `try_navigate` loads a
+`data:` URL that calls `console.error` and requires it to arrive: 42 checks
+became 46.
+
+### Two mistakes on the way, both about reading the artifact
+
+**A stale binary reported a pass.** The build task was read while it was
+still compiling -- the `ok` printed by an earlier step in the same command
+looked like success -- and the driver was run anyway. The build had failed
+with two incomplete-type errors, the binary was three hours old, and its
+"42 passed, 0 failed" described code that never existed. The tell was that
+the new section did not appear in the log at all. Exit status *and*
+timestamp are checked before running now.
+
+**And the style gate refused the first shape.** A braceless `if` around
+the `connect` put the lambda a level deeper than the gate's brace model
+expects. Bracing it would have satisfied the tool and is exactly the
+deformation `code-style.md` records having cost 22 lines across five
+projects -- so the flag is read once into a captured bool and the connect
+is unconditional, which matches the neighbouring blocks without bending
+anything.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
