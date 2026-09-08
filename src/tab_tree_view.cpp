@@ -255,15 +255,26 @@ void tab_tree_view::reopen_folders() {
 			}
 		}
 	}
+	// **`m_current_id` is what was current before the rebuild, not what is
+	// current now.** It is captured by `remember_open_folders` and cleared on
+	// every call, so it exists to carry the selection ACROSS a rebuild --
+	// which is why restoring it belongs here and not in `reveal_current`.
 	if (!m_current_id.isEmpty()) {
 		if (node *cur = src->node_by_id(m_current_id)) {
 			const QModelIndex idx = view_index(cur);
-			if (idx.isValid()) {
+			if (idx.isValid())
 				setCurrentIndex(idx);
-				scrollTo(idx, QAbstractItemView::EnsureVisible);
-			}
 		}
 	}
+	reveal_current();
+}
+
+void tab_tree_view::reveal_current() {
+	// Whatever is current NOW, which after the restore above is the row that
+	// survived the rebuild, and elsewhere is simply the tab in front of you.
+	const QModelIndex idx = currentIndex();
+	if (idx.isValid())
+		scrollTo(idx, QAbstractItemView::EnsureVisible);
 }
 
 void tab_tree_view::show_node(node *n) {

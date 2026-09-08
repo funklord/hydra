@@ -21970,6 +21970,56 @@ thing under the drawer and is deliberately out: disabling it reaches the
 engine view, whose focus and compositing are the backend's, and
 `set_obscured` is the channel that exists for telling the page.
 
+## Opening the tab tree did not show you the tab you were on
+
+The tree keeps whatever scroll position it was left at, which is right
+while somebody is reading it and wrong the moment it is shown again.
+Measured with 40 tabs and the current one at #35:
+
+    drawer opened   current row y=665, viewport 493 tall   NOT visible
+
+So a phone with a real number of tabs opened its tab tree scrolled to
+somewhere the tab in front of you is not. `reveal_current` is called when
+the drawer opens and when the splitter pane comes back -- the pane has the
+identical fault, since it is re-shown at the position it was hidden at.
+The row lands at y=456 now.
+
+### The extraction was wrong, and the test showed it by doing nothing
+
+`reopen_folders` ended with a block that scrolls to a row, so extracting it
+looked like the whole job. **It is not "show the current tab", it is
+"restore the selection across a model rebuild"** -- two questions that end
+in the same `scrollTo`.
+
+The tell is the member's lifecycle rather than its name. `m_current_id` is
+cleared at the top of `remember_open_folders` and set from `currentIndex()`
+immediately after, so it holds what was current **then**, and is empty
+whenever no rebuild has happened. A `reveal_current` built on it returned
+at its guard in exactly the case it was written for.
+
+**It failed silently, which is what made the test worth having.** The
+section went red reporting `row y=665` -- the original measurement,
+recovered -- rather than erroring, because a function that scrolls nowhere
+and a function that is never called look identical from outside. An
+assertion that `reveal_current` had been *called* would have passed.
+
+So the rebuild path restores the selection from `m_current_id` and then
+calls `reveal_current`, which scrolls to `currentIndex`. Both callers get
+what their names say.
+
+    sabotage: drop the call on drawer open
+    scrolled away from it, the way a browsed list is left   ok
+    and opening the drawer brings it back into view         FAIL (y=665)
+
+The precondition staying green is what says the fixture is stable, and the
+failure reproducing the original number rather than merely being red is
+what says the assertion is aimed at the right thing.
+
+**The fixture scrolls the tree away on purpose.** Activating a tab already
+scrolls to it and closes the drawer, so without that the row would be
+visible for a reason this section is not about, and the check would pass
+whatever the code did.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

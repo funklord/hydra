@@ -2764,6 +2764,11 @@ void main_window::set_tree_visible(bool visible) {
 	} else {
 		m_sidebar->show();
 		m_splitter->setSizes({m_tree_width, qMax(400, width() - m_tree_width)});
+		// The pane has the same fault as the drawer: it comes back at
+		// whatever scroll position it was hidden at, which need not be
+		// anywhere near the tab in front of you.
+		if (m_tree)
+			m_tree->reveal_current();
 	}
 	save_view_soon();
 }
@@ -3076,6 +3081,12 @@ void main_window::set_drawer_open(bool open, bool animate) {
 		// `set_obscured` above is how the page is told instead. The find bar
 		// is this project's own widget and safe to take out of the chain.
 		set_drawer_cover(true);
+		// **Show the tab you are on.** The tree keeps the scroll position it
+		// was left at, so a drawer opened after somebody had browsed the list
+		// showed a tree scrolled somewhere the current tab is not -- measured
+		// at 40 tabs, current row at y=665 in a 493-tall viewport.
+		if (m_tree)
+			m_tree->reveal_current();
 		if (m_tree)
 			m_tree->setFocus(Qt::OtherFocusReason);
 	} else {

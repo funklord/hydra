@@ -489,6 +489,55 @@ int main(int argc, char **argv) {
 		              .arg(QString::fromUtf8(next.what)));
 	}
 
+	section("opening the tab tree shows the tab you are on");
+
+	// **The tree keeps the scroll position it was left at**, which is right
+	// while somebody is reading it and wrong the moment it is shown again.
+	// Measured with 40 tabs and the current one at #35: opening the drawer
+	// put the current row at y=665 in a viewport 493 tall, so a phone showed
+	// its tab tree scrolled to somewhere the tab in front of you is not.
+	//
+	// The fixture scrolls the tree away deliberately. Activating a tab
+	// already scrolls to it and closes the drawer, so without that the row
+	// would be visible for a reason this section is not about, and the check
+	// would pass whatever the code did.
+	{
+		main_window m(&factory, &policy, &filter);
+		m.setGeometry(0, 0, 360, 640);
+		m.show();
+		spin(250);
+
+		node *deep = nullptr;
+		for (int i = 0; i < 40; ++i) {
+			node *t = m.m_model->add_tab(nullptr, QString("tab %1").arg(i),
+			                              QString("http://t%1.example/").arg(i));
+			if (i == 35)
+				deep = t;
+		}
+		spin(200);
+		check(deep != nullptr, "forty tabs, and one of them well down the list");
+		if (deep) {
+			const QModelIndex idx =
+			  m.m_proxy->mapFromSource(m.m_model->index_for_node(deep));
+			emit m.m_tree->activated(idx);
+			spin(300);
+			m.m_tree->scrollToTop();
+			spin(150);
+			check(!m.m_tree->visualRect(idx).intersects(
+			         m.m_tree->viewport()->rect()),
+			       "scrolled away from it, the way a browsed list is left");
+
+			if (m.m_drawer_action) m.m_drawer_action->trigger();
+			spin(400);
+			const QRect row = m.m_tree->visualRect(idx);
+			check(row.height() > 0
+			       && m.m_tree->viewport()->rect().intersects(row),
+			       QString("and opening the drawer brings it back into view "
+			                "(row y=%1, viewport %2 tall)")
+			         .arg(row.y()).arg(m.m_tree->viewport()->height()));
+		}
+	}
+
 	section("a shut drawer is out of the keyboard's way, and can be opened by it");
 
 	// **Two halves of one gap: the tab tree could not be opened from the

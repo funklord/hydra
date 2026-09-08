@@ -55,6 +55,22 @@ public:
 	// opened by any route but a click filed the next one under the wrong parent.
 	void show_node(node *n);
 
+	// **Scroll to the tab you are on.**
+	//
+	// The tree keeps whatever scroll position it was left at, which is right
+	// while somebody is reading it and wrong the moment it is shown again:
+	// measured with 40 tabs and the current one at #35, opening the drawer
+	// put the current row at y=665 in a viewport 493 tall, so a phone showed
+	// its tab tree scrolled to somewhere the tab in front of you is not.
+	//
+	// `reopen_folders` ended with a block like this and calls this instead,
+	// so the rule lives in one place rather than at each site that shows the
+	// tree. **It scrolls to `currentIndex`, not to `m_current_id`** -- that
+	// member is captured before a model rebuild and cleared on every call, so
+	// it says what was current then rather than what is current now, and the
+	// first version of this returned early whenever no rebuild had happened.
+	void reveal_current();
+
 	// **Keeps folders open across a model reset.** Several operations rebuild
 	// the model wholesale -- a drop, a load, a mirror swap -- and a reset tells
 	// the view that everything it knew is void, so it collapses the lot. After
