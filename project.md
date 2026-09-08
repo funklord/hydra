@@ -21717,12 +21717,44 @@ control. Sabotaged by dropping one name:
 **The four stay green and only the derived one moves**, which is the whole
 argument for carrying both.
 
-**Four textless actions are left unexplained rather than asserted on** --
-two parented to a `QMenu` and two to a `QToolBar`, with no icon, shortcut
-or tooltip between them, and three others that are Qt's own
-`_q_qlineeditclearaction`. They are recorded because a count nobody can
-explain is worth more written down than rounded off, and not asserted on
-because I have not established what they are.
+### The seven textless actions, and the check that could not fail
+
+They were recorded as unexplained rather than rounded off, and chasing
+them down is what made a second check writable. Identified by their
+associated widgets rather than guessed at:
+
+    3 x _q_qlineeditclearaction   the clear cross Qt puts in a QLineEdit
+    qt_menubar_ext_button         the menu bar's overflow
+    qt_toolbar_ext_button         the toolbar's overflow
+    QToolBar::toggleViewAction    textless: the bar has no windowTitle
+    QWidgetAction                 the address bar, put on with addWidget
+
+**The `toggleViewAction` was the one worth chasing and the hypothesis was
+wrong.** A `QToolBar`'s toggle takes its label from the bar's
+`windowTitle`, and `QMainWindow::createPopupMenu` lists toolbars by that
+label -- so it looked like a blank, checkable row in the toolbar's context
+menu. It is not: **`main_window` is a `QWidget`, not a `QMainWindow`**, so
+that menu does not exist and nothing renders the action. Disproved by the
+compiler refusing `createPopupMenu`, which is a measurement like any other.
+
+Knowing the population is what allowed a derived check over actions -- a
+toolbar button takes its accessible name from its action's text, which is
+how the drawer button came to announce itself as a glyph.
+
+**And the sabotage caught that check excluding everything it was for.**
+The first version skipped any action whose parent is a `QToolBar`, which
+is most of ours. With the drawer button's text deliberately removed:
+
+    the drawer button is named rather than a glyph ("")     FAIL
+    every action of ours carries text for it (none wordless) ok
+
+The enumerated check caught the sabotage and the new one did not, because
+it could not: it had excluded the population it was written to cover, and
+"none wordless" was the only sentence it could ever produce. Skipping by
+what a thing IS -- `QWidgetAction`, a `qt_`-named associated widget, the
+toggle by pointer -- makes the same sabotage read:
+
+    every action of ours carries text for it ((unnamed) in QToolBar) FAIL
 
 ## What is next (in order)
 

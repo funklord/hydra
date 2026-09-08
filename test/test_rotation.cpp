@@ -74,6 +74,7 @@
 #include <QLabel>
 #include <QHeaderView>
 #include <QToolBar>
+#include <QWidgetAction>
 #include <QMenu>
 #include <QToolButton>
 #include <QSignalSpy>
@@ -334,6 +335,67 @@ int main(int argc, char **argv) {
 		               "(%1)")
 		        .arg(nameless.isEmpty() ? QString("none unnamed")
 		                                 : nameless.join(", ")));
+
+		// **The same question for actions, which is where a menu entry
+		// lives.** A toolbar button takes its accessible name from its
+		// action's text, so an action with no text is a control that
+		// announces as nothing -- which is what the drawer button was.
+		//
+		// Seven actions in this window have no text and all seven are Qt's,
+		// established rather than assumed before this check was written:
+		// three are `_q_qlineeditclearaction`, the clear cross Qt puts inside
+		// a QLineEdit; two are the overflow buttons, identified by their
+		// associated widgets `qt_menubar_ext_button` and
+		// `qt_toolbar_ext_button`; and the last two belong to the QToolBar
+		// itself, one of them its `toggleViewAction`, textless because the
+		// bar has no `windowTitle`.
+		//
+		// **That one is inert rather than a blank menu row**, which was the
+		// worry: `QMainWindow::createPopupMenu` is what would show it, and
+		// this window is a `QWidget`, so nothing renders it at all.
+		//
+		// They are skipped by what they ARE and not by a list of exceptions,
+		// so an action of ours that loses its text is caught rather than
+		// accumulating beside them.
+		//
+		// **The first version of this skipped every action whose parent is a
+		// QToolBar, which is most of ours.** It reported "none wordless" with
+		// the drawer button's text deliberately removed -- a check that
+		// excluded the population it was written to cover, and could only
+		// ever have said that. The sabotage below is what found it, which is
+		// the whole reason for running one on a check that has just been
+		// added.
+		QStringList wordless;
+		for (QAction *a : w.findChildren<QAction *>()) {
+			if (a->isSeparator() || !a->text().isEmpty())
+				continue;
+			if (a->objectName().startsWith("_q_"))
+				continue;
+			// A widget put on a toolbar arrives as a `QWidgetAction`, which
+			// has no label of its own and wants none -- the address bar is
+			// one.
+			if (qobject_cast<QWidgetAction *>(a))
+				continue;
+			bool qts = false;
+			for (QObject *o : a->associatedObjects())
+				if (o->objectName().startsWith("qt_"))
+					qts = true;
+			for (QToolBar *b : w.findChildren<QToolBar *>())
+				if (a == b->toggleViewAction())
+					qts = true;
+			if (qts)
+				continue;
+			wordless << QString("%1 in %2")
+			              .arg(a->objectName().isEmpty() ? QString("(unnamed)")
+			                                              : a->objectName())
+			              .arg(a->parent() ? a->parent()->metaObject()
+			                                   ->className()
+			                                : "none");
+		}
+		check(wordless.isEmpty(),
+		      QString("and every action of ours carries text for it (%1)")
+		        .arg(wordless.isEmpty() ? QString("none wordless")
+		                                 : wordless.join(", ")));
 	}
 
 	section("a narrow window puts the sidebar in a drawer");
