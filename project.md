@@ -21837,6 +21837,50 @@ Both older checks stay green while the key does nothing. Same shape as the
 extension menu above: one assertion proves a value was stored, the other
 proves the feature works, and only the second can see the gap.
 
+## The same fault with the two widgets swapped
+
+A shut drawer stayed in the tab chain because it was off screen but still
+visible to Qt. The mirror is a widget that is **on** screen with the drawer
+standing in front of it, and it was there too. Measured with both open:
+
+    chain  QLineEdit -> QComboBox -> QLineEdit -> QToolButton x3
+           -> address_line -> tab_tree_view
+
+The first two are the sidebar's own search and sort, correctly reachable.
+**The middle four are the find bar's input and its Previous, Next and Close
+buttons, every one of them behind the drawer** -- 0,61 295x557 over a bar
+at 0,587 360x31.
+
+The drawer is treated as modal everywhere else in this code: Escape closes
+it, a tap outside closes it, and the page is told it is obscured. The
+keyboard walking out of it into something it stands in front of
+contradicts that.
+
+**The page stack is deliberately not disabled with the find bar.** It is
+the other thing the drawer covers, and disabling it reaches the engine
+view, whose focus and compositing are the backend's -- `set_obscured` is
+the channel that exists for telling the page, and on Android the view is
+composited natively above everything Qt paints. The find bar is this
+project's own widget and safe to take out of the chain; the page is a
+guess, so it was left alone and said so rather than left unmentioned.
+
+The two assertions test different facts, which the sabotage shows by
+failing only one:
+
+    with setEnabled(false) removed
+    which the open drawer takes out of the keyboard's reach   FAIL
+    and hands back when the drawer shuts                      ok
+
+A find bar that was never disabled is trivially enabled afterwards, so the
+second stays green. Had both gone red the second would have been
+decoration.
+
+**And the older focus assertions staying green is what was actually being
+watched.** The last change of this shape silently disabled the handover --
+`setFocus` on a disabled widget does nothing -- so *opening moves the
+keyboard into the drawer* and *the keyboard does not go with it* passing
+here is the result that mattered, not the two new ones.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

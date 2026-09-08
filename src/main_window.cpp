@@ -3043,10 +3043,36 @@ void main_window::set_drawer_open(bool open, bool animate) {
 		// it silently stopped working -- the keyboard stayed on the find
 		// bar, which is the fault the handover exists to fix.
 		m_sidebar->setEnabled(true);
+		// **And the find bar goes the other way, for the same reason.**
+		//
+		// The drawer covers it -- 0,61 295x557 over a bar at 0,587 360x31 --
+		// and covering it is not enough: measured with both open, Tab walked
+		// out of the drawer and into the find input and its three buttons,
+		// all of them behind the drawer. That is this section's own fault
+		// with the two widgets swapped, the covered one on screen and the
+		// cover over it.
+		//
+		// The drawer is treated as modal everywhere else here -- Escape
+		// closes it, a tap outside closes it -- so the keyboard leaving it
+		// for something it is standing in front of contradicts what the rest
+		// of the code says it is.
+		//
+		// **The page stack is deliberately not disabled with it.** It is the
+		// other thing the drawer covers, and disabling it reaches the engine
+		// view, whose focus and compositing are the backend's business --
+		// `set_obscured` above is how the page is told instead. The find bar
+		// is this project's own widget and safe to take out of the chain.
+		if (m_find)
+			m_find->setEnabled(false);
 		if (m_tree)
 			m_tree->setFocus(Qt::OtherFocusReason);
-	} else if (QWidget *had = QApplication::focusWidget()) {
-		if (m_sidebar->isAncestorOf(had)) {
+	} else {
+		// Handed back when the drawer shuts, and before the handover below,
+		// so a find bar that was open is usable again immediately.
+		if (m_find)
+			m_find->setEnabled(true);
+		QWidget *const had = QApplication::focusWidget();
+		if (had && m_sidebar->isAncestorOf(had)) {
 			web_view_backend *v = current_view();
 			if (v && v->widget())
 				v->widget()->setFocus(Qt::OtherFocusReason);

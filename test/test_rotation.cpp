@@ -570,6 +570,26 @@ int main(int argc, char **argv) {
 		spin(400);
 		check(m.m_sidebar->isEnabled(),
 		       "and an open one is back in it");
+
+		// **The mirror: what the open drawer covers must leave the chain
+		// too.** Measured with both open, Tab walked out of the drawer and
+		// into the find input and its three buttons, every one of them behind
+		// it -- the same fault as a shut drawer staying reachable, with the
+		// covered widget on screen and the cover over it. The drawer is
+		// treated as modal everywhere else here, so the keyboard leaving it
+		// for something it stands in front of contradicts the rest.
+		find_bar *fb = m.findChild<find_bar *>();
+		check(fb != nullptr, "the window has a find bar to be covered");
+		if (fb) {
+			fb->show();
+			spin(120);
+			check(!fb->isEnabled(),
+			       "which the open drawer takes out of the keyboard's reach");
+			m.m_drawer_action->trigger();
+			spin(400);
+			check(fb->isEnabled(),
+			       "and hands back when the drawer shuts");
+		}
 	}
 
 	section("the drawer takes the keyboard with it, both ways");
