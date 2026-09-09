@@ -22348,6 +22348,67 @@ projects -- so the flag is read once into a captured bool and the connect
 is unconditional, which matches the neighbouring blocks without bending
 anything.
 
+## Three reports from use, and what each one turned out to be
+
+### The downloads window would not let its columns be moved
+
+Reported as "doesn't scale to text size and doesn't allow the user to
+adjust the table field widths". Two faults, and measured before touching
+anything: **`any column draggable: no`**. Not one section was
+`Interactive`, and Qt moves a divider only for those -- Name was `Stretch`,
+three were `ResizeToContents`, Progress was `Fixed` at 170 px.
+
+All `Interactive` now, with the last section taking the slack so the table
+still fills. **The cost is real and worth knowing**: Status absorbs spare
+width rather than Name, so it is wider by default than it was (386 against
+260) while Name is about where it was (241 against 260). That is the price
+of Name being draggable instead of stretched.
+
+The widths not chosen by content were pixels, so each column starts from
+the width of what it holds and the window is a hundred characters by
+twenty-five rows rather than 880x460.
+
+**The growth check passed the defect it was written for.** It said "at
+least 4 of 5 grow", to excuse the last section being sized by the window;
+pinning one column still left four. A threshold that tolerates one failure
+cannot see one failure. It excludes the last column by position now.
+
+### Tabs kept for hours and never saved
+
+The first explanation offered was the hang that followed it, and **that was
+wrong** -- tabs alive for hours gave the 1500 ms debounce thousands of
+chances. The holder's objection is what showed it.
+
+Every writer is conditioned on `m_tree_path`, which only a successful
+`load_tree` sets. `main.cpp` falls back to the default tree when a path is
+refused, but **only when the refused path was not already the default** --
+so a default tree that will not load is retried by nothing, and the browser
+comes up working and persists nothing.
+
+The status bar says so now, at the holder's suggestion: absent when clean,
+"Saving..." while a debounce runs, and **"Not saving"** which stays until
+something can be written. Confirmed on the handset, where it is correctly
+absent -- the phone's tree loads, so that failure is not a general one.
+
+**It does not repair the load failure**, which needs the failing tree to
+diagnose.
+
+### Restored tabs came back as about:blank
+
+Not flakiness in the save, which wrote exactly what the model held. There
+are four assignments to a node's url in the whole tree -- two reading from
+disk, one the tab lock's pin, one unrelated -- and **none is a
+navigation**. A tab created empty, which is what a new tab is, keeps an
+empty url however far it is browsed; a tab opened from a link keeps that
+link's. That is why some survived and some did not, deterministically.
+
+**The obvious repair is the one this file already warns about**: `n->url`
+is where the tab lock stores its pin, so writing it on navigation would
+overwrite pins. Separating them is a tree-file format change and the
+holder's decision; a narrower option is to fill a node's url only while it
+is empty, which covers the blank-tab case without touching pinned rows.
+Put to the holder, not chosen here.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
