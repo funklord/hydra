@@ -517,6 +517,22 @@ public:
 	// in a moment" and "it has not saved and will not".
 	QToolButton     *m_save_hint  = nullptr;
 	void refresh_save_hint();
+
+	// **Give a node the address it is showing, but only while it has none.**
+	//
+	// Reported from use: tabs came back as `about:blank` after a restart. The
+	// save was faithful -- nothing in this tree ever wrote a node's url on
+	// navigation, so a tab created empty (which is what a new tab is) kept an
+	// empty url however far it was browsed, while one opened from a link kept
+	// that link's. Deterministic, and it reads as the save being flaky.
+	//
+	// **Only while empty, because the tab lock's pin lives in the same
+	// field.** `set_locked` writes the pinned address to `node::url`, so
+	// following the page unconditionally would overwrite pins. A locked node
+	// therefore has a non-empty url by construction and this never touches
+	// one. Separating the two meanings is a tree-file format change and the
+	// copyright holder's; this is the narrower option they chose.
+	void fill_empty_node_url(web_view_backend *view, const QUrl &u);
 	QProgressBar    *m_progress   = nullptr;   // beside it, only while loading
 	find_bar        *m_find       = nullptr;   // above the status bar, hidden
 

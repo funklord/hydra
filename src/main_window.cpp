@@ -3306,6 +3306,9 @@ void main_window::open_node(node *n, bool load_now) {
 		});
 		connect(view, &web_view_backend::url_changed, this, [this, view](const QUrl &u) {
 			apply_policy(view, u.host());
+			// For every view, not only the current one: a background tab that
+			// navigates is exactly the one whose address nothing else records.
+			fill_empty_node_url(view, u);
 			if (view == current_view()) {
 				sync_page_context();
 				update_navigation();
@@ -4815,6 +4818,35 @@ void main_window::save_tree_soon() {
 // says so, and pressing it is the only way to find out where the file would
 // have gone -- a session once kept tabs for hours with every save a no-op and
 // one line on stderr as the only sign.
+void main_window::fill_empty_node_url(web_view_backend *view, const QUrl &u) {
+	if (!view || !m_model)
+		return;
+	// **`about:blank` is not an address anybody typed**, and it is the first
+	// thing a warm view reports -- `open_node` loads it before the real one.
+	// Filling with it would leave the node non-empty, and this only ever
+	// writes while empty, so the address that follows would never land: a
+	// guard that fills once with the wrong value is worse than no guard.
+	if (!u.isValid() || u.scheme() == QLatin1String("about"))
+		return;
+	const QString text = u.toString();
+	if (text.isEmpty())
+		return;
+
+	const QString id = m_views_by_id.key(view);
+	if (id.isEmpty())
+		return;
+	node *const n = m_model->node_by_id(id);
+	// Folders have no page, and a node that already carries an address keeps
+	// it -- that address may be a lock's pin, which is the whole reason this
+	// is narrow.
+	if (!n || n->is_folder() || !n->url.isEmpty())
+		return;
+
+	n->url = text;
+	m_model->refresh_node(n);
+	save_tree_soon();
+}
+
 void main_window::refresh_save_hint() {
 	if (!m_save_hint)
 		return;

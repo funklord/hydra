@@ -22404,10 +22404,38 @@ link's. That is why some survived and some did not, deterministically.
 
 **The obvious repair is the one this file already warns about**: `n->url`
 is where the tab lock stores its pin, so writing it on navigation would
-overwrite pins. Separating them is a tree-file format change and the
-holder's decision; a narrower option is to fill a node's url only while it
-is empty, which covers the blank-tab case without touching pinned rows.
-Put to the holder, not chosen here.
+overwrite pins. Separating them is a tree-file format change.
+
+**Settled by the copyright holder: fill the url only while it is empty.**
+Not following the page, which is the repair that needs the format change --
+this covers the blank-tab case and cannot touch a pinned row, because a
+locked node has a non-empty url by construction.
+
+`fill_empty_node_url` runs on every view's `url_changed`, not only the
+current one: a background tab that navigates is exactly the one whose
+address nothing else records.
+
+**`about:` is refused, and that guard is the subtle half.** A warm view
+reports `about:blank` before the real page. Filling with it would leave the
+node non-empty, and since this only ever writes while empty, the real
+address could never land afterwards -- blank tabs traded for tabs pinned to
+`about:blank`, which is harder to notice and harder to undo. So the test
+asserts both that `about:blank` does not fill it *and* that the real one
+still lands, and the sabotage that removes the guard fails both:
+
+    sabotage                     fill   pin    about:blank   real one after
+    follow the page always       ok     FAIL   ok            ok
+    let about: through           ok     ok     FAIL          FAIL
+
+**Tabs already saved with an empty url are not repaired by this.** Those
+rows are on disk as they are; each fills in the first time it navigates
+under a build that has this.
+
+**And two sabotages did not apply before these did.** `sed` was given `|`
+as its delimiter for patterns containing `||`, so both substitutions
+errored and both runs reported a clean 288 -- a sabotage that did not
+happen and a check that cannot fail are the same output. The substitution
+asserts now.
 
 ## What is next (in order)
 

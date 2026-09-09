@@ -149,6 +149,10 @@ public:
 	QWidget *widget() override { return m_widget; }
 	QUrl url() const override { return m_url; }
 	void load(const QUrl &u) override { m_url = u; }
+
+	// Announce a navigation the way a real backend does. A signal cannot be
+	// emitted from outside its class, so the fake offers the door.
+	void navigated_to(const QUrl &u) { m_url = u; emit url_changed(u); }
 	void back() override {}
 	void forward() override {}
 	void reload() override {}
@@ -546,6 +550,76 @@ int main(int argc, char **argv) {
 		         .arg(with)
 		         .arg(clashes.isEmpty() ? QString("none shared")
 		                                 : clashes.join("; ")));
+	}
+
+	section("a tab that had no address takes the one it is showing");
+
+	// **Reported from use: tabs came back as `about:blank`.** The save was
+	// faithful -- nothing wrote a node's url on navigation, so a tab created
+	// empty (which is what a new tab is) kept an empty url however far it was
+	// browsed, while one opened from a link kept that link's. Deterministic,
+	// and it reads as the save being flaky.
+	//
+	// Filled only while empty, chosen by the copyright holder over following
+	// the page: `set_locked` stores a lock's pin in this same field, so a node
+	// that already carries an address keeps it and no pin can be overwritten.
+	{
+		main_window w3(&factory, &policy, &filter);
+		w3.resize(900, 600);
+		w3.show();
+		spin(150);
+
+		auto show = [&](node *n) -> fake_view * {
+			const QModelIndex idx =
+			  w3.m_proxy->mapFromSource(w3.m_model->index_for_node(n));
+			emit w3.m_tree->activated(idx);
+			spin(200);
+			return static_cast<fake_view *>(
+			  w3.m_views_by_id.value(n->id, nullptr));
+		};
+
+		node *blank = w3.m_model->add_tab(nullptr, "a new tab", QString());
+		check(blank && blank->url.isEmpty(), "a tab opened with no address");
+		if (fake_view *v = blank ? show(blank) : nullptr) {
+			v->navigated_to(QUrl("https://filled.example/page"));
+			spin(150);
+			check(blank->url == "https://filled.example/page",
+			       QString("takes the address it navigates to (%1)")
+			         .arg(blank->url.isEmpty() ? QString("(still empty)")
+			                                    : blank->url));
+		}
+
+		// **The pin case.** A node that already has an address keeps it --
+		// which is what stops a lock's pin being replaced by whatever the
+		// page went to next.
+		node *pinned = w3.m_model->add_tab(nullptr, "a pinned tab",
+		                                    "https://pinned.example/keep");
+		if (fake_view *v = pinned ? show(pinned) : nullptr) {
+			v->navigated_to(QUrl("https://elsewhere.example/moved"));
+			spin(150);
+			check(pinned->url == "https://pinned.example/keep",
+			       QString("and an address already set is left alone (%1)")
+			         .arg(pinned->url));
+		}
+
+		// **`about:blank` must not fill it.** A warm view reports it first,
+		// and since this only ever writes while empty, filling with it would
+		// leave the node non-empty and the real address could never land --
+		// blank tabs traded for tabs pinned to about:blank.
+		node *warm = w3.m_model->add_tab(nullptr, "a warm tab", QString());
+		if (fake_view *v = warm ? show(warm) : nullptr) {
+			v->navigated_to(QUrl("about:blank"));
+			spin(150);
+			check(warm->url.isEmpty(),
+			       QString("about:blank does not count as an address (%1)")
+			         .arg(warm->url.isEmpty() ? QString("still empty")
+			                                   : warm->url));
+			v->navigated_to(QUrl("https://real.example/after"));
+			spin(150);
+			check(warm->url == "https://real.example/after",
+			       QString("so the real one still lands after it (%1)")
+			         .arg(warm->url));
+		}
 	}
 
 	section("the window says when nothing is reaching the disk");
