@@ -22645,6 +22645,44 @@ removed, the assertion that an unreadable tree survives the window closing
 stays green. The session got its saves back without weakening the guarantee
 that produced the refusal.
 
+### A lot of backups, for now
+
+**Asked for by the copyright holder while the save path is being shaken
+out.** Recoverability over tidiness: deliberately dumb copying, no
+deduplication, on the grounds that a clever scheme is a new thing that can
+be wrong and this exists because things were wrong.
+
+`backup_tree` copies the tree into `<dir>/backup/`, named
+`tree-yyyyMMdd-hhmmss.txt`. Copy, never move, and never over a name already
+taken. One is taken at load -- the tree exactly as found, which is the one
+state nothing in the session has had a chance to spoil -- and one per five
+minutes of activity from the debounced flush, capturing what is on disk
+*before* each write replaces it. The newest hundred are kept.
+
+It sits inside `if (ok)`, so a start that falls back takes one copy, of
+whichever tree actually loaded, not one of each.
+
+**The prune is a deletion path and is tested as one.** It walks only the
+directory this creates and only the names this writes, which is the bargain
+`CLAUDE.md` asks for where a wildcard is unavoidable: vouch for the
+directory when you cannot vouch for the files.
+
+    sabotage                       count   oldest went   newest kept   not ours
+    prune from the wrong end       ok      FAIL          FAIL          ok
+    prune with no name filter      ok      ok            ok            FAIL
+
+**The first row is the reason the survivors are named rather than counted.**
+Sorting the wrong way leaves exactly a hundred files and deletes precisely
+the hundred worth keeping; every count-only check passes.
+
+**A prediction written before that run was wrong, and the code was right.**
+It expected the second sabotage to fail two assertions, reasoning that
+`notes.txt` would consume one of seven deletions and spare
+`tree-...-000005`. Seven deletions is `notes.txt` plus `000000` to
+`000005`, which is six files, so `000005` goes and the assertion holds.
+Recorded because the arithmetic was checked against the result rather than
+the other way round, which is the only order that catches it.
+
 ### A slashless url argument was read as a tree path
 
 Found while looking for the above, and not the cause of it. `argument_url`

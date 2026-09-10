@@ -3187,6 +3187,92 @@ int main(int argc, char **argv) {
 			         .arg(v->url().toString()));
 	}
 
+	section("the tree is copied into backup/ as it was found");
+
+	// **Asked for while the save path is being shaken out**: a lot of copies,
+	// kept, so that a tree lost to any of the faults above is recoverable
+	// rather than merely explained.
+	{
+		const QString dir = QDir::temp().filePath("hydra-rotation-backup");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString path = dir + "/tree.txt";
+		const QByteArray body =
+		  "- [tab] a page worth keeping | https://keep.example/\n";
+		{
+			QFile f(path);
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write(body);
+		}
+
+		main_window w5(&factory, &policy, &filter);
+		check(w5.load_tree(path), "a tree that loads");
+		const QDir bdir(dir + "/backup");
+		const QStringList made =
+		  bdir.entryList(QStringList{ "tree-*.txt" }, QDir::Files, QDir::Name);
+		check(made.size() == 1,
+		       QString("is copied into backup/ once (%1)").arg(made.size()));
+		const QByteArray copied = [&] {
+			QFile f(bdir.filePath(made.value(0)));
+			f.open(QIODevice::ReadOnly);
+			return f.readAll();
+		}();
+		check(copied == body,
+		       QString("with the bytes it was found with (%1 of %2)")
+		         .arg(copied.size()).arg(body.size()));
+	}
+
+	section("the prune keeps the newest and spares what it did not write");
+
+	// **Direction, not just count.** A sort that ran newest-first would leave
+	// exactly the right number of files and delete precisely the ones worth
+	// keeping, passing any check that only counts. So the survivors are named.
+	{
+		const QString dir = QDir::temp().filePath("hydra-rotation-prune");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString path = dir + "/tree.txt";
+		{
+			QFile f(path);
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("- [tab] the live one | https://live.example/\n");
+		}
+		const QString bpath = dir + "/backup";
+		QDir().mkpath(bpath);
+		// Stamped so a plain name sort is a date sort, and dated well before
+		// today so the copy taken below is unambiguously the newest.
+		for (int i = 0; i < 105; ++i) {
+			QFile f(bpath + "/" +
+			         QString("tree-20260101-%1.txt")
+			           .arg(i, 6, 10, QChar('0')));
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("old\n");
+		}
+		// Not ours, and must be left alone: the prune vouches for the
+		// directory, but only for the names it writes itself.
+		{
+			QFile f(bpath + "/notes.txt");
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("somebody's own file\n");
+		}
+
+		main_window w6(&factory, &policy, &filter);
+		check(w6.load_tree(path), "a tree that loads, with 105 copies behind it");
+
+		const QDir bdir(bpath);
+		const QStringList held =
+		  bdir.entryList(QStringList{ "tree-*.txt" }, QDir::Files, QDir::Name);
+		check(held.size() == 100,
+		       QString("leaves a hundred (%1)").arg(held.size()));
+		check(!QFileInfo::exists(bpath + "/tree-20260101-000000.txt") &&
+		       !QFileInfo::exists(bpath + "/tree-20260101-000005.txt"),
+		       "the oldest are the ones that went");
+		check(QFileInfo::exists(bpath + "/tree-20260101-000104.txt"),
+		       "the newest staged copy is still there");
+		check(QFileInfo::exists(bpath + "/notes.txt"),
+		       "and a file it did not write is untouched");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

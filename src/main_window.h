@@ -677,6 +677,10 @@ public:
 	// itself, so the entry is simply found to have no live view and dropped.
 	QSet<QString>       m_blobs_dirty;
 	QString             m_tree_path;
+	// When the tree was last copied into `backup/`, as an epoch stamp rather
+	// than a QDateTime so this header needs no extra include. Zero means
+	// never, which makes the first flush take one.
+	qint64              m_last_backup_ms = 0;
 	QString             m_policy_path;
 
 	// Answers to permission prompts, for this run only: "host\nfeature" ->

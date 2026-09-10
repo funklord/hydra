@@ -2430,6 +2430,70 @@ main_window::~main_window() {
 		m_kiosk->exit();
 }
 
+// How many copies of the tree to keep, and how long to wait between them.
+// Deliberately generous and deliberately dumb: this is a safety net while
+// the save path is being shaken out, so recoverability beats tidiness and a
+// clever scheme is a new thing that can be wrong. At a few hundred kilobytes
+// a tree that is tens of megabytes at worst.
+static const int   k_backup_keep = 100;
+static const qint64 k_backup_gap_ms = 5 * 60 * 1000;
+
+// A copy of the tree exactly as it stands on disk.
+//
+// **Copy, never move, and never over a name already taken.** The whole point
+// is that nothing here can lose what is already written -- a backup that
+// overwrote the previous backup would be the defect this guards against,
+// one directory along.
+//
+// The prune walks only the directory this creates, and only names of the
+// shape this writes. It cannot reach the tree itself, the sidecars beside
+// it, or anything else somebody keeps in the data directory. That is the
+// bargain `CLAUDE.md` asks for where a wildcard is unavoidable: if you
+// cannot vouch for the files, vouch for the directory.
+//
+// Returns the path written, or empty. Failure is announced and is never
+// fatal: refusing to save because a backup failed would turn a safety net
+// into the loss it exists to prevent.
+static QString backup_tree(const QString &tree) {
+	if (tree.isEmpty() || !QFileInfo::exists(tree))
+		return QString();
+	const QFileInfo info(tree);
+	const QString dir = info.absolutePath() + "/backup";
+	if (!QDir().mkpath(dir)) {
+		qWarning("backup: cannot make %s; this session is not being copied",
+		          qPrintable(dir));
+		return QString();
+	}
+	const QString base   = info.completeBaseName();
+	const QString suffix = info.suffix();
+	const QString tail   = suffix.isEmpty() ? QString() : "." + suffix;
+	const QString stamp =
+	  QDateTime::currentDateTime().toString("yyyyMMdd-hhmmss");
+
+	// Same second, twice: bounded, and the last candidate is returned rather
+	// than looping, because a thousand copies inside one second is not a case
+	// worth serving.
+	QString name = base + "-" + stamp + tail;
+	for (int n = 2; QFileInfo::exists(dir + "/" + name) && n < 1000; ++n)
+		name = base + "-" + stamp + "-" + QString::number(n) + tail;
+	if (QFileInfo::exists(dir + "/" + name))
+		return QString();
+	if (!QFile::copy(tree, dir + "/" + name)) {
+		qWarning("backup: cannot copy %s to %s", qPrintable(tree),
+		          qPrintable(dir + "/" + name));
+		return QString();
+	}
+
+	// Oldest first: the stamp is written most-significant-first, so a plain
+	// name sort is a date sort.
+	QDir d(dir);
+	const QStringList held =
+	  d.entryList(QStringList{ base + "-*" + tail }, QDir::Files, QDir::Name);
+	for (int i = 0; i < held.size() - k_backup_keep; ++i)
+		QFile::remove(d.filePath(held.at(i)));
+	return dir + "/" + name;
+}
+
 // Where a session saves when its tree could not be read.
 //
 // **Never an existing file.** This exists because an unreadable tree used to
@@ -2674,6 +2738,17 @@ bool main_window::load_tree(const QString &path) {
 	// After the nodes exist and before anything draws: the tree shows a count
 	// from this, so restoring it later would flash a row that claimed no past
 	// and then quietly gained one.
+	// **The tree as it was found, before this session can touch it.** The
+	// most valuable copy there is: everything after this point is a state
+	// somebody may want to get back from, and this is the one state nothing
+	// in this session has had a chance to spoil. Taken whether or not the
+	// read was clean -- a partial parse is exactly when the original is worth
+	// keeping, and `.unparsed` covers only the case that reported lost lines.
+	if (ok) {
+		backup_tree(path);
+		m_last_backup_ms = QDateTime::currentMSecsSinceEpoch();
+	}
+
 	restore_histories();
 	restore_view_state();
 	return ok;
@@ -5811,6 +5886,20 @@ void main_window::mark_dirty() {
 
 void main_window::flush_tree() {
 	if (!m_tree_path.isEmpty()) {
+		// A copy of what is on disk *before* this write replaces it, so the
+		// set of backups is a set of states that were once live rather than
+		// of states about to be. Rate limited because this is debounced off
+		// every structural change: without the gap a busy hour would be
+		// hundreds of copies of a tree that barely moved.
+		//
+		// The stamp advances even when the copy failed, so an unwritable
+		// backup directory costs one warning every few minutes rather than
+		// one per save.
+		const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
+		if (now_ms - m_last_backup_ms >= k_backup_gap_ms) {
+			backup_tree(m_tree_path);
+			m_last_backup_ms = now_ms;
+		}
 		const bool ok = m_model->save(m_tree_path);
 		// **Said once per failure, not once per write.** This is debounced off
 		// every structural change, so a disk that has filled would otherwise
