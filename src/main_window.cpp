@@ -4020,6 +4020,17 @@ void main_window::view_page_source() {
 // link that asked for a new window -- and they must answer it the same way,
 // which is why the body is here rather than in either caller.
 void main_window::open_external_url(const QUrl &url) {
+	// **Every arrival, counted, on request.** The dedupe in `enqueue` means a
+	// second call for one click produces one row exactly as a single call
+	// does, so the downloads window can no longer answer whether a click
+	// arrives here once or twice -- the fix removed the symptom that was the
+	// only evidence. One line per arrival restores it: a single click that
+	// logs two lines is the doubled call caught in the act, and one that logs
+	// one has ruled it out for that link.
+	static int arrivals = 0;
+	++arrivals;
+	if (qEnvironmentVariableIsSet("HYDRA_DOWNLOAD_DEBUG"))
+		qWarning("external #%d: %s", arrivals, qPrintable(url.toString()));
 	if (renders_as_page(url))
 		return;
 	if (!m_downloads->source_for(url)) {
@@ -5216,11 +5227,20 @@ void main_window::start_download(const QUrl &url) {
 			if (it.value() == v) { node_id = it.key(); break; }
 	}
 
+	// Counted either side of the call, because `enqueue` returns an id and
+	// not whether it made one: a count that did not grow means it recognised
+	// the url as a job already running and handed back the existing id, which
+	// is a second call arriving for one click.
+	const int before_jobs = int(m_downloads->jobs().size());
 	const int id = m_downloads->enqueue(url, node_id, &error);
 	if (!id) {
 		m_status->showMessage(error, 8000);
 		return;
 	}
+	if (int(m_downloads->jobs().size()) == before_jobs &&
+	     qEnvironmentVariableIsSet("HYDRA_DOWNLOAD_DEBUG"))
+		qWarning("download: duplicate suppressed, job %d already holds %s",
+		          id, qPrintable(url.toString()));
 	m_address->clear();
 	// Show the list rather than announce it in the status bar: a download the
 	// user cannot watch is not a first-class download (sec 11.2).

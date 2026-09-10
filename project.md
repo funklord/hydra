@@ -22522,6 +22522,46 @@ thing it is for:
   SIGTERM**; `timeout -k` does. The test drives a `mailto:` now, which is
   the same branch with nothing behind it.
 
+**The doubled call itself: one mechanism confirmed, one candidate, and a
+counter to tell them apart.** Reading every path that can create a job
+settled part of it. `adopt` serves screen capture alone, so a magnet job can
+only come from `enqueue`, which means two rows really were two calls into
+`start_download` rather than one call making two jobs.
+
+After the fix there are exactly two ways in, and each click should take one
+of them:
+
+    magnet, no target        the frame navigates -> scheme handler
+    magnet, target=_blank    the window request  -> open_external_url
+
+**Confirmed:** the leftover tab. Before the fix a `target="_blank"` magnet
+made a node whose url was the magnet, and `open_node` loads `n->url`
+whenever it builds a view -- so reopening that row after the live cap
+evicted its view, or after a restart, navigated to the magnet again and
+called the handler a second time. That is fixed at source and asserted.
+
+**Candidate, not established:** a page that both anchors and scripts the
+link -- `window.open` alongside a `location` assignment -- fires both paths
+for one click, the window request and the frame navigation. It is
+page-dependent, which fits "some as two and some as one" exactly as well as
+the leftover tab does, and nothing in this tree can decide between them.
+
+**So the dedupe removed the only evidence there was.** One row now appears
+whether a click arrives once or twice, so the downloads window can no longer
+answer the question. `HYDRA_DOWNLOAD_DEBUG` restores it: one line per
+arrival, plus a line when `enqueue` hands back an id it already had.
+
+    HYDRA_DOWNLOAD_DEBUG=1 ./hydra 2>&1 | grep -E "external #|duplicate suppressed"
+
+Two `external #` lines for one click is the doubled call caught in the act;
+one line rules it out for that link.
+
+**The counter is watched reaching a known single arrival**, because its
+failure mode is silence and a silent counter reports exactly what a single
+arrival reports. Removing its `qWarning` fails that assertion and nothing
+else -- so a future run showing one line means the click arrived once,
+rather than meaning the logging had quietly stopped.
+
 **`open_downloads` and the consent box were both checked and neither hangs
 the browser.** The first is `show()`, not `exec()`, and the second is a
 `Qt::QueuedConnection`, so neither runs a nested loop inside the engine's

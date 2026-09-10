@@ -140,6 +140,11 @@ private:
 	bool m_live = false;
 };
 
+// Where captured qWarning output lands. File scope because
+// `qInstallMessageHandler` takes a function pointer, which a capturing
+// lambda cannot become.
+static QStringList g_captured;
+
 class fake_view : public web_view_backend {
 public:
 	explicit fake_view(QWidget *parent = nullptr) : web_view_backend(nullptr) {
@@ -3050,10 +3055,29 @@ int main(int argc, char **argv) {
 		};
 		const int before = count_all(w4.m_model->root());
 		const QUrl external("mailto:someone@example.invalid");
+
+		// **The arrival counter, asked to speak.** It exists to answer
+		// whether one click reaches the download path once or twice, and its
+		// failure mode is silence -- which is indistinguishable from a click
+		// that only arrived once. So it is watched here reaching a known
+		// single arrival, and a run that captures nothing fails.
+		g_captured.clear();
+		qputenv("HYDRA_DOWNLOAD_DEBUG", "1");
+		QtMessageHandler prev = qInstallMessageHandler(
+		  [](QtMsgType, const QMessageLogContext &, const QString &m) {
+			g_captured << m;
+		});
+
 		web_view_backend *adopt =
 		  from ? from->asked_new_window(external, /*user_initiated=*/true)
 		        : nullptr;
 		spin(150);
+
+		qInstallMessageHandler(prev);
+		qunsetenv("HYDRA_DOWNLOAD_DEBUG");
+		check(g_captured.filter("external #").size() == 1,
+		       QString("one arrival at the download path is logged once (%1)")
+		         .arg(g_captured.filter("external #").size()));
 		check(from && adopt == nullptr,
 		       "a link that is not a page is offered no view to adopt");
 		check(count_all(w4.m_model->root()) == before,
