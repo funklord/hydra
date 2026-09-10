@@ -59,6 +59,29 @@ void download_manager::set_consent(const QString &source_id, bool granted) {
 int download_manager::enqueue(const QUrl &url, const QString &node_id,
                                QString *error,
                                const QMap<QString, QString> &headers) {
+	// **The same address twice is one download, not two.**
+	//
+	// Reported from use: clicking a magnet link sometimes produced two rows
+	// in the downloads list and sometimes one. There was no check here at
+	// all -- a source accepted the url and a job was built, however many
+	// times it was asked -- so two calls made two jobs of the same transfer.
+	// Why the engine's external-url handler fires twice for some links and
+	// once for others is a separate question and still open; this is the
+	// half that can be answered where the jobs are made.
+	//
+	// **Only while the existing one is still going.** `is_terminal` is done,
+	// failed or cancelled, and a job in one of those states is history: asking
+	// for that address again is a retry somebody meant, and refusing it would
+	// make a failed download unrepeatable.
+	//
+	// The existing id rather than 0, because 0 is this function's failure
+	// value and the caller turns it into "Nothing here can download that".
+	// A second click is not an error -- it is a request to see the download
+	// that is already running, which is what the caller does with an id.
+	for (const download_job &j : m_jobs)
+		if (j.url == url && !j.terminal())
+			return j.id;
+
 	// First source that accepts wins. If none does, report the most specific
 	// reason offered rather than a generic refusal -- the sources know why.
 	download_source *chosen = nullptr;

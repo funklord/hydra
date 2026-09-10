@@ -158,6 +158,38 @@ int main(int argc, char **argv) {
 	      QString("per-file sizes are displayed (%1)")
 	          .arg(feature ? feature->text(3) : QString()));
 
+	// **The same address twice is one download.**
+	//
+	// Reported from use: clicking a magnet link sometimes produced two rows
+	// and sometimes one. There was no check in `enqueue` at all -- a source
+	// accepted the url and a job was built, however many times it was asked.
+	// Why the engine's handler fires twice for some links is still open; this
+	// is the half answerable where the jobs are made.
+	const QUrl twice("magnet:?xt=urn:btih:twice");
+	const int before = int(m.jobs().size());
+	QString e2;
+	const int first = m.enqueue(twice, QString(), &e2);
+	check(first != 0, "a magnet is accepted once");
+	const int again = m.enqueue(twice, QString(), &e2);
+	check(again == first,
+	       QString("and asking again is the same download (%1 then %2)")
+	           .arg(first).arg(again));
+	check(int(m.jobs().size()) == before + 1,
+	       QString("with one row, not two (%1)")
+	           .arg(int(m.jobs().size()) - before));
+
+	// **But a finished one can be asked for again.** `is_terminal` is done,
+	// failed or cancelled, and refusing those would make a failed download
+	// unrepeatable -- which is a worse fault than the duplicate it prevents.
+	m.cancel(first);
+	const int retried = m.enqueue(twice, QString(), &e2);
+	check(retried != 0 && retried != first,
+	       QString("a cancelled one can be started afresh (%1 then %2)")
+	           .arg(first).arg(retried));
+	check(int(m.jobs().size()) == before + 2,
+	       QString("which is a row of its own (%1)")
+	           .arg(int(m.jobs().size()) - before));
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

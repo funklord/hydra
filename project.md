@@ -22348,7 +22348,7 @@ projects -- so the flag is read once into a captured bool and the connect
 is unconditional, which matches the neighbouring blocks without bending
 anything.
 
-## Three reports from use, and what each one turned out to be
+## Reports from use, and what each one turned out to be
 
 ### The downloads window would not let its columns be moved
 
@@ -22436,6 +22436,48 @@ as its delimiter for patterns containing `||`, so both substitutions
 errored and both runs reported a clean 288 -- a sabotage that did not
 happen and a check that cannot fail are the same output. The substitution
 asserts now.
+
+### One magnet, two rows -- and sometimes one
+
+Reported alongside the torrent work: "some of the torrents came up as two
+downloads, and some as one", and later, of a run where every link was a
+magnet, "it shows only as one row. What is the difference?"
+
+**There was no dedupe anywhere.** `enqueue` picked the first source that
+accepted the url and built a `download_job`, unconditionally, however many
+times it was asked -- so two calls with one magnet made two top-level rows.
+Nothing about the magnet decided it; what decided it was how many times the
+handler fired.
+
+    for (const download_job &j : m_jobs)
+    	if (j.url == url && !j.terminal())
+    		return j.id;
+
+Returning the **existing id** rather than 0, because 0 is the failure value
+the caller turns into "Nothing here can download that" -- a duplicate click
+would otherwise report the download as impossible while it was running.
+
+**The `!terminal()` half is the one that could have made things worse.**
+`is_terminal` is done, failed or cancelled, and matching those too would
+make a failed download unrepeatable: clicking the link again would silently
+return the dead job's id and nothing would start. That trades "sometimes two
+rows" for "cannot retry a failure", which is the worse fault of the two and
+would not surface until somebody needed it. So both halves are asserted, and
+each sabotage fails only its own half:
+
+    sabotage                      same id   one row   retry works   own row
+    no dedupe at all              FAIL      FAIL      ok            FAIL
+    refuse terminal jobs too      ok        ok        FAIL          FAIL
+
+Note `seeding` is complete but **not** terminal, which is correct here: a
+seeding torrent is still a live job and asking for it again should find it.
+
+**Why the handler fires twice for some links is still open.** This is the
+half answerable where the jobs are made; the duplicate *call* is upstream in
+the external-url path and is not diagnosed. The rows are right either way,
+which is what was reported -- but a fix that makes a symptom go away without
+explaining it leaves the cause to surface somewhere else, so it is recorded
+here rather than closed.
 
 ## What is next (in order)
 
