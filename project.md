@@ -22472,6 +22472,61 @@ each sabotage fails only its own half:
 Note `seeding` is complete but **not** terminal, which is correct here: a
 seeding torrent is still a live job and asking for it again should find it.
 
+**And a second, independent fault produced the same symptom.** Found by
+reading the path the click takes rather than by another report.
+`open_new_window` made a node for any valid url -- nothing there consulted
+`renders_as_page` -- so a magnet carrying `target="_blank"` became a tab,
+its url the magnet and its title the whole magnet string, `url.host()`
+being empty for one.
+
+That tab could never render, and it was worse than untidy: `open_node`
+loads `n->url` whenever it builds a view, so opening the row after the live
+cap had evicted its view, or after a restart, navigated to the magnet again
+and started the download afresh. It is also why the two behaviours were
+deterministic per link -- whether the link carried `target="_blank"`
+decided which path it took, not anything about the magnet.
+
+So the check is in both places. At the door, a url that is not a page is
+handed to the download path and no tab is made; at the load, a row whose
+url is not a page opens blank, because the trees already on disk carry
+these rows and loading one would hand it straight back to the scheme
+handler. `open_external_url` is the shared body, so the two ways in cannot
+answer differently.
+
+    sabotage                       adopt   no tab   control   count   blank
+    no scheme check at the door    FAIL    FAIL     ok        FAIL    ok
+    load whatever the row carries  ok      ok       ok        ok      FAIL
+
+**Three faults in the test were found before either sabotage was
+believed**, and all three are the same shape -- a check that cannot see the
+thing it is for:
+
+- **It counted the root's children.** A new window is filed *under* the tab
+  that asked, so the count could not see a leaked tab at all: the refusal
+  assertion passed, and would have passed with the guard removed. It counts
+  the whole tree now, which is what turned `0 new` into evidence.
+- **The control passed by counting the defect.** With the door guard
+  removed, the leaked tab became current, and the shell only answers a
+  window request from the current tab -- so the control's own request was
+  never delivered, it failed for a reason that was not its own, and the
+  count passed by counting the leaked tab in place of the tab the control
+  never made. The opener is shown again between the two requests now. The
+  prediction written before that run was wrong on two lines of four, which
+  is how it surfaced.
+- **It wedged the suite for three and a half hours.** Driving a real magnet
+  reached a real libtorrent source, and a torrent is a public download, so
+  the queued consent box opened -- a `QMessageBox::exec()` with nobody to
+  answer it. `timeout 600` then sent SIGTERM, the shutdown handler caught it
+  and saved, and the save never finished, so both the suite and `timeout`
+  sat there. **`timeout` alone does not bound a process that handles
+  SIGTERM**; `timeout -k` does. The test drives a `mailto:` now, which is
+  the same branch with nothing behind it.
+
+**`open_downloads` and the consent box were both checked and neither hangs
+the browser.** The first is `show()`, not `exec()`, and the second is a
+`Qt::QueuedConnection`, so neither runs a nested loop inside the engine's
+synchronous callback. That hypothesis is closed rather than left standing.
+
 **Why the handler fires twice for some links is still open.** This is the
 half answerable where the jobs are made; the duplicate *call* is upstream in
 the external-url path and is not diagnosed. The rows are right either way,

@@ -322,6 +322,7 @@ public:
 	// view is then created *without* loading anything, because the request
 	// carries the navigation and doing it twice would replay a one-time OAuth
 	// url.
+	void open_external_url(const QUrl &url);   // a link that is not a page
 	node *open_new_window(const QUrl &url, bool user_initiated,
 	                       web_view_backend **adopt = nullptr);
 	void view_page_source();

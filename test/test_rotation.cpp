@@ -28,6 +28,7 @@
 // The sizes are a foldable's, in logical pixels: 360x800 and 800x360 folded,
 // 674x841 and 841x674 open. A desktop window dragged between those sizes is
 // the same event, which is why none of this needs a device.
+#include <functional>
 #include "main_window.h"
 #include "settings_dialog.h"
 #include <QFocusEvent>
@@ -153,6 +154,13 @@ public:
 	// Announce a navigation the way a real backend does. A signal cannot be
 	// emitted from outside its class, so the fake offers the door.
 	void navigated_to(const QUrl &u) { m_url = u; emit url_changed(u); }
+	// The same door for a window request. Returns whatever the shell offered
+	// to adopt, which is null when it declined to make one.
+	web_view_backend *asked_new_window(const QUrl &u, bool user_initiated) {
+		web_view_backend *adopt = nullptr;
+		emit new_window_requested(u, user_initiated, &adopt);
+		return adopt;
+	}
 	void back() override {}
 	void forward() override {}
 	void reload() override {}
@@ -2993,6 +3001,97 @@ int main(int argc, char **argv) {
 			check(note->text().contains("Never uses an external service"),
 			       "an empty field is the placeholder, and that is loopback");
 		}
+	}
+
+	section("a link that is not a page does not become a tab");
+
+	// **The other half of the doubled download row.** `open_new_window` made
+	// a node for any valid url, so a magnet link carrying `target="_blank"`
+	// became a tab: url set to the magnet, and a title of the whole magnet
+	// string, `url.host()` being empty for one.
+	//
+	// It could never render, and it was not merely untidy. `open_node` loads
+	// `n->url` whenever it builds a view, so opening that row once the live
+	// cap had evicted its view -- or after a restart -- navigated to the
+	// magnet again and started the download a second time.
+	{
+		main_window w4(&factory, &policy, &filter);
+		w4.resize(900, 600);
+		w4.show();
+		spin(150);
+
+		auto show4 = [&](node *n) -> fake_view * {
+			const QModelIndex idx =
+			  w4.m_proxy->mapFromSource(w4.m_model->index_for_node(n));
+			emit w4.m_tree->activated(idx);
+			spin(200);
+			return static_cast<fake_view *>(
+			  w4.m_views_by_id.value(n->id, nullptr));
+		};
+
+		node *page = w4.m_model->add_tab(nullptr, "a page", "https://a.example/");
+		fake_view *from = page ? show4(page) : nullptr;
+		check(from != nullptr, "a page tab is showing, so a link has an opener");
+
+		// **`mailto:` rather than a magnet, deliberately.** The branch under
+		// test is `!renders_as_page(url)`, which is the same for both -- but a
+		// magnet has a source behind it in this build, so driving one here
+		// starts a real libtorrent session and raises the public-download
+		// consent box. That is a `QMessageBox::exec()` with nobody to answer
+		// it, and it wedged this suite for three and a half hours: `timeout`
+		// sent SIGTERM, the shutdown handler caught it, and the save never
+		// finished. A scheme with no source reaches the same refusal and
+		// leaves the suite off the network.
+		std::function<int(node *)> count_all = [&](node *n) -> int {
+			int c = 1;
+			for (node *k : n->children)
+				c += count_all(k);
+			return c;
+		};
+		const int before = count_all(w4.m_model->root());
+		const QUrl external("mailto:someone@example.invalid");
+		web_view_backend *adopt =
+		  from ? from->asked_new_window(external, /*user_initiated=*/true)
+		        : nullptr;
+		spin(150);
+		check(from && adopt == nullptr,
+		       "a link that is not a page is offered no view to adopt");
+		check(count_all(w4.m_model->root()) == before,
+		       QString("and no tab is made for it (%1 new)")
+		         .arg(count_all(w4.m_model->root()) - before));
+
+		// **The control, and it is the half that makes the refusal mean
+		// something.** A window request for a real page must still produce a
+		// tab -- otherwise the check above would pass just as loudly with the
+		// whole path broken.
+		// **Show the opener again before asking a second time.** The shell
+		// only answers a window request from the tab that is current, and
+		// `open_node` makes a newly opened tab current -- so a tab leaking
+		// from the request above would take `from` out of the running and
+		// this control would fail for a reason that is not its own. Measured:
+		// with the door guard removed it did exactly that, while the count
+		// below passed by counting the leaked tab in place of this one.
+		if (page)
+			show4(page);
+		web_view_backend *adopt_page =
+		  from ? from->asked_new_window(QUrl("https://b.example/popup"), true)
+		        : nullptr;
+		spin(150);
+		check(adopt_page != nullptr,
+		       "while a page asking for a window still gets one");
+		check(count_all(w4.m_model->root()) == before + 1,
+		       QString("as a tab of its own (%1 new)")
+		         .arg(count_all(w4.m_model->root()) - before));
+
+		// **And a row already saved under the old behaviour opens blank.**
+		// Those trees are on disk; loading the magnet would hand it straight
+		// back to the scheme handler and start the download again.
+		node *stray = w4.m_model->add_tab(nullptr, "a magnet tab",
+		                                   "magnet:?xt=urn:btih:fromdisk");
+		if (fake_view *v = stray ? show4(stray) : nullptr)
+			check(v->url() == QUrl("about:blank"),
+			       QString("a magnet row saved by an older build opens blank (%1)")
+			         .arg(v->url().toString()));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

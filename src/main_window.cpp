@@ -592,17 +592,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 			           name.isEmpty() ? url.toString() : name), 12000);
 		});
 
-		factory->set_external_url_handler([this](const QUrl &url) {
-			if (renders_as_page(url))
-				return;
-			if (!m_downloads->source_for(url)) {
-				m_status->showMessage(
-				  QString("Nothing here can open %1").arg(url.scheme() + ":"),
-				  6000);
-				return;
-			}
-			start_download(url);
-		});
+		factory->set_external_url_handler(
+		  [this](const QUrl &url) { open_external_url(url); });
 	}
 	// The local proxy is optional: if it cannot listen, Watch still works and
 	// simply hands over the raw URL (sec 10 -- it is an upgrade tier, not a
@@ -3610,9 +3601,17 @@ void main_window::open_node(node *n, bool load_now) {
 			view->restore_state(m_state->load(n->id));
 			m_state->remove(n->id);
 		} else {
-			view->load(n->url.isEmpty()
+			// A row whose url is not a page is one of the magnet tabs
+			// described in `open_new_window`. Loading it would hand the url
+			// straight back to the scheme handler and start the download
+			// again, so such a row opens blank -- the tabs already saved to
+			// disk under the old behaviour are the reason this is checked
+			// here as well as at the door.
+			const QUrl target = n->url.isEmpty() ? QUrl()
+			                                      : QUrl::fromUserInput(n->url);
+			view->load(target.isEmpty() || !renders_as_page(target)
 			               ? QUrl(QStringLiteral("about:blank"))
-			               : QUrl::fromUserInput(n->url));
+			               : target);
 		}
 	}
 
@@ -4016,10 +4015,45 @@ void main_window::view_page_source() {
 	                 true);
 }
 
+// A link that is not a page: a magnet, a mailto, anything registered as a
+// custom scheme. Two paths reach this -- the engine's scheme handler, and a
+// link that asked for a new window -- and they must answer it the same way,
+// which is why the body is here rather than in either caller.
+void main_window::open_external_url(const QUrl &url) {
+	if (renders_as_page(url))
+		return;
+	if (!m_downloads->source_for(url)) {
+		m_status->showMessage(
+		  QString("Nothing here can open %1").arg(url.scheme() + ":"), 6000);
+		return;
+	}
+	start_download(url);
+}
+
 node *main_window::open_new_window(const QUrl &url, bool user_initiated,
                                     web_view_backend **adopt) {
 	if (!url.isValid() || url.isEmpty())
 		return nullptr;
+
+	// **A magnet link with `target="_blank"` was becoming a tab.** Nothing
+	// here consulted `renders_as_page`, so any scheme the engine handed over
+	// as a window request got a node -- url set to the magnet, and a title of
+	// the whole magnet string, since `url.host()` is empty for one.
+	//
+	// The tab could never render, and it was worse than untidy: `open_node`
+	// loads `n->url` whenever it builds a view, so clicking that row after
+	// the live cap had evicted its view -- or after a restart -- navigated to
+	// the magnet again and started the download a second time. That is one
+	// mechanism behind a click producing two rows.
+	//
+	// The download still has to happen, because refusing the request without
+	// doing anything would abandon the navigation and lose the link
+	// altogether: the engine is waiting on this, and the scheme handler only
+	// runs if something navigates.
+	if (!renders_as_page(url)) {
+		open_external_url(url);
+		return nullptr;
+	}
 
 	web_view_backend *from = current_view();
 	const QString asker = from ? from->url().host() : QString();
