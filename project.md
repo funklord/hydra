@@ -22613,6 +22613,38 @@ ends `return ok`, which that pattern cannot see. **A grep for return
 literals cannot find a function that returns a variable**, and the failure
 mode is a confident narrowing rather than an empty result.
 
+### A tree that will not open saves beside itself
+
+**Settled by the copyright holder: save to a sidecar file instead.** Giving
+up the path protected the file and cost the session everything -- which is
+the half of the trade that was never stated when the refusal went in.
+
+`m_tree_path` becomes `tree.txt.new` rather than being cleared, so every
+writer guarded on it works again while the unreadable file is untouched. If
+that name is held, a stamped one is taken instead: two failed sessions in a
+row would otherwise keep the second one's tabs and lose the first's, which
+is this branch's own defect one file along. The search is bounded and
+returns its last candidate rather than looping.
+
+`load_tree` still returns false. The load did fail, and `main.cpp`'s
+fallback depends on that answer; what changed is where the session saves,
+not whether the read succeeded.
+
+**Two of the six assertions are weaker than they read, and saying so here
+is cheaper than somebody trusting them later.** Under the sabotage that
+restores the old clearing behaviour, both no-clobber checks pass
+*vacuously* -- an empty path trivially differs from `tree.txt.new`, and
+there is no rescue to compare. And the rescue in these fixtures is empty in
+the first place, because a session whose tree would not load has no tabs, so
+the content comparison is `0 bytes, was 0`. **The name assertion is what
+catches a clobber**, proven by the sabotage that reuses a held name; the
+content one is nearly free and nearly worthless.
+
+What the sabotage did establish is the part worth having: with the sidecar
+removed, the assertion that an unreadable tree survives the window closing
+stays green. The session got its saves back without weakening the guarantee
+that produced the refusal.
+
 ### A slashless url argument was read as a tree path
 
 Found while looking for the above, and not the cause of it. `argument_url`

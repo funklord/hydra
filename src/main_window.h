@@ -512,10 +512,15 @@ public:
 	// **Shown while anything is waiting to reach disk, and while nothing can.**
 	//
 	// Asked for after a session lost hours of tabs: the saves are debounced,
-	// and every writer is guarded on `m_tree_path` being set, so a tree that
-	// failed to load leaves all of them a silent no-op with nothing on screen
+	// and every writer is guarded on `m_tree_path` being set, so a window
+	// with no path leaves all of them a silent no-op with nothing on screen
 	// to say so. A control that stays lit is the difference between "it saves
 	// in a moment" and "it has not saved and will not".
+	//
+	// A tree that failed to load is no longer one of those cases -- it takes
+	// a sidecar name instead, so it saves -- but a path refused before it was
+	// ever assigned still is: a directory that does not exist, or a url
+	// handed over as a tree path.
 	QToolButton     *m_save_hint  = nullptr;
 	void refresh_save_hint();
 

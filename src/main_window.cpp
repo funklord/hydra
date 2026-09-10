@@ -2430,6 +2430,29 @@ main_window::~main_window() {
 		m_kiosk->exit();
 }
 
+// Where a session saves when its tree could not be read.
+//
+// **Never an existing file.** This exists because an unreadable tree used to
+// be written over, and a rescue that overwrote the last rescue would repeat
+// that in miniature -- two failed sessions in a row would leave the second
+// one's tabs and lose the first one's. So the plain name is used only when
+// nothing holds it, and a stamped one otherwise.
+//
+// The loop terminates on the bound, not on finding a free name: a thousand
+// collisions within one second is not a case worth serving, and returning
+// the last candidate is better than looping.
+static QString sidecar_path(const QString &tree) {
+	QString candidate = tree + ".new";
+	if (!QFileInfo::exists(candidate))
+		return candidate;
+	const QString stamp =
+	  QDateTime::currentDateTime().toString("yyyyMMdd-hhmmss");
+	candidate = tree + ".new-" + stamp;
+	for (int n = 2; QFileInfo::exists(candidate) && n < 1000; ++n)
+		candidate = tree + ".new-" + stamp + "-" + QString::number(n);
+	return candidate;
+}
+
 bool main_window::load_tree(const QString &path) {
 	// **The directory has to exist already, and refusing is the fix for a bug
 	// rather than fussiness.**
@@ -2574,11 +2597,22 @@ bool main_window::load_tree(const QString &path) {
 	m_consent->set_rules(cr);
 	m_antiadblock->set_rules(cr);
 
-	// **A tree that would not load must not be saved over.** `m_tree_path` is
-	// assigned near the top of this function because everything else here is
-	// derived from the tree's directory, and every writer below is guarded by
-	// an `isEmpty()` check on the path it uses -- so clearing it is exactly
-	// how this window says "persist the rest, but leave that file alone".
+	// **A tree that would not load must not be saved over -- but the session
+	// still has to be able to save.** `m_tree_path` is assigned near the top
+	// of this function because everything else here is derived from the
+	// tree's directory, and every writer below is guarded by an `isEmpty()`
+	// check on the path it uses.
+	//
+	// Clearing it was the first answer, and it was half right: it protected
+	// the file and cost the session everything. Measured from use -- a tree
+	// that would not open left a browser running for hours with every tab it
+	// opened, moved and closed reaching nothing, and `main.cpp` cannot
+	// recover that either, because its fallback retries only when the refused
+	// path was not already the default.
+	//
+	// So give up the file and take another name beside it. The unreadable
+	// tree is untouched, which was the whole point of refusing it, and this
+	// session lands somewhere a person can find and rename.
 	//
 	// The load fails only when the file is there and could not be read; an
 	// absent file is an ordinary first run and still succeeds. See
@@ -2586,12 +2620,14 @@ bool main_window::load_tree(const QString &path) {
 	// measurement that says an unreadable file is still replaceable.
 	const bool ok = m_model->load(path);
 	if (!ok) {
-		m_tree_path.clear();
+		m_tree_path = sidecar_path(path);
 		if (m_status)
 			m_status->showMessage(
-			    QString("%1 could not be read. Nothing will be saved to it "
-			             "this session, so the tabs in it are still there.")
-			        .arg(path), 0);
+			    QString("%1 could not be read, and is left as it is. This "
+			             "session is being saved to %2 instead.")
+			        .arg(path, QFileInfo(m_tree_path).fileName()), 0);
+		qCritical("tree: %s could not be read; saving this session to %s",
+		           qPrintable(path), qPrintable(m_tree_path));
 	} else if (const int lost = m_model->last_unparsed(); lost > 0) {
 		// **A partial read is the dangerous one, because everything looks
 		// fine.** The tree opens, the tabs that parsed are all there, and the

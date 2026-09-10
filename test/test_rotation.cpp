@@ -1728,6 +1728,18 @@ int main(int argc, char **argv) {
 			check(!unreadable.load_tree(path),
 			      "load_tree refuses a tree it cannot read");
 
+			// **Refusing the file must not cost the session its saves.**
+			// Clearing the path protected the tree and left every writer a
+			// silent no-op, which is how a browser ran for hours with none
+			// of its tabs reaching disk. It takes a name beside the tree
+			// instead, so the unreadable file is still untouched and this
+			// session has somewhere to go.
+			check(unreadable.m_tree_path == path + ".new",
+			       QString("and saves beside it instead of nowhere (%1)")
+			         .arg(unreadable.m_tree_path.isEmpty()
+			                ? QString("nothing at all")
+			                : QFileInfo(unreadable.m_tree_path).fileName()));
+
 			// **A slashless url argument used to walk through the directory
 			// check.** `argument_url` calls only file, http and https pages,
 			// so every other scheme arrives here as a tree path -- and a
@@ -1770,6 +1782,37 @@ int main(int argc, char **argv) {
 		               "%2)").arg(after.size()).arg(before.size()));
 		check(after.contains("something the user cares about"),
 		      "with the tab that was in it still named");
+		// And the session it could not open for is on disk beside it, which
+		// is the half that clearing the path used to lose.
+		check(QFileInfo::exists(path + ".new"),
+		       QString("while this session was written to %1")
+		         .arg(QFileInfo(path + ".new").fileName()));
+
+		// **A second failed session must not take the first one's rescue.**
+		// Two unreadable starts in a row would otherwise keep the second
+		// session's tabs and lose the first's, which is the defect this whole
+		// branch exists to avoid, repeated one file along.
+		{
+			const QByteArray first_rescue = [&] {
+				QFile f(path + ".new"); f.open(QIODevice::ReadOnly);
+				return f.readAll();
+			}();
+			QFile::setPermissions(path, QFile::Permissions());
+			main_window second(&factory, &policy, &filter);
+			check(!second.load_tree(path),
+			       "a second session still cannot read the tree");
+			check(second.m_tree_path != path + ".new",
+			       QString("and takes a name of its own (%1)")
+			         .arg(QFileInfo(second.m_tree_path).fileName()));
+			QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner);
+			const QByteArray still = [&] {
+				QFile f(path + ".new"); f.open(QIODevice::ReadOnly);
+				return f.readAll();
+			}();
+			check(still == first_rescue,
+			       QString("leaving the first rescue as it was (%1 bytes, was "
+			                "%2)").arg(still.size()).arg(first_rescue.size()));
+		}
 	}
 
 	// **The same defect as the tree, in the five stores beside it.** Each one
