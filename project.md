@@ -22574,6 +22574,84 @@ which is what was reported -- but a fix that makes a symptom go away without
 explaining it leaves the cause to surface somewhere else, so it is recorded
 here rather than closed.
 
+### Why the tree failed to load
+
+Asked directly, after the save indicator went in. The mechanism is in two
+functions and neither is subtle once both are read together.
+
+`tree_outline::load` refuses a file that **exists and will not open**, and
+returns an empty tree for one that is merely absent -- the two had to be
+told apart because treating an unreadable file as empty is how the next
+save wrote that emptiness back over somebody's tabs. `load_tree` then does
+the only thing it can with that refusal:
+
+    const bool ok = m_model->load(path);
+    if (!ok) m_tree_path.clear();
+
+Every writer in the window is guarded on `m_tree_path`, so clearing it is
+how the window says "persist the rest, leave that file alone" -- and it
+means **nothing reaches the tree for the rest of the session**. Tabs alive
+for hours, never written, which is exactly what was reported. `main.cpp`
+cannot recover it either: its fallback retries only when the refused path
+was not already the default, and with no argument it is.
+
+**The specific reason `open()` failed is not recoverable.** The code prints
+`f.errorString()`, which would name it, and that line went nowhere: the user
+journal carries no hydra output at all, and `~/.xsession-errors` carries
+none of its diagnostics -- both checked for whether they *could* have
+carried it before the empty results were read as meaning anything. The
+permissions on the file are ordinary now. So the mechanism is established
+and the trigger is not, and the honest position is that the two are
+different claims.
+
+**A wrong turn worth keeping, because it cost an hour and would be made
+again.** Midway through, a grep for `return (true|false)` over the function
+found exactly one hit and the conclusion drawn was that a missing directory
+was the only way to fail -- so the diagnosis above was announced as wrong
+and the search moved to magnet arguments and instance locks. The function
+ends `return ok`, which that pattern cannot see. **A grep for return
+literals cannot find a function that returns a variable**, and the failure
+mode is a confident narrowing rather than an empty result.
+
+### A slashless url argument was read as a tree path
+
+Found while looking for the above, and not the cause of it. `argument_url`
+classifies only `file`, `http` and `https` as pages, so every other scheme
+reaches `main.cpp` as a tree path. The directory check was written for the
+`file:` incident it names, and that incident had slashes in it:
+
+    magnet:?xt=urn:btih:abc     dir=/home/funk              PASSES
+    mailto:someone@example      dir=/home/funk              PASSES
+    file:///tmp/x/page.html     dir=/home/funk/file:/tmp/x  refused
+    https://example.com/page    dir=/home/funk/https:/exa   refused
+
+Measured with a probe rather than reasoned about, because the claim was
+about what `QFileInfo::absolutePath()` does with a string that is not a
+path. A scheme with no slash has no directory component, so the directory
+it appears to sit in is the working directory, which always exists.
+
+Passing means the tree opens empty and every writer is redirected: a
+`state/`, a `view.ini` and a `policy.ini` beside wherever the browser was
+started, and the session saved into a file named after the magnet.
+**Reproduced rather than argued** -- the sabotage run that removed the guard
+left exactly that litter in `test/`, the saved tree a zero-byte file named
+`mailto:someone@example.invalid`, which is the empty tree that would have
+gone over the real one. Removed by name afterwards. Refused
+now, unless a file of that name really exists, and a one-character scheme
+is left alone so a Windows drive letter still works.
+
+**It did not happen on this machine** -- no such files in `$HOME` -- so it
+is a latent defect rather than the reported one, and the entry says so
+rather than letting a plausible mechanism collect a symptom it did not
+cause.
+
+**The test's control had to move to its own window.** A successful
+`load_tree` assigns `m_tree_path`, so running the positive case in the
+window that had just refused an unreadable tree would have aimed its close
+at another file -- leaving the older assertion, that an unreadable tree is
+not written over, passing for a reason unrelated to the refusal. That is
+the third time in this pass a check was about to pass for the wrong reason.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

@@ -2457,6 +2457,39 @@ bool main_window::load_tree(const QString &path) {
 	// Whether a `file:` url should be opened as a page rather than read as a
 	// tree is a separate question, deliberately decided in `main.cpp` and not
 	// answered here.
+	// **A scheme with no slashes walks straight through the check below.**
+	// That check refuses `file:///tmp/x/page.html` because its
+	// `absolutePath()` is the nonexistent `file:/tmp/x` -- it was written for
+	// the incident described there, and that incident had slashes in it. A
+	// `magnet:` or `mailto:` argument has none, so `absolutePath()` is simply
+	// the working directory, which always exists.
+	//
+	// Measured rather than reasoned, from the working directory:
+	//
+	//     magnet:?xt=urn:btih:abc     dir=/home/funk              PASSES
+	//     mailto:someone@example      dir=/home/funk              PASSES
+	//     file:///tmp/x/page.html     dir=/home/funk/file:/tmp/x  refused
+	//     https://example.com/page    dir=/home/funk/https:/exa   refused
+	//
+	// Passing means the tree comes up empty and every writer is pointed at
+	// the working directory instead: a `state/`, a `view.ini` and a
+	// `policy.ini` beside wherever the browser was started, and the session
+	// saved into a file named after the magnet. `argument_url` classifies
+	// only file, http and https as pages, so every other scheme reaches here
+	// as a tree path.
+	//
+	// A file that really is named that way still wins, because it exists. The
+	// length test leaves a Windows drive letter alone, which parses as a
+	// one-character scheme.
+	const QString arg_scheme = QUrl(path).scheme();
+	if (!QFileInfo::exists(path) && arg_scheme.size() > 1) {
+		qCritical("tree: %s is a %s url, not a tree; refusing to open it as "
+		           "one, because doing so empties the tree and scatters this "
+		           "window's files into the working directory",
+		           qPrintable(path), qPrintable(arg_scheme));
+		return false;
+	}
+
 	const QString dir = QFileInfo(path).absolutePath();
 	if (!QFileInfo(dir).isDir()) {
 		qCritical("tree: %s is not in an existing directory (%s); refusing to "

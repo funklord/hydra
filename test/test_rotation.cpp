@@ -1727,6 +1727,32 @@ int main(int argc, char **argv) {
 			main_window unreadable(&factory, &policy, &filter);
 			check(!unreadable.load_tree(path),
 			      "load_tree refuses a tree it cannot read");
+
+			// **A slashless url argument used to walk through the directory
+			// check.** `argument_url` calls only file, http and https pages,
+			// so every other scheme arrives here as a tree path -- and a
+			// magnet has no slash, so the directory it appears to sit in is
+			// the working directory, which always exists. The tree then came
+			// up empty with every writer pointed at the working directory.
+			// These refuse before `m_tree_path` is assigned, so they leave
+			// the cleared path above alone.
+			check(!unreadable.load_tree("magnet:?xt=urn:btih:notatree"),
+			      "and refuses a magnet handed to it as a tree");
+			check(!unreadable.load_tree("mailto:someone@example.invalid"),
+			      "and a mailto, which has no slash either");
+
+			// The control, in a window of its own. A path for a tree not
+			// written yet is a new tree rather than a url and must still be
+			// accepted -- but a successful load assigns `m_tree_path`, and
+			// doing that to this window would aim its close at another file,
+			// leaving the assertion below (that an unreadable tree is not
+			// written over) passing for a reason unrelated to the refusal.
+			{
+				main_window fresh(&factory, &policy, &filter);
+				check(fresh.load_tree(dir + "/brand-new-tree.txt"),
+				       "while a plain path for a tree not yet written is "
+				       "accepted");
+			}
 			unreadable.show();
 			spin(150);
 			// The close is the point: this is the path that used to write an
