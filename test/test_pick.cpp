@@ -190,6 +190,67 @@ int main(int argc, char **argv) {
 	       QString("which is a row of its own (%1)")
 	           .arg(int(m.jobs().size()) - before));
 
+	// **What a phone has room for. Measured on the handset, not imagined.**
+	// On the Fold's cover screen the viewport is 336 px and the five columns
+	// want 489 -- Name 140, Source 59, Progress 124, Size 66, Status 100. The
+	// four that are not Name come to 349 by themselves, so narrowing Name
+	// cannot fit five columns there, and two attempts at that failed before
+	// the arithmetic was actually done.
+	//
+	// What was wrong on the device is that Size and Status sat past the right
+	// edge with nothing able to reach them: a viewport drag is a rubber-band
+	// selection rather than a pan, and the scrollbar thumb would not move.
+	// Both were tried on the phone.
+	//
+	// Columns are indices here because the enum is private to the dialog:
+	// 0 Name, 1 Source, 2 Progress, 3 Size, 4 Status.
+	{
+		downloads_dialog narrow(&m, &players, &proxy);
+		narrow.resize(360, 600);
+		narrow.show();
+		spin(500);
+
+		auto *t = narrow.findChild<QTreeWidget *>();
+		QHeaderView *const h = t ? t->header() : nullptr;
+		check(t && t->isColumnHidden(1) && t->isColumnHidden(3),
+		       "Source and Size step aside on a phone-width window");
+
+		int shown = 0;
+		QStringList widths;
+		for (int c = 0; t && h && c < h->count(); ++c) {
+			if (t->isColumnHidden(c))
+				continue;
+			shown += h->sectionSize(c);
+			widths << QString::number(h->sectionSize(c));
+		}
+		const int vp = t ? t->viewport()->width() : 0;
+		std::printf("  [note] narrow: %s = %d in a %d px viewport\n",
+		             qPrintable(widths.join('+')), shown, vp);
+		check(t && shown <= vp,
+		       QString("and what is left fits (%1 of %2 px)")
+		         .arg(shown).arg(vp));
+
+		// **The control, and it is what stops this being a permanent
+		// amputation.** A version that simply hid two columns always would
+		// pass everything above while quietly removing information from the
+		// desktop, where there is room for all five.
+		downloads_dialog wide(&m, &players, &proxy);
+		wide.resize(1400, 600);
+		wide.show();
+		spin(500);
+
+		auto *tw = wide.findChild<QTreeWidget *>();
+		check(tw && !tw->isColumnHidden(1) && !tw->isColumnHidden(3),
+		       "while a wide window shows all five");
+		const int natural =
+		  tw ? tw->fontMetrics().horizontalAdvance(
+		         "A film with a reasonably long file name.mkv")
+		     : 0;
+		check(tw && tw->header()->sectionSize(0) >= natural,
+		       QString("with the name column still whole (%1 against %2 px)")
+		         .arg(tw ? tw->header()->sectionSize(0) : 0).arg(natural));
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

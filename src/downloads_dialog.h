@@ -41,7 +41,24 @@ public:
 	downloads_dialog(download_manager *downloads, player_launcher *players,
 	                  local_proxy *proxy, QWidget *parent = nullptr);
 
+protected:
+	// The widths come from the font, which is right and is not the whole
+	// story: it cannot know how wide the screen is. Re-decide on every
+	// resize, which includes the first show.
+	void resizeEvent(QResizeEvent *event) override;
+
 private:
+	// Drop the two columns a phone has no room for, and put them back when
+	// there is room again. See the definition for the measurement.
+	void fit_columns();
+	void showEvent(QShowEvent *event) override;
+	// What each column asks for at the current font, recorded once. Live
+	// sizes cannot be read back: `setStretchLastSection` makes the last
+	// column elastic, so they always add to about the viewport.
+	int  m_natural[5]    = { 0, 0, 0, 0, 0 };
+	int  m_natural_total = 0;
+	bool m_cramped       = false;
+
 	void refresh();              // reconcile rows against the job list
 	void schedule_refresh();     // coalesce bursts of changed()
 	void update_buttons();

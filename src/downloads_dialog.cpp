@@ -202,6 +202,14 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 	head->resizeSection(col_source, fm.horizontalAdvance("bittorrent  "));
 	head->resizeSection(col_progress, fm.horizontalAdvance("100%") * 4);
 	head->resizeSection(col_size, fm.horizontalAdvance("1023.4 MB  "));
+	// Recorded while they are still what the font asked for. `sectionSize`
+	// cannot be read back later: `setStretchLastSection` makes the last
+	// column elastic, so the live sizes always add up to about the viewport
+	// and say nothing about what the columns actually want.
+	for (int c = 0; c < m_list->columnCount(); ++c) {
+		m_natural[c]    = head->sectionSize(c);
+		m_natural_total += m_natural[c];
+	}
 	m_list->setItemDelegateForColumn(col_progress, new progress_delegate(this));
 	connect(m_list, &QTreeWidget::itemSelectionChanged,
 	         this, &downloads_dialog::update_buttons);
@@ -272,6 +280,88 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 void downloads_dialog::schedule_refresh() {
 	if (!m_coalesce->isActive())
 		m_coalesce->start();
+}
+
+// **Measured on the handset, and the arithmetic decided this rather than
+// taste.** On the Fold's cover screen the viewport is 336 logical px and the
+// five columns want 489: Name 140, Source 59, Progress 124, Size 66, Status
+// 100. The four that are not Name come to 349 on their own, so no amount of
+// narrowing Name fits five columns there -- two attempts at that failed, the
+// second of them also silently shrinking Name on a desktop, because
+// `setStretchLastSection` makes the live sizes useless for the sum.
+//
+// What was actually wrong on the device is that Size and Status sat past the
+// right edge and nothing could reach them: a drag in the viewport is a
+// rubber-band selection, not a pan, and dragging the horizontal scrollbar's
+// thumb moved nothing. Both were tried and the header positions were
+// identical afterwards.
+//
+// So Source and Size go, and Name, Progress and Status stay -- what the row
+// is, how far along, and whether it failed. The copyright holder chose which
+// two.
+//
+// The threshold is the font's own answer rather than a number: hide when all
+// five cannot fit, which moves with the text size exactly as the widths do.
+// Compared against the recorded naturals, never the live sizes, so the
+// decision cannot oscillate as hiding changes what fits.
+void downloads_dialog::fit_columns() {
+	QHeaderView *const head = m_list->header();
+	const int viewport = m_list->viewport()->width();
+	if (viewport <= 0 || m_natural_total <= 0)
+		return;
+
+	// **Re-decided every time, not latched.** The first version returned
+	// early when the verdict had not changed, and an early `resizeEvent` --
+	// fired before the layout gives the viewport its real width -- latched
+	// "cramped" on a desktop dialog that then never re-evaluated. Comparing
+	// against a recorded constant makes repeating the whole decision free of
+	// hysteresis, so there is nothing to gain by short-circuiting it.
+	const bool cramped = m_natural_total > viewport;
+	if (cramped != m_cramped) {
+		m_cramped = cramped;
+		m_list->setColumnHidden(col_source, cramped);
+		m_list->setColumnHidden(col_size, cramped);
+	}
+
+	// A progress bar does not need four times the width of "100%" on a
+	// phone; it is a bar, and the number inside it is the same either way.
+	const QFontMetrics fm = m_list->fontMetrics();
+	head->resizeSection(col_progress,
+	                     cramped ? fm.horizontalAdvance("100%") * 2
+	                             : m_natural[col_progress]);
+	if (!cramped) {
+		// Re-applied on the way back: a column that was hidden does not
+		// necessarily remember the width it had.
+		head->resizeSection(col_source, m_natural[col_source]);
+		head->resizeSection(col_size, m_natural[col_size]);
+	}
+
+	// And the name column takes whatever is left, between a floor and what
+	// the font asked for. Computed from the naturals rather than decremented
+	// from the current width, so it gives the space back when the window
+	// grows -- an earlier attempt only ever subtracted, and left Name at its
+	// floor on a 1400 px desktop.
+	int others = 0;
+	for (int c = 0; c < m_list->columnCount(); ++c) {
+		if (c == col_name || m_list->isColumnHidden(c))
+			continue;
+		others += (c == col_progress) ? head->sectionSize(c) : m_natural[c];
+	}
+	const int floor_px = fm.horizontalAdvance("a long enough name.mkv");
+	head->resizeSection(
+	  col_name, qBound(floor_px, viewport - others, m_natural[col_name]));
+}
+
+void downloads_dialog::showEvent(QShowEvent *event) {
+	QDialog::showEvent(event);
+	// The geometry a resize reports during construction is not the one the
+	// dialog ends up with, so decide again once it is actually on screen.
+	fit_columns();
+}
+
+void downloads_dialog::resizeEvent(QResizeEvent *event) {
+	QDialog::resizeEvent(event);
+	fit_columns();
 }
 
 void downloads_dialog::refresh() {

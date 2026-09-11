@@ -22613,6 +22613,68 @@ ends `return ok`, which that pattern cannot see. **A grep for return
 literals cannot find a function that returns a variable**, and the failure
 mode is a confident narrowing rather than an empty result.
 
+### Two columns a phone could not reach
+
+Reported long ago and only now checked on the handset. On the Fold's cover
+screen -- 840 px, viewport 336 -- the downloads table showed Name, Source and
+a `Progress` header clipped mid-word, and `Size` and `Status` sat past the
+right edge. **Nothing could reach them**: a drag inside the viewport is a
+rubber-band selection rather than a pan, and dragging the horizontal
+scrollbar's thumb moved nothing. Both were tried on the device and the header
+positions were byte-identical afterwards. `Status` is the column that says
+whether a download failed, and it was the one entirely off-screen.
+
+**Three attempts, and the arithmetic should have come first.**
+
+    Name 140   Source 59   Progress 124   Size 66   Status 100   = 489
+
+The four that are not Name total **349 against a 336 px viewport**, so
+narrowing Name cannot fit five columns there at any width. That was
+measurable before the first line was written and was not measured until the
+second attempt failed.
+
+- **Squeeze Name.** Impossible, per the above. It also only ever subtracted
+  from the current width, and `resizeEvent` fires while the dialog is still
+  small during construction -- so Name was cut to its floor and never given
+  anything back: 140 where the font asked 241, on a 1400 px desktop.
+- **Sum the other columns and give Name the rest.** `setStretchLastSection`
+  makes the last column elastic, so the live sizes always add to about the
+  viewport and say nothing about what the columns want. The quantity being
+  measured included the slack being computed.
+- **Hide Source and Size** -- the copyright holder's choice of which two --
+  **narrow `Progress`** from four times the width of "100%" to twice, and fit
+  Name to the remainder from recorded naturals. 174+62+100 = 336 exactly.
+
+**The threshold is the font's own answer, not a constant**: hide when all
+five cannot fit, which moves with the text size exactly as the widths do. A
+fixed pixel threshold would break at large text in precisely the way the
+fixed 170 px `Progress` column did.
+
+    sabotage                      result
+    never hide                    2 fail -- load-bearing
+    latch the verdict again       0 fail -- NOT proven
+    Progress keeps its full width 1 fail -- load-bearing
+
+**The middle row is a correction.** The latch was a real bug, observed and
+fixed by hand -- an early `resizeEvent` set `cramped` on a desktop dialog and
+nothing revisited it. But restoring it leaves all 17 assertions green,
+because the `showEvent` override added alongside calls `fit_columns` once the
+geometry is real and that first call is the one the latch keeps. The
+re-evaluation stays as belt-and-braces and is **not** described as proven.
+
+**Verified on the device, both screens.**
+
+    cover 840    Name 453   Source hidden   Progress 141   Size hidden
+                 Status 196                 rightmost edge 816 of 840
+    unfolded     all five shown, rightmost edge 1768 of 1768
+
+The cover case was taken with a temporary `wm size` override, reset
+immediately afterwards. And the first reading of the unfolded screen was
+reported here as three columns overflowing, which was wrong: the check
+compared against 840 while the phone had been opened to 1768. **A stale
+constant in the instrument, not a fault in the tree** -- and the third time
+this dialog has been measured badly rather than built badly.
+
 ### The media dialog called a member on a half-destroyed view
 
 **Found by running the suite under ASan and UBSan**, after four subsystems
