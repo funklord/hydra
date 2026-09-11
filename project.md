@@ -22613,6 +22613,65 @@ ends `return ok`, which that pattern cannot see. **A grep for return
 literals cannot find a function that returns a variable**, and the failure
 mode is a confident narrowing rather than an empty result.
 
+### The media dialog called a member on a half-destroyed view
+
+**Found by running the suite under ASan and UBSan**, after four subsystems
+had been read and none implicated. The copyright holder's question -- "you
+can't run it and test that?" -- is what produced this; reading had not.
+
+    /usr/include/.../qpointer.h:75: runtime error: downcast of address
+        0x504000004f90 which does not point to an object of type
+        'QAbstractItemView'
+    ../src/empty_state.cpp:68: runtime error: member call on address
+        0x504000004f90 which does not point to an object of type
+        'QAbstractScrollArea'
+
+Same address, both sites. `empty_state` installs a resize filter on a view's
+viewport and never removes it. `media_dialog` owns both the list and the
+`empty_state`, the list is created first and so destroyed first, and a view
+dies derived-first -- `~QTreeView`, `~QAbstractItemView`,
+`~QAbstractScrollArea`, then `~QWidget`, then `~QObject`. Qt delivers events
+throughout. The filter therefore runs while the view is part-way gone and
+asks it for its `viewport()`.
+
+**`QPointer` does not cover this, and the header already said why it was
+needed for the label.** It clears in `~QObject`, which is the *last* step, so
+through the whole derived teardown it still reads non-null. Worse,
+`QPointer<QAbstractItemView>` `static_cast`s on every access, so merely
+reading the handle in that window is undefined.
+
+So the handle is a `QPointer<QObject>`, which needs no cast, and every use
+goes through a `qobject_cast`. That is the part that makes it correct rather
+than quieter: the metaobject IS maintained as each destructor runs, so the
+cast returns null exactly once the object has stopped being a view. The
+viewport is stored separately so the filter never has to ask, and the
+destructor removes the filter.
+
+**What no other check could see:**
+
+    original   2 UBSan errors     ASan clean     15 passed, 0 failed
+    fixed      0 UBSan errors     ASan clean     15 passed, 0 failed
+
+**The assertion column is identical.** Every one of the suite's checks passes
+over the undefined behaviour, and the full 2110-assertion gate passes too.
+**ASan is clean as well, and that is not a gap in ASan** -- the object is
+mid-destruction rather than freed, so the allocation is entirely valid.
+Only the vptr check can see a live object whose type has changed underneath
+a pointer. A single witness, so it was made to testify against the broken
+build before its silence on the fixed one was believed.
+
+**Whether this is the reported crash is not established.** It is on the
+dialog behind the play button, it fires on teardown, and it is undefined
+behaviour rather than a benign race -- which is a better-founded candidate
+than either of the two withdrawn above. It stays a candidate until the
+holder stops seeing the crash.
+
+**The stale-binary rule was broken while fixing this.** A build failed and
+the run chained behind it with `;` executed the previous binary, reporting
+"2 UBSan errors" that read exactly like a result about the new code. The
+compile error was loud; the stale run under it was not. Chained on `&&`
+since.
+
 ### A retry that woke into the next assembly
 
 Found by reading `stream_assembly` after two other candidates for the media

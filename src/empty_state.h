@@ -32,12 +32,14 @@
 
 class QAbstractItemView;
 class QLabel;
+class QWidget;
 
 class empty_state : public QObject {
 	Q_OBJECT
 public:
 	// The view is the parent of the overlay, so the label dies with it.
 	explicit empty_state(QAbstractItemView *view, QObject *parent = nullptr);
+	~empty_state() override;
 
 	// Empty text means "say nothing", which is not the same as an empty list.
 	void set_text(const QString &text);
@@ -61,6 +63,30 @@ private:
 	// segfaulted every time the consent dialog closed -- `refresh()` running on
 	// a label that had been freed one frame earlier. `QPointer` nulls itself, so
 	// teardown makes `refresh()` a no-op instead of a crash.
-	QPointer<QAbstractItemView> m_view;
-	QPointer<QLabel>            m_label;
+	// **And `QPointer<QAbstractItemView>` was not enough, which is the second
+	// half of the same lesson.** A `QPointer` clears itself in `~QObject`, and
+	// a view dies derived-first: by the time `~QAbstractScrollArea` has run,
+	// the QObject part is still alive and the pointer still reads non-null.
+	// Every member call in that window -- `viewport()`, `model()` -- is a call
+	// on a sub-object that no longer exists, and `QPointer<QAbstractItemView>`
+	// makes it worse by static_cast-ing on every access, so merely reading it
+	// is undefined.
+	//
+	// Caught by UBSan: "downcast of address ... which does not point to an
+	// object of type QAbstractItemView", from the resize filter during a media
+	// dialog teardown. ASan saw nothing, because the object is mid-destruction
+	// rather than freed -- the allocation is still perfectly valid.
+	//
+	// So the handle is a plain QObject, which needs no cast to read, and every
+	// use goes through `view()`. `qobject_cast` consults the metaobject, and
+	// that IS updated as each destructor runs -- so it returns null exactly
+	// once the object has stopped being a view.
+	QPointer<QObject>  m_view;
+	// Compared against in the filter so the viewport never has to be asked of
+	// a view that may be half gone.
+	QPointer<QWidget>  m_viewport;
+	QPointer<QLabel>   m_label;
+
+	// Null once the object is no longer a view, including mid-destruction.
+	QAbstractItemView *view() const;
 };
