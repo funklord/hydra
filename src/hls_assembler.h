@@ -66,6 +66,12 @@ private:
 
 	QNetworkAccessManager *m_net = nullptr;
 	QPointer<QNetworkReply> m_reply;
+	// Which run a deferred callback belongs to. `m_stopped` cannot answer
+	// that: `start()` sets it true through `stop()` and then false again, so a
+	// retry timer pending from the previous press passes its own guard and
+	// drives the new run. Counted rather than flagged, because the question is
+	// *which* run asked and not whether some run is stopped.
+	int                     m_run = 0;
 	QFile  *m_file = nullptr;
 
 	stream_context m_ctx;

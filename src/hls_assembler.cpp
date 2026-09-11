@@ -34,6 +34,11 @@ QNetworkReply *hls_assembler::get(const QUrl &url, const QByteArray &range) {
 void hls_assembler::start(const QUrl &manifest, const stream_context &ctx,
                            const QString &output_path) {
 	stop();
+	// A new run, so anything deferred by the last one can tell it is stale.
+	// Everything below is reset except `m_playlist`, which is what made the
+	// stale retry harmful rather than merely wasteful: it walked the previous
+	// stream's segment list while writing into this run's file.
+	++m_run;
 	m_ctx       = ctx;
 	m_path      = output_path;
 	m_written   = 0;
@@ -150,8 +155,14 @@ void hls_assembler::next_segment() {
 				// `next_segment()` re-reads `segments.at(m_index)`, and the
 				// index only advances on success -- so this fetches the same
 				// segment again rather than skipping past it.
-				QTimer::singleShot(wait, this, [this] {
-					if (!m_stopped)
+				// **Bound to this run.** `m_stopped` is not enough: a press
+				// that starts another assembly clears it, so a retry pending
+				// from this one would wake into that one -- fetching the old
+				// playlist's segments into the new run's file, advancing its
+				// index and racing its manifest fetch.
+				const int run = m_run;
+				QTimer::singleShot(wait, this, [this, run] {
+					if (!m_stopped && run == m_run)
 						next_segment();
 				});
 				return;

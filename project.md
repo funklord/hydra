@@ -22613,6 +22613,49 @@ ends `return ok`, which that pattern cannot see. **A grep for return
 literals cannot find a function that returns a variable**, and the failure
 mode is a confident narrowing rather than an empty result.
 
+### A retry that woke into the next assembly
+
+Found by reading `stream_assembly` after two other candidates for the media
+crash came to nothing. **It is not that crash either** -- it corrupts output
+rather than faulting -- but it is a real defect and it is the same family as
+the `Qt::UniqueConnection` one recorded above it: **press-scoped work
+outliving the press.**
+
+A failed segment schedules a retry up to 1200 ms out, guarded by
+`if (!m_stopped)`. `start()` sets that flag true through `stop()` and then
+immediately back to false, so a retry pending from the previous press passes
+its own guard and drives the *new* run. Both chains then call
+`next_segment()` and both advance `m_index`.
+
+`m_stopped` cannot express the question. It answers "is some run stopped",
+and what is being asked is "is the run that booked me still the current
+one". So `start()` increments `m_run`, the timer captures its value, and a
+stale timer does nothing.
+
+**What the sabotage showed, and why the assertion is on bytes:**
+
+    run 1   FAIL  holds exactly its own four segments (16384 of 16384 bytes)
+    run 2   FAIL  holds exactly its own four segments (16384 of 16384 bytes)
+    run 3   FAIL  holds exactly its own four segments (16384 of 16384 bytes)
+
+**The length is right in every failing run.** The race duplicates one
+segment and skips another, so the output stays exactly 4 x 4096 bytes and
+holds the wrong ones. A size check -- the obvious assertion -- passes all
+three. Only comparing the content fails.
+
+**Run three times on purpose**, because the test is timing-dependent: it has
+to press the second assembly inside the 400 ms retry window, and a single
+green sabotage would not distinguish "the guard is unnecessary" from "the
+window was missed". Three reds say the test reaches the defect. That
+dependence is a real weakness of the test and is recorded rather than
+papered over -- on a slow enough machine it could pass while broken.
+
+A third assertion, that the new output holds nothing from the assembly it
+replaced, **stays green under the sabotage** and is not evidence: the second
+manifest lands before the stale retry fires, so the resurrected chain
+fetches the new stream's segments rather than the old one's. Kept as a cheap
+check on a different failure mode, labelled so nobody counts it twice.
+
 ### The media crash: a hazard found, an attribution withdrawn
 
 **The crash is still unexplained.** This entry exists because a plausible

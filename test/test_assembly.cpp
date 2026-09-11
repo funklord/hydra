@@ -302,6 +302,78 @@ int main(int argc, char **argv) {
 		pump(800);
 	}
 
+	section("a retry pending from one assembly does not wake into the next");
+
+	// **Press-scoped work outliving the press**, which is the same family as
+	// the `Qt::UniqueConnection` defect above it: a failed segment schedules a
+	// retry up to 1200 ms out, guarded by `if (!m_stopped)` -- and `start()`
+	// sets that flag true through `stop()` and then straight back to false.
+	// A retry pending from the previous press therefore passes its own guard
+	// and drives the new run, racing its chain: both call `next_segment()`,
+	// both advance `m_index`, and segments are duplicated or skipped.
+	//
+	// Asserted on the bytes rather than on a count, because the corruption is
+	// in which segments landed and in what order.
+	{
+		// Stream A has a hole, so fetching it schedules a retry. Stream B is
+		// whole. Disjoint bytes, so a mix-up is visible in the output.
+		QByteArray want_b;
+		cdn.files["/A0.ts"] = QByteArray(k_seg_size, 'p');
+		// /A1.ts deliberately absent -> 404 -> retry scheduled
+		QByteArray man_a = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		                    "#EXTINF:4.0,\n/A0.ts\n#EXTINF:4.0,\n/A1.ts\n"
+		                    "#EXT-X-ENDLIST\n";
+		cdn.files["/a.m3u8"] = man_a;
+
+		QByteArray man_b = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n";
+		for (int i = 0; i < 4; ++i) {
+			const QByteArray seg(k_seg_size, char('q' + i));
+			cdn.files["/B" + QString::number(i) + ".ts"] = seg;
+			man_b += "#EXTINF:4.0,\n/B" + QByteArray::number(i) + ".ts\n";
+			want_b += seg;
+		}
+		man_b += "#EXT-X-ENDLIST\n";
+		cdn.files["/b.m3u8"] = man_b;
+
+		QTemporaryDir work;
+		const QString out_a = work.filePath("a.ts");
+		const QString out_b = work.filePath("b.ts");
+
+		auto pump = [](int ms) {
+			QElapsedTimer t;
+			t.start();
+			while (t.elapsed() < ms)
+				QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+		};
+
+		hls_assembler asmb(nullptr);
+		bool b_done = false;
+		QObject::connect(&asmb, &hls_assembler::completed,
+		                  [&] { b_done = true; });
+
+		stream_context ctx;
+		asmb.start(QUrl(base + "/a.m3u8"), ctx, out_a);
+		// A0 lands (120 ms), A1 answers 404 (120 ms), a retry is booked for
+		// 400 ms after that. Start the next run inside that window.
+		pump(350);
+		asmb.start(QUrl(base + "/b.m3u8"), ctx, out_b);
+
+		QElapsedTimer t;
+		t.start();
+		while (t.elapsed() < 8000 && !b_done)
+			QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+		check(b_done, "the second assembly finishes");
+
+		QFile f(out_b);
+		f.open(QIODevice::ReadOnly);
+		const QByteArray got = f.readAll();
+		check(got == want_b,
+		       QString("and holds exactly its own four segments (%1 of %2 bytes)")
+		         .arg(got.size()).arg(want_b.size()));
+		check(!got.contains('p'),
+		       "with nothing from the assembly it replaced");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;
 }
