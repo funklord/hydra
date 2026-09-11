@@ -10,6 +10,7 @@
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QPointer>
 #include <QDir>
 #include <QFileInfo>
 
@@ -151,6 +152,11 @@ QUrl local_proxy::publish_file(const QString &path, const QString &content_type,
 
 void local_proxy::serve_file(QTcpSocket *client, const entry &e,
                               const QByteArray &head, bool head_only) {
+	// Weak, and at function scope because the guard after the loop needs it
+	// too: a raw pointer is not null after the object it names is deleted, so
+	// `if (client)` there would test nothing at all.
+	QPointer<QTcpSocket> alive(client);
+
 	QFile f(e.local_path);
 	if (!f.open(QIODevice::ReadOnly)) {
 		send_simple(client, 404, "not available yet");
@@ -240,7 +246,28 @@ void local_proxy::serve_file(QTcpSocket *client, const entry &e,
 		QElapsedTimer idle;
 		idle.start();
 
-		while (left > 0 && client->state() == QAbstractSocket::ConnectedState) {
+		// **A hazard by construction, and NOT a defect anybody has seen
+		// fire.** `on_connection` wires `disconnected` to `deleteLater()`,
+		// and both waits below run the event loop -- so the socket this frame
+		// holds by raw pointer is owned by a slot that can delete it while
+		// the loop is pumping. The next `state()`, `write()` or
+		// `waitForBytesWritten()` would then read freed memory.
+		//
+		// **What was measured, so nobody re-derives it.** A standalone
+		// reproduction of this wiring -- a client aborting from a readyRead
+		// handler -- destroys the socket under the loop every run. The same
+		// scenario driven through this class does NOT: a guard instrumented
+		// to report never fired, because `serve_file` runs at a deeper event
+		// loop level than that probe and Qt delivers a deferred delete only
+		// when the level permits. So the hazard is real and its reachability
+		// through this path is unproven.
+		//
+		// Held weakly anyway. It costs a pointer and removes a dependence on
+		// Qt's loop-level bookkeeping, which is not a thing this code should
+		// have to reason about to be correct. It is not a fix for the media
+		// crash reported from use; that is still unexplained.
+		while (left > 0 && alive &&
+		        client->state() == QAbstractSocket::ConnectedState) {
 			const qint64 have = readable_now();
 			if (have > seen) {          // progress: the clock starts again
 				seen = have;
@@ -251,6 +278,8 @@ void local_proxy::serve_file(QTcpSocket *client, const entry &e,
 					break;              // genuinely stalled, not merely behind
 				QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents,
 				                                 50);
+				if (!alive)
+					return;
 				continue;
 			}
 
@@ -260,15 +289,21 @@ void local_proxy::serve_file(QTcpSocket *client, const entry &e,
 			if (chunk.isEmpty()) {
 				QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents,
 				                                 50);
+				if (!alive)
+					return;
 				continue;
 			}
 			client->write(chunk);
 			client->waitForBytesWritten(3000);
+			if (!alive)
+				return;
 			pos  += chunk.size();
 			left -= chunk.size();
 		}
 	}
-	client->disconnectFromHost();
+	// Weakly, for the reason above: the loop may have outlived the socket.
+	if (alive)
+		client->disconnectFromHost();
 }
 
 void local_proxy::unpublish_all() {

@@ -22613,6 +22613,80 @@ ends `return ok`, which that pattern cannot see. **A grep for return
 literals cannot find a function that returns a variable**, and the failure
 mode is a confident narrowing rather than an empty result.
 
+### The media crash: a hazard found, an attribution withdrawn
+
+**The crash is still unexplained.** This entry exists because a plausible
+mechanism was found, announced as the cause, and then failed the experiment
+that would have confirmed it -- and the wrong half is the part worth keeping.
+
+`local_proxy::serve_file` streams to the player through a loop holding the
+client socket by **raw pointer**, and calls two things that run the event
+loop, `processEvents` and `waitForBytesWritten`. `on_connection` wires that
+socket's own `disconnected` signal to `deleteLater()`. So the frame holds a
+pointer owned by a slot that can delete it while the loop pumps: the next
+`state()`, `write()` or the `disconnectFromHost()` after the loop would read
+freed memory. That much is structural and needs no measurement.
+
+**What was measured, in order, including the step that cost the claim:**
+
+    standalone reproduction of the wiring      socket destroyed under the
+                                               loop, every run
+    same scenario through local_proxy          proxy still serving; passes
+                                               with the guards and without
+    guards instrumented to report              never fired
+
+The third line is the one that settles it. A test passing under sabotage
+proves nothing on its own -- a use-after-free is free not to fault, and that
+was said before the run rather than after. But a guard that never fires says
+the free never happened, and that is a different and much stronger negative:
+**the scenario is not reachable through this path as driven.** The likely
+reason is that `serve_file` runs at a deeper event loop level than the
+probe, and Qt delivers a deferred delete only when the level permits.
+
+**So the reproduction did not transfer, and a reproduction that does not
+transfer is not evidence about the code it was modelled on.** It was treated
+as such for about an hour.
+
+The guard is kept: it costs a pointer and removes a dependence on Qt's
+loop-level bookkeeping, which is not something this loop should have to
+reason about to be correct. It is hardening, not a fix, and the code and the
+test both say so in as many words -- the test is labelled a smoke test
+precisely because it passes either way.
+
+**`network_fetcher`'s nested loop was examined next and is sound.** It runs
+on a dedicated `hydra-helper-fetch` thread, so the comment defending it --
+no widgets, no user input, no script to re-enter -- is accurate, and
+`Qt::BlockingQueuedConnection` serialises calls from any one caller, so the
+pile-up of nested fetches that was being hunted cannot occur.
+
+**The exposure is the caller's side, and it is a freeze rather than a
+crash.** `fetch()` blocks the thread that calls it, and the caller is the
+GUI thread inside the modal `extractor_dialog`. A slow or unresponsive host
+therefore freezes the browser while an extractor is being taught. Bounded at
+roughly **20 seconds**: `helper_host` refuses a new call once the cumulative
+clock passes `deadline_ms` (10000), so the worst case is a call admitted just
+under the deadline that then runs its own full timeout. A first reading of
+this said the freeze multiplied by `max_calls` for eighty seconds, which
+mistook a cumulative budget for a per-call one.
+
+The script chooses neither the timeout nor the byte cap -- `helper_host`
+passes `m_budget.deadline_ms` and the remaining byte room -- so a learned
+extractor cannot widen its own freeze. That was checked rather than assumed.
+
+**It does not touch the reported crash**: `stream_assembly`, which is the
+HLS path behind the play button, does not use `network_fetcher` at all. No
+code change was made. Making a helper fetch asynchronous changes how that
+dialog works and is the copyright holder's call, not something to fold into
+a commit about another subsystem.
+
+**Where to look next**, since this closed nothing: the crash was reported on
+pressing play, and the paths that run from there are `stream_assembly` for
+HLS, `player_launcher::play`, and `network_fetcher`, whose nested
+`QEventLoop::exec` is the same class of re-entrancy hazard as the one above
+and has not been examined. Reproducing under `make SANITIZE=1` against a
+real page is the instrument that would answer it, and nothing short of
+running the real thing has answered anything here.
+
 ### A tree that will not open saves beside itself
 
 **Settled by the copyright holder: save to a sidecar file instead.** Giving

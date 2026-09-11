@@ -213,6 +213,95 @@ int main(int argc, char **argv) {
 	       QFileInfo(assembly.scratch_path()).isDir(),
 	       "and the scratch directory is still there for the next one");
 
+	section("a player that vanishes mid-stream does not take the proxy with it");
+
+	// **Not a regression test, and labelled so it is not mistaken for one.**
+	// It passes with the guards and without them, and an instrumented guard
+	// never fired against it, so it does not demonstrate the hazard below --
+	// it is a smoke test that a player vanishing mid-stream leaves the proxy
+	// serving. Strengthening it means reaching the free, which nothing here
+	// has managed.
+	//
+	// `serve_file` holds a raw pointer to the client
+	// across `processEvents` and `waitForBytesWritten`, both of which run the
+	// event loop, while `on_connection` wires `disconnected` to
+	// `deleteLater()`. A player that closes mid-stream -- which is what one
+	// does every time it probes or seeks -- destroyed the socket under the
+	// loop, and the next `state()`, `write()` or `disconnectFromHost()` read
+	// freed memory.
+	//
+	// **Driven by signals under one pump, and the first version of this was
+	// not** -- which is the part of this worth keeping. Client and server share a thread here, so a sequential
+	// `waitForReadyRead` lets `serve_file` run to completion inside it: the
+	// abort then lands after the stream rather than during it, and the defect
+	// is never touched. Worse, the parked client drains nothing, so the
+	// server's `waitForBytesWritten` times out on every chunk and the test
+	// deadlocks on flow control -- which is how that version failed against
+	// the fixed code and gave the game away.
+	//
+	// A survived crash is not observable from inside the process, so the
+	// assertion is that the proxy still serves afterwards: that says the loop
+	// came out, not merely that this run happened not to fault.
+	{
+		QTemporaryDir served;
+		const QString path = served.filePath("stream.bin");
+		{
+			QFile f(path);
+			f.open(QIODevice::WriteOnly);
+			f.write(QByteArray(256 * 1024, 'x'));   // several passes of the loop
+		}
+
+		local_proxy p2;
+		check(p2.start(), "a proxy with a file to serve");
+		const QUrl u = p2.publish_file(path, "application/octet-stream");
+		check(u.isValid() && u.port() > 0, "which published it");
+
+		const QByteArray req = ("GET " + u.path() + " HTTP/1.1\r\nHost: "
+		                         + u.host() + "\r\n\r\n").toUtf8();
+		auto pump = [](int ms) {
+			QElapsedTimer t;
+			t.start();
+			while (t.elapsed() < ms)
+				QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+		};
+
+		QTcpSocket first;
+		bool gone = false;
+		QObject::connect(&first, &QTcpSocket::connected,
+		                  [&] { first.write(req); });
+		QObject::connect(&first, &QTcpSocket::readyRead, [&] {
+			// Inside the server's own processEvents: this is the moment the
+			// socket is destroyed under the serving loop.
+			if (!gone) {
+				gone = true;
+				first.abort();
+			}
+		});
+		first.connectToHost(u.host(), quint16(u.port()));
+		QElapsedTimer t;
+		t.start();
+		while (t.elapsed() < 5000 && !gone)
+			QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+		check(gone, "a player connects and goes away mid-stream");
+		pump(1500);
+
+		QTcpSocket second;
+		QByteArray got;
+		QObject::connect(&second, &QTcpSocket::connected,
+		                  [&] { second.write(req); });
+		QObject::connect(&second, &QTcpSocket::readyRead,
+		                  [&] { got += second.readAll(); });
+		second.connectToHost(u.host(), quint16(u.port()));
+		t.restart();
+		while (t.elapsed() < 8000 && !got.contains("200"))
+			QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+		check(got.contains("200"),
+		       QString("and the proxy still serves afterwards (%1 bytes back)")
+		         .arg(got.size()));
+		second.abort();
+		pump(800);
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;
 }
