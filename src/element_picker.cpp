@@ -28,6 +28,15 @@ void element_picker::cancelled() {
 }
 
 void element_picker::element_picked(const QString &json) {
+	// **A pick is only valid while one is armed.** Nothing here checked, so a
+	// script that called this without a `begin()` -- a stale call after the
+	// pick was cancelled, or a background tab's script while another tab's
+	// pick was armed -- was processed as though the user had clicked, and the
+	// element became a proposal scoped to whatever `m_page_url` held. Ignoring
+	// an unarmed pick is what makes cancelling one (below, and on a page
+	// change) actually stop it.
+	if (!m_active)
+		return;
 	m_active = false;
 
 	const QJsonObject o = QJsonDocument::fromJson(json.toUtf8()).object();

@@ -132,6 +132,32 @@ int main(int argc, char **argv) {
 		check(aborted.count() == 1, "and says so once");
 	}
 
+	// **A pick only counts while one is armed.** element_picked did not check,
+	// so a call with no begin() -- a stale call after a cancel, or a page's
+	// script firing it on its own -- was processed as a real click and became
+	// a proposal. The gate is what lets cancelling a pick, and abandoning one
+	// on a page change, actually stop it.
+	{
+		element_picker p;
+		QSignalSpy picked(&p, &element_picker::picked);
+
+		p.element_picked(R"({"tag":"DIV","id":"x","selector":"div#x"})");
+		check(picked.count() == 0,
+		       "a pick with nothing armed is ignored");
+
+		p.begin("https://a.example/");
+		p.element_picked(R"({"tag":"DIV","id":"x","selector":"div#x"})");
+		check(picked.count() == 1, "an armed pick is taken");
+		p.element_picked(R"({"tag":"P","id":"y","selector":"p#y"})");
+		check(picked.count() == 1,
+		       "and a second pick, the first having disarmed it, is ignored");
+
+		p.begin("https://b.example/");
+		p.cancelled();
+		p.element_picked(R"({"tag":"DIV","id":"z","selector":"div#z"})");
+		check(picked.count() == 1, "a pick after a cancel is ignored");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

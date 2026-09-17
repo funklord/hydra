@@ -22671,14 +22671,30 @@ host (`m_page_url`), because switching tabs does not re-arm. And a
 background page's script could call `element_picked` while armed, proposing
 a selector for the current host.
 
-**Left open on purpose, unlike the other three.** The consequence is a
-*proposal* the user reviews in the filter-evolution dialog, which names the
-host, not a silently applied rule -- so the worst case is a reviewable
-wrong-host suggestion during the seconds a pick is armed, not a leak. The
-same per-view refactor would close it, at the cost the others had; whether a
-niche, user-reviewed confusion earns that is the holder's call. Recorded
-rather than fixed, because the three that were fixed were user-visible or
-credential-carrying and this is neither.
+**Fixed, but not with a per-view refactor -- a smaller change reached it.**
+The reachable part is the tab-switch: `begin()` arms the picker with the
+front tab's url, so `sync_page_context` now abandons an in-progress pick
+when the page context changes (a switch or a navigation), and
+`element_picked` ignores a pick when nothing is armed. Together a pick made
+after switching is a no-op rather than a rule for the tab it began on. That
+also closes a stale or spurious `element_picked` -- a call with no `begin()`
+-- which the slot processed as a real click before. The `element_picked`
+gate is what makes cancelling actually stop a pick; without it the cancel
+sets a flag the slot did not read.
+
+The residual, not closed by this, is a background page calling
+`element_picked` during the seconds a pick is armed on the front tab: the
+shared bridge cannot tell which view called, so that path would still
+propose for the current host. It is left, because the result is a proposal
+the user reviews in a dialog that names the host, and closing it needs the
+per-view refactor the impact does not earn. Recorded so the line between
+what was fixed and what was not is explicit.
+
+The tests: test_picker covers the gate (an unarmed pick, a second pick, a
+pick after a cancel -- each ignored), and test_rotation covers the switch
+(arm on A, activate B, the pick is abandoned and a pick after is a no-op).
+Removing the gate fails the first set and the no-op check; removing the
+cancel fails the switch checks.
 
 ### Autofill delivers a filled credential to every open tab (confirmed on device)
 

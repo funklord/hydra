@@ -4588,6 +4588,13 @@ void main_window::sync_page_context() {
 	// fill that did not happen here. The button stays where it is; only what
 	// it says and whether it can be pressed go back to the start.
 	reset_key_action();
+	// **A page change abandons an in-progress element pick.** `begin()` armed
+	// it with the url of the view that was in front then, so a pick made after
+	// switching tabs (or after this view navigated) would be scoped to the
+	// wrong page. Cancelling here, with the gate in `element_picked`, makes a
+	// pick after the change a no-op until the user starts one afresh.
+	if (m_picker && m_picker->active())
+		m_picker->cancelled();
 	// The autofill origin is this view's own, set on its per-view controller
 	// from that view's navigation -- not from here, which reads the current
 	// view and was the shared object's cross-tab bug.

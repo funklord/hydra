@@ -50,6 +50,7 @@
 #include "consent_dialog.h"
 #include "annoyance_log.h"
 #include "autofill_controller.h"
+#include "element_picker.h"
 #include "antiadblock_watch.h"
 #include "extractor_signals.h"
 #include "media_detector.h"
@@ -3478,6 +3479,45 @@ int main(int argc, char **argv) {
 		       "the newest staged copy is still there");
 		check(QFileInfo::exists(bpath + "/notes.txt"),
 		       "and a file it did not write is untouched");
+	}
+
+	section("switching tabs abandons an element pick in progress");
+
+	// **Zap an Element arms the picker with the url of the tab in front.**
+	// Without abandoning it on a tab switch, a pick made in the new tab would
+	// be scoped to the old one -- begin() set m_page_url from the first tab.
+	// sync_page_context cancels it on the switch, and element_picked's gate
+	// makes a pick after that a no-op.
+	{
+		main_window w9(&factory, &policy, &filter);
+		w9.resize(900, 600);
+		w9.show();
+		spin(150);
+
+		auto open9 = [&](node *n) {
+			emit w9.m_tree->activated(
+			  w9.m_proxy->mapFromSource(w9.m_model->index_for_node(n)));
+			spin(200);
+		};
+		node *a = w9.m_model->add_tab(nullptr, "A", "https://a.example/");
+		node *b = w9.m_model->add_tab(nullptr, "B", "https://b.example/");
+		open9(a);
+
+		check(w9.m_picker != nullptr, "the window has an element picker");
+		if (w9.m_picker) {
+			QSignalSpy picked(w9.m_picker, &element_picker::picked);
+			w9.m_picker->begin("https://a.example/");
+			check(w9.m_picker->active(), "a pick is armed on tab A");
+
+			open9(b);   // switch to B -> sync_page_context
+			check(!w9.m_picker->active(),
+			       "switching to tab B abandons it");
+
+			w9.m_picker->element_picked(
+			  R"({"tag":"DIV","id":"x","selector":"div#x"})");
+			check(picked.count() == 0,
+			       "and a pick after the switch is a no-op, not a rule for A");
+		}
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
