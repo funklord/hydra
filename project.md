@@ -22638,6 +22638,48 @@ the `isModified` guard is untouched -- both asserted as controls.
 
     sabotage: the old body     cursor 5 -> 24, selection lost, cursor 8 -> 26
 
+### The shared-bridge sweep, completed: five bridges, and where each stands
+
+The fault first found in the cosmetic filter -- one script-bridge object
+serving every view, keyed on per-page state taken from the current view --
+turned up in three bridges and was fixed in each. This is the sweep of all
+five script bridges `open_node` installs, so the lens is not left half-run.
+
+    bridge            shape                              status
+    cosmetic_filters  shared, host from current view     fixed, per view
+    consent_blocker   shared, host from current view     fixed, per view
+    autofill_controller shared, origin from current view fixed, per view
+    element_picker    shared, page_url from current view same shape, open
+    mse_tap           per-host dictionary, page reports  safe, different
+                      its own location.hostname          pattern
+
+**`mse_tap` is not the shape and needs no change.** It keeps `m_by_site`, a
+dictionary keyed by host, and the page reports under its own
+`location.hostname` -- which the isolated world reads truthfully and a page
+cannot spoof. Queries (`streams_for`, `active_for`) are parameterized by the
+host the shell asks about. So a background tab's streams file under that
+tab's host and the shell reading the current tab's host never sees them.
+There is no shared mutable per-page field taken from the current view, which
+is the thing the other four are judged on.
+
+**`element_picker` is the shape, with a real but niche bug.** One picker is
+the `hydraPicker` bridge in every view, `begin(page_url)` sets `m_page_url`
+from the current view and arms it, and `pick_requested` broadcasts so every
+tab's script enters pick mode. Reachable: Zap an Element on tab A, switch to
+tab B without picking, pick an element there -- the proposal targets A's
+host (`m_page_url`), because switching tabs does not re-arm. And a
+background page's script could call `element_picked` while armed, proposing
+a selector for the current host.
+
+**Left open on purpose, unlike the other three.** The consequence is a
+*proposal* the user reviews in the filter-evolution dialog, which names the
+host, not a silently applied rule -- so the worst case is a reviewable
+wrong-host suggestion during the seconds a pick is armed, not a leak. The
+same per-view refactor would close it, at the cost the others had; whether a
+niche, user-reviewed confusion earns that is the holder's call. Recorded
+rather than fixed, because the three that were fixed were user-visible or
+credential-carrying and this is neither.
+
 ### Autofill delivers a filled credential to every open tab (confirmed on device)
 
 Found by sweeping the other shared bridges after the cosmetic and consent
