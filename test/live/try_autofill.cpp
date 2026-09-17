@@ -18,6 +18,11 @@
 #include "policy_engine.h"
 #include "request_filter.h"
 #include "qtwebengine_factory.h"
+#include "web_view_backend.h"
+#include "autofill_controller.h"
+#include "keepass_bridge.h"
+#include "keepass_protocol.h"
+#include "autofill_script.h"
 
 #include <QAction>
 #include <QImage>
@@ -33,6 +38,8 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QTreeView>
+#include <QWebEngineView>
+#include <QWebEnginePage>
 #include <functional>
 #include <cstdio>
 
@@ -58,6 +65,18 @@ static bool wait_for(const std::function<bool()> &done, int max_ms = 8000) {
 	while (!done() && t.elapsed() < max_ms)
 		spin(25);
 	return done();
+}
+
+static QString read_pw(web_view_backend *v) {
+	auto *view = qobject_cast<QWebEngineView *>(v->widget());
+	if (!view || !view->page()) return QString("(no page)");
+	QString out; QEventLoop loop;
+	view->page()->runJavaScript(
+	  "(document.querySelector('input[type=password]')||{}).value||''",
+	  [&](const QVariant &r) { out = r.toString(); loop.quit(); });
+	QTimer::singleShot(3000, &loop, &QEventLoop::quit);
+	loop.exec();
+	return out;
 }
 
 // A login form, over plain HTTP on loopback.
@@ -277,6 +296,71 @@ int main(int argc, char *argv[]) {
 
 	note("KeePassXC is not needed for any of the above, and is not exercised by");
 	note("it: what a paired vault does with a real reply is try_keepass's job.");
+
+	section("a filled credential must not reach a tab that did not ask");
+	{
+		// The finding in project.md: one autofill_controller is the bridge in
+		// every view's QWebChannel, and deliver() emits credentials_ready.
+		// The claim is that a QWebChannel broadcasts a shared object's signal
+		// to every channel with a subscriber, so one delivery reaches every
+		// tab. That is the one link that is QWebChannel semantics rather than
+		// in-tree code, confirmed here against a real engine. Two views, two
+		// loopback hosts, one shared controller; a single forced delivery
+		// through offer_for_test (which reaches deliver without the request
+		// gate); then both password fields read back. Both filled is the leak.
+		origin srvA, srvB;
+		srvA.listen(QHostAddress::LocalHost, 0);
+		srvB.listen(QHostAddress("127.0.0.2"), 0);
+		const QUrl urlA(QString("http://127.0.0.1:%1/").arg(srvA.serverPort()));
+		const QUrl urlB(QString("http://127.0.0.2:%1/").arg(srvB.serverPort()));
+
+		keepass_bridge      kp;
+		autofill_controller controller(&kp, &policy);
+
+		web_view_backend *va = factory.create_view(nullptr);
+		web_view_backend *vb = factory.create_view(nullptr);
+		for (web_view_backend *v : { va, vb }) {
+			v->set_script_bridge(&controller, "hydraAutofill");
+			v->inject_script("hydra-autofill",
+			                  QString::fromUtf8(autofill_script::source()),
+			                  false);
+			v->widget()->resize(400, 300);
+			v->widget()->show();
+		}
+		va->load(urlA);
+		vb->load(urlB);
+
+		auto has_pw = [](web_view_backend *v) {
+			auto *view = qobject_cast<QWebEngineView *>(v->widget());
+			if (!view || !view->page()) return false;
+			bool got = false; QEventLoop loop;
+			view->page()->runJavaScript(
+			  "!!document.querySelector('input[type=password]')",
+			  [&](const QVariant &r) { got = r.toBool(); loop.quit(); });
+			QTimer::singleShot(2000, &loop, &QEventLoop::quit);
+			loop.exec();
+			return got;
+		};
+		const bool loaded = wait_for([&] { return has_pw(va) && has_pw(vb); });
+		check(loaded, "both pages loaded with a password field");
+		spin(700);
+
+		check(read_pw(va).isEmpty() && read_pw(vb).isEmpty(),
+		       "neither field is filled before a delivery");
+
+		const QString secret = "s3cr3t-should-stay-in-one-tab";
+		controller.offer_for_test({ credential{ "acct", "alice", secret } });
+		spin(900);
+
+		const QString a = read_pw(va), b = read_pw(vb);
+		note(QString("tab A field=%1").arg(a.isEmpty() ? "(empty)" : a));
+		note(QString("tab B field=%1").arg(b.isEmpty() ? "(empty)" : b));
+
+		check(a == secret || b == secret,
+		       "a delivery reaches at least one tab, so the path runs");
+		check(!(a == secret && b == secret),
+		       "and only the tab it was for -- not broadcast to the other");
+	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

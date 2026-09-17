@@ -22638,6 +22638,70 @@ the `isModified` guard is untouched -- both asserted as controls.
 
     sabotage: the old body     cursor 5 -> 24, selection lost, cursor 8 -> 26
 
+### Autofill delivers a filled credential to every open tab (confirmed on device)
+
+Found by sweeping the other shared bridges after the cosmetic and consent
+ones turned out to have the same shape -- one script-bridge object serving
+every view. `m_autofill` is that shape too, and unlike the other two it
+carries credentials, so it is recorded here on its own rather than fixed in
+passing.
+
+**What is verified by reading.** `open_node` sets the single `m_autofill`
+as the `hydraAutofill` bridge on every view. Each `qtwebengine_view` has its
+own `QWebChannel` (`m_channel`), and `set_script_bridge` does
+`m_channel->registerObject("hydraAutofill", m_autofill)` -- so the one
+object is registered in N channels. The injected autofill script, in every
+loaded tab, does `af.credentials_ready.connect(...)` unconditionally
+(the password-field check gates only the submit watcher and the initial
+request, not the subscription). `deliver()` sends a fill by
+`emit credentials_ready(json)` on that shared object.
+
+**What is reasoned, not run.** QWebChannel publishes a registered object's
+signal to every channel whose client has subscribed. So one
+`emit credentials_ready` reaches every open tab's autofill script, each of
+which runs `fill(entries)` and writes the login and password into its own
+form fields -- where that page's own scripts can read them. The request
+side is gated (`blocked_reason` requires the passed `location.origin` to
+equal the shell-set `m_origin`, which is the current view's), so only the
+focused tab can *trigger* a fill; but delivery is a broadcast, so the
+credentials reach tabs that did not ask and are not that origin. That makes
+it a cross-tab credential disclosure: filling a password on the focused tab
+hands it to every other loaded tab.
+
+**Confirmed against a real engine, 2026-09-17.** `try_autofill` gained a
+section that creates two real WebEngine views on two different loopback
+hosts (`127.0.0.1` and `127.0.0.2`), each a page with a password field,
+sharing one `autofill_controller` as the `hydraAutofill` bridge exactly as
+`open_node` wires the single `m_autofill`. One delivery is forced through
+`offer_for_test`, and both pages' fields are read back:
+
+    tab A field=s3cr3t-should-stay-in-one-tab
+    tab B field=s3cr3t-should-stay-in-one-tab
+
+Both filled from one delivery, on different origins, with both fields empty
+beforehand -- so the credential reached a tab that never asked and is not
+that origin. The broadcast is real, not merely standard QWebChannel
+behaviour reasoned about. The driver fails loudly while the leak stands and
+becomes its regression test: the origin-in-payload fix flips it to a pass
+by delivering only to the matching origin. Run on an isolated Xvfb display,
+which the offscreen suite cannot do -- `fake_view` has no real QWebChannel.
+
+**The fix, minimal and low-risk, is defence the request side already
+implies.** `deliver()` should carry the origin it fetched for (`m_origin`),
+and the isolated-world script should fill only if that equals its own
+`location.origin`. The isolated world reads the frame's true origin, which
+the page cannot spoof, and the request side already succeeds only when
+`location.origin == m_origin` -- so the same equality gates delivery,
+passes for the legitimate focused tab, and refuses every other. It needs no
+per-view refactor. Whether to also make autofill per-view like consent is a
+larger question; the origin-in-payload check closes the leak either way.
+
+**Not implemented yet, by the holder's choice to verify first.** The live
+confirmation above is done; the fix is not. It is credential delivery and a
+wrong origin comparison would break autofill for the legitimate tab, so the
+go-ahead is the holder's. When it lands, the `try_autofill` section is the
+test that proves it -- both tabs today, one tab after.
+
 ### The consent blocker answered for the wrong site too
 
 The same fault as the cosmetic bridge, in the sibling that answers cookie
