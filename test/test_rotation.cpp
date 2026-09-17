@@ -3136,6 +3136,17 @@ int main(int argc, char **argv) {
 		       "the badge is told, rather than being left showing a count");
 	}
 
+	// One controller per view now, so the setting is read where a tab opens
+	// rather than off a single window-wide object. This reaches it.
+	auto autofill_of = [&](main_window &w) -> autofill_controller * {
+		node *n = w.m_model->add_tab(nullptr, "t", "https://x.example/");
+		emit w.m_tree->activated(
+		  w.m_proxy->mapFromSource(w.m_model->index_for_node(n)));
+		spin(200);
+		web_view_backend *v = w.m_views_by_id.value(n->id, nullptr);
+		return v ? v->findChild<autofill_controller *>() : nullptr;
+	};
+
 	section("the HTTPS-only autofill switch the description already promised");
 	{
 		// `policy.cpp` has always told the user that autofill is "limited to
@@ -3153,8 +3164,9 @@ int main(int argc, char **argv) {
 			// the startup line exists. The assertion that discriminates is
 			// "the next launch comes up with it off", below, where the two
 			// differ.
-			check(w13.m_autofill && w13.m_autofill->https_only(),
-			       "the window has an autofill controller and it is on");
+			autofill_controller *af13 = autofill_of(w13);
+			check(af13 && af13->https_only(),
+			       "an opened tab's autofill controller is on");
 
 			settings_dialog dlg(w13.m_players, w13.m_downloads, w13.m_torrents,
 			                     w13.m_local_ai, w13.m_external_ai, w13.m_policy,
@@ -3175,7 +3187,8 @@ int main(int argc, char **argv) {
 		// where nobody opens that dialog.
 		{
 			main_window w14(&factory, &policy, &filter);
-			check(w14.m_autofill && !w14.m_autofill->https_only(),
+			autofill_controller *af14 = autofill_of(w14);
+			check(af14 && !af14->https_only(),
 			       "and the next launch comes up with it off");
 		}
 		// Back on, then Restore Defaults on the page it lives on.

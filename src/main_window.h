@@ -244,6 +244,11 @@ private:
 	void refresh_banner_affordance();
 	// Connect a per-view consent blocker's signals to the window.
 	void wire_consent(consent_blocker *c);
+	// The autofill controller of the view in front, or null. The toolbar key
+	// and the generate action act on the current page.
+	autofill_controller *current_autofill() const;
+	// Connect a per-view autofill controller's window-level signals.
+	void wire_autofill(autofill_controller *c);
 	// Keep the Kiosk Mode entry's status tip honest about how to get out.
 	// **It said "Esc returns" unconditionally**, and both Esc and F11 are
 	// gated on the saved `allow_escape` -- whose own settings row warns that
@@ -599,7 +604,11 @@ public:
 	// which happens after construction.
 	request_filter     *m_filter        = nullptr;
 	keepass_bridge     *m_keepass       = nullptr;
-	autofill_controller *m_autofill     = nullptr;
+	// One autofill controller per view now, parented to the view and found
+	// through it -- see `current_autofill` and the per-view creation in
+	// `open_node`. There is no shared one: it delivered a filled credential to
+	// every open tab (project.md, confirmed on device), because its
+	// `credentials_ready` signal was registered in every view's QWebChannel.
 	consent_blocker     *m_consent      = nullptr;
 	antiadblock_watch   *m_antiadblock  = nullptr;
 	// Sites already fixed this session, so a page that keeps checking cannot

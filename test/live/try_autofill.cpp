@@ -23,6 +23,10 @@
 #include "keepass_bridge.h"
 #include "keepass_protocol.h"
 #include "autofill_script.h"
+#include "tab_tree_model.h"
+#include "tab_tree_view.h"
+#include "tree_sort_proxy.h"
+#include "node.h"
 
 #include <QAction>
 #include <QImage>
@@ -299,38 +303,51 @@ int main(int argc, char *argv[]) {
 
 	section("a filled credential must not reach a tab that did not ask");
 	{
-		// The finding in project.md: one autofill_controller is the bridge in
-		// every view's QWebChannel, and deliver() emits credentials_ready.
-		// The claim is that a QWebChannel broadcasts a shared object's signal
-		// to every channel with a subscriber, so one delivery reaches every
-		// tab. That is the one link that is QWebChannel semantics rather than
-		// in-tree code, confirmed here against a real engine. Two views, two
-		// loopback hosts, one shared controller; a single forced delivery
-		// through offer_for_test (which reaches deliver without the request
-		// gate); then both password fields read back. Both filled is the leak.
+		// The finding in project.md, now the regression test for the fix.
+		// Two real tabs on two different loopback hosts are opened through the
+		// shell's own open_node, which creates one autofill_controller per
+		// view. A delivery is forced on ONE tab's controller (offer_for_test,
+		// which reaches deliver without the request gate); credentials_ready
+		// is on that controller's own object, so it should reach only that
+		// tab's QWebChannel. Both fields are read back: the OTHER tab filling
+		// is the leak, and is what a single shared controller did -- confirmed
+		// on device before the fix.
 		origin srvA, srvB;
 		srvA.listen(QHostAddress::LocalHost, 0);
 		srvB.listen(QHostAddress("127.0.0.2"), 0);
-		const QUrl urlA(QString("http://127.0.0.1:%1/").arg(srvA.serverPort()));
-		const QUrl urlB(QString("http://127.0.0.2:%1/").arg(srvB.serverPort()));
+		const QString urlA = QString("http://127.0.0.1:%1/").arg(srvA.serverPort());
+		const QString urlB = QString("http://127.0.0.2:%1/").arg(srvB.serverPort());
 
-		keepass_bridge      kp;
-		autofill_controller controller(&kp, &policy);
+		node *na = w.m_model->add_tab(nullptr, "A", urlA);
+		node *nb = w.m_model->add_tab(nullptr, "B", urlB);
+		auto open = [&](node *n) {
+			emit w.m_tree->activated(
+			  w.m_proxy->mapFromSource(w.m_model->index_for_node(n)));
+			spin(400);
+		};
+		open(na);
+		open(nb);
+		web_view_backend *va = w.m_views_by_id.value(na->id, nullptr);
+		web_view_backend *vb = w.m_views_by_id.value(nb->id, nullptr);
+		check(va && vb, "two tabs opened through the shell");
 
-		web_view_backend *va = factory.create_view(nullptr);
-		web_view_backend *vb = factory.create_view(nullptr);
-		for (web_view_backend *v : { va, vb }) {
-			v->set_script_bridge(&controller, "hydraAutofill");
-			v->inject_script("hydra-autofill",
-			                  QString::fromUtf8(autofill_script::source()),
-			                  false);
-			v->widget()->resize(400, 300);
-			v->widget()->show();
-		}
-		va->load(urlA);
-		vb->load(urlB);
+		auto *ca = va ? va->findChild<autofill_controller *>() : nullptr;
+		auto *cb = vb ? vb->findChild<autofill_controller *>() : nullptr;
+		check(ca && cb && ca != cb,
+		       "each view has its own autofill controller");
 
-		auto has_pw = [](web_view_backend *v) {
+		auto pw = [](web_view_backend *v) -> QString {
+			auto *view = qobject_cast<QWebEngineView *>(v->widget());
+			if (!view || !view->page()) return QString("(no page)");
+			QString out; QEventLoop loop;
+			view->page()->runJavaScript(
+			  "(document.querySelector('input[type=password]')||{}).value||''",
+			  [&](const QVariant &r) { out = r.toString(); loop.quit(); });
+			QTimer::singleShot(3000, &loop, &QEventLoop::quit);
+			loop.exec();
+			return out;
+		};
+		auto has_pw = [&](web_view_backend *v) {
 			auto *view = qobject_cast<QWebEngineView *>(v->widget());
 			if (!view || !view->page()) return false;
 			bool got = false; QEventLoop loop;
@@ -341,25 +358,23 @@ int main(int argc, char *argv[]) {
 			loop.exec();
 			return got;
 		};
-		const bool loaded = wait_for([&] { return has_pw(va) && has_pw(vb); });
-		check(loaded, "both pages loaded with a password field");
-		spin(700);
+		const bool loaded = va && vb &&
+		  wait_for([&] { return has_pw(va) && has_pw(vb); });
+		check(loaded, "both login pages loaded");
+		spin(700);   // let each per-view script connect credentials_ready
 
-		check(read_pw(va).isEmpty() && read_pw(vb).isEmpty(),
-		       "neither field is filled before a delivery");
-
-		const QString secret = "s3cr3t-should-stay-in-one-tab";
-		controller.offer_for_test({ credential{ "acct", "alice", secret } });
-		spin(900);
-
-		const QString a = read_pw(va), b = read_pw(vb);
-		note(QString("tab A field=%1").arg(a.isEmpty() ? "(empty)" : a));
-		note(QString("tab B field=%1").arg(b.isEmpty() ? "(empty)" : b));
-
-		check(a == secret || b == secret,
-		       "a delivery reaches at least one tab, so the path runs");
-		check(!(a == secret && b == secret),
-		       "and only the tab it was for -- not broadcast to the other");
+		if (ca) {
+			const QString secret = "s3cr3t-should-stay-in-one-tab";
+			ca->offer_for_test({ credential{ "acct", "alice", secret } });
+			spin(900);
+			const QString a = pw(va), b = pw(vb);
+			note(QString("delivered on A: A field=%1").arg(a.isEmpty() ? "(empty)" : a));
+			note(QString("                B field=%1").arg(b.isEmpty() ? "(empty)" : b));
+			check(a == secret, "the tab it was delivered to is filled");
+			check(b != secret,
+			       "and the other tab is NOT -- delivery is per view, not a "
+			       "broadcast");
+		}
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

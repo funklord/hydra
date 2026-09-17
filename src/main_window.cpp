@@ -357,81 +357,10 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(m_fx_mirror, &session_mirror::failed, this,
 	        [this](const QString &why) { m_status->showMessage(why, 8000); });
 
-	m_autofill = new autofill_controller(m_keepass, m_policy, this);
-	// Applied here rather than only when the settings page is opened, for the
-	// reason `load_into` exists: otherwise "settings persist" quietly means
-	// "settings persist if you go and look".
-	m_autofill->set_https_only(settings_store::autofill_https_only());
-	// More than one login for a site is a question only the user can answer, and
-	// it is asked here rather than in the page: the controller holds the
-	// passwords until the answer comes back, so the picker is a list of names
-	// and the page learns nothing until a choice is made.
-	connect(m_autofill, &autofill_controller::choice_needed, this,
-	        [this](const QStringList &labels) {
-		bool ok = false;
-		const QString pick = QInputDialog::getItem(
-		    this, "Which login?",
-		    "More than one login is stored for this site:", labels, 0,
-		    /*editable=*/false, &ok);
-		// A dismissed dialog fills nothing, which is a legitimate answer and
-		// not an error worth a message.
-		m_autofill->choose(ok ? labels.indexOf(pick) : -1);
-	});
-	// The refusal is the key icon's job (sec 13.2) and there is no key icon yet, so
-	// the status bar carries it meanwhile. Silence here is the thing to avoid:
-	// "nothing stored for this site" and "KeePassXC is not running" produce the
-	// same empty form, and only one of them is worth doing something about.
-	// The key's four states. Each is a different thing to do next, which is why
-	// they read differently rather than all being "autofill unavailable".
-	connect(m_autofill, &autofill_controller::requested, this, [this] {
-		if (!m_key_action)
-			return;
-		m_key_action->setEnabled(true);
-		m_key_action->setText("Key");
-		m_key_action->setToolTip("This page has a login form. Click to fill it "
-		                          "from KeePassXC.");
-	});
-	connect(m_autofill, &autofill_controller::refused, this,
-	        [this](const QString &why) {
-		// On the key *and* in the status bar. The tooltip is where it stays
-		// readable -- a status message is gone in six seconds and the form is
-		// still sitting there empty.
-		if (m_key_action) {
-			m_key_action->setEnabled(true);
-			m_key_action->setText("Key ✕");
-			m_key_action->setToolTip(why);
-		}
-		m_status->showMessage(why, 6000);
-	});
-	// Offering to save, which is the one path that *writes* to the vault. Asked
-	// with a plain question naming the login and the site and never showing the
-	// password -- a prompt that displays it is a prompt that shoulder-surfs --
-	// and never remembered as a preference: "never for this site" is a policy
-	// decision and belongs in the shield beside the other per-site settings,
-	// not in a checkbox on a transient dialog.
-	connect(m_autofill, &autofill_controller::save_offered, this,
-	        [this](const QString &login, const QString &host) {
-		const QString who = login.isEmpty() ? QStringLiteral("this login")
-		                                     : login;
-		const bool yes = QMessageBox::question(
-		    this, "Save to KeePassXC?",
-		    QString("Save the password for %1 at %2?").arg(who, host)) ==
-		    QMessageBox::Yes;
-		m_autofill->confirm_save(yes);
-	});
-	connect(m_autofill, &autofill_controller::save_finished, this,
-	        [this](bool, const QString &message) {
-		m_status->showMessage(message, 6000);
-	});
-
-	connect(m_autofill, &autofill_controller::credentials_ready, this,
-	        [this](const QString &) {
-		if (!m_key_action)
-			return;
-		m_key_action->setEnabled(true);
-		m_key_action->setText("Key ✓");
-		m_key_action->setToolTip("Filled from KeePassXC. Click to fill again.");
-	});
+	// The autofill controllers are created per view in `open_node` and their
+	// window-level signals connected in `wire_autofill`. There is no shared
+	// controller: see main_window.h and project.md for why the single one was a
+	// cross-tab credential leak.
 	m_consent  = new consent_blocker(m_policy, this);
 	// Say it once, and say what the lever is. A page that will not run because
 	// we block ads is indistinguishable from a broken site unless we tell them,
@@ -939,8 +868,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		// re-opening the last picker, or caching the entries -- and both mean
 		// holding credentials for longer than the fill that asked for them.
 		// Re-asking costs one round trip to a local socket and keeps sec 13.3.
-		if (m_autofill)
-			m_autofill->request_credentials(m_autofill->page_origin());
+		if (autofill_controller *af = current_autofill())
+			af->request_credentials(af->page_origin());
 	});
 
 	// **On the toolbar rather than in a menu, and that is the whole design.**
@@ -1666,8 +1595,8 @@ QMenuBar *main_window::build_menu_bar() {
 	// browser with a new attack surface for no benefit. The shell asks, and the
 	// injected script puts the answer in the field that wanted it.
 	QAction *kpg = pw_menu->addAction("&Generate Password", this, [this] {
-		if (m_autofill)
-			m_autofill->request_generated_password(m_autofill->page_origin());
+		if (autofill_controller *af = current_autofill())
+			af->request_generated_password(af->page_origin());
 	});
 	kpg->setStatusTip("Ask KeePassXC for a password and put it in this page's "
 	                   "new-password field");
@@ -2320,6 +2249,77 @@ void main_window::refresh_kiosk_tip() {
 // it could not answer. The lambdas are what the constructor connected to the
 // single shared blocker before it became the aggregator; the host they carry
 // is now the blocker's own view's, which is the fix.
+autofill_controller *main_window::current_autofill() const {
+	web_view_backend *v = current_view();
+	return v ? v->findChild<autofill_controller *>() : nullptr;
+}
+
+// A per-view autofill controller's window-level signals, connected to the
+// window. These are what the constructor connected to the single shared
+// controller before it became per-view; the difference is that `credentials_ready`
+// and `generated_password` are NOT here -- those go to the page, on this
+// controller's own object and so its own view's channel, which is the fix.
+// The captured `c` is the controller that raised each signal, so `choose` and
+// `confirm_save` answer the one that asked; the picker and the prompt are
+// modal and shown synchronously, so `c` is still the right one when they
+// return.
+void main_window::wire_autofill(autofill_controller *c) {
+	connect(c, &autofill_controller::choice_needed, this,
+	         [this, c](const QStringList &labels) {
+		bool ok = false;
+		const QString pick = QInputDialog::getItem(
+		    this, "Which login?",
+		    "More than one login is stored for this site:", labels, 0,
+		    /*editable=*/false, &ok);
+		c->choose(ok ? labels.indexOf(pick) : -1);
+	});
+	// The key states below are the CURRENT view's: a background tab whose
+	// script asks must not repaint the key for the tab in front. The dialogs
+	// above and below are per-controller because they answer a specific
+	// controller and are modal.
+	connect(c, &autofill_controller::requested, this, [this, c] {
+		if (c != current_autofill() || !m_key_action)
+			return;
+		m_key_action->setEnabled(true);
+		m_key_action->setText("Key");
+		m_key_action->setToolTip("This page has a login form. Click to fill it "
+		                          "from KeePassXC.");
+	});
+	connect(c, &autofill_controller::refused, this,
+	         [this, c](const QString &why) {
+		if (c != current_autofill())
+			return;
+		if (m_key_action) {
+			m_key_action->setEnabled(true);
+			m_key_action->setText("Key ✕");
+			m_key_action->setToolTip(why);
+		}
+		m_status->showMessage(why, 6000);
+	});
+	connect(c, &autofill_controller::save_offered, this,
+	         [this, c](const QString &login, const QString &host) {
+		const QString who = login.isEmpty() ? QStringLiteral("this login")
+		                                     : login;
+		const bool yes = QMessageBox::question(
+		    this, "Save to KeePassXC?",
+		    QString("Save the password for %1 at %2?").arg(who, host)) ==
+		    QMessageBox::Yes;
+		c->confirm_save(yes);
+	});
+	connect(c, &autofill_controller::save_finished, this,
+	         [this](bool, const QString &message) {
+		m_status->showMessage(message, 6000);
+	});
+	connect(c, &autofill_controller::credentials_ready, this,
+	         [this, c](const QString &) {
+		if (c != current_autofill() || !m_key_action)
+			return;
+		m_key_action->setEnabled(true);
+		m_key_action->setText("Key ✓");
+		m_key_action->setToolTip("Filled from KeePassXC. Click to fill again.");
+	});
+}
+
 void main_window::wire_consent(consent_blocker *c) {
 	connect(c, &consent_blocker::acted, this,
 	         [this](const QString &host, const QString &choice) {
@@ -3406,7 +3406,24 @@ void main_window::open_node(node *n, bool load_now) {
 		// Autofill plumbing (architecture doc sec 13.2): the content script runs
 		// in an isolated world and talks to a bridge object the shell owns.
 		// The page never sets its own origin -- the shell does, on navigation.
-		view->set_script_bridge(m_autofill, "hydraAutofill");
+		//
+		// **One controller per view, because one shared one delivered a filled
+		// credential to every open tab.** Its `credentials_ready` signal was
+		// registered in every view's QWebChannel, and a QWebChannel publishes a
+		// shared object's signal to every channel with a subscriber -- so a
+		// password filled on the focused tab reached every other tab's script.
+		// Confirmed on device; see project.md. Per view, the signal is on this
+		// view's own object and reaches only this view's channel. The shared
+		// keepass_bridge is still one, and tags are unique across controllers
+		// (a static counter) so a reply reaches the view that asked.
+		auto *autofill = new autofill_controller(m_keepass, m_policy, view);
+		autofill->set_https_only(settings_store::autofill_https_only());
+		autofill->set_page_origin(
+		  QUrl::fromUserInput(n->url).adjusted(
+		    QUrl::RemovePath | QUrl::RemoveQuery |
+		    QUrl::RemoveFragment).toString());
+		wire_autofill(autofill);
+		view->set_script_bridge(autofill, "hydraAutofill");
 		view->inject_script("hydra-autofill",
 		                     QString::fromUtf8(autofill_script::source()));
 		// The element picker rides the same seam -- that is why it waited for
@@ -3496,13 +3513,20 @@ void main_window::open_node(node *n, bool load_now) {
 					save_tree_soon();
 		});
 		connect(view, &web_view_backend::url_changed, this,
-		         [this, view, cosmetic, consent](const QUrl &u) {
+		         [this, view, cosmetic, consent, autofill](const QUrl &u) {
 			apply_policy(view, u.host());
 			// This view's own host, for this view's own bridges -- not the
 			// current view's, which is the fault described where the bridges
 			// are made.
 			cosmetic->set_page_host(u.host());
 			consent->set_page_host(u.host());
+			// This view's own autofill origin, and the current HTTPS-only
+			// setting, so a fill asked for after a same-tab navigation is
+			// gated for where the tab actually is now.
+			autofill->set_page_origin(
+			  u.adjusted(QUrl::RemovePath | QUrl::RemoveQuery |
+			              QUrl::RemoveFragment).toString());
+			autofill->set_https_only(settings_store::autofill_https_only());
 			// **And the rules, pulled fresh from the aggregator.** The
 			// injected consent script reads `rules_json` once per page load,
 			// so a rule learned in the dialog reaches an open tab exactly
@@ -4564,11 +4588,9 @@ void main_window::sync_page_context() {
 	// fill that did not happen here. The button stays where it is; only what
 	// it says and whether it can be pressed go back to the start.
 	reset_key_action();
-	if (m_autofill) {
-		m_autofill->set_page_origin(
-		  u.adjusted(QUrl::RemovePath | QUrl::RemoveQuery |
-		              QUrl::RemoveFragment).toString());
-	}
+	// The autofill origin is this view's own, set on its per-view controller
+	// from that view's navigation -- not from here, which reads the current
+	// view and was the shared object's cross-tab bug.
 }
 
 void main_window::suspend_node(node *n) {
@@ -5865,8 +5887,10 @@ void main_window::open_settings() {
 	// dialog is the one place that can change it. Without this the setting
 	// would take effect on the next launch, which for a control about where a
 	// password may be typed is the wrong kind of surprise in both directions.
-	if (m_autofill)
-		m_autofill->set_https_only(settings_store::autofill_https_only());
+	// The current view's controller now; the others re-read on their next
+	// navigation, which is the same refresh the per-site defaults below get.
+	if (autofill_controller *af = current_autofill())
+		af->set_https_only(settings_store::autofill_https_only());
 
 	// Global defaults may have moved, and every live view was configured from
 	// the old ones. Re-apply rather than wait for the next navigation, or the

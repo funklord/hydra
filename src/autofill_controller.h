@@ -123,7 +123,13 @@ private:
 	policy_engine  *m_policy = nullptr;
 	QString m_origin;
 	bool    m_https_only = k_https_only_default;
-	int     m_next_tag = 1;
+	// **Static, so tags are unique across the per-view controllers.** There
+	// is one controller per view now, each connected to the one shared
+	// keepass_bridge, so every reply reaches every controller and each keeps
+	// only the one whose tag it holds. Per-instance counters would collide --
+	// two views both waiting on tag 1 -- and a reply would be delivered to the
+	// wrong view. A single monotonic source across the process removes that.
+	static int s_next_tag;
 	int     m_pending  = 0;
 	// Separate tags per kind of request. One `m_pending` was enough while a
 	// fill was the only thing in flight; a save confirmed while a generate is

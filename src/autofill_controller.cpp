@@ -7,6 +7,8 @@
 #include <QJsonObject>
 #include <QUrl>
 
+int autofill_controller::s_next_tag = 1;
+
 autofill_controller::autofill_controller(keepass_bridge *bridge, policy_engine *policy,
                                           QObject *parent)
   : QObject(parent), m_bridge(bridge), m_policy(policy) {
@@ -89,7 +91,7 @@ void autofill_controller::request_credentials(const QString &origin) {
 		emit refused(why);
 		return;
 	}
-	m_pending = m_next_tag++;
+	m_pending = s_next_tag++;
 	m_bridge->request_logins(m_origin, m_pending);
 }
 
@@ -132,7 +134,7 @@ void autofill_controller::confirm_save(bool yes) {
 		emit save_finished(false, "Not connected to KeePassXC.");
 		return;
 	}
-	m_save_tag = m_next_tag++;
+	m_save_tag = s_next_tag++;
 	m_bridge->save_login(origin, offered.login, offered.password, QString(),
 	                      m_save_tag);
 }
@@ -145,12 +147,12 @@ void autofill_controller::request_generated_password(const QString &origin) {
 	}
 	if (!m_bridge)
 		return;
-	m_generate_tag = m_next_tag++;
+	m_generate_tag = s_next_tag++;
 	m_bridge->generate_password(m_generate_tag);
 }
 
 void autofill_controller::offer_for_test(const QList<credential> &entries) {
-	m_pending = m_next_tag++;
+	m_pending = s_next_tag++;
 	on_logins(m_pending, entries);
 }
 

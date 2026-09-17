@@ -22696,11 +22696,58 @@ passes for the legitimate focused tab, and refuses every other. It needs no
 per-view refactor. Whether to also make autofill per-view like consent is a
 larger question; the origin-in-payload check closes the leak either way.
 
-**Not implemented yet, by the holder's choice to verify first.** The live
-confirmation above is done; the fix is not. It is credential delivery and a
-wrong origin comparison would break autofill for the legitimate tab, so the
-go-ahead is the holder's. When it lands, the `try_autofill` section is the
-test that proves it -- both tabs today, one tab after.
+**Fixed the same way as consent: one controller per view.** The holder
+chose the full per-view refactor after the live confirmation. Only two of
+the controller's signals ever leaked -- `credentials_ready` and
+`generated_password`, the ones that reach a page; everything else (refused,
+requested, save_offered, choice_needed) goes to C++ and is window-level and
+safe. So the split is by role, exactly as consent's was:
+
+- `open_node` creates one `autofill_controller` per view, parented to it,
+  with the page origin and the HTTPS-only setting from that view. Its
+  `credentials_ready` is on its own object, so it reaches only its own
+  view's QWebChannel.
+- The one `keepass_bridge` is still shared, and `m_next_tag` is now
+  `static` so tags are unique across the per-view controllers -- every
+  reply reaches every controller and each keeps only the one whose tag it
+  holds, so a reply is delivered to the view that asked.
+- `wire_autofill` connects each controller's window-level signals to the
+  window, the lambdas the constructor used to hold. The picker and the save
+  prompt are modal and shown synchronously, so the captured controller is
+  still the right one when `choose`/`confirm_save` answer it. The key-state
+  updates (requested, refused, credentials_ready) are gated on the current
+  view, so a background tab's script cannot repaint the key for the tab in
+  front.
+- The toolbar key and the generate action act on `current_autofill()`, the
+  controller of the view in front, found through it.
+
+**Why per-view instances rather than an aggregator-plus-bridge split**, the
+shape the option described: a new bridge class is a new QObject, whose moc
+symbols ripple into link closures that only `tool/objsets.py` can recompute
+-- and that is broken on the fmake DBus issue signalled to fmake. Reusing
+the existing class per view needs no new symbol, which is the same reason
+the consent refactor took that shape.
+
+**Confirmed on device, and the driver flipped.** The `try_autofill` section
+now opens two tabs through the real `open_node`, delivers on one view's
+controller, and reads both fields:
+
+    delivered on A: A field=s3cr3t-should-stay-in-one-tab
+                    B field=(empty)
+
+Only the tab it was delivered to filled. The section is the regression
+test: reverting `open_node` to one shared controller makes
+`view->findChild<autofill_controller*>()` null -- the shared one is
+parented to the window, not the view -- so "each view has its own
+controller" fails, which is the check that catches it.
+
+**A self-inflicted process note.** While verifying, a sabotage that reverts
+source was run in parallel with `make check`, a concurrent edit of
+`main_window.cpp` under a build reading it. The sabotage build also had the
+wrong working directory, failed to rebuild, and ran the stale fixed binary
+-- a "22 passed" that proved nothing, the exact stale-binary trap. Both are
+the same lesson: serialise anything that mutates the tree, and never read a
+pass from a binary the build step did not produce.
 
 ### The consent blocker answered for the wrong site too
 
