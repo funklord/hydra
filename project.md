@@ -23114,7 +23114,19 @@ code change was made. Making a helper fetch asynchronous changes how that
 dialog works and is the copyright holder's call, not something to fold into
 a commit about another subsystem.
 
-**Where to look next**, since this closed nothing: the crash was reported on
+**The offline suites are UB-clean under sanitizers, which narrows this.**
+Swept 2026-09-17 with `-fsanitize=address,undefined`: test_rotation (325),
+test_crypto (30), test_extractor (171), test_model (229), test_tree (68) and
+test_assembly (15) each reported zero ASan and zero UBSan errors. test_assembly
+is the regression check -- it carried the two UBSan errors that found the
+empty_state teardown bug, and is clean now. So the parsing, crypto, tree and
+window-lifecycle code reachable offline is memory- and UB-clean, and the one
+UB that was found lived in a real-view teardown path only the live driver
+reached. If the media crash is undefined behaviour, it is in the
+WebEngine-interacting paths the offline suites cannot exercise -- which is
+where a live-engine sanitizer run, not an offline one, would find it.
+
+**Where to look next**, since this closed nothing:**Where to look next**, since this closed nothing: the crash was reported on
 pressing play, and the paths that run from there are `stream_assembly` for
 HLS, `player_launcher::play`, and `network_fetcher`, whose nested
 `QEventLoop::exec` is the same class of re-entrancy hazard as the one above
