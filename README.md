@@ -432,7 +432,5 @@ Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>
 
 ## Licence
 
-None yet.
-
 Vendored and linked components keep their own terms: yt-dlp is public
 domain (Unlicense), Qt is used under LGPL-3.0-only, linked dynamically.
