@@ -2410,12 +2410,57 @@ int main(int argc, char **argv) {
 		check(!quiet.contains('('),
 		      QString("with no count while nothing is waiting (%1)").arg(quiet));
 
-		w6.m_consent->set_page_host("example.com");
-		w6.m_consent->report_unhandled("Godta alle\tAvvis alle");
-		spin(50);
-		const QString loud = w6.m_banners_action->text();
-		check(loud.contains("(1)"),
-		      QString("and a count once one is (%1)").arg(loud));
+		// **Through a real view now, because the count is fed a new way.**
+		// The shared blocker used to be the bridge and the aggregator both,
+		// and reporting to it refreshed the badge directly. Now each view has
+		// its own blocker and the window aggregates what they find; the badge
+		// is refreshed by that aggregation. So the report has to come from a
+		// view's blocker, which is also the fix: a tab reports under its own
+		// host, not the front tab's.
+		auto show6 = [&](node *n) -> fake_view * {
+			const QModelIndex idx =
+			  w6.m_proxy->mapFromSource(w6.m_model->index_for_node(n));
+			emit w6.m_tree->activated(idx);
+			spin(200);
+			return static_cast<fake_view *>(
+			  w6.m_views_by_id.value(n->id, nullptr));
+		};
+		w6.resize(900, 600);
+		w6.show();
+		spin(150);
+
+		node *front = w6.m_model->add_tab(nullptr, "front",
+		                                   "https://front.example/");
+		fake_view *vf = front ? show6(front) : nullptr;
+		node *back = w6.m_model->add_tab(nullptr, "back",
+		                                  "https://back.example/");
+		fake_view *vb = back ? show6(back) : nullptr;   // back is now in front
+		// Put the first tab back in front, so the tab that reports below is a
+		// genuine background tab -- the case the shared blocker got wrong.
+		if (vf) show6(front);
+		check(vf && vb, "two tabs");
+
+		const QString cn = consent_blocker::bridge_name();
+		auto *cb = vb ? qobject_cast<consent_blocker *>(
+		                  vb->bridges.value(cn, nullptr)) : nullptr;
+		check(cb != nullptr, "the background tab has a consent blocker");
+		if (cb) {
+			// The background tab (back.example) finds a banner it cannot
+			// answer, while front.example is the current view.
+			cb->report_unhandled("Godta alle\tAvvis alle");
+			spin(50);
+			const QString loud = w6.m_banners_action->text();
+			check(loud.contains("(1)"),
+			      QString("and a count once one is (%1)").arg(loud));
+			// The list the dialog reads holds it under the tab's OWN host,
+			// not the front tab's -- the whole point of the fix.
+			const QStringList rows = w6.m_consent->unhandled();
+			check(rows.size() == 1 &&
+			       rows.first().startsWith("back.example\t"),
+			       QString("recorded under the reporting tab's host (%1)")
+			         .arg(rows.isEmpty() ? QString("(none)")
+			                              : rows.first().section('\t', 0, 0)));
+		}
 	}
 
 	// **A record of where somebody has been, with no way to remove it.**

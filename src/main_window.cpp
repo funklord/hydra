@@ -483,19 +483,10 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// Non-empty from the start: a view can be built before any tree is loaded,
 	// and an empty rule set is a blocker that silently does nothing.
 
-	connect(m_consent, &consent_blocker::acted, this,
-	         [this](const QString &host, const QString &choice) {
-		m_status->showMessage(
-		    QString("Answered the cookie banner on %1 (%2)").arg(host, choice), 6000);
-	});
-	// A policy change nobody asked for has to be visible when it happens, not
-	// merely findable in the shield afterwards.
-	connect(m_consent, &consent_blocker::relaxed_cookies, this,
-	         [this](const QString &host) {
-		m_status->showMessage(
-		    QString("Allowed first-party cookies for %1 so its consent choice "
-		             "sticks — change it in the shield").arg(host), 9000);
-	});
+	// The per-view blockers created in `open_node` carry `acted`,
+	// `relaxed_cookies` and `found_unanswerable`; `m_consent` is now the
+	// window aggregator behind the dialog and the badge, and emits none of
+	// them. `wire_consent` connects each per-view blocker.
 	m_picker   = new element_picker(this);
 	connect(m_picker, &element_picker::picked, this,
 	         [this](const picked_element &) { open_filter_evolution(); });
@@ -1769,11 +1760,8 @@ QMenuBar *main_window::build_menu_bar() {
 	// capture entry already do, rather than anything that interrupts: nothing
 	// here is urgent, and a person who never opens Tools is not being asked to
 	// care.
-	// Straight to the member: Qt lets a slot take fewer arguments than its
-	// signal, and this one wants neither of them -- it reads the list.
-	if (m_consent)
-		connect(m_consent, &consent_blocker::found_unanswerable, this,
-		         &main_window::refresh_banner_affordance);
+	// The badge is refreshed by `wire_consent`'s per-view handler, which
+	// records the finding into the aggregator and then updates the count.
 	refresh_banner_affordance();
 
 	// **"Something got through here", by name, where somebody can find it.**
@@ -2325,6 +2313,36 @@ void main_window::refresh_kiosk_tip() {
 	      : QStringLiteral("Fullscreen chrome-less presentation — Esc is "
 	                        "turned off for this screen, so there may be no "
 	                        "way out except ending the process"));
+}
+
+// The signals a per-view consent blocker raises, connected to the window: the
+// status line for what it did, and the aggregator plus the badge for a banner
+// it could not answer. The lambdas are what the constructor connected to the
+// single shared blocker before it became the aggregator; the host they carry
+// is now the blocker's own view's, which is the fix.
+void main_window::wire_consent(consent_blocker *c) {
+	connect(c, &consent_blocker::acted, this,
+	         [this](const QString &host, const QString &choice) {
+		m_status->showMessage(
+		    QString("Answered the cookie banner on %1 (%2)").arg(host, choice),
+		    6000);
+	});
+	// A policy change nobody asked for has to be visible when it happens, not
+	// merely findable in the shield afterwards.
+	connect(c, &consent_blocker::relaxed_cookies, this,
+	         [this](const QString &host) {
+		m_status->showMessage(
+		    QString("Allowed first-party cookies for %1 so its consent choice "
+		             "sticks — change it in the shield").arg(host), 9000);
+	});
+	// Recorded into the one list the dialog and the badge read, under the host
+	// the per-view blocker reported -- its own view's, not the front tab's.
+	connect(c, &consent_blocker::found_unanswerable, this,
+	         [this](const QString &host, const QString &labels) {
+		if (m_consent)
+			m_consent->record_unhandled(host, labels);
+		refresh_banner_affordance();
+	});
 }
 
 void main_window::refresh_banner_affordance() {
@@ -3402,7 +3420,27 @@ void main_window::open_node(node *n, bool load_now) {
 		// The consent banner, answered rather than merely hidden (sec 7.1's
 		// cookie_notices). Same isolated world as the others: it clicks the
 		// page's own buttons, so the page must not be able to rewrite it.
-		view->set_script_bridge(m_consent, consent_blocker::bridge_name());
+		//
+		// **One consent blocker per view, for the reason the cosmetic one is,
+		// found in the same report.** The shared blocker kept the page host
+		// from `sync_page_context`, which reads the current view, while every
+		// view held the same object -- so a background tab asked whether to
+		// answer its banner and was told for the front tab's host, and a
+		// banner it could not answer was reported under the front tab's host
+		// too, which would teach a rule for the wrong site.
+		//
+		// Unlike cosmetic, the state does not all go per view: the rules and
+		// the missed-banner list the dialog reviews are the window's. So the
+		// window keeps `m_consent` as the aggregator behind the dialog and the
+		// badge, and each view gets a blocker of its own that carries the host,
+		// answers the script for it, follows the aggregator's rules, and hands
+		// findings back through `wire_consent`.
+		auto *consent = new consent_blocker(m_policy, view);
+		if (m_consent)
+			consent->set_rules(m_consent->rules());
+		consent->set_page_host(QUrl::fromUserInput(n->url).host());
+		wire_consent(consent);
+		view->set_script_bridge(consent, consent_blocker::bridge_name());
 		// On subframes too, which is the whole difference between answering a
 		// CMP and looking at one: vendors ship them as iframes.
 		view->inject_script("hydra-consent", consent_blocker::script_source(), true);
@@ -3458,12 +3496,21 @@ void main_window::open_node(node *n, bool load_now) {
 					save_tree_soon();
 		});
 		connect(view, &web_view_backend::url_changed, this,
-		         [this, view, cosmetic](const QUrl &u) {
+		         [this, view, cosmetic, consent](const QUrl &u) {
 			apply_policy(view, u.host());
-			// This view's own host, for this view's own bridge -- not the
-			// current view's, which is the fault described where the bridge
-			// is made.
+			// This view's own host, for this view's own bridges -- not the
+			// current view's, which is the fault described where the bridges
+			// are made.
 			cosmetic->set_page_host(u.host());
+			consent->set_page_host(u.host());
+			// **And the rules, pulled fresh from the aggregator.** The
+			// injected consent script reads `rules_json` once per page load,
+			// so a rule learned in the dialog reaches an open tab exactly
+			// when it matters -- its next navigation -- without a signal to
+			// fan out. The aggregator is the one source of truth; this view's
+			// blocker mirrors it at the moment the page will ask.
+			if (m_consent)
+				consent->set_rules(m_consent->rules());
 			// For every view, not only the current one: a background tab that
 			// navigates is exactly the one whose address nothing else records.
 			fill_empty_node_url(view, u);
@@ -4512,8 +4559,6 @@ void main_window::sync_page_context() {
 	if (!v)
 		return;
 	const QUrl u = v->url();
-	if (m_consent)
-		m_consent->set_page_host(u.host());
 	// The key belongs to the page that raised it: a new document has not asked
 	// for anything yet, and a tick left over from the last one would claim a
 	// fill that did not happen here. The button stays where it is; only what

@@ -278,19 +278,27 @@ bool consent_blocker::active_for(const QString &host) const {
 	return m_policy && !m_policy->is_allowed(policy::feature::cookie_notices, host);
 }
 
+// Bounded and deduplicated: the observer fires per mutation on some pages,
+// and the same banner arriving twenty times is one finding, not twenty. Split
+// out of `report_unhandled` so the window aggregator can be handed a finding a
+// per-view blocker made, under that view's host rather than this object's.
+bool consent_blocker::record_unhandled(const QString &host,
+                                        const QString &labels) {
+	const QString row = host + "\t" + labels.left(400);
+	if (m_unhandled.contains(row))
+		return false;
+	m_unhandled.prepend(row);
+	while (m_unhandled.size() > 20)
+		m_unhandled.removeLast();
+	return true;
+}
+
 void consent_blocker::report_unhandled(const QString &labels) {
 	const QString host = m_host;
 	if (host.isEmpty() || !active_for(host))
 		return;
-	// Bounded and deduplicated: the observer fires per mutation on some pages,
-	// and the same banner arriving twenty times is one finding, not twenty.
-	const QString row = host + "\t" + labels.left(400);
-	if (m_unhandled.contains(row))
-		return;
-	m_unhandled.prepend(row);
-	while (m_unhandled.size() > 20)
-		m_unhandled.removeLast();
-	emit found_unanswerable(host, labels.left(400));
+	if (record_unhandled(host, labels))
+		emit found_unanswerable(host, labels.left(400));
 }
 
 bool consent_blocker::forget_unhandled(const QString &host,

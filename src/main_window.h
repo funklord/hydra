@@ -242,6 +242,8 @@ private:
 	// this project whose evidence *is* the proposal announced itself to
 	// nobody: a person had to open Tools and guess.
 	void refresh_banner_affordance();
+	// Connect a per-view consent blocker's signals to the window.
+	void wire_consent(consent_blocker *c);
 	// Keep the Kiosk Mode entry's status tip honest about how to get out.
 	// **It said "Esc returns" unconditionally**, and both Esc and F11 are
 	// gated on the saved `allow_escape` -- whose own settings row warns that

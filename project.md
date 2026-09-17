@@ -22638,6 +22638,58 @@ the `isModified` guard is untouched -- both asserted as controls.
 
     sabotage: the old body     cursor 5 -> 24, selection lost, cursor 8 -> 26
 
+### The consent blocker answered for the wrong site too
+
+The same fault as the cosmetic bridge, in the sibling that answers cookie
+banners, and left for its own change because it is wired in more widely. One
+`consent_blocker` was the script bridge for every view and took the page
+host from `sync_page_context`, which reads the current view. A tab loading
+in the background therefore asked whether to answer its banner, and reported
+a banner it could not answer, under the FRONT tab's host -- so a rule
+learned from a background tab's banner would have been proposed for the
+wrong site, which is worse than the read side alone.
+
+**Why it was a refactor and not a swap.** Cosmetic state is entirely per
+view; consent state is not. The rules table and the missed-banner list the
+review dialog reads are the window's, not a tab's. So the split is
+per-role, not per-object:
+
+- `m_consent` stays as the window aggregator -- the source of truth for
+  rules, the one `unhandled()` list the badge and the dialog read, the
+  target of `set_rules` from the dialog and from load. It is no longer a
+  script bridge for any view, and emits none of the signals; the dialog is
+  untouched.
+- Each view gets its own `consent_blocker`, parented to it, carrying that
+  view's host, answering the script for it. `wire_consent` connects each
+  one's `acted`, `relaxed_cookies` and `found_unanswerable` to the window
+  -- the lambdas the constructor used to hold, now carrying the per-view
+  host, which is the fix.
+- A banner a per-view blocker cannot answer is recorded into the aggregator
+  through `record_unhandled(host, labels)`, under the reporting view's own
+  host, into the one list the dialog reviews.
+
+**Rules reach an open tab without a signal, and the reason is the script.**
+The first attempt added a `rules_changed` signal so per-view blockers could
+follow a rule learned in the dialog. That is a new moc symbol, and it
+rippled into link closures that only `tool/objsets.py` can recompute -- and
+that tool is currently broken on an unrelated QtDBus compile error in
+`test_theme.cpp` under fmake, signalled to fmake rather than worked around
+here. But the injected consent script reads `rules_json` once per page
+load, so a per-view blocker only needs fresh rules at navigation. The
+`url_changed` lambda pulls them from the aggregator there -- no signal, no
+new symbol, no regeneration, and the rules arrive exactly when the page
+asks. Behaviourally identical to the old shared object, which also only
+applied a new rule on the next load.
+
+**The test drives the background case.** With one tab in front and another
+behind, the background tab reports an unanswerable banner; the assertion is
+that the aggregator's list -- what the dialog reviews -- records it under
+the background tab's host, not the front tab's. The existing badge-count
+test was rewritten onto this path, because the count is now fed by the
+aggregation rather than by the shared object's own signal. Restoring the
+pre-refactor source fails exactly the host assertion, reporting the front
+tab's host.
+
 ### One cosmetic bridge answered for the wrong site
 
 Reported from use: Teams showed its top-bar icons in one tab and not in
@@ -22674,12 +22726,10 @@ the real page and an account. `HYDRA_FILTER_DEBUG=1` prints
 `cosmetic: page host is now "..."` per view; a good tab against a bad one
 on that line is the next comparison if icons still vanish.
 
-**`consent_blocker` has the identical shape and the identical fault**, and
-is not changed here. It is wired into the window more widely -- three
-signals, a dialog aggregating its `unhandled()` list across every tab,
-rules pushed into it -- so making it per-view is a refactor rather than a
-swap, and doing it half-way beside this one would leave a bridge that is
-per-view for one purpose and shared for another. It is owed.
+**`consent_blocker` had the identical shape and the identical fault**, and
+is now fixed the same way -- see *The consent blocker answered for the
+wrong site too*, below. It was left for its own change because it is wired
+in more widely, which the entry describes.
 
 ### Two columns a phone could not reach
 

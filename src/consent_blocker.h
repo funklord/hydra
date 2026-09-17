@@ -72,6 +72,13 @@ public:
 	// Bounded: a page that reports in a loop must not be able to grow this.
 	QStringList unhandled() const { return m_unhandled; }
 
+	// **The aggregator's entry point.** A per-view blocker gates and emits
+	// `found_unanswerable`; the window records it here, under the host the
+	// per-view blocker reported, into the one list the dialog and the badge
+	// read. Deduplicated and bounded, exactly as a page's own report is.
+	// Returns whether it was newly added, so the caller can skip work.
+	bool record_unhandled(const QString &host, const QString &labels);
+
 	// **Drop a label that has become a rule, so the list is a to-do rather
 	// than a log.** Without this the review loop had no completion: a banner
 	// stayed in `unhandled()` after a rule was learned from it, offering the
