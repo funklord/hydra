@@ -426,17 +426,13 @@ diffable and hand-editable, and it is exactly what gets serialized to a model.
 named on the command line. The one thing that does not is the KeePassXC
 association key, which lives in the session keyring instead.
 
-## Licence
+## Copyright
 
 Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>
 
-**None, deliberately.** This browser is being developed unlicensed until it is
-complete, and the terms will be settled then. No rights are granted in the
-meantime, which is what an absent licence means rather than an oversight in it.
+## Licence
 
-The tree carried GPL-3.0-or-later until 2026-08-31. Do not restore it and do
-not add another: a licence is the copyright holder's to choose, an absent one
-leaves every option open, and a published grant cannot be taken back.
+None yet.
 
-Vendored and linked components keep their own terms — yt-dlp is public domain
-(Unlicense), and Qt is used under its LGPL-3.0-only option, linked dynamically.
+Vendored and linked components keep their own terms: yt-dlp is public
+domain (Unlicense), Qt is used under LGPL-3.0-only, linked dynamically.
