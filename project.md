@@ -23126,7 +23126,15 @@ reached. If the media crash is undefined behaviour, it is in the
 WebEngine-interacting paths the offline suites cannot exercise -- which is
 where a live-engine sanitizer run, not an offline one, would find it.
 
-**Where to look next**, since this closed nothing:**Where to look next**, since this closed nothing: the crash was reported on
+**The live-engine run was tried and was inconclusive.** `try_watch` built
+under UBSan and run against a real engine timed out under the sanitizer's
+overhead before it reached the Watch/play checks, printing no UB in the
+part that ran -- and it drives a synthetic media fixture rather than the
+page that crashed, so even a clean run would not clear the real path. The
+live instrument needs the actual trigger under a sanitized build, which is
+the environment that saw the crash, not a synthetic driver.
+
+**Where to look next**, since this closed nothing: the crash was reported on
 pressing play, and the paths that run from there are `stream_assembly` for
 HLS, `player_launcher::play`, and `network_fetcher`, whose nested
 `QEventLoop::exec` is the same class of re-entrancy hazard as the one above
