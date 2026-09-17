@@ -596,7 +596,6 @@ public:
 	// Kept so the accepted rules can be handed to it once the list is loaded,
 	// which happens after construction.
 	request_filter     *m_filter        = nullptr;
-	cosmetic_filters   *m_cosmetic      = nullptr;
 	keepass_bridge     *m_keepass       = nullptr;
 	autofill_controller *m_autofill     = nullptr;
 	consent_blocker     *m_consent      = nullptr;

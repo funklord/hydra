@@ -630,9 +630,8 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	});
 
 	m_filters   = new filter_list;
-	// The cosmetic half of sec 12. It reads the same list the interceptor does, and
-	// reaches pages the only way a `##` rule can: through the DOM.
-	m_cosmetic  = new cosmetic_filters(m_filters, this);
+	// The cosmetic half of sec 12 is created per view, in `open_node`: see
+	// the note there for why one shared bridge answered for the wrong site.
 
 	// Saved settings are applied here rather than by the settings dialog, so
 	// they take effect on a run where that dialog is never opened -- otherwise
@@ -3407,7 +3406,26 @@ void main_window::open_node(node *n, bool load_now) {
 		// On subframes too, which is the whole difference between answering a
 		// CMP and looking at one: vendors ship them as iframes.
 		view->inject_script("hydra-consent", consent_blocker::script_source(), true);
-		view->set_script_bridge(m_cosmetic, cosmetic_filters::bridge_name());
+		// **One cosmetic bridge per view, because one for all of them answered
+		// for the wrong site.** The bridge keeps the page's host itself -- the
+		// page never names it, so no page can ask what rules exist for any
+		// site but its own, and that stays true here. But the shared object
+		// took its host from `sync_page_context`, which reads the CURRENT
+		// view, while every view was handed the same object. A page loading
+		// in a background tab therefore asked for its selectors and was given
+		// the front tab's: Teams loaded behind YouTube got YouTube's rules.
+		// Reported from use as the same site showing its icons in one tab and
+		// not in another, and that is what it was -- which rules a page got
+		// depended on what happened to be in front when it loaded.
+		//
+		// Parented to the view, so it goes when the view does, and given the
+		// host from this view's own navigation below. `consent_blocker` has
+		// the same shape and the same fault; it is wired into the window
+		// more widely and is recorded in project.md rather than changed
+		// here.
+		auto *cosmetic = new cosmetic_filters(m_filters, view);
+		cosmetic->set_page_host(QUrl::fromUserInput(n->url).host());
+		view->set_script_bridge(cosmetic, cosmetic_filters::bridge_name());
 		view->inject_script("hydra-cosmetic", cosmetic_filters::script_source());
 		view->set_script_bridge(m_mse, mse_tap::bridge_name());
 		view->inject_script("hydra-mse-relay", mse_tap::relay_source());
@@ -3439,8 +3457,13 @@ void main_window::open_node(node *n, bool load_now) {
 				if (m_model->set_page_title(n, t))
 					save_tree_soon();
 		});
-		connect(view, &web_view_backend::url_changed, this, [this, view](const QUrl &u) {
+		connect(view, &web_view_backend::url_changed, this,
+		         [this, view, cosmetic](const QUrl &u) {
 			apply_policy(view, u.host());
+			// This view's own host, for this view's own bridge -- not the
+			// current view's, which is the fault described where the bridge
+			// is made.
+			cosmetic->set_page_host(u.host());
 			// For every view, not only the current one: a background tab that
 			// navigates is exactly the one whose address nothing else records.
 			fill_empty_node_url(view, u);
@@ -4491,8 +4514,6 @@ void main_window::sync_page_context() {
 	const QUrl u = v->url();
 	if (m_consent)
 		m_consent->set_page_host(u.host());
-	if (m_cosmetic)
-		m_cosmetic->set_page_host(u.host());
 	// The key belongs to the page that raised it: a new document has not asked
 	// for anything yet, and a tick left over from the last one would claim a
 	// fill that did not happen here. The button stays where it is; only what
@@ -5991,7 +6012,37 @@ void main_window::update_address(const QString &url, bool force) {
 	if (!force && m_address->isModified())
 		return;
 	m_address->setModified(false);
+
+	// **And not over somebody's cursor either.** `isModified` engages once a
+	// key has been pressed, and the moment before that is exactly where a
+	// person is: they have tapped the bar, which selects it all, or tapped
+	// again to place the cursor, and have not typed yet. A page emitting
+	// `url_changed` in that moment -- and a single-page app does so
+	// constantly -- reached `setText`, which moves the cursor to the end and
+	// drops the selection **even when the text is identical**. So the first
+	// keystroke inserted at the end instead of replacing, and a cursor placed
+	// to edit jumped away. Reported from use as "difficulty entering and
+	// editing the URL"; measured, the cursor went from 5 to 24 on an
+	// unchanged address.
+	//
+	// The bar still follows the page. What it stops doing is throwing away
+	// what the person was doing with the field in order to. Identical text
+	// is not written at all, and when the text does change under a focused
+	// field, a whole-field selection stays whole and a placed cursor stays
+	// placed, clamped to the new length.
+	if (m_address->text() == url)
+		return;
+	const bool focused      = m_address->hasFocus();
+	const bool all_selected = focused && m_address->hasSelectedText() &&
+	                          m_address->selectedText() == m_address->text();
+	const int  cursor       = m_address->cursorPosition();
 	m_address->setText(url);
+	if (!focused)
+		return;
+	if (all_selected)
+		m_address->selectAll();
+	else
+		m_address->setCursorPosition(qMin(cursor, int(url.size())));
 }
 
 void main_window::apply_policy(web_view_backend *view, const QString &host) {

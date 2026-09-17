@@ -22613,6 +22613,74 @@ ends `return ok`, which that pattern cannot see. **A grep for return
 literals cannot find a function that returns a variable**, and the failure
 mode is a confident narrowing rather than an empty result.
 
+### The address bar wrote over the cursor
+
+Reported from use as "difficulty entering and editing the URL text".
+`update_address` guards a half-typed address with `isModified`, and that
+guard is right -- it engages once a key has been pressed. The moment before
+that is exactly where a person is: they have tapped the bar, which selects
+it all, or tapped again to place the cursor, and have not yet typed. A page
+emitting `url_changed` in that moment -- a single-page app does so
+constantly -- reached `setText`, which moves the cursor to the end and
+drops the selection **even when the text is identical**.
+
+Measured: cursor at 5 on an unchanged address, `url_changed` with the same
+string, cursor at 24 -- the end. So the first keystroke inserted at the end
+instead of replacing, which is "entering", and a placed cursor jumped away,
+which is "editing". Two symptoms, one mechanism.
+
+The bar still follows the page; what it stops doing is throwing away what
+the person was doing with the field in order to. Identical text is not
+written at all. When the text does change under a focused field, a
+whole-field selection stays whole and a placed cursor stays placed, clamped
+to the new length. An unfocused bar follows the page exactly as before, and
+the `isModified` guard is untouched -- both asserted as controls.
+
+    sabotage: the old body     cursor 5 -> 24, selection lost, cursor 8 -> 26
+
+### One cosmetic bridge answered for the wrong site
+
+Reported from use: Teams showed its top-bar icons in one tab and not in
+another. Anything profile-wide -- the request filter, cookies, the cache --
+cannot produce a per-tab difference on one site; only something applied per
+view can. Two things are: `apply_policy`, and the injected scripts, of
+which the cosmetic filter is the one that hides elements.
+
+**The mechanism, measured.** One `cosmetic_filters` object was the script
+bridge for every view. It keeps the page's host itself -- deliberately, so
+the page never names it and no page can ask what rules exist for any site
+but its own, which is a leak the original design closed. But that host was
+set from `sync_page_context`, which reads the CURRENT view. A page loading
+in a background tab asked for its selectors and was given the front tab's:
+Teams loading behind YouTube got YouTube's rules. Which rules a page got
+depended on what happened to be in front when it loaded.
+
+So the bridge is one per view, parented to it, fed from that view's own
+`url_changed`. The page still never names its host and still cannot ask
+about another site; a background tab simply answers for itself.
+
+    sabotage: the original files    the two views hold one bridge, and the
+                                    tab behind reports host=b.example -- the
+                                    front tab's
+
+`fake_view::set_script_bridge` was a no-op that discarded the object, so
+nothing in the suite could ask which bridge a view held; it records them
+now, which is what let the fault be asserted rather than described.
+
+**Not established: that this is the whole of the Teams symptom.** The
+per-tab inconsistency is real and it lives exactly where the symptom does,
+but whether a wrong site's rules are what hides Fluent's icon font needs
+the real page and an account. `HYDRA_FILTER_DEBUG=1` prints
+`cosmetic: page host is now "..."` per view; a good tab against a bad one
+on that line is the next comparison if icons still vanish.
+
+**`consent_blocker` has the identical shape and the identical fault**, and
+is not changed here. It is wired into the window more widely -- three
+signals, a dialog aggregating its `unhandled()` list across every tab,
+rules pushed into it -- so making it per-view is a refactor rather than a
+swap, and doing it half-way beside this one would leave a bridge that is
+per-view for one purpose and shared for another. It is owed.
+
 ### Two columns a phone could not reach
 
 Reported long ago and only now checked on the handset. On the Fold's cover

@@ -29,6 +29,7 @@
 // 674x841 and 841x674 open. A desktop window dragged between those sizes is
 // the same event, which is why none of this needs a device.
 #include <functional>
+#include "cosmetic_filters.h"
 #include "main_window.h"
 #include "settings_dialog.h"
 #include <QFocusEvent>
@@ -198,7 +199,13 @@ public:
 		if (!scripts.contains(n)) scripts << n;
 	}
 	void remove_script(const QString &n) override { scripts.removeAll(n); }
-	void set_script_bridge(QObject *, const QString &) override {}
+	// Recorded, for the reason `scripts` is: a no-op setter meant nothing in
+	// the suite could ask which object a view was handed, and the fault this
+	// caught was every view being handed the same one.
+	QHash<QString, QObject *> bridges;
+	void set_script_bridge(QObject *o, const QString &n) override {
+		bridges.insert(n, o);
+	}
 	QByteArray save_state() const override { return {}; }
 	bool restore_state(const QByteArray &) override { return false; }
 
@@ -633,6 +640,148 @@ int main(int argc, char **argv) {
 			       QString("so the real one still lands after it (%1)")
 			         .arg(warm->url));
 		}
+	}
+
+	section("the address bar keeps its cursor while the page reports where it is");
+
+	// **Reported from use: "difficulty entering and editing the URL text".**
+	// `update_address` guards a half-typed address with `isModified`, and
+	// that guard is right -- but it only engages once a key has been pressed.
+	// The moment before that is exactly where a person is: they have tapped
+	// the bar (which selects it all) or tapped again to place the cursor, and
+	// have not yet typed. A page that emits `url_changed` in that moment --
+	// and a single-page app emits it constantly -- reaches `setText`, which
+	// moves the cursor to the end and drops the selection **even when the
+	// text is identical**. So the first keystroke inserts at the end instead
+	// of replacing, and a cursor placed to edit jumps away.
+	//
+	// The bar still follows the page. What it stops doing is throwing away
+	// what the person was doing with the field in order to.
+	{
+		main_window w7(&factory, &policy, &filter);
+		w7.resize(900, 600);
+		w7.show();
+		spin(150);
+
+		auto show7 = [&](node *n) -> fake_view * {
+			const QModelIndex idx =
+			  w7.m_proxy->mapFromSource(w7.m_model->index_for_node(n));
+			emit w7.m_tree->activated(idx);
+			spin(200);
+			return static_cast<fake_view *>(
+			  w7.m_views_by_id.value(n->id, nullptr));
+		};
+
+		node *page = w7.m_model->add_tab(nullptr, "a page",
+		                                  "https://site.example/one");
+		fake_view *v = page ? show7(page) : nullptr;
+		check(v != nullptr, "a page is showing");
+		QLineEdit *const bar = w7.m_address;
+		if (v && bar) {
+			bar->setFocus(Qt::MouseFocusReason);
+			spin(50);
+			bar->deselect();
+			bar->setCursorPosition(5);
+			v->navigated_to(QUrl("https://site.example/one"));   // unchanged
+			spin(100);
+			check(bar->cursorPosition() == 5,
+			       QString("the same address again leaves the cursor where "
+			                "it was (%1)").arg(bar->cursorPosition()));
+
+			bar->selectAll();
+			v->navigated_to(QUrl("https://site.example/two"));
+			spin(100);
+			check(bar->text() == "https://site.example/two",
+			       "a new address is still shown");
+			check(bar->hasSelectedText() && bar->selectedText() == bar->text(),
+			       "with the whole field still selected, so the next "
+			       "keystroke replaces it");
+
+			bar->deselect();
+			bar->setCursorPosition(8);
+			v->navigated_to(QUrl("https://site.example/three"));
+			spin(100);
+			check(bar->cursorPosition() == 8,
+			       QString("and a cursor placed to edit stays put (%1)")
+			         .arg(bar->cursorPosition()));
+
+			// **Two controls.** An unfocused bar follows the page exactly as
+			// before -- the change is about a field somebody is using, not
+			// about the bar reporting navigation. And a half-typed address
+			// is still never written over, which is the older guard.
+			bar->clearFocus();
+			spin(50);
+			v->navigated_to(QUrl("https://site.example/four"));
+			spin(100);
+			check(bar->text() == "https://site.example/four",
+			       "while an unfocused bar simply follows the page");
+
+			bar->setFocus(Qt::MouseFocusReason);
+			spin(50);
+			bar->setText("typed so far");
+			bar->setModified(true);
+			v->navigated_to(QUrl("https://site.example/five"));
+			spin(100);
+			check(bar->text() == "typed so far",
+			       "and something half-typed is never written over");
+		}
+	}
+
+	section("each tab's cosmetic rules are its own, not the front tab's");
+
+	// **Reported from use: the same site showed its icons in one tab and not
+	// in another.** One `cosmetic_filters` was the bridge for every view, and
+	// it took its host from `sync_page_context`, which reads the CURRENT
+	// view. So a page loading in a background tab asked for its selectors
+	// and was given the front tab's. Which rules a page got depended on what
+	// happened to be in front when it loaded, which is exactly a per-tab
+	// difference on one site.
+	//
+	// The page still never names its host -- that is the leak the original
+	// design closed and it stays closed -- so the bridge has to be one per
+	// view, fed from that view's own navigation.
+	{
+		main_window w8(&factory, &policy, &filter);
+		w8.resize(900, 600);
+		w8.show();
+		spin(150);
+
+		auto show8 = [&](node *n) -> fake_view * {
+			const QModelIndex idx =
+			  w8.m_proxy->mapFromSource(w8.m_model->index_for_node(n));
+			emit w8.m_tree->activated(idx);
+			spin(200);
+			return static_cast<fake_view *>(
+			  w8.m_views_by_id.value(n->id, nullptr));
+		};
+
+		node *a = w8.m_model->add_tab(nullptr, "site a", "https://a.example/");
+		fake_view *va = a ? show8(a) : nullptr;
+		node *b = w8.m_model->add_tab(nullptr, "site b", "https://b.example/");
+		fake_view *vb = b ? show8(b) : nullptr;   // b in front, a behind
+		check(va && vb, "two tabs, the second one in front");
+
+		const QString name = cosmetic_filters::bridge_name();
+		QObject *ba = va ? va->bridges.value(name, nullptr) : nullptr;
+		QObject *bb = vb ? vb->bridges.value(name, nullptr) : nullptr;
+		check(ba && bb && ba != bb,
+		       "each view holds a cosmetic bridge of its own");
+
+		// The tab BEHIND navigates. Its bridge must answer for its own host,
+		// and the front tab's must be untouched by it.
+		if (va)
+			va->navigated_to(QUrl("https://a.example/page"));
+		spin(100);
+		auto *ca = qobject_cast<cosmetic_filters *>(ba);
+		auto *cb = qobject_cast<cosmetic_filters *>(bb);
+		const QString sa = ca ? ca->debug_state() : QString("(no bridge)");
+		const QString sb = cb ? cb->debug_state() : QString("(no bridge)");
+		check(sa.startsWith("host=a.example"),
+		       QString("a tab loading behind answers for its own host (%1)")
+		         .arg(sa.section(' ', 0, 0)));
+		check(sb.startsWith("host=b.example"),
+		       QString("while the front tab keeps its own (%1)")
+		         .arg(sb.section(' ', 0, 0)));
 	}
 
 	section("the window says when nothing is reaching the disk");
