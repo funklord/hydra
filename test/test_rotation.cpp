@@ -575,15 +575,13 @@ int main(int argc, char **argv) {
 
 	section("a tab that had no address takes the one it is showing");
 
-	// **Reported from use: tabs came back as `about:blank`.** The save was
-	// faithful -- nothing wrote a node's url on navigation, so a tab created
-	// empty (which is what a new tab is) kept an empty url however far it was
-	// browsed, while one opened from a link kept that link's. Deterministic,
-	// and it reads as the save being flaky.
-	//
-	// Filled only while empty, chosen by the copyright holder over following
-	// the page: `set_locked` stores a lock's pin in this same field, so a node
-	// that already carries an address keeps it and no pin can be overwritten.
+	// **Reported from use: tabs came back as `about:blank`, then later that
+	// the properties dialog showed a different url than the tab.** The node's
+	// url follows the page now, so a tab created empty takes the address it
+	// browses to and keeps taking each next one -- which is what the
+	// properties dialog, the tree and session-restore all read. The one
+	// exception is a locked node: its url is the lock's pin, set when the lock
+	// was applied, and must not move with the page.
 	{
 		main_window w3(&factory, &policy, &filter);
 		w3.resize(900, 600);
@@ -610,23 +608,36 @@ int main(int argc, char **argv) {
 			                                    : blank->url));
 		}
 
-		// **The pin case.** A node that already has an address keeps it --
-		// which is what stops a lock's pin being replaced by whatever the
-		// page went to next.
-		node *pinned = w3.m_model->add_tab(nullptr, "a pinned tab",
+		// **A non-locked address follows the page.** This is the fix for the
+		// reported mismatch: an address already set, on a tab that is not
+		// locked, moves with the tab rather than freezing where it began.
+		node *roam = w3.m_model->add_tab(nullptr, "a roaming tab",
+		                                  "https://roam.example/first");
+		if (fake_view *v = roam ? show(roam) : nullptr) {
+			v->navigated_to(QUrl("https://roam.example/second"));
+			spin(150);
+			check(roam->url == "https://roam.example/second",
+			       QString("a non-locked tab's url follows the page (%1)")
+			         .arg(roam->url));
+		}
+
+		// **The pin case, which is what stays put.** A locked node's url is
+		// its pin; browsing must not move it. `set_locked` writes the pin, and
+		// the page going elsewhere leaves it exactly there.
+		node *pinned = w3.m_model->add_tab(nullptr, "a locked tab",
 		                                    "https://pinned.example/keep");
+		w3.m_model->set_locked(pinned, true, "https://pinned.example/keep");
 		if (fake_view *v = pinned ? show(pinned) : nullptr) {
 			v->navigated_to(QUrl("https://elsewhere.example/moved"));
 			spin(150);
 			check(pinned->url == "https://pinned.example/keep",
-			       QString("and an address already set is left alone (%1)")
-			         .arg(pinned->url));
+			       QString("a locked tab keeps its pin (%1)").arg(pinned->url));
 		}
 
-		// **`about:blank` must not fill it.** A warm view reports it first,
-		// and since this only ever writes while empty, filling with it would
-		// leave the node non-empty and the real address could never land --
-		// blank tabs traded for tabs pinned to about:blank.
+		// **`about:blank` is not recorded.** A warm view reports it first,
+		// before the real page; recording it would put the transient blank in
+		// the node in place of the page about to load, so it is skipped and
+		// the real address that follows is what lands.
 		node *warm = w3.m_model->add_tab(nullptr, "a warm tab", QString());
 		if (fake_view *v = warm ? show(warm) : nullptr) {
 			v->navigated_to(QUrl("about:blank"));

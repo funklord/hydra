@@ -545,7 +545,7 @@ public:
 	// therefore has a non-empty url by construction and this never touches
 	// one. Separating the two meanings is a tree-file format change and the
 	// copyright holder's; this is the narrower option they chose.
-	void fill_empty_node_url(web_view_backend *view, const QUrl &u);
+	void track_node_url(web_view_backend *view, const QUrl &u);
 	QProgressBar    *m_progress   = nullptr;   // beside it, only while loading
 	find_bar        *m_find       = nullptr;   // above the status bar, hidden
 

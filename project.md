@@ -22406,22 +22406,38 @@ link's. That is why some survived and some did not, deterministically.
 is where the tab lock stores its pin, so writing it on navigation would
 overwrite pins. Separating them is a tree-file format change.
 
-**Settled by the copyright holder: fill the url only while it is empty.**
-Not following the page, which is the repair that needs the format change --
-this covers the blank-tab case and cannot touch a pinned row, because a
-locked node has a non-empty url by construction.
+**First settled as: fill the url only while it is empty** -- covering the
+blank-tab case without touching a pinned row, on the reasoning that
+following the page needs the format change to keep the pin safe.
 
-`fill_empty_node_url` runs on every view's `url_changed`, not only the
-current one: a background tab that navigates is exactly the one whose
-address nothing else records.
+**Reopened and re-settled after a second report: the url follows the page,
+except when the node is locked.** The first rule fixed the blank-tab case
+and left another: a non-locked tab's url froze at its first navigation
+while the tab browsed on, so the properties dialog, the tree and
+session-restore all showed where a tab began rather than where it was --
+reported from use as "the tab url and the one in properties not being the
+same". The fear that made the first rule narrow was overwriting a pin, and
+a non-locked node has no pin -- so following the page for non-locked nodes
+does not need the format change the broader "follow the page always" would.
+That was the third answer neither the first rule nor "follow always"
+named: `track_node_url` (the renamed `fill_empty_node_url`) writes the page
+url unless the node is locked or a folder, and a locked node's url stays
+the pin. It runs on every view's `url_changed`, not only the current one,
+so a background tab that navigates records its own address.
 
-**`about:` is refused, and that guard is the subtle half.** A warm view
-reports `about:blank` before the real page. Filling with it would leave the
-node non-empty, and since this only ever writes while empty, the real
-address could never land afterwards -- blank tabs traded for tabs pinned to
-`about:blank`, which is harder to notice and harder to undo. So the test
-asserts both that `about:blank` does not fill it *and* that the real one
-still lands, and the sabotage that removes the guard fails both:
+The behaviour is the same for a locked tab either way -- its view stays on
+the pin, browsing it opens a sub-tab -- so nothing a lock protects changed;
+only a non-locked tab now keeps its url current. Sabotage: dropping the
+locked guard lets a locked pin follow the page (the pin test fails);
+reverting to fill-only-while-empty freezes a non-locked url (the
+follows-the-page test fails). Each half fails only its own assertion.
+
+**`about:` is still refused, and that guard is the subtle half.** A warm
+view reports `about:blank` before the real page. Recording it would put the
+transient blank into the node in place of the page about to load, so it is
+skipped and the real address that follows is what lands. The test asserts
+both that `about:blank` is not recorded *and* that the real one still
+lands:
 
     sabotage                     fill   pin    about:blank   real one after
     follow the page always       ok     FAIL   ok            ok

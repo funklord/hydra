@@ -3537,7 +3537,7 @@ void main_window::open_node(node *n, bool load_now) {
 				consent->set_rules(m_consent->rules());
 			// For every view, not only the current one: a background tab that
 			// navigates is exactly the one whose address nothing else records.
-			fill_empty_node_url(view, u);
+			track_node_url(view, u);
 			if (view == current_view()) {
 				sync_page_context();
 				update_navigation();
@@ -5102,14 +5102,14 @@ void main_window::save_tree_soon() {
 // says so, and pressing it is the only way to find out where the file would
 // have gone -- a session once kept tabs for hours with every save a no-op and
 // one line on stderr as the only sign.
-void main_window::fill_empty_node_url(web_view_backend *view, const QUrl &u) {
+void main_window::track_node_url(web_view_backend *view, const QUrl &u) {
 	if (!view || !m_model)
 		return;
 	// **`about:blank` is not an address anybody typed**, and it is the first
 	// thing a warm view reports -- `open_node` loads it before the real one.
-	// Filling with it would leave the node non-empty, and this only ever
-	// writes while empty, so the address that follows would never land: a
-	// guard that fills once with the wrong value is worse than no guard.
+	// Recording it would put the transient blank into the node in place of the
+	// page that is about to load; skipping it leaves the node at its previous
+	// address, which is what the properties dialog and the tree should show.
 	if (!u.isValid() || u.scheme() == QLatin1String("about"))
 		return;
 	const QString text = u.toString();
@@ -5120,12 +5120,21 @@ void main_window::fill_empty_node_url(web_view_backend *view, const QUrl &u) {
 	if (id.isEmpty())
 		return;
 	node *const n = m_model->node_by_id(id);
-	// Folders have no page, and a node that already carries an address keeps
-	// it -- that address may be a lock's pin, which is the whole reason this
-	// is narrow.
-	if (!n || n->is_folder() || !n->url.isEmpty())
+	// **A non-locked node's url follows the page; a locked node's does not.**
+	// `node::url` carries two meanings -- a tab's address and, when the tab is
+	// locked, the pin the lock keeps it on. For a locked node the url is the
+	// pin, set when the lock was applied, and must not move with the page;
+	// that is the whole of what "locked" protects, and a locked tab's own view
+	// stays on the pin anyway (browsing it opens a sub-tab). For a non-locked
+	// node the url is just its address, and the properties dialog, the tree
+	// and session-restore all read it -- so freezing it at the first
+	// navigation left every one of them showing where a tab began rather than
+	// where it is, which is the mismatch reported from use. Folders have no
+	// page.
+	if (!n || n->is_folder() || n->locked)
 		return;
-
+	if (n->url == text)
+		return;   // the page has not moved; no write, no save
 	n->url = text;
 	m_model->refresh_node(n);
 	save_tree_soon();
