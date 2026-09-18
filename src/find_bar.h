@@ -4,6 +4,7 @@
 
 class QLabel;
 class QLineEdit;
+class QToolButton;
 
 // Find on this page: the strip that appears above the status bar.
 //
@@ -36,7 +37,8 @@ signals:
 	// `fresh` distinguishes a new term from stepping through the current one.
 	// The engine restarts its search on a new term and advances on a repeat,
 	// and only the bar knows which just happened.
-	void search(const QString &text, bool forward, bool fresh);
+	void search(const QString &text, bool forward, bool fresh,
+	             bool case_sensitive);
 	void dismissed();
 
 protected:
@@ -45,6 +47,7 @@ protected:
 private:
 	void step(bool forward);
 
-	QLineEdit *m_input = nullptr;
-	QLabel    *m_count = nullptr;
+	QLineEdit  *m_input = nullptr;
+	QLabel     *m_count = nullptr;
+	QToolButton *m_case = nullptr;
 };

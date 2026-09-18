@@ -10209,6 +10209,17 @@ Details that are each a decision:
 - **Icons from the style, not characters.** The toolbar already learned this:
   a phone font had no glyph for the reload character and the button drew an
   empty box.
+- **Match case is a toggle, and only where it can mean something.** The engine
+  finds case-insensitively by default; a checkable "Aa" beside the field adds
+  the `FindCaseSensitively` flag, and turning it on re-runs the current term at
+  once rather than waiting for the next keystroke. It carries as a fourth
+  parameter on the `search`/`find_text` seam. **It is absent on Android**,
+  where the system WebView's `findAllAsync` has no case option -- a control
+  that toggled nothing would be the dishonest kind this project removes, so the
+  toggle is not built there and the backend never receives a true. The suite
+  drives the real bar: an ordinary search reaches the backend case-insensitive,
+  toggling Match case reaches it case-sensitive, and dropping the flag on the
+  toggle fails only that second check.
 
 **And it found a shortcut clash.** `Ctrl+F` was already bound to *Find in Tree*,
 the sidebar filter. Two actions sharing a `QKeySequence` is an ambiguous

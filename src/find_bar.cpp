@@ -70,6 +70,25 @@ find_bar::find_bar(QWidget *parent) : QWidget(parent) {
 	row->addWidget(prev);
 	row->addWidget(next);
 
+	// **Match case**, a toggle rather than a button: it changes what the search
+	// means, not something done once. Absent on Android, where the system
+	// WebView's find has no case option and a control that did nothing would be
+	// the dishonest kind this project keeps removing.
+#ifndef Q_OS_ANDROID
+	m_case = new QToolButton(this);
+	m_case->setObjectName("find_case");
+	m_case->setText("Aa");
+	m_case->setCheckable(true);
+	m_case->setToolTip("Match case");
+	row->addWidget(m_case);
+	connect(m_case, &QToolButton::toggled, this, [this] {
+		// Re-run the current term as a fresh search so toggling case takes
+		// effect at once rather than at the next keystroke.
+		if (!m_input->text().isEmpty())
+			emit search(m_input->text(), true, true, m_case->isChecked());
+	});
+#endif
+
 	m_count = new QLabel(this);
 	m_count->setObjectName("find_count");
 	// **A floor so the buttons beside it do not jump, measured rather than
@@ -104,7 +123,7 @@ find_bar::find_bar(QWidget *parent) : QWidget(parent) {
 	connect(m_input, &QLineEdit::textChanged, this, [this](const QString &t) {
 		if (t.isEmpty())
 			m_count->clear();
-		emit search(t, true, true);
+		emit search(t, true, true, m_case && m_case->isChecked());
 	});
 	connect(m_input, &QLineEdit::returnPressed, this, [this] {
 		// Shift is read here rather than in keyPressEvent because the line
@@ -123,14 +142,15 @@ void find_bar::begin() {
 	m_input->setFocus();
 	m_input->selectAll();
 	if (!m_input->text().isEmpty())
-		emit search(m_input->text(), true, true);
+		emit search(m_input->text(), true, true, m_case && m_case->isChecked());
 }
 
 QString find_bar::text() const { return m_input->text(); }
 
 void find_bar::step(bool forward) {
 	if (!m_input->text().isEmpty())
-		emit search(m_input->text(), forward, false);
+		emit search(m_input->text(), forward, false,
+		             m_case && m_case->isChecked());
 }
 
 void find_bar::set_result(int matches, int active) {

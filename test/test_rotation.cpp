@@ -210,6 +210,16 @@ public:
 	}
 	QByteArray save_state() const override { return {}; }
 	bool restore_state(const QByteArray &) override { return false; }
+	// Recorded, for the reason the others are: the base find_text discards its
+	// arguments, so nothing could see whether the bar's Match case flag reaches
+	// the backend.
+	QString last_find;
+	bool    last_find_case = false;
+	void find_text(const QString &t, bool, bool, bool case_sensitive) override {
+		last_find = t;
+		last_find_case = case_sensitive;
+		emit find_result(0, 0);
+	}
 
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;
@@ -682,6 +692,37 @@ int main(int argc, char **argv) {
 			       QString("and the stored url matches what was typed (%1)")
 			         .arg(edited->url));
 		}
+	}
+
+	section("find on page can be told to match case");
+	{
+		main_window m(&factory, &policy, &filter);
+		m.show();
+		spin(200);
+		node *t = m.m_model->add_tab(nullptr, "a page", "https://find.example/");
+		fake_view *v = nullptr;
+		if (t) {
+			const QModelIndex idx =
+			  m.m_proxy->mapFromSource(m.m_model->index_for_node(t));
+			emit m.m_tree->activated(idx);
+			spin(200);
+			v = static_cast<fake_view *>(m.m_views_by_id.value(t->id, nullptr));
+		}
+		find_bar *fb = m.findChild<find_bar *>();
+		QLineEdit *in = fb ? fb->findChild<QLineEdit *>("find_input") : nullptr;
+		auto *mc = fb ? fb->findChild<QToolButton *>("find_case") : nullptr;
+		check(v && fb && in, "a page, a find bar and its field");
+		check(mc != nullptr, "and a Match case toggle beside it");
+		if (in)
+			in->setText("Term");
+		spin(120);
+		check(v && v->last_find == "Term" && !v->last_find_case,
+		       "an ordinary search is case-insensitive");
+		if (mc)
+			mc->setChecked(true);
+		spin(120);
+		check(v && v->last_find_case,
+		       "turning on Match case re-runs the search case-sensitively");
 	}
 
 	section("the address bar keeps its cursor while the page reports where it is");

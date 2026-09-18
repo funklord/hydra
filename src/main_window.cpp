@@ -1196,16 +1196,16 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_find = new find_bar(this);
 	outer->addWidget(m_find);
 	connect(m_find, &find_bar::search, this,
-	         [this](const QString &t, bool forward, bool fresh) {
+	         [this](const QString &t, bool forward, bool fresh, bool cs) {
 		if (web_view_backend *v = current_view())
-			v->find_text(t, forward, fresh);
+			v->find_text(t, forward, fresh, cs);
 	});
 	connect(m_find, &find_bar::dismissed, this, [this] {
 		// Clearing the term is what drops the engine's highlight. Hiding the
 		// bar alone would leave the page marked up with a search nothing on
 		// screen still refers to.
 		if (web_view_backend *v = current_view())
-			v->find_text(QString(), true, true);
+			v->find_text(QString(), true, true, false);
 		m_find->hide();
 		if (web_view_backend *v = current_view())
 			v->widget()->setFocus();

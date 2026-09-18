@@ -341,8 +341,10 @@ public:
 	// nothing and reports no matches, which is exactly what the bar then
 	// shows. `fresh` says the term changed, so the engine restarts rather than
 	// advancing to the next match.
-	virtual void find_text(const QString &text, bool forward, bool fresh) {
+	virtual void find_text(const QString &text, bool forward, bool fresh,
+	                        bool case_sensitive) {
 		Q_UNUSED(text) Q_UNUSED(forward) Q_UNUSED(fresh)
+		Q_UNUSED(case_sensitive)
 		emit find_result(0, 0);
 	}
 

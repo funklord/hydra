@@ -967,7 +967,12 @@ void android_view::exit_fullscreen() {
 // interchangeable: `findAllAsync` restarts the search, `findNext` walks what
 // the last search found. Restarting on every press of Next would put the
 // highlight back on the first match each time.
-void android_view::find_text(const QString &text, bool forward, bool fresh) {
+void android_view::find_text(const QString &text, bool forward, bool fresh,
+                              bool case_sensitive) {
+	// The system WebView's findAllAsync has no case option, so the desktop's
+	// Match case toggle is not offered on Android and this never receives a
+	// true; accepted rather than passed on, for lack of anywhere to pass it.
+	Q_UNUSED(case_sensitive)
 	if (!m_native) {
 		// Same answer the base class gives, so a view with no WebView behind
 		// it still leaves the bar saying something true.

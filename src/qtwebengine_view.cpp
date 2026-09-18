@@ -1106,13 +1106,16 @@ bool qtwebengine_view::can_go_forward() const {
 // `fresh` is not passed to Qt, and does not need to be: `findText` restarts
 // when the term differs from the last one and advances when it matches, which
 // is the same distinction arrived at from the other side.
-void qtwebengine_view::find_text(const QString &text, bool forward, bool fresh) {
+void qtwebengine_view::find_text(const QString &text, bool forward, bool fresh,
+                                  bool case_sensitive) {
 	Q_UNUSED(fresh)
 	if (!m_view)
 		return;
 	QWebEnginePage::FindFlags flags;
 	if (!forward)
 		flags |= QWebEnginePage::FindBackward;
+	if (case_sensitive)
+		flags |= QWebEnginePage::FindCaseSensitively;
 	m_view->findText(text, flags, [this](const QWebEngineFindTextResult &r) {
 		emit find_result(r.numberOfMatches(), r.activeMatch());
 	});

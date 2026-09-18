@@ -265,7 +265,8 @@ public:
 	QString page_title() const override { return m_title; }
 	void stop() override;
 	void exit_fullscreen() override;
-	void find_text(const QString &text, bool forward, bool fresh) override;
+	void find_text(const QString &text, bool forward, bool fresh,
+	                bool case_sensitive) override;
 	void set_permission_decider(permission_decider fn) override { m_decider = std::move(fn); }
 	// **The shell installed one on every view and this end ignored it**, so a
 	// site behind HTTP authentication failed on Android with no prompt. The
