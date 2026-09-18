@@ -824,6 +824,43 @@ int main(int argc, char **argv) {
 		check(v && v->saved == 1, "Save Page hands the page to the backend");
 	}
 
+	section("Ctrl+W closes the current tab, lands on a neighbour, reopenable");
+	{
+		main_window m(&factory, &policy, &filter);
+		m.show();
+		spin(200);
+		node *t1 = m.m_model->add_tab(nullptr, "first", "https://one.example/");
+		node *t2 = m.m_model->add_tab(nullptr, "second", "https://two.example/");
+		const QString id1 = t1 ? t1->id : QString();
+		const QString id2 = t2 ? t2->id : QString();
+		if (t1) {
+			const QModelIndex idx =
+			  m.m_proxy->mapFromSource(m.m_model->index_for_node(t1));
+			emit m.m_tree->activated(idx);
+			spin(200);
+		}
+		check(!id1.isEmpty() && !id2.isEmpty(),
+		       "two tabs open, the first being viewed");
+		check(m.m_views_by_id.value(id1, nullptr) != nullptr,
+		       "the viewed tab has a live view");
+		QAction *close = nullptr;
+		for (QAction *a : m.findChildren<QAction *>())
+			if (a->text() == "Close &Tab") { close = a; break; }
+		check(close && close->isEnabled(),
+		       "Close Tab is live while a page is shown");
+		m.close_current_tab();
+		spin(150);
+		check(m.m_model->node_by_id(id1) == nullptr,
+		       "the tab that was current is gone from the tree");
+		check(m.m_views_by_id.value(id1, nullptr) == nullptr,
+		       "and its view is torn down");
+		check(m.m_model->node_by_id(id2) != nullptr, "the other tab remains");
+		check(m.m_model->has_closed(), "the closed tab is remembered");
+		node *back = m.m_model->reopen_closed();
+		check(back && back->url == QString("https://one.example/"),
+		       "so Reopen Closed Tab brings the closed one back");
+	}
+
 	section("the address bar keeps its cursor while the page reports where it is");
 
 	// **Reported from use: "difficulty entering and editing the URL text".**

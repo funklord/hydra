@@ -506,6 +506,11 @@ public:
 	// cannot save (Android), like Print.
 	void save_page();
 
+	// Close the tab whose page is showing (Ctrl+W), landing on a neighbour
+	// first the way a browser does. Reopenable, so it asks nothing. Public so
+	// the shortcut and a test drive it.
+	void close_current_tab();
+
 	tab_tree_model  *m_model = nullptr;
 	tree_sort_proxy *m_proxy = nullptr;
 	tab_tree_view   *m_tree  = nullptr;
@@ -644,6 +649,7 @@ public:
 	QAction            *m_desktop_site_action = nullptr;
 	QAction            *m_mute_action  = nullptr;
 	QAction            *m_save_page_action = nullptr;
+	QAction            *m_close_tab_action = nullptr;
 	bool                m_page_fullscreen = false;
 	web_view_backend   *m_kiosk_view      = nullptr;
 	QAction            *m_key_action    = nullptr;

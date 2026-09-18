@@ -1335,6 +1335,17 @@ QMenuBar *main_window::build_menu_bar() {
 	    file_menu->addAction("New &Folder", QKeySequence("Ctrl+Shift+N"), this,
 	                          &main_window::new_folder);
 	new_folder_act->setStatusTip("Add a folder under the selection");
+
+	// Close the current tab, the browser-standard Ctrl+W. Distinct from the
+	// tree's Delete: that removes the selected row and asks first because it
+	// can take a folder and everything in it, while this closes the single
+	// tab being viewed and asks nothing, because Reopen Closed Tab brings it
+	// back. Greyed when no page is showing.
+	m_close_tab_action = file_menu->addAction("Close &Tab",
+	                                          QKeySequence("Ctrl+W"), this,
+	                                          &main_window::close_current_tab);
+	m_close_tab_action->setStatusTip("Close the tab you are viewing (Reopen Closed Tab brings it back)");
+	m_close_tab_action->setEnabled(false);
 	file_menu->addSeparator();
 
 	QAction *loc_act = file_menu->addAction("Open &Location…",
@@ -1855,6 +1866,27 @@ void main_window::present_fullscreen(web_view_backend *view, bool on) {
 		m_page_fullscreen = false;
 		view->exit_fullscreen();
 	}
+}
+
+void main_window::close_current_tab() {
+	web_view_backend *v = current_view();
+	if (!v)
+		return;
+	const QString id = m_views_by_id.key(v);
+	node *n = id.isEmpty() ? nullptr : m_model->node_by_id(id);
+	// current_view() is a page, so its node is never a folder; the guard says
+	// so rather than relying on it.
+	if (!n || n->is_folder())
+		return;
+	// Remembered, so Reopen Closed Tab brings it back -- which is why this asks
+	// nothing where the tree's Delete does: one tab, never a folder, and
+	// recoverable. Removal lands on the placeholder, the same as Delete: the
+	// tree is the tab list and stays in view, so the next tab is one click
+	// away. Auto-advancing was considered and declined -- activate_adjacent_tab
+	// cycles only *open* tabs, so it could not reach an unopened neighbour
+	// anyway, and diverging from Delete here would be a second close behaviour
+	// to keep in step.
+	m_model->remove_node(n, /*remember=*/true);
 }
 
 void main_window::save_page() {
@@ -4065,6 +4097,9 @@ void main_window::update_navigation() {
 
 	if (m_save_page_action)
 		m_save_page_action->setEnabled(v && v->can_save_page());
+
+	if (m_close_tab_action)
+		m_close_tab_action->setEnabled(v != nullptr);
 
 	m_back_action->setEnabled(v && !pinned && v->can_go_back());
 	m_fwd_action->setEnabled(v && !pinned && v->can_go_forward());

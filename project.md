@@ -20791,6 +20791,41 @@ download it triggers -- so the integration is by inspection of the
 `downloadRequested` handler that every other download already goes through,
 and the end-to-end save is left to verify on a device.
 
+## Ctrl+W: the close every browser has and this one did not
+
+There was no keyboard way to close the tab you were looking at. The tree's
+Delete removes the *selected* row and asks first, because it can take a folder
+and everything under it -- a different operation from the browser-standard
+Ctrl+W, which closes the single tab whose page is showing. Anyone arriving
+from another browser pressed Ctrl+W and nothing happened.
+
+**File > Close Tab (Ctrl+W)** closes the current tab and asks nothing, which
+is safe here for two reasons the tree's Delete cannot claim: it is one tab and
+never a folder -- `current_view()` is a page, so its node is a leaf -- and it
+is remembered, so Reopen Closed Tab (Ctrl+Shift+T) brings it straight back.
+That is why it needs no confirmation where Delete does. It is greyed when no
+page is showing.
+
+It removes the current node through `remove_node(n, remember=true)`, the same
+removal Delete runs, whose `about_to_remove` signal tears the view down and
+lands the stack on the placeholder. **Auto-advancing to a neighbour was
+considered and declined**, and the reason is worth recording because the
+obvious version does not work: `activate_adjacent_tab`, the call Ctrl+PageDown
+uses, cycles only *open* tabs -- `collect_open_tabs` gathers `open_tab` and
+`suspended_tab`, not an `unopened_tab` a session restored but never viewed --
+so it could not reach an unopened neighbour anyway, and where it could, the
+tab it lands on is one click away in the tree, which is always in view as the
+tab list. Diverging from Delete here would be a second close behaviour to keep
+in step for a gain the tree already provides.
+
+The test opens two tabs, views the first, closes it, and asserts the closed
+tab is gone from the tree, its view is torn down, the other tab remains, and
+Reopen Closed Tab returns the one that was closed. Three guards fail on their
+own: dropping `remove_node` reddens "the tab that was current is gone from the
+tree", dropping the `remember` flag reddens "the closed tab is remembered",
+and a close that tore down nothing would leave the view, reddening "and its
+view is torn down".
+
 ## Zoom had two routes in and one of them was remembered
 
 The same lens again -- a value with two writers where only one reaches the
