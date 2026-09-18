@@ -88,6 +88,7 @@
 #include <QLayout>
 #include <QListWidget>
 #include <QLineEdit>
+#include <QDialog>
 #include <QSplitter>
 #include <QTimer>
 #include <cstdio>
@@ -651,6 +652,35 @@ int main(int argc, char **argv) {
 			check(warm->url == "https://real.example/after",
 			       QString("so the real one still lands after it (%1)")
 			         .arg(warm->url));
+		}
+
+		// **Editing the address in properties loads it.** The other half of
+		// the mismatch: the stored url follows the page, so changing it by hand
+		// must move the page rather than leave the view where it was and the
+		// two disagreeing again. Driven through the real modal dialog -- a timer
+		// fills the Address field and accepts while `exec()` runs -- so the
+		// whole chain is exercised: the dialog's emit, and the shell's load in
+		// answer. A direct emit would test only the second half.
+		node *edited = w3.m_model->add_tab(nullptr, "an edited tab",
+		                                    "https://before.example/x");
+		if (fake_view *v = edited ? show(edited) : nullptr) {
+			QTimer::singleShot(120, [] {
+				auto *dlg = qobject_cast<QDialog *>(
+				  QApplication::activeModalWidget());
+				if (!dlg)
+					return;
+				if (auto *ln = dlg->findChild<QLineEdit *>("properties_url"))
+					ln->setText("https://after.example/y");
+				dlg->accept();
+			});
+			w3.m_tree->edit_properties(edited);
+			spin(150);
+			check(v->url() == QUrl("https://after.example/y"),
+			       QString("editing the Address in properties loads it (%1)")
+			         .arg(v->url().toString()));
+			check(edited->url == "https://after.example/y",
+			       QString("and the stored url matches what was typed (%1)")
+			         .arg(edited->url));
 		}
 	}
 

@@ -121,10 +121,11 @@ signals:
 	// default handler, and neither is a tree's business.
 	void open_externally_requested(node *n);
 	void suspend_requested(node *n);
-	// Pin or unpin, and it goes to the shell for one reason: a node's url does
-	// not follow the page -- only its title does -- so a tab opened at one
-	// address and browsed to another still records the first. Locking means
-	// "keep *this* page", and only the shell can see which page that is.
+	// Pin or unpin, and it goes to the shell for one reason: locking means
+	// "keep *this* page", the one showing right now, and only the shell can see
+	// which page that is. A non-locked node's stored url follows the page, but
+	// the live view is still what knows the exact address -- fragment and all --
+	// at the instant the lock is applied.
 	void lock_requested(node *n);
 	// One entry from a tab's imported history, opened as a **sub-tab** of the
 	// row it belongs to (sec 5.5). The shell, for the same reason as the rest
@@ -133,6 +134,11 @@ signals:
 	// row itself back into its own past would rewrite the address the record
 	// exists to preserve.
 	void history_open_requested(node *parent, const QUrl &url);
+	// The address in the properties dialog was changed. The tree has no engine
+	// to load it, so the shell does: into the node's live view if it has one,
+	// and nothing when the tab is not open, its stored url having just been
+	// updated and its next activation loading from it.
+	void navigate_requested(node *n);
 
 protected:
 	// Where the file-manager gestures are actually decided.

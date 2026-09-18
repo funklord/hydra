@@ -22453,6 +22453,30 @@ errored and both runs reported a clean 288 -- a sabotage that did not
 happen and a check that cannot fail are the same output. The substitution
 asserts now.
 
+**The reverse direction had to follow, and it did not before.** Once the
+stored url follows the page, the properties dialog is the one place the two
+can diverge from the other side: `update_node` wrote `n->url` and saved, but
+nothing navigated the open view, so editing the Address showed one address
+while the tab stayed on another -- and the next page event would overwrite
+the edit. So editing the Address now loads it. `edit_properties` emits
+`navigate_requested(n)` when the address actually changed; the shell loads
+it into the node's live view, and a tab that is not open needs nothing --
+its stored url is already updated and its next activation loads from it. The
+emit is ordered after `set_locked`, so editing *and* keeping a tab locked
+re-pins to the new address first, and the load then matches the pin instead
+of tripping the locked-tab sub-tab redirect in `allow_navigation`.
+
+The test drives the real modal dialog -- a timer fills the Address field and
+accepts while `exec()` runs -- rather than emitting the signal directly,
+because a direct emit tests only the shell's half and leaves the dialog's
+emit unproven. That was not academic: the first version emitted
+`navigate_requested` itself and *passed with the emit sabotaged*, since the
+sabotage cut the producer the test bypassed -- the recompiled object was in
+the binary, so it was the test that was wrong, not the build. Driven through
+the dialog, the same sabotage fails the navigation check while the
+stored-url check stays green: the dialog still writes `n->url`, only the load
+is cut, so the two assertions separate producer from consumer.
+
 ### One magnet, two rows -- and sometimes one
 
 Reported alongside the torrent work: "some of the torrents came up as two
@@ -23620,3 +23644,31 @@ carried along as amendments to a list item.
    KeePassXC rather than the real vault. If that set up is a Flatpak, try the
    `app/org.keepassxc.KeePassXC/` socket variant first — it is the one thing
    about the path still unverified.
+
+## From fmake: the hydra it builds had no icons, and its suite offscreen
+
+Measured by fmake's session on 2026-09-18 in a copy of this tree's
+tracked files at `2112356`, with fmake at its section 262. The first
+finding was fmake's and is fixed there; the rest is this tree's to read.
+
+**Icons.** `fmake --explain hydra` listed `hydra_seed.qrc` as opened and
+`icon/hydra.qrc` not at all, so the `hydra` fmake built shipped without
+its icons: every icon here is named as `QStringLiteral(":/ui/%1.svg")`
+or `":/icon/hydra-%1.png"`, and fmake's prefix match saw `/ui/%1.svg`
+start no declared path. Fixed in fmake (section 262): the text before a
+placeholder is the prefix. Nothing to change here; `make objsets` with
+an fmake past that commit is enough.
+
+**`fmake test`.** 46 unit tests build and run (section 57 of fmake's
+notes counted 38 on 2026-09-02). Without a display 18 fail, 13 of them
+Qt's platform plugin aborting, which fmake names under each failure
+since its section 258; with `QT_QPA_PLATFORM=offscreen` in the
+environment, 6 fail: `test_dlheaders`, `test_headers` and `test_probe`
+want a server that the Makefile's run presumably provides; `test_replay`
+cannot open `:/ui/drawer.svg` (the icons, above -- whether its link set
+reaches `main_window.cpp`'s literal after the fix was not re-measured);
+`test_helpers_live` and `test_live_model` are the two live drivers
+section 57 recorded as living outside `tests/live/`, and they run in
+the default group here because nothing in the tree says `@test live`.
+This tree's `fmake.toml` carries no `test-env`; the line is
+`test-env = ["QT_QPA_PLATFORM=offscreen"]` under `[project]`.

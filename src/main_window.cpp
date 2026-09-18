@@ -997,6 +997,25 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		if (parent)
 			open_child_tab(parent, url);
 	});
+	connect(m_tree, &tab_tree_view::navigate_requested, this, [this](node *n) {
+		if (!n)
+			return;
+		// Only a tab that is actually open needs moving. A closed or suspended
+		// one has had its stored url updated already and loads from it when it
+		// is next activated -- forcing it open here would spend a live-view
+		// slot on a tab nobody switched to.
+		web_view_backend *v = m_views_by_id.value(n->id, nullptr);
+		if (!v)
+			return;
+		// The same expression open_node uses, so an edited address loads
+		// exactly as it would on a fresh open: a magnet or other non-page url
+		// opens blank rather than handing itself back to the scheme handler.
+		const QUrl target = n->url.isEmpty() ? QUrl()
+		                                     : QUrl::fromUserInput(n->url);
+		v->load(target.isEmpty() || !renders_as_page(target)
+		            ? QUrl(QStringLiteral("about:blank"))
+		            : target);
+	});
 	connect(m_tree, &tab_tree_view::suspend_requested, this, &main_window::suspend_node);
 	connect(m_tree, &tab_tree_view::lock_requested, this, &main_window::toggle_lock);
 	// The live address, for the same reason Copy Address takes it: handing
@@ -4197,11 +4216,11 @@ bool main_window::allow_navigation(web_view_backend *view, const QUrl &url,
 
 // Pin or unpin a node, with the address it is pinned to.
 //
-// The shell does this rather than the tree because **a node's url does not
-// follow the page**: only the title does, so a tab opened at one address and
-// browsed to another still records the first, and the live view is the only
-// thing that knows where it actually is. Locking means "keep this page", so
-// the page showing is what gets written.
+// The shell does this rather than the tree because locking means "keep this
+// page" -- the one showing right now -- and only the live view knows which
+// address that is. A non-locked node's stored url follows the page, but the
+// pin wants the exact page in front of the user at the instant the lock is
+// applied, fragment included, so the view is what gets read.
 void main_window::toggle_lock(node *n) {
 	if (!n)
 		return;

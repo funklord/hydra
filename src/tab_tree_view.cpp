@@ -532,6 +532,7 @@ void tab_tree_view::edit_properties(node *n) {
 
 	auto *title = new QLineEdit(n->title, &dlg);
 	auto *url   = new QLineEdit(n->url, &dlg);
+	url->setObjectName("properties_url");
 	auto *tags  = new QLineEdit(n->tags.join(", "), &dlg);
 	url->setPlaceholderText("about:blank");
 	tags->setPlaceholderText("comma separated");
@@ -653,11 +654,20 @@ void tab_tree_view::edit_properties(node *n) {
 	for (const QString &t : tags->text().split(',', Qt::SkipEmptyParts))
 		if (!t.trimmed().isEmpty())
 			tag_list << t.trimmed();
+	const QString url_before = n->url;
 	m->update_node(n, title->text(), n->is_folder() ? n->url : url->text(),
 	                tag_list);
 	// After update_node, so the pin is the address just written rather than the
 	// one the dialog opened on.
 	m->set_locked(n, locked->isChecked());
+	// A changed address is a request to go there. The tree has no engine, so
+	// the shell loads it into the node's live view; a tab that is not open
+	// needs nothing done, its stored url having just been updated and its next
+	// activation loading from it. Emitted after set_locked so a lock applied in
+	// the same edit has already pinned to this address -- the load then matches
+	// the pin instead of tripping the locked-tab sub-tab redirect.
+	if (!n->is_folder() && n->url != url_before)
+		emit navigate_requested(n);
 }
 
 bool tab_tree_view::reordering_is_meaningful() const {
