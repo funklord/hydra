@@ -275,6 +275,24 @@ bool download_manager::forget(int id) {
 	return false;
 }
 
+int download_manager::forget_finished() {
+	int removed = 0;
+	// Backwards, so removing one does not shift an index still to be
+	// checked. terminal() is the same test forget() uses, so a live job --
+	// queued or running -- is left exactly as Remove leaves it.
+	for (int i = m_jobs.size() - 1; i >= 0; --i) {
+		if (m_jobs[i].terminal()) {
+			m_jobs.removeAt(i);
+			++removed;
+		}
+	}
+	if (removed > 0) {
+		emit changed();
+		persist_history();
+	}
+	return removed;
+}
+
 static QString state_name(download_state s) {
 	switch (s) {
 	case download_state::done:      return QStringLiteral("done");

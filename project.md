@@ -2971,6 +2971,22 @@ every other mutation, so the same coalesced refresh redraws the list. Tested
 with a fake source driven to done: a running job is refused, a finished one is
 removed, and dropping the terminal guard fails exactly that refusal.
 
+**Clear Finished drops every stopped row at once.** Remove takes one row at a
+time, and a persisted list only grows, so clearing a session's worth by hand
+was the tedium the persistence created. `download_manager::forget_finished`
+removes every terminal job in one pass -- iterating backwards so a removal does
+not shift an index still to be checked -- and returns how many it dropped,
+emitting `changed()` and persisting only when that is non-zero, so clearing an
+already-clean list is silent. It uses the same `terminal()` test `forget`
+does, so a job still going is left exactly as Remove leaves it. Its button sits
+outside the per-row group that deadens with no selection, because its state is
+a property of the *list* -- live whenever any finished download exists --
+rather than of the selection, and `update_buttons` sets it from that. Tested
+with three downloads, two driven terminal and one left running: the clear
+removes two and returns two, the running one stays, and a second clear returns
+zero; a clear that removed the running job too would fail "the one still going
+is left on the list".
+
 **Finished downloads persist across a restart.** The list is in memory, so a
 completed transfer used to vanish on exit -- reported, and a real gap for a
 browser. `download_manager` writes its terminal rows to `download-history.json`

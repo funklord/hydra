@@ -1354,6 +1354,34 @@ int main(int argc, char **argv) {
 		check(!dm.forget(id), "removing what is not there does nothing");
 	}
 
+	section("Clear Finished drops every terminal download and keeps the rest");
+	{
+		download_manager dm;
+		auto *fs = new fake_download_source;
+		dm.add_source(fs);
+		QString err;
+		const int a = dm.enqueue(QUrl("http://x/a"), "na", &err);
+		const int b = dm.enqueue(QUrl("http://x/b"), "nb", &err);
+		const int c = dm.enqueue(QUrl("http://x/c"), "nc", &err);
+		check(a && b && c, "three downloads on the list");
+		check(dm.forget_finished() == 0,
+		       "nothing is cleared while all are still going");
+		fs->finish(a, true);    // -> done, terminal
+		fs->finish(b, false);   // -> failed, terminal
+		// c is left running
+		check(dm.forget_finished() == 2,
+		       "the finished and the failed ones are cleared together");
+		int remaining = 0;
+		bool c_present = false;
+		for (const download_job &j : dm.jobs()) {
+			++remaining;
+			if (j.id == c) c_present = true;
+		}
+		check(remaining == 1 && c_present,
+		       "and the one still going is left on the list");
+		check(dm.forget_finished() == 0, "a second clear finds nothing to do");
+	}
+
 	section("a finished download is kept across a restart");
 	{
 		const QString hist = QDir::temp().filePath("hydra-dl-history.json");

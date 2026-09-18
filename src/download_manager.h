@@ -96,6 +96,11 @@ public:
 	// whether a job was removed.
 	bool forget(int id);
 
+	// Drop every finished, failed or cancelled job at once, leaving anything
+	// still going. Returns how many were removed -- and persists and signals
+	// only when that is non-zero, so clearing an already-clean list is silent.
+	int forget_finished();
+
 	// Keep finished downloads across a restart. The list is in memory, so a
 	// completed transfer vanished on exit; this writes the terminal rows to a
 	// small file and reads them back. Set the path once and the manager saves

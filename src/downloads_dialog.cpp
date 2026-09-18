@@ -257,6 +257,15 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 		b->setEnabled(false);
 		row->addWidget(b);
 	}
+	// Not in the group above: Remove acts on the selected row and so is
+	// dead without one, but Clear Finished acts on the whole list, so its
+	// state follows whether any finished download exists rather than the
+	// selection. update_buttons() sets it.
+	m_clear = new QPushButton("Clear &Finished", this);
+	m_clear->setToolTip("Remove every finished, failed or cancelled download "
+	                     "from this list at once");
+	m_clear->setEnabled(false);
+	row->addWidget(m_clear);
 	outer->addLayout(row);
 
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
@@ -269,6 +278,8 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 	connect(m_folder, &QPushButton::clicked, this, &downloads_dialog::act_open_folder);
 	connect(m_watch,  &QPushButton::clicked, this, &downloads_dialog::act_watch);
 	connect(m_remove, &QPushButton::clicked, this, &downloads_dialog::act_remove);
+	connect(m_clear,  &QPushButton::clicked, this,
+	         &downloads_dialog::act_clear_finished);
 
 	// changed() fires on every chunk of every transfer. Repainting the tree at
 	// that rate is pure waste, so bursts are collapsed into one refresh.
@@ -494,6 +505,16 @@ void downloads_dialog::update_buttons() {
 	for (const download_job &j : m_downloads->jobs())
 		if (j.id == id)
 			job = &j;
+
+	// List-based, not selection-based: Clear Finished is live whenever any
+	// finished download exists, so it is set here before the no-selection
+	// return that deadens the per-job buttons below.
+	if (m_clear) {
+		bool any_terminal = false;
+		for (const download_job &j : m_downloads->jobs())
+			if (j.terminal()) { any_terminal = true; break; }
+		m_clear->setEnabled(any_terminal);
+	}
 
 	if (!job) {
 		for (QPushButton *b : { m_watch, m_pause, m_resume, m_cancel, m_folder,
@@ -753,4 +774,11 @@ void downloads_dialog::act_remove() {
 	// forget() refuses a job that is still going and emits changed() on success,
 	// which the list is already wired to refresh from.
 	m_downloads->forget(selected_job());
+}
+
+void downloads_dialog::act_clear_finished() {
+	// forget_finished() drops every terminal job and leaves anything still
+	// going; it emits changed() when it removed something, which drives the
+	// refresh, so there is nothing to update by hand here.
+	m_downloads->forget_finished();
 }
