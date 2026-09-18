@@ -686,6 +686,34 @@ void tab_tree_model::remint_if_taken(node *n) {
 		remint_if_taken(k);
 }
 
+QList<node *> tab_tree_model::top_level_only(const QList<node *> &nodes) {
+	// Drop any node with an ancestor also in the set: removing the ancestor
+	// takes the whole subtree, so keeping the descendant would double-count it
+	// and -- worse -- a later delete would dereference memory already freed.
+	QList<node *> roots;
+	for (node *n : nodes) {
+		if (!n)
+			continue;
+		bool covered = false;
+		for (node *p = n->parent; p; p = p->parent)
+			if (nodes.contains(p)) {
+				covered = true;
+				break;
+			}
+		if (!covered && !roots.contains(n))
+			roots << n;
+	}
+	return roots;
+}
+
+int tab_tree_model::remove_nodes(const QList<node *> &nodes, bool remember) {
+	int removed = 0;
+	for (node *n : top_level_only(nodes))
+		if (remove_node(n, remember))
+			++removed;
+	return removed;
+}
+
 void tab_tree_model::update_node(node *n, const QString &title,
                                   const QString &url, const QStringList &tags) {
 	if (!n)

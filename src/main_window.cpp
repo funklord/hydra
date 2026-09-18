@@ -1453,8 +1453,10 @@ QMenuBar *main_window::build_menu_bar() {
 	// that sentence was relying on.
 	QAction *del_act = edit_menu->addAction("&Delete", QKeySequence::Delete, this,
 	                                         [this] {
-		if (node *n = selected_node())
-			m_tree->confirm_and_remove(n);
+		// The whole selection, not just the current row: the tree is
+		// ExtendedSelection and this action's tip has always promised "the
+		// selection", while it deleted one node and left the rest highlighted.
+		m_tree->confirm_and_remove_selection();
 	});
 	del_act->setStatusTip("Remove the selection and everything inside it");
 	edit_menu->addSeparator();

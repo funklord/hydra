@@ -134,6 +134,14 @@ public:
 	// Every node under `n` is marked as belonging to the same source.
 	static void mark_mirror(node *n, const QString &source);
 	bool  remove_node(node *n, bool remember = false);
+	// Remove several subtrees at once (a multi-selection delete). Descendants
+	// of another node in the set are dropped first -- removing the ancestor
+	// takes the whole subtree, so removing the descendant afterwards would
+	// touch freed memory. Returns how many top-level nodes were removed.
+	int   remove_nodes(const QList<node *> &nodes, bool remember = false);
+	// The subset of `nodes` with no ancestor also in `nodes`. Pure and static
+	// so the safety filter above can be tested without touching the tree.
+	static QList<node *> top_level_only(const QList<node *> &nodes);
 	// Reopen the most recently deleted subtree (Ctrl+Shift+T). Deletion is
 	// otherwise permanent -- `remove_node` does `delete n` and takes the whole
 	// subtree -- so a *user* delete (remember=true) stashes a faithful copy,

@@ -498,6 +498,30 @@ int main(int argc, char **argv) {
 		check(!m.has_closed(), "and the stack is empty again");
 	}
 
+	section("a multi-selection deletes as top-level roots, dropping covered children");
+	{
+		tab_tree_model m;
+		node *folder = m.add_folder(m.root(), "F");
+		node *a = m.add_tab(folder, "a", "http://a/");
+		m.add_tab(folder, "b", "http://b/");
+		node *c = m.add_tab(m.root(), "c", "http://c/");
+
+		// A folder and a child inside it: the child is covered by the folder,
+		// so it is not a root. Keeping it would double-count and, worse, a
+		// later delete would touch memory the folder's removal already freed.
+		const QList<node *> roots = tab_tree_model::top_level_only({folder, a, c});
+		check(roots.size() == 2 && roots.contains(folder) && roots.contains(c)
+		         && !roots.contains(a),
+		      "a node inside a selected folder is dropped from the roots");
+
+		// Remove two non-overlapping roots in one call (the folder takes its
+		// two tabs with it); the covered child is never dereferenced.
+		const int removed = m.remove_nodes({folder, c}, /*remember=*/true);
+		check(removed == 2, "both roots removed in one call");
+		check(m.root()->children.isEmpty(), "and the tree is empty");
+		check(m.has_closed(), "each removed root is left reopenable");
+	}
+
 	section("an internal removal is not reopenable, and a subtree comes back whole");
 	{
 		tab_tree_model m;

@@ -448,7 +448,14 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 		// discovered afterwards, and a direct count cannot deliver that for
 		// any nested tree -- which is the ordinary case, since the context
 		// menu offers "New Folder Here" inside a folder.
-		confirm_and_remove(n);
+		//
+		// A right-click within a multi-selection is about the selection; on a
+		// row outside it, about that one row.
+		const QList<node *> sel = selected_nodes();
+		if (n && sel.size() > 1 && sel.contains(n))
+			confirm_and_remove_selection();
+		else
+			confirm_and_remove(n);
 	}
 }
 
@@ -491,6 +498,50 @@ bool tab_tree_view::confirm_and_remove(node *n) {
 		return false;
 	m->remove_node(n, /*remember=*/true);
 	return true;
+}
+
+QList<node *> tab_tree_view::selected_nodes() const {
+	QList<node *> out;
+	if (!selectionModel())
+		return out;
+	for (const QModelIndex &i : selectionModel()->selectedIndexes()) {
+		if (i.column() != 0)
+			continue;
+		if (node *n = node_at_index(i))
+			if (!out.contains(n))
+				out << n;
+	}
+	return out;
+}
+
+bool tab_tree_view::confirm_and_remove_selection() {
+	tab_tree_model *m = source_model();
+	if (!m)
+		return false;
+	const QList<node *> roots = tab_tree_model::top_level_only(selected_nodes());
+	if (roots.isEmpty())
+		return false;
+	// A lone selection gets the single-item question, which names it.
+	if (roots.size() == 1)
+		return confirm_and_remove(roots.first());
+	// Count every descendant too, so the question states what actually goes
+	// rather than only the rows that were clicked.
+	int extra = 0;
+	for (node *n : roots) {
+		QList<node *> stack = n->children;
+		while (!stack.isEmpty()) {
+			node *k = stack.takeLast();
+			++extra;
+			stack << k->children;
+		}
+	}
+	const QString what = extra > 0
+	  ? QString("Delete %1 selected items and the %2 item%3 inside them?")
+	        .arg(roots.size()).arg(extra).arg(extra == 1 ? "" : "s")
+	  : QString("Delete %1 selected items?").arg(roots.size());
+	if (QMessageBox::question(this, "Delete", what) != QMessageBox::Yes)
+		return false;
+	return m->remove_nodes(roots, /*remember=*/true) > 0;
 }
 
 void tab_tree_view::keyPressEvent(QKeyEvent *event) {

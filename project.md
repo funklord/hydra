@@ -2494,6 +2494,25 @@ nothing to reopen; a folder returns with the tab still inside it. The
 enablement rides the existing `structure_changed` signal -- a delete fills the
 stack, a reopen empties a slot -- so no new signal was added for the menu.
 
+**Deleting a multi-selection, safely.** The tree is `ExtendedSelection` and
+drag already moved several rows at once, but Delete -- the key and the Edit
+entry -- removed only the current row, while its own status tip promised "the
+selection and everything inside it". It deletes the whole selection now,
+behind one confirmation, each subtree reopenable by the mechanism above.
+
+The correctness-critical part is a safety filter, not a tidy-up:
+`tab_tree_model::top_level_only` drops any selected node with an ancestor also
+selected, because `remove_node` does `delete n` on the whole subtree -- so
+removing a selected folder frees a selected child inside it, and removing that
+child afterwards would dereference freed memory. It is pure and static so it is
+tested without touching the tree: selecting a folder and a tab within it yields
+just the folder as a root, and `remove_nodes` then removes the non-overlapping
+roots. Reverting the filter fails only the drop-the-child check, and the
+non-overlapping removal beside it still passes -- which is why the test deletes
+a non-overlapping set, so the sabotage cannot instead crash on the freed child.
+A right-click within a multi-selection deletes the selection; on a row outside
+it, that one row.
+
 ## Download transport seam (arch §11.4)
 
 `download_manager` no longer contains a transport. It owns the queue, the

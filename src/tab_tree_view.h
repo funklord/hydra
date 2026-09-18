@@ -45,6 +45,10 @@ public:
 	// and the window's Edit menu, which also owns the Delete key -- must put
 	// the same question. Returns whether anything was removed.
 	bool confirm_and_remove(node *n);
+	// Delete the whole current selection (the tree is ExtendedSelection), each
+	// subtree reopenable, behind one confirmation. Falls back to the single
+	// question for a lone selection. Returns whether anything was removed.
+	bool confirm_and_remove_selection();
 
 	// Make `n` the current row: expanded to, highlighted, scrolled into view.
 	//
@@ -152,6 +156,7 @@ private:
 	void reopen_folders();
 	QModelIndex view_index(node *n) const;
 	node *node_at_index(const QModelIndex &idx) const;
+	QList<node *> selected_nodes() const;
 
 	QLabel     *m_empty = nullptr;
 	QStringList m_open_ids;
