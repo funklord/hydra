@@ -11,7 +11,7 @@ class filter_list;
 // The kinds of request every engine can distinguish. Qt WebEngine reports far
 // more resource types and Android's WebView reports fewer; this is the subset
 // the policy rules actually key off, so both can map onto it.
-enum class resource_kind { script, image, other };
+enum class resource_kind { script, image, font, other };
 
 // What the shell wants done with a request, as flags rather than an action, so
 // a backend can honour the parts it supports.

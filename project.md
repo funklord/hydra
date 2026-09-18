@@ -5008,6 +5008,27 @@ The main document is deliberately exempt: a WebView that blocks its own page
 shows an empty frame with no way back, and these rules are about what a page
 loads, not which pages may be visited.
 
+**Fonts are their own resource kind, and the imported list does not touch
+them.** `resource_kind` gained `font` beside `script` and `image`:
+`kind_from_hints` reads it from a `font/*` (or `application/font*`) Accept type
+and from a `.woff2`/`.woff`/`.ttf`/`.otf`/`.eot` path, and the Qt interceptor
+maps WebEngine's `FontResource` onto it. `decide()` then skips the imported
+filter list for a font. The reason is a property of this engine: it does not
+read a rule's resource-type option, so a rule written for a tracker or a script
+applies to any font URL it matches by substring -- and a blocked webfont does
+not hide an ad, it renders a page's icon glyphs as their ligature names, which
+is why ad blockers do not block fonts by default. The floor is kept:
+`is_ad_host` runs before the list and is a domain decision, so a font from a
+known ad host is still blocked. On a default install the list is empty and
+nothing changes; the exemption earns its keep the moment a user imports
+EasyList, whose broad rules are the ones that catch a font by accident.
+
+The test is a discriminating triple: a font URL a rule would match is left
+alone, the *same rule and host* on a non-font resource still blocks (so the
+pass is the kind, not the rule failing to match), and a font from
+`doubleclick.net` is still blocked by the floor. Removing the one-line
+`kind != font` guard fails only the first.
+
 ### The content scripts run, and can call back
 
 There is no QWebChannel on Android, so `addJavascriptInterface` carries a

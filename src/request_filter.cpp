@@ -34,10 +34,18 @@ resource_kind kind_from_hints(const QString &accept, const QUrl &url) {
 	if (a.contains(QLatin1String("javascript")) ||
 	    a.contains(QLatin1String("application/ecmascript")))
 		return resource_kind::script;
-	// `text/css`, `text/html`, `font/*` and friends are all "other" as far as
-	// the rules go, and saying so early keeps the path guessing below from
-	// firing on a stylesheet that happens to live under /js/.
-	if (a.startsWith(QLatin1String("text/")) || a.contains(QLatin1String("font/")))
+	// A font, named outright by the Accept type, is its own kind: a broad
+	// filter-list rule meant for a tracker matches a font URL by substring, and
+	// blocking a webfont turns a page's icon glyphs into their ligature names --
+	// which is why ad blockers do not block fonts by default.
+	if (a.contains(QLatin1String("font/")) ||
+	    a.contains(QLatin1String("application/font")) ||
+	    a.contains(QLatin1String("application/vnd.ms-fontobject")))
+		return resource_kind::font;
+	// `text/css`, `text/html` and friends are "other" as far as the rules go,
+	// and saying so early keeps the path guessing below from firing on a
+	// stylesheet that happens to live under /js/.
+	if (a.startsWith(QLatin1String("text/")))
 		return resource_kind::other;
 
 	// Then the path, lowercased and without a query string: `?v=3` cache
@@ -53,6 +61,13 @@ resource_kind kind_from_hints(const QString &accept, const QUrl &url) {
 	for (const QString &s : image_suffixes)
 		if (path.endsWith(s))
 			return resource_kind::image;
+	static const QStringList font_suffixes = {
+		QStringLiteral(".woff2"), QStringLiteral(".woff"), QStringLiteral(".ttf"),
+		QStringLiteral(".otf"),   QStringLiteral(".eot"),
+	};
+	for (const QString &s : font_suffixes)
+		if (path.endsWith(s))
+			return resource_kind::font;
 	return resource_kind::other;
 }
 
@@ -80,7 +95,13 @@ request_decision request_filter::decide(const request_context &ctx) const {
 	// shield says is broken has to turn *all* of this off, or the escape hatch
 	// only half works and the page still fails for a reason the user was told
 	// they had disabled.
-	if (m_list && !m_engine->is_allowed(feature::ads, ctx.site_host) &&
+	// Fonts are spared the imported list: this engine does not read a rule's
+	// resource-type option, so a rule written for a tracker or a script applies
+	// to any font URL it matches by substring, and a blocked webfont shows a
+	// page's icons as their ligature text. A font from a known ad host is still
+	// blocked above by is_ad_host, which is a domain decision this does not skip.
+	if (m_list && ctx.kind != resource_kind::font &&
+	    !m_engine->is_allowed(feature::ads, ctx.site_host) &&
 	    m_list->blocks(ctx.url.toString(), ctx.site_host)) {
 		d.block = true;
 		return d;

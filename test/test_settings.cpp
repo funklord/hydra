@@ -362,6 +362,12 @@ int main(int argc, char **argv) {
 			 "an upper-case extension, with no header at all"},
 			{"", "https://s.example/a.png/redirect", resource_kind::other,
 			 "an extension mid-path is not an extension"},
+			{"font/woff2", "https://s.example/icons", resource_kind::font,
+			 "a font Accept type, with no extension"},
+			{"", "https://s.example/fonts/icons.woff2", resource_kind::font,
+			 "a .woff2 path with no header at all"},
+			{"", "https://s.example/glyphs.ttf", resource_kind::font,
+			 "and a .ttf path"},
 		};
 		for (const row &r : rows)
 			check(kind_from_hints(QString::fromLatin1(r.accept), QUrl(r.url)) == r.want,
@@ -868,6 +874,47 @@ int main(int argc, char **argv) {
 		e.set_setting("news.example", policy::feature::ads, policy::setting::allow);
 		check(!f.decide(ctx).block,
 		      "allowing ads for the site stops the accepted rules too");
+	}
+
+	// Fonts are spared the imported list. This engine ignores a rule's
+	// resource-type option, so a broad rule matches a font URL by substring and
+	// a blocked webfont turns a page's icons into ligature text. The ad-host
+	// floor still holds, so a font from a known ad domain is blocked regardless.
+	section("the imported list does not block fonts");
+	{
+		policy_engine e;
+		filter_list   list;
+		request_filter f(&e);
+		filter_rule r;
+		r.text = "||fonts.example^";
+		list.add(r);
+		f.set_filter_list(&list);
+
+		request_context font;
+		font.site_host    = "app.example";
+		font.request_host = "fonts.example";
+		font.url          = QUrl("https://fonts.example/icons.woff2");
+		font.kind         = kind_from_hints("font/woff2", font.url);
+		check(!f.decide(font).block,
+		      "a font the list would match is left alone, so icons keep their glyphs");
+
+		// The discriminator: same rule, same host, a non-font resource -- so a
+		// pass proves the exemption is the kind, not the rule failing to match.
+		request_context other = font;
+		other.url  = QUrl("https://fonts.example/track.js");
+		other.kind = kind_from_hints("*/*", other.url);
+		check(f.decide(other).block,
+		      "while a non-font resource on the same host still is: the kind, not the rule");
+
+		// And the floor: a font from a known ad host is still blocked, by
+		// is_ad_host, which the exemption does not touch.
+		request_context adfont;
+		adfont.site_host    = "app.example";
+		adfont.request_host = "doubleclick.net";
+		adfont.url          = QUrl("https://doubleclick.net/f.woff2");
+		adfont.kind         = kind_from_hints("font/woff2", adfont.url);
+		check(f.decide(adfont).block,
+		      "but a font from a known ad host is still blocked by is_ad_host");
 	}
 
 	// What `scope` actually means, which is two things.

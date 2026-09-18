@@ -19,6 +19,7 @@ void qtwebengine_interceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
 	switch (info.resourceType()) {
 		case RT::ResourceTypeScript: ctx.kind = resource_kind::script; break;
 		case RT::ResourceTypeImage:  ctx.kind = resource_kind::image;  break;
+		case RT::ResourceTypeFontResource: ctx.kind = resource_kind::font; break;
 		default:                     ctx.kind = resource_kind::other;  break;
 	}
 
