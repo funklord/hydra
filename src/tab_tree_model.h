@@ -176,6 +176,13 @@ public:
 	// what is inside it. Returns how many top-level copies were made.
 	int   duplicate_nodes(const QList<node *> &nodes);
 
+	// Wrap the selected rows in a new folder, in place. Takes the roots of the
+	// selection (a child whose parent is also selected travels inside it) and
+	// leaves a pinned row where it is, like a drag. The folder takes the first
+	// grouped row's place under its parent. Returns the folder, or null when
+	// nothing movable was selected.
+	node *group_into_folder(const QList<node *> &nodes, const QString &title);
+
 	// Pin or unpin a node (architecture doc sec 5.5). Returns whether anything
 	// changed, for the same reason `set_page_title` does: the caller saves the
 	// tree on a change and should not write the file for a no-op.

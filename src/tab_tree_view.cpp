@@ -379,6 +379,7 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	// Delete used to sit *below* Properties, which puts the irreversible action
 	// where three decades of muscle memory expects the harmless one.
 	QAction *copy_url_a = nullptr, *dup_a = nullptr, *external_a = nullptr;
+	QAction *group_a = nullptr;
 	if (n && !n->url.isEmpty()) {
 		copy_url_a = menu.addAction("&Copy Address");
 		external_a = menu.addAction("Open in &Another App…");
@@ -398,6 +399,13 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	QAction *folder_a = menu.addAction("New &Folder Here");
 	if (n)
 		dup_a = menu.addAction("Dup&licate");
+	// Wrap the current selection in a new folder, when a right-click lands
+	// within a selection of two or more -- the tree-native "group these tabs".
+	{
+		const QList<node *> gsel = tab_tree_model::top_level_only(selected_nodes());
+		if (n && gsel.size() > 1 && selected_nodes().contains(n))
+			group_a = menu.addAction("&Group into Folder");
+	}
 
 	// Reorder among siblings, greyed at the ends -- only where a move would
 	// show, which is tree order (a drag is refused otherwise for the same
@@ -434,6 +442,14 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 			duplicate_selection();
 		else
 			m->duplicate_node(n);
+	}
+	else if (chosen == group_a) {
+		// Named on the spot, like New Folder Here: the folder opens for rename
+		// rather than being left as "New folder" to find and fix.
+		if (node *f = m->group_into_folder(selected_nodes(), QString())) {
+			show_node(f);
+			edit_properties(f);
+		}
 	}
 	else if (chosen == up_a)        m->move_sibling(n, -1);
 	else if (chosen == down_a)      m->move_sibling(n, 1);

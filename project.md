@@ -2544,6 +2544,30 @@ Duplicate copied only the current row while its tip promised "the selection".
 a folder already copies what is inside it, so a separately-selected child would
 be copied twice -- and the context menu is selection-aware the same way.
 
+**Grouping wraps a selection in a new folder**, the move tree browsers are
+built around and this one lacked: several tabs selected, one gesture, a folder
+holding them. `tab_tree_model::group_into_folder` takes `top_level_only` of the
+selection for the same reason delete and duplicate do -- a child whose parent
+is also selected travels inside that parent, so pulling it out separately would
+double it -- and it leaves a pinned row where it is, exactly as a drag does,
+because a lock means "this one stays". The new folder takes the first grouped
+row's place under that row's parent, its position counted among the siblings
+that are staying so removing the moved rows does not drift it. Like
+`dropMimeData`, and for the reason stated there, it re-parents under a
+`beginResetModel` rather than fine-grained move signals: arbitrary rows change
+parent at once, and a begin/endMoveRows index slip corrupts the view in ways
+that surface far from the mistake. It is offered from the context menu when a
+right-click lands within a selection of two or more, and the folder opens for
+rename on the spot, like New Folder Here.
+
+Tested pure: grouping two of four loose tabs makes a folder holding both in
+order, at the first one's place, with the other two untouched; grouping a
+folder together with a child inside it and a loose tab moves the folder and the
+tab while the child stays within its folder; a lone pinned row groups to
+nothing and leaves the tree unchanged. Dropping the `top_level_only` filter
+reddens the covered-child check, dropping the lock skip reddens the pinned-row
+check, and a group that never re-parents reddens the rows-live-inside check.
+
 ## Download transport seam (arch §11.4)
 
 `download_manager` no longer contains a transport. It owns the queue, the

@@ -534,6 +534,55 @@ int main(int argc, char **argv) {
 		      "and the first will not move up");
 	}
 
+	section("grouping wraps the selected rows in a new folder in place");
+	{
+		tab_tree_model m;
+		node *a = m.add_tab(m.root(), "a", "http://a/");
+		node *b = m.add_tab(m.root(), "b", "http://b/");
+		node *c = m.add_tab(m.root(), "c", "http://c/");
+		node *d = m.add_tab(m.root(), "d", "http://d/");
+		(void)a; (void)d;
+		node *f = m.group_into_folder({b, c}, "Grp");
+		check(f && f->is_folder() && f->title == "Grp", "a new folder is made");
+		check(f && f->parent == m.root(), "under the shared parent");
+		check(f && f->children.size() == 2, "holding both grouped rows");
+		check(b->parent == f && c->parent == f,
+		       "and the grouped rows now live inside it");
+		check(f->children.value(0) == b && f->children.value(1) == c,
+		       "in the order they were given");
+		check(m.root()->children.size() == 3,
+		       "root keeps a, the new folder and d");
+		check(m.root()->children.indexOf(f) == 1,
+		       "and the folder took the first grouped row's place");
+	}
+
+	section("grouping takes selection roots and leaves a pinned row put");
+	{
+		tab_tree_model m;
+		node *outer = m.add_folder(m.root(), "outer");
+		node *inner = m.add_tab(outer, "inner", "http://in/");
+		node *pin = m.add_tab(m.root(), "pin", "http://p/");
+		pin->locked = true;
+		node *plain = m.add_tab(m.root(), "plain", "http://q/");
+		node *f = m.group_into_folder({outer, inner, pin, plain}, "G");
+		check(f && f->children.size() == 2,
+		       "only the two movable roots move in");
+		check(outer->parent == f && plain->parent == f, "outer and plain");
+		check(inner->parent == outer,
+		       "the covered child travels inside its own folder, not separately");
+		check(pin->parent == m.root(), "the pinned row stays where it was");
+	}
+
+	section("grouping nothing movable makes no folder");
+	{
+		tab_tree_model m;
+		node *pin = m.add_tab(m.root(), "pin", "http://p/");
+		pin->locked = true;
+		check(m.group_into_folder({pin}, "X") == nullptr,
+		       "a lone pinned row cannot be grouped");
+		check(m.root()->children.size() == 1, "and nothing was added to the tree");
+	}
+
 	section("a multi-selection deletes as top-level roots, dropping covered children");
 	{
 		tab_tree_model m;

@@ -577,6 +577,65 @@ node *tab_tree_model::add_folder(node *parent, const QString &title) {
 	return f;
 }
 
+node *tab_tree_model::group_into_folder(const QList<node *> &nodes,
+                                        const QString &title) {
+	// Only the roots of the selection, and never a pinned row: the same rules
+	// delete uses (top_level_only) and a drag uses (locked rows do not move).
+	QList<node *> moving;
+	for (node *n : top_level_only(nodes))
+		if (n && n->parent && !n->locked)
+			moving << n;
+	if (moving.isEmpty())
+		return nullptr;
+
+	// The folder takes the first grouped row's place, counted among the
+	// siblings that are staying so removing the moved rows does not drift it.
+	node *anchor = moving.first();
+	node *dest = anchor->parent;
+	int pos = 0;
+	for (node *sib : dest->children) {
+		if (sib == anchor)
+			break;
+		if (!moving.contains(sib))
+			++pos;
+	}
+
+	// A reset, like dropMimeData: arbitrary rows change parent at once, and a
+	// begin/endMoveRows index slip corrupts the view in ways that surface far
+	// from here. The open-row state is the cost, matching a drag.
+	beginResetModel();
+	node *f = new node;
+	f->id        = unused_id("f");
+	f->type      = node_type::folder;
+	f->title     = title.isEmpty() ? QStringLiteral("New folder") : title;
+	f->created   = QDateTime::currentDateTime();
+	f->last_seen = f->created;
+	f->parent    = dest;
+
+	QList<node *> emptied;
+	for (node *n : moving) {
+		if (n->parent && n->parent != dest && !emptied.contains(n->parent))
+			emptied << n->parent;
+		n->parent->children.removeOne(n);
+	}
+	dest->children.insert(qBound(0, pos, int(dest->children.size())), f);
+	for (node *n : moving) {
+		n->parent = f;
+		f->children << n;
+		// Out of a mirror is out of it: the new folder carries no mirror mark,
+		// so a grouped row loses its own, exactly as a drag into a plain folder.
+		clear_mirror(n);
+	}
+	renumber(f);
+	renumber(dest);
+	for (node *p : emptied)
+		renumber(p);
+	reindex();
+	endResetModel();
+	emit structure_changed();
+	return f;
+}
+
 node *tab_tree_model::add_tab(node *parent, const QString &title,
                                const QString &url) {
 	if (!parent)
