@@ -36,6 +36,20 @@ static void spin(int ms) {
 	QEventLoop l; QTimer::singleShot(ms, &l, &QEventLoop::quit); l.exec();
 }
 
+// A download source that accepts anything and finishes only when told, so a job
+// reaches a terminal state without a server. It adds no signals of its own -- it
+// emits download_source's inherited finished() -- so it needs no moc.
+class fake_download_source : public download_source {
+public:
+	QString id() const override { return "fake"; }
+	QString display_name() const override { return "Fake"; }
+	source_capabilities capabilities() const override { return {}; }
+	bool accepts(const QUrl &, QString *) const override { return true; }
+	bool start(const download_request &, QString *) override { return true; }
+	void cancel(int) override {}
+	void finish(int job_id, bool ok) { emit finished(job_id, ok, QString()); }
+};
+
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication app(argc, argv);
@@ -1317,6 +1331,26 @@ int main(int argc, char **argv) {
 	// for as long as it existed, while the controller honoured it and the
 	// `fit` setting that makes it matter was on the page. Nine of ten fields
 	// persisted, which is exactly what nobody notices.
+	section("a finished download can be removed, a running one cannot");
+	{
+		download_manager dm;
+		auto *fs = new fake_download_source;
+		dm.add_source(fs);   // takes ownership
+		QString err;
+		const int id = dm.enqueue(QUrl("http://x/one"), "n", &err);
+		check(id != 0, "the download is accepted onto the list");
+		check(!dm.forget(id),
+		      "a download still going is not removed from the list");
+		fs->finish(id, true);   // -> done, terminal
+		check(dm.forget(id), "once it has finished it can be removed");
+		bool present = false;
+		for (const download_job &j : dm.jobs())
+			if (j.id == id)
+				present = true;
+		check(!present, "and it is gone from the list");
+		check(!dm.forget(id), "removing what is not there does nothing");
+	}
+
 	section("a kiosk setting survives being written and read back");
 	{
 		kiosk_config c;

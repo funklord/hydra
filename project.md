@@ -2961,6 +2961,17 @@ false 0%. Multi-file jobs list their files as children once known. Open Folder
 opens the *containing directory*, never the file — the standing rule is that a
 download is written to disk and not opened by us.
 
+**Remove clears a stopped row from the list.** The list only ever grew --
+pause, resume, cancel and open-folder, but nothing dismissed a download once it
+was done, failed or cancelled, so a finished or dead transfer sat there until
+the next launch (the list is in memory and does not persist). Remove, enabled
+only for a terminal row, drops it through `download_manager::forget`, which
+refuses a job that is still going so a running download cannot vanish from view
+mid-transfer. `forget` emits `changed()` like every other mutation, so the same
+coalesced refresh redraws the list. Tested with a fake source driven to done: a
+running job is refused, a finished one is removed, and dropping the terminal
+guard fails exactly that refusal.
+
 Rows are reconciled in place rather than rebuilt, and `changed()` is coalesced
 on a 200 ms timer: it fires on every chunk of every transfer, and clearing the
 tree at that rate would throw away the selection and scroll position several

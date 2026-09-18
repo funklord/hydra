@@ -253,6 +253,19 @@ void download_manager::cancel(int id) {
 	}
 }
 
+bool download_manager::forget(int id) {
+	for (int i = 0; i < m_jobs.size(); ++i) {
+		if (m_jobs[i].id != id)
+			continue;
+		if (!m_jobs[i].terminal())
+			return false;   // a running download does not vanish from the list
+		m_jobs.removeAt(i);
+		emit changed();
+		return true;
+	}
+	return false;
+}
+
 void download_manager::pause(int id) {
 	download_job *j = find(id);
 	if (!j || !m_live.contains(id))

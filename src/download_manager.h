@@ -91,6 +91,10 @@ public:
 	void cancel(int id);
 	void pause(int id);
 	void unpause(int id);
+	// Drop a finished, failed or cancelled job from the list. Refuses a job
+	// still going -- a running download must not vanish from view. Returns
+	// whether a job was removed.
+	bool forget(int id);
 
 	const QList<download_job> &jobs() const { return m_jobs; }
 

@@ -67,6 +67,7 @@ private:
 	void act_cancel();
 	void act_open_folder();
 	void act_watch();
+	void act_remove();
 	// Watch cannot launch the moment it is pressed: the front of the chosen
 	// file is usually not there yet, especially when that file is not first in
 	// the torrent. This polls until enough has landed, then launches.
@@ -105,6 +106,7 @@ private:
 	QPushButton *m_resume = nullptr;
 	QPushButton *m_cancel = nullptr;
 	QPushButton *m_folder = nullptr;
+	QPushButton *m_remove = nullptr;
 	QPushButton *m_watch  = nullptr;
 	QTimer      *m_coalesce = nullptr;
 

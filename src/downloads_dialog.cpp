@@ -249,7 +249,11 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 	m_folder = new QPushButton("Open &Folder", this);
 	m_watch  = new QPushButton("&Watch", this);
 	m_watch->setToolTip("Play this while it is still downloading");
-	for (QPushButton *b : { m_watch, m_pause, m_resume, m_cancel, m_folder }) {
+	m_remove = new QPushButton("Re&move", this);
+	m_remove->setToolTip("Remove a finished, failed or cancelled download from "
+	                      "this list");
+	for (QPushButton *b : { m_watch, m_pause, m_resume, m_cancel, m_folder,
+	                         m_remove }) {
 		b->setEnabled(false);
 		row->addWidget(b);
 	}
@@ -264,6 +268,7 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 	connect(m_cancel, &QPushButton::clicked, this, &downloads_dialog::act_cancel);
 	connect(m_folder, &QPushButton::clicked, this, &downloads_dialog::act_open_folder);
 	connect(m_watch,  &QPushButton::clicked, this, &downloads_dialog::act_watch);
+	connect(m_remove, &QPushButton::clicked, this, &downloads_dialog::act_remove);
 
 	// changed() fires on every chunk of every transfer. Repainting the tree at
 	// that rate is pure waste, so bursts are collapsed into one refresh.
@@ -491,7 +496,8 @@ void downloads_dialog::update_buttons() {
 			job = &j;
 
 	if (!job) {
-		for (QPushButton *b : { m_watch, m_pause, m_resume, m_cancel, m_folder })
+		for (QPushButton *b : { m_watch, m_pause, m_resume, m_cancel, m_folder,
+		                         m_remove })
 			b->setEnabled(false);
 		return;
 	}
@@ -509,6 +515,8 @@ void downloads_dialog::update_buttons() {
 	// stopping it is exactly what a user would expect Cancel to do there.
 	m_cancel->setEnabled(!job->terminal());
 	m_folder->setEnabled(!job->path.isEmpty());
+	// Removable once it has stopped -- done, failed or cancelled.
+	m_remove->setEnabled(job->terminal());
 
 	// Watch is offered when the source says a partial file is usable and the
 	// job contains something worth playing. Whether that is a torrent or an
@@ -739,4 +747,10 @@ void downloads_dialog::act_open_folder() {
 		QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
 		return;
 	}
+}
+
+void downloads_dialog::act_remove() {
+	// forget() refuses a job that is still going and emits changed() on success,
+	// which the list is already wired to refresh from.
+	m_downloads->forget(selected_job());
 }
