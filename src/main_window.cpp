@@ -5,6 +5,9 @@
 #include "screen_picker.h"
 #include "cert_dialog.h"
 #include "find_bar.h"
+#include "zoom_store.h"
+#include <QSaveFile>
+#include <QFile>
 #include "tab_tree_model.h"
 #include "tab_tree_view.h"
 #include "tree_sort_proxy.h"
@@ -1163,6 +1166,13 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	                               .filePath("download-history.json");
 	m_downloads->set_history_path(dl_history);
 	m_downloads->load_history(dl_history);
+	// Per-tab zoom, read back so a page a person zoomed is zoomed again. Loaded
+	// before any tab opens, so `apply_zoom` sees last time's value.
+	m_zoom_path = QDir(QStandardPaths::writableLocation(
+	                       QStandardPaths::AppDataLocation))
+	                  .filePath("zoom.json");
+	if (QFile zf(m_zoom_path); zf.open(QIODevice::ReadOnly))
+		m_zoom = zoom_store::from_json(zf.readAll());
 	m_tab_counts = new QLabel(this);
 	// Named so a driver can read the live-view count without scanning every
 	// label for one whose text happens to match a pattern.
@@ -4083,8 +4093,21 @@ void main_window::step_zoom(int direction) {
 			m_zoom.remove(id);
 		else
 			m_zoom.insert(id, factor);
+		save_zoom();
 	}
 	m_status->showMessage(QString("Zoom %1%").arg(qRound(factor * 100)), 3000);
+}
+
+void main_window::save_zoom() const {
+	if (m_zoom_path.isEmpty())
+		return;
+	// Atomic, so a crash mid-write cannot leave a half-file that fails to parse
+	// and loses every remembered zoom at once.
+	QSaveFile f(m_zoom_path);
+	if (!f.open(QIODevice::WriteOnly))
+		return;
+	f.write(zoom_store::to_json(m_zoom));
+	f.commit();
 }
 
 void main_window::apply_zoom(web_view_backend *view, const QString &node_id) {
@@ -4723,6 +4746,7 @@ void main_window::suspend_node(node *n) {
 		m_zoom.remove(n->id);
 	else
 		m_zoom.insert(n->id, z);
+	save_zoom();
 
 	if (view == current_view())
 		m_stack->setCurrentIndex(0);  // back to placeholder

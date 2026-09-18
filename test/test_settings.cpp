@@ -7,6 +7,9 @@
 #include "cosmetic_filters.h"
 #include "policy_engine.h"
 #include "download_manager.h"
+#include "zoom_store.h"
+#include <QJsonObject>
+#include <QJsonDocument>
 #include "player_launcher.h"
 #include "media_detector.h"
 #include "accept_language.h"
@@ -1390,6 +1393,27 @@ int main(int argc, char **argv) {
 		         dm.jobs().first().url == QUrl("http://x/done"),
 		      "and the terminal one is loaded");
 		QFile::remove(hist);
+	}
+
+	section("per-tab zoom persists, and neither end stores 100%");
+	{
+		QHash<QString, double> z;
+		z.insert("a1", 1.5);
+		z.insert("b2", 0.75);
+		z.insert("c3", 1.0);   // the default -- must not be written
+		const QByteArray json = zoom_store::to_json(z);
+		const QJsonObject o = QJsonDocument::fromJson(json).object();
+		check(o.size() == 2 && !o.contains("c3"),
+		      "to_json writes the real zooms and omits 100%");
+		const QHash<QString, double> back = zoom_store::from_json(json);
+		check(back.size() == 2 && qFuzzyCompare(back.value("a1"), 1.5) &&
+		         qFuzzyCompare(back.value("b2"), 0.75),
+		      "and they round-trip with their factors intact");
+		// A 100% row a hand-edited or older file might carry is dropped on load.
+		const QHash<QString, double> guard =
+		  zoom_store::from_json("{\"x\":1.0,\"y\":2.0}");
+		check(guard.size() == 1 && !guard.contains("x"),
+		      "from_json ignores a 100% row in the file");
 	}
 
 	section("a kiosk setting survives being written and read back");

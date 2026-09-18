@@ -20777,11 +20777,18 @@ will otherwise assume the phone half is too. (Checked in the `.cpp` first,
 which does not carry the override; it is inline in the header, and reading
 only the source file nearly produced a "regression" that was not there.)
 
-**What this does not fix.** `m_zoom` is still a `QHash` in memory, so no
-zoom of either kind survives a restart. That is the shipped behaviour and
-was not what this entry set out to change; it is written down here because
-the two halves look alike from outside and somebody will otherwise measure
-one and conclude the other.
+**And it persists now.** `m_zoom` was a `QHash` in memory, so no zoom of
+either kind survived a restart -- the gap this entry first recorded as
+unfixed, and reported from use. It is written to `zoom.json` in the app data
+directory, through `zoom_store` whose `to_json`/`from_json` are pure and
+tested, and read back before any tab opens, so a page a person zoomed comes
+back zoomed. **100% remains the absence of a setting on disk as in memory**:
+neither end writes or loads a 1.0, so a hand-edited or older file cannot
+reintroduce an entry for every tab ever looked at -- and each guard is tested
+on its own, because a file round-trip carries both and a sabotage of one
+would otherwise hide behind the other. Only the map's own factor persists;
+what does not live in `m_zoom`, such as a `stretch` mode, is per-session as
+before.
 
 ## An external process this program starts had no bound at all
 
