@@ -172,6 +172,10 @@ public:
 	void back() override {}
 	void forward() override {}
 	void reload() override {}
+	// Recorded, for the reason the others are: proves the shell asked for a
+	// cache-bypassing reload specifically, not a plain one.
+	int  reload_bypassed = 0;
+	void reload_bypass_cache() override { ++reload_bypassed; }
 	// Recorded rather than dropped, so a test can ask what the shell actually
 	// derived from the policy. It was discarded here, which meant nothing in
 	// the suite could see `apply_policy`'s output at all.
@@ -859,6 +863,31 @@ int main(int argc, char **argv) {
 		node *back = m.m_model->reopen_closed();
 		check(back && back->url == QString("https://one.example/"),
 		       "so Reopen Closed Tab brings the closed one back");
+	}
+
+	section("Reload Ignoring Cache asks the backend to bypass its cache");
+	{
+		main_window m(&factory, &policy, &filter);
+		m.show();
+		spin(200);
+		node *t = m.m_model->add_tab(nullptr, "a page", "https://fresh.example/");
+		fake_view *v = nullptr;
+		if (t) {
+			const QModelIndex idx =
+			  m.m_proxy->mapFromSource(m.m_model->index_for_node(t));
+			emit m.m_tree->activated(idx);
+			spin(200);
+			v = static_cast<fake_view *>(m.m_views_by_id.value(t->id, nullptr));
+		}
+		QAction *hard = nullptr;
+		for (QAction *a : m.findChildren<QAction *>())
+			if (a->text() == "Reload &Ignoring Cache") { hard = a; break; }
+		check(v && hard, "a tab and a Reload Ignoring Cache action");
+		check(hard && hard->isEnabled(), "it is live while a page is shown");
+		check(v && v->reload_bypassed == 0, "and nothing is reloaded until asked");
+		m.reload_ignoring_cache();
+		check(v && v->reload_bypassed == 1,
+		       "the shell asks the backend to reload past the cache");
 	}
 
 	section("the address bar keeps its cursor while the page reports where it is");

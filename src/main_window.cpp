@@ -1640,6 +1640,16 @@ QMenuBar *main_window::build_menu_bar() {
 	go_menu->addSeparator();
 	m_reload_action = go_menu->addAction("&Reload", QKeySequence::Refresh, this,
 	                                      &main_window::reload_page);
+	// A reload that fetches everything fresh, past the cache -- Ctrl+Shift+R
+	// everywhere. On a backend that cannot bypass its cache this still
+	// reloads (see the seam), so it is enabled whenever there is a page.
+	m_hard_reload_action = go_menu->addAction("Reload &Ignoring Cache",
+	                                          QKeySequence("Ctrl+Shift+R"),
+	                                          this,
+	                                          &main_window::reload_ignoring_cache);
+	m_hard_reload_action->setStatusTip("Reload and fetch everything fresh, "
+	                                   "past the cache");
+	m_hard_reload_action->setEnabled(false);
 	go_menu->addSeparator();
 	// **Flip between open tabs from the page**, with no trip to the tree and
 	// while the keyboard is in the web view -- Ctrl+PageDown / Ctrl+PageUp, as
@@ -1866,6 +1876,11 @@ void main_window::present_fullscreen(web_view_backend *view, bool on) {
 		m_page_fullscreen = false;
 		view->exit_fullscreen();
 	}
+}
+
+void main_window::reload_ignoring_cache() {
+	if (web_view_backend *v = current_view())
+		v->reload_bypass_cache();
 }
 
 void main_window::close_current_tab() {
@@ -4104,6 +4119,8 @@ void main_window::update_navigation() {
 	m_back_action->setEnabled(v && !pinned && v->can_go_back());
 	m_fwd_action->setEnabled(v && !pinned && v->can_go_forward());
 	m_reload_action->setEnabled(v != nullptr);
+	if (m_hard_reload_action)
+		m_hard_reload_action->setEnabled(v != nullptr);
 }
 
 // **A window called "Hydra" tells the task switcher nothing.** Every window

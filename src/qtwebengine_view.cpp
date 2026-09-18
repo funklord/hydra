@@ -939,6 +939,10 @@ void qtwebengine_view::reload() {
 	m_view->triggerPageAction(QWebEnginePage::Reload);
 }
 
+void qtwebengine_view::reload_bypass_cache() {
+	m_view->triggerPageAction(QWebEnginePage::ReloadAndBypassCache);
+}
+
 void qtwebengine_view::apply_settings(const view_settings &s) {
 	QWebEngineSettings *set = m_page->settings();
 	set->setAttribute(QWebEngineSettings::JavascriptEnabled, s.javascript);

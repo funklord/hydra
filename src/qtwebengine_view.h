@@ -43,6 +43,7 @@ public:
 	void back() override;
 	void forward() override;
 	void reload() override;
+	void reload_bypass_cache() override;
 	void stop() override;
 	void exit_fullscreen() override;
 	void print() override;

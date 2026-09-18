@@ -20791,6 +20791,32 @@ download it triggers -- so the integration is by inspection of the
 `downloadRequested` handler that every other download already goes through,
 and the end-to-end save is left to verify on a device.
 
+## Reload Ignoring Cache, and a default that degrades instead of vanishing
+
+Reload fetched what the cache already held; there was no way to force a page
+fresh past it -- the Ctrl+Shift+R every browser binds, for a stylesheet that
+did not update or a page serving stale content.
+
+**Go > Reload Ignoring Cache (Ctrl+Shift+R)** is a fifth capability on the
+seam, and it is shaped unlike the others on purpose. stop, print, mute and
+save all default to *nothing* and are greyed on a `can_X()`, because a
+half-done print or a mute that does not mute is worse than an absent one.
+A reload that does not bypass the cache is still a reload -- a real, useful
+answer -- so `reload_bypass_cache()` defaults to calling `reload()` rather
+than doing nothing, and carries no `can_X()`: it is enabled wherever there is
+a page. Qt WebEngine bypasses with `ReloadAndBypassCache`; Android's WebView
+has no bypass action, so it inherits the default and reloads normally, which
+is the graceful degrade rather than a control that lies.
+
+The test activates a tab and fires the action, asserting the `fake_view`
+recorded a bypass request specifically -- a separate counter from a plain
+reload, so a shell that called `reload()` instead would leave it at zero.
+Sabotaging `reload_ignoring_cache` so it does not reach the backend reddens
+"the shell asks the backend to reload past the cache". The degrade-to-reload
+default is the one-line base body and the Android path, untestable in the
+offscreen suite for the same reason the other Android backends are -- it is
+verified by reading, like them.
+
 ## Ctrl+W: the close every browser has and this one did not
 
 There was no keyboard way to close the tab you were looking at. The tree's

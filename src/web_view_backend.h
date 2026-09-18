@@ -67,6 +67,14 @@ public:
 	virtual void forward() = 0;
 	virtual void reload() = 0;
 
+	// Reload past the cache -- Ctrl+Shift+R. **Not pure, and it degrades to a
+	// plain reload rather than doing nothing**: a backend that cannot bypass
+	// its cache still has a reload, and a slightly-less-forceful refresh is a
+	// real answer where print() and mute() have none -- so there is no can_X()
+	// to grey here, unlike those. Qt WebEngine bypasses the cache; Android's
+	// WebView has no bypass action, so it inherits this default and reloads.
+	virtual void reload_bypass_cache() { reload(); }
+
 	// Abandon whatever is loading. **Not pure**: a backend that cannot stop a
 	// load does nothing, and the shell's Stop button is then a button that
 	// does nothing -- which is why the shell only offers one while a load is

@@ -511,6 +511,10 @@ public:
 	// the shortcut and a test drive it.
 	void close_current_tab();
 
+	// Reload the current page past the cache (Ctrl+Shift+R). Public so the
+	// shortcut and a test drive it.
+	void reload_ignoring_cache();
+
 	tab_tree_model  *m_model = nullptr;
 	tree_sort_proxy *m_proxy = nullptr;
 	tab_tree_view   *m_tree  = nullptr;
@@ -644,6 +648,7 @@ public:
 	QAction            *m_back_action   = nullptr;
 	QAction            *m_fwd_action    = nullptr;
 	QAction            *m_reload_action = nullptr;
+	QAction            *m_hard_reload_action = nullptr;
 	QAction            *m_print_action  = nullptr;
 	QAction            *m_source_action = nullptr;
 	QAction            *m_desktop_site_action = nullptr;
