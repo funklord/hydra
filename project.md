@@ -2560,6 +2560,23 @@ that surface far from the mistake. It is offered from the context menu when a
 right-click lands within a selection of two or more, and the folder opens for
 rename on the spot, like New Folder Here.
 
+**Dissolving a folder is the inverse**, and pairs with grouping: it lifts a
+folder's children up into its parent, in its place, and deletes the emptied
+folder. It refuses a locked folder, or one holding a locked child, and refuses
+whole rather than in part -- a lock means the row does not change parent, so a
+locked child could not be lifted out and the folder could never empty. It
+moves the direct children only, so a nested folder rises whole with its own
+subtree intact rather than being flattened. Same reset-model re-parent as
+grouping, and the context menu offers Dissolve Folder only when it would work
+-- an unlocked folder with no locked child -- since an entry that silently
+does nothing is the failure this project keeps writing down.
+
+Tested: dissolving a folder of two puts both children where the folder was and
+removes it; a folder with a locked child does not dissolve and nothing moves;
+a folder holding a nested folder rises with that inner folder's own child
+still inside it. A dissolve that skipped the lock check reddens the refusal,
+and one that flattened recursively reddens the nested-folder check.
+
 Tested pure: grouping two of four loose tabs makes a folder holding both in
 order, at the first one's place, with the other two untouched; grouping a
 folder together with a child inside it and a loose tab moves the folder and the

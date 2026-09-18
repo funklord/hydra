@@ -636,6 +636,44 @@ node *tab_tree_model::group_into_folder(const QList<node *> &nodes,
 	return f;
 }
 
+bool tab_tree_model::dissolve_folder(node *folder) {
+	if (!folder || !folder->is_folder() || !folder->parent)
+		return false;
+	// A lock means the row does not change parent. The folder itself moving
+	// nowhere is fine, but its children move up into the grandparent -- so a
+	// locked folder, or one holding a locked child, cannot be dissolved
+	// without breaking that promise. Refused whole rather than done in part.
+	if (folder->locked)
+		return false;
+	for (node *k : folder->children)
+		if (k->locked)
+			return false;
+
+	node *parent = folder->parent;
+	const int at = parent->children.indexOf(folder);
+
+	// A reset, like group_into_folder and dropMimeData: rows change parent at
+	// once, and a fine-grained move index slip corrupts the view out of sight.
+	beginResetModel();
+	const QList<node *> kids = folder->children;
+	folder->children.clear();
+	parent->children.removeOne(folder);
+	// The folder sat at `at`; with it gone, inserting the children there puts
+	// them exactly where it was, in their own order.
+	int pos = at;
+	for (node *k : kids) {
+		k->parent = parent;
+		parent->children.insert(qBound(0, pos, int(parent->children.size())), k);
+		++pos;
+	}
+	delete folder;   // detached and empty
+	renumber(parent);
+	reindex();
+	endResetModel();
+	emit structure_changed();
+	return true;
+}
+
 node *tab_tree_model::add_tab(node *parent, const QString &title,
                                const QString &url) {
 	if (!parent)

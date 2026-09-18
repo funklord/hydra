@@ -183,6 +183,12 @@ public:
 	// nothing movable was selected.
 	node *group_into_folder(const QList<node *> &nodes, const QString &title);
 
+	// The inverse of grouping: move a folder's children up into its parent,
+	// where the folder was, and delete the now-empty folder. Refuses a locked
+	// folder or one with a locked child, since a lock means the row does not
+	// change parent -- so the folder could not be emptied. Returns success.
+	bool dissolve_folder(node *folder);
+
 	// Pin or unpin a node (architecture doc sec 5.5). Returns whether anything
 	// changed, for the same reason `set_page_title` does: the caller saves the
 	// tree on a change and should not write the file for a no-op.

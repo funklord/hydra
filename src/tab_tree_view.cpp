@@ -406,6 +406,17 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 		if (n && gsel.size() > 1 && selected_nodes().contains(n))
 			group_a = menu.addAction("&Group into Folder");
 	}
+	// The inverse, on a folder: dissolve it and lift its children up. Offered
+	// only when it would work -- an unlocked folder with no locked child --
+	// since a menu entry that silently does nothing is worse than an absent one.
+	QAction *dissolve_a = nullptr;
+	if (n && n->is_folder() && !n->locked) {
+		bool locked_child = false;
+		for (node *k : n->children)
+			if (k->locked) { locked_child = true; break; }
+		if (!locked_child)
+			dissolve_a = menu.addAction("&Dissolve Folder");
+	}
 
 	// Reorder among siblings, greyed at the ends -- only where a move would
 	// show, which is tree order (a drag is refused otherwise for the same
@@ -451,6 +462,7 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 			edit_properties(f);
 		}
 	}
+	else if (chosen == dissolve_a)  m->dissolve_folder(n);
 	else if (chosen == up_a)        m->move_sibling(n, -1);
 	else if (chosen == down_a)      m->move_sibling(n, 1);
 	else if (chosen == lock_a)      emit lock_requested(n);

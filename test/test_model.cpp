@@ -583,6 +583,48 @@ int main(int argc, char **argv) {
 		check(m.root()->children.size() == 1, "and nothing was added to the tree");
 	}
 
+	section("dissolving a folder lifts its children into its place");
+	{
+		tab_tree_model m;
+		node *a = m.add_tab(m.root(), "a", "http://a/");
+		node *f = m.add_folder(m.root(), "F");
+		node *x = m.add_tab(f, "x", "http://x/");
+		node *y = m.add_tab(f, "y", "http://y/");
+		node *b = m.add_tab(m.root(), "b", "http://b/");
+		(void)a; (void)b;
+		check(m.dissolve_folder(f), "the folder dissolves");
+		check(m.root()->children.size() == 4,
+		       "its children take its place at root (a, x, y, b)");
+		check(x->parent == m.root() && y->parent == m.root(),
+		       "the children now sit under the grandparent");
+		check(m.root()->children.indexOf(x) == 1 &&
+		      m.root()->children.indexOf(y) == 2,
+		       "in order, where the folder was (after a)");
+	}
+
+	section("dissolving is refused when a child is locked");
+	{
+		tab_tree_model m;
+		node *f = m.add_folder(m.root(), "F");
+		node *x = m.add_tab(f, "x", "http://x/");
+		x->locked = true;
+		check(!m.dissolve_folder(f),
+		       "a folder with a locked child does not dissolve");
+		check(x->parent == f, "and the locked child stays where it is");
+		check(m.root()->children.size() == 1, "the folder is still there");
+	}
+
+	section("dissolving keeps a nested folder whole");
+	{
+		tab_tree_model m;
+		node *outer = m.add_folder(m.root(), "outer");
+		node *inner = m.add_folder(outer, "inner");
+		node *t = m.add_tab(inner, "t", "http://t/");
+		check(m.dissolve_folder(outer), "the outer folder dissolves");
+		check(inner->parent == m.root(), "the inner folder moves up whole");
+		check(t->parent == inner, "with its own child still inside it");
+	}
+
 	section("a multi-selection deletes as top-level roots, dropping covered children");
 	{
 		tab_tree_model m;
