@@ -1211,6 +1211,20 @@ void qtwebengine_view::print() {
 	m_view->print(m_printer.get());
 }
 
+void qtwebengine_view::set_muted(bool muted) {
+	if (m_page)
+		m_page->setAudioMuted(muted);
+}
+
+bool qtwebengine_view::is_muted() const {
+	return m_page && m_page->isAudioMuted();
+}
+
+// The page is what carries audio, so a backend with a page can always mute.
+bool qtwebengine_view::can_mute() const {
+	return m_page != nullptr;
+}
+
 void qtwebengine_view::set_authenticator(authenticator fn) {
 	m_authenticator = std::move(fn);
 }

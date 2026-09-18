@@ -100,6 +100,18 @@ public:
 	virtual void print() {}
 	virtual bool can_print() const { return false; }
 
+	// Silence this page's audio, per tab.
+	//
+	// **Not pure, and the shell must ask before offering it**, exactly as
+	// print() does. A backend that cannot mute does nothing and reports itself
+	// unmuted, so an unconditional menu entry would be a control that lies
+	// about a tab's state -- Qt WebEngine mutes the page, but Android's system
+	// WebView exposes no such control, so there `can_mute()` is false and the
+	// shell greys the action rather than showing a checkbox nothing backs.
+	virtual void set_muted(bool muted) { Q_UNUSED(muted) }
+	virtual bool is_muted() const { return false; }
+	virtual bool can_mute() const { return false; }
+
 	virtual void apply_settings(const view_settings &s) = 0;
 	virtual void set_permission_decider(permission_decider fn) = 0;
 

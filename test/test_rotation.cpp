@@ -220,6 +220,15 @@ public:
 		last_find_case = case_sensitive;
 		emit find_result(0, 0);
 	}
+	// Recorded and answered, for the reason the others are: a no-op setter
+	// with the base getter means the shell can mute a tab and the suite
+	// hears the base-class false, so a toggle that never reaches the view
+	// looks exactly like one that works. can_mute is true so the action is
+	// live, matching a desktop backend.
+	bool muted = false;
+	void set_muted(bool m) override { muted = m; }
+	bool is_muted() const override { return muted; }
+	bool can_mute() const override { return true; }
 
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;
@@ -749,6 +758,38 @@ int main(int argc, char **argv) {
 		spin(120);
 		check(v && v->last_find_case,
 		       "turning on Match case re-runs the search case-sensitively");
+	}
+
+	section("Mute Tab silences the current tab and its toggle tracks the view");
+	{
+		main_window m(&factory, &policy, &filter);
+		m.show();
+		spin(200);
+		node *t = m.m_model->add_tab(nullptr, "a loud page",
+		                             "https://loud.example/");
+		fake_view *v = nullptr;
+		if (t) {
+			const QModelIndex idx =
+			  m.m_proxy->mapFromSource(m.m_model->index_for_node(t));
+			emit m.m_tree->activated(idx);
+			spin(200);
+			v = static_cast<fake_view *>(m.m_views_by_id.value(t->id, nullptr));
+		}
+		QAction *mute = nullptr;
+		for (QAction *a : m.findChildren<QAction *>())
+			if (a->text() == "&Mute Tab") { mute = a; break; }
+		check(v && mute, "a tab and a Mute Tab action");
+		check(mute && mute->isCheckable(), "the action is a checkable toggle");
+		check(v && !v->muted && mute && !mute->isChecked(),
+		       "a tab starts unmuted, and the toggle shows it");
+		m.toggle_mute();
+		check(v && v->muted, "Mute Tab silences the tab");
+		check(mute && mute->isChecked(), "and the toggle now reads muted");
+		check(mute && mute->isEnabled(),
+		       "the action is live where the backend can mute");
+		m.toggle_mute();
+		check(v && !v->muted, "toggling again unmutes it");
+		check(mute && !mute->isChecked(), "and the toggle follows it back");
 	}
 
 	section("the address bar keeps its cursor while the page reports where it is");

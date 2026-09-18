@@ -20725,6 +20725,38 @@ touch the one belonging to whoever runs it. `live_view_cap()` reads the
 variable on every call, which is what makes the question askable from a
 driver at all -- and it is the same lever `try_delete` already uses.
 
+## Mute Tab, borrowing the shape Print and Desktop Site already proved
+
+A tab that plays audio could be silenced only by finding and pausing whatever
+was playing, which a background tab does not offer. Every desktop browser has
+a per-tab mute, and hydra had none -- no `setAudioMuted` call anywhere, only a
+`QMutexLocker` the search kept turning up.
+
+It is a third instance of the optional-virtual capability the seam already
+carries twice. `web_view_backend::set_muted`/`is_muted` are **not pure**, with
+a `can_mute()` the shell greys the action on -- exactly `print()`/`can_print()`.
+Qt WebEngine mutes the page through `QWebEnginePage::setAudioMuted`, so its
+`can_mute()` is true whenever it has a page; **Android's system WebView exposes
+no mute control**, so the base `can_mute()` false stands and the menu entry is
+greyed there rather than being a checkbox that silently does nothing -- the
+failure the Stop button and Print both record once already.
+
+The View menu's **Mute Tab** (Ctrl+M) is checkable, and its checkmark is the
+view's own answer refreshed in `update_navigation` on every tab switch, not the
+last click -- the same rule `desktop_site` states, because a per-tab toggle
+that shows the previously-focused tab's state is a control that teaches people
+not to trust it. A checkable action does not re-fire `triggered` on
+`setChecked`, so unlike the desktop-site toggle it needs no `QSignalBlocker`.
+
+The test drives the real shell: it activates a tab, toggles mute, and asserts
+the `fake_view` records it and that the menu action's checked state follows.
+The `fake_view` records `muted` and answers `can_mute()` true, for the reason
+its other getters are recorded -- a no-op setter over the base-class `false`
+getter would let a toggle that never reaches the view look exactly like one
+that works. Sabotaging the flip in `toggle_mute` (drop the `!`) reddens "Mute
+Tab silences the tab"; sabotaging the `setChecked` refresh reddens "the toggle
+now reads muted".
+
 ## Zoom had two routes in and one of them was remembered
 
 The same lens again -- a value with two writers where only one reaches the

@@ -1549,6 +1549,13 @@ QMenuBar *main_window::build_menu_bar() {
 	zin->setStatusTip("Make this page larger");
 	zout->setStatusTip("Make this page smaller");
 	zoff->setStatusTip("Back to 100%");
+
+	m_mute_action = view_menu->addAction("&Mute Tab", QKeySequence("Ctrl+M"),
+	                                      this, &main_window::toggle_mute);
+	m_mute_action->setCheckable(true);
+	m_mute_action->setStatusTip("Silence this tab's audio");
+	m_mute_action->setEnabled(false);
+
 	view_menu->addSeparator();
 
 	m_kiosk_action = view_menu->addAction("&Kiosk Mode", QKeySequence(Qt::Key_F11),
@@ -1838,6 +1845,14 @@ void main_window::present_fullscreen(web_view_backend *view, bool on) {
 		m_page_fullscreen = false;
 		view->exit_fullscreen();
 	}
+}
+
+void main_window::toggle_mute() {
+	if (web_view_backend *v = current_view())
+		v->set_muted(!v->is_muted());
+	// Refresh the checkmark from the view's own state, here and on every tab
+	// switch, so it is always this tab's answer rather than the last one's.
+	update_navigation();
 }
 
 void main_window::toggle_kiosk() {
@@ -4023,6 +4038,14 @@ void main_window::update_navigation() {
 #endif
 		QSignalBlocker block(m_desktop_site_action);
 		m_desktop_site_action->setChecked(live && v->desktop_site());
+	}
+
+	// Per tab, and greyed where the backend cannot mute (Android's WebView).
+	// The check comes from the view rather than the last click; a checkable
+	// action does not re-fire `triggered` on setChecked, so no blocker here.
+	if (m_mute_action) {
+		m_mute_action->setEnabled(v && v->can_mute());
+		m_mute_action->setChecked(v && v->is_muted());
 	}
 
 	m_back_action->setEnabled(v && !pinned && v->can_go_back());

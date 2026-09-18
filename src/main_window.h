@@ -496,6 +496,11 @@ public:
 	// exist. Public, like the members below, so the shortcut and a test drive it.
 	node *activate_adjacent_tab(bool forward);
 
+	// Silence the current tab's audio, or unmute it (Ctrl+M). Public so the
+	// shortcut and a test drive it; the checkmark tracks the view, not the
+	// last click, so switching tabs shows that tab's answer.
+	void toggle_mute();
+
 	tab_tree_model  *m_model = nullptr;
 	tree_sort_proxy *m_proxy = nullptr;
 	tab_tree_view   *m_tree  = nullptr;
@@ -632,6 +637,7 @@ public:
 	QAction            *m_print_action  = nullptr;
 	QAction            *m_source_action = nullptr;
 	QAction            *m_desktop_site_action = nullptr;
+	QAction            *m_mute_action  = nullptr;
 	bool                m_page_fullscreen = false;
 	web_view_backend   *m_kiosk_view      = nullptr;
 	QAction            *m_key_action    = nullptr;
