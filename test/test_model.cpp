@@ -625,6 +625,35 @@ int main(int argc, char **argv) {
 		check(t->parent == inner, "with its own child still inside it");
 	}
 
+	section("moving a tab out of its folder promotes it to the folder's level");
+	{
+		tab_tree_model m;
+		node *outer = m.add_folder(m.root(), "outer");
+		node *a = m.add_tab(outer, "a", "http://a/");
+		node *b = m.add_tab(outer, "b", "http://b/");
+		node *after = m.add_tab(m.root(), "after", "http://z/");
+		(void)after;
+		check(m.move_out(a), "the tab moves out");
+		check(a->parent == m.root(), "it now sits at the folder's level");
+		check(m.root()->children.indexOf(a) ==
+		      m.root()->children.indexOf(outer) + 1,
+		       "just after the folder it left");
+		check(outer->children.size() == 1 && b->parent == outer,
+		       "and the sibling it left behind stays inside");
+	}
+
+	section("moving out is refused at the top level and for a locked tab");
+	{
+		tab_tree_model m;
+		node *top = m.add_tab(m.root(), "top", "http://t/");
+		check(!m.move_out(top), "a top-level tab has nowhere to move out to");
+		node *f = m.add_folder(m.root(), "f");
+		node *x = m.add_tab(f, "x", "http://x/");
+		x->locked = true;
+		check(!m.move_out(x), "a locked tab does not move out");
+		check(x->parent == f, "it stays where it is");
+	}
+
 	section("recently closed remembers each tab newest-first and reopens any");
 	{
 		tab_tree_model m;

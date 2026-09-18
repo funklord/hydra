@@ -674,6 +674,31 @@ bool tab_tree_model::dissolve_folder(node *folder) {
 	return true;
 }
 
+bool tab_tree_model::move_out(node *n) {
+	// A lock means the row does not change parent; refuse rather than break it.
+	if (!n || n->locked || !n->parent)
+		return false;
+	node *parent = n->parent;
+	node *grand = parent->parent;
+	if (!grand)
+		return false;   // already at the top level -- nowhere to move out to
+
+	// A reset, like the other cross-parent moves here, for the reason stated at
+	// dropMimeData: a fine-grained move index slip corrupts the view out of
+	// sight. Placed just after the folder it left, where the eye expects it.
+	beginResetModel();
+	parent->children.removeOne(n);
+	const int at = grand->children.indexOf(parent) + 1;
+	n->parent = grand;
+	grand->children.insert(qBound(0, at, int(grand->children.size())), n);
+	renumber(parent);
+	renumber(grand);
+	reindex();
+	endResetModel();
+	emit structure_changed();
+	return true;
+}
+
 node *tab_tree_model::add_tab(node *parent, const QString &title,
                                const QString &url) {
 	if (!parent)

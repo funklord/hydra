@@ -196,6 +196,12 @@ public:
 	// change parent -- so the folder could not be emptied. Returns success.
 	bool dissolve_folder(node *folder);
 
+	// Promote a node to its folder's own level, placed just after that folder.
+	// The touch-friendly un-nest, since a phone has no reorder keys and a drag
+	// across the tree is awkward. Refuses a locked node (a lock does not
+	// reparent) and a node already at the top level. Returns success.
+	bool move_out(node *n);
+
 	// Pin or unpin a node (architecture doc sec 5.5). Returns whether anything
 	// changed, for the same reason `set_page_title` does: the caller saves the
 	// tree on a change and should not write the file for a no-op.

@@ -429,6 +429,12 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 		down_a = menu.addAction("Move &Down");
 		down_a->setEnabled(row >= 0 && row + 1 < n->parent->children.size());
 	}
+	// Un-nest one level -- a reparent, so unlike reorder it is offered under any
+	// sort. Shown for a nested, unlocked row: its parent has a parent of its
+	// own (root has none), and a lock means the row does not change parent.
+	QAction *out_a = nullptr;
+	if (n && n->parent && n->parent->parent && !n->locked)
+		out_a = menu.addAction("Move &Out of Folder");
 
 	QAction *del_a = nullptr, *props_a = nullptr;
 	if (n) {
@@ -465,6 +471,7 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	else if (chosen == dissolve_a)  m->dissolve_folder(n);
 	else if (chosen == up_a)        m->move_sibling(n, -1);
 	else if (chosen == down_a)      m->move_sibling(n, 1);
+	else if (chosen == out_a)       m->move_out(n);
 	else if (chosen == lock_a)      emit lock_requested(n);
 	else if (chosen == folder_a) {
 		// Into the folder that was clicked, or beside a tab -- which is what a

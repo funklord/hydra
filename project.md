@@ -2577,6 +2577,29 @@ a folder holding a nested folder rises with that inner folder's own child
 still inside it. A dissolve that skipped the lock check reddens the refusal,
 and one that flattened recursively reddens the nested-folder check.
 
+## Move Out of Folder: editing the tree without a keyboard or a drag
+
+Reorder (Move Up/Down) and the group/dissolve pair gave the tree a context
+menu that can rearrange it, which matters most where there is no other way:
+on a phone there are no Ctrl+Shift+Up/Down keys and dragging a row across a
+long tree by touch is awkward. The one move still missing was the common one
+-- lift a tab out of the folder it is nested in.
+
+`tab_tree_model::move_out` promotes a node to its folder's own level, placed
+just after that folder where the eye expects it. It refuses a locked node,
+because a lock means the row does not change parent, and a node already at the
+top level, which has nowhere to rise to -- detected by its parent having no
+parent, since root has none. It is a reparent, so unlike reorder it is offered
+under any sort, and it re-parents under the same reset-model as the other
+cross-parent moves, for the reason dropMimeData states. The context menu shows
+Move Out of Folder for a nested, unlocked row.
+
+Tested: moving a tab out of a two-tab folder lands it at the folder's level
+just after the folder, with its sibling left inside; a top-level tab has
+nowhere to go and a locked tab does not move. Dropping the lock check reddens
+the locked-tab refusal, and a move that does not reparent reddens the
+promoted-to-the-folder's-level check.
+
 ## Recently Closed: the list behind Ctrl+Shift+T
 
 Deletion has always been reopenable -- the model keeps the last 25 closed
