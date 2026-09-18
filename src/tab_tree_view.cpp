@@ -489,7 +489,7 @@ bool tab_tree_view::confirm_and_remove(node *n) {
 	  : QString("Delete \"%1\"?").arg(n->title);
 	if (QMessageBox::question(this, "Delete", what) != QMessageBox::Yes)
 		return false;
-	m->remove_node(n);
+	m->remove_node(n, /*remember=*/true);
 	return true;
 }
 

@@ -954,6 +954,13 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// moved": it reads two booleans off the current view.
 	connect(m_model, &tab_tree_model::structure_changed, this,
 	        &main_window::update_navigation);
+	// Reopen is available exactly when something has been deleted. Refreshed on
+	// every structural change -- a delete fills the stack, a reopen empties one
+	// slot -- behind a guard because the menu may not be built yet here.
+	connect(m_model, &tab_tree_model::structure_changed, this, [this] {
+		if (m_reopen_action)
+			m_reopen_action->setEnabled(m_model->has_closed());
+	});
 	// A node about to be deleted may have a live view, and the model knows
 	// nothing about views. Without this the view survived its node: it stayed in
 	// the stack showing a page for a tab that no longer existed, stayed in the
@@ -1385,6 +1392,19 @@ QMenuBar *main_window::build_menu_bar() {
 	m_undo_action->setEnabled(false);
 	m_undo_action->setStatusTip("Put the tree back the way it was before the "
 	                             "last accepted reorganization");
+	// Reopen the last deleted tab or folder. Deletion is otherwise permanent --
+	// the confirmation dialog is the only guard -- so this is the safety net
+	// every browser binds to Ctrl+Shift+T, grouped with Undo as the other way
+	// back from a change you did not mean.
+	m_reopen_action = edit_menu->addAction("Reopen Closed &Tab",
+	                                        QKeySequence("Ctrl+Shift+T"), this,
+	                                        [this] {
+		if (node *n = m_model->reopen_closed())
+			m_tree->show_node(n);
+	});
+	m_reopen_action->setEnabled(false);
+	m_reopen_action->setStatusTip("Bring back the most recently deleted tab or "
+	                               "folder");
 	edit_menu->addSeparator();
 
 	// **The address it is showing, not the address it was opened at.** A

@@ -472,6 +472,52 @@ int main(int argc, char **argv) {
 		holds(m, "reordering inside one folder");
 	}
 
+	section("a deleted tab can be reopened, faithfully");
+	{
+		tab_tree_model m;
+		node *folder = m.add_folder(m.root(), "Reading");
+		m.add_tab(folder, "A", "http://a/");
+		node *b = m.add_tab(folder, "B", "http://b/");
+		m.add_tab(folder, "C", "http://c/");
+		m.set_locked(b, true, "http://b/pinned");
+
+		check(!m.has_closed(), "nothing to reopen before anything is deleted");
+		m.remove_node(b, /*remember=*/true);
+		check(folder->children.size() == 2, "the tab is gone");
+		check(m.has_closed(), "and it is reopenable");
+
+		node *back = m.reopen_closed();
+		check(back != nullptr, "reopen returns the restored node");
+		check(folder->children.size() == 3, "the tab is back");
+		check(folder->children.size() == 3 && folder->children.at(1) == back,
+		      "restored at the index it was deleted from, not the end");
+		check(back && back->title == "B" && back->url == "http://b/pinned",
+		      "with its title and its pinned url");
+		check(back && back->locked,
+		      "and still locked: a faithful copy keeps the pin, unlike a duplicate");
+		check(!m.has_closed(), "and the stack is empty again");
+	}
+
+	section("an internal removal is not reopenable, and a subtree comes back whole");
+	{
+		tab_tree_model m;
+		node *folder = m.add_folder(m.root(), "Work");
+		m.add_tab(folder, "one", "http://1/");
+		m.add_tab(folder, "two", "http://2/");
+
+		m.remove_node(folder->children.first());   // remember defaults to false
+		check(!m.has_closed(),
+		      "an internal delete (remember=false) leaves nothing to reopen");
+
+		m.remove_node(folder, /*remember=*/true);  // the folder and its one child
+		check(m.has_closed(), "a user delete of a folder is reopenable");
+		node *back = m.reopen_closed();
+		check(back && back->is_folder() && back->title == "Work",
+		      "the folder returns");
+		check(back && back->children.size() == 1,
+		      "with the tab that was still inside it");
+	}
+
 	section("sibling order stays unique, whatever emptied the list");
 	{
 		// `order` is the key tree-order sorting compares on, and the proxy is

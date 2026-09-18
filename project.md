@@ -2453,6 +2453,47 @@ it or crashing.
 
 One level only, as §9.4 specifies — the snapshot is cleared once used.
 
+## Reopen closed tab (Ctrl+Shift+T)
+
+**Deletion was the one destructive act with no way back.** Undo Reorganize
+above covers an accepted reorganization; nothing covered a delete, and
+`remove_node` does `delete n` -- which takes the whole subtree, a folder and
+every tab in it -- with only the confirmation dialog in front of it. In a tree
+whose entire design is about not losing tabs, that was the gap the undo work
+named and did not close.
+
+**Edit → Reopen Closed Tab (Ctrl+Shift+T)**, the shortcut three decades of
+browsers put it on, enabled only when something has been deleted. A user delete
+-- the context menu and the Edit-menu Delete, both through `confirm_and_remove`
+-- passes `remember=true` and the model stashes a copy before the subtree is
+gone; an *internal* removal (a mirror refresh, a reorganize's re-parenting)
+passes the default `false` and is not reopenable, so Reopen never resurrects
+churn the user did not do.
+
+**The copy is faithful, which is the whole point and where the obvious reuse
+would have failed.** `deep_copy` already existed, for Duplicate and for dragging
+a tab out of a mirror -- and it deliberately drops `locked` and `renamed` and
+re-mints the id, because a *duplicate* nobody has pinned yet must start unpinned
+(sec 5.5). A restore is the same row coming back, so it must keep them:
+`deep_copy` grew a `keep_state` flag that carries `locked` (and with it the pin,
+which lives in `url`) and `renamed` across. Reusing the duplicate path unchanged
+would have brought a locked tab back unlocked -- the sabotage that proves the
+test is exactly dropping that flag, and it fails only the "still locked" check
+while the tab still returns to its place.
+
+**Grafted back where it was, by id.** The stash records the parent's id and the
+row, not pointers: the folder may have been deleted or moved since, so
+`reopen_closed` resolves the parent by id, falls back to the root when it is
+gone, and clamps the row. Any id in the restored subtree that a live node has
+taken since is re-minted first, so a reopen never collides. The stack is capped
+at 25, oldest dropped, and the destructor frees whatever was never reopened.
+
+The tests are in `test_model`: a locked tab deleted and reopened comes back at
+its old index, titled, pinned and still locked; an internal delete leaves
+nothing to reopen; a folder returns with the tab still inside it. The
+enablement rides the existing `structure_changed` signal -- a delete fills the
+stack, a reopen empties a slot -- so no new signal was added for the menu.
+
 ## Download transport seam (arch §11.4)
 
 `download_manager` no longer contains a transport. It owns the queue, the
@@ -23686,8 +23727,14 @@ Qt's platform plugin aborting, which fmake names under each failure
 since its section 258; with `QT_QPA_PLATFORM=offscreen` in the
 environment, 6 fail: `test_dlheaders`, `test_headers` and `test_probe`
 want a server that the Makefile's run presumably provides; `test_replay`
-cannot open `:/ui/drawer.svg` (the icons, above -- whether its link set
-reaches `main_window.cpp`'s literal after the fix was not re-measured);
+cannot open `:/ui/drawer.svg`, and this one is NOT the icon fix: its
+link set does not reach `main_window.cpp`, where the `:/ui/%1.svg`
+literal lives, so `--explain test_replay` correctly reports it opens
+neither resource. That is fmake's documented limit (its sections 17
+and 45): a resource reached through a path with no `:/` literal in the
+program's own closure cannot be seen, and the remedy is
+`Q_INIT_RESOURCE(hydra)` in the test or `--force-link`. A runtime
+failure, as the limit says, not a link one;
 `test_helpers_live` and `test_live_model` are the two live drivers
 section 57 recorded as living outside `tests/live/`, and they run in
 the default group here because nothing in the tree says `@test live`.

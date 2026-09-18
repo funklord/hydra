@@ -631,6 +631,7 @@ public:
 	QString             m_filters_path;
 	QAction            *m_kiosk_action  = nullptr;
 	QAction            *m_undo_action   = nullptr;
+	QAction            *m_reopen_action = nullptr;
 	tree_snapshot       m_undo;
 	QTimer             *m_save_timer    = nullptr;
 	// Whether the tree is showing now, and how wide it was when it last was.

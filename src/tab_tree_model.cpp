@@ -23,6 +23,8 @@ tab_tree_model::tab_tree_model(QObject *parent)
 
 tab_tree_model::~tab_tree_model() {
 	delete m_root;  // deletes the whole tree recursively (node dtor)
+	for (const closed_entry &c : m_closed)
+		delete c.tree;
 }
 
 // A padlock in the corner of whatever icon the row already had.
@@ -391,7 +393,8 @@ QString tab_tree_model::unused_id(const QString &like) const {
 }
 
 static node *deep_copy(const node *src, tab_tree_model *model,
-                        const std::function<QString(const QString &)> &fresh) {
+                        const std::function<QString(const QString &)> &fresh,
+                        bool keep_state = false) {
 	node *c = new node;
 	c->id       = fresh(src->id);
 	c->type     = src->type;
@@ -412,12 +415,16 @@ static node *deep_copy(const node *src, tab_tree_model *model,
 	// exactly what `unused_id` exists to prevent.
 	if (c->type == node_type::open_tab || c->type == node_type::suspended_tab)
 		c->type = node_type::unopened_tab;
-	// Nor a copy of `locked` or `renamed`, for a related reason: both say
-	// something a person decided about *that* row. A copy nobody has pinned yet
-	// starts unpinned, or the gesture hands back something that has to be
-	// unlocked before it will move (sec 5.5).
+	// Not a copy of `locked` or `renamed` for a duplicate or a mirror drag:
+	// both say something a person decided about *that* row, and a copy nobody
+	// has pinned yet starts unpinned (sec 5.5). A *restore* is the exception --
+	// it is the same row coming back, so `keep_state` carries them across.
+	if (keep_state) {
+		c->locked  = src->locked;
+		c->renamed = src->renamed;
+	}
 	for (const node *k : src->children) {
-		node *kid = deep_copy(k, model, fresh);
+		node *kid = deep_copy(k, model, fresh, keep_state);
 		kid->parent = c;
 		c->children << kid;
 	}
@@ -597,7 +604,7 @@ node *tab_tree_model::add_tab(node *parent, const QString &title,
 	return t;
 }
 
-bool tab_tree_model::remove_node(node *n) {
+bool tab_tree_model::remove_node(node *n, bool remember) {
 	// The root is the tree; removing it would leave the model pointing at
 	// nothing and the outline writer with no document to write.
 	if (!n || n == m_root || !n->parent)
@@ -611,6 +618,21 @@ bool tab_tree_model::remove_node(node *n) {
 	const int row = parent->children.indexOf(n);
 	if (row < 0)
 		return false;
+
+	// A user delete is reopenable (Ctrl+Shift+T); an internal one is not.
+	// Captured here, before the node and its subtree are gone, as a faithful
+	// copy -- locked pins kept, unlike a duplicate -- with the parent and row
+	// to graft it back to. Capped, oldest dropped, so a long session does not
+	// hoard deleted trees.
+	if (remember) {
+		node *clone = deep_copy(n, this,
+		                         [](const QString &id) { return id; },
+		                         /*keep_state=*/true);
+		m_closed.append({clone, parent->id, row});
+		const int cap = 25;
+		while (m_closed.size() > cap)
+			delete m_closed.takeFirst().tree;
+	}
 
 	emit about_to_remove(n);
 	// **A removal, not a reset.** `beginResetModel` invalidates every index the
@@ -630,6 +652,38 @@ bool tab_tree_model::remove_node(node *n) {
 	endRemoveRows();
 	emit structure_changed();
 	return true;
+}
+
+node *tab_tree_model::reopen_closed() {
+	if (m_closed.isEmpty())
+		return nullptr;
+	closed_entry e = m_closed.takeLast();
+	node *sub = e.tree;
+	// The folder it lived in may be gone; the root always answers.
+	node *parent = node_by_id(e.parent_id);
+	if (!parent)
+		parent = m_root;
+	remint_if_taken(sub);
+	int at = e.index;
+	if (at < 0)
+		at = 0;
+	if (at > parent->children.size())
+		at = parent->children.size();
+	beginInsertRows(index_for_node(parent), at, at);
+	sub->parent = parent;
+	parent->children.insert(at, sub);
+	renumber(parent);
+	reindex();
+	endInsertRows();
+	emit structure_changed();
+	return sub;
+}
+
+void tab_tree_model::remint_if_taken(node *n) {
+	if (node_by_id(n->id))
+		n->id = unused_id(n->is_folder() ? "f" : "t");
+	for (node *k : n->children)
+		remint_if_taken(k);
 }
 
 void tab_tree_model::update_node(node *n, const QString &title,

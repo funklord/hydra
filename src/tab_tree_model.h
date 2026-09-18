@@ -133,7 +133,15 @@ public:
 	                      const QList<node *> &tabs);
 	// Every node under `n` is marked as belonging to the same source.
 	static void mark_mirror(node *n, const QString &source);
-	bool  remove_node(node *n);
+	bool  remove_node(node *n, bool remember = false);
+	// Reopen the most recently deleted subtree (Ctrl+Shift+T). Deletion is
+	// otherwise permanent -- `remove_node` does `delete n` and takes the whole
+	// subtree -- so a *user* delete (remember=true) stashes a faithful copy,
+	// locked pins and all, and this grafts it back where it was. Internal
+	// removals (a mirror refresh, a reorganize) pass remember=false and are not
+	// reopenable, so Reopen never resurrects churn the user did not do.
+	bool  has_closed() const { return !m_closed.isEmpty(); }
+	node *reopen_closed();
 	// Edit what a node *is*, as opposed to where it sits. The id is deliberately
 	// not editable: it keys the state blob and the outline file, and letting a
 	// person retype it would orphan a tab's history with no warning.
@@ -206,6 +214,14 @@ private:
 	// id would share a `state/<id>.blob`, so one tab's scroll position and form
 	// contents would be restored into the other.
 	QString unused_id(const QString &like) const;
+	// Re-mint any id in this subtree that a live node already holds, so a
+	// reopened tab never collides with one created since it was deleted.
+	void remint_if_taken(node *n);
+
+	// Deleted subtrees, newest last, owned here until grafted back by
+	// `reopen_closed` or evicted past the cap; the destructor frees the rest.
+	struct closed_entry { node *tree = nullptr; QString parent_id; int index = 0; };
+	QList<closed_entry> m_closed;
 	bool    is_ancestor_of(const node *maybe_ancestor, const node *n) const;
 
 	QString               m_path;
