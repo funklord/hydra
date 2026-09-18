@@ -498,6 +498,28 @@ int main(int argc, char **argv) {
 		check(!m.has_closed(), "and the stack is empty again");
 	}
 
+	section("a node moves up and down among its siblings, and stops at the ends");
+	{
+		tab_tree_model m;
+		node *f = m.add_folder(m.root(), "F");
+		node *a = m.add_tab(f, "a", "http://a/");
+		node *b = m.add_tab(f, "b", "http://b/");
+		node *c = m.add_tab(f, "c", "http://c/");
+		auto order = [&] {
+			QString s;
+			for (node *k : f->children)
+				s += k->title;
+			return s;
+		};
+		check(order() == "abc", "starting order");
+		check(m.move_sibling(b, -1) && order() == "bac", "b moves up past a");
+		check(m.move_sibling(b, 1) && order() == "abc", "and back down again");
+		check(!m.move_sibling(c, 1) && order() == "abc",
+		      "the last child will not move down");
+		check(!m.move_sibling(a, -1) && order() == "abc",
+		      "and the first will not move up");
+	}
+
 	section("a multi-selection deletes as top-level roots, dropping covered children");
 	{
 		tab_tree_model m;

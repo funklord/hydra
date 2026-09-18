@@ -547,6 +547,18 @@ child makes a ring, the outline writer recurses forever, and everything below
 the drag disappears from the file. §9.4 refuses the same move for the reorganizer
 and this is that rule one gesture closer to the user.
 
+**And reorder from the keyboard, not only by drag.** Ctrl+Shift+Up /
+Ctrl+Shift+Down move the current row one place among its siblings, with Move Up
+/ Move Down on the context menu, greyed at the ends. Both gate on the same
+tree-order condition a drag does -- under a sort a move would not show -- so the
+two ways to reorder agree on when it means anything. The move itself is
+`tab_tree_model::move_sibling`, a remove-then-insert that keeps the node alive:
+it reuses the notification pattern the rest of the model uses rather than
+`beginMoveRows`, whose destination index counts the row as still present and is
+a well-worn source of off-by-one view corruption. Tested at the model -- a row
+moves up, back down, and refuses at either end -- and nullifying the target
+index fails exactly those.
+
 ### A tab's name, and the two different things it can be
 
 Reported rather than found: browsing to another page left the old label in

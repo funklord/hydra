@@ -714,6 +714,31 @@ int tab_tree_model::remove_nodes(const QList<node *> &nodes, bool remember) {
 	return removed;
 }
 
+bool tab_tree_model::move_sibling(node *n, int delta) {
+	if (!n || !n->parent)
+		return false;
+	node *parent = n->parent;
+	const int row = parent->children.indexOf(n);
+	const int to = row + delta;
+	if (row < 0 || to < 0 || to >= parent->children.size())
+		return false;
+	// A remove then an insert, keeping the node alive -- the pattern the rest of
+	// this file uses, which sidesteps beginMoveRows' destination-index trap.
+	// After the removal the tail has shifted down by one, so `to = row + delta`
+	// lands correctly for both directions.
+	const QModelIndex pidx = index_for_node(parent);
+	beginRemoveRows(pidx, row, row);
+	parent->children.removeAt(row);
+	endRemoveRows();
+	beginInsertRows(pidx, to, to);
+	parent->children.insert(to, n);
+	endInsertRows();
+	renumber(parent);
+	reindex();
+	emit structure_changed();
+	return true;
+}
+
 void tab_tree_model::update_node(node *n, const QString &title,
                                   const QString &url, const QStringList &tags) {
 	if (!n)

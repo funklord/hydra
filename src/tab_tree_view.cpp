@@ -399,6 +399,18 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	if (n)
 		dup_a = menu.addAction("Dup&licate");
 
+	// Reorder among siblings, greyed at the ends -- only where a move would
+	// show, which is tree order (a drag is refused otherwise for the same
+	// reason). The shortcut is Ctrl+Shift+Up / Ctrl+Shift+Down.
+	QAction *up_a = nullptr, *down_a = nullptr;
+	if (n && n->parent && reordering_is_meaningful()) {
+		const int row = n->parent->children.indexOf(n);
+		up_a = menu.addAction("Move &Up");
+		up_a->setEnabled(row > 0);
+		down_a = menu.addAction("Move &Down");
+		down_a->setEnabled(row >= 0 && row + 1 < n->parent->children.size());
+	}
+
 	QAction *del_a = nullptr, *props_a = nullptr;
 	if (n) {
 		menu.addSeparator();
@@ -415,6 +427,8 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	else if (chosen == copy_url_a)  QGuiApplication::clipboard()->setText(n->url);
 	else if (chosen == external_a)  emit open_externally_requested(n);
 	else if (chosen == dup_a)       m->duplicate_node(n);
+	else if (chosen == up_a)        m->move_sibling(n, -1);
+	else if (chosen == down_a)      m->move_sibling(n, 1);
 	else if (chosen == lock_a)      emit lock_requested(n);
 	else if (chosen == folder_a) {
 		// Into the folder that was clicked, or beside a tab -- which is what a
@@ -558,6 +572,21 @@ void tab_tree_view::keyPressEvent(QKeyEvent *event) {
 			edit_properties(n);
 			return;
 		}
+	}
+	// Ctrl+Shift+Up / Ctrl+Shift+Down reorders the current row among its
+	// siblings -- but only in tree order, since under any other sort the
+	// canonical order the file keeps is not what is shown and a move would do
+	// nothing visible, exactly as a drag-reorder is refused there. Consumed on
+	// match so it never falls through to extending the selection.
+	if ((event->modifiers() & Qt::ControlModifier) &&
+	    (event->modifiers() & Qt::ShiftModifier) &&
+	    (event->key() == Qt::Key_Up || event->key() == Qt::Key_Down)) {
+		if (reordering_is_meaningful())
+			if (node *n = node_at_index(currentIndex()))
+				if (tab_tree_model *m = source_model())
+					if (m->move_sibling(n, event->key() == Qt::Key_Up ? -1 : 1))
+						show_node(n);
+		return;
 	}
 	QTreeView::keyPressEvent(event);
 }

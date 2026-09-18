@@ -142,6 +142,10 @@ public:
 	// The subset of `nodes` with no ancestor also in `nodes`. Pure and static
 	// so the safety filter above can be tested without touching the tree.
 	static QList<node *> top_level_only(const QList<node *> &nodes);
+	// Move a node one place up (delta -1) or down (+1) among its siblings, in
+	// canonical order. Returns false at the ends. Reordering is only visible in
+	// tree order; the view gates on that, as it does for a drag.
+	bool  move_sibling(node *n, int delta);
 	// Reopen the most recently deleted subtree (Ctrl+Shift+T). Deletion is
 	// otherwise permanent -- `remove_node` does `delete n` and takes the whole
 	// subtree -- so a *user* delete (remember=true) stashes a faithful copy,
