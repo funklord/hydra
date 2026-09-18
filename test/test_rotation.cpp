@@ -694,6 +694,32 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	section("Ctrl+PageDown steps between open tabs and wraps");
+	{
+		main_window m(&factory, &policy, &filter);
+		m.show();
+		spin(200);
+		node *t1 = m.m_model->add_tab(nullptr, "one", "https://1.example/");
+		node *t2 = m.m_model->add_tab(nullptr, "two", "https://2.example/");
+		node *t3 = m.m_model->add_tab(nullptr, "three", "https://3.example/");
+		auto open = [&](node *n) {
+			const QModelIndex idx =
+			  m.m_proxy->mapFromSource(m.m_model->index_for_node(n));
+			emit m.m_tree->activated(idx);
+			spin(120);
+		};
+		open(t1);
+		open(t2);
+		open(t3);   // t3 is the current tab
+		check(t1 && t2 && t3, "three tabs opened");
+		check(m.activate_adjacent_tab(true) == t1,
+		      "next from the last wraps round to the first");
+		check(m.activate_adjacent_tab(true) == t2, "then forward to the second");
+		check(m.activate_adjacent_tab(false) == t1, "and back to the first");
+		check(m.activate_adjacent_tab(false) == t3,
+		      "previous from the first wraps round to the last");
+	}
+
 	section("find on page can be told to match case");
 	{
 		main_window m(&factory, &policy, &filter);

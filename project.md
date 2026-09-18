@@ -627,6 +627,19 @@ empty tab is a question about where to go; a new folder asks for its name on the
 spot, because a folder called "New folder" is one somebody has to come back and
 rename, and they will not.
 
+**Flipping between open tabs, from the page.** Switching tabs meant a trip to
+the tree -- a click, or an arrow-and-Enter with the keyboard in the sidebar.
+There was no Ctrl+PageDown, the shortcut every browser binds to step the tab
+strip while the keyboard is still in the page. Go -> Next Tab (Ctrl+PageDown)
+and Previous Tab (Ctrl+PageUp) walk the open tabs in tree order and wrap; a
+suspended tab counts and open_node restores it on arrival, and with fewer than
+two open the keys do nothing. The strip is the tree itself, so "the tabs" are
+the open and suspended nodes depth-first -- not the whole bookmark tree, which
+would make the keys step through hundreds of rows. The test opens three and
+checks that forward from the last wraps to the first, forward again advances,
+and previous wraps the other way; flipping the one direction line fails
+exactly those.
+
 **And the right-click menu was nearly empty.** It offered Open and Suspend, and
 returned early for folders — so the containers everything lives in could not be
 renamed, emptied or added to, and a right-click on blank space did nothing. It

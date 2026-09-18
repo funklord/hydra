@@ -487,6 +487,12 @@ private:
 	int m_crash_cap = 0;
 public:
 
+	// Show the next or previous open tab (Ctrl+PageDown / Ctrl+PageUp), the
+	// browser-standard flip through the tab strip -- here the open tabs in tree
+	// order, wrapping. Returns the tab activated, or null when fewer than two
+	// exist. Public, like the members below, so the shortcut and a test drive it.
+	node *activate_adjacent_tab(bool forward);
+
 	tab_tree_model  *m_model = nullptr;
 	tree_sort_proxy *m_proxy = nullptr;
 	tab_tree_view   *m_tree  = nullptr;

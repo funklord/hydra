@@ -1594,6 +1594,17 @@ QMenuBar *main_window::build_menu_bar() {
 	go_menu->addSeparator();
 	m_reload_action = go_menu->addAction("&Reload", QKeySequence::Refresh, this,
 	                                      &main_window::reload_page);
+	go_menu->addSeparator();
+	// **Flip between open tabs from the page**, with no trip to the tree and
+	// while the keyboard is in the web view -- Ctrl+PageDown / Ctrl+PageUp, as
+	// every browser binds them. They step the open tabs in tree order and wrap;
+	// a suspended tab counts and open_node restores it on arrival.
+	go_menu->addAction("&Next Tab", QKeySequence(Qt::CTRL | Qt::Key_PageDown),
+	                    this, [this] { activate_adjacent_tab(true); })
+	    ->setStatusTip("Show the next open tab");
+	go_menu->addAction("&Previous Tab", QKeySequence(Qt::CTRL | Qt::Key_PageUp),
+	                    this, [this] { activate_adjacent_tab(false); })
+	    ->setStatusTip("Show the previous open tab");
 
 	// ---- Tools: grouped, with Settings last ---------------------------------
 	//
@@ -4941,6 +4952,34 @@ void main_window::on_tree_activated(const QModelIndex &proxy_index) {
 		return;
 	node *n = m_model->node_for_index(m_proxy->mapToSource(proxy_index));
 	open_node(n);
+}
+
+// Open tabs in tree order, depth-first. A suspended tab is an open tab whose
+// view was freed, so it belongs in the strip and open_node restores it.
+static void collect_open_tabs(node *p, QList<node *> &out) {
+	for (node *k : p->children) {
+		if (k->type == node_type::open_tab ||
+		    k->type == node_type::suspended_tab)
+			out << k;
+		collect_open_tabs(k, out);
+	}
+}
+
+node *main_window::activate_adjacent_tab(bool forward) {
+	QList<node *> tabs;
+	if (m_model && m_model->root())
+		collect_open_tabs(m_model->root(), tabs);
+	if (tabs.size() < 2)
+		return nullptr;
+	node *cur = nullptr;
+	if (web_view_backend *v = current_view())
+		cur = m_model->node_by_id(m_views_by_id.key(v));
+	const int idx = tabs.indexOf(cur);
+	const int next = idx < 0
+	  ? (forward ? 0 : tabs.size() - 1)
+	  : (idx + (forward ? 1 : -1) + tabs.size()) % tabs.size();
+	open_node(tabs.at(next));
+	return tabs.at(next);
 }
 
 // Where a new node goes: beside whatever is selected, or at the top level when
