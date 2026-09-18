@@ -20833,6 +20833,37 @@ default is the one-line base body and the Android path, untestable in the
 offscreen suite for the same reason the other Android backends are -- it is
 verified by reading, like them.
 
+## A Not-secure mark, the modern way round
+
+The address bar said nothing about whether a page was reached over a secure
+connection. hydra warns about plaintext in the moments it matters most --
+a permission prompt and an auth prompt both pass the page's scheme so the
+dialog can say the origin is not https -- but a page just sitting there over
+plain http carried no persistent signal at all.
+
+The indicator is deliberately shaped the modern way: it marks **only
+insecurity**. A leading "Not secure" mark appears on an `http://` page and on
+nothing else -- not a padlock on https, which every major browser has dropped
+because badging the default expectation taught people to read its absence as
+danger. `scheme_is_insecure` is the whole rule and it is deliberately narrow:
+http among page schemes, case-insensitively, and nothing else -- https is
+secure, and `file:`, `about:` and `data:` are not network loads to worry
+about. It is a free function, pure and tested on its own, so the bar and the
+test read the same answer.
+
+The mark is a leading action on the address field, hidden at creation and
+toggled in `update_navigation` from the current page's scheme -- the same
+place the per-tab action states are refreshed, so it follows a navigation and
+a tab switch alike and is hidden when there is no page. Only the top-level
+scheme is judged; mixed content within an https page is a deeper question this
+does not claim to answer, which the tooltip does not overstate.
+
+Two tests. The classifier is checked directly on http (both cases), https,
+a file url, about: and an empty url. The wiring opens a plain-http tab and
+asserts the mark appears, then navigates to https and asserts it clears --
+reading the action by its object name and its own visible flag, which does
+not depend on the window being on screen.
+
 ## Ctrl+W: the close every browser has and this one did not
 
 There was no keyboard way to close the tab you were looking at. The tree's

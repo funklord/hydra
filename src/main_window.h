@@ -65,6 +65,13 @@ class ollama_provider;
 class claude_provider;
 struct node;
 
+// True for a page loaded over a plaintext connection, where what the user
+// types can be read on the wire. Among page schemes only http qualifies:
+// https is secure, and file:, about: and data: are not network loads at all.
+// Following the modern convention this signals only *insecurity* -- https is
+// the default expectation now, not a padlock to celebrate.
+bool scheme_is_insecure(const QUrl &url);
+
 // The shell: a splitter with the tab tree on the left and a stack of
 // chrome-less web views on the right (architecture doc sec 6). Tabs follow a
 // lifecycle -- unopened -> open (live view) -> suspended (history blob) -- with a
@@ -649,6 +656,7 @@ public:
 	QAction            *m_fwd_action    = nullptr;
 	QAction            *m_reload_action = nullptr;
 	QAction            *m_hard_reload_action = nullptr;
+	QAction            *m_insecure_action = nullptr;
 	QAction            *m_print_action  = nullptr;
 	QAction            *m_source_action = nullptr;
 	QAction            *m_desktop_site_action = nullptr;

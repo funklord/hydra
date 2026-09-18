@@ -771,6 +771,22 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	  "Type a web address to go to it, or words to search for");
 	m_address->setPlaceholderText("Address");
 	m_address->setClearButtonEnabled(true);
+	// A leading "Not secure" mark, shown only on plain-http pages. Hidden by
+	// default and toggled from the current page's scheme in update_navigation;
+	// https carries nothing, the modern convention that a secure connection is
+	// the expectation rather than a badge.
+	m_insecure_action = m_address->addAction(
+	  themed_icon({ "security-low", "dialog-warning" }, style(),
+	              QStyle::SP_MessageBoxWarning),
+	  QLineEdit::LeadingPosition);
+	m_insecure_action->setObjectName("insecure_indicator");
+	// Text for a screen reader and for the action-label invariant the suite
+	// checks; a QLineEdit action renders only its icon, so this does not show.
+	m_insecure_action->setText("Not secure");
+	m_insecure_action->setToolTip("Not secure: this page was loaded over plain "
+	                              "HTTP, so what you type here can be read or "
+	                              "changed on the network.");
+	m_insecure_action->setVisible(false);
 	// **What the on-screen keyboard should do here, which nothing had told
 	// it.** No input-method hints were set anywhere in this application, so on
 	// a phone this box behaved like a message box: the first letter
@@ -4121,6 +4137,10 @@ void main_window::update_navigation() {
 	m_reload_action->setEnabled(v != nullptr);
 	if (m_hard_reload_action)
 		m_hard_reload_action->setEnabled(v != nullptr);
+	// Shown only where the current page is plain http; hidden otherwise and
+	// when there is no page.
+	if (m_insecure_action)
+		m_insecure_action->setVisible(v && scheme_is_insecure(v->url()));
 }
 
 // **A window called "Hydra" tells the task switcher nothing.** Every window
@@ -6280,6 +6300,12 @@ void main_window::restore_histories(node *from) {
 // refused certificate, a blocked popup and a dead renderer all say their piece
 // there, and all of them could be erased by the next url_changed. The status
 // bar is for what is *happening*; the address bar is for where you are.
+// Only http among page schemes: see the header. Kept tiny and pure so the
+// address bar's indicator and a test read the same answer.
+bool scheme_is_insecure(const QUrl &url) {
+	return url.scheme().compare(QLatin1String("http"), Qt::CaseInsensitive) == 0;
+}
+
 void main_window::update_address(const QString &url, bool force) {
 	// **And not over somebody's typing.** A page that moves on its own -- a
 	// meta refresh, a script redirect, a slow load that commits late -- emits

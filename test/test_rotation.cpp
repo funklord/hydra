@@ -890,6 +890,47 @@ int main(int argc, char **argv) {
 		       "the shell asks the backend to reload past the cache");
 	}
 
+	section("scheme_is_insecure marks plain http and nothing else");
+	{
+		check(scheme_is_insecure(QUrl("http://x.example/")),
+		       "plain http is insecure");
+		check(scheme_is_insecure(QUrl("HTTP://x.example/")),
+		       "and the scheme test ignores case");
+		check(!scheme_is_insecure(QUrl("https://x.example/")),
+		       "https is not");
+		check(!scheme_is_insecure(QUrl("file:///tmp/a.html")),
+		       "a local file is not a network load");
+		check(!scheme_is_insecure(QUrl("about:blank")), "about: is not");
+		check(!scheme_is_insecure(QUrl()), "and an empty url is not");
+	}
+
+	section("the address bar warns on a plain-http page and clears on https");
+	{
+		main_window m(&factory, &policy, &filter);
+		m.show();
+		spin(200);
+		QAction *warn = nullptr;
+		for (QAction *a : m.findChildren<QAction *>())
+			if (a->objectName() == "insecure_indicator") { warn = a; break; }
+		check(warn, "the Not-secure indicator exists");
+		check(warn && !warn->isVisible(), "and is hidden with no page open");
+		node *t = m.m_model->add_tab(nullptr, "plain", "http://plain.example/");
+		fake_view *v = nullptr;
+		if (t) {
+			const QModelIndex idx =
+			  m.m_proxy->mapFromSource(m.m_model->index_for_node(t));
+			emit m.m_tree->activated(idx);
+			spin(200);
+			v = static_cast<fake_view *>(m.m_views_by_id.value(t->id, nullptr));
+		}
+		check(warn && warn->isVisible(), "a plain-http page raises Not secure");
+		if (v)
+			v->navigated_to(QUrl("https://safe.example/"));
+		spin(150);
+		check(warn && !warn->isVisible(),
+		       "and moving to https clears it");
+	}
+
 	section("the address bar keeps its cursor while the page reports where it is");
 
 	// **Reported from use: "difficulty entering and editing the URL text".**
