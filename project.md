@@ -2577,6 +2577,30 @@ a folder holding a nested folder rises with that inner folder's own child
 still inside it. A dissolve that skipped the lock check reddens the refusal,
 and one that flattened recursively reddens the nested-folder check.
 
+## Recently Closed: the list behind Ctrl+Shift+T
+
+Deletion has always been reopenable -- the model keeps the last 25 closed
+subtrees, capped and oldest-dropped -- but only the most recent one could be
+brought back, one at a time, in reverse. The data for the whole list was there
+and unreachable.
+
+`reopen_closed_at(index)` generalises `reopen_closed`, which is now just it at
+0, and `closed_title`/`closed_count` read the list -- all newest-first, since
+the store is appended to and the last entry is the most recent. An Edit >
+Recently Closed submenu lists them and reopens the chosen one. It is rebuilt
+on `aboutToShow` rather than kept in step with the model, for the reason this
+file keeps arriving at -- a standing second copy of a changing list drifts --
+and shows a disabled "Nothing closed yet" rather than opening onto an empty
+menu that reads as broken.
+
+The model API is tested where it lives: closing alpha, beta then gamma leaves
+three remembered newest-first, reopening index 1 brings back beta rather than
+the newest and drops it from the list, and `reopen_closed` still takes gamma.
+A `reopen_closed_at` that ignored its index and took the newest would redden
+"brings back beta, not the newest"; an oldest-first `closed_title` would redden
+the ordering checks. The submenu itself is a standard `aboutToShow` rebuild
+over that tested API, and the suite checks it is present in the menu bar.
+
 Tested pure: grouping two of four loose tabs makes a folder holding both in
 order, at the first one's place, with the other two untouched; grouping a
 folder together with a child inside it and a loose tab moves the folder and the

@@ -1459,6 +1459,33 @@ QMenuBar *main_window::build_menu_bar() {
 	m_reopen_action->setEnabled(false);
 	m_reopen_action->setStatusTip("Bring back the most recently deleted tab or "
 	                               "folder");
+
+	// The full list behind Ctrl+Shift+T: pick a specific one, not only the
+	// last. Rebuilt each time it opens, because the set changes as tabs are
+	// closed and reopened -- a standing copy would be a second thing to keep
+	// in step with the model. Newest-first, the order the model counts in.
+	QMenu *recent = edit_menu->addMenu("Recently &Closed");
+	recent->setObjectName("recently_closed_menu");
+	connect(recent, &QMenu::aboutToShow, this, [this, recent] {
+		recent->clear();
+		const int n = m_model ? m_model->closed_count() : 0;
+		if (n == 0) {
+			// A disabled line rather than an empty menu, so the entry never
+			// opens onto nothing and reads as broken.
+			QAction *none = recent->addAction("Nothing closed yet");
+			none->setEnabled(false);
+			return;
+		}
+		for (int i = 0; i < n; ++i) {
+			const QString t = m_model->closed_title(i);
+			QAction *a = recent->addAction(
+			  t.isEmpty() ? QStringLiteral("(untitled)") : t);
+			connect(a, &QAction::triggered, this, [this, i] {
+				if (node *reopened = m_model->reopen_closed_at(i))
+					m_tree->show_node(reopened);
+			});
+		}
+	});
 	edit_menu->addSeparator();
 
 	// **The address it is showing, not the address it was opened at.** A

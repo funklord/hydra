@@ -890,6 +890,17 @@ int main(int argc, char **argv) {
 		       "the shell asks the backend to reload past the cache");
 	}
 
+	section("the Edit menu carries a Recently Closed list");
+	{
+		main_window m(&factory, &policy, &filter);
+		m.show();
+		spin(150);
+		// Found as a QObject to avoid pulling in <QMenu> here; the wiring under
+		// test is that the submenu exists in the Edit menu at all.
+		check(m.findChild<QObject *>("recently_closed_menu") != nullptr,
+		       "a Recently Closed submenu is wired into the menu bar");
+	}
+
 	section("scheme_is_insecure marks plain http and nothing else");
 	{
 		check(scheme_is_insecure(QUrl("http://x.example/")),

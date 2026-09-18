@@ -153,7 +153,14 @@ public:
 	// removals (a mirror refresh, a reorganize) pass remember=false and are not
 	// reopenable, so Reopen never resurrects churn the user did not do.
 	bool  has_closed() const { return !m_closed.isEmpty(); }
+	// How many closed tabs are remembered, and the title of one, counted
+	// newest-first (0 is the most recently closed). For a Recently Closed list.
+	int   closed_count() const { return int(m_closed.size()); }
+	QString closed_title(int index) const;
 	node *reopen_closed();
+	// Reopen a specific remembered tab, newest-first index. reopen_closed() is
+	// this at 0.
+	node *reopen_closed_at(int index);
 	// Edit what a node *is*, as opposed to where it sits. The id is deliberately
 	// not editable: it keys the state blob and the outline file, and letting a
 	// person retype it would orphan a tab's history with no warning.

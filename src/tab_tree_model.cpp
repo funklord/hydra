@@ -751,10 +751,28 @@ bool tab_tree_model::remove_node(node *n, bool remember) {
 	return true;
 }
 
+QString tab_tree_model::closed_title(int index) const {
+	// Newest-first: the list is appended to, so 0 is the last entry.
+	if (index < 0 || index >= m_closed.size())
+		return QString();
+	const node *t = m_closed.at(m_closed.size() - 1 - index).tree;
+	if (!t)
+		return QString();
+	if (!t->title.isEmpty())
+		return t->title;
+	return t->url.isEmpty() ? QStringLiteral("(untitled)") : t->url;
+}
+
 node *tab_tree_model::reopen_closed() {
-	if (m_closed.isEmpty())
+	return reopen_closed_at(0);
+}
+
+node *tab_tree_model::reopen_closed_at(int index) {
+	// Newest-first index, so 0 maps to the last entry -- what reopen_closed
+	// took before this was generalised, and still does through it.
+	if (index < 0 || index >= m_closed.size())
 		return nullptr;
-	closed_entry e = m_closed.takeLast();
+	closed_entry e = m_closed.takeAt(m_closed.size() - 1 - index);
 	node *sub = e.tree;
 	// The folder it lived in may be gone; the root always answers.
 	node *parent = node_by_id(e.parent_id);

@@ -625,6 +625,30 @@ int main(int argc, char **argv) {
 		check(t->parent == inner, "with its own child still inside it");
 	}
 
+	section("recently closed remembers each tab newest-first and reopens any");
+	{
+		tab_tree_model m;
+		node *a = m.add_tab(m.root(), "alpha", "http://a/");
+		node *b = m.add_tab(m.root(), "beta", "http://b/");
+		node *c = m.add_tab(m.root(), "gamma", "http://c/");
+		m.remove_node(a, /*remember=*/true);
+		m.remove_node(b, /*remember=*/true);
+		m.remove_node(c, /*remember=*/true);
+		check(m.closed_count() == 3, "three closed tabs are remembered");
+		check(m.closed_title(0) == "gamma", "newest first is gamma");
+		check(m.closed_title(1) == "beta", "then beta");
+		check(m.closed_title(2) == "alpha", "then alpha");
+		node *back = m.reopen_closed_at(1);
+		check(back && back->title == "beta",
+		       "reopening index 1 brings back beta, not the newest");
+		check(m.closed_count() == 2, "and that one leaves the list");
+		check(m.closed_title(0) == "gamma" && m.closed_title(1) == "alpha",
+		       "the rest stay in newest-first order");
+		node *last = m.reopen_closed();
+		check(last && last->title == "gamma",
+		       "reopen_closed still takes the most recent");
+	}
+
 	section("a multi-selection deletes as top-level roots, dropping covered children");
 	{
 		tab_tree_model m;
