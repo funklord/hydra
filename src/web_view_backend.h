@@ -112,6 +112,18 @@ public:
 	virtual bool is_muted() const { return false; }
 	virtual bool can_mute() const { return false; }
 
+	// Save a copy of this page to disk.
+	//
+	// **Not pure, and greyed on `can_save_page()`** -- the same shape as
+	// print() and for the same reason. Qt WebEngine saves the page as a single
+	// MHTML file, which the profile's download handler receives like any other
+	// download: it lands in the downloads folder, shows in the list and
+	// persists, so there is no chooser here and none of print()'s dialog
+	// ownership. Android's WebView is not wired to a page save, so there
+	// `can_save_page()` is false and the entry is greyed rather than silent.
+	virtual void save_page() {}
+	virtual bool can_save_page() const { return false; }
+
 	virtual void apply_settings(const view_settings &s) = 0;
 	virtual void set_permission_decider(permission_decider fn) = 0;
 

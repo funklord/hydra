@@ -230,6 +230,13 @@ public:
 	bool is_muted() const override { return muted; }
 	bool can_mute() const override { return true; }
 
+	// Recorded for the same reason the others are: a no-op save over the
+	// base-class can_save_page false would let a menu entry that never
+	// reaches the view look exactly like one that works.
+	int  saved = 0;
+	void save_page() override { ++saved; }
+	bool can_save_page() const override { return true; }
+
 	QLabel *m_widget = nullptr;
 	QUrl    m_url;
 };
@@ -790,6 +797,31 @@ int main(int argc, char **argv) {
 		m.toggle_mute();
 		check(v && !v->muted, "toggling again unmutes it");
 		check(mute && !mute->isChecked(), "and the toggle follows it back");
+	}
+
+	section("Save Page hands the page to the backend, and greys where it cannot");
+	{
+		main_window m(&factory, &policy, &filter);
+		m.show();
+		spin(200);
+		node *t = m.m_model->add_tab(nullptr, "a page", "https://save.example/");
+		fake_view *v = nullptr;
+		if (t) {
+			const QModelIndex idx =
+			  m.m_proxy->mapFromSource(m.m_model->index_for_node(t));
+			emit m.m_tree->activated(idx);
+			spin(200);
+			v = static_cast<fake_view *>(m.m_views_by_id.value(t->id, nullptr));
+		}
+		QAction *save = nullptr;
+		for (QAction *a : m.findChildren<QAction *>())
+			if (a->text() == "Save &Page") { save = a; break; }
+		check(v && save, "a tab and a Save Page action");
+		check(save && save->isEnabled(),
+		       "the action is live where the backend can save");
+		check(v && v->saved == 0, "and nothing is saved until asked");
+		m.save_page();
+		check(v && v->saved == 1, "Save Page hands the page to the backend");
 	}
 
 	section("the address bar keeps its cursor while the page reports where it is");

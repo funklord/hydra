@@ -1225,6 +1225,19 @@ bool qtwebengine_view::can_mute() const {
 	return m_page != nullptr;
 }
 
+// SavePage triggers a download the profile's downloadRequested handler
+// receives -- named, placed in the downloads folder and noted -- exactly like
+// any other download, so the save shares that whole path rather than owning a
+// chooser. The default format is a single MHTML file.
+void qtwebengine_view::save_page() {
+	if (m_page)
+		m_page->triggerAction(QWebEnginePage::SavePage);
+}
+
+bool qtwebengine_view::can_save_page() const {
+	return m_page != nullptr;
+}
+
 void qtwebengine_view::set_authenticator(authenticator fn) {
 	m_authenticator = std::move(fn);
 }

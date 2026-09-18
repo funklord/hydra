@@ -1365,6 +1365,16 @@ QMenuBar *main_window::build_menu_bar() {
 	});
 	m_print_action->setStatusTip("Print this page");
 	m_print_action->setEnabled(false);
+
+	// A copy of the page to the downloads folder, not a chooser: the save
+	// is a download like any other (see the backend), so it goes where
+	// downloads go. Greyed where the backend cannot save, as Print is.
+	m_save_page_action = file_menu->addAction("Save &Page",
+	                                          QKeySequence("Ctrl+Shift+S"),
+	                                          this, &main_window::save_page);
+	m_save_page_action->setStatusTip("Save a copy of this page to your "
+	                                 "downloads folder");
+	m_save_page_action->setEnabled(false);
 	file_menu->addSeparator();
 
 	// Both importers together, which is the one thing the flat list made
@@ -1845,6 +1855,11 @@ void main_window::present_fullscreen(web_view_backend *view, bool on) {
 		m_page_fullscreen = false;
 		view->exit_fullscreen();
 	}
+}
+
+void main_window::save_page() {
+	if (web_view_backend *v = current_view())
+		v->save_page();
 }
 
 void main_window::toggle_mute() {
@@ -4047,6 +4062,9 @@ void main_window::update_navigation() {
 		m_mute_action->setEnabled(v && v->can_mute());
 		m_mute_action->setChecked(v && v->is_muted());
 	}
+
+	if (m_save_page_action)
+		m_save_page_action->setEnabled(v && v->can_save_page());
 
 	m_back_action->setEnabled(v && !pinned && v->can_go_back());
 	m_fwd_action->setEnabled(v && !pinned && v->can_go_forward());

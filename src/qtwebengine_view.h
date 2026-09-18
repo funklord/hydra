@@ -50,6 +50,8 @@ public:
 	void set_muted(bool muted) override;
 	bool is_muted() const override;
 	bool can_mute() const override;
+	void save_page() override;
+	bool can_save_page() const override;
 	void apply_settings(const view_settings &s) override;
 	void set_permission_decider(permission_decider fn) override;
 	void set_capture_chooser(capture_chooser fn) override;

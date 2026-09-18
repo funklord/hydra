@@ -501,6 +501,11 @@ public:
 	// last click, so switching tabs shows that tab's answer.
 	void toggle_mute();
 
+	// Save a copy of the current page to the downloads folder (Ctrl+Shift+S).
+	// Public so the shortcut and a test drive it. Greyed where the backend
+	// cannot save (Android), like Print.
+	void save_page();
+
 	tab_tree_model  *m_model = nullptr;
 	tree_sort_proxy *m_proxy = nullptr;
 	tab_tree_view   *m_tree  = nullptr;
@@ -638,6 +643,7 @@ public:
 	QAction            *m_source_action = nullptr;
 	QAction            *m_desktop_site_action = nullptr;
 	QAction            *m_mute_action  = nullptr;
+	QAction            *m_save_page_action = nullptr;
 	bool                m_page_fullscreen = false;
 	web_view_backend   *m_kiosk_view      = nullptr;
 	QAction            *m_key_action    = nullptr;

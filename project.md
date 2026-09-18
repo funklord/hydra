@@ -20757,6 +20757,40 @@ that works. Sabotaging the flip in `toggle_mute` (drop the `!`) reddens "Mute
 Tab silences the tab"; sabotaging the `setChecked` refresh reddens "the toggle
 now reads muted".
 
+## Save Page, riding the download path instead of owning a chooser
+
+There was no way to keep a copy of a page. Print put it on paper and the tree
+file kept the *address*, but the page itself -- an article to read offline, a
+receipt, a page that will change -- could not be saved at all.
+
+It is the fourth optional-virtual capability on the seam, after stop, print
+and mute: `save_page`/`can_save_page`, not pure, greyed on `can_save_page()`.
+What makes it smaller than Print rather than larger is that it owns no dialog.
+`QWebEnginePage::triggerAction(SavePage)` starts a download, and the profile's
+`downloadRequested` handler already accepts any download, names it, places it
+in the downloads folder and notes it -- so a saved page lands where downloads
+land, appears in the downloads list, and now survives a restart with the rest
+of that list. The default format is a single MHTML file, so there is no
+resource directory to manage either. Print owns its `QPrintDialog` because
+printing has nowhere else to go; saving has the whole download path, so
+reaching for a `QFileDialog` would have been a second way to choose a
+destination that hydra's downloads deliberately do not offer.
+
+**File > Save Page (Ctrl+Shift+S)** -- not "Save Page As...", because the
+ellipsis and the "As" would promise a chooser that is not there; the entry
+saves to the downloads folder and its status tip says so. Ctrl+S was already
+Save Tree. Android's WebView is not wired to a page save, so `can_save_page()`
+is false there and the entry is greyed, like Print.
+
+The seam test drives the real shell: it activates a tab, fires Save Page, and
+asserts the `fake_view` recorded the call and that the menu action is enabled
+where the backend can save. Sabotaging `main_window::save_page` so it does not
+call the view reddens "hands the page to the backend". **What the offscreen
+suite cannot show is the file appearing** -- that needs a real engine and the
+download it triggers -- so the integration is by inspection of the
+`downloadRequested` handler that every other download already goes through,
+and the end-to-end save is left to verify on a device.
+
 ## Zoom had two routes in and one of them was remembered
 
 The same lens again -- a value with two writers where only one reaches the
