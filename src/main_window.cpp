@@ -1428,8 +1428,9 @@ QMenuBar *main_window::build_menu_bar() {
 	});
 	copy_addr->setStatusTip("Copy the selected tab's address");
 	QAction *dup_act = edit_menu->addAction("Dup&licate", this, [this] {
-		if (node *n = selected_node())
-			m_model->duplicate_node(n);
+		// The whole selection, as the tip says -- this copied only the current
+		// row while several were highlighted, the same gap Delete had.
+		m_tree->duplicate_selection();
 	});
 	dup_act->setStatusTip("Make a copy of the selection beside it");
 	edit_menu->addSeparator();

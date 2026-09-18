@@ -2538,6 +2538,12 @@ a non-overlapping set, so the sabotage cannot instead crash on the freed child.
 A right-click within a multi-selection deletes the selection; on a row outside
 it, that one row.
 
+**Duplicate got the same treatment**, since it had the same gap: Edit ->
+Duplicate copied only the current row while its tip promised "the selection".
+`duplicate_nodes` runs `top_level_only` first for the same reason -- duplicating
+a folder already copies what is inside it, so a separately-selected child would
+be copied twice -- and the context menu is selection-aware the same way.
+
 ## Download transport seam (arch §11.4)
 
 `download_manager` no longer contains a transport. It owns the queue, the

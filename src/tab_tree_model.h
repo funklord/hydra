@@ -171,6 +171,10 @@ public:
 	bool  set_page_title(node *n, const QString &title);
 	// A duplicate under the same parent, with an id of its own.
 	node *duplicate_node(node *n);
+	// Duplicate several nodes at once (a multi-selection). Descendants of
+	// another selected node are dropped -- duplicating a folder already copies
+	// what is inside it. Returns how many top-level copies were made.
+	int   duplicate_nodes(const QList<node *> &nodes);
 
 	// Pin or unpin a node (architecture doc sec 5.5). Returns whether anything
 	// changed, for the same reason `set_page_title` does: the caller saves the

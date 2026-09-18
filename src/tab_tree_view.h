@@ -49,6 +49,9 @@ public:
 	// subtree reopenable, behind one confirmation. Falls back to the single
 	// question for a lone selection. Returns whether anything was removed.
 	bool confirm_and_remove_selection();
+	// Duplicate the whole current selection, covered descendants dropped.
+	// Returns how many copies were made.
+	int duplicate_selection();
 
 	// Make `n` the current row: expanded to, highlighted, scrolled into view.
 	//

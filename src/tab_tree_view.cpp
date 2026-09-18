@@ -426,7 +426,15 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	else if (chosen == sus_a)       emit suspend_requested(n);
 	else if (chosen == copy_url_a)  QGuiApplication::clipboard()->setText(n->url);
 	else if (chosen == external_a)  emit open_externally_requested(n);
-	else if (chosen == dup_a)       m->duplicate_node(n);
+	else if (chosen == dup_a) {
+		// Like Delete: a right-click within a multi-selection copies the
+		// selection; on a row outside it, that one row.
+		const QList<node *> dsel = selected_nodes();
+		if (n && dsel.size() > 1 && dsel.contains(n))
+			duplicate_selection();
+		else
+			m->duplicate_node(n);
+	}
 	else if (chosen == up_a)        m->move_sibling(n, -1);
 	else if (chosen == down_a)      m->move_sibling(n, 1);
 	else if (chosen == lock_a)      emit lock_requested(n);
@@ -556,6 +564,11 @@ bool tab_tree_view::confirm_and_remove_selection() {
 	if (QMessageBox::question(this, "Delete", what) != QMessageBox::Yes)
 		return false;
 	return m->remove_nodes(roots, /*remember=*/true) > 0;
+}
+
+int tab_tree_view::duplicate_selection() {
+	tab_tree_model *m = source_model();
+	return m ? m->duplicate_nodes(selected_nodes()) : 0;
 }
 
 void tab_tree_view::keyPressEvent(QKeyEvent *event) {

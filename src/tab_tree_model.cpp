@@ -808,6 +808,14 @@ bool tab_tree_model::set_page_title(node *n, const QString &title) {
 	return true;
 }
 
+int tab_tree_model::duplicate_nodes(const QList<node *> &nodes) {
+	int made = 0;
+	for (node *n : top_level_only(nodes))
+		if (duplicate_node(n))
+			++made;
+	return made;
+}
+
 node *tab_tree_model::duplicate_node(node *n) {
 	if (!n || !n->parent)
 		return nullptr;

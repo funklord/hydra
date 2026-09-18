@@ -498,6 +498,20 @@ int main(int argc, char **argv) {
 		check(!m.has_closed(), "and the stack is empty again");
 	}
 
+	section("duplicating a multi-selection copies each root once");
+	{
+		tab_tree_model m;
+		node *f = m.add_folder(m.root(), "F");
+		node *a = m.add_tab(f, "a", "http://a/");
+		node *loose = m.add_tab(m.root(), "loose", "http://l/");
+		// The folder, its child, and a loose tab: only the folder and the loose
+		// tab are roots -- duplicating the folder already copies the child.
+		const int made = m.duplicate_nodes({f, a, loose});
+		check(made == 2, "two roots duplicated; the covered child is not a third");
+		check(m.root()->children.size() == 4,
+		      "F and its copy, then loose and its copy");
+	}
+
 	section("a node moves up and down among its siblings, and stops at the ends");
 	{
 		tab_tree_model m;
