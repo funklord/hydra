@@ -1351,6 +1351,47 @@ int main(int argc, char **argv) {
 		check(!dm.forget(id), "removing what is not there does nothing");
 	}
 
+	section("a finished download is kept across a restart");
+	{
+		const QString hist = QDir::temp().filePath("hydra-dl-history.json");
+		QFile::remove(hist);
+		{
+			download_manager dm;
+			auto *fs = new fake_download_source;
+			dm.add_source(fs);
+			QString err;
+			const int id = dm.enqueue(QUrl("http://x/keep.bin"), "n", &err);
+			fs->finish(id, true);          // -> done
+			dm.set_history_path(hist);
+			dm.save_history(hist);
+		}
+		download_manager dm2;
+		dm2.load_history(hist);
+		check(dm2.jobs().size() == 1, "the finished download comes back");
+		check(dm2.jobs().size() == 1 &&
+		         dm2.jobs().first().url == QUrl("http://x/keep.bin") &&
+		         dm2.jobs().first().terminal(),
+		      "with its url and its terminal status");
+		QFile::remove(hist);
+	}
+
+	section("history load keeps only the terminal rows in the file");
+	{
+		const QString hist = QDir::temp().filePath("hydra-dl-guard.json");
+		QFile f(hist);
+		check(f.open(QIODevice::WriteOnly), "wrote a history fixture");
+		f.write("[{\"url\":\"http://x/done\",\"status\":\"done\"},"
+		         "{\"url\":\"http://x/run\",\"status\":\"running\"}]");
+		f.close();
+		download_manager dm;
+		dm.load_history(hist);
+		check(dm.jobs().size() == 1, "a non-terminal row in the file is ignored");
+		check(dm.jobs().size() == 1 &&
+		         dm.jobs().first().url == QUrl("http://x/done"),
+		      "and the terminal one is loaded");
+		QFile::remove(hist);
+	}
+
 	section("a kiosk setting survives being written and read back");
 	{
 		kiosk_config c;

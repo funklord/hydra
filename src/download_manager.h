@@ -96,6 +96,17 @@ public:
 	// whether a job was removed.
 	bool forget(int id);
 
+	// Keep finished downloads across a restart. The list is in memory, so a
+	// completed transfer vanished on exit; this writes the terminal rows to a
+	// small file and reads them back. Set the path once and the manager saves
+	// itself whenever the terminal set changes (a finish, a cancel, a remove).
+	// Never persisted: the per-request headers, which carry the page's cookies
+	// and auth, and any job still going -- only history is kept, never a fake
+	// "running" row that cannot resume.
+	void set_history_path(const QString &path) { m_history_path = path; }
+	void save_history(const QString &path) const;
+	void load_history(const QString &path);
+
 	const QList<download_job> &jobs() const { return m_jobs; }
 
 signals:
@@ -117,12 +128,14 @@ private:
 	download_job *find(int id);
 	void on_progress(int id, const download_progress &p);
 	void on_finished(int id, bool ok, const QString &message);
+	void persist_history();
 
 	QList<download_source *> m_sources;
 	QList<download_job>      m_jobs;
 	QSet<int>                m_live;      // handed to a source, not yet finished
 	QSet<QString>            m_consented;
 	int     m_next_id = 1;
+	QString m_history_path;
 	bool    m_pumping    = false;
 	bool    m_pump_again = false;
 	QString m_dir;

@@ -1156,6 +1156,13 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	                         .filePath("extractors.json");
 	keep_or_disown(m_extractors.load(m_extractors_path), &m_extractors_path,
 	                "The saved extractors");
+	// Finished downloads survive a restart: the manager saves the terminal rows
+	// itself whenever they change, and this reads last time's back in.
+	const QString dl_history = QDir(QStandardPaths::writableLocation(
+	                                    QStandardPaths::AppDataLocation))
+	                               .filePath("download-history.json");
+	m_downloads->set_history_path(dl_history);
+	m_downloads->load_history(dl_history);
 	m_tab_counts = new QLabel(this);
 	// Named so a driver can read the live-view count without scanning every
 	// label for one whose text happens to match a pattern.

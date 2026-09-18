@@ -2961,16 +2961,31 @@ false 0%. Multi-file jobs list their files as children once known. Open Folder
 opens the *containing directory*, never the file — the standing rule is that a
 download is written to disk and not opened by us.
 
-**Remove clears a stopped row from the list.** The list only ever grew --
-pause, resume, cancel and open-folder, but nothing dismissed a download once it
-was done, failed or cancelled, so a finished or dead transfer sat there until
-the next launch (the list is in memory and does not persist). Remove, enabled
-only for a terminal row, drops it through `download_manager::forget`, which
-refuses a job that is still going so a running download cannot vanish from view
-mid-transfer. `forget` emits `changed()` like every other mutation, so the same
-coalesced refresh redraws the list. Tested with a fake source driven to done: a
-running job is refused, a finished one is removed, and dropping the terminal
-guard fails exactly that refusal.
+**Remove clears a stopped row from the list.** The list had no way to dismiss
+a download once it was done, failed or cancelled -- and now that finished
+downloads persist (below), a restart does not clear them either, so Remove is
+the way. Enabled only for a terminal row, it drops the row through
+`download_manager::forget`, which refuses a job still going so a running
+download cannot vanish from view mid-transfer. `forget` emits `changed()` like
+every other mutation, so the same coalesced refresh redraws the list. Tested
+with a fake source driven to done: a running job is refused, a finished one is
+removed, and dropping the terminal guard fails exactly that refusal.
+
+**Finished downloads persist across a restart.** The list is in memory, so a
+completed transfer used to vanish on exit -- reported, and a real gap for a
+browser. `download_manager` writes its terminal rows to `download-history.json`
+in the app data directory and reads them back on startup; it holds the path and
+saves itself whenever the terminal set changes -- a finish, a cancel, a remove
+-- so there is no separate save step to forget. Two things are deliberately
+kept out. The per-request headers, which carry the page's cookies and auth (sec
+11.3), are never written: a download record is not a place to spill
+credentials. And a job still going is never persisted -- only terminal rows are
+saved, *and* load rejects any non-terminal row in the file, so a restart cannot
+resurrect a "running" download that has no transfer behind it. The file is
+capped at the most recent 200 and written atomically through `QSaveFile`. The
+load guard is tested against a hand-written fixture of one done row and one
+running row -- only the done one loads -- and dropping the guard fails exactly
+that.
 
 Rows are reconciled in place rather than rebuilt, and `changed()` is coalesced
 on a 200 ms timer: it fires on every chunk of every transfer, and clearing the

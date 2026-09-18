@@ -1,6 +1,12 @@
 #include "download_manager.h"
 
 #include <QStandardPaths>
+#include <QFile>
+#include <QSaveFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 
 download_manager::download_manager(QObject *parent) : QObject(parent) {
 	m_dir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
@@ -236,6 +242,7 @@ void download_manager::on_finished(int id, bool ok, const QString &message) {
 		}
 	}
 	emit changed();
+	persist_history();
 	pump();
 }
 
@@ -250,6 +257,7 @@ void download_manager::cancel(int id) {
 	} else {
 		j->status = download_state::cancelled;
 		emit changed();
+		persist_history();
 	}
 }
 
@@ -261,9 +269,90 @@ bool download_manager::forget(int id) {
 			return false;   // a running download does not vanish from the list
 		m_jobs.removeAt(i);
 		emit changed();
+		persist_history();
 		return true;
 	}
 	return false;
+}
+
+static QString state_name(download_state s) {
+	switch (s) {
+	case download_state::done:      return QStringLiteral("done");
+	case download_state::failed:    return QStringLiteral("failed");
+	case download_state::cancelled: return QStringLiteral("cancelled");
+	default:                        return QString();
+	}
+}
+
+static download_state state_from_name(const QString &n) {
+	if (n == QLatin1String("done"))      return download_state::done;
+	if (n == QLatin1String("failed"))    return download_state::failed;
+	if (n == QLatin1String("cancelled")) return download_state::cancelled;
+	return download_state::queued;   // a non-terminal sentinel, rejected on load
+}
+
+void download_manager::persist_history() {
+	if (!m_history_path.isEmpty())
+		save_history(m_history_path);
+}
+
+void download_manager::save_history(const QString &path) const {
+	QList<const download_job *> hist;
+	for (const download_job &j : m_jobs)
+		if (j.terminal())
+			hist << &j;
+	// Bound the file: keep the most recent, so a long-lived profile does not
+	// accumulate a download record without limit.
+	const int cap = 200;
+	const int from = hist.size() > cap ? hist.size() - cap : 0;
+	QJsonArray arr;
+	for (int i = from; i < hist.size(); ++i) {
+		const download_job &j = *hist[i];
+		QJsonObject o;
+		o.insert("url",    j.url.toString());
+		o.insert("source", j.source_id);
+		o.insert("path",   j.path);
+		o.insert("node",   j.node_id);
+		o.insert("received", double(j.received));
+		o.insert("total",    double(j.total));
+		o.insert("status", state_name(j.status));
+		if (!j.error.isEmpty())
+			o.insert("error", j.error);
+		o.insert("public", j.public_participation);
+		arr.append(o);
+	}
+	// Atomic, so a crash mid-write cannot leave a half-file that fails to parse
+	// and loses the whole history.
+	QSaveFile f(path);
+	if (!f.open(QIODevice::WriteOnly))
+		return;
+	f.write(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+	f.commit();
+}
+
+void download_manager::load_history(const QString &path) {
+	QFile f(path);
+	if (!f.open(QIODevice::ReadOnly))
+		return;
+	const QJsonArray arr = QJsonDocument::fromJson(f.readAll()).array();
+	for (const QJsonValue &v : arr) {
+		const QJsonObject o = v.toObject();
+		download_job j;
+		j.status = state_from_name(o.value("status").toString());
+		if (!j.terminal())
+			continue;   // only history is restored, never a fake running row
+		j.id        = m_next_id++;
+		j.url       = QUrl(o.value("url").toString());
+		j.source_id = o.value("source").toString();
+		j.path      = o.value("path").toString();
+		j.node_id   = o.value("node").toString();
+		j.received  = qint64(o.value("received").toDouble());
+		j.total     = qint64(o.value("total").toDouble(-1));
+		j.error     = o.value("error").toString();
+		j.public_participation = o.value("public").toBool();
+		m_jobs.push_back(j);
+	}
+	emit changed();
 }
 
 void download_manager::pause(int id) {
