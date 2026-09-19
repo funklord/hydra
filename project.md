@@ -23807,12 +23807,39 @@ Which makes it the shape `evidence.md` calls *a gate's verdict can be a
 property of the toolchain rather than of the source*: it passed where it was
 written and fails here, and neither machine is wrong.
 
-**The ceiling is left alone.** What it should be, or whether the check should
-assert the toolbar's contribution instead of the window's total, is a
-judgement about what the check is for, and that belongs to whoever set it. The
-failure now names the item that set the floor, because the message as it stood
-sent its reader to the address bar -- and a flag naming the wrong mechanism
-costs somebody the wrong look, with the authority of a diagnosis.
+**That it tracks the font is measured, not inferred.** Moving only
+`QT_FONT_DPI` moves the number and nothing else does:
+
+    QT_FONT_DPI     72     84     96    120
+    window floor   179    207    228    228
+
+**The obvious repair was tried and does not work, which is the part worth
+keeping.** If the sentence claims a relationship -- the toolbar holding the
+address bar must not be the item that sets the window's floor -- then assert
+that instead of a pixel, and it stops moving with the desktop. It was written,
+and then sabotaged: `k_address_min` raised from 160 to 900, which is an
+address bar demanding more than the whole window.
+
+Three checks failed. The field-selection check, the cursor-position check, and
+*"4 button(s) left the bar, and all 3 are in the extension menu"*. **The new
+assertion passed**, because a `QToolBar` never propagates the address bar's
+minimum at all -- the overflow mechanism absorbs it, which is exactly what
+`fc98ca8` built it to do. So the replacement could not fail the way the thing
+it guards fails: a control-shaped hole written while fixing one.
+
+Which also says where the property really lives. *"The floor the address bar
+sets does not become the window's"* is guarded by the overflow checks beside
+it, which do move when that floor moves, and *"the window fits a phone"* by
+the next section's bound of 320 -- a small phone or a split screen -- which
+passes at 228. Between them the 223 pin adds a number that tracks the desktop.
+
+**It is still left exactly as it was.** Retiring a gate on the strength of a
+replacement that cannot fail is worse than leaving it red, and what the pin
+should be -- a wider bound, the overflow relationship, or nothing -- is a
+judgement about what it is for that belongs to whoever set it. The failure
+names the item that set the floor now, because the message as it stood sent
+its reader to the address bar, and a flag naming the wrong mechanism costs
+somebody the wrong look with the authority of a diagnosis.
 
 ## A tab opens onto white, and nothing tells the page otherwise
 
