@@ -23814,6 +23814,59 @@ failure now names the item that set the floor, because the message as it stood
 sent its reader to the address bar -- and a flag naming the wrong mechanism
 costs somebody the wrong look, with the authority of a diagnosis.
 
+## A tab opens onto white, and nothing tells the page otherwise
+
+`try_flicker` grabs the window at intervals after a tab is activated, and
+until now nobody had read what it produces. Mean brightness of each 1100x780
+grab, offscreen, 2026-09-19:
+
+    t+ms    0    40    90   150   240   360   520   750  1100  1700  2600
+    mean  250   250   250   250   250   250   250   250   250   106   106
+
+The page area is white until the document paints, and then it is the page's
+own colour. Re-measured from 2026-09-03, where the flip fell between t+240 and
+t+360 -- **that is not a regression and the two runs do not compare**: the
+earlier one was `xcb` on an Xvfb display and this one is offscreen, on a
+machine under different load. What both establish is the shape, not the
+duration.
+
+**It is not the theme arriving late, which was the first reading and was
+wrong.** The chrome is light in the frame before and the frame after; what
+changes is the page area alone, from white to the fixture's dark blue. The
+theme is applied throughout.
+
+The cause is that nothing says otherwise. `grep -rn setBackgroundColor src/`
+returns nothing, so the engine paints its own default behind a page that has
+not painted yet, and its default is white.
+
+**Where this is invisible and where it is not.** On a light desktop white
+matches the chrome and there is nothing to see -- which is every measurement
+above, since neither display had a portal to ask and both resolved light.
+`theme.h` records that the desktop this project is written on is a dark KDE
+whose portal answers "prefer dark". **That last step is an inference and not a
+measurement**: no frame in this section was captured on a dark theme, and the
+claim that a person sees a white flash on every tab open has not been taken.
+It is the first thing to measure if this is ever picked up.
+
+**The obvious fix has a cost that is worse than the flash**, which is why this
+is recorded rather than done. `page->setBackgroundColor(palette base)` also
+decides what is painted behind a page that never sets a background of its own
+-- those get white today, with readable dark text, and a dark base turns them
+dark-on-dark. That is a legibility fault on real pages traded for a transient
+one on tab open.
+
+The alternative is paint-holding: keep the placeholder in the stack until the
+first paint commits, so there is no bare view to flash. It costs a timeout,
+because a load that never finishes must not strand the tab behind a
+placeholder for ever.
+
+**Whose it is.** Which of those two, or neither, is the copyright holder's
+call: one trades a flash for a rendering rule that reaches every page, and the
+other adds a state machine to tab opening. The measurement is here so that the
+decision does not need re-taking, and this section is the record it did not
+have -- it was reported in conversation on 2026-09-03 and written down
+nowhere, which is the copy nobody re-reads.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
