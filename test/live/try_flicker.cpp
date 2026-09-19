@@ -5,6 +5,8 @@
 #include "qtwebengine_factory.h"
 #include "torrent_download_source.h"
 #include "sample_tree.h"
+#include "theme.h"
+#include "settings_dialog.h"
 
 #include <QApplication>
 #include <QPlatformSurfaceEvent>
@@ -13,6 +15,8 @@
 #include <QElapsedTimer>
 #include <QProcess>
 #include <QTimer>
+#include <QImage>
+#include <QStackedWidget>
 #include <QTreeView>
 #include <QUrl>
 #include <cstdio>
@@ -27,12 +31,80 @@ static QString test_out() {
 static const QString OUTDIR =
   test_out();
 
+// Mean brightness of a region of a grab, 0..255, or -1 where the region is
+// empty. Reported rather than left in the PNGs: the previous record of this
+// driver says in as many words that nobody had read what it produces, and a
+// number printed beside the timestamp is read where eleven images are not.
+static QString mean_of(const QImage &img, const QRect &r) {
+	const QRect box = r.intersected(img.rect());
+	if (box.isEmpty())
+		return QStringLiteral("-");
+	qint64 sr = 0, sg = 0, sb = 0;
+	int lo = 255, hi = 0;
+	for (int y = box.top(); y <= box.bottom(); ++y)
+		for (int x = box.left(); x <= box.right(); ++x) {
+			const QRgb c = img.pixel(x, y);
+			sr += qRed(c); sg += qGreen(c); sb += qBlue(c);
+			const int g = qGray(c);
+			lo = qMin(lo, g); hi = qMax(hi, g);
+		}
+	const qint64 n = qint64(box.width()) * box.height();
+	// **The channels, not a grey.** A grey cannot separate the two things this
+	// driver has to tell apart on a dark desktop: the engine's own background
+	// before a page paints, which is neutral, and the fixture page once it has,
+	// which is dark blue. Both are dark, and averaged into one number they are
+	// the same number -- so "is there still a flash when the chrome is dark"
+	// cannot be asked of a grey at all.
+	// **The range as well as the mean, because a mean cannot see ink.** Text
+	// on a page is a small fraction of its pixels, so a page of dark text on
+	// white and a page of dark text on dark have means far apart and are told
+	// apart by neither of them alone. The darkest and lightest greys in the
+	// region answer the question the mean cannot: whether anything on it
+	// stands out from what is behind it.
+	return QString("%1/%2/%3 lo%4 hi%5")
+	    .arg(sr / n).arg(sg / n).arg(sb / n).arg(lo).arg(hi);
+}
+
+// Where the page is, asked of the widget holding it rather than guessed from
+// the window's size. main_window keeps its views in a QStackedWidget and that
+// is the only one under this window while no dialog is open -- the other four
+// in this tree belong to dialogs. Returns an empty rect if it is not there,
+// and the caller prints that rather than substituting a number.
+static QRect page_rect(QWidget &w) {
+	auto *stack = w.findChild<QStackedWidget *>();
+	if (!stack)
+		return QRect();
+	QWidget *cur = stack->currentWidget();
+	if (!cur || cur->size().isEmpty())
+		return QRect();
+	return QRect(cur->mapTo(&w, QPoint(0, 0)), cur->size());
+}
+
 int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	qtwebengine_factory::register_url_schemes(torrent_download_source::url_schemes());
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
 	QDir().mkpath(OUTDIR);
+
+	// **The theme, because without it this driver measures a case nobody has.**
+	// It built a main_window and never applied an appearance, so every grab was
+	// taken with Qt's default light palette -- and the open question about the
+	// white page area is what it looks like on a DARK desktop, where white is
+	// not the colour of the chrome around it. Applied the way main.cpp does, so
+	// the window is the one a user gets; with no configuration the choice is
+	// `system`, which resolves light here and leaves every previous run
+	// comparable.
+	//
+	// Point HYDRA_TEST_CONFIG at a file holding `appearance=dark` under [ui] to
+	// take the other case.
+	const theme::choice want = settings_store::appearance();
+	theme::watcher appearance;
+	appearance.set_choice(want);
+	theme::set_web_engine_scheme(theme::resolve(want));
+	std::printf("appearance: %s, resolved %s\n",
+	             qPrintable(theme::name_of(want)),
+	             theme::resolve(want) == Qt::ColorScheme::Dark ? "dark" : "light");
 
 	policy_engine       policy;
 	request_filter      filter(&policy);
@@ -66,7 +138,15 @@ int main(int argc, char *argv[]) {
 	// the shell paints in the moments after a tab opens, and while the page
 	// came off the network those timings moved with a remote site's week rather
 	// than with this code.
-	w.load_tree(shell::local_page_tree());
+	// **A second fixture, chosen by the environment.** The default page sets
+	// its own background, which is what makes the flash visible as a change.
+	// HYDRA_FLICKER_PLAIN loads one that sets none, which is the page the
+	// recorded objection to setBackgroundColor is about -- it is the engine's
+	// default that shows through there, and what that default is worth
+	// measuring rather than assuming.
+	w.load_tree(qEnvironmentVariableIsSet("HYDRA_FLICKER_PLAIN")
+	              ? shell::plain_page_tree()
+	              : shell::local_page_tree());
 	w.resize(1100, 780);
 	w.show();
 
@@ -85,7 +165,17 @@ int main(int argc, char *argv[]) {
 			QTimer::singleShot(ms, [&w, ms, &t] {
 				const QPixmap p = w.grab();
 				p.save(OUTDIR + QString("f%1.png").arg(ms, 5, 10, QChar('0')));
-				std::printf("t+%-5d grabbed (elapsed %lld)\n", ms, t.elapsed());
+				const QImage img = p.toImage();
+				const QRect page = page_rect(w);
+				// The chrome is sampled as well, and that is the half that
+				// makes the page number mean something: "the page area is
+				// white" is only a flash if what surrounds it is not. A
+				// strip across the toolbar, above wherever the page starts.
+				const QRect chrome(0, 0, img.width(),
+				                    page.isEmpty() ? 0 : page.top());
+				std::printf("t+%-5d grabbed (elapsed %lld) page=%s chrome=%s\n",
+				             ms, t.elapsed(), qPrintable(mean_of(img, page)),
+				             qPrintable(mean_of(img, chrome)));
 			});
 		}
 		QTimer::singleShot(22000, [] {

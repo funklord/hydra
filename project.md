@@ -23867,32 +23867,79 @@ returns nothing, so the engine paints its own default behind a page that has
 not painted yet, and its default is white.
 
 **Where this is invisible and where it is not.** On a light desktop white
-matches the chrome and there is nothing to see -- which is every measurement
-above, since neither display had a portal to ask and both resolved light.
-`theme.h` records that the desktop this project is written on is a dark KDE
-whose portal answers "prefer dark". **That last step is an inference and not a
-measurement**: no frame in this section was captured on a dark theme, and the
-claim that a person sees a white flash on every tab open has not been taken.
-It is the first thing to measure if this is ever picked up.
+matches the chrome and there is nothing to see. **On a dark one it is real,
+and it is now measured rather than inferred** -- which is what this paragraph
+used to say was missing.
 
-**The obvious fix has a cost that is worse than the flash**, which is why this
-is recorded rather than done. `page->setBackgroundColor(palette base)` also
-decides what is painted behind a page that never sets a background of its own
--- those get white today, with readable dark text, and a dark base turns them
-dark-on-dark. That is a legibility fault on real pages traded for a transient
-one on tab open.
+**The driver could not have taken that measurement, and that is why nobody
+had.** `try_flicker` built a `main_window` and never applied an appearance, so
+every grab in this section was taken with Qt's default light palette: it was
+photographing the case where the answer is already known. It applies the
+choice the way `main.cpp` does now -- `theme::watcher::set_choice` and
+`set_web_engine_scheme` -- so `system` still resolves light offscreen and every
+earlier run stays comparable, and an `appearance=dark` configuration takes the
+other case.
+
+Two other things had to change before the output meant anything. The grabs are
+measured over **the page's own rectangle**, asked of the `QStackedWidget` that
+holds the views rather than guessed from the window's size; the fixture page
+is `background:#123` and reads back as 17/34/51, which is what says the
+rectangle is the page. And the mean is reported **per channel with the grey
+range beside it**, because one number cannot do this job: the engine's
+pre-paint background and the fixture's dark blue are both dark, and a page of
+dark text on white and one of dark text on dark differ in their range and not
+in their mean.
+
+Dark appearance, offscreen, three runs, 2026-09-20:
+
+    t+ms      0     40     90    150    240    360    750   2600
+    page    255    255    255    255     17     17     17     17
+    chrome   48     48     48     48     48     48     48     48
+
+The page area is **flat white** -- `lo255 hi255`, not a pale average -- against
+a chrome of 48, for 150 to 240 ms. Two runs flipped at t+240 and one at t+360,
+which is the sample-slot variance this section already records; one earlier run
+had the page painted before t+0 and showed no white at all, so the duration is
+load-dependent and the shape is not. On a dark desktop this is the starkest
+version of the fault rather than the invisible one.
+
+**The obvious fix has a cost, and the cost was an argument until it was run.**
+`page->setBackgroundColor(palette base)` also decides what is painted behind a
+page that never sets a background of its own. Measured by making the change,
+taking both fixtures and putting it back -- a second fixture that sets no
+background at all was added for it:
+
+    dark appearance          t+0 page      background-less page at rest
+    as it is                 255 flat      253, lo0 hi255   black on white
+    with setBackgroundColor   31 flat       30, lo0 hi31    black on near-black
+
+So both halves hold. The flash goes -- at t+0 the page area is 31, which is
+the chrome's own dark, flat. And a page that states no colours becomes black
+text on a 31 ground, which is about 1.3:1 and unreadable. A page that states
+its own is untouched either way: the styled fixture still renders 17/34/51
+with light text over it.
+
+The dark scheme flag does not help here and that is worth knowing, because it
+is the first thing anybody would reach for: `set_web_engine_scheme` already
+passes `preferredColorScheme=0`, and a background-less page still paints white
+under it. Blink's preference reaches what a page asks for, not what is painted
+where a page asks for nothing.
+
+**The revert is part of the measurement.** With the line taken out the flash
+returns to `lo255 hi255`, so what moved was the change and not the machine.
 
 The alternative is paint-holding: keep the placeholder in the stack until the
 first paint commits, so there is no bare view to flash. It costs a timeout,
 because a load that never finishes must not strand the tab behind a
 placeholder for ever.
 
-**Whose it is.** Which of those two, or neither, is the copyright holder's
-call: one trades a flash for a rendering rule that reaches every page, and the
-other adds a state machine to tab opening. The measurement is here so that the
-decision does not need re-taking, and this section is the record it did not
-have -- it was reported in conversation on 2026-09-03 and written down
-nowhere, which is the copy nobody re-reads.
+**Whose it is, and it is now a measured trade rather than a predicted one.**
+Which of those two, or neither, is the copyright holder's call: one trades a
+flash for a rendering rule that reaches every page, and the other adds a state
+machine to tab opening. Both sides of the first are numbers above, taken in
+both directions, so the decision does not need re-taking -- and this section is
+the record it did not have, having been reported in conversation on 2026-09-03
+and written down nowhere, which is the copy nobody re-reads.
 
 ## A signature the JNI check declined to compare
 

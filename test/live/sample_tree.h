@@ -155,4 +155,20 @@ inline QString local_page_tree(const QString &out_dir = scratch_dir()) {
 	return single_tab_tree(QUrl::fromLocalFile(page).toString(), out_dir);
 }
 
+// A page that sets no background of its own, which is the case the recorded
+// objection to `setBackgroundColor` is about: the engine paints its default
+// behind such a page, and a dark default would put dark text on it. There is
+// no `<style>` here on purpose -- adding one is the whole point of not having
+// it.
+inline QString plain_page_tree(const QString &out_dir = scratch_dir()) {
+	QDir().mkpath(out_dir);
+	const QString page = QDir(out_dir).filePath("plain-page.html");
+	QFile f(page);
+	if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+		f.write("<!doctype html><title>plain fixture</title>"
+		         "<h1>plain fixture</h1><p>no background, no colour</p>");
+	f.close();
+	return single_tab_tree(QUrl::fromLocalFile(page).toString(), out_dir);
+}
+
 }  // namespace shell
