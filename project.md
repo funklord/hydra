@@ -23725,6 +23725,60 @@ at another file -- leaving the older assertion, that an unreadable tree is
 not written over, passing for a reason unrelated to the refusal. That is
 the third time in this pass a check was about to pass for the wrong reason.
 
+## An empty string from Qt, and a suite that could not say so
+
+`test_autofill` failed intermittently for a fortnight on one check --
+*"which Qt always answers, with or without XDG_RUNTIME_DIR"* -- and re-running
+it always passed, which is why nobody caught it. The re-run was the mistake:
+the harness sets `TMPDIR` and the bare binary does not, so a failure in
+`$TMPDIR/runtime-<user>` was being "confirmed fixed" by a run that
+consulted `/tmp/runtime-<user>`. **Two different directories, and only one of
+them was ever broken.**
+
+What Qt actually does, measured against 6.8.2 by asking it rather than reading
+it:
+
+| the directory it would use | `RuntimeLocation` answers |
+| --- | --- |
+| absent (Qt creates it) | the path |
+| `0700` | the path |
+| `2700`, setgid inherited | the path |
+| `0750` | **nothing** |
+| `0770` | **nothing** |
+
+So it is an empty string rather than a fallback, and the trigger is any group
+or other permission bit. Every suite reading `RuntimeLocation` fails together
+when one is set, and none of them says why.
+
+**Two explanations were wrong before the right one.** A creation race between
+`mkdir` and `chmod` -- 288 concurrent starts against a fresh setgid parent,
+zero empties. And a foreign-owned `XDG_RUNTIME_DIR`, which Qt rejects and then
+*falls back* from rather than giving up: pointed at `funk`'s `/run/user/1000`
+it answered the `$TMPDIR` fallback.
+
+What remains is the state itself, and it is one careless creation away. That
+directory lives inside `test/build-make/tmp`, which is group-writable, setgid
+and owned by another user; under the umask in use here a plain `mkdir` there
+lands at **2775**. Qt sets the mode on the one it creates, and refuses rather
+than repairs one it finds -- so a single wrong creation breaks every Qt suite
+in the tree until somebody removes the directory.
+
+The harness creates it now, with the mode stated rather than inherited, and
+`install -d -m 700` on every run repairs a wrong one instead of leaving it.
+Reproduced deliberately before and after: at `2770` the suite fails on exactly
+the historical check with exactly the historical tally, 64 passed and 1
+failed; through `make test` the mode comes back 2700 and it passes.
+
+**And the check now says which directory Qt refused**, because a guard in a
+recipe does not protect the person debugging, who is the one running the
+binary directly -- which is precisely the run that has no repair. "Qt always
+answers" is the one thing a failure there has already disproved.
+
+**What is not established is who created the bad one.** It is correct today,
+the origin is sixteen days gone, and no mechanism reproduced it. The fix does
+not depend on knowing: it makes the state correct on every run whatever put it
+wrong.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

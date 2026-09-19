@@ -234,6 +234,28 @@ SUITES     = $(filter-out $(NEEDS_MORE),$(ALL_SUITES))
 # accumulated here since 14 August, which a name nobody removes is how. Absolute
 # because a suite is free to chdir and a relative TMPDIR would follow it.
 TEST_TMP = $(TESTS_DIR)/tmp
+
+# **The runtime directory Qt would otherwise create for itself.**
+#
+# The test environment sets TMPDIR and deliberately leaves XDG_RUNTIME_DIR
+# unset, so `QStandardPaths::RuntimeLocation` resolves to
+# `$$TMPDIR/runtime-<user>`. Qt returns an EMPTY string -- not a fallback --
+# when that directory carries any group or other permission bit, and every
+# suite reading RuntimeLocation fails together when it does. Measured against
+# Qt 6.8.2: absent, 0700 and 2700 all answer; 0750 and 0770 answer with
+# nothing.
+#
+# Qt creates it correctly when it creates it. What it cannot fix is a wrong
+# one that already exists -- it checks and refuses rather than repairing --
+# and this one lives in a group-writable setgid directory, where a plain
+# `mkdir` under the umask in use here lands at 2775. That is one careless
+# creation away from breaking every Qt suite in the tree until somebody
+# removes the directory, which is the shape `test_autofill` caught
+# intermittently and which nothing then explained.
+#
+# So the harness makes it, with the mode stated rather than inherited, and
+# `-m` on every run repairs a wrong one instead of leaving it.
+TEST_RUNTIME = $(TEST_TMP)/runtime-$(shell id -un)
 # **Hostile on purpose.** The shipped live-view cap is 8; the suite and every
 # driver run at 2, so that suspend-and-restore -- where tab state gets lost --
 # happens constantly rather than only for somebody with nine tabs open. Raising
@@ -355,6 +377,7 @@ test:
 	@for t in $(SUITES); do $(MAKE) --no-print-directory -C test -j$(JOBS) \
 	   build-make/$$t >/dev/null || exit 1; done
 	@mkdir -p $(TEST_TMP)
+	@install -d -m 700 $(TEST_RUNTIME)
 	@fail=0; for t in $(SUITES); do \
 	   out=$$($(TEST_ENV) ./$(TESTS_DIR)/$$t 2>&1); \
 	   if [ $$? -eq 0 ]; then printf '  ok   %-16s %s\n' "$$t" "$$(echo "$$out" | tail -1)"; \
@@ -372,6 +395,7 @@ test-one:
 	@test -n "$(T)" || { echo "usage: make test-one T=test_theme"; exit 2; }
 	@$(MAKE) --no-print-directory -C test -j$(JOBS) build-make/$(T)
 	@mkdir -p $(TEST_TMP)
+	@install -d -m 700 $(TEST_RUNTIME)
 	@$(TEST_ENV) ./$(TESTS_DIR)/$(T)
 
 # Separate from `test` because it is a different order of cost: each driver
@@ -387,6 +411,7 @@ drivers:
 replay:
 	@$(MAKE) --no-print-directory -C test -j$(JOBS) build-make/test_replay >/dev/null
 	@mkdir -p $(TEST_TMP)
+	@install -d -m 700 $(TEST_RUNTIME)
 	@$(TEST_ENV) ./$(TESTS_DIR)/test_replay
 
 # Run them all and summarise. Offscreen by default, so it does not take over a

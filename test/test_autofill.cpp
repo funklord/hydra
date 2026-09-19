@@ -14,6 +14,8 @@
 #include "policy_engine.h"
 
 #include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -449,6 +451,37 @@ int main(int argc, char **argv) {
 		const QString sock = keepass_bridge::socket_path();
 		check(sock == runtime + "/org.keepassxc.KeePassXC.BrowserServer",
 		      QString("the socket is under Qt's runtime directory (%1)").arg(sock));
+		// **When it does not answer, say which directory it refused**, because
+		// "Qt always answers" is the one thing a failure here has already
+		// disproved, and the message as it stood sent nobody anywhere.
+		//
+		// Qt returns an EMPTY string -- not a fallback -- when the directory
+		// it would use carries any group or other permission bit. Measured
+		// against 6.8.2: absent, 0700 and 2700 all answer; 0750 and 0770
+		// answer with nothing. `make test` now creates that directory with
+		// its mode stated, so a harness run cannot meet it -- but a suite run
+		// directly gets no such repair, and running a binary directly is what
+		// debugging one means.
+		//
+		// Recomputing Qt's path here would be two copies of one assumption if
+		// it were an assertion. It is a message on a failure that has already
+		// happened, which is the one place a second opinion costs nothing.
+		if (runtime.isEmpty()) {
+			const QString guess = QDir::tempPath() + "/runtime-"
+			                       + QString::fromLocal8Bit(qgetenv("USER"));
+			const QFileInfo fi(guess);
+			QString why = "and it does not exist";
+			if (fi.exists()) {
+				const QFile::Permissions p = fi.permissions();
+				why = (p & (QFile::ReadGroup | QFile::WriteGroup | QFile::ExeGroup
+				             | QFile::ReadOther | QFile::WriteOther | QFile::ExeOther))
+				        ? "which carries group or other permission bits; Qt "
+				          "refuses those and returns nothing"
+				        : "which looks correct, so the cause is elsewhere";
+			}
+			std::printf("  ..    Qt would have used %s, %s\n",
+			             qPrintable(guess), qPrintable(why));
+		}
 		check(!runtime.isEmpty(),
 		      "which Qt always answers, with or without XDG_RUNTIME_DIR");
 		check(sock.endsWith("/org.keepassxc.KeePassXC.BrowserServer"),
