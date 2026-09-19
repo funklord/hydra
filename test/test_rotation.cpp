@@ -1756,12 +1756,43 @@ int main(int argc, char **argv) {
 		                "(%1 on the bar and in the menu)")
 		         .arg(doubled));
 
+		// **Name the item that set the floor, because this message names the
+		// address bar and the address bar is usually not it.**
+		//
+		// Measured here at 228 against the 223 above: the toolbar holding the
+		// address bar contributes 53, and the menu bar contributes the whole
+		// 228 -- six titles that cannot wrap, in whatever font the machine
+		// has. Nothing in this suite pins a font, and `git log -S` finds no
+		// change to the set of top-level menus since this check was written,
+		// so the number moves with the desktop rather than with the tree.
+		//
+		// The ceiling is left exactly as it was. What is fixed is a failure
+		// that sent its reader to the wrong widget: a flag naming the wrong
+		// mechanism costs somebody the wrong look, and costs it with the
+		// authority of a diagnosis.
+		QString floor_by;
+		if (QLayout *l = phone.layout()) {
+			int worst = -1;
+			for (int i = 0; i < l->count(); ++i) {
+				QLayoutItem *it = l->itemAt(i);
+				const int w = it->minimumSize().width();
+				if (w <= worst)
+					continue;
+				worst = w;
+				floor_by = QString("%1 at %2")
+				             .arg(it->widget()
+				                    ? QString(it->widget()->metaObject()->className())
+				                    : QStringLiteral("a spacer"))
+				             .arg(w);
+			}
+		}
 		check(phone.layout()
 		       && phone.layout()->minimumSize().width() <= 223,
 		       QString("the floor the address bar sets does not become the "
-		                "window's (%1)")
+		                "window's (%1, set by %2)")
 		         .arg(phone.layout() ? phone.layout()->minimumSize().width()
-		                              : -1));
+		                              : -1)
+		         .arg(floor_by.isEmpty() ? QStringLiteral("nothing") : floor_by));
 	}
 
 	section("the window fits a small phone, and a hint does not decide that");

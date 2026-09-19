@@ -23779,6 +23779,41 @@ the origin is sixteen days gone, and no mechanism reproduced it. The fix does
 not depend on knowing: it makes the state correct on every run whatever put it
 wrong.
 
+## A pin that measures the desktop's font
+
+`make check` is red here at `4340ce6`, reproducibly, on one `test_rotation`
+check: *the floor the address bar sets does not become the window's* wants the
+window's layout minimum at 223 or less and measures **228**.
+
+The address bar is not what set it. Decomposed by asking the layout rather
+than the widgets -- a `QWidget`'s `minimumSizeHint` and its contribution as a
+layout item are different numbers, and only the second decides:
+
+| layout item | minimum |
+| --- | --- |
+| `QMenuBar` | **228** |
+| `QStatusBar` | 154 |
+| `QToolBar`, which holds the address bar | 53 |
+| `QSplitter` | 43 |
+| `find_bar`, hidden | 0 |
+
+So the floor is six menu titles that cannot wrap, in whatever font the machine
+has. Nothing in the suite pins a font, and `git log -S 'menu->addMenu('`
+finds no change to the set of top-level menus since the check was written --
+its one hit since is `Recently &Closed`, which is a submenu of Edit and
+widens no menu bar. The number moves with the desktop, not with the tree.
+
+Which makes it the shape `evidence.md` calls *a gate's verdict can be a
+property of the toolchain rather than of the source*: it passed where it was
+written and fails here, and neither machine is wrong.
+
+**The ceiling is left alone.** What it should be, or whether the check should
+assert the toolbar's contribution instead of the window's total, is a
+judgement about what the check is for, and that belongs to whoever set it. The
+failure now names the item that set the floor, because the message as it stood
+sent its reader to the address bar -- and a flag naming the wrong mechanism
+costs somebody the wrong look, with the authority of a diagnosis.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
