@@ -228,6 +228,20 @@ def descriptor(java, imports):
 		return DESCRIPTOR_OF[java]
 	if java in imports:
 		return "L" + imports[java].replace(".", "/") + ";"
+	# **A nested class is written `Outer.Inner` and imported as `Outer`.**
+	# The JVM spells it `Louter/path$Inner;`, joining the nesting with `$`,
+	# so without this the whole signature resolved to `?` and went
+	# uncompared -- which the tool reported honestly and could not act on.
+	# `WebChromeClient.CustomViewCallback` is the one in this tree.
+	#
+	# Only where the OUTER name is imported: a fully-qualified type written
+	# inline starts with a package segment that is in no import map, and
+	# still resolves to None rather than to a guess.
+	if "." in java:
+		outer, _, nested = java.partition(".")
+		if outer in imports:
+			return ("L" + imports[outer].replace(".", "/")
+			         + "$" + nested.replace(".", "$") + ";")
 	return None
 
 
@@ -349,9 +363,11 @@ JNIEXPORT void JNICALL Java_se_vibes_hydra_Sample_nobodyWants(JNIEnv *, jobject)
 CONTROL_JAVA_STATICS = """
 package se.vibes.hydra;
 import android.app.Activity;
+import android.webkit.WebChromeClient;
 class Sample {
 	public static void fine(long id, String url) {}
 	public static boolean open(Activity a, String url) { return true; }
+	public static void nested(WebChromeClient.CustomViewCallback cb) {}
 }
 """
 
@@ -363,6 +379,8 @@ void b() { QJniObject::callStaticMethod<void>(k_cls, "renamed", "(J)V", 1); }
 void c() { QJniObject::callStaticMethod<void>(k_cls, "fine", "(JI)V", 1); }
 void d() { QJniObject::callStaticMethod<jboolean>("se/vibes/hydra/Nowhere",
                                                    "open", "()Z"); }
+void e() { QJniObject::callStaticMethod<void>(k_cls, "nested",
+       "(Landroid/webkit/WebChromeClient$CustomViewCallback;)V"); }
 """
 
 CONTROL_CALLS_EXPECT = {
@@ -397,8 +415,8 @@ def self_test():
 	# The other direction, same discipline.
 	statics = parse_java_statics(CONTROL_JAVA_STATICS, "se/vibes/hydra/Sample")
 	calls = parse_cpp_calls(CONTROL_CPP_CALLS, "control.cpp")
-	if len(calls) != 4:
-		return ["the call samples did not parse: %d found, want 4" % len(calls)]
+	if len(calls) != 5:
+		return ["the call samples did not parse: %d found, want 5" % len(calls)]
 	out = dict(call_faults(calls, statics))
 	for what, expect in CONTROL_CALLS_EXPECT.items():
 		got = out.get(what)
@@ -407,9 +425,17 @@ def self_test():
 		elif expect not in got:
 			complaints.append("%s was reported for the wrong reason: %s"
 			                   % (what, got))
-	# The one that is correct must be silent -- with three faults expected out
-	# of four calls, a checker that complained about everything would satisfy
-	# every line above.
+	# The two that are correct must be silent -- with three faults expected
+	# out of five calls, a checker that complained about everything would
+	# satisfy every line above.
+	#
+	# **And `nested` is the one that discriminates the nesting rule.** Its
+	# call carries the right descriptor for `WebChromeClient.CustomViewCallback`,
+	# so it is silent only where the outer class's import resolves the inner
+	# name. Without that rule the Java side reads `(?)V`, the correct call
+	# disagrees with it, and this count goes to four. The first version of
+	# this control used a WRONG descriptor and passed either way, which is a
+	# control that cannot fail the way the thing it controls for fails.
 	if len(out) != 3:
 		complaints.append("%d call faults reported, want exactly 3" % len(out))
 
@@ -518,15 +544,22 @@ def main():
 	# call compared against a `?` has not been checked -- reporting it as
 	# verified would be the vacuous pass this file's own control exists to
 	# refuse.
-	unresolved = sum(1 for methods in classes.values()
-	                  for sigs in methods.values()
-	                  for sig in sigs if "?" in sig)
+	# **Named, not just counted.** A tally says how much was not checked and
+	# leaves a reader unable to judge whether it matters; the name says which
+	# feature is uncovered, and a `?` in a printed signature shows exactly
+	# which parameter the mapping could not place.
+	unresolved = sorted("%s.%s(%s)" % (cls, method, sig)
+	                     for cls, methods in classes.items()
+	                     for method, sigs in methods.items()
+	                     for sig in sigs if "?" in sig)
 	note = ""
 	if unresolved:
-		note = ", %d java signature(s) unresolved and not compared" % unresolved
+		note = ", %d java signature(s) unresolved and not compared" % len(unresolved)
 	print("jni-check: %d native method(s) and %d call(s) into Java, "
 	       "every one resolvable and matching%s"
 	      % (len(wanted), len(calls), note))
+	for sig in unresolved:
+		print("         not compared: %s" % sig)
 	return 0
 
 

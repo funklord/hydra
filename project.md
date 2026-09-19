@@ -23867,6 +23867,40 @@ decision does not need re-taking, and this section is the record it did not
 have -- it was reported in conversation on 2026-09-03 and written down
 nowhere, which is the copy nobody re-reads.
 
+## A signature the JNI check declined to compare
+
+`make jni` ended with *"1 java signature(s) unresolved and not compared"* --
+honest, and unactionable: a reader learns something went unchecked and cannot
+tell whether it matters. It says which now, and the one it named was
+`HydraWebView.showFullscreen((JLandroid/view/View;?)V)`.
+
+The `?` is `WebChromeClient.CustomViewCallback`. A nested class is written
+`Outer.Inner` in Java and imported as `Outer`, so the dotted name matched no
+import and resolved to nothing; the JVM spells it with the nesting joined by
+`$`. The rule is one clause, and it is deliberately narrow -- it fires only
+where the OUTER name is imported, so a fully-qualified type written inline
+still resolves to `None` rather than to a guess, which is the property the
+resolver's own docstring asks for.
+
+**The first control for it was worthless, and the sabotage is what said so.**
+It called the method with a *wrong* descriptor and expected a complaint --
+and a complaint is what the checker produces either way, because a call
+compared against `(?)V` disagrees with it too. Removing the new rule left that
+control passing, which is a control that cannot fail the way the thing it
+controls for fails.
+
+The one that works carries the *right* descriptor and expects silence. With
+the rule the nested name resolves and the call matches; without it the Java
+side reads `(?)V`, the correct call disagrees, and the fault count goes from
+three to four. Measured both ways: the rule in place reports 23 native methods
+and 25 calls with nothing unresolved, and the rule removed refuses to run at
+all -- *"the control failed, so nothing below would mean anything: 4 call
+faults reported, want exactly 3"*.
+
+Nothing in the tree calls `showFullscreen` from C++ -- it is Java calling
+Java -- so no comparison was being skipped that anything depended on. What was
+wrong was a guard that could not say what it had not done.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
