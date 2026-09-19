@@ -23928,6 +23928,40 @@ Nothing in the tree calls `showFullscreen` from C++ -- it is Java calling
 Java -- so no comparison was being skipped that anything depended on. What was
 wrong was a guard that could not say what it had not done.
 
+## A helper that claimed every mutation and covered none of the newest
+
+`test_model.cpp` carries a two-line helper that runs the tree invariants over
+the whole model and fails the case if anything is out of shape:
+
+    static void holds(tab_tree_model &m, const char *where);
+
+Its comment says that "every mutation added to this file inherits the check by
+being written here". That had stopped being true. The three newest mutations --
+`group_into_folder`, `dissolve_folder` and `move_out` -- have eight sections
+between them, and **none of the eight called it**. The claim was made by a
+comment and enforced by nobody, so the check was inherited by whoever
+remembered rather than by being written there.
+
+The eight call it now, and every one passes: 299 cases, 0 failures, the tree
+well formed after each of the three. So this closed a coverage gap and found
+no defect, which is worth saying plainly rather than letting the commit imply
+a fix.
+
+**What makes it evidence is the second sabotage rather than the first.**
+Dropping `n->parent = grand;` from `move_out` fails the new check -- and it
+also fails an existing behaviour case in the same section, so it proves only
+that something was watching. Dropping the `renumber(parent)` from
+`dissolve_folder` instead leaves every placement correct and every stored
+`order` stale: `298 passed, 1 failed`, and the one is the invariant check
+naming three positions that disagree with their recorded order. That is a
+defect only this check can see, which is the property a control has to
+demonstrate.
+
+The order values are what the tree file is written from and what tree-order
+sorting compares on, so the sabotage is not a contrived one -- it is the
+shape the invariants section already records as having cost three siblings
+holding order 2.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

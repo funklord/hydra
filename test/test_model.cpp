@@ -554,6 +554,7 @@ int main(int argc, char **argv) {
 		       "root keeps a, the new folder and d");
 		check(m.root()->children.indexOf(f) == 1,
 		       "and the folder took the first grouped row's place");
+		holds(m, "grouping wraps the selected rows in a new fo");
 	}
 
 	section("grouping takes selection roots and leaves a pinned row put");
@@ -571,6 +572,7 @@ int main(int argc, char **argv) {
 		check(inner->parent == outer,
 		       "the covered child travels inside its own folder, not separately");
 		check(pin->parent == m.root(), "the pinned row stays where it was");
+		holds(m, "grouping takes selection roots and leaves a ");
 	}
 
 	section("grouping nothing movable makes no folder");
@@ -581,6 +583,7 @@ int main(int argc, char **argv) {
 		check(m.group_into_folder({pin}, "X") == nullptr,
 		       "a lone pinned row cannot be grouped");
 		check(m.root()->children.size() == 1, "and nothing was added to the tree");
+		holds(m, "grouping nothing movable makes no folder");
 	}
 
 	section("dissolving a folder lifts its children into its place");
@@ -600,6 +603,7 @@ int main(int argc, char **argv) {
 		check(m.root()->children.indexOf(x) == 1 &&
 		      m.root()->children.indexOf(y) == 2,
 		       "in order, where the folder was (after a)");
+		holds(m, "dissolving a folder lifts its children into ");
 	}
 
 	section("dissolving is refused when a child is locked");
@@ -612,6 +616,7 @@ int main(int argc, char **argv) {
 		       "a folder with a locked child does not dissolve");
 		check(x->parent == f, "and the locked child stays where it is");
 		check(m.root()->children.size() == 1, "the folder is still there");
+		holds(m, "dissolving is refused when a child is locked");
 	}
 
 	section("dissolving keeps a nested folder whole");
@@ -623,6 +628,7 @@ int main(int argc, char **argv) {
 		check(m.dissolve_folder(outer), "the outer folder dissolves");
 		check(inner->parent == m.root(), "the inner folder moves up whole");
 		check(t->parent == inner, "with its own child still inside it");
+		holds(m, "dissolving keeps a nested folder whole");
 	}
 
 	section("moving a tab out of its folder promotes it to the folder's level");
@@ -640,6 +646,7 @@ int main(int argc, char **argv) {
 		       "just after the folder it left");
 		check(outer->children.size() == 1 && b->parent == outer,
 		       "and the sibling it left behind stays inside");
+		holds(m, "moving a tab out of its folder promotes it t");
 	}
 
 	section("moving out is refused at the top level and for a locked tab");
@@ -652,6 +659,7 @@ int main(int argc, char **argv) {
 		x->locked = true;
 		check(!m.move_out(x), "a locked tab does not move out");
 		check(x->parent == f, "it stays where it is");
+		holds(m, "moving out is refused at the top level and f");
 	}
 
 	section("recently closed remembers each tab newest-first and reopens any");
