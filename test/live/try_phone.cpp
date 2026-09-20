@@ -107,6 +107,25 @@ static void as_android_would(QWidget *dlg) {
 	dlg->setGeometry(QRect(QPoint(0, 0), k_phone));
 }
 
+// **Run this driver without a window manager, or do not believe the sizer
+// verdicts.** A desktop WM owns a window's geometry and answers `setGeometry`
+// on its own schedule, so under one the measurement below is a race between
+// the request and the WM's reply. Measured 2026-09-21 on Xvfb with xfwm4: the
+// sizer checks fail intermittently at the dialog's own `setMinimumWidth(460)`
+// -- three runs named `webauth-account`, then `certificate`, then nothing --
+// while the same driver offscreen passed 205 of 205 three times in a row.
+//
+// It is the on-screen mode that is wrong here rather than the check, and the
+// two wants are in tension: `sweep.sh` recommends on-screen because that is
+// where appearance and focus are faithful, and this is the one driver that
+// wants the opposite. Android has no such arbiter -- `dialog_sizer` runs on a
+// Show event and nothing argues with it -- so a failure seen only under a WM
+// is about this machine.
+//
+// Left as a note rather than a suppression on purpose: the verdict is
+// correct whenever it is asked in the right conditions, and softening it here
+// would cost the one place a real sizing regression would show.
+
 // **A dialog whose narrow layout is a known, measured gap.** The sweep reads
 // the "N passed, M failed" line, so a driver that reports an unfixed defect as
 // a failure makes every future sweep red -- and this tree's own rule is that a

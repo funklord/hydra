@@ -24500,6 +24500,39 @@ green line nobody can see the edges of is exactly what this file keeps being
 written about. Separating the two needs a handler that can be asked twice,
 which is a property of the machine rather than of this code.
 
+## The phone sizer's verdicts need no window manager, and the sweep supplies one
+
+A full sweep reported `try_phone` failing *"webauth-account is on the screen
+after the sizer has run (460 of 360)"*. Re-run alone it failed again naming
+**certificate** instead, then passed. The number is the same in every case and
+it is not a coincidence: `cert_dialog`, `webauth_dialog` and the properties
+dialog each carry `setMinimumWidth(460)`.
+
+That looks exactly like a real defect -- three dialogs that cannot fit a
+360-pixel phone -- and it is not. `android_dialogs::dialog_sizer` clears the
+dialog's own minimum before handing it the screen rectangle, and the driver
+copies that faithfully, on purpose, because the real one compiles only for
+Android. With the minimum cleared the layout decides, and the layout fits.
+
+**What does not fit is a desktop window manager.** It owns a window's geometry
+and answers `setGeometry` on its own schedule, so under one the measurement is
+a race between the request and the reply. Measured:
+
+    Xvfb + xfwm4, on screen    fails intermittently at 460; three runs named
+                               webauth-account, then certificate, then nothing
+    offscreen, no WM           205 of 205, three runs in a row
+
+So the failing runs are about this machine. Android has no such arbiter --
+`dialog_sizer` runs on a Show event and nothing argues with it.
+
+**The awkward part is that the two wants are in tension**, which is why this is
+recorded rather than fixed. `sweep.sh` recommends on-screen precisely because
+that is where appearance and focus are faithful, and it has the incidents to
+show for it; this is the one driver that wants the opposite. Softening the
+verdict would cost the only place a real sizing regression could show, so the
+note goes beside the check instead: run it without a window manager, or do not
+believe the sizer verdicts.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
