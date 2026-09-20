@@ -24117,7 +24117,17 @@ passed, 0 failed (exit 1 after passing)` -- in the format a real defect
 arrives in, on a machine where nothing is wrong.
 
 A driver can declare it now: a `HYDRA-SKIP: <reason>` line, which the sweep
-reads and reports as a skip. The reason is the driver's own statement rather
+reads and reports as a skip.
+
+**One loose end from running the sweep, observation only.** After the first
+full run an `xdg-open` for `try_handoff`'s url was still alive, orphaned to
+init, holding six deleted `/dev/shm` files totalling 512 KB -- the shape
+`running-code.md` asks to be checked for afterwards, which is how it was
+found. A second full run of the same driver left none, so it is not one per
+run and the mechanism is not established; `try_handoff` hands the url to
+whatever the desktop would open it with, and what that does next is not this
+tree's to control. Worth knowing before running many sweeps, not worth a
+change on one occurrence. The reason is the driver's own statement rather
 than a condition recomputed in the script, because a copy of the socket path
 in `sweep.sh` would be a second thing to be wrong, and it would go stale in
 the direction that reports a working machine as broken. The static skip list
