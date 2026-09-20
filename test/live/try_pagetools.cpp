@@ -195,13 +195,25 @@ int main(int argc, char *argv[]) {
 
 	section("copying the address of the page you are looking at");
 	{
-		// **A node's `url` is where the tab was filed and does not follow a
-		// navigation.** The title does -- that dual meaning is recorded in
-		// `project.md` as the copyright holder's to settle, because the tab
-		// lock's pin lives in the same field. What is not their question is
-		// which of the two Copy Address should read: the address bar shows the
-		// page you are on, and an action beside it that hands you the page you
-		// started from is two controls disagreeing about one tab.
+		// **Which of two answers Copy Address gives**: the address bar shows
+		// the page you are on, and an action beside it that hands you the page
+		// you started from is two controls disagreeing about one tab.
+		//
+		// **This section used to arrange that disagreement by doing nothing,
+		// and it stopped working without failing.** A node's `url` did not
+		// follow a navigation, so navigating inside a tab left the filed
+		// address and the live one apart by itself. `5cda368` deliberately
+		// reversed that -- a non-locked tab's stored url follows the page now,
+		// because the properties dialog, the tree and session-restore were all
+		// showing where a tab began. The two checks below then compared two
+		// values that had become the same one, and passed either way: measured
+		// by reducing `address_of` to `return n->url`, which is the sabotage
+		// this section is recorded as catching, and watching both of them stay
+		// green.
+		//
+		// So the disagreement is constructed rather than waited for. The row's
+		// stored address is planted somewhere the page is not, and Copy Address
+		// has to answer with the page.
 		auto *model = w.findChild<tab_tree_model *>();
 		node *folder = model->root()->children.first();
 		node *row = folder->children.first();
@@ -213,9 +225,17 @@ int main(int argc, char *argv[]) {
 		emit address->returnPressed();
 		check(wait_for(address, "two.html"), "and taken to another page inside it");
 		f.wait_idle();
-		check(row->url == filed,
-		       QString("the row still holds the address it was filed at (%1)")
+		// The current rule, pinned here because no live driver pinned it:
+		// the row followed the page.
+		check(row->url != filed && row->url.contains("two.html"),
+		       QString("the row's stored address followed the page (%1)")
 		           .arg(QFileInfo(row->url).fileName()));
+
+		// And now the disagreement, planted. `address_of` prefers the live
+		// view; nothing but this makes the two answers different, and without
+		// a difference the checks below cannot fail.
+		const QString planted = QUrl::fromLocalFile(one).toString();
+		row->url = planted;
 
 		QAction *copy = nullptr;
 		for (QAction *a : w.findChildren<QAction *>())
@@ -236,6 +256,9 @@ int main(int argc, char *argv[]) {
 			check(got == address->text(),
 			       "which is the address bar's answer, so the two controls "
 			       "agree about one tab");
+			check(got != planted,
+			       QString("and not the address planted in the row (%1)")
+			           .arg(QFileInfo(planted).fileName()));
 		}
 	}
 

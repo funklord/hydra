@@ -20277,12 +20277,14 @@ most of them reached by drivers through a tooltip or a slot rather than by
 label, which is the proxy over-reporting again. `Copy Address` was not one of
 those.
 
-It copied `n->url`, the address the row was **filed** at. A node's url does
-not follow a navigation -- the title does, and that dual meaning is recorded
-in `project.md` as the copyright holder's to settle, because the tab lock's
+It copied `n->url`, the address the row was **filed** at. A node's url did
+not follow a navigation then -- the title did, and that dual meaning is
+recorded below as the copyright holder's to settle, because the tab lock's
 pin lives in the same field. So after clicking through a site, the address
 bar showed where you were and Ctrl+Shift+C gave you where you came in. Two
-controls, one tab, different answers.
+controls, one tab, different answers. (For a non-locked row the field follows
+the page since `5cda368`; the fix here is unaffected, and what it cost the
+test is at the end of this section.)
 
 **Which field to fix is the holder's question; which field this action reads
 is not.** For a row whose view is live, what the person is looking at is the
@@ -20306,11 +20308,30 @@ Two spellings of one question is how they drifted in the first place, and a
 third was one edit away.
 
 `try_pagetools` covers it, and the middle check is the one that makes the
-other two mean anything: it asserts that the row still holds the address it
-was filed at, so the section is measuring the disagreement rather than a
-tree that happened to keep up. Sabotaged back to `n->url`: the clipboard
-holds `one.html` while the address bar reads `two.html`, which is the defect
-stated as an assertion.
+other two mean anything: without a row whose stored address differs from the
+page in front of it, the two answers are one answer and the checks pass
+whichever field the action reads.
+
+**~~It asserts that the row still holds the address it was filed at.~~ It
+cannot, and the reason is that the premise was deliberately retired.**
+`5cda368` made a non-locked tab's stored url follow the page, because the
+properties dialog, the tree and session-restore were all showing where a tab
+began rather than where it is. The two addresses stopped being different by
+themselves, so the control stopped separating anything -- and nothing said
+so, because a control that cannot fail passes.
+
+Measured on 2026-09-20 rather than reasoned about: `address_of` reduced to
+`return n->url`, which is precisely the sabotage this paragraph used to
+claim it caught, and **both remaining checks stayed green**. The only
+failure in the driver was the stale control itself, which reads as a broken
+test rather than as an unguarded code path -- the more expensive way round,
+since the obvious response to it is to delete the line.
+
+The section constructs the disagreement now instead of waiting for it: it
+pins the current rule -- the row's stored address followed the page -- then
+plants the old address back into the row and requires Copy Address to answer
+with the page. Re-sabotaged, all three fail; restored, 30 pass and none
+fail.
 
 ## The saved policy overrules a capability, and one comment already says it must not
 
