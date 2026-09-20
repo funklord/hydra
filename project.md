@@ -23828,6 +23828,20 @@ Which makes it the shape `evidence.md` calls *a gate's verdict can be a
 property of the toolchain rather than of the source*: it passed where it was
 written and fails here, and neither machine is wrong.
 
+**And it is the only check in the tree that does**, which is the fact this
+section was missing and which bears on what to do about it. The whole offline
+suite was run at two other font sizes, 2026-09-20:
+
+    QT_FONT_DPI=72    36 suites, every one clean -- test_rotation included
+    QT_FONT_DPI=96    35 clean, test_rotation 375 passed 1 failed  (this machine)
+    QT_FONT_DPI=120   35 clean, test_rotation 375 passed 1 failed
+
+So the pin passes below about 84 and fails at and above 96, and **no other
+check among roughly 4,400 moves with the font in either direction**. The suite
+is portable and this one line is not. That also says the fix is local: nothing
+else depends on the number, so changing or retiring it cannot disturb anything
+measured here.
+
 **That it tracks the font is measured, not inferred.** Moving only
 `QT_FONT_DPI` moves the number and nothing else does:
 
