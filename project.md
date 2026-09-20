@@ -24305,6 +24305,54 @@ to be that size is not established here. The guard does not depend on knowing:
 it asks whether the thing measured was big enough to have been laid out, which
 is the question the audit needs answered either way.
 
+## The toolbar's own icons were bundled to fix a report, and nothing checked it
+
+The copyright holder reported icons differing between machines and **no shield
+icon** on one of them. The cause is recorded in `icon/hydra.qrc`: the shield
+fell back to `SP_VistaShield`, a Windows standard pixmap that comes back empty
+on a Linux style, and the key to `SP_CustomBase`, which is explicitly a null
+icon. The fix was to bundle the toolbar's own svgs at `:/ui/<name>.svg` and
+prefer them over whatever the host's theme holds.
+
+**Nothing checked that the preference takes effect.** `themed_icon` says so
+when it does not -- one `qWarning` per icon -- and a warning on stderr in a
+driver whose output nobody reads is a fault that has announced itself and been
+missed, which is the same shape as the capture driver above.
+
+**Two wrong versions came first and both are worth the lines**, because each is
+a way this check can be confidently useless.
+
+*Wrong place.* Written into `test_rotation`, it reported **Key and Shield have
+no icon** -- on a build where nothing is wrong. The offline suites deliberately
+do not link the resources: `test/Makefile` says an offline suite "would pay 180
+KB for a resource it never draws", so every `:/ui/*.svg` is null there and the
+two callers with no style fallback end up empty. Ten minutes were spent on
+`hydra.pro` not declaring `QT += svg` before the link set was read. A check
+whose population is the wrong binary reports a defect that does not exist, and
+the desktop application is fine: the live drivers link the resources, draw all
+ten, and warn about none.
+
+*Wrong question.* Moved into `try_look`, the check asked whether every toolbar
+action ended up with an icon that renders. Sabotaged -- the shield's bundled
+name misspelled -- **it passed**: this machine's icon theme answers
+`security-high`, so the button drew perfectly from the fallback. That is the
+reported fault reproduced rather than caught. **Uniformity is the property, and
+a host whose theme rescues the fallback is exactly what hides it**, so a check
+that asks "was something drawn" is blind on every machine where the answer does
+not matter.
+
+What works is counting `themed_icon`'s own diagnostic, which fires precisely
+when a bundled icon did not render, whatever rescues the button afterwards. The
+same sabotage now reports:
+
+    toolbar: 9 action(s) with an icon to draw; 1 bundled icon(s) failed to render
+      ! icon: :/ui/shieldx.svg did not render; is Qt Svg present?
+
+against `9 action(s) ... 0 bundled icon(s) failed` on the tree as it stands. The
+action count is printed for the reason this document keeps arriving at: a loop
+that finds no toolbar reports a clean toolbar in the same words as one that
+checked nine.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

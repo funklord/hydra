@@ -55,6 +55,7 @@
 #include <QStyleOptionComboBox>
 #include <QComboBox>
 #include <QLayout>
+#include <QToolBar>
 #include <QTreeView>
 #include <QDir>
 #include <QEventLoop>
@@ -141,6 +142,33 @@ static bool combo_control() {
 		return false;
 	}
 	return true;
+}
+
+// **`themed_icon`'s own diagnostic, counted rather than printed and lost.**
+// It warns once per bundled icon that would not render, which is the exact
+// moment the toolbar stops being the same on every machine -- and a warning on
+// stderr in a driver whose output nobody reads is a fault that has announced
+// itself and been missed.
+static QtMessageHandler g_previous_handler = nullptr;
+static int g_icon_warnings = 0;
+static QStringList g_icon_failures;
+
+static void count_icon_warnings(QtMsgType type, const QMessageLogContext &ctx,
+                                 const QString &msg) {
+	if (msg.startsWith("icon:")) {
+		++g_icon_warnings;
+		g_icon_failures << msg;
+	}
+	// **Passed on, never swallowed.** `qInstallMessageHandler` answers with a
+	// null pointer when what it replaced was Qt's own default, so forwarding
+	// only to a predecessor silences everything the engine says -- and a
+	// driver gone quiet about the engine looks like one whose engine had
+	// nothing to say. The same note is on try_forget's handler.
+	if (g_previous_handler)
+		g_previous_handler(type, ctx, msg);
+	else
+		std::fprintf(stderr, "%s\n",
+		              qPrintable(qFormatLogMessage(type, ctx, msg)));
 }
 
 static void audit(QWidget *w, const QString &name) {
@@ -387,6 +415,10 @@ int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
+	// Before the window: `themed_icon` runs in main_window's constructor, so a
+	// handler installed after it would count nothing and say so in the same
+	// words as a clean run.
+	g_previous_handler = qInstallMessageHandler(count_icon_warnings);
 
 	if (!combo_control())
 		return 2;
@@ -442,6 +474,50 @@ int main(int argc, char *argv[]) {
 
 	std::printf("\n== the window itself ==\n");
 	save(&w, "window-wide");
+
+	// **An icon that does not render is a button that is not there**, because
+	// this toolbar is icon-only. That is the shape reported from use -- icons
+	// differing between machines, and no shield on one of them -- and the
+	// answer was to bundle the toolbar's own svgs at `:/ui/<name>.svg` and
+	// prefer them over whatever the desktop's theme holds.
+	//
+	// **The property to check is that the bundled icon was used, not that
+	// something was drawn**, and the two come apart exactly where it matters.
+	// Measured: with the shield's bundled name deliberately misspelled, this
+	// machine's icon theme answered `security-high` and the button drew
+	// perfectly -- so a check asking "did every action get an icon" passed
+	// over the defect, on the one host where the theme happens to have it.
+	// That is the reported fault reproduced rather than caught: uniformity is
+	// the point, and a host that rescues the fallback is what hides it.
+	//
+	// `themed_icon` already says so, once per failure, in a qWarning nobody
+	// reads. Counting it is what turns a diagnostic into a result -- the
+	// warning fires precisely when a bundled icon did not render, whatever
+	// rescues the button afterwards.
+	//
+	// **And it belongs in a live driver and nowhere else.** The offline suites
+	// do not link the resources on purpose -- test/Makefile says so, and would
+	// pay 180 KB for something they never draw -- so the same question asked
+	// there reports Key and Shield missing on a build where nothing is wrong.
+	// Asked there first, and it did exactly that.
+	{
+		int examined = 0;
+		for (QToolBar *tb : w.findChildren<QToolBar *>())
+			for (QAction *a : tb->actions())
+				if (!a->isSeparator() && !a->text().isEmpty())
+					++examined;
+		// The count is printed because a loop that found no toolbar reports a
+		// clean toolbar in the same words as one that checked every button.
+		std::printf("  toolbar: %d action(s) with an icon to draw; "
+		             "%d bundled icon(s) failed to render\n",
+		             examined, g_icon_warnings);
+		if (examined == 0)
+			++g_problems;
+		for (const QString &line : std::as_const(g_icon_failures)) {
+			std::printf("    ! %s\n", qPrintable(line));
+			++g_problems;
+		}
+	}
 
 	// The narrow case, where the tree becomes a drawer. Worth its own picture
 	// because it is a different layout, not the same one squeezed.
