@@ -24192,6 +24192,43 @@ what the defect looked like from inside the program.
 
 **Six report-only drivers remain unread**, and this is two for two.
 
+## The lens the consent finding suggested, and what it caught
+
+Three faults in one day had one shape: a check reading a value through an
+object that a deliberate change had moved, with only part of the section going
+red. The lens that follows from it is mechanical -- **a test asking the window
+for an object of which the window has more than one.**
+
+Swept `findChild<T *>` across `test/`, against which of these classes are
+built per view rather than per window:
+
+    per window   media_detector, mse_tap, download_manager, find_bar
+    per view     autofill_controller, cosmetic_filters
+    both         consent_blocker -- an aggregator and one per view
+
+Six call sites name the three risky types. **Five were already right**:
+`try_autofill` asks each of two views for its own controller, and
+`test_rotation` scopes to a view the same way. `try_consent`'s remaining
+window-level lookup is correct too, and the reason is worth stating rather than
+counting: every use left on it -- `unhandled()`, `rules()`,
+`rule_from_label()` -- is a fact the window owns, which is exactly the division
+the per-view change established. The sixth was the one already fixed above.
+
+So the lens found nothing new in the code, and recording that is the point: the
+class has been swept, with the method written down, so the next fault here
+needs a different lens rather than this one run again.
+
+**It did catch something in the two helpers written to fix the first one**,
+which is the part worth keeping. Both asked `findChild<QStackedWidget *>()` for
+the window's view stack -- and four dialogs in this tree keep a stack of their
+own and are children of the window, so the type alone picks whichever comes
+first. That is the same proxy fault one level up, written while correcting it.
+Neither was wrong in practice, because no dialog is open in `try_flicker` and
+the main stack happened to come first in `try_consent`; a helper that is right
+only while that holds is one nobody will re-check. They select on
+`st->window() == &w` now, which separates a dialog's stack from the window's
+exactly.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

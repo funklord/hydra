@@ -179,7 +179,14 @@ public:
 // front, and re-asked after every switch, since the object changes with the
 // tab.
 static consent_blocker *current_blocker(QWidget &w) {
-	auto *stack = w.findChild<QStackedWidget *>();
+	// **The window's stack, not a dialog's.** Four dialogs in this tree keep a
+	// QStackedWidget of their own and are children of the window, so asking by
+	// type alone is a proxy that picks whichever comes first -- the fault this
+	// helper exists to correct, one level up. `window()` is the top-level
+	// widget a widget sits in, so it separates them exactly.
+	QStackedWidget *stack = nullptr;
+	for (QStackedWidget *st : w.findChildren<QStackedWidget *>())
+		if (st->window() == &w) { stack = st; break; }
 	QWidget *cur = stack ? stack->currentWidget() : nullptr;
 	return cur ? cur->findChild<consent_blocker *>() : nullptr;
 }

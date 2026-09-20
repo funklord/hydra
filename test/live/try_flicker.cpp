@@ -71,7 +71,14 @@ static QString mean_of(const QImage &img, const QRect &r) {
 // in this tree belong to dialogs. Returns an empty rect if it is not there,
 // and the caller prints that rather than substituting a number.
 static QRect page_rect(QWidget &w) {
-	auto *stack = w.findChild<QStackedWidget *>();
+	// The window's own stack. Four dialogs here keep a QStackedWidget and are
+	// children of the window, so asking by type alone answers with whichever
+	// comes first; `window()` is the top-level widget a widget sits in, which
+	// separates them. No dialog is open in this driver today, and a helper
+	// that is right only while that holds is one nobody will re-check.
+	QStackedWidget *stack = nullptr;
+	for (QStackedWidget *st : w.findChildren<QStackedWidget *>())
+		if (st->window() == &w) { stack = st; break; }
 	if (!stack)
 		return QRect();
 	QWidget *cur = stack->currentWidget();
