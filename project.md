@@ -24353,6 +24353,31 @@ action count is printed for the reason this document keeps arriving at: a loop
 that finds no toolbar reports a clean toolbar in the same words as one that
 checked nine.
 
+**And the Android half was asked and answered rather than assumed**, because
+the first version of this investigation nearly ended in a needless
+`QT += svg`. The reasoning that produced it was: the desktop links QtSvg only
+through WebEngine and Quick, the Android branch adds neither, and Android has
+no icon theme to rescue a fallback -- so the phone would lose all ten icons and
+Key and Shield would be blank, which is the reported fault on the holder's own
+handset. It is wrong at every step, and each step was checkable:
+
+- **A widgets-only binary renders them.** A twelve-line program linking
+  neither QtSvg nor Quick, with one svg in its resources, answers
+  `isNull=0 pixmap24Null=0` and reports `svg` among the supported formats:
+  the `qsvg` image plugin loads on demand. `QT += svg` would buy nothing.
+- **androiddeployqt bundles the plugin without being asked.** The APK in
+  `build-android-arm64-v8a/` carries `libQt6Svg_arm64-v8a.so`,
+  `libplugins_imageformats_qsvg_arm64-v8a.so` and the svg *icon engine*
+  beside them, among 35 plugins.
+- **And that APK carries the icons.** `shield`, `key`, `back` and `drawer`
+  are all present as resource names, UTF-16, inside
+  `libhydra_arm64-v8a.so`. The bundling landed in `dcfe38a` on 2026-09-03
+  and the APK was built on the 18th, so it is on the later side of the fix.
+
+Recorded because the question looks open from the build files and is closed
+by three commands, and because the shape is this file's own: a plausible
+chain about somebody else's platform, none of whose links had been measured.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
