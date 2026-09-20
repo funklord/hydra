@@ -24009,6 +24009,52 @@ sorting compares on, so the sabotage is not a contrived one -- it is the
 shape the invariants section already records as having cost three siblings
 holding order 2.
 
+## Four Alt keys claimed twice, found by two detectors that do not overlap
+
+The first full on-screen sweep of all forty-two live drivers since they were
+last all built reported five failures. Every one reproduced when re-run alone,
+which is what this tree's sweep script asks for before believing one. Four of
+them were the same fault in two places:
+
+    try_menus   File   New &Tab        vs  Close &Tab        Alt+T
+    try_menus   File   &Print...       vs  Save &Page        Alt+P
+    try_menus   Edit   Recently &Closed vs  &Copy Address    Alt+C
+    try_look    downloads dialog
+                       Open &Folder    vs  Clear &Finished   Alt+F
+
+Qt matches mnemonics case-insensitively and cycles between collisions rather
+than activating either, so each of these is a key that does nothing on the
+first press.
+
+**The two detectors are independent and neither could have found all four.**
+`try_menus` walks the menu bar and asks the question per menu; `try_look` opens
+twenty dialogs and asks it per surface. The downloads dialog has no menu and
+the File menu is on no dialog, so the fourth was reachable only by the second
+detector and the first three only by the first. This class has been found here
+twice before, both times in one place, and the reason it keeps coming back is
+that adding an item is what creates it -- nothing about the new item looks
+wrong, and the collision is a property of its neighbours.
+
+**The conventional letter keeps its claim and the other moves**, which is what
+decides each of the four rather than taste: `&Print`, `&Copy Address` and
+`Open &Folder` are spellings a person arrives with. So `Close &Tab` becomes
+`&Close Tab`, `Save &Page` becomes `Sa&ve Page`, `Recently &Closed` becomes
+`R&ecently Closed`, and `Clear &Finished` becomes `C&lear Finished` -- each
+replacement checked against the rest of its own menu or dialog rather than
+assumed free.
+
+Measured after: `try_menus` 28 passed and 0 failed where it was 26 and 2, and
+the downloads audit 0 problems where it was 1 -- over 20 surfaces, 103 buttons,
+68 labels and 66 combos, which the driver prints for the reason this document
+keeps arriving at. A zero over a population it names is a different statement
+from a zero.
+
+**Two offline checks were matching the old text literally**, in `test_rotation`:
+`a->text() == "Save &Page"` and the same for `Close &Tab`. They ask which
+action this is and were answering on where its ampersand sits, so a mnemonic
+fix would have read as a broken test. They strip the ampersand now, which is
+the question they meant. 35 suites pass unchanged.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

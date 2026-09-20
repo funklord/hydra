@@ -1357,7 +1357,7 @@ QMenuBar *main_window::build_menu_bar() {
 	// can take a folder and everything in it, while this closes the single
 	// tab being viewed and asks nothing, because Reopen Closed Tab brings it
 	// back. Greyed when no page is showing.
-	m_close_tab_action = file_menu->addAction("Close &Tab",
+	m_close_tab_action = file_menu->addAction("&Close Tab",
 	                                          QKeySequence("Ctrl+W"), this,
 	                                          &main_window::close_current_tab);
 	m_close_tab_action->setStatusTip("Close the tab you are viewing (Reopen Closed Tab brings it back)");
@@ -1396,7 +1396,7 @@ QMenuBar *main_window::build_menu_bar() {
 	// A copy of the page to the downloads folder, not a chooser: the save
 	// is a download like any other (see the backend), so it goes where
 	// downloads go. Greyed where the backend cannot save, as Print is.
-	m_save_page_action = file_menu->addAction("Save &Page",
+	m_save_page_action = file_menu->addAction("Sa&ve Page",
 	                                          QKeySequence("Ctrl+Shift+S"),
 	                                          this, &main_window::save_page);
 	m_save_page_action->setStatusTip("Save a copy of this page to your "
@@ -1464,7 +1464,7 @@ QMenuBar *main_window::build_menu_bar() {
 	// last. Rebuilt each time it opens, because the set changes as tabs are
 	// closed and reopened -- a standing copy would be a second thing to keep
 	// in step with the model. Newest-first, the order the model counts in.
-	QMenu *recent = edit_menu->addMenu("Recently &Closed");
+	QMenu *recent = edit_menu->addMenu("R&ecently Closed");
 	recent->setObjectName("recently_closed_menu");
 	connect(recent, &QMenu::aboutToShow, this, [this, recent] {
 		recent->clear();

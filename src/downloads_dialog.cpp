@@ -261,7 +261,7 @@ downloads_dialog::downloads_dialog(download_manager *downloads,
 	// dead without one, but Clear Finished acts on the whole list, so its
 	// state follows whether any finished download exists rather than the
 	// selection. update_buttons() sets it.
-	m_clear = new QPushButton("Clear &Finished", this);
+	m_clear = new QPushButton("C&lear Finished", this);
 	m_clear->setToolTip("Remove every finished, failed or cancelled download "
 	                     "from this list at once");
 	m_clear->setEnabled(false);

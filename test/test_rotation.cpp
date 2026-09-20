@@ -819,7 +819,7 @@ int main(int argc, char **argv) {
 		}
 		QAction *save = nullptr;
 		for (QAction *a : m.findChildren<QAction *>())
-			if (a->text() == "Save &Page") { save = a; break; }
+			if (a->text().remove('&') == "Save Page") { save = a; break; }
 		check(v && save, "a tab and a Save Page action");
 		check(save && save->isEnabled(),
 		       "the action is live where the backend can save");
@@ -849,7 +849,7 @@ int main(int argc, char **argv) {
 		       "the viewed tab has a live view");
 		QAction *close = nullptr;
 		for (QAction *a : m.findChildren<QAction *>())
-			if (a->text() == "Close &Tab") { close = a; break; }
+			if (a->text().remove('&') == "Close Tab") { close = a; break; }
 		check(close && close->isEnabled(),
 		       "Close Tab is live while a page is shown");
 		m.close_current_tab();
