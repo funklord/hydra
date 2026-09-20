@@ -24253,6 +24253,58 @@ only while that holds is one nobody will re-check. They select on
 `st->window() == &w` now, which separates a dialog's stack from the window's
 exactly.
 
+## The appearance audit measured a dialog before it had been laid out
+
+A confirmation sweep reported four failures and **none of them was a defect**,
+which is the sweep script's own rule working: re-run a failure alone before
+believing it. Two were flakes of the kind its header already records -- a
+`try_handoff` check and `try_phone`'s filter-dialog focus, both passing alone
+at 5 of 5 and 205 of 205. One was **mine**: a `make` in the tree while the
+sweep was running, so the sweep tried to exec `try_capture` while the linker
+was writing it and reported `rc=126 Permission denied`. That reads exactly
+like a broken driver and is worth knowing before it costs somebody an hour.
+
+The fourth was worth keeping. `try_look`'s audit reported two cramped buttons:
+
+    ! auth-site: "Sign in" needs 80px and has 36
+    ! auth-site: "Cancel"  needs 80px and has 36
+
+and alone the same driver found nothing. The difference is in the line above
+them, which nobody would read as the answer:
+
+    under the sweep   auth-site   100x30
+    alone             auth-site   200x172
+
+The surface was grabbed before Qt had laid it out, so every control in it sat
+at its minimum and every width check failed at once. Two false findings, and
+the only variable was how loaded the machine was when the grab happened.
+
+**A false finding is the expensive kind here**, because this audit is read by
+somebody deciding whether an appearance problem is real, and one that cries
+wolf is one that gets skipped -- the argument the driver's own comments
+already make about mnemonics across a stack's pages.
+
+It refuses now rather than measuring: a laid-out widget is at least its own
+`minimumSizeHint`, which needs no constant, and a surface under that is
+reported as not audited and **counted as a problem**. Skipping it silently
+would be a surface that reads exactly like one that passed, which is the fault
+this driver exists to catch.
+
+**The control took two attempts and the first was worthless.** It audited a
+`QDialog` that had never been shown, on the assumption that an un-laid-out
+widget is 100x30 -- and an unshown top-level dialog is **640x480**, comfortably
+above its floor, so the guard correctly stayed silent and the control proved
+nothing. Measured rather than assumed: `size=640x480 minHint=203x78`. Resized
+to the geometry actually observed it fires, once per surface:
+
+    CONTROL size=100x30 minHint=203x78
+    ! CONTROL-unlaid was not laid out when it was grabbed (100x30, floor 203x78)
+
+100x30 is a *child* widget's default, not a window's, so how `auth-site` came
+to be that size is not established here. The guard does not depend on knowing:
+it asks whether the thing measured was big enough to have been laid out, which
+is the question the audit needs answered either way.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

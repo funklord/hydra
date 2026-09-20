@@ -146,6 +146,31 @@ static bool combo_control() {
 static void audit(QWidget *w, const QString &name) {
 	if (!w)
 		return;
+	// **Refuse a surface that has not been laid out, rather than measure it.**
+	// A widget Qt has not laid out yet is 100x30, its default, and everything
+	// inside it sits at its minimum -- so every width check fails at once and
+	// the audit reports a dialog full of cramped controls that is nothing of
+	// the kind. Measured 2026-09-20: under a full sweep `auth-site` was
+	// captured at 100x30 and produced *"Sign in needs 80px and has 36"* and
+	// the same for Cancel, while the same driver run alone captured it at
+	// 200x172 and found nothing. Two false findings, and the only difference
+	// was how loaded the machine was when the grab happened.
+	//
+	// A laid-out widget is at least its own minimumSizeHint, so that is the
+	// discriminator, and it needs no constant. Reported as a refusal and
+	// counted as a problem: the audit did not run here, and a surface silently
+	// skipped is indistinguishable from one that passed -- which is the fault
+	// this driver exists to avoid, not one to commit while fixing it.
+	const QSize floor = w->minimumSizeHint();
+	if (floor.isValid() &&
+	     (w->width() < floor.width() || w->height() < floor.height())) {
+		std::printf("    ! %s was not laid out when it was grabbed "
+		             "(%dx%d, floor %dx%d) -- not audited\n",
+		             qPrintable(name), w->width(), w->height(),
+		             floor.width(), floor.height());
+		++g_problems;
+		return;
+	}
 	if (w->windowTitle().trimmed().isEmpty()) {
 		std::printf("    ! %s has no window title\n", qPrintable(name));
 		++g_problems;
