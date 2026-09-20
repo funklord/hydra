@@ -45,6 +45,7 @@
 #include <QAbstractButton>
 #include <QHash>
 #include <QApplication>
+#include <QDate>
 #include <QDialog>
 #include <QLabel>
 #include <QTreeWidget>
@@ -696,11 +697,16 @@ int main(int argc, char *argv[]) {
 		web_view_backend::certificate_offer a;
 		a.subject = "Ada Lovelace";
 		a.issuer  = "Example Certification Authority";
-		a.valid_until = "2027-01-01";
+		// Relative, so the pair stays one live certificate and one expired
+		// one. Written as literals they rotted: `2026-09-01` was comfortably
+		// ahead when it was typed and three weeks past by 2026-09-21.
+		a.valid_until = QDate::currentDate().addDays(120)
+		                    .toString(Qt::ISODate);
 		web_view_backend::certificate_offer b;
 		b.subject = "Ada (work)";
 		b.issuer  = "Corp CA";
-		b.valid_until = "2026-09-01";
+		b.valid_until = QDate::currentDate().addDays(-20)
+		                    .toString(Qt::ISODate);
 		offered << a << b;
 		cert_dialog cert("id.example", offered, &w);
 		cert.show();
@@ -735,10 +741,20 @@ int main(int argc, char *argv[]) {
 		// for the host and would leave this an empty window.
 		if (consent_blocker *b = w.m_consent) {
 			b->set_page_host("nachrichten.beispiel.invalid");
-			b->report_unhandled("Alle akzeptieren | Nur notwendige Cookies | "
+			// **Tab-separated, because that is what the page sends.** The
+			// injected script reports `labels.join('\t')` and the dialog
+			// splits on a tab to make one child row per button -- those rows
+			// are the selectable things, and picking one is the whole of what
+			// the window is for. Written here with " | " between the labels,
+			// the split found one field, and the picture showed each site with
+			// a single unselectable row holding all three labels at once: a
+			// state the product cannot produce, in the only picture anybody
+			// has of this dialog. Read as a defect first, which is what a
+			// fixture that does not match its producer costs a reader.
+			b->report_unhandled("Alle akzeptieren\tNur notwendige Cookies\t"
 			                     "Einstellungen verwalten");
 			b->set_page_host("aviser.eksempel.invalid");
-			b->report_unhandled("Godta alle | Avvis alle | Administrer valg");
+			b->report_unhandled("Godta alle\tAvvis alle\tAdministrer valg");
 			consent_dialog cd(b, g_out + "/look-consent-rules.json", &w);
 			cd.show();
 			QApplication::processEvents();

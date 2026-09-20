@@ -24392,6 +24392,63 @@ Recorded because the question looks open from the build files and is closed
 by three commands, and because the shape is this file's own: a plausible
 chain about somebody else's platform, none of whose links had been measured.
 
+## Somebody read the pictures, and the certificate chooser was hiding a dead one
+
+`try_look` takes twenty photographs of this program's surfaces and its header
+says they are for a person to read. Nobody had. Reading them cost half an hour
+and found one product defect, one fixture that showed a state the program
+cannot produce, and two fixtures with a shelf life.
+
+**The defect: an expired certificate read exactly like a live one.** The client
+certificate chooser lists each offer as *"issued by Corp CA -- valid until
+2026-09-01"*, and `cert_dialog.cpp` says in its own comment that a certificate
+"already expired ... is the case worth noticing". The only way to notice was to
+compare a date against today in your head, while a site waits. In the picture
+one of the two rows was three weeks dead and indistinguishable from the other.
+
+It says `EXPIRED 2026-09-01` now where the date has passed, and `valid until`
+where it has not. The date is parsed rather than carried: the backend seam
+hands this over as text -- `qtwebengine_view` writes
+`expiryDate().toString(Qt::ISODate)` into a QString -- and ISO-8601 reads back
+exactly. **A value that does not parse is printed unchanged**, because a
+certificate whose expiry this cannot read is not thereby expired.
+
+`try_chrome` asserts **both directions in one run**, which is what stops the
+check passing by always or never marking: one offer is live and one is past,
+and a dialog that marked everything or nothing fails one of the two. 79 pass
+where it was 77.
+
+**The fixtures had rotted into the case they were not testing.** All three
+drivers held the literal pair `2027-01-01` and `2026-09-01`, both comfortably
+ahead when written. By 2026-09-21 the second had expired, so every one of them
+had quietly become one live certificate and one dead one -- which is why the
+defect was visible at all, and equally why it would have stopped being visible
+again on its own. They are `currentDate().addDays(120)` and `addDays(-20)` now,
+one of each on purpose.
+
+**And one picture showed a state the program cannot produce.** The consent
+dialog makes one child row per button a banner offered, splitting on a tab,
+because those rows are the selectable things and picking one is the whole of
+what the window is for. `try_look` fed it `"Godta alle | Avvis alle |
+Administrer valg"` as a single string, so the split found one field and each
+site got a single unselectable row holding all three labels. The injected
+script sends `labels.join('\t')`; the fixture did not. Read as a defect first,
+which is what a fixture that disagrees with its producer costs a reader.
+
+**One change was made and then taken back, which is worth recording.** Since
+the site headers are deliberately unselectable, the consent dialog photographs
+with both of its actions greyed, and selecting a row first makes a livelier
+picture. That is a state the reader reaches after a click, and this driver
+photographs surfaces *as they open* -- the audit's own `greyed:` line for the
+initial state is data, and the change deleted it. Reverted.
+
+The other seventeen surfaces were read and are sound: the wide and narrow
+windows, settings in both layouts, the screen picker, both auth prompts, the
+permission prompt, downloads, media, properties, site controls and rules. The
+narrow settings page turns its page list into a dropdown and shortens
+*Restore Privacy & security defaults* to *Restore defaults*, which is the kind
+of thing only a picture shows.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

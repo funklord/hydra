@@ -1,5 +1,7 @@
 #include "cert_dialog.h"
 
+#include <QDate>
+#include <QDateTime>
 #include <QDialogButtonBox>
 #include <QLabel>
 #include <QListWidget>
@@ -45,13 +47,35 @@ cert_dialog::cert_dialog(const QString &host,
 		// Subject first, because it is the one a person recognises as theirs.
 		// Issuer and expiry follow, since a certificate from an unexpected
 		// issuer, or one already expired, is the case worth noticing.
-		m_list->addItem(QString("%1\n    issued by %2 — valid until %3")
+		// **Say "expired" where it has, rather than printing the date and
+		// leaving the arithmetic to the reader.** The line above already
+		// called an already-expired certificate "the case worth noticing",
+		// and the only way to notice it was to compare a date against today
+		// in your head -- which nobody does while a site is waiting. Found by
+		// looking at the picture try_look takes of this window: one of the two
+		// rows was three weeks dead and read exactly like the live one.
+		//
+		// Parsed rather than carried, because the seam hands this over as
+		// text: `qtwebengine_view` writes `expiryDate().toString(Qt::ISODate)`
+		// into a QString field. ISO-8601 round-trips exactly, so reading it
+		// back is safe -- and a value that does not parse is left alone and
+		// printed as it arrived, since a certificate whose expiry this cannot
+		// read is not thereby expired.
+		const QDateTime until_dt =
+		  QDateTime::fromString(c.valid_until, Qt::ISODate);
+		const QDate until = until_dt.isValid()
+		                        ? until_dt.date()
+		                        : QDate::fromString(c.valid_until, Qt::ISODate);
+		const bool expired = until.isValid() && until < QDate::currentDate();
+		m_list->addItem(QString("%1\n    issued by %2 — %3 %4")
 		                    .arg(c.subject.isEmpty()
 		                             ? QStringLiteral("(unnamed certificate)")
 		                             : c.subject,
 		                          c.issuer.isEmpty()
 		                             ? QStringLiteral("an unnamed authority")
 		                             : c.issuer,
+		                          expired ? QStringLiteral("EXPIRED")
+		                                   : QStringLiteral("valid until"),
 		                          c.valid_until.isEmpty()
 		                             ? QStringLiteral("an unstated date")
 		                             : c.valid_until));

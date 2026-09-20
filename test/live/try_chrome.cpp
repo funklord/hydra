@@ -18,6 +18,7 @@
 #include "node.h"
 #include "tab_tree_model.h"
 #include <QAbstractButton>
+#include <QDate>
 #include <QApplication>
 #include <QLabel>
 #include <QListWidget>
@@ -222,11 +223,21 @@ int main(int argc, char *argv[]) {
 	{
 		QList<web_view_backend::certificate_offer> offered;
 		web_view_backend::certificate_offer a;
+		// **Dated relative to today, because a literal rots into the case it
+		// was not testing.** These read `2027-01-01` and `2026-09-01`, both
+		// comfortably in the future when they were written; by 2026-09-21 the
+		// second had expired, so the fixture had quietly become one live
+		// certificate and one dead one without anybody choosing that. Now it
+		// is one of each on purpose, and stays that way.
+		const QString future =
+		  QDate::currentDate().addDays(120).toString(Qt::ISODate);
+		const QString past =
+		  QDate::currentDate().addDays(-20).toString(Qt::ISODate);
 		a.subject = "Ada Lovelace";  a.issuer = "Example CA";
-		a.valid_until = "2027-01-01";
+		a.valid_until = future;
 		web_view_backend::certificate_offer b;
 		b.subject = "Ada (work)";    b.issuer = "Corp CA";
-		b.valid_until = "2026-09-01";
+		b.valid_until = past;
 		offered << a << b;
 
 		cert_dialog dlg("id.example", offered, &w);
@@ -240,6 +251,19 @@ int main(int argc, char *argv[]) {
 		          list->item(0)->text().contains("Example CA"),
 		      "each named by holder and issuer, since an unexpected issuer is "
 		      "the case worth noticing");
+
+		// **Both directions in one run, so the check cannot pass by always or
+		// never marking.** One certificate is live and one is three weeks
+		// dead; a dialog that marked everything, or nothing, fails one of
+		// these two. Printing the date and leaving the reader to compare it
+		// against today is what this replaced -- the dead row read exactly
+		// like the live one in the picture try_look takes.
+		check(list && !list->item(0)->text().contains("EXPIRED"),
+		      "a certificate still in date is not marked expired");
+		check(list && list->item(1)->text().contains("EXPIRED"),
+		      QString("and one past its date says so (%1)")
+		          .arg(list ? list->item(1)->text().section('\n', 1).trimmed()
+		                     : QString()));
 
 		// **Nothing selected, and Send unavailable.** A pre-selected row plus
 		// an enabled button is one keystroke from identifying somebody who was

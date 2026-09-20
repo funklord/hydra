@@ -52,6 +52,7 @@
 #include "theme.h"
 #include <QAbstractButton>
 #include <QButtonGroup>
+#include <QDate>
 #include <QDialog>
 #include <QDir>
 #include <QLayout>
@@ -805,11 +806,16 @@ int main(int argc, char *argv[]) {
 		web_view_backend::certificate_offer a;
 		a.subject = "Ada Lovelace";
 		a.issuer  = "Example Certification Authority";
-		a.valid_until = "2027-01-01";
+		// Relative, so the pair stays one live certificate and one expired
+		// one. Written as literals they rotted: `2026-09-01` was comfortably
+		// ahead when it was typed and three weeks past by 2026-09-21.
+		a.valid_until = QDate::currentDate().addDays(120)
+		                    .toString(Qt::ISODate);
 		web_view_backend::certificate_offer b;
 		b.subject = "Ada (work)";
 		b.issuer  = "Corp CA";
-		b.valid_until = "2026-09-01";
+		b.valid_until = QDate::currentDate().addDays(-20)
+		                    .toString(Qt::ISODate);
 		offered << a << b;
 
 		cert_dialog dlg("id.example", offered, &f.window);
