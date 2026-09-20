@@ -24190,7 +24190,31 @@ is yours:
 Rows 0 and 1 are the closed port, kept by accident and worth leaving: they are
 what the defect looked like from inside the program.
 
-**Six report-only drivers remain unread**, and this is two for two.
+**And the evidence it lacked existed and was unused.**
+`media_fixture::server` keeps a `seen` list -- *"every path this served, for a
+driver that wants to say what was asked for rather than trusting that it
+was"* -- and **no driver used it**. That list is exactly what turns
+`navigated` from a print into a fact: with the target pointed at a closed
+port, the driver printed `navigated` and nothing anywhere said the page had
+never been fetched. It prints the list now, and says in as many words that an
+empty one means the run measured nothing:
+
+    fixture served 18 request(s):
+      asked: /  /player  /stream.m3u8  /seg-1.ts  /ads/banner.gif  ...
+
+**Six report-only drivers were read after this**, and the other five had
+nothing wrong: `try_frame` answers its one question, `try_media` files the
+manifest and badges it, `try_mse` shows the tap hooked and appended to,
+`try_downloads` prints every job, and `try_settings` is a screenshot driver
+whose report is the images. `try_settings` reporting *"Neither backend is
+available"* was checked against the machine rather than assumed -- Ollama is
+not running here, so the line is correct.
+
+**A second lens from the same fault came up empty, recorded so it is not run
+again**: every other hard-coded url in the drivers is deliberately
+unroutable -- `example.test`, `.invalid`, `192.0.2.1` from TEST-NET-1, the
+discard port 9 -- and `try_keepass`'s `127.0.0.1:9931` is a key into the
+vault rather than something fetched.
 
 ## The lens the consent finding suggested, and what it caught
 

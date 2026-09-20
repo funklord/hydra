@@ -38,6 +38,7 @@ int main(int argc, char *argv[]) {
 	// try_downloads, and this driver was the one it missed. A real url is
 	// still what the argument is for.
 	media_fixture::server fixture;
+	const bool own_fixture = argc <= 1;
 	const QString target = argc > 1 ? QString::fromLocal8Bit(argv[1])
 	                                 : fixture.start();
 	if (target.isEmpty()) {
@@ -142,6 +143,23 @@ int main(int argc, char *argv[]) {
 		if (a) { std::printf("stopping capture\n"); a->trigger(); }
 	});
 	QTimer::singleShot(79000, [&] {
+		// **What the fixture was actually asked for.** `media_fixture` keeps
+		// this list for a driver that wants to say what was fetched rather
+		// than trusting that it was, and until now no driver used it. It is
+		// the evidence this one lacked: with the target pointed at a closed
+		// port, "navigated" still printed and nothing said the page had not
+		// been served. An empty list while serving our own fixture means the
+		// run measured nothing, whatever the rest of the output says.
+		if (own_fixture) {
+			std::printf("fixture served %d request(s)%s\n",
+			             int(fixture.seen.size()),
+			             fixture.seen.isEmpty()
+			                 ? "  <- nothing was fetched; this run measured "
+			                   "nothing"
+			                 : ":");
+			for (const QString &path : std::as_const(fixture.seen))
+				std::printf("  asked: %s\n", qPrintable(path));
+		}
 		QDir d(outdir);
 		for (const QFileInfo &fi : d.entryInfoList(QDir::Files, QDir::Time))
 			std::printf("FILE %s %lld bytes\n", qPrintable(fi.fileName()), fi.size());
