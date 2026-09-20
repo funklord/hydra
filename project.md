@@ -24076,6 +24076,54 @@ action this is and were answering on where its ampersand sits, so a mnemonic
 fix would have read as a broken test. They strip the ampersand now, which is
 the question they meant. 35 suites pass unchanged.
 
+## Two live sections were asking an object that had stopped holding the answer
+
+Both came out of the same sweep as the mnemonics, and they are one shape:
+a deliberate redesign moved a value, the check that read it was not moved,
+and **only part of each section went red** -- which is what made both look
+like a broken test rather than an unguarded path.
+
+**`try_consent`: the page host moved to the view.** The section proving the
+page context follows the tab rather than the last navigation asked
+`w.findChild<consent_blocker *>()`. There is more than one: the window keeps
+an aggregator behind the dialog and the badge, and every view gets a blocker
+of its own -- a change made because a shared blocker answered a background
+tab's banner for the front tab's host. `findChild` answers with the
+aggregator, and the aggregator's host is never set.
+
+So the section had been reading an empty string for both tabs. One check
+compared it against `127.0.0.2` and failed; the next compared it against the
+first tab's host, which was also empty, and **passed**; the third asked that
+it not equal `127.0.0.2`, and passed too. One failure and two vacuous passes,
+which reads as one check needing a look.
+
+It asks the view in front now, re-asked after each switch since the object
+changes with the tab, and it refuses an empty host rather than comparing one
+to another. The hosts are real: `127.0.0.1`, then `127.0.0.2`, then
+`127.0.0.1` again after a switch that navigates nothing. 42 pass, 0 fail
+where it was 39 and 1.
+
+Controlled by emptying `consent->set_page_host(u.host())` in the per-view
+wiring: **all four** checks fail, including the two that used to pass on
+empty. The sabotage also breaks three earlier sections, so it is not a clean
+control for this section alone -- but the section under test does fail, which
+is what had to be shown.
+
+**`try_keepass`: a machine that cannot run it is not a failure.** It stops
+when nothing is listening on the KeePassXC socket, deliberately, rather than
+reporting passes for a bridge that talked to nobody. The only way it had to
+say so was a non-zero exit, so every sweep printed `CRASH try_keepass 1
+passed, 0 failed (exit 1 after passing)` -- in the format a real defect
+arrives in, on a machine where nothing is wrong.
+
+A driver can declare it now: a `HYDRA-SKIP: <reason>` line, which the sweep
+reads and reports as a skip. The reason is the driver's own statement rather
+than a condition recomputed in the script, because a copy of the socket path
+in `sweep.sh` would be a second thing to be wrong, and it would go stale in
+the direction that reports a working machine as broken. The static skip list
+above it is unchanged; this is for the preconditions only the driver can
+test.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

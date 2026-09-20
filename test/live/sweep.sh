@@ -355,6 +355,23 @@ for d in $drivers; do
 			timeout "${SWEEP_TIMEOUT:-300}" $prefix "$BIN/$d" >"$log" 2>&1
 	fi
 	rc=$?
+	# **A driver that says it could not run here.** The skip list above is
+	# static -- it knows a driver takes a url, or needs dbus-run-session -- and
+	# a precondition only the driver can test had no way to be reported except
+	# as a non-zero exit. try_keepass stops when nothing is listening on the
+	# KeePassXC socket, deliberately refusing to report passes for a bridge
+	# that talked to nobody, and every sweep called that a CRASH: "1 passed, 0
+	# failed (exit 1 after passing)", in the format a real defect arrives in.
+	#
+	# Reading the driver's own statement rather than recomputing its condition
+	# here, because a copy of the socket path in this script is a second thing
+	# to be wrong, and it would go stale in the direction that reports a
+	# working machine as broken.
+	skipped=$(grep -m1 '^HYDRA-SKIP: ' "$log" 2>/dev/null | sed 's/^HYDRA-SKIP: //')
+	if [ -n "$skipped" ]; then
+		printf '  skip   %-16s %s\n' "$d" "$skipped"
+		continue
+	fi
 	last=$(grep -E 'passed,' "$log" | tail -1)
 	if [ -n "$last" ]; then
 		# **A tally and an exit code are halves of one result.** This judged

@@ -30,6 +30,7 @@
 #include <QTreeView>
 #include <QTreeWidget>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QUrlQuery>
 #include <QWebEnginePage>
 #include <QWebEngineView>
@@ -168,6 +169,20 @@ public:
 		});
 	}
 };
+
+// **Which consent blocker, because there is more than one.** The window keeps
+// an aggregator behind the dialog and the badge, and every view gets a blocker
+// of its own that carries that view's host -- see where the bridges are made.
+// `findChild<consent_blocker *>()` on the window answers with whichever comes
+// first in the child tree, and that is the aggregator, whose host is never
+// set. So a question about which site is in force has to be put to the view in
+// front, and re-asked after every switch, since the object changes with the
+// tab.
+static consent_blocker *current_blocker(QWidget &w) {
+	auto *stack = w.findChild<QStackedWidget *>();
+	QWidget *cur = stack ? stack->currentWidget() : nullptr;
+	return cur ? cur->findChild<consent_blocker *>() : nullptr;
+}
 
 int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -494,25 +509,40 @@ int main(int argc, char *argv[]) {
 			bar->setText(QString("http://127.0.0.1:%1/plain").arg(port));
 			QMetaObject::invokeMethod(bar, "returnPressed");
 			spin(2500);
-			const QString host_one = blocker->page_host();
+			consent_blocker *b1 = current_blocker(w);
+			check(b1 != nullptr, "the tab in front has a blocker of its own");
+			const QString host_one = b1 ? b1->page_host() : QString();
+			// **Non-empty, or the two checks below compare nothing with
+			// nothing.** That is not hypothetical here: this section asked the
+			// window's aggregator until 2026-09-20, so `host_one` was empty,
+			// and the check that switching back restores it passed by
+			// comparing one empty string to another while the check above it
+			// failed. One failure and two vacuous passes read as one broken
+			// check.
+			check(host_one == "127.0.0.1",
+			       QString("the first tab's host is in force while it is (%1)")
+			           .arg(host_one));
 
 			emit tree_view->activated(second);
 			spin(800);
 			bar->setText(QString("http://127.0.0.2:%1/plain").arg(port));
 			QMetaObject::invokeMethod(bar, "returnPressed");
 			spin(2500);
-			check(blocker->page_host() == "127.0.0.2",
+			consent_blocker *b2 = current_blocker(w);
+			check(b2 && b2->page_host() == "127.0.0.2",
 			      QString("the second tab's host is current while it is (%1)")
-			          .arg(blocker->page_host()));
+			          .arg(b2 ? b2->page_host() : QString("no blocker")));
 
 			// The whole point: back to the first tab, which navigates nothing.
 			emit tree_view->activated(first);
 			spin(2000);
-			check(blocker->page_host() == host_one,
+			consent_blocker *b3 = current_blocker(w);
+			const QString back = b3 ? b3->page_host() : QString();
+			check(!back.isEmpty() && back == host_one,
 			      QString("switching back restores the first tab's host without a "
 			               "navigation (%1, wanted %2)")
-			          .arg(blocker->page_host(), host_one));
-			check(blocker->page_host() != "127.0.0.2",
+			          .arg(back, host_one));
+			check(!back.isEmpty() && back != "127.0.0.2",
 			      "and does not leave the other tab's site in force");
 		}
 	}

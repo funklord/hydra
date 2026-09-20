@@ -68,6 +68,12 @@ int main(int argc, char **argv) {
 	check(keepass_bridge::supported(),
 	      "built with libsodium — the protocol is encrypted end to end");
 	if (!keepass_bridge::supported()) {
+		// **Declared rather than left to the sweep to guess.** This is a
+		// machine that cannot run the driver, not a driver that failed, and
+		// the two had one spelling: a non-zero exit. See the note on
+		// HYDRA-SKIP in sweep.sh.
+		std::printf("HYDRA-SKIP: built without libsodium, so there is no "
+		             "protocol to speak\n");
 		std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 		return 1;
 	}
@@ -97,6 +103,10 @@ int main(int argc, char **argv) {
 			           "integration enabled.");
 			note("Nothing below could mean anything, so this stops rather than");
 			note("reporting passes for a bridge that talked to nobody.");
+			std::printf("HYDRA-SKIP: %s\n",
+			             QFile::exists(sock)
+			                 ? "a stale KeePassXC socket, nothing listening"
+			                 : "no KeePassXC browser socket on this machine");
 			std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 			return 1;
 		}
