@@ -24642,6 +24642,16 @@ carried along as amendments to a list item.
    later addition falsifies silently. Read as "what remains is mostly
    device-bound", not as an inventory.
 
+   **Wrong again on 2026-09-20, and by a route this entry could not have
+   guessed: not an untested file, but a tested one nobody read.** Eight live
+   drivers are report-only -- they print pictures and timings and have no
+   tally -- so in the sweep's summary a run that failed at everything and one
+   that succeeded are the same green line. Reading them found two defects in
+   `try_capture`, which had been navigating to a closed port for sixty seconds
+   a sweep and describing a page that was never fetched. Neither needed a
+   network or a device; both needed somebody to read output that was being
+   produced correctly and thrown away. The sections above have the detail.
+
    **And it went stale again the same way, which is the entry proving its own
    point.** A second sweep asked a different question -- not "which files has
    nobody tested" but **"which files does no test so much as name"** -- and
