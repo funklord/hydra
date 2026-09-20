@@ -24442,12 +24442,63 @@ picture. That is a state the reader reaches after a click, and this driver
 photographs surfaces *as they open* -- the audit's own `greyed:` line for the
 initial state is data, and the change deleted it. Reverted.
 
-The other seventeen surfaces were read and are sound: the wide and narrow
-windows, settings in both layouts, the screen picker, both auth prompts, the
-permission prompt, downloads, media, properties, site controls and rules. The
-narrow settings page turns its page list into a dropdown and shortens
-*Restore Privacy & security defaults* to *Restore defaults*, which is the kind
-of thing only a picture shows.
+All twenty were read. The other eighteen are sound: the wide and narrow
+windows, the no-match tree, properties, settings in both layouts, site
+controls, downloads, the empty and filled banner lists, the media list, the
+annoyance report, all three auth prompts, the permission prompt, the screen
+picker and the passkey chooser. The narrow settings page turns its page list
+into a dropdown and shortens *Restore Privacy & security defaults* to
+*Restore defaults*, which is the kind of thing only a picture shows.
+
+**Two things the pictures raised and neither is a fault, recorded so the next
+reader does not re-open them.** The site-controls panel shows **Camera** and
+**Microphone** at *Allow* where Screen sharing and Location are *Ask*, which
+looks like the permission prompt being bypassed. It is deliberate and
+`policy_engine.cpp` argues it in place: `allow` means the shield does not
+stand in the way, Android's own runtime permission is still in front, and the
+comment records the desktop having no equivalent gate as a real loosening
+rather than glossing it. And the status bar reads *Saving...* in every window
+grab across a whole run, which looks like a hint that never clears -- the view
+timer is 2500 ms and the blob timer 5000 ms, both restarted by a resize or a
+row change, and this driver resizes and opens things continuously. A busy
+program, not a stuck label.
+
+## A flaky check, and the fix that nearly made it a dead one
+
+`try_handoff`'s last check -- *handing over `about:blank` fetches nothing* --
+is the only one in the sweep that has failed under a full run and then passed
+three times in a row on its own. Twice now. An intermittent false failure is
+how a gate gets skipped, so it was worth the hour.
+
+**The count was already mark-relative**, so only a request arriving after the
+mark can fail it. The section above hands a real url to whatever the desktop
+uses, and that application fetches on its own schedule -- slow enough, under a
+loaded sweep, to land inside the next section and be counted against it.
+
+**And the two stories are indistinguishable by the count**, which is the part
+worth keeping. A late duplicate from the section above hits `/handed`. So does
+the fault this check exists for: the action handing over the page the tab used
+to be on rather than the `about:blank` it is on now. `about:blank` cannot
+itself reach that server, so any hit is for the old url either way. Waiting
+until the server has been quiet for a second and a half removes the innocent
+one -- which is what makes a surviving failure mean something, rather than
+merely making the driver greener.
+
+**Then the control refused to fire, and that is the finding.** Sabotaging the
+driver to stay on the real url -- so the handoff has something real to fetch --
+still produced **0 requests**. The desktop handler launched by the section
+above is already running and does not fetch again for the same address. So
+after the first handoff nothing this driver does is observable at that server
+at all, and a pass here says the server stayed quiet rather than that the
+refusal worked.
+
+Which means the change had to be reported honestly rather than as a fix: it
+removes a false failure, and it does not give the check an ability to fail that
+it turns out never to have had in this environment. **The one time it spoke, it
+was wrong.** That limit is pinned in the driver beside the check, because a
+green line nobody can see the edges of is exactly what this file keeps being
+written about. Separating the two needs a handler that can be asked twice,
+which is a property of the machine rather than of this code.
 
 ## What is next (in order)
 

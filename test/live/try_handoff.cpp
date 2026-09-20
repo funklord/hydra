@@ -164,12 +164,46 @@ int main(int argc, char *argv[]) {
 			QMetaObject::invokeMethod(addr, "returnPressed");
 		}
 		spin(1500);
+		// **Let the section above finish arriving before marking.** The
+		// application the desktop launched fetches on its own schedule, and
+		// under a full sweep it is slow enough to land inside this section, so
+		// a mark taken straight after `spin(1500)` counts somebody else's
+		// request against this check. It is the only check in the sweep that
+		// has failed and then passed three times running on its own.
+		//
+		// Quiescing is not tidiness: both stories end in a hit on `/handed` --
+		// a late duplicate from above, and the fault this check exists for,
+		// the action handing over the page the tab used to be on rather than
+		// the `about:blank` it is on now. about:blank cannot itself reach this
+		// server, so any hit is for the old url either way and the count alone
+		// cannot separate them.
+		//
+		// **What this check does NOT establish, measured rather than assumed.**
+		// Its positive control does not fire here. Removing the navigation to
+		// about:blank entirely -- so the tab stays on the real url and the
+		// handoff has something to fetch -- still produces **0 requests**: the
+		// desktop handler launched by the section above is already running and
+		// does not fetch again for the same address. So after the first
+		// handoff nothing this driver does is observable at this server, and a
+		// pass here says the server stayed quiet rather than that the refusal
+		// worked. Pinned so the next reader does not take it for more than it
+		// is; separating them needs a handler that can be asked twice, which
+		// is a property of the machine rather than of this code.
+		int settled = server.hits;
+		for (int waited = 0; waited < 8000; waited += 250) {
+			spin(250);
+			if (server.hits == settled && waited >= 1500)
+				break;
+			settled = server.hits;
+		}
 		const int before = server.hits;
 		if (QAction *a = action_named(&w, "Open This Page in &Another App"))
 			a->trigger();
 		spin(1500);
 		check(server.hits == before,
-		      "handing over about:blank fetches nothing, as there is nothing to fetch");
+		      QString("handing over about:blank fetches nothing, as there is "
+		               "nothing to fetch (%1 request(s) after a quiet server)")
+		          .arg(server.hits - before));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
