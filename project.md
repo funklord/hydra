@@ -24134,6 +24134,64 @@ the direction that reports a working machine as broken. The static skip list
 above it is unchanged; this is for the preconditions only the driver can
 test.
 
+## A capture driver that captured nothing, for a page that did not exist
+
+The sweep sorts drivers into ones judged on a tally and ones that are
+report-only -- screenshots and timings for a person to read. The second kind
+has a failure mode the first does not: **nobody reads them**, so a report of
+total failure and a report of success are the same green line in the summary.
+`try_flicker` was the first one read here and it produced a measurement.
+`try_capture` is the second, and it produced a defect.
+
+Its whole subject is capturing a playing video. Every sweep it reported:
+
+    t+20000  row: ...mp4 | Media capture | 0 B | Failed -- Nothing was captured.
+    t+30000  status="Capturing, but nothing has arrived -- press play. If the
+             page is already playing, it may not use Media Source, and nothing
+             here can record it."
+
+which reads as a page the tap cannot follow. It is not. The driver's default
+target was the literal `http://127.0.0.1:8840/index.html` and **it started no
+server**, so for sixty seconds a sweep it navigated to a closed port, captured
+nothing, and exited `done`. The status message explaining why nothing arrived
+was describing a page that was never fetched.
+
+`media_fixture.h` is the fix and it was already written: a server that opens a
+MediaSource and appends to it, which is what the tap hooks. Its own comments
+record this exact fault being found in `try_downloads` -- *"try_downloads asked
+a port nobody served instead"* -- so the class was known and this driver was
+the one the pass missed. It serves its own fixture now, and a real url is still
+what the argument is for.
+
+Measured after: `Capturing 2.00 KiB (4.02 KiB/s)`, then *"Capture paused at
+2.00 KiB -- the page has stopped feeding its player"*, which is the right
+answer for a fixture that appends once, and `FILE ... 2048 bytes` on disk. The
+whole path from the tap to a finished file now runs in the sweep.
+
+**And reading the output found the second one.** The driver printed
+`topLevelItem(0)` of the downloads list as "the row", and that list survives a
+run, because the drivers keep their state under `~/.qttest` deliberately. So
+the row it described was whatever the oldest run had left. Measured: it printed
+`...-015247.mp4 | 0 B | Failed` while the file that run wrote was
+`...-095427.mp4` at 2048 bytes -- a previous run's failure reported as this
+one's result, which is the same shape as asking the window for a consent
+blocker and getting the aggregator.
+
+It prints the count and every row now. A report-only driver exists to be read,
+so the answer is to show what is there rather than to guess better at which row
+is yours:
+
+    4 row(s) in the list
+      row 0: ...-015247.mp4 | 0 B      | Failed -- Nothing was captured.
+      row 1: ...-023735.mp4 | 0 B      | Failed -- Nothing was captured.
+      row 2: ...-095427.mp4 | 2.0 KiB  | Complete
+      row 3: ...-095616.mp4 | 2.0 KiB  | Downloading -- 4.02 KiB/s
+
+Rows 0 and 1 are the closed port, kept by accident and worth leaving: they are
+what the defect looked like from inside the program.
+
+**Six report-only drivers remain unread**, and this is two for two.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

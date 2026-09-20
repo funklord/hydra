@@ -6,6 +6,7 @@
 #include "download_manager.h"
 #include "mse_tap.h"
 #include "sample_tree.h"
+#include "media_fixture.h"
 
 #include <QAction>
 #include <QApplication>
@@ -29,7 +30,21 @@ int main(int argc, char *argv[]) {
 	qtwebengine_factory::register_url_schemes(torrent_download_source::url_schemes());
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
-	const QString target = argc > 1 ? argv[1] : "http://127.0.0.1:8840/index.html";
+	// **A fixture of its own, because the default was a port nobody served.**
+	// This read `http://127.0.0.1:8840/index.html` and started no server, so
+	// every sweep navigated nowhere, captured nothing for sixty seconds and
+	// reported "done" -- a report-only success over a page that does not
+	// exist. `media_fixture.h` records the same fault being fixed in
+	// try_downloads, and this driver was the one it missed. A real url is
+	// still what the argument is for.
+	media_fixture::server fixture;
+	const QString target = argc > 1 ? QString::fromLocal8Bit(argv[1])
+	                                 : fixture.start();
+	if (target.isEmpty()) {
+		std::printf("HYDRA-SKIP: the fixture server could not listen\n");
+		return 1;
+	}
+	std::printf("serving: %s\n", qPrintable(target));
 	const QString outdir = argc > 2 ? argv[2] : QDir::temp().filePath("hydra-cap");
 
 	policy_engine       policy;
@@ -82,13 +97,31 @@ int main(int argc, char *argv[]) {
 				if (ww->isVisible() && ww->windowTitle().contains("Downloads")) {
 					ww->grab().save((test_out() +
 					                 "scratchpad/live/50-capjob-%1.png").arg(t));
+					// **Every row, with the count, rather than the first
+					// one.** The downloads list survives a run -- the drivers
+					// keep their state under ~/.qttest on purpose -- so
+					// `topLevelItem(0)` is whatever the oldest run left, and
+					// this driver spent its output describing a previous run's
+					// failed capture as though it were this one's. Measured:
+					// the row printed here read `...-015247.mp4 | 0 B | Failed
+					// -- Nothing was captured` while the file this run wrote
+					// was `...-095427.mp4`, 2048 bytes.
+					//
+					// A report-only driver exists to be read, so the answer is
+					// to print what is there and let the reader see which row
+					// is theirs, not to guess better.
 					auto *tree = ww->findChild<QTreeWidget *>();
-					if (tree && tree->topLevelItemCount())
-						std::printf("t+%-6d row: %s | %s | %s | %s\n", t,
-						             qPrintable(tree->topLevelItem(0)->text(0)),
-						             qPrintable(tree->topLevelItem(0)->text(1)),
-						             qPrintable(tree->topLevelItem(0)->text(3)),
-						             qPrintable(tree->topLevelItem(0)->text(4)));
+					if (tree) {
+						std::printf("t+%-6d %d row(s) in the list\n", t,
+						             tree->topLevelItemCount());
+						for (int i = 0; i < tree->topLevelItemCount(); ++i)
+							std::printf("t+%-6d   row %d: %s | %s | %s | %s\n",
+							             t, i,
+							             qPrintable(tree->topLevelItem(i)->text(0)),
+							             qPrintable(tree->topLevelItem(i)->text(1)),
+							             qPrintable(tree->topLevelItem(i)->text(3)),
+							             qPrintable(tree->topLevelItem(i)->text(4)));
+					}
 					return;
 				}
 			std::printf("t+%-6d no downloads window\n", t);
