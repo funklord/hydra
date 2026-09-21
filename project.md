@@ -8366,15 +8366,25 @@ changes, so alternating between the packaged and current binaries re-inferred
 from scratch every time. Two runs disagreeing about a supposedly deterministic
 set is what a stale cache looks like, and it is not that.
 
-**And the macro problem underneath is real and is this tree's**, which the
-masking hides rather than removes. `theme.h` defines `class QDBusVariant {}`
-when `HYDRA_HAVE_DBUS` is absent -- deliberately, so a slot's signature exists
-whether or not DBus does -- and a translation unit that gets no such macro
-while the real QtDBus header is reachable has the class twice. The
-`@pkg_optional` that tells fmake about DBus sits beside the include in
-`theme.cpp`; `test/test_theme.cpp` includes the header and carries none. fmake
-says it will not infer that and gave the reason: an annotation is a property of
-the translation unit it is in, and one TU's answer cannot govern another's.
+**~~And the macro problem underneath is real and is this tree's.~~ It was
+downstream of the include path, and setting that removed it.** `theme.h`
+defines `class QDBusVariant {}` when `HYDRA_HAVE_DBUS` is absent --
+deliberately, so a slot's signature exists whether or not DBus does -- and a
+translation unit reaching that header without the macro, while the real QtDBus
+one is reachable, has the class twice. That is what the packaged build hit.
+
+With `[project] include-dirs = ['src']` set, `test/test_theme.cpp` gets **both**
+`-I<root>/src` and `HYDRA_HAVE_DBUS`, read out of `compile_commands.json`, and
+compiles. So the macro arrived once the include resolved. By what route is not
+claimed here -- fmake's own account is that an annotation is a property of the
+translation unit it sits in and cannot govern another's, which this observation
+sits awkwardly beside; that is theirs to reconcile and it was reported to them.
+
+**The wider fix, measured before it was taken.** `fmake hydra` from the root
+now builds the whole tree, suites included, and exits 0 where it stopped on 72
+files. The thing that had to be checked first is that this changes what
+`make -C test objsets` compiles: it does not change what that produces. Same 88
+programs, same 5218 objects, the same multiset of objects per program.
 
 Nothing is wrong with the program in either case, and the README says so rather
 than implying a clean run. **Running it with the binary a reader actually has

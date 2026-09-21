@@ -54,7 +54,26 @@
 # symbol tables; the objects are thrown away and nothing built here is ever
 # run or shipped, so what the string says is irrelevant and saying `0.1` would
 # invite somebody to keep it in step with a file it has nothing to do with.
+# **`include-dirs` is what lets the test tree compile from the repository
+# root.** The suites say `#include "theme.h"` from `test/`, where the quoted
+# form does not resolve -- `src/theme.cpp` says the same words and needs no
+# `-I` at all, because a quoted include is looked for beside the including
+# file first. Without this fmake stops on 72 of them, each naming the header
+# it wanted and this option as the fix.
+#
+# Measured before adding it, because it changes what `make -C test objsets`
+# compiles: with it the whole tree builds and `fmake hydra` exits 0, and the
+# link sets it computes are **identical** -- 88 programs, 5218 objects, the
+# same multiset of objects per program.
+#
+# It also settles a thing this tree recorded as a fault of its own.
+# `test/test_theme.cpp` was reaching `theme.h` without `HYDRA_HAVE_DBUS`, so
+# the stub `QDBusVariant` that header defines for DBus-less builds met the
+# real one. With the include path right it gets the macro as well -- checked
+# in `compile_commands.json` -- so that was downstream of this, not a separate
+# problem.
 [project]
+include-dirs = ['src']
 cflags  = ['-DHYDRA_VERSION="(link sets only; see fmake.toml)"']
 exclude = ["build/**", "build-android-*/**", "build-qmake/**",
             "test/build-make/**", "third_party/**", "attic/**"]

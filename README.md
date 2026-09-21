@@ -352,12 +352,10 @@ same sources with no build file at all:
 fmake hydra -j2               # from the repository root; see the JOBS warning
 ```
 
-It builds the program and then **exits non-zero**, because it goes on to the
-test tree, which does not compile without a build system telling it where the
-headers are. Both the packaged fmake and the current one reach `* built hydra`
-first, and both then stop on the suites: they want
-`[project] include-dirs = ['src']`, which this tree does not set because the
-test tree has its own Makefile. Neither is a fault in the program.
+It builds the whole tree, suites included, and exits 0. `fmake.toml` supplies
+the two things no source states: the build directories to leave alone, and
+`include-dirs = ['src']`, without which the suites' `#include "theme.h"` does
+not resolve from `test/`.
 
 It works the whole build out by itself — every `Q_OBJECT`, the moc runs, the
 platform-specific sources excluded by name, and a link set closed over symbols
