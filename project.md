@@ -8267,7 +8267,35 @@ The guard in `main.cpp` stays. It is what makes a source-only build finish
 wherever it is rooted, and it is the shape `version_fallbacks` looks for.
 
 The README claimed this build worked, then said it did not, then said what it
-does -- and now says where to run it.
+does, then said where to run it -- and now says what running it looks like.
+
+**The fourth correction came from checking the claim against the tool a reader
+has.** `fmake hydra -j2` was verified with `python3 ~/src/fmake/fmake`, a
+working copy from a sibling's tree, and the README tells a reader to type
+`fmake`, which is `/usr/bin/fmake` and two months older. Run that way it
+**exits 1** -- after reaching `* built hydra`, because it carries on into the
+test tree.
+
+Both builds do that and they fail on different files, which is the part worth
+writing down:
+
+    current    72 test sources, all for `node.h is on no include path here`,
+               with `[project] include-dirs = ['src']` named as the fix
+    packaged   one, test/test_theme.cpp
+
+The second is a case of this tree's own making and the same shape as
+`HYDRA_VERSION`. `theme.h` defines `class QDBusVariant {}` when
+`HYDRA_HAVE_DBUS` is absent, deliberately, so a slot's signature exists whether
+or not DBus does -- and a translation unit that gets no such macro while the
+real QtDBus header is reachable has the class twice. The `@pkg_optional`
+annotation that tells fmake about DBus sits beside the include in `theme.cpp`;
+`test/test_theme.cpp` includes the header and carries no annotation.
+
+Nothing is wrong with the program in either case, and the README says so rather
+than implying a clean run. **Running it with the binary a reader actually has
+is the check the earlier verification skipped**, and it is the same rule that
+sent me to run the command in the first place -- applied, the first time, to
+the wrong executable.
 
 **And the guard opened a hole that had to be closed in the same pass.** Before
 it, a `hydra.pro` that stopped defining `HYDRA_VERSION` was a compile error --
