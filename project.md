@@ -24586,6 +24586,35 @@ instinct as asserting a relationship rather than a value.
 
 Four distinct pages, each the one its filename claims.
 
+## A gap note that printed two stale numbers on every sweep
+
+`try_phone` downgrades the verdict for a dialog with a known, measured gap and
+prints the reason instead, so the summary stays honest without a red line
+nobody can act on. The settings entry carried two widths: the dialog is *"395
+wide here rather than 360"* and the button box *"needs 373"*.
+
+Re-measured 2026-09-21: **396 offscreen, 416 on screen, layout floor 294 and
+314 respectively.** So both numbers had rotted, and the run reprints them as
+current every time it is swept -- which is the countable present-tense claim
+this file keeps describing, in the one place it is read aloud most often.
+
+**The number also depends on the display mode**, which is what makes it not
+merely out of date but unquotable: 396 offscreen against 416 under a window
+manager, the same fault measured twice. A single figure in the text cannot be
+right for both.
+
+The remedy is the one `evidence.md` names for a count that is quoted often:
+stop quoting it. The lines around it already say what this run measured --
+`settings asked 360x640, got 396x640, layout floor 294x214`, and the names of
+the buttons that hang off the edge -- so the note keeps the cause and the fix,
+which do not move, and points at the measurement rather than carrying a copy of
+it.
+
+Found by reading `try_phone`'s twenty-eight pictures, the last of the three
+screenshot sets nobody had looked at. The pictures themselves are sound: the
+seven settings pages, the site controls, downloads and the dialogs all fit and
+wrap at phone width, which is what the 205 checks beside them already say.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

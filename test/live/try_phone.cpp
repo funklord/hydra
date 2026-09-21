@@ -137,22 +137,33 @@ static void as_android_would(QWidget *dlg) {
 // still printed. What is suppressed is only the verdict.
 static QString known_gap(const QString &name) {
 	if (name == "settings")
-		return "its seven pages fit now; what is left is the button box, which "
-		        "needs 373 because the Restore label names the page it acts "
-		        "on. That is a deliberate choice, and on a device the label "
-		        "elides rather than anything being unreachable. **And it is "
-		        "395 wide here rather than 360**, which is a different fault "
-		        "and not deliberate: the first setGeometry is clamped by the "
-		        "wide layout's minimum, the switch to narrow then lowers that "
-		        "minimum, and android_dialogs.cpp applies the geometry once so "
-		        "nothing re-applies it. Measured: once 395, settled 395, twice "
-		        "360. **And the button check below is the same fault**, not the "
-		        "Restore label: with the second apply the four buttons that "
-		        "hang off the edge come back on screen, measured. The fix is a "
-		        "second apply in `android_dialogs.cpp`, which is Android code "
-		        "this machine cannot build -- forcing Q_OS_ANDROID makes Qt's "
-		        "own headers ask for qjnitypes.h, so it cannot even be "
-		        "syntax-checked here.";
+		// **No widths in here, and that is the point.** This text is printed
+		// on every sweep, and it used to carry two: the dialog was "395 wide
+		// here rather than 360" and the button box "needs 373". Re-measured
+		// 2026-09-21 it is 416 with a layout floor of 314, so both numbers had
+		// rotted while being reprinted as current on every run. The lines
+		// above and below this one already state what the run measured --
+		// `asked ... got ... layout floor ...` and the names of the buttons
+		// that hang off the edge -- so quoting them here is a second copy that
+		// can only go stale. What belongs here is the cause and the fix, which
+		// do not move.
+		return "its pages fit; what is left is the button box, which is wider "
+		        "than the screen because the Restore label names the page it "
+		        "acts on. That is a deliberate choice, and on a device the "
+		        "label elides rather than anything being unreachable. **And "
+		        "the dialog is wider than the screen too**, which is a "
+		        "different fault and not deliberate: the first setGeometry is "
+		        "clamped by the wide layout's minimum, the switch to narrow "
+		        "then lowers that minimum, and android_dialogs.cpp applies the "
+		        "geometry once so nothing re-applies it. Applying it twice "
+		        "reaches the screen width; the printed line above gives what "
+		        "one apply left. **And the button check below is the same "
+		        "fault**, not the Restore label: with the second apply the "
+		        "buttons that hang off the edge come back on screen, measured. "
+		        "The fix is a second apply in `android_dialogs.cpp`, which is "
+		        "Android code this machine cannot build -- forcing "
+		        "Q_OS_ANDROID makes Qt's own headers ask for qjnitypes.h, so "
+		        "it cannot even be syntax-checked here.";
 	return QString();
 }
 
