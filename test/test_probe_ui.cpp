@@ -1,6 +1,15 @@
 // Probing in the settings window must be a button, never a side effect of
 // opening it.
+//
+// **The backend is in-process**, from `ollama_stub.h`. It used to be a stub
+// Ollama on port 8811 started by hand, which is why this suite sat outside
+// `make test` -- and why the reachable branch below said so and checked
+// nothing: the file's own comment explains that it asserts the shape of both
+// answers because "this suite is meant to need nothing but a build". It now
+// needs nothing but a build AND takes the reachable branch, which is the one
+// a person sees when their model is running.
 #include "settings_dialog.h"
+#include "ollama_stub.h"
 #include "filter_list.h"
 #include "download_manager.h"
 #include "player_launcher.h"
@@ -35,7 +44,13 @@ static void spin(int ms) {
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QApplication app(argc, argv);
-	const QString up = argc > 1 ? argv[1] : "http://127.0.0.1:8811";
+
+	ollama_stub stub;
+	const QString up = stub.start();
+	if (up.isEmpty()) {
+		std::printf("could not listen\n");
+		return 1;
+	}
 
 	const QString tmp = QDir::temp().filePath("hydra-probeui-test");
 	QDir(tmp).removeRecursively();
@@ -49,6 +64,10 @@ int main(int argc, char **argv) {
 	ollama_provider local_ai;
 	claude_provider external_ai;
 	local_ai.set_endpoint(QUrl(up));
+	// Named from the provider rather than repeated here: `ready()` separates
+	// "running" from "running and has the model you asked for", and a stub
+	// offering some other name would put the dialog in the third state.
+	stub.models = { local_ai.model() };
 
 	QSignalSpy probes(&local_ai, &ollama_provider::probe_finished);
 
@@ -72,18 +91,17 @@ int main(int argc, char **argv) {
 	spin(2000);
 	check(probes.count() == 1, QString("one probe ran (%1)").arg(probes.count()));
 	check(btn->isEnabled(), "and it comes back");
-	// Which answer is correct depends on whether anything is actually running,
-	// and this suite is meant to need nothing but a build. So assert the shape
-	// of both answers rather than assuming a backend is up: the failure this
-	// guards against is a status that stays on "not checked yet" after a probe
-	// completes, which is what a dropped signal looks like.
-	if (status->text().contains("reachable")) {
-		check(true, QString("the status reports the running model (%1)").arg(status->text()));
-	} else {
-		check(status->text().contains("Neither backend is available"),
-		      QString("no backend is up, and the status says so (%1)").arg(status->text()));
-		std::printf("  --    (no AI backend running; the reachable path went unchecked)\n");
-	}
+	// **The reachable branch, asserted rather than accommodated.** This used
+	// to accept either answer, because whether a backend was up depended on
+	// what the person running it had started -- so the case a person actually
+	// meets, a model that answers, was the one never checked. The stub is up
+	// by construction now, so the status must say so; the failure this guards
+	// against is unchanged, a status that stays on "not checked yet" after a
+	// probe completes, which is what a dropped signal looks like.
+	check(status->text().contains("reachable"),
+	      QString("the status reports the running model (%1)").arg(status->text()));
+	check(stub.seen.contains("/api/tags"),
+	      QString("and the probe really asked it (%1)").arg(stub.seen.join(", ")));
 
 	section("and it tests what is in the field, not what was saved");
 	auto *url = dlg.findChildren<QLineEdit *>().value(0);

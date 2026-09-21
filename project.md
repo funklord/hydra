@@ -25646,6 +25646,49 @@ move.
 checks and `test_dlheaders` brought twelve, of which eight were written long
 ago and then left behind a manual step.
 
+## Two more suites in, and the timeout that had never been measured
+
+`test_probe` and `test_probe_ui` needed *"a stub Ollama on 8811, plus a
+blackhole listener that accepts and never answers"*, started by hand. Both
+are in-process now, from `test/ollama_stub.h`, and both suites are in the
+offline set -- 40 suites, from 36 four commits ago.
+
+**What each one was missing is different, and neither was the checks failing.**
+
+`test_probe`'s timeout section printed *"(no blackhole endpoint given)"* and
+ran nothing whenever the second argument was absent, which it always was. It
+is the only place the probe's own deadline is measured, and it measures
+something a closed port cannot: **a refused connection comes back at once, so
+only a host that accepts and then says nothing costs the timeout**. Six
+checks, now run -- 601 ms against a 600 ms setting, 1900 against 2000, and
+the clamp on an absurd one.
+
+`test_probe_ui`'s reachable branch was written as an `if`/`else` that accepted
+either answer, with the comment saying why: *"this suite is meant to need
+nothing but a build"*. Correct at the time and it meant the case a person
+actually meets -- a model that answers -- was the one never checked. It is an
+assertion now, on the exact sentence the label shows: *"Local model is
+reachable -- nothing will leave this machine."*
+
+**Two fixture notes worth keeping.**
+
+The `down` endpoint was hard-coded `http://127.0.0.1:9`. That is a guess about
+this machine, and a discard service answering would turn "unreachable" into a
+pass for the wrong reason. It binds an ephemeral port and closes it, so the
+port is known to have been free.
+
+The stub's model list is set from the provider's own `model()` rather than
+repeated in the fixture, because `ready()` separates *running* from *running
+and has the model you asked for* -- a stub naming some other model puts the
+dialog in a third state that neither suite is about.
+
+**And the fixture is asserted, not assumed.** A suite whose server was never
+asked anything would pass every check by having nothing to disagree with, so
+both suites check what the stub saw. The separation is visible under
+sabotage: disconnecting `probe_finished` from the label leaves *"the probe
+really asked it"* green and turns *"the status reports the running model"*
+red, which is exactly the dropped-signal defect the section was written for.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

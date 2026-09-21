@@ -194,8 +194,8 @@ endif
 # The excluded ones each need something the machine may not have; test/README.md
 # says which, and they are named at the end of a run rather than silently
 # skipped.
-NEEDS_MORE = test_helpers_live test_probe \
-             test_probe_ui test_torrent test_watch test_live_model \
+NEEDS_MORE = test_helpers_live \
+             test_torrent test_watch test_live_model \
              test_ytdlp_live test_replay
 ALL_SUITES = $(basename $(notdir $(wildcard test/test_*.cpp)))
 SUITES     = $(filter-out $(NEEDS_MORE),$(ALL_SUITES))
