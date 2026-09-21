@@ -63,6 +63,9 @@
 #include <QEventLoop>
 #include <QLineEdit>
 #include <QFile>
+#include <QSettings>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QTimer>
 #include <cstdio>
 
@@ -401,6 +404,47 @@ static void save(QWidget *w, const QString &name) {
 // same, and the settings page has one -- below `k_narrow_threshold` its
 // category list becomes a dropdown, which is a code path nothing had ever
 // looked at.
+// **A local stand-in for the AI probe, so three dialogs can be photographed.**
+//
+// `learn_this_site`, the filter-evolution review and the reorganizer all call
+// `choose_ai()` first and refuse with a status message when no provider is
+// reachable. On a machine with nothing serving Ollama that is every run, so
+// `extractor_dialog`, `filter_dialog` and `reorganize_dialog` were never
+// opened here -- and the audit inside `save` is the only mnemonic and button
+// check any dialog gets, so those three had never had one.
+//
+// `ollama_provider::probe()` GETs `<endpoint>/api/tags` and calls the provider
+// reachable when the reply carries no transport error, so answering 200 on any
+// path is the whole of what this needs. Nothing is ever sent to it: these
+// dialogs are photographed and rejected, and the AI call is behind a button.
+//
+// The same shape as `media_fixture`, and for the same reason -- a driver that
+// depends on a real service tests the machine it runs on.
+class probe_stub : public QTcpServer {
+public:
+	// The endpoint, once listening. Empty when it could not.
+	QString start() {
+		if (!listen(QHostAddress::LocalHost, 0))
+			return QString();
+		return QStringLiteral("http://127.0.0.1:%1").arg(serverPort());
+	}
+
+protected:
+	void incomingConnection(qintptr fd) override {
+		auto *sock = new QTcpSocket(this);
+		sock->setSocketDescriptor(fd);
+		connect(sock, &QTcpSocket::readyRead, sock, [sock] {
+			sock->readAll();
+			static const QByteArray body = "{\"models\":[{\"name\":\"stub\"}]}";
+			sock->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+			             "Content-Length: " + QByteArray::number(body.size()) +
+			             "\r\nConnection: close\r\n\r\n" + body);
+			sock->disconnectFromHost();
+		});
+		connect(sock, &QTcpSocket::disconnected, sock, &QObject::deleteLater);
+	}
+};
+
 static void shoot_modal(main_window *w, const QString &slot, const QString &name,
                          QSize narrow = QSize()) {
 	QTimer::singleShot(900, [w, name, narrow] {
@@ -462,6 +506,23 @@ int main(int argc, char *argv[]) {
 
 	if (!combo_control())
 		return 2;
+
+	// **Point the AI probe at a local stand-in before the window is built.**
+	// Written through QSettings rather than an environment variable because
+	// that is where `settings_store::load_into` reads it, and `live_paths`
+	// puts this run's settings under ~/.qttest, so it touches nothing of the
+	// person's. `local_only` so nothing can fall back to a remote provider.
+	probe_stub ai_probe;
+	const QString ai_endpoint = ai_probe.start();
+	if (ai_endpoint.isEmpty()) {
+		std::printf("  !!    the AI probe stub could not listen; three "
+		             "dialogs will not open\n");
+	} else {
+		QSettings s(QSettings::IniFormat, QSettings::UserScope, "hydra", "hydra");
+		s.setValue("ai/ollama_endpoint", ai_endpoint);
+		s.setValue("ai/mode", "local_only");
+		s.sync();
+	}
 
 	g_out = qEnvironmentVariableIsSet("HYDRA_SHOTS")
 	            ? QString::fromLocal8Bit(qgetenv("HYDRA_SHOTS"))

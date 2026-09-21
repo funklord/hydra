@@ -24873,9 +24873,34 @@ and a refused one:
     filters-loaded     no dialog appeared -- No AI provider: start Ollama ...
 
 `media` is the one that is fine: it is shot again later as `media-loaded`,
-once a page is open. The other three are a **coverage gap that depends on the
-machine** -- start Ollama and the audit grows by three dialogs, none of which
-it has ever inspected.
+once a page is open. The other three were a **coverage gap that depended on
+the machine**, which is the worst kind: it closes itself on whoever happens to
+have Ollama running and reopens for everybody else, and nothing says which
+you are.
+
+**So the driver brings its own.** `probe()` GETs `<endpoint>/api/tags` and
+calls the provider reachable when the reply carries no transport error, so a
+twenty-line `QTcpServer` answering 200 on any path is the whole of what these
+dialogs need to open. The endpoint goes into this run's own settings -- which
+`live_paths` has already redirected under `~/.qttest`, so it touches nothing
+of the person's -- with `mode=local_only` so nothing can fall back to a remote
+provider. Nothing is ever sent to it: these dialogs are photographed and
+rejected, and the AI call is behind a button. It is the same shape as
+`media_fixture`, for the same reason -- a driver that depends on a real
+service tests the machine it runs on.
+
+Measured: **23 surfaces and 112 buttons**, against 20 and 103, with no
+external process running.
+
+**And the three were clean, which is the answer rather than an anticlimax.**
+Fourteen classes derive from `QDialog` and the audit now reaches all fourteen,
+so the mnemonic check that found four collisions elsewhere in this program has
+finally been asked of every dialog in it.
+
+Controlled by planting one: renaming `filter_dialog`'s **&Accept Selected** to
+**&Send Selected** gives `! filters-loaded: Alt+S is claimed by both "&Send"
+and "&Send Selected"`, 1 problem over the same 23 surfaces. The new surfaces
+are audited, not merely photographed.
 
 ## What is next (in order)
 
