@@ -24930,6 +24930,24 @@ Controlled by planting one: renaming `filter_dialog`'s **&Accept Selected** to
 and "&Send Selected"`, 1 problem over the same 23 surfaces. The new surfaces
 are audited, not merely photographed.
 
+**`try_phone` had already solved this, differently, and both answers are
+right.** It reaches the same three dialogs by constructing them itself and
+handing them an `ollama_provider` pointed at port 9 with nothing listening --
+which works because a dialog built directly never asks whether its provider is
+reachable; only `choose_ai()` does, and that is the shell's.
+
+So the two drivers need opposite stand-ins, and the reason is what each one is
+for. `try_phone` measures a dialog at a phone's width, so building it directly
+is the shortest honest route and an unreachable provider is enough.
+`try_look` photographs what a *click* produces, so it has to go through the
+window's slot -- which means passing the chooser, which means a provider that
+answers. Collapsing either into the other would cost the thing that driver
+exists to test: `try_look` would stop exercising the shell's path, and
+`try_phone` would grow a server it has no use for.
+
+Recorded because the two now look like duplicate solutions to one problem and
+are not, and the cheaper-looking one is the wrong one in the other's place.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
