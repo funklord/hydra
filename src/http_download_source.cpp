@@ -200,7 +200,20 @@ void http_download_source::wire(transfer *t) {
 }
 
 void http_download_source::teardown(transfer *t, bool ok, const QString &message) {
+	QString detail = message;
 	if (t->file) {
+		// **The one point that can answer whether the bytes are on disk.**
+		// QFile buffers, so every `write` in the handlers above can return a
+		// full count and still have written nothing; a full disk or a quota
+		// surfaces at the flush. Without this a download that ran out of
+		// room closed, reported `done`, and was recorded in the history as a
+		// finished one -- with `received` and `total` both read back from the
+		// truncated file, so they agreed and nothing downstream could tell.
+		if (ok && (!t->file->flush() ||
+		            t->file->error() != QFileDevice::NoError)) {
+			ok = false;
+			detail = t->file->errorString();
+		}
 		t->file->close();
 		delete t->file;
 		t->file = nullptr;
@@ -216,7 +229,7 @@ void http_download_source::teardown(transfer *t, bool ok, const QString &message
 	const int id = t->id;
 	m_transfers.remove(id);
 	delete t;
-	emit finished(id, ok, message);
+	emit finished(id, ok, detail);
 }
 
 void http_download_source::cancel(int id) {

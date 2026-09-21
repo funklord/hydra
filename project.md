@@ -25531,6 +25531,54 @@ firing rather than the window never having found the file. Sabotaging the
 guard fails three including the data-loss one; putting "Ready" back at the
 end fails the message alone.
 
+## Bytes that were counted and never landed, and the limit that proves it
+
+`QFile` buffers. So a `write` returns a full count for bytes that are still
+in memory, and the only honest answer comes from the flush -- which is why
+"check the write count" is the weaker half of the rule and this tree's own
+test comments said, correctly, that a read-only file cannot reach it.
+
+**RLIMIT_FSIZE reaches it.** Measured on a standalone probe before anything
+relied on it: with the soft limit at 1024 and `SIGXFSZ` ignored, a `QSaveFile`
+opens (1), takes every byte (`write: 8192 of 8192`), and `commit()` returns
+**0** with nothing left on disk. It applies to regular files only, so a
+suite's stdout pipe and an in-process CDN's sockets are unaffected, and the
+limit is restored the moment the call returns.
+
+That converts a recorded limit into a covered case. The sabotage this file
+reported two commits ago as leaving all seven download checks green -- write,
+commit, `return true`, the pre-fix behaviour -- now fails exactly one check,
+the new one, and the read-only checks stay green. The two fixtures cover
+different halves and each is the only one that can see its own.
+
+**Three write sites were counting bytes they had not written.**
+
+- `hls_assembler` discarded both the `write` and the `flush`, and added the
+  segment to `m_written` regardless. Under the limit it reported success,
+  `finished()`, and **7000 bytes written** with nothing on disk -- a player
+  handed a file of holes, which is the "video that is wrong, no error
+  anywhere" this suite's own header was written about. Four checks, all four
+  red under the sabotage.
+- `http_download_source` wrote in three places and checked none. `teardown`
+  closed the file and reported `done` with `received` and `total` both read
+  back from the truncated file, so they agreed and nothing downstream could
+  tell -- and the row went into the history as a finished download. The flush
+  and the file's error are read in `teardown` now, which is the one point all
+  three writes pass through.
+- `settings_dialog`'s learned-rules export announced *"Exported to %1"* with
+  `write`'s result discarded. Its import read `fromJson` with no parse check,
+  so a file that is not JSON and a file with no rules in it both arrived as
+  *"Nothing to import."*
+
+**What is not covered, and why.** The `http_download_source` fix has no
+offline fixture: its suite is `test_dlheaders`, which is in `NEEDS_MORE`
+because it takes a server's base url on the command line rather than starting
+one. Making it self-serving -- `test_assembler` and `media_fixture` both show
+the shape -- would move it into the offline set and give this fix and the
+header checks beside it a home. That is its own piece of work. The two
+`settings_dialog` diagnostics have none either, and cannot: both sit behind a
+modal `QFileDialog`.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

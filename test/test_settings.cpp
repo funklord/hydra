@@ -27,6 +27,8 @@
 #include <QSettings>
 #include <QTimer>
 #include <cstdio>
+#include <csignal>
+#include <sys/resource.h>
 #include <unistd.h>   // geteuid, for the check root cannot fail
 
 static int g_pass = 0, g_fail = 0;
@@ -1417,14 +1419,13 @@ int main(int argc, char **argv) {
 		// class to the status bar, so the automatic write is what has to
 		// raise it -- an explicit call returning false reaches nobody.
 		//
-		// **What this cannot reach, measured rather than assumed.**
+		// **What this fixture reaches, measured rather than assumed.**
 		// `QSaveFile::open` refuses an existing target that is not writable,
 		// so a read-only file exercises the open guard and never gets as far
-		// as `commit()`. Sabotaging the commit line alone -- writing and
+		// as `commit()`: sabotaging the commit line alone -- writing and
 		// returning true unconditionally, which is what this code did before
-		// -- leaves all seven checks below green. Reaching commit needs a
-		// write error at flush, a full filesystem or a quota, and this suite
-		// cannot make one.
+		// -- leaves all seven checks below green. The section after this one
+		// reaches commit instead, through a file-size limit.
 		const QString dir = QDir::tempPath() + "/hydra-dl-history-ro";
 		QDir(dir).removeRecursively();
 		QDir().mkpath(dir);
@@ -1488,6 +1489,65 @@ int main(int argc, char **argv) {
 		         dm.jobs().first().url == QUrl("http://x/done"),
 		      "and the terminal one is loaded");
 		QFile::remove(hist);
+	}
+
+	section("a history whose bytes never reach the disk reports failure");
+	{
+		// **The half a read-only file cannot test.** QFile buffers, so
+		// `write` returns a full count for bytes that are still in memory and
+		// the only honest answer comes from `commit()`. RLIMIT_FSIZE is the
+		// one way this suite can produce that: the open succeeds, the write
+		// reports every byte taken, and the flush inside commit fails.
+		// Measured before it was relied on -- open 1, write 8192 of 8192,
+		// commit 0, and no file left behind.
+		//
+		// The signal has to be ignored or the write kills the process, and
+		// the limit is restored immediately: it is the whole process's while
+		// it is set, and it applies to regular files only, so the suite's own
+		// stdout is a pipe and unaffected.
+		const QString dir = QDir::tempPath() + "/hydra-dl-history-full";
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString hist = dir + "/history.json";
+
+		download_manager dm;
+		auto *fs = new fake_download_source;
+		dm.add_source(fs);
+		QString err;
+		for (int i = 0; i < 40; ++i) {
+			const int id = dm.enqueue(
+			  QUrl(QString("http://x/row-%1-with-a-long-enough-name.bin").arg(i)),
+			  "n", &err);
+			fs->finish(id, true);
+		}
+		check(dm.save_history(hist), "a save under no limit reports success");
+		const qint64 full = QFileInfo(hist).size();
+		check(full > 1024,
+		       QString("and the history is bigger than the limit (%1 bytes)")
+		         .arg(full));
+
+		void (*was_sig)(int) = ::signal(SIGXFSZ, SIG_IGN);
+		rlimit was{};
+		::getrlimit(RLIMIT_FSIZE, &was);
+		rlimit capped = was;
+		capped.rlim_cur = 1024;
+		const bool set = ::setrlimit(RLIMIT_FSIZE, &capped) == 0;
+		const bool said = set ? dm.save_history(hist) : true;
+		::setrlimit(RLIMIT_FSIZE, &was);
+		::signal(SIGXFSZ, was_sig);
+
+		if (!set) {
+			std::printf("  --    RLIMIT_FSIZE could not be lowered here, so "
+			             "the commit check is skipped\n");
+		} else {
+			check(!said, "a save whose bytes cannot reach the disk reports "
+			              "failure");
+			check(QFileInfo(hist).size() == full,
+			       "and the history that was there is still whole");
+			check(QDir(dir).entryList(QDir::Files | QDir::Hidden).size() == 1,
+			       "with nothing half-written left beside it");
+		}
+		QDir(dir).removeRecursively();
 	}
 
 	section("a damaged download history is not read as an empty one");

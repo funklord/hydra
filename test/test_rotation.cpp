@@ -94,6 +94,8 @@
 #include <QStatusBar>
 #include <QTimer>
 #include <cstdio>
+#include <csignal>
+#include <sys/resource.h>
 #include <unistd.h>   // geteuid, for the check root cannot fail
 
 static int g_pass = 0, g_fail = 0;
@@ -3921,9 +3923,11 @@ int main(int argc, char **argv) {
 		// is also how the confirmation was caught overwriting the warning one
 		// line later.
 		//
-		// Same limit as the download-history section in `test_settings`: a
-		// read-only target is refused by `QSaveFile::open`, so `commit()`'s
-		// own status is not what these checks reach.
+		// A read-only target is refused by `QSaveFile::open`, so the checks
+		// above reach the open guard rather than `commit()`. The last one
+		// here reaches commit, by the means `test_settings` measured: a file-
+		// size limit, under which the open succeeds and the write reports
+		// every byte taken while none of them lands.
 		const QString zdir = QDir::tempPath() + "/hydra-zoom-ro";
 		QDir(zdir).removeRecursively();
 		QDir().mkpath(zdir);
@@ -3976,6 +3980,36 @@ int main(int argc, char **argv) {
 				       "is what makes \"in this session only\" true");
 				QFile::setPermissions(wz.m_zoom_path,
 				                       QFile::ReadOwner | QFile::WriteOwner);
+			}
+
+			// **And the same failure arriving at the flush rather than
+			// the open**, which is the shape a full disk actually has and
+			// the one a permission bit cannot imitate. `m_zoom` is public
+			// precisely so a test can put something in it; sixty rows take
+			// the file past the limit. SIGXFSZ is ignored or the write
+			// kills the suite, and the limit is the whole process's for
+			// the two statements it is set across.
+			for (int i = 0; i < 60; ++i)
+				wz.m_zoom.insert(
+				  QString("node-%1-with-a-long-enough-id").arg(i), 1.25);
+			void (*was_sig)(int) = ::signal(SIGXFSZ, SIG_IGN);
+			rlimit was{};
+			::getrlimit(RLIMIT_FSIZE, &was);
+			rlimit capped = was;
+			capped.rlim_cur = 1024;
+			const bool set = ::setrlimit(RLIMIT_FSIZE, &capped) == 0;
+			if (set)
+				zin->trigger();
+			::setrlimit(RLIMIT_FSIZE, &was);
+			::signal(SIGXFSZ, was_sig);
+			if (!set) {
+				std::printf("  --    RLIMIT_FSIZE could not be lowered "
+				             "here, so the flush check is skipped\n");
+			} else {
+				check(wz.m_status->currentMessage().contains("Could not "
+				                                               "save"),
+				       "a zoom whose bytes never reach the disk is "
+				       "reported too");
 			}
 		}
 		QDir(zdir).removeRecursively();

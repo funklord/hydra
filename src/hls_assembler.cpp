@@ -175,8 +175,16 @@ void hls_assembler::next_segment() {
 		m_attempt = 0;
 		const QByteArray body = reply->readAll();
 		if (m_file) {
-			m_file->write(body);
-			m_file->flush();   // so a reader can play what has landed so far
+			// Flushed so a reader can play what has landed so far -- and
+			// read, because that is where a full disk surfaces. Both results
+			// used to be discarded and `m_written` counted the bytes anyway,
+			// so an assembly that could not write reported progress it did
+			// not have and handed the player a file with holes in it.
+			if (m_file->write(body) != body.size() || !m_file->flush()) {
+				emit failed(QString("Could not write %1: %2")
+				                .arg(m_path, m_file->errorString()));
+				return;
+			}
 			m_written += body.size();
 		}
 		++m_index;

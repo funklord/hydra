@@ -21,7 +21,9 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTimer>
+#include <csignal>
 #include <cstdio>
+#include <sys/resource.h>
 
 static int g_pass = 0, g_fail = 0;
 static void check(bool ok, const QString &w) {
@@ -241,6 +243,56 @@ int main(int argc, char **argv) {
 		check(!run(a, QUrl(base + "/no-such.m3u8"), dir + "/none.ts", 6000),
 		      "no manifest, no assembly");
 		check(bad.count() == 1, "and it says so rather than waiting forever");
+	}
+
+	section("a file it cannot finish writing is a failure, not a short one");
+	{
+		// The same property as the missing segment above, from the other
+		// side: the bytes arrive and the disk will not take them. The open
+		// succeeds -- `hls_assembler` already reports that failure -- and
+		// every `write` returns a full count, because QFile buffers; the
+		// flush is the only thing that can answer, and both its result and
+		// the write's used to be discarded while `m_written` counted the
+		// bytes anyway. So the assembly reported progress it did not have and
+		// handed the player a file with holes in it.
+		//
+		// RLIMIT_FSIZE produces exactly that, measured rather than assumed:
+		// open 1, write 8192 of 8192, flush and commit false, nothing on
+		// disk. SIGXFSZ has to be ignored or the write kills the suite, and
+		// the limit is the whole process's while it is set -- which is why it
+		// is restored the moment the assembly returns. Sockets are not
+		// regular files, so the in-process CDN is unaffected by it.
+		server.files["/full.m3u8"] =
+		  "#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		  "#EXTINF:4,\nseg0.ts\n#EXTINF:4,\nseg1.ts\n#EXT-X-ENDLIST\n";
+
+		hls_assembler a;
+		QSignalSpy bad(&a, &hls_assembler::failed);
+		const QString out = dir + "/full.ts";
+
+		void (*was_sig)(int) = ::signal(SIGXFSZ, SIG_IGN);
+		rlimit was{};
+		::getrlimit(RLIMIT_FSIZE, &was);
+		rlimit capped = was;
+		capped.rlim_cur = 512;   // below one segment
+		const bool set = ::setrlimit(RLIMIT_FSIZE, &capped) == 0;
+		const bool completed = set ? run(a, QUrl(base + "/full.m3u8"), out, 6000)
+		                            : false;
+		::setrlimit(RLIMIT_FSIZE, &was);
+		::signal(SIGXFSZ, was_sig);
+
+		if (!set) {
+			std::printf("  --    RLIMIT_FSIZE could not be lowered here, so "
+			             "the unwritable-file checks are skipped\n");
+		} else {
+			check(!completed, "it does not report success");
+			check(bad.count() == 1, "it reports the failure once");
+			check(!a.finished(),
+			      "and does not claim to have finished");
+			check(a.bytes_written() == 0,
+			      QString("nor to have written bytes that never landed (%1)")
+			        .arg(a.bytes_written()));
+		}
 	}
 
 	QDir(dir).removeRecursively();

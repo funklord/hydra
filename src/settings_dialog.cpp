@@ -35,6 +35,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QJsonParseError>
 #include <QMessageBox>
 #include <QGuiApplication>
 #include <QListWidget>
@@ -1800,8 +1801,19 @@ void settings_dialog::build_filter_page(QWidget *page) {
 			m_rules_note->setText("Could not write that file.");
 			return;
 		}
-		f.write(QJsonDocument(m_consent->rules().export_learned())
-		            .toJson(QJsonDocument::Indented));
+		// **Written, then said so** -- it used to announce the export with
+		// `write`'s result discarded, so a full disk or a quota produced a
+		// short file under the word "Exported". QFile buffers, so the count
+		// alone does not answer; the flush is where a write error surfaces.
+		const QByteArray json =
+		  QJsonDocument(m_consent->rules().export_learned())
+		      .toJson(QJsonDocument::Indented);
+		if (f.write(json) != json.size() || !f.flush()) {
+			m_rules_note->setText(
+			  QString("Could not write all of that file (%1). What is on disk "
+			           "is incomplete.").arg(f.errorString()));
+			return;
+		}
 		m_rules_note->setText(QString("Exported to %1.").arg(path));
 	});
 	connect(rules_import, &QPushButton::clicked, this, [this] {
@@ -1816,7 +1828,17 @@ void settings_dialog::build_filter_page(QWidget *page) {
 			m_rules_note->setText("Could not read that file.");
 			return;
 		}
-		const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+		// A file that is not JSON is not a file with no rules in it, and
+		// both arrive here as an empty object. Told apart, because the two
+		// need different things of the person: one is the wrong file, the
+		// other is a file that says nothing.
+		QJsonParseError perr{};
+		const QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &perr);
+		if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
+			m_rules_note->setText(
+			  QString("That file is not a rule file (%1).").arg(perr.errorString()));
+			return;
+		}
 		const site_rules::import_result got =
 		  site_rules::judge_import(doc.object(), QFileInfo(path).fileName());
 
