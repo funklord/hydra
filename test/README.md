@@ -162,11 +162,18 @@ The driver writes to its **own** keyring item (`HYDRA_SECRET_KIND` defaults to
 delete a pairing you actually use. `test_credstore` refuses to touch the service
 at all unless that variable names something other than the real item.
 
-### Need libtorrent
+### Need libtorrent, and are held back for their runtime
 
 `test_torrent` and `test_watch` build only when `libtorrent-rasterbar` is found.
 They stand up a real seeder in-process and move a torrent over loopback — no
-tracker, no DHT, the seeder connects directly.
+tracker, no DHT, the seeder connects directly, and **nothing has to be started
+by hand**.
+
+So they are not in `make test` for a different reason from the suites above:
+they run here and pass here, and they are slow. Measured 2026-09-22, 36 s and
+33 s against a 93-second `make test` — the pair nearly doubles the target a
+person runs before every commit. Run one with `make test-one T=test_torrent`;
+`make test` names them separately from the ones it genuinely cannot run.
 
 **If a "throttled" local transfer finishes instantly**, that is not a bug in the
 test: libtorrent puts loopback peers in `local_peer_class`, which is exempt from

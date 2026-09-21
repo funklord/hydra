@@ -25723,6 +25723,48 @@ sabotage: disconnecting `probe_finished` from the label leaves *"the probe
 really asked it"* green and turns *"the status reports the running model"*
 red, which is exactly the dropped-signal defect the section was written for.
 
+## Two suites that were never blocked, only slow
+
+Having moved four suites out of `NEEDS_MORE` by writing their servers
+in-process, the same question put to the last two candidates found they were
+not blocked at all. `test_torrent` and `test_watch` stand up a real libtorrent
+swarm **inside the test process** and move a torrent over loopback -- no
+tracker, no DHT, nothing to start by hand. They build and pass here today: 36
+and 20 checks, measured 2026-09-22.
+
+    test_torrent   36 checks   36 s
+    test_watch     20 checks   33 s
+    make test      39 suites   93 s
+
+So the trailer was telling a reader something false. *"Not run here, each
+needs something this target does not provide"* is true of a suite wanting
+Ollama or a recorded corpus, and is not true of these two: what they need is
+libtorrent, which is here, and about seventy seconds. **"Cannot run here" and
+"chose not to run it" read the same in a trailer and are not the same fact**,
+and the first is the one that stops a reader trying.
+
+They are split now -- `NEEDS_MORE` and `HELD_BACK`, named separately at the
+end of a run, with the second saying it runs here and pointing at
+`make test-one`. The waits inside them are not padding: `pump_until` polls at
+250 ms and returns the moment the transfer completes, with a 60-second
+ceiling it never reaches, so the time is libtorrent's handshake and transfer
+rather than a sleep somebody could shorten.
+
+**Whether they belong in the default target is the holder's, because the
+number is the one that decides it.** 93 seconds to 165 is a near-doubling of
+what `make check` costs before every commit, in exchange for 56 checks over
+the only subsystem `make test` does not touch at all. Nothing here has an
+opinion; the measurement is above so that deciding it does not need taking it
+again.
+
+**Two sweeps came back empty on the way**, recorded so the next lens is not
+one of these. Every `connect` with a lambda in `src/` passes a context object
+-- zero three-argument connects, which is the form whose lambda outlives the
+object it captured. And the clear-browsing-data path already has the deadline
+this session went looking for: `clear_run` starts one before it asks for
+anything, with a comment naming the exact symptom -- *"a clear that never
+answers leaves a dialog saying Clearing... for ever"*.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

@@ -191,14 +191,23 @@ endif
 # CMake, which globbed while the hand-written half of the source list did not;
 # it survived dropping CMake instead, since `test/Makefile` globs `test_*.cpp`
 # and fmake wants no source list at all.
-# The excluded ones each need something the machine may not have; test/README.md
-# says which, and they are named at the end of a run rather than silently
-# skipped.
-NEEDS_MORE = test_helpers_live \
-             test_torrent test_watch test_live_model \
-             test_ytdlp_live test_replay
+# The excluded ones are excluded for two different reasons and it is worth the
+# second variable to say which, because "cannot run here" and "chose not to
+# run it" read the same in a trailer and are not the same fact. A reader told
+# a suite needs something the machine lacks will not try it.
+#
+# NEEDS_MORE: a model, a URL, a recorded corpus -- things this machine may not
+# have. test/README.md says what each one wants.
+NEEDS_MORE = test_helpers_live test_live_model test_ytdlp_live test_replay
+# HELD_BACK: runs here, passes here, and is kept out of the default target for
+# its runtime alone. Measured 2026-09-22: `test_torrent` 36 s and `test_watch`
+# 33 s against a 93-second `make test`, so the pair nearly doubles the target a
+# person runs before every commit. They stand up a real libtorrent swarm
+# in-process over loopback -- no tracker, no DHT, no server to start -- and
+# `make test-one T=test_torrent` runs one now, with nothing else needed.
+HELD_BACK  = test_torrent test_watch
 ALL_SUITES = $(basename $(notdir $(wildcard test/test_*.cpp)))
-SUITES     = $(filter-out $(NEEDS_MORE),$(ALL_SUITES))
+SUITES     = $(filter-out $(NEEDS_MORE) $(HELD_BACK),$(ALL_SUITES))
 
 # Offscreen because none of these want a window, and a keyring item of their
 # own because `test_credstore` writes and deletes one: under the real name that
@@ -392,6 +401,9 @@ test:
 	 echo; echo "not run here, each needs something this target does not provide:"; \
 	 echo "  $(NEEDS_MORE)"; \
 	 echo "  see test/README.md for what each one wants"; \
+	 echo; echo "runs here and held back for its runtime, not for a missing"; \
+	 echo "dependency -- make test-one T=<name> runs one:"; \
+	 echo "  $(HELD_BACK)"; \
 	 exit $$fail
 
 test-one:
