@@ -24835,6 +24835,48 @@ exists is inside the timer that fills it, so the reading is taken there --
 an empty box says nothing. Sabotaged, it reads `24 of 24` and fails. 376 pass
 where it was 375.
 
+## Three dialogs the appearance audit has never seen, and why
+
+`try_look`'s audit is the only mnemonic and button check any *dialog* gets --
+`try_menus` covers the menu bar, and `try_phone` measures widths and focus but
+has no mnemonic check at all. So which dialogs that audit reaches is the
+population that matters, and four of its seven modal shots have always
+reported `no dialog appeared`.
+
+Counted against the tree: fourteen classes derive from `QDialog`, and the
+audit covers eleven. The three it does not are `extractor_dialog`,
+`filter_dialog` and `reorganize_dialog` -- **so their mnemonics have never
+been checked by anything**, which is the fault four instances of were found
+elsewhere in this program on the same day.
+
+**Timing was the first theory and it was wrong, which is worth more than the
+theory.** `shoot_modal` looked once, 900 ms after asking, and the extractor's
+own comment beside the call says it probes its candidates on open and "wants
+longer on screen" -- a stated intent the code did not carry out, since it got
+the same fixed wait as a dialog that merely draws itself. Replacing the single
+look with a five-second poll changed nothing: **four before, four after, the
+same twenty surfaces.** The change was reverted rather than kept for looking
+principled.
+
+The slots refuse; they are not slow. `learn_this_site` asks `choose_ai()`
+first and returns with a status message when there is no provider, and the
+filter-evolution and reorganizer slots do the same. Nothing serves Ollama on
+this machine, so those three dialogs cannot open here at all.
+
+So the driver reads the refusal back rather than reporting a bare absence,
+because "no dialog appeared" is equally true of a missing feature, a slow one
+and a refused one:
+
+    media              no dialog appeared -- Open a page first ...
+    reorganizer        no dialog appeared -- No AI provider: start Ollama ...
+    extractor-loaded   no dialog appeared -- No AI provider: start Ollama ...
+    filters-loaded     no dialog appeared -- No AI provider: start Ollama ...
+
+`media` is the one that is fine: it is shot again later as `media-loaded`,
+once a page is open. The other three are a **coverage gap that depends on the
+machine** -- start Ollama and the audit grows by three dialogs, none of which
+it has ever inspected.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

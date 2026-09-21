@@ -52,6 +52,7 @@
 #include "consent_blocker.h"
 #include "consent_dialog.h"
 #include "webauth_dialog.h"
+#include <QStatusBar>
 #include <QStyle>
 #include <QStyleOptionComboBox>
 #include <QComboBox>
@@ -402,7 +403,7 @@ static void save(QWidget *w, const QString &name) {
 // looked at.
 static void shoot_modal(main_window *w, const QString &slot, const QString &name,
                          QSize narrow = QSize()) {
-	QTimer::singleShot(900, [name, narrow] {
+	QTimer::singleShot(900, [w, name, narrow] {
 		for (QWidget *x : QApplication::topLevelWidgets()) {
 			auto *d = qobject_cast<QDialog *>(x);
 			if (!d || !d->isVisible())
@@ -425,7 +426,26 @@ static void shoot_modal(main_window *w, const QString &slot, const QString &name
 			d->reject();
 			return;
 		}
-		std::printf("  %-28s no dialog appeared\n", qPrintable(name));
+		// **Say why, because three of these always fail for one reason.**
+		// `learn_this_site`, the filter-evolution review and the reorganizer
+		// all ask `choose_ai()` first and return with a status message when
+		// there is no provider -- which is this machine's state, since nothing
+		// serves Ollama here. So the audit inside `save` never sees
+		// `extractor_dialog`, `filter_dialog` or `reorganize_dialog`, and that
+		// audit is the only mnemonic and button check any dialog gets.
+		//
+		// Timing was the first theory and it was wrong: polling for five
+		// seconds instead of looking once at 900 ms changed nothing, four
+		// before and four after. The slot refuses; it is not slow.
+		//
+		// The status bar is where the refusal goes, so it is read back here
+		// rather than left as "no dialog appeared" -- which is true of a
+		// missing feature, a slow one and a refused one alike.
+		QString why;
+		if (auto *sb = w->findChild<QStatusBar *>())
+			why = sb->currentMessage();
+		std::printf("  %-28s no dialog appeared%s%s\n", qPrintable(name),
+		             why.isEmpty() ? "" : " -- ", qPrintable(why));
 	});
 	QMetaObject::invokeMethod(w, slot.toUtf8().constData());
 	spin(1400);
