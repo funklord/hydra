@@ -1,6 +1,13 @@
 // Do a learned extractor's headers actually reach the CDN? The proxy is the
 // only thing that can put them there, so ask a server what it received.
+//
+// **The server is in-process**, from `echo_server.h`. It used to be
+// `test/echohdr.py` on port 8850, which is why these five checks -- the only
+// thing in the tree that asks whether a `stream_context` survives the hop
+// through the proxy at all -- ran outside `make test` for whoever started it
+// by hand.
 #include "local_proxy.h"
+#include "echo_server.h"
 
 #include <QCoreApplication>
 #include <QEventLoop>
@@ -20,7 +27,14 @@ static void check(bool ok, const QString &w) {
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication app(argc, argv);
-	const QString upstream = argc > 1 ? argv[1] : "http://127.0.0.1:8850/stream";
+
+	echo_server server;
+	const QString base = server.start();
+	if (base.isEmpty()) {
+		std::printf("could not listen\n");
+		return 1;
+	}
+	const QString upstream = base + "/stream";
 
 	local_proxy proxy;
 	check(proxy.start(), "proxy listening");
@@ -43,7 +57,7 @@ int main(int argc, char **argv) {
 	loop.exec();
 
 	const QJsonObject got = QJsonDocument::fromJson(r->readAll()).object();
-	std::printf("  ..    upstream saw %d headers\n", got.size());
+	std::printf("  ..    upstream saw %lld headers\n", (long long)got.size());
 
 	check(got.value("referer").toString() == ctx.referer,
 	      QString("Referer arrived (%1)").arg(got.value("referer").toString()));

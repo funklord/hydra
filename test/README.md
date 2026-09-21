@@ -94,7 +94,6 @@ Start the helper, run the suite, stop the helper.
 
 | suite | helper |
 |---|---|
-| `test_headers` | `python3 test/echohdr.py 8850` — reports the headers it received |
 | `test_helpers_live` | the helper tier against a real CDN, with a hand-written extractor so a failure is the tier's and not a prompt's — takes a fresh capture from `try_extract` |
 | `test_probe`, `test_probe_ui` | a stub Ollama on 8811, plus a "blackhole" listener that accepts and never answers, for the timeout tests |
 

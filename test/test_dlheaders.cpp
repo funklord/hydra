@@ -2,25 +2,20 @@
 // resume still own the Range header, and does a write that never reaches the
 // disk get reported as a finished download?
 //
-// **The server is in-process now.** It used to be `test/echodl.py`, started
-// by hand on port 8851, and that was the only reason this suite sat in
-// NEEDS_MORE -- three checks about which bytes leave this browser, run by
-// whoever remembered to read `test/README.md` first. The python file is gone
-// rather than kept beside this: two copies of one behaviour is two things to
-// be wrong, and nothing else referenced it.
+// **The server is in-process**, from `echo_server.h`, which replaced the
+// python file this used to need on port 8851 -- the only reason this suite
+// sat in NEEDS_MORE, with three checks about which bytes leave this browser
+// run by whoever remembered to read `test/README.md` first.
 #include "download_manager.h"
 #include "http_download_source.h"
+#include "echo_server.h"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
-#include <QHash>
-#include <QHostAddress>
 #include <QSignalSpy>
-#include <QTcpServer>
-#include <QTcpSocket>
 #include <QTimer>
 #include <csignal>
 #include <cstdio>
@@ -39,78 +34,19 @@ static const download_job *job_of(const download_manager &m, int id) {
 	return nullptr;
 }
 
-// The request's own headers, served back as the body, so a completed download
-// IS the record of what the server saw.
-//
-// Faithful to the python it replaces rather than to what seemed reasonable:
-// keys lowercased, values exactly as sent, and **206 when the request carried
-// a Range, 200 otherwise**. That last one is not decoration -- only 206 means
-// "the rest of it" to `http_download_source`, and a 200 makes it truncate the
-// partial file and start again, which is the behaviour the resume section
-// below is written against.
-class echo : public QTcpServer {
-public:
-	void incomingConnection(qintptr fd) override {
-		auto *s = new QTcpSocket(this);
-		s->setSocketDescriptor(fd);
-		connect(s, &QTcpSocket::disconnected, this, [this, s] {
-			m_buf.remove(s);
-			s->deleteLater();
-		});
-		connect(s, &QTcpSocket::readyRead, this, [this, s] {
-			QByteArray &buf = m_buf[s];
-			buf += s->readAll();
-			// A GET has no body, so the header block is the whole request --
-			// but it is not guaranteed to arrive in one read.
-			const int end = buf.indexOf("\r\n\r\n");
-			if (end < 0)
-				return;
-			const QByteArray head = buf.left(end);
-			m_buf.remove(s);
-
-			QByteArray body = "{\n";
-			const QList<QByteArray> lines = head.split('\n');
-			bool ranged = false;
-			for (int i = 1; i < lines.size(); ++i) {     // 0 is the request line
-				const QByteArray line = lines.at(i).trimmed();
-				const int colon = line.indexOf(':');
-				if (colon <= 0)
-					continue;
-				const QByteArray key = line.left(colon).toLower();
-				const QByteArray val = line.mid(colon + 1).trimmed();
-				if (key == "range")
-					ranged = true;
-				if (body.size() > 2)
-					body += ",\n";
-				body += "\"" + key + "\": \"" + val + "\"";
-			}
-			body += "\n}";
-
-			s->write("HTTP/1.1 " +
-			          QByteArray(ranged ? "206 Partial Content" : "200 OK") +
-			          "\r\nContent-Type: video/mp4\r\nContent-Length: " +
-			          QByteArray::number(body.size()) +
-			          "\r\nConnection: close\r\n\r\n" + body);
-			s->flush();
-			s->disconnectFromHost();
-		});
-	}
-
-private:
-	QHash<QTcpSocket *, QByteArray> m_buf;
-};
 
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication app(argc, argv);
 
-	echo server;
-	if (!server.listen(QHostAddress::LocalHost, 0)) {
+	echo_server server;
+	server.range_aware  = true;    // see echo_server.h: 206 is load-bearing
+	server.content_type = "video/mp4";
+	const QString base = server.start();
+	if (base.isEmpty()) {
 		std::printf("could not listen\n");
 		return 1;
 	}
-	const QString base =
-	  QString("http://127.0.0.1:%1").arg(server.serverPort());
 	const QString dir  = QDir::temp().filePath("hydra-dlhdr");
 	QDir(dir).removeRecursively();
 	QDir().mkpath(dir);

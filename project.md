@@ -25589,7 +25589,8 @@ read `test/README.md` first and remembered to start `test/echodl.py` on port
 8851. That is now done.
 
 **The server is thirteen lines of python reproduced in C++, and faithfully
-rather than reasonably.** The one detail that matters is the status code:
+rather than reasonably.** (It moved to `test/echo_server.h` the same day,
+shared with `test_headers`; see the section after this one.) The one detail that matters is the status code:
 206 when the request carried a Range, 200 otherwise. Only 206 means "the rest
 of it" to `http_download_source`, which truncates the partial file and starts
 again on anything else -- so a stand-in that answered 200 to everything would
@@ -25614,6 +25615,36 @@ Makefile either. The comment states why the floor is low and says the target
 prints what it ran, because `make test` names every suite on every
 invocation and a number in a comment is a present-tense countable claim
 about the tree's own shape that nothing re-derives.
+
+## Both echo servers, one header, and the second suite nobody ran
+
+`test_headers` is `test_dlheaders`' sibling and sat in `NEEDS_MORE` for the
+same reason: `python3 test/echohdr.py 8850`, started by hand. Its five checks
+are the only thing in the tree that asks whether a `stream_context` survives
+the hop through `local_proxy` at all -- whether a learned extractor's Referer,
+User-Agent, Cookie and invented headers actually reach the CDN -- and they ran
+for whoever read `test/README.md` first.
+
+**One class, not two.** The two python files differed in a status code and a
+Content-Type, so a second C++ copy would have been the vendoring hazard this
+tree keeps writing down. `test/echo_server.h` answers with the request's own
+headers as JSON, keys lowercased and values as sent, with `range_aware`
+selecting the 206-on-Range behaviour that `http_download_source` depends on.
+Both python files are deleted.
+
+**The control matters more here than a sabotage of the code under test**,
+because the risk with a hand-written fixture is that the suite measures the
+fixture. Removing the Referer forwarding from `local_proxy` takes the
+upstream's header count from 9 to 8 and turns exactly one check red, naming
+the header: the chain being measured is the browser's, not the server's.
+
+`test_headers` also carried a `%d` against a `qsizetype`, which had never been
+compiled by `make test` and so had never printed a warning. Fixed with the
+move.
+
+38 suites now, from 36 before these two commits: `test_headers` brings seven
+checks and `test_dlheaders` brought twelve, of which eight were written long
+ago and then left behind a manual step.
 
 ## What is next (in order)
 
