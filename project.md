@@ -8375,10 +8375,29 @@ one is reachable, has the class twice. That is what the packaged build hit.
 
 With `[project] include-dirs = ['src']` set, `test/test_theme.cpp` gets **both**
 `-I<root>/src` and `HYDRA_HAVE_DBUS`, read out of `compile_commands.json`, and
-compiles. So the macro arrived once the include resolved. By what route is not
-claimed here -- fmake's own account is that an annotation is a property of the
-translation unit it sits in and cannot govern another's, which this observation
-sits awkwardly beside; that is theirs to reconcile and it was reported to them.
+compiles.
+
+**~~fmake's account is that an annotation cannot govern another unit's.~~
+Retracted by them, and the real answer was this tree's own.** An
+`@pkg_optional` splits: the macro it names becomes a *tree* flag, defined for
+every unit, while the package's cflags stay with the annotating unit. So a test
+that only includes the header gets the macro by design -- because a header
+which shapes itself on such a macro is included by units that never asked, and
+two units disagreeing about a struct's layout is the quiet version of the same
+fault.
+
+**And the report that made them do it was ours**, from 2026-09-17, recorded
+about twelve thousand lines above this: `objsets` broken on a QtDBus compile
+error in `test_theme.cpp`, "signalled to fmake rather than worked around here".
+The packaged 2026-08-04 binary predates that fix, which is exactly why it
+showed the redefinition and the current one does not.
+
+So today's investigation rediscovered this tree's own six-week-old finding,
+wrote it up as a fresh limit to design around, and asked its author to confirm
+the limit. The rule that would have caught it is the one about deferring a
+question the project has already decided somewhere else under a different name
+-- and here it was not even a different name, it was the same file and the same
+class.
 
 **The wider fix, measured before it was taken.** `fmake hydra` from the root
 now builds the whole tree, suites included, and exits 0 where it stopped on 72
@@ -23557,9 +23576,13 @@ per-role, not per-object:
 The first attempt added a `rules_changed` signal so per-view blockers could
 follow a rule learned in the dialog. That is a new moc symbol, and it
 rippled into link closures that only `tool/objsets.py` can recompute -- and
-that tool is currently broken on an unrelated QtDBus compile error in
+that tool was then broken on an unrelated QtDBus compile error in
 `test_theme.cpp` under fmake, signalled to fmake rather than worked around
-here. But the injected consent script reads `rules_json` once per page
+here. **~~currently broken~~ Fixed upstream on this report**, in fmake's
+section 240: the macro an `@pkg_optional` names is a tree flag, defined for
+every unit, because a header that shapes itself on one is included by units
+that never asked. `objsets` runs here again -- twice on 2026-09-21, 88
+programs and 5218 objects. But the injected consent script reads `rules_json` once per page
 load, so a per-view blocker only needs fresh rules at navigation. The
 `url_changed` lambda pulls them from the aggregator there -- no signal, no
 new symbol, no regeneration, and the rules arrive exactly when the page
