@@ -24319,6 +24319,21 @@ to be that size is not established here. The guard does not depend on knowing:
 it asks whether the thing measured was big enough to have been laid out, which
 is the question the audit needs answered either way.
 
+**And the refusal is the honest answer rather than a good one**, which the next
+sweep demonstrated by firing it: `auth-site was not laid out when it was
+grabbed (100x30, floor 188x155) -- not audited`. No false findings, and the run
+still lost that surface -- more often the busier the machine is, which is
+exactly when a sweep is running. So `save` now waits for the layout before it
+measures or photographs: a laid-out widget is at least its own
+`minimumSizeHint`, the same test the guard makes, bounded at two seconds and
+giving up rather than looping, since a widget that never reaches its floor is
+the case the refusal exists to report.
+
+Three runs since, all `0 problem(s)` with `auth-site` at its real 200x172 --
+and the population says the same thing from the other side, **103 buttons
+rather than 101**: a refused surface was quietly costing the audit the two
+buttons on it, which is a count that moves when coverage does.
+
 ## The toolbar's own icons were bundled to fix a report, and nothing checked it
 
 The copyright holder reported icons differing between machines and **no shield

@@ -356,6 +356,25 @@ static void audit(QWidget *w, const QString &name) {
 static void save(QWidget *w, const QString &name) {
 	if (!w)
 		return;
+	// **Wait for the layout before measuring or photographing.** A widget Qt
+	// has not laid out yet sits at 100x30 with everything inside it at its
+	// minimum, so an audit of it reports a dialog full of cramped controls
+	// that is nothing of the kind, and the picture is of a box rather than of
+	// a window. `audit` refuses such a surface rather than believing it, which
+	// is the honest answer and not a good one: the run still loses that
+	// surface, and it loses it more often the busier the machine is.
+	//
+	// A laid-out widget is at least its own minimumSizeHint, which is the same
+	// test `audit` makes and needs no constant. Bounded, and it gives up
+	// rather than looping: a widget that never reaches its floor is exactly
+	// the case the refusal below exists to report.
+	for (int waited = 0; waited < 2000; waited += 50) {
+		const QSize floor = w->minimumSizeHint();
+		if (!floor.isValid() ||
+		     (w->width() >= floor.width() && w->height() >= floor.height()))
+			break;
+		spin(50);
+	}
 	const QString path = QString("%1/%2-%3.png")
 	                         .arg(g_out).arg(g_shots, 2, 10, QChar('0')).arg(name);
 	audit(w, name);
