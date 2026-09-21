@@ -8342,10 +8342,27 @@ it is neither:
     + bare "src" added   * 1 inferred include dir(s) dropped by
                            [project] exclude: src
 
-**A thing can only be dropped if it was proposed**, so `src` is inferred here,
-is not dropped by this tree's globs, and is still absent from all 211 compile
-entries. The control is the whole of why that is worth saying: a bare absence
-would have been read as "never proposed" and would have been wrong.
+**~~A thing can only be dropped if it was proposed, so `src` is inferred
+here.~~ That read one line's meaning off its wording, and the instrument fmake
+added next says otherwise.** With `-v` now reporting the set it KEEPS as well
+as the set it destroys, re-taken 2026-09-21 against `2696b1f` with the explicit
+`include-dirs` removed so the conditions match the original:
+
+    no exclude naming src     * 0 inferred include dir(s) kept
+                              (no drop line at all)
+    exclude = ["src", ...]    * 1 inferred include dir(s) dropped
+                                by [project] exclude: src
+                              * 0 inferred include dir(s) kept
+
+So nothing is inferred here either way, and **adding an exclude is what makes
+`src` appear as a candidate to be dropped**. The drop line counts from a set
+the kept line never counts. Which of the two is the inference is not decided
+here.
+
+That agrees with the compile lines rather than contradicting them: `0 kept` is
+why no entry among the 211 carries `-I<root>/src`. The odd reading was always
+the drop line, and the earlier entry treated it as the reliable one because it
+was the only one that spoke.
 
 The reconciliation is inside fmake and is not guessed at here. Two details were
 sent back as possible narrowings: the inferred directory does not appear to
