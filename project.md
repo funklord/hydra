@@ -8230,6 +8230,27 @@ does not reach the layout `fmake -C src` describes.
 The README claimed this build worked, then said it did not, and now says what
 it does.
 
+**And the guard opened a hole that had to be closed in the same pass.** Before
+it, a `hydra.pro` that stopped defining `HYDRA_VERSION` was a compile error --
+loud, immediate, impossible to ship. After it, that same removal is silent:
+the fallback takes over and the program reports *unknown (built without a
+version)* while everything still builds and every suite still passes. The fix
+for one tool's blind spot had made a different one.
+
+`version-check` already compared `VERSION` against `debian/changelog` and
+asserted that `hydra.pro` *reads* the file rather than restating the number. It
+now also asserts that `hydra.pro` still **defines the macro**, and -- where the
+program has been built -- that the binary reports what `VERSION` says. Two
+witnesses for one fact, one static and one behavioural, which is the pair this
+file keeps arriving at: the second asks the artifact rather than the thing that
+produced it.
+
+Both were sabotaged before being believed. Deleting the `DEFINES` line fails
+with the reason spelled out; pointing `BUILD_DIR` at a stub that answers
+`hydra 9.9` fails with *"the built program reports '9.9' where VERSION says
+'0.1'"*. And where the program is not built the target says so rather than
+passing quietly, since a check that cannot run is not a check that agreed.
+
 Suggestions went to `fmake/suggestions/hydra.md`, which replaced the
 documentation-based version wholesale.
 

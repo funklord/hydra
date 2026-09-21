@@ -490,6 +490,26 @@ version-check:
 		echo "               VERSION; the two will drift" >&2; \
 		exit 1; \
 	fi; \
+	if ! grep -q 'DEFINES *+= *HYDRA_VERSION' hydra.pro; then \
+		echo "version-check: hydra.pro no longer defines HYDRA_VERSION, so" >&2; \
+		echo "               main.cpp's #ifndef fallback decides what the" >&2; \
+		echo "               program reports -- silently, since the guard" >&2; \
+		echo "               is what stops that being a compile error" >&2; \
+		exit 1; \
+	fi; \
+	if [ -x $(BUILD_DIR)/hydra ]; then \
+		said=$$(QT_QPA_PLATFORM=offscreen $(BUILD_DIR)/hydra --version \
+		         2>/dev/null | sed -n '1s/^hydra //p'); \
+		if [ "$$said" != "$$file" ]; then \
+			echo "version-check: the built program reports '$$said'" >&2; \
+			echo "               where VERSION says '$$file'" >&2; \
+			exit 1; \
+		fi; \
+		echo "version-check: and the built program reports $$said"; \
+	else \
+		echo "version-check: $(BUILD_DIR)/hydra is not built, so the" ; \
+		echo "               binary was not asked what it reports"; \
+	fi; \
 	if [ -n "$$tool" ]; then \
 		echo "version-check: $$file, in step (both readers agree)"; \
 	else \
