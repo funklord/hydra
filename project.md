@@ -8143,7 +8143,9 @@ And a link set derived from symbols that is **smaller** than the one
 `CMakeLists.txt` names, with every declined library explained by the header that
 suggested it.
 
-**It cannot build this tree**, and the reason is ours rather than fmake's.
+**~~It cannot build this tree~~**, measured 2026-08-04 -- **and it can, as of
+2026-09-21; both blockers below are closed and the correction is at the end of
+this section.** The reason it could not was ours rather than fmake's.
 `src/` holds four `android_*.cpp` that CMake adds only inside `if(ANDROID)`.
 They carry no self-guard, because the build system is what excludes them, so
 fmake schedules all four and stops at
@@ -8226,6 +8228,13 @@ fires. Measured both ways: with `VERSION` copied into `src/` it says
 -- the finding and its remedy, exactly what was wanted -- and with the file one
 level up, where it actually lives, nothing at all. A feature that works and
 does not reach the layout `fmake -C src` describes.
+
+**Signalled as fmake's `suggestions/hydra.md`, their commit `a29d754`**, which
+names the artifact rather than the act -- `harmonization.md` asks for that, and
+this document has already recorded one "signalled" that turned out to be an
+intention nobody had carried out. Their tree was dirty with another session's
+work when it went in, so only that one file was staged, by name, and their
+three modified files were left alone.
 
 The README claimed this build worked, then said it did not, and now says what
 it does.
