@@ -24315,6 +24315,23 @@ driver takes a url with a video on it as an argument and is skipped in every
 sweep for exactly that reason, so the fix rests on the measured mechanism and
 on the write now being reported either way -- which is what its silence cost.
 
+**And one more in the same driver, of a class this tree has already written
+down twice.** `try_capture` defaulted its download directory to
+`/tmp/hydra-cap`. `sweep.sh` carries a paragraph on exactly that -- *"a fixed
+path in /tmp belongs to whoever got there first"* -- and sets `HYDRA_TEST_OUT`,
+`HYDRA_SHOTS` and `HYDRA_TEST_CONFIG` per run to avoid it. This driver used the
+first for its screenshots and not for the thing it exists to produce.
+
+Two costs, and the second is the one that matters. It accumulated: fifteen
+captures from different runs in one directory, because nothing scoped it to a
+run. And on a machine with a second user that directory is unwritable, so the
+driver reports **"Nothing was captured"** -- which is precisely what the
+closed-port defect above looked like. Two unrelated faults with one symptom is
+the thing worth removing, and the one that would have cost somebody an evening.
+
+It writes to `test_out() + "dl"` now, which is what `try_downloads` already
+does, and a run leaves exactly its own capture behind.
+
 **And the evidence it lacked existed and was unused.**
 `media_fixture::server` keeps a `seen` list -- *"every path this served, for a
 driver that wants to say what was asked for rather than trusting that it

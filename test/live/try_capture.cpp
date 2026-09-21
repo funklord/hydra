@@ -46,7 +46,20 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 	std::printf("serving: %s\n", qPrintable(target));
-	const QString outdir = argc > 2 ? argv[2] : QDir::temp().filePath("hydra-cap");
+	// **Under this run's own output, not a fixed path in /tmp.** This
+	// defaulted to `/tmp/hydra-cap`, which is the hazard `sweep.sh` documents
+	// at length and sets three environment variables to avoid: a fixed name
+	// there belongs to whoever got there first, so a second uid running this
+	// driver cannot write its captures -- and what it reports then is
+	// "Nothing was captured", which is exactly what the closed-port defect
+	// above looked like. Two unrelated faults with one symptom is the thing
+	// worth removing.
+	//
+	// It also accumulated: fifteen captures from different runs were sitting
+	// in one directory, because nothing ever scoped it to a run.
+	// `try_downloads` already writes to `OUTDIR + "dl"`; this is the same.
+	const QString outdir = argc > 2 ? QString::fromLocal8Bit(argv[2])
+	                                 : test_out() + "dl";
 
 	policy_engine       policy;
 	request_filter      filter(&policy);
