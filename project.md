@@ -8363,16 +8363,38 @@ kept` means "none besides the root"**, and the line says nothing about the
 `-I<root>` that is on every compile entry. Their fixture totals 1 either way;
 this tree totals 0 without the exclude and 1 with it.
 
-So the pair is consistent inside a run, and the anomaly is **between** the two
-runs: adding an exclude brings a directory into this tree's inferred set,
-where in a fixture of the same shape it changes nothing. What was never true
-is that `src` is proposed in the run with no exclude. Why an exclude changes
-what this tree infers is fmake's question and stays theirs.
+So the pair is consistent inside a run.
 
-`0 kept` in the real config is still why no entry among the 211 carries
-`-I<root>/src`, and that half was right for the right reason. What was wrong
-was calling the drop line the outlier: it reports honestly about the run it
-was printed in, and it is the runs that differ.
+**~~And the anomaly is between the two runs.~~ There was no anomaly, and the
+whole exchange was two commands being compared.** Closed by fmake on
+2026-09-21, their section 313 at `d21d61f`, reproduced in one fixture:
+
+    fmake -v                        0 inferred
+    fmake -v, exclude = ["src"]     1 inferred, dropped
+    fmake test -v                   1 inferred, kept: src
+
+The first two lines are this tree's numbers. The third is what fmake had been
+quoting back, because **they ran `fmake test` every time and this tree ran
+`fmake`, and neither side ever wrote the command down.** Their cause, in one
+sentence: a quote include found beside its includer costs no `-I`, so
+`src/main.c` saying `#include "theme.h"` contributes nothing to the inferred
+set, while a test translation unit cannot do that and falls to the basename
+fallback, which adds `src`. Excluding `src` removes the program from the
+build, leaving the test unit as the whole population -- which infers `src`,
+and the same exclude then drops it.
+
+So both of this tree's readings were true, of different builds, and so was
+theirs. `0 kept` in the real config is still why no entry among the 211
+carries `-I<root>/src`.
+
+**The un-strike above was right by accident, and the lesson is not about
+include paths.** Three mechanisms were proposed here for a discrepancy that
+had no mechanism. The tell was available throughout: **a fixture that
+reproduces a shape but not the numbers has usually been asked a different
+question, and the first thing to compare is the argv, not the tree.** It is
+the same fault as the README line this tree got wrong earlier the same day --
+naming one command and testing another -- one notch along, and the half
+neither side thought to state was the half that mattered.
 
 **What survives is the argument for printing both numbers, which neither side
 made while the change was about readability.** A tool printing only `kept`
