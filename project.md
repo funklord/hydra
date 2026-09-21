@@ -8342,11 +8342,11 @@ it is neither:
     + bare "src" added   * 1 inferred include dir(s) dropped by
                            [project] exclude: src
 
-**~~A thing can only be dropped if it was proposed, so `src` is inferred
-here.~~ That read one line's meaning off its wording, and the instrument fmake
-added next says otherwise.** With `-v` now reporting the set it KEEPS as well
-as the set it destroys, re-taken 2026-09-21 against `2696b1f` with the explicit
-`include-dirs` removed so the conditions match the original:
+**A thing can only be dropped if it was proposed, so `src` is inferred in the
+run where it is dropped.** That sentence stood, was struck here on
+2026-09-21, and is restored the same day. With `-v` now reporting the set
+fmake KEEPS as well as the set it destroys, re-taken against `2696b1f` with
+the explicit `include-dirs` removed so the conditions match the original:
 
     no exclude naming src     * 0 inferred include dir(s) kept
                               (no drop line at all)
@@ -8354,15 +8354,32 @@ as the set it destroys, re-taken 2026-09-21 against `2696b1f` with the explicit
                                 by [project] exclude: src
                               * 0 inferred include dir(s) kept
 
-So nothing is inferred here either way, and **adding an exclude is what makes
-`src` appear as a candidate to be dropped**. The drop line counts from a set
-the kept line never counts. Which of the two is the inference is not decided
-here.
+**~~The drop line counts from a set the kept line never counts.~~** That was
+this tree's reading and it was wrong; fmake corrected it from the code. Both
+lines count one set, `proj.incdirs | {"."}`, in one loop, so every member is
+either dropped or kept. The tree root is added unconditionally rather than
+inferred, is never dropped, and is filtered out of the kept count -- so **`0
+kept` means "none besides the root"**, and the line says nothing about the
+`-I<root>` that is on every compile entry. Their fixture totals 1 either way;
+this tree totals 0 without the exclude and 1 with it.
 
-That agrees with the compile lines rather than contradicting them: `0 kept` is
-why no entry among the 211 carries `-I<root>/src`. The odd reading was always
-the drop line, and the earlier entry treated it as the reliable one because it
-was the only one that spoke.
+So the pair is consistent inside a run, and the anomaly is **between** the two
+runs: adding an exclude brings a directory into this tree's inferred set,
+where in a fixture of the same shape it changes nothing. What was never true
+is that `src` is proposed in the run with no exclude. Why an exclude changes
+what this tree infers is fmake's question and stays theirs.
+
+`0 kept` in the real config is still why no entry among the 211 carries
+`-I<root>/src`, and that half was right for the right reason. What was wrong
+was calling the drop line the outlier: it reports honestly about the run it
+was printed in, and it is the runs that differ.
+
+**What survives is the argument for printing both numbers, which neither side
+made while the change was about readability.** A tool printing only `kept`
+would have said 0 here and been believed; printing only `dropped` said 1 and
+was believed. The discrepancy was visible at all only because both were
+printed -- and the conclusion drawn from it here was still wrong, which is
+the honest form of the point rather than a weaker one.
 
 The reconciliation is inside fmake and is not guessed at here. Two details were
 sent back as possible narrowings: the inferred directory does not appear to
