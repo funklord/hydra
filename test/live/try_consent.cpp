@@ -371,8 +371,34 @@ int main(int argc, char *argv[]) {
 	             seen.isEmpty() ? "(none)" : qPrintable(seen.first()));
 	check(!seen.isEmpty(), "and the banner is recorded as unanswerable rather "
 	                        "than silently skipped");
-	check(!seen.isEmpty() && seen.first().contains("Avvis alle"),
-	      "with the labels it offered, which is most of the rule already");
+	// **Split, not `contains`.** This is the only place in the tree where the
+	// injected script's output meets the C++ that parses it: the script sends
+	// `labels.join('\t')` and `consent_dialog` splits on a tab to make one
+	// selectable row per button. Four places state that separator -- two in
+	// the script, two in the parsers -- and nothing made them agree.
+	//
+	// `contains("Avvis alle")` could not tell them apart: change the join to a
+	// pipe and the row still contains the label, so that check passed while
+	// the dialog drew each site as a single unselectable row holding every
+	// label at once. Not hypothetical -- a fixture written with " | " produced
+	// exactly that, and it read as a defect in the dialog.
+	//
+	// **What this adds is where the failure lands, not whether one happens.**
+	// Measured by making the change: joining with a pipe fails six checks, and
+	// the other five are the rule-learning chain downstream discovering that a
+	// label is now "Godta alle|Avvis alle". Those would have caught it. What
+	// they would not have said is why -- the first red line used to be four
+	// steps past the fault, about rules, in a section that is not the one that
+	// broke. This one fails at the moment the row is recorded and prints the
+	// field count and the fields, which is the whole diagnosis.
+	const QStringList fields = seen.isEmpty()
+	                             ? QStringList()
+	                             : seen.first().split(QLatin1Char('\t'));
+	check(fields.size() >= 3 && fields.first() == "127.0.0.1"
+	        && fields.contains("Avvis alle"),
+	      QString("with the labels it offered, separated the way the dialog "
+	               "parses them (%1 field(s): %2)")
+	        .arg(fields.size()).arg(fields.join(" / ")));
 
 	// Turning one into a rule, and what scope it gets.
 	const site_rule learned = blocker->rule_from_label("Avvis alle", "reject");

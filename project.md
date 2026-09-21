@@ -24963,6 +24963,36 @@ So the fault four instances of were fixed this session has now been asked of
 every dialog this program can show, which is the first time that sentence has
 been true.
 
+## The one place the injected script meets the parser, checked by substring
+
+The consent bridge states its separator four times: the injected script sends
+`labels.join('\t')` twice, and `consent_blocker` and `consent_dialog` each
+split on a tab. Nothing made them agree.
+
+`try_consent` is the only place in the tree where the real script's output
+reaches the real parser -- it loads a page with a banner nothing can answer and
+reads back what was recorded. Its assertion was
+`seen.first().contains("Avvis alle")`, which is true of
+`127.0.0.1\tGodta alle\tAvvis alle` and equally true of
+`127.0.0.1\tGodta alle|Avvis alle`. The check that watched the meeting point
+could not see the thing the meeting point is for.
+
+It splits now and asserts the shape: at least three fields, the host first, the
+label among them. A real run reports
+`3 field(s): 127.0.0.1 / Godta alle / Avvis alle`.
+
+**What that buys is where the failure lands, not whether one happens**, and the
+sabotage is what made the difference honest. Joining with a pipe instead fails
+**six** checks: this one, and five more as the rule-learning chain downstream
+discovers that a label is now `Godta alle|Avvis alle`. Those five would have
+caught it. What they would not have said is *why* -- the first red line used to
+be four steps past the fault, in a section about rules rather than the one that
+broke. This one fails where the row is recorded and prints the field count and
+the fields.
+
+The first draft of the comment beside it claimed nothing else would notice.
+That was wrong, and the sabotage said so before it was committed.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
