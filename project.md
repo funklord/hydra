@@ -8185,25 +8185,50 @@ answered by the `@pkg_optional` annotations this tree has since added, six of
 them. So the file-name blocker and the found-means-defined blocker are both
 closed.
 
-**It gets to 135 of 136 and stops at one line.** The single error in the whole
+**It got to 135 of 136 and stopped at one line.** The single error in the whole
 run:
 
     main.cpp:91: error: 'HYDRA_VERSION' was not declared in this scope
 
-`hydra.pro` defines it from the `VERSION` file, and `main.cpp` reads it without
-saying anywhere that it comes from the build. That is the same shape as the
+`hydra.pro` defines it from the `VERSION` file, and `main.cpp` read it without
+saying anywhere that it comes from the build. Same shape as the
 optional-dependency finding above -- a source depending on a decision it cannot
-see -- with the difference that this one is used unguarded, so it is a hard
-error rather than a body that silently vanishes.
+see -- except that this one is read unguarded, so it is a hard error rather
+than a body that silently vanishes.
 
-**And the obvious answer is the one this workspace forbids.** fmake's `@define`
-takes a literal, so declaring it in the source means writing the version number
-there: a second copy of the thing `VERSION` exists to hold in one place, per
-`code-style.md`. Whether fmake should be able to take a define's value from a
-file is fmake's question and not this tree's to answer, and it is the one thing
-standing between it and a complete build here.
+**And the answer was ours, which is worth how nearly it was not.** The first
+reading was that fmake needs a way to take a define's value from a file, since
+`@define` takes a literal and writing the number into the source is the one
+thing `VERSION` exists to prevent. That was drafted as a request to fmake and
+was wrong: **fmake already anticipates exactly this case.** `version_fallbacks`
+looks for a macro with `VERSION` as a component of its name, guarded by
+`#ifndef`, defined to a string literal, and reports a file that supplies its
+own -- deliberately reporting rather than resolving, because it can see the
+tree has a `VERSION` file saying something else and cannot know that "unknown"
+is wrong. The docstring cites `RAIDTRAY_VERSION "unknown (built without a
+version)"`, so a sibling was already doing it.
 
-The README said this build works. It says what happens now.
+So `main.cpp` carries the guard now, and **fmake builds this tree**: 136 of 136
+compiled, linked, `* built hydra`. The binary says `hydra unknown (built
+without a version)` where the qmake one says `hydra 0.1`, and the number is
+still stated in `VERSION` and nowhere else.
+
+**The signal to fmake is a different thing from the one nearly sent, and it is
+real.** That report is keyed on a `VERSION` file in the **build root** --
+literally `open(os.path.join(root, "VERSION"))` -- and hydra's sits at the
+repository root while the build root is `src/`. So for this tree it never
+fires. Measured both ways: with `VERSION` copied into `src/` it says
+
+    main.cpp defines HYDRA_VERSION itself because the build did not, so this
+    binary reports a version it made up
+    VERSION here says 0.1; [project] cflags = ['-DHYDRA_VERSION="0.1"'] supplies it
+
+-- the finding and its remedy, exactly what was wanted -- and with the file one
+level up, where it actually lives, nothing at all. A feature that works and
+does not reach the layout `fmake -C src` describes.
+
+The README claimed this build worked, then said it did not, and now says what
+it does.
 
 Suggestions went to `fmake/suggestions/hydra.md`, which replaced the
 documentation-based version wholesale.

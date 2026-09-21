@@ -6,6 +6,27 @@
  * is main.cpp. Naming it here rather than in a build file keeps the fact where
  * the entry point is.
  */
+// **A version to fall back on when the build does not supply one.**
+//
+// `hydra.pro` passes `-DHYDRA_VERSION="<the VERSION file>"`, and a build that
+// reads the sources rather than the project file cannot know that: fmake got
+// 135 of these 136 sources compiled and stopped here, on the one line that
+// reads the macro, with the only error in the run.
+//
+// The guard rather than an annotation carrying the number, because the number
+// belongs in `VERSION` and nowhere else -- `code-style.md` gives that file as
+// the single place a version is stated, and a copy in a source comment goes
+// stale on the first release. This says only that there is a version and this
+// build was not told it.
+//
+// It is also the shape fmake already looks for: a macro with VERSION as a
+// component of its name, guarded by `#ifndef`, defined to a string literal.
+// It reports such a file rather than resolving it -- it can see the tree has a
+// VERSION file saying something else, and cannot know that "unknown" is wrong.
+#ifndef HYDRA_VERSION
+#define HYDRA_VERSION "unknown (built without a version)"
+#endif
+
 #include "main_window.h"
 #include "settings_dialog.h"   // settings_store
 #include "theme.h"

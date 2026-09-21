@@ -352,19 +352,19 @@ same sources with no build file at all:
 fmake -C src -j2              # name a number; see the JOBS warning above
 ```
 
-It works almost the whole build out by itself — every `Q_OBJECT`, the moc runs,
-the platform-specific sources excluded by name, and a link set closed over
-symbols rather than guessed. The annotations in the sources are what it cannot
-know: `@target` in `main.cpp`, and one `@pkg_optional` beside each optional
+It works the whole build out by itself — every `Q_OBJECT`, the moc runs, the
+platform-specific sources excluded by name, and a link set closed over symbols
+rather than guessed. The annotations in the sources are what it cannot know:
+`@target` in `main.cpp`, and one `@pkg_optional` beside each optional
 dependency's include.
 
-**It does not finish, and `make` is the way to build this.** Measured
-2026-09-21: 135 of the 136 sources compile and `main.cpp` does not, because
-`HYDRA_VERSION` is defined by `hydra.pro` from the `VERSION` file and a source
-that reads the macro says nothing about where it comes from. fmake's `@define`
-takes a literal, so saying it in the source would put the version number in a
-second place — which is the one thing the `VERSION` file exists to prevent.
-`project.md` carries the measurement.
+**What it cannot know is the version.** `hydra.pro` passes
+`-DHYDRA_VERSION="<the VERSION file>"`, and a build that reads the sources
+rather than the project file has no way to see that. `main.cpp` carries a
+guarded fallback so the build finishes, and a binary built this way says
+`hydra unknown (built without a version)` where the qmake one says `hydra 0.1`.
+The number stays in `VERSION` and nowhere else. `project.md` carries the
+measurement.
 
 ## Testing
 
