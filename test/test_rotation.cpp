@@ -2674,6 +2674,42 @@ int main(int argc, char **argv) {
 	// Found from the other end: `found_unanswerable` was emitted and connected
 	// to nothing anywhere in the tree, which is what sent anybody to read this
 	// code at all.
+	// **Each bridge's name is stated twice, and nothing made the two agree.**
+	// The C++ registers the object under `bridge_name()`; the injected script
+	// reaches it by writing the name out again -- `objs.hydraConsent`,
+	// `objs.hydraCosmetic`, `objs.hydraMse`. Rename the one in the header and
+	// the script looks up a property that is not there, `bridge` is undefined,
+	// and the page silently reports nothing: no compile error, and nothing
+	// offline that would notice.
+	//
+	// Checked as a string because the script is one. This needs no engine and
+	// no page, which is why it belongs here rather than in a live driver --
+	// the drivers that exercise these bridges end to end would catch a rename,
+	// but only on a machine that can run them, and only after a page loads.
+	section("each injected script looks up the bridge it is registered as");
+	{
+		const struct { const char *what; QString js; const char *name; } bridges[] = {
+			{ "consent",  consent_blocker::script_source(),
+			  consent_blocker::bridge_name() },
+			{ "cosmetic", cosmetic_filters::script_source(),
+			  cosmetic_filters::bridge_name() },
+			// The relay is the half that talks to the bridge; the hook runs
+			// in the page's own world and reaches it through the relay.
+			{ "mse relay", mse_tap::relay_source(), mse_tap::bridge_name() },
+		};
+		for (const auto &b : bridges) {
+			// The script has to be there at all: an empty source would pass a
+			// `contains` on any name, which is the shape this file keeps
+			// finding.
+			check(b.js.size() > 100,
+			       QString("the %1 script has a body (%2 chars)")
+			         .arg(b.what).arg(b.js.size()));
+			check(b.js.contains(QLatin1String(b.name)),
+			       QString("and the %1 script names the bridge it is "
+			                "registered as (%2)").arg(b.what).arg(b.name));
+		}
+	}
+
 	section("a banner leaves the review list once it has taught a rule");
 	{
 		policy_engine  pol;

@@ -24993,6 +24993,41 @@ the fields.
 The first draft of the comment beside it claimed nothing else would notice.
 That was wrong, and the sabotage said so before it was committed.
 
+## Three bridge names, each written twice, with nothing holding them together
+
+Following the separator finding to its neighbours: every injected script in
+this program reaches C++ through a named object, and that name is stated
+twice. The C++ registers under `bridge_name()`; the script writes it out again
+as `objs.hydraConsent`, `objs.hydraCosmetic`, `objs.hydraMse`.
+
+Rename the one in the header and the script looks up a property that is not
+there. `bridge` is undefined, the page reports nothing, and there is no
+compile error -- the two halves are a C++ literal and a string constant that
+never meet until a page runs. The live drivers that exercise these bridges end
+to end would catch it, on a machine that can run them, after a page loads.
+
+Offline, in `test_rotation`, because the script is a string and this needs no
+engine: each script must name the bridge it is registered as. Six checks, two
+per bridge -- the second is that the script has a body at all, since a
+`contains` over an empty string passes for any name, which is the shape this
+file keeps arriving at.
+
+    the consent script has a body (9552 chars)
+    and the consent script names the bridge it is registered as (hydraConsent)
+    the cosmetic script has a body (2221 chars)
+    ... and the mse relay (1864 chars), hydraMse
+
+**The mse one took two attempts and the compiler said so.** There is no
+`mse_tap::script_source()`: that tap is two scripts, a hook that runs in the
+page's own world and a relay that talks to the bridge, and only the relay names
+it. Written against a method that does not exist, it did not compile -- which
+is the cheapest possible correction and worth contrasting with the string
+checks either side of it, where a wrong guess compiles and passes.
+
+Controlled by renaming `consent_blocker::bridge_name()` to `hydraConsentX`:
+that one check fails naming the new value and the other two stay green. 382
+pass where it was 376.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
