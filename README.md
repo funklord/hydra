@@ -345,18 +345,26 @@ just the build. The Makefile defaults to `-j2` and takes `JOBS=`.
 
 **Two build systems are maintained, and the Makefile is the interface to
 both.** Underneath it, `hydra.pro` (qmake) builds the app and the APK, and
-`test/Makefile` builds the test tree. The second is **fmake**, which builds the
-same sources from no build file at all:
+`test/Makefile` builds the test tree. The second is **fmake**, which reads the
+same sources with no build file at all:
 
 ```sh
 fmake -C src -j2              # name a number; see the JOBS warning above
 ```
 
-It works the whole build out by itself — every `Q_OBJECT`, the moc runs, the
-platform-specific sources, and a link set closed over symbols rather than
-guessed. The six things it cannot know are annotations in the sources: `@target`
-in `main.cpp`, and one `@pkg_optional` beside each optional dependency's
-include. `project.md` carries the measurements and the reasoning.
+It works almost the whole build out by itself — every `Q_OBJECT`, the moc runs,
+the platform-specific sources excluded by name, and a link set closed over
+symbols rather than guessed. The annotations in the sources are what it cannot
+know: `@target` in `main.cpp`, and one `@pkg_optional` beside each optional
+dependency's include.
+
+**It does not finish, and `make` is the way to build this.** Measured
+2026-09-21: 135 of the 136 sources compile and `main.cpp` does not, because
+`HYDRA_VERSION` is defined by `hydra.pro` from the `VERSION` file and a source
+that reads the macro says nothing about where it comes from. fmake's `@define`
+takes a literal, so saying it in the source would put the version number in a
+second place — which is the one thing the `VERSION` file exists to prevent.
+`project.md` carries the measurement.
 
 ## Testing
 

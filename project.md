@@ -8176,6 +8176,35 @@ fmake would make our static library unnecessary is **still unverified** -- the
 build fails before reaching a link, and the 19m17s-to-6m57s figure it quotes
 was this project solving that with an archive, not fmake solving it.
 
+**~~The two blockers~~ Both of those are gone, and one new one is in their
+place.** Re-measured 2026-09-21, because the README claims this build works and
+`harmonization.md` says such a line is to be run before it is written. fmake
+excludes the Android sources by itself now -- *"4 sources named for another
+platform ... not built for linux/x86_64"* -- and the optional dependencies are
+answered by the `@pkg_optional` annotations this tree has since added, six of
+them. So the file-name blocker and the found-means-defined blocker are both
+closed.
+
+**It gets to 135 of 136 and stops at one line.** The single error in the whole
+run:
+
+    main.cpp:91: error: 'HYDRA_VERSION' was not declared in this scope
+
+`hydra.pro` defines it from the `VERSION` file, and `main.cpp` reads it without
+saying anywhere that it comes from the build. That is the same shape as the
+optional-dependency finding above -- a source depending on a decision it cannot
+see -- with the difference that this one is used unguarded, so it is a hard
+error rather than a body that silently vanishes.
+
+**And the obvious answer is the one this workspace forbids.** fmake's `@define`
+takes a literal, so declaring it in the source means writing the version number
+there: a second copy of the thing `VERSION` exists to hold in one place, per
+`code-style.md`. Whether fmake should be able to take a define's value from a
+file is fmake's question and not this tree's to answer, and it is the one thing
+standing between it and a complete build here.
+
+The README said this build works. It says what happens now.
+
 Suggestions went to `fmake/suggestions/hydra.md`, which replaced the
 documentation-based version wholesale.
 
