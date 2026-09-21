@@ -109,13 +109,21 @@ public:
 	// and auth, and any job still going -- only history is kept, never a fake
 	// "running" row that cannot resume.
 	void set_history_path(const QString &path) { m_history_path = path; }
-	void save_history(const QString &path) const;
+	// Reports whether the write landed. It used to return void with
+	// `commit()`'s answer discarded, so a history that could not be written
+	// looked exactly like one that was.
+	bool save_history(const QString &path) const;
 	void load_history(const QString &path);
 
 	const QList<download_job> &jobs() const { return m_jobs; }
 
 signals:
 	void changed();   // any job's state or progress moved
+
+	// The automatic write behind `set_history_path` could not be made. This
+	// class has no status bar to say so with, and the manager keeps its rows
+	// in memory either way -- so the shell is told, and decides.
+	void save_failed();
 
 	// A job is held because its source needs consent that has not been given.
 	// The UI is expected to explain and then call set_consent().

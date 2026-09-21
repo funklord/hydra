@@ -293,7 +293,10 @@ private:
 	void step_zoom(int direction);          // -1, 0 to reset, +1
 	void apply_zoom(web_view_backend *view, const QString &node_id);
 	// Write the per-tab zoom map to disk so a zoomed page comes back zoomed.
-	void save_zoom() const;
+	// Reports whether the write landed, like every other store here. It used
+	// to return void with `commit()`'s answer discarded, so a zoom that could
+	// not be written was indistinguishable from one that was.
+	bool save_zoom() const;
 
 	// **Everything the shell keys by node id, visited from one place.**
 	//

@@ -310,11 +310,11 @@ static download_state state_from_name(const QString &n) {
 }
 
 void download_manager::persist_history() {
-	if (!m_history_path.isEmpty())
-		save_history(m_history_path);
+	if (!m_history_path.isEmpty() && !save_history(m_history_path))
+		emit save_failed();
 }
 
-void download_manager::save_history(const QString &path) const {
+bool download_manager::save_history(const QString &path) const {
 	QList<const download_job *> hist;
 	for (const download_job &j : m_jobs)
 		if (j.terminal())
@@ -343,9 +343,11 @@ void download_manager::save_history(const QString &path) const {
 	// and loses the whole history.
 	QSaveFile f(path);
 	if (!f.open(QIODevice::WriteOnly))
-		return;
-	f.write(QJsonDocument(arr).toJson(QJsonDocument::Compact));
-	f.commit();
+		return false;
+	const QByteArray json = QJsonDocument(arr).toJson(QJsonDocument::Compact);
+	if (f.write(json) != json.size())
+		return false;   // the destructor discards; the previous file stays
+	return f.commit();
 }
 
 void download_manager::load_history(const QString &path) {

@@ -90,6 +90,7 @@
 #include <QLineEdit>
 #include <QDialog>
 #include <QSplitter>
+#include <QStatusBar>
 #include <QTimer>
 #include <cstdio>
 #include <unistd.h>   // geteuid, for the check root cannot fail
@@ -3902,6 +3903,81 @@ int main(int argc, char **argv) {
 			check(picked.count() == 0,
 			       "and a pick after the switch is a no-op, not a rule for A");
 		}
+	}
+
+	section("a zoom that cannot be written says so");
+	{
+		// `save_zoom` used to return void with `commit()`'s answer discarded
+		// -- the one store in the profile whose failed write reached nobody,
+		// while `filter_list`, `policy_engine` and their siblings all report
+		// through `saved_or_said`. A profile directory that cannot be written
+		// lost every remembered zoom silently.
+		//
+		// Driven through the menu action rather than by calling the writer,
+		// because what is asserted is that the failure reaches the PERSON. A
+		// correct `save_zoom` whose answer nothing reads is the defect being
+		// replaced, and only the status bar can tell the two apart -- which
+		// is also how the confirmation was caught overwriting the warning one
+		// line later.
+		//
+		// Same limit as the download-history section in `test_settings`: a
+		// read-only target is refused by `QSaveFile::open`, so `commit()`'s
+		// own status is not what these checks reach.
+		const QString zdir = QDir::tempPath() + "/hydra-zoom-ro";
+		QDir(zdir).removeRecursively();
+		QDir().mkpath(zdir);
+
+		main_window wz(&factory, &policy, &filter);
+		wz.resize(900, 600);
+		wz.show();
+		spin(150);
+		wz.m_zoom_path = zdir + "/zoom.json";
+
+		QAction *zin = nullptr;
+		for (QAction *a : wz.findChildren<QAction *>())
+			if (a->text().remove('&') == "Zoom In") { zin = a; break; }
+		check(zin != nullptr, "the Zoom In action is in the window");
+
+		node *t = wz.m_model->add_tab(nullptr, "zoomed", "https://z.example/");
+		emit wz.m_tree->activated(
+		  wz.m_proxy->mapFromSource(wz.m_model->index_for_node(t)));
+		spin(200);
+		check(wz.m_views_by_id.contains(t->id), "and a tab is showing to zoom");
+
+		if (zin && wz.m_views_by_id.contains(t->id)) {
+			zin->trigger();
+			spin(50);
+			check(QFile::exists(wz.m_zoom_path),
+			       "a zoom it can write reaches the disk");
+			check(wz.m_zoom.value(t->id, 1.0) > 1.0,
+			       "and is remembered against the tab");
+			check(wz.m_status->currentMessage().startsWith("Zoom "),
+			       "with the window confirming the new level");
+
+			// As root the permission bits are advice, so a 0400 file is
+			// written without complaint and these would fail against correct
+			// code. Skipped rather than adapted, as test_state does.
+			if (::geteuid() == 0) {
+				std::printf("  --    running as root: a read-only file is "
+				             "still writable, so the failed-save checks are "
+				             "skipped\n");
+			} else {
+				QFile::setPermissions(wz.m_zoom_path, QFile::ReadOwner);
+				const double before = wz.m_zoom.value(t->id, 1.0);
+				zin->trigger();
+				spin(50);
+				check(wz.m_status->currentMessage().contains("Could not save"),
+				       "a zoom it cannot write is reported, not swallowed");
+				check(!wz.m_status->currentMessage().startsWith("Zoom "),
+				       "and the confirmation does not overwrite the warning");
+				check(wz.m_zoom.value(t->id, 1.0) > before,
+				       "while the window keeps the new level in memory, which "
+				       "is what makes \"in this session only\" true");
+				QFile::setPermissions(wz.m_zoom_path,
+				                       QFile::ReadOwner | QFile::WriteOwner);
+			}
+		}
+		QDir(zdir).removeRecursively();
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

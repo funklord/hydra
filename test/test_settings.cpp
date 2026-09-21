@@ -1394,7 +1394,7 @@ int main(int argc, char **argv) {
 			const int id = dm.enqueue(QUrl("http://x/keep.bin"), "n", &err);
 			fs->finish(id, true);          // -> done
 			dm.set_history_path(hist);
-			dm.save_history(hist);
+			check(dm.save_history(hist), "a save it can write reports success");
 		}
 		download_manager dm2;
 		dm2.load_history(hist);
@@ -1404,6 +1404,73 @@ int main(int argc, char **argv) {
 		         dm2.jobs().first().terminal(),
 		      "with its url and its terminal status");
 		QFile::remove(hist);
+	}
+
+	section("a download history that cannot be written says so");
+	{
+		// The manager writes this file by itself whenever the terminal set
+		// moves, so no caller in the shell ever sees that write return. It
+		// used to be `void` with `commit()`'s answer discarded: a profile
+		// directory that could not be written lost every finished row and
+		// said nothing, which is what `saved_or_said` exists to prevent for
+		// every other store here. `save_failed` is the only route from this
+		// class to the status bar, so the automatic write is what has to
+		// raise it -- an explicit call returning false reaches nobody.
+		//
+		// **What this cannot reach, measured rather than assumed.**
+		// `QSaveFile::open` refuses an existing target that is not writable,
+		// so a read-only file exercises the open guard and never gets as far
+		// as `commit()`. Sabotaging the commit line alone -- writing and
+		// returning true unconditionally, which is what this code did before
+		// -- leaves all seven checks below green. Reaching commit needs a
+		// write error at flush, a full filesystem or a quota, and this suite
+		// cannot make one.
+		const QString dir = QDir::tempPath() + "/hydra-dl-history-ro";
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString hist = dir + "/history.json";
+
+		download_manager dm;
+		auto *fs = new fake_download_source;
+		dm.add_source(fs);
+		QString err;
+		const int id = dm.enqueue(QUrl("http://x/ro.bin"), "n", &err);
+		fs->finish(id, true);
+		check(dm.save_history(hist), "a save it can write reports success");
+		const QByteArray before = [&] {
+			QFile f(hist); f.open(QIODevice::ReadOnly); return f.readAll();
+		}();
+		check(!before.isEmpty(), "and wrote the row");
+
+		// As root the permission bits are advice: a 0400 file is written
+		// without complaint, so these assertions fail against correct code.
+		// Skipped rather than adapted, as test_state does for the same
+		// reason -- CI's build job is root in a container.
+		if (::geteuid() == 0) {
+			std::printf("  --    running as root: a read-only file is still "
+			             "writable, so the failed-save checks are skipped\n");
+		} else {
+			QFile::setPermissions(hist, QFile::ReadOwner);
+			check(!dm.save_history(hist),
+			      "a save it cannot write reports failure");
+
+			int said = 0;
+			QObject::connect(&dm, &download_manager::save_failed,
+			                  [&said] { ++said; });
+			dm.set_history_path(hist);
+			check(dm.forget_finished() == 1,
+			      "clearing the finished row triggers the automatic write");
+			check(said == 1, "and that write failing is signalled, not swallowed");
+
+			QFile::setPermissions(hist, QFile::ReadOwner | QFile::WriteOwner);
+			const QByteArray after = [&] {
+				QFile f(hist); f.open(QIODevice::ReadOnly); return f.readAll();
+			}();
+			check(after == before, "with the history that was there still whole");
+			check(QDir(dir).entryList(QDir::Files | QDir::Hidden).size() == 1,
+			      "and nothing half-written left beside it");
+		}
+		QDir(dir).removeRecursively();
 	}
 
 	section("history load keeps only the terminal rows in the file");

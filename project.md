@@ -25356,6 +25356,72 @@ same sets in a different order, so `make objsets` always shows a diff. Nothing
 is wrong with the file it writes; the churn just makes review noisier than it
 needs to be.
 
+## Two stores whose failed write said nothing, and the sweep that missed them
+
+`main_window.cpp` carries a paragraph about this exact defect. It says
+`filter_list::save`, `policy_engine::save` and their siblings were made to
+report honestly -- `QSaveFile`, `return f.commit()`, false on a full disk --
+"and every caller discarded the answer", and that the status bar is the honest
+channel. `saved_or_said` exists for it and is called at nine sites.
+
+Two stores were not in that sweep, found by asking the mechanical question
+instead of the topical one: **which `QSaveFile` writes discard `commit()`?**
+Seven sites, five of which check both the write count and the commit:
+
+    state_store::save             count + commit
+    state_store::save_history     count + commit
+    tree_outline::save            commit
+    site_extractor (the learned set)  count + commit
+    filter_list::save             commit
+    download_manager::save_history    NEITHER -- and returned void
+    main_window::save_zoom            NEITHER -- and returned void
+
+Both returned `void`, so there was nothing for a caller to discard and
+nothing for the compiler to notice. That is why the earlier pass missed them:
+it swept the callers of functions that already returned `bool`, and a `void`
+function is invisible to that lens. **The population was "stores that report
+a failure nobody reads", and the two worst cases were the ones that did not
+report at all.**
+
+Both now return `bool`, check the write count before committing so the
+destructor discards rather than publishing a short file, and route through
+`saved_or_said`.
+
+**The download manager needed a signal, because it has no status bar.** It
+writes its history by itself whenever the terminal set moves -- a finish, a
+cancel, a Clear Finished -- so no caller in the shell is present when that
+write returns. `save_failed` is emitted from `persist_history`, and the window
+turns it into the same sentence every other store gets. Without that the fixed
+return value would have been correct and unread, which is the defect it
+replaces wearing a better type.
+
+**And the zoom fix was wrong on its first draft, caught by driving the test
+through the menu rather than the writer.** `step_zoom` ends with
+`showMessage("Zoom 125%")`, so the warning `saved_or_said` had just put in the
+status bar was overwritten one line later and the person saw nothing. It
+returns on a failed save now: the page has visibly changed size either way, so
+of the two messages the failure is the one that cannot be seen without it. A
+test that had called `save_zoom` directly would have passed against that.
+
+**What the fixtures reach, and what they do not.** `QSaveFile::open` refuses an
+existing target that is not writable, so a read-only file exercises the open
+guard and never reaches `commit()`. Measured: sabotaging the commit line alone
+-- write, commit, `return true`, which is what `save_history` did before --
+leaves all seven of the new download checks green. Reaching commit needs a
+write error at flush, and this suite cannot make one. Both test comments say
+so.
+
+The four sabotages that do land, each on the check it belongs to:
+
+    save_history returns true on open failure    2 red: the return, the signal
+    persist_history drops the emit               1 red: the signal only
+    save_zoom returns true on open failure       2 red: the report, the order
+    step_zoom does not return on failure         2 red: same two
+
+`test_settings` gains seven checks and `test_rotation` eight; 36 suites run,
+35 clean, and `test_rotation`'s single failure is the known font pin recorded
+in *A pin that measures the desktop's font* above, unchanged at 228.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

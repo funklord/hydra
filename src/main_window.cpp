@@ -488,6 +488,12 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(m_downloads, &download_manager::consent_required, this,
 	         &main_window::confirm_public_download, Qt::QueuedConnection);
 
+	// The manager writes its history by itself whenever the terminal set
+	// moves, so the shell never sees the return of that write. Without this
+	// the only store in the profile whose failure said nothing.
+	connect(m_downloads, &download_manager::save_failed, this,
+	         [this] { saved_or_said(false, "the download history"); });
+
 	// Links that are not pages (sec 11.4). The rule is deliberately general rather
 	// than a test for one scheme: anything the browser will not render, but
 	// which some download source will take, becomes a download. A magnet link
@@ -4233,21 +4239,28 @@ void main_window::step_zoom(int direction) {
 			m_zoom.remove(id);
 		else
 			m_zoom.insert(id, factor);
-		save_zoom();
+		// Returned on rather than ignored: the confirmation below would
+		// overwrite the failure a line later, and of the two the failure is
+		// the one the person cannot see for themselves -- the page has
+		// visibly changed size either way.
+		if (!saved_or_said(save_zoom(), "the zoom for this tab"))
+			return;
 	}
 	m_status->showMessage(QString("Zoom %1%").arg(qRound(factor * 100)), 3000);
 }
 
-void main_window::save_zoom() const {
+bool main_window::save_zoom() const {
 	if (m_zoom_path.isEmpty())
-		return;
+		return true;   // nothing to write to is not a failed write
 	// Atomic, so a crash mid-write cannot leave a half-file that fails to parse
 	// and loses every remembered zoom at once.
 	QSaveFile f(m_zoom_path);
 	if (!f.open(QIODevice::WriteOnly))
-		return;
-	f.write(zoom_store::to_json(m_zoom));
-	f.commit();
+		return false;
+	const QByteArray json = zoom_store::to_json(m_zoom);
+	if (f.write(json) != json.size())
+		return false;   // the destructor discards; the previous file stays
+	return f.commit();
 }
 
 void main_window::apply_zoom(web_view_backend *view, const QString &node_id) {
@@ -4886,7 +4899,10 @@ void main_window::suspend_node(node *n) {
 		m_zoom.remove(n->id);
 	else
 		m_zoom.insert(n->id, z);
-	save_zoom();
+	// `saved_or_said`'s wording is honest here where it is not for the blob
+	// above: `m_zoom` is the window's, not the view's, so a failed write
+	// really does leave the zoom in this session only.
+	saved_or_said(save_zoom(), "the zoom for this tab");
 
 	if (view == current_view())
 		m_stack->setCurrentIndex(0);  // back to placeholder
