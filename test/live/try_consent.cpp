@@ -125,6 +125,28 @@ static const char *k_framed = R"HTML(
 <p>article text</p>
 <iframe src="__OTHER__/reject" width="700" height="200"></iframe>)HTML";
 
+// **Distinct labels, and that is not decoration.** `record_unhandled`
+// deduplicates on the exact `host\tlabels` row, and a frame reports under the
+// *top* page's host -- so a frame carrying `k_foreign`'s buttons produces the
+// row the top-level test already recorded, is dropped as a duplicate, and the
+// count does not move. Written that way first, and it read as the relay
+// failing.
+static const char *k_foreign_inner = R"HTML(
+<div id="cc" style="position:fixed;bottom:0;width:100%;height:120px;background:#eee">
+  <p>Vi bruker informasjonskapsler (cookies) på dette nettstedet.</p>
+  <button>Godta alt i ramma</button>
+  <button>Avvis alt i ramma</button>
+</div>
+<script>wire('cc');</script>)HTML";
+
+// The same shape carrying a banner nothing can answer. The subframe cannot
+// reach the bridge itself -- only the top frame holds it -- so this is the one
+// page that exercises the `window.top.postMessage` relay, which exists for
+// exactly this case and which nothing reached before.
+static const char *k_framed_foreign = R"HTML(
+<p>article text</p>
+<iframe src="__OTHER__/foreign-inner" width="700" height="200"></iframe>)HTML";
+
 class origin : public QTcpServer {
 public:
 	QHash<QString, QString> clicked;    // path -> label
@@ -149,7 +171,24 @@ public:
 				if (target.startsWith("/reject"))          inner = k_reject;
 				else if (target.startsWith("/decoy"))      inner = k_decoy;
 				else if (target.startsWith("/scrolllock")) inner = k_scrolllock;
+				// **Before `/foreign`, because it is a prefix of this.**
+				// Placed after it first, and `/foreign-inner` was served the
+				// plain foreign banner instead -- whose row the top-level
+				// test had already recorded, so it deduplicated and the
+				// framed check read as the relay failing. The same trap as
+				// `/framed`, one rule further down, walked into immediately
+				// after writing the comment about it.
+				else if (target.startsWith("/foreign-inner"))
+					inner = k_foreign_inner;
 				else if (target.startsWith("/foreign"))    inner = k_foreign;
+				// **Before `/framed`, because `startsWith` is a prefix test
+				// and `/framed-foreign` starts with `/framed`.** Ordered the
+				// other way the longer name can never be reached, and the
+				// page would silently serve the reject banner instead --
+				// which is the substring-anchor trap this tree has paid for
+				// elsewhere.
+				else if (target.startsWith("/framed-foreign"))
+					inner = k_framed_foreign;
 				else if (target.startsWith("/framed"))     inner = k_framed;
 				QByteArray page_inner(inner);
 				page_inner.replace("__OTHER__",
@@ -579,6 +618,47 @@ int main(int argc, char *argv[]) {
 			      "and does not leave the other tab's site in force");
 		}
 	}
+
+	// **Last, because recording prepends.** A new row becomes
+	// `unhandled().first()`, and the rule-learning sections above read
+	// that: run mid-file, this one handed them the frame's banner and
+	// three of their checks failed on a list that was correct.
+	// **The same case one frame down, which is the path the relay exists for.**
+	// A subframe cannot reach the bridge: only the top frame holds it. So the
+	// script in the frame posts `{__hydra_consent_none: labels}` to
+	// `window.top`, and the top frame's listener hands it to the bridge. That
+	// relay had nothing exercising it -- the unanswerable test above runs at
+	// the top level, where the script calls the bridge directly, and the
+	// existing iframe test carries a banner that *can* be answered, which
+	// never reaches this branch.
+	//
+	// Counted from a mark rather than asked whether the list is non-empty: the
+	// section above has already put a row in it, so "something is recorded"
+	// was true before this page loaded.
+	std::printf("\n== a banner one frame down that nothing can answer ==\n");
+	const int before_framed = blocker->unhandled().size();
+	load("/framed-foreign", 8000);
+	const QStringList after_framed = blocker->unhandled();
+	check(after_framed.size() > before_framed,
+	       QString("the frame's banner reaches the top frame's bridge "
+	                "(%1 row(s), was %2)")
+	         .arg(after_framed.size()).arg(before_framed));
+	// **`first()`, because `record_unhandled` prepends.** Reading `last()`
+	// returned the oldest row -- the top-level banner from the section
+	// above -- and reported the relay as losing the labels it had in fact
+	// carried correctly.
+	//
+	// The row is filed under the *top* page's host, which is what the
+	// per-view blocker was told, so this also says the relay did not lose
+	// which page it came from.
+	const QStringList framed_fields =
+	  after_framed.size() > before_framed
+	    ? after_framed.first().split(QLatin1Char('\t')) : QStringList();
+	check(framed_fields.size() >= 3
+	        && framed_fields.contains("Avvis alt i ramma"),
+	       QString("with its labels intact through the relay (%1 field(s): %2)")
+	         .arg(framed_fields.size()).arg(framed_fields.join(" / ")));
+
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

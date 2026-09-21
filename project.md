@@ -25042,6 +25042,46 @@ Controlled by renaming `consent_blocker::bridge_name()` to `hydraConsentX`:
 that one check fails naming the new value and the other two stay green. 382
 pass where it was 376.
 
+## The relay that exists for subframes, and had nothing exercising it
+
+A banner inside a subframe cannot reach the bridge: only the top frame holds
+it. So the injected script posts `{__hydra_consent_none: labels}` to
+`window.top`, and the top frame's listener hands it on. That branch had no
+test. The unanswerable-banner section runs at the top level, where the script
+calls the bridge directly; the existing iframe section carries a banner that
+*can* be answered, which never reaches this code. The hardest case -- a CMP in
+a frame whose labels nothing matches -- was the one nothing covered.
+
+It is covered now, and **the relay works**: a frame's banner arrives as
+`3 field(s): 127.0.0.1 / Godta alt i ramma / Avvis alt i ramma`, filed under
+the top page's host, which is also what the per-view blocker was told. Breaking
+the key on the sending side alone fails both new checks and nothing else.
+
+**Getting there took three wrong turns, and each made working code look
+broken.** They are worth listing because all three are classes this document
+already carries.
+
+- **A prefix served the wrong page.** The fixture dispatches on
+  `target.startsWith(...)`, and `/foreign-inner` starts with `/foreign`, which
+  is matched earlier -- so the new path quietly served the old banner. I had
+  just written a comment putting `/framed-foreign` ahead of `/framed` for
+  exactly this reason, and then walked into its sibling one rule further down.
+- **Dedup hid the second attempt.** `record_unhandled` drops an identical
+  `host\tlabels` row, and a frame reports under the *top* page's host -- so a
+  frame carrying the same buttons produces the row the earlier section already
+  recorded. The count did not move, which read as the relay failing.
+- **The list prepends.** A new row is `unhandled().first()`; reading `last()`
+  returned the oldest row and reported the relay as losing labels it had
+  carried perfectly. And because a new row lands at the front, running this
+  section mid-file handed the rule-learning sections above it the frame's
+  banner, and three of their checks failed on a list that was correct. It runs
+  last now.
+
+Three false alarms in one investigation, all mine, none in the product. The
+thing that separated them from a real defect each time was asking where the
+probe could express the error -- loading the same banner top-level, which
+recorded nothing and said the fixture was never served.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
