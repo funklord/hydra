@@ -25579,6 +25579,42 @@ header checks beside it a home. That is its own piece of work. The two
 `settings_dialog` diagnostics have none either, and cannot: both sit behind a
 modal `QFileDialog`.
 
+## The three checks nobody ran, and the count that had rotted
+
+The previous section recorded a gap and named its remedy: `test_dlheaders`
+took a server's base url on the command line rather than starting one, so it
+sat in `NEEDS_MORE` and its three checks -- about which headers leave this
+browser and whether a resume owns its own `Range` -- ran only for whoever
+read `test/README.md` first and remembered to start `test/echodl.py` on port
+8851. That is now done.
+
+**The server is thirteen lines of python reproduced in C++, and faithfully
+rather than reasonably.** The one detail that matters is the status code:
+206 when the request carried a Range, 200 otherwise. Only 206 means "the rest
+of it" to `http_download_source`, which truncates the partial file and starts
+again on anything else -- so a stand-in that answered 200 to everything would
+have made the resume section pass for the wrong reason. `evidence.md` has
+this as *a stand-in reproduces the half of a tool you have seen*; the remedy
+there is to derive it from the real thing's source, and the real thing was
+still in the tree to read.
+
+`echodl.py` is deleted rather than kept beside it. Two copies of one
+behaviour is two things to be wrong, and nothing else referenced it.
+
+**And the fix with no home now has one.** Sabotaging `teardown` back to
+discarding the flush puts the job at status 5 -- `done` -- with an empty
+error string, which is the defect exactly: a download that ran out of disk,
+recorded as finished. Two checks fire on it.
+
+**The suite count in the Makefile had rotted, which is worth more than the
+number.** It said *"33 run today, of 43 files with 10 in NEEDS_MORE"*; the
+tree had 46 files, and the true figures the day it was read were 36 of 46
+with 10. It is 37 of 46 with 9 now -- and that sentence is not in the
+Makefile either. The comment states why the floor is low and says the target
+prints what it ran, because `make test` names every suite on every
+invocation and a number in a comment is a present-tense countable claim
+about the tree's own shape that nothing re-derives.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

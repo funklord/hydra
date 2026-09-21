@@ -194,7 +194,7 @@ endif
 # The excluded ones each need something the machine may not have; test/README.md
 # says which, and they are named at the end of a run rather than silently
 # skipped.
-NEEDS_MORE = test_headers test_dlheaders test_helpers_live test_probe \
+NEEDS_MORE = test_headers test_helpers_live test_probe \
              test_probe_ui test_torrent test_watch test_live_model \
              test_ytdlp_live test_replay
 ALL_SUITES = $(basename $(notdir $(wildcard test/test_*.cpp)))
@@ -363,9 +363,12 @@ test:
 	@# and `check: style test` is what a person runs before committing. So the
 	@# floor belongs here, where both paths cross it.
 	@#
-	@# 33 run today, of 43 files with 10 in NEEDS_MORE. The floor is below
-	@# that rather than equal to it: suites come and go, and the failure worth
-	@# catching is the list collapsing, not one suite being retired.
+	@# The floor is deliberately well below what runs: suites come and go,
+	@# and the failure worth catching is the list collapsing, not one suite
+	@# being retired. No count is written here -- this target prints what it
+	@# ran on every invocation, and a number in a comment is a claim about
+	@# the tree's own shape that nothing re-derives. The one that used to sit
+	@# here said 33 of 43 files when there were 46.
 	@n=$$(echo $(SUITES) | wc -w); \
 	 if [ "$$n" -lt 30 ]; then \
 		echo "test: only $$n suite(s) in the list; expected at least 30." >&2; \
