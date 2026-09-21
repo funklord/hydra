@@ -353,12 +353,11 @@ fmake hydra -j2               # from the repository root; see the JOBS warning
 ```
 
 It builds the program and then **exits non-zero**, because it goes on to the
-test tree and part of that does not compile without a build system. Both the
-packaged fmake and the current one reach `* built hydra` first. The two fail on
-different files: the current one wants `[project] include-dirs = ['src']` for
-the suites' `#include "node.h"`, and the packaged one stops on
-`test/test_theme.cpp`, where `theme.h` defines a stub `QDBusVariant` for builds
-without DBus and the real one is reachable. Neither is a fault in the program.
+test tree, which does not compile without a build system telling it where the
+headers are. Both the packaged fmake and the current one reach `* built hydra`
+first, and both then stop on the suites: they want
+`[project] include-dirs = ['src']`, which this tree does not set because the
+test tree has its own Makefile. Neither is a fault in the program.
 
 It works the whole build out by itself — every `Q_OBJECT`, the moc runs, the
 platform-specific sources excluded by name, and a link set closed over symbols

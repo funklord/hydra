@@ -8276,20 +8276,37 @@ working copy from a sibling's tree, and the README tells a reader to type
 **exits 1** -- after reaching `* built hydra`, because it carries on into the
 test tree.
 
-Both builds do that and they fail on different files, which is the part worth
-writing down:
+Both builds do that and they stop on different messages:
 
-    current    72 test sources, all for `node.h is on no include path here`,
+    current    72 test sources, each `<header>.h is on no include path here`,
                with `[project] include-dirs = ['src']` named as the fix
-    packaged   one, test/test_theme.cpp
+    packaged   test/test_theme.cpp, `redefinition of class QDBusVariant`
 
-The second is a case of this tree's own making and the same shape as
-`HYDRA_VERSION`. `theme.h` defines `class QDBusVariant {}` when
-`HYDRA_HAVE_DBUS` is absent, deliberately, so a slot's signature exists whether
-or not DBus does -- and a translation unit that gets no such macro while the
-real QtDBus header is reachable has the class twice. The `@pkg_optional`
-annotation that tells fmake about DBus sits beside the include in `theme.cpp`;
-`test/test_theme.cpp` includes the header and carries no annotation.
+**Written first as "they fail on different files", which was true and implied
+something false.** It reads as two builds disagreeing about the optional macro.
+They do not disagree; one never gets far enough to have an opinion. fmake's
+side settled it with a fact I could check and they could not: failure *groups*
+are not capped, only the files within a group, so a redefinition would have
+been its own group and visible. In the current build `QDBusVariant` appears
+**zero** times, and `test/test_theme.cpp` is in the 72 -- failing on
+`theme.h: No such file or directory`, which is the preprocessor giving up
+before any class can be defined twice.
+
+So the packaged build has the **wider** inferred include path: it finds
+`theme.h` and reaches the redefinition, where the current one dies earlier.
+fmake's own sections 293 and 305 narrowed that path by letting `[project]
+exclude` reach it, which is the likelier cause of the difference than anything
+about DBus.
+
+**And the macro problem underneath is real and is this tree's**, which the
+masking hides rather than removes. `theme.h` defines `class QDBusVariant {}`
+when `HYDRA_HAVE_DBUS` is absent -- deliberately, so a slot's signature exists
+whether or not DBus does -- and a translation unit that gets no such macro
+while the real QtDBus header is reachable has the class twice. The
+`@pkg_optional` that tells fmake about DBus sits beside the include in
+`theme.cpp`; `test/test_theme.cpp` includes the header and carries none. fmake
+says it will not infer that and gave the reason: an annotation is a property of
+the translation unit it is in, and one TU's answer cannot govern another's.
 
 Nothing is wrong with the program in either case, and the README says so rather
 than implying a clean run. **Running it with the binary a reader actually has
