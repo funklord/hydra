@@ -25082,6 +25082,23 @@ thing that separated them from a real defect each time was asking where the
 probe could express the error -- loading the same banner top-level, which
 recorded nothing and said the fixture was never served.
 
+**The same design exists twice, and the other copy was already tested.** The
+MSE tap has the identical shape -- a hook in the page's world that cannot
+reach the bridge from a frame, so it posts `{__hydra_mse: detail}` to
+`window.top` where the relay listens, and dispatches a `hydra-mse` event
+directly when it is already the top. Checked, expecting the same gap:
+`try_subframe` covers it and covers it better than this. A page on 127.0.0.1
+embeds an iframe from 127.0.0.2 that feeds a MediaSource, and it asserts the
+stream is reported at all, is filed under the *page's* host, and is not filed
+under the iframe's -- which is the question after "does it arrive", and the one
+that decides whether the shell can find it again.
+
+So the lens came back empty on the second instance, and the asymmetry is the
+finding worth keeping: one relay had a driver written for it on purpose, with
+a header explaining why the case is normal rather than a corner, and the other
+had nothing. Nothing distinguished them from outside -- both were code that
+worked.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
