@@ -64,6 +64,8 @@
 #include <QStyle>
 #include <QStyleOptionComboBox>
 #include <QListWidget>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QPushButton>
 #include <QToolButton>
 #include <QTimer>
@@ -452,6 +454,18 @@ static void measure(QWidget *dlg, const QString &name) {
 			QApplication::processEvents();
 			const QString leaf = pages->item(i)->text().toLower()
 			                         .replace(' ', '-').replace('&', "and");
+			// **Back to the top before photographing.** The Tab-coverage walk
+			// above steps through every focusable control, and a scroll area
+			// scrolls to reveal what it focuses -- so by the time these are
+			// taken the view is wherever the last Tab left it. Every picture
+			// in this set started part-way down a description, and the top of
+			// a page, which is where its heading and first setting are, was in
+			// none of them. Nothing measured depends on this: the button-edge
+			// and cut-label checks have already run.
+			for (QScrollArea *sa : dlg->findChildren<QScrollArea *>())
+				if (sa->verticalScrollBar())
+					sa->verticalScrollBar()->setValue(0);
+			QApplication::processEvents();
 			save(dlg, QString("%1-%2").arg(name, leaf));
 		}
 		pages->setCurrentRow(0);

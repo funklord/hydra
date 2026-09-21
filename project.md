@@ -24610,10 +24610,21 @@ the buttons that hang off the edge -- so the note keeps the cause and the fix,
 which do not move, and points at the measurement rather than carrying a copy of
 it.
 
-Found by reading `try_phone`'s twenty-eight pictures, the last of the three
-screenshot sets nobody had looked at. The pictures themselves are sound: the
-seven settings pages, the site controls, downloads and the dialogs all fit and
-wrap at phone width, which is what the 205 checks beside them already say.
+Found by reading `try_phone`'s pictures, the last of the three screenshot sets
+nobody had looked at. What they show is sound -- the settings pages, the site
+controls, downloads and the dialogs fit and wrap at phone width, which is what
+the 205 checks beside them already say.
+
+**But every one of them started part-way down its page**, and the top of a
+page, where its heading and first setting are, was in none of them. The
+Tab-coverage walk runs before these are taken and steps through every focusable
+control, and a scroll area scrolls to reveal what it focuses -- so the view was
+wherever the last Tab had left it. Read as the dialog opening scrolled, which
+would have been a real fault on a phone; it is the driver's own earlier check
+leaving state behind, which is the same shape as a fixture that does not match
+its producer. The scroll goes back to the top before each shot now, after
+everything measured has been measured, and each page is photographed from its
+start.
 
 ## What is next (in order)
 
