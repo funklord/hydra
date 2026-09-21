@@ -8331,6 +8331,28 @@ a test target given `-I. -Isrc` unasked -- does not fire here at all, rather
 than firing and being narrowed. That is the difference stated as a fact; the
 cause remains theirs.
 
+**~~It does not fire here at all.~~ It fires; the result simply never reaches a
+compile line.** fmake reproduced this tree's exact message from
+`exclude = ["src"]` -- a bare directory name, where `src/**` matches the
+contents and leaves the inferred directory standing -- and asked which of two
+states this tree was in: dropped by that path, or never proposed. Measured, and
+it is neither:
+
+    real config          no "inferred include dir" line at all
+    + bare "src" added   * 1 inferred include dir(s) dropped by
+                           [project] exclude: src
+
+**A thing can only be dropped if it was proposed**, so `src` is inferred here,
+is not dropped by this tree's globs, and is still absent from all 211 compile
+entries. The control is the whole of why that is worth saying: a bare absence
+would have been read as "never proposed" and would have been wrong.
+
+The reconciliation is inside fmake and is not guessed at here. Two details were
+sent back as possible narrowings: the inferred directory does not appear to
+reach moc either, and the word "inferred" appears zero times in a verbose run
+unless something is dropped -- so the only way to observe the positive case is
+to provoke the negative one.
+
 **And the macro problem underneath is real and is this tree's**, which the
 masking hides rather than removes. `theme.h` defines `class QDBusVariant {}`
 when `HYDRA_HAVE_DBUS` is absent -- deliberately, so a slot's signature exists
