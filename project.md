@@ -24533,6 +24533,44 @@ verdict would cost the only place a real sizing regression could show, so the
 note goes beside the check instead: run it without a window manager, or do not
 believe the sizer verdicts.
 
+## The settings screenshots were four pictures of one page
+
+`try_settings` is the other driver whose report is its images, and the same
+question put to `try_look` -- has anybody looked? -- found two faults here.
+
+**Offscreen it produced nothing and said it had run.** Its `screen()` shells
+out to `import -window root`, which needs a real X display, so under the
+sweep's default mode all seven captures failed, the driver printed `!!` seven
+times and exited 0, and the sweep filed it as a report-only driver that ran to
+the end -- the same line a successful run prints. The comment on `screen()`
+already names this shape for the case where the output directory did not
+exist; this was the other way in and it was still open. It takes one picture as
+a probe now and declares `HYDRA-SKIP` when that fails, which the sweep reports
+as a skip with the reason.
+
+**On screen, three of its pictures were byte-identical.** The driver changed
+settings page with `findChild<QTabWidget *>()` and `setCurrentIndex`, and the
+settings dialog is a `QListWidget` driving a `QStackedWidget` -- there is no
+QTabWidget anywhere in it. The lookup returned null inside an `if`, so the page
+never changed and nothing failed: `02-settings-player`, `03-settings-downloads`
+and `04-settings-ai` were all Privacy & security, and `03` and `04` matched to
+the byte.
+
+The behaviour underneath was fine, which is why nothing else noticed: a stacked
+page stays a child of the dialog whether or not it is showing, so
+`check_local` and `rescan_players` were found and pressed on pages nobody could
+see. Only the record was wrong.
+
+It selects by the label a person reads now, so reordering the sections cannot
+quietly photograph the wrong one, and **it says so when it cannot find the
+page** -- a lookup that fails silently being the whole of what went wrong.
+That immediately caught a second thing: `"Media & players"` did not match,
+because stripping `&` to drop the mnemonic also strips the literal ampersand in
+the name. Both sides go through the same transformation now, which is the same
+instinct as asserting a relationship rather than a value.
+
+Four distinct pages, each the one its filename claims.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
