@@ -24687,6 +24687,18 @@ a race between the request and the reply. Measured:
 So the failing runs are about this machine. Android has no such arbiter --
 `dialog_sizer` runs on a Show event and nothing argues with it.
 
+**And "a race" understates it: the request can be ignored outright.** Measured
+2026-09-21 on a third dialog, which is what made it clear. The consent dialog's
+layout floor is 140x234, so it fits a phone easily, and offscreen it does:
+
+    offscreen      asked 360x640, got 360x640   -- passes
+    under xfwm4    asked 360x640, got 720x420   -- fails
+
+720x420 is the dialog's own natural size. The window manager did not answer
+late; it kept the geometry it wanted. A driver measuring what `setGeometry`
+left behind therefore measures the window manager's policy wherever one is
+running, which is the whole of why this check wants none.
+
 **The awkward part is that the two wants are in tension**, which is why this is
 recorded rather than fixed. `sweep.sh` recommends on-screen precisely because
 that is where appearance and focus are faithful, and it has the incidents to
