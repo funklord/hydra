@@ -24948,6 +24948,21 @@ exists to test: `try_look` would stop exercising the shell's path, and
 Recorded because the two now look like duplicate solutions to one problem and
 are not, and the cheaper-looking one is the wrong one in the other's place.
 
+**And with that the dialog coverage closes, both ways.** Fourteen classes in
+`src/` derive from `QDialog`. `try_look` audits 23 surfaces covering all
+fourteen -- mnemonics, button widths, cut labels and unnamed controls, at
+desktop size. `try_phone` measures 19 covering the same fourteen at 360x640 --
+fitting, focus, Tab reach and cut labels. Neither list is maintained by hand;
+both are what the drivers open, and the counts above are what they print.
+
+The three that were missing are clean on both counts. At phone width the
+newly-checkable ones report `got 360x640` with layout floors of 291, 304 and
+285 -- comfortably inside a phone -- and every check beside them passes.
+
+So the fault four instances of were fixed this session has now been asked of
+every dialog this program can show, which is the first time that sentence has
+been true.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
