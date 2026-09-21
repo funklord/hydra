@@ -96,8 +96,25 @@ int main(int argc, char *argv[]) {
 		QTimer::singleShot(t, [&, t] {
 			for (QWidget *ww : QApplication::topLevelWidgets())
 				if (ww->isVisible() && ww->windowTitle().contains("Downloads")) {
-					ww->grab().save((test_out() +
-					                 "scratchpad/live/50-capjob-%1.png").arg(t));
+					// **Written where this driver's other output goes, and
+					// the status read.** This said
+					// `test_out() + "scratchpad/live/..."` -- a path segment
+					// from somebody's own scratch layout, which no other
+					// driver uses and which nothing creates. `QPixmap::save`
+					// answers false for a directory that is not there and the
+					// result went unread, so both pictures of the downloads
+					// window during a capture have never been written: zero
+					// across every run in this tree's history. The same shape
+					// try_settings' `screen()` carries a paragraph about, in a
+					// driver that had not learned it.
+					const QString shot =
+					  test_out() + QString("50-capjob-%1.png").arg(t);
+					QDir().mkpath(test_out());
+					if (ww->grab().save(shot))
+						std::printf("  shot  %s\n", qPrintable(shot));
+					else
+						std::printf("  !!    could not write %s\n",
+						             qPrintable(shot));
 					// **Every row, with the count, rather than the first
 					// one.** The downloads list survives a run -- the drivers
 					// keep their state under ~/.qttest on purpose -- so

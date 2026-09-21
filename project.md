@@ -24279,6 +24279,25 @@ is yours:
 Rows 0 and 1 are the closed port, kept by accident and worth leaving: they are
 what the defect looked like from inside the program.
 
+**A third thing in the same driver, found by asking where its pictures were.**
+It grabs the downloads window twice during a capture and saved them to
+`test_out() + "scratchpad/live/50-capjob-...png"` -- a path segment from
+somebody's own scratch layout, which no other driver uses and which nothing
+creates. `QPixmap::save` answers false for a directory that is not there, and
+the result went unread, so **neither picture has ever been written**: zero of
+them across every run in this tree, including the fifteen this session made.
+
+That is the shape `try_settings`' own `screen()` carries a paragraph about --
+a driver whose output is pictures, reporting success having written none -- in
+a driver that had not learned it. They go where the rest of this driver's
+output goes now, the directory is made first, and the status is read and
+printed either way.
+
+The picture that results is worth having: the downloads list mid-capture, with
+the two `Failed -- Nothing was captured` rows from the closed-port era sitting
+above twelve completed 2.0 KiB captures, and the button row showing what is
+available while one is running.
+
 **And the evidence it lacked existed and was unused.**
 `media_fixture::server` keeps a `seen` list -- *"every path this served, for a
 driver that wants to say what was asked for rather than trusting that it
