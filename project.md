@@ -24332,6 +24332,16 @@ the thing worth removing, and the one that would have cost somebody an evening.
 It writes to `test_out() + "dl"` now, which is what `try_downloads` already
 does, and a run leaves exactly its own capture behind.
 
+**The rest of that class was swept and is sound**, recorded so nobody runs it
+again. Twelve fixed `/tmp/hydra-*` paths remain in the drivers and every one is
+a *fallback* reached only when `HYDRA_TEST_OUT` is unset -- which the sweep
+always sets -- so they are the run-it-by-hand default rather than a path the
+sweep uses. `try_chrome`'s `fixture f("/tmp/hydra-chrome")` reads as an
+exception and is not: `shell_fixture.h` takes the environment first and treats
+the argument as the fallback. `repro_share` does the same. The distinction that
+matters is not whether a fixed path appears but whether it is reached with the
+variable set, and `try_capture`'s download directory was the only one that was.
+
 **And the evidence it lacked existed and was unused.**
 `media_fixture::server` keeps a `seen` list -- *"every path this served, for a
 driver that wants to say what was asked for rather than trusting that it
