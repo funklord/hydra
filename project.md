@@ -25469,6 +25469,68 @@ the POST helper reads its reply after spinning rather than with
 `waitForReadyRead`, because the server answering is in the same process and
 needs the event loop.
 
+## The read side of the same two stores, and the guard that reported to nobody
+
+Having fixed what those two stores do when a WRITE fails, the mirror
+question: what do they do when the READ fails? `keep_or_disown` is this
+tree's answer and its comment is already the argument -- *"%1 could not be
+read. Nothing will be saved to it this session, so what is in it is still
+there."* Five stores went through it. The same two did not.
+
+    extractors.json        keep_or_disown
+    policy.ini             keep_or_disown
+    annoyances.ini         keep_or_disown
+    filters-ai.txt         keep_or_disown
+    site rules             keep_or_disown
+    download-history.json  load_history returned void
+    zoom.json              an if with no else
+
+**The zoom is the expensive one, because `save_zoom` writes the whole map.**
+One unreadable or truncated `zoom.json` read as empty, then one Ctrl+=, and
+every remembered zoom is gone -- with the file that held them already
+overwritten by the time anybody wonders. Measured in `test_rotation`: without
+the guard the damaged file is replaced by a one-entry map; with it the file
+is untouched and the bar says why.
+
+**A damaged file is not a short one**, which `policy_engine` already had to
+learn. `QJsonDocument::fromJson` answers a truncated file with an empty
+array, and an empty array is exactly what a profile with no finished
+downloads looks like -- so `load_history` now reads the parse error, and
+`zoom_store::from_json` takes an optional `bool *ok` for the same reason. An
+absent file stays an ordinary first run in both.
+
+**And the guard that already existed had been reporting to nobody.** The
+comment above the extractors load says it was moved down the constructor
+"because the guard has something to say and needs somewhere to say it" -- it
+was moved to where `m_status` exists, and not to after
+`showMessage("Ready")`, which is posted 67 lines further down and wiped it
+every single time. The test that found it had the bar reading `Ready` where
+it expected a warning about `zoom.json`.
+
+"Ready" is the idle placeholder, so it is posted first now, before anything
+can have something to say. And `keep_or_disown` and `saved_or_said` clear
+`m_page_note`: that latch marks a line the next navigation may retire, which
+is true of the startup placeholder and the renderer-crash notice and is not
+true of a window telling somebody their file will not be written to. Both
+halves were needed -- moving "Ready" alone leaves the warning alive until the
+first page loads.
+
+This is the third instance in two commits of one shape: **a message posted
+into a single-slot status bar and overwritten before it could be read.**
+`step_zoom`'s confirmation was the first, `on_load_progress`'s unconditional
+clear (already fixed, and its comment names "the startup Ready") was there
+before either. A sweep of all 100 `showMessage` sites for a second message on
+the same path found no others: every remaining multi-message function is an
+if/else chain, which is the alternative shape rather than the sequential one.
+
+Eight checks in `test_rotation`, which sets `XDG_DATA_HOME` so the window
+builds its own path from `AppDataLocation` -- assigning `m_zoom_path`
+afterwards would skip the code under test -- and nine in `test_settings`. The
+control is a good file read first, so a disowned path afterwards is the guard
+firing rather than the window never having found the file. Sabotaging the
+guard fails three including the data-loss one; putting "Ready" back at the
+end fails the message alone.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

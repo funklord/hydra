@@ -113,7 +113,12 @@ public:
 	// `commit()`'s answer discarded, so a history that could not be written
 	// looked exactly like one that was.
 	bool save_history(const QString &path) const;
-	void load_history(const QString &path);
+	// False when the file is there and could not be read or did not parse.
+	// An absent file is an ordinary first run and answers true. The caller is
+	// expected to stop writing to a file it could not read: a damaged history
+	// read as an empty one is overwritten by the next finished download, and
+	// the rows that were in it are gone.
+	bool load_history(const QString &path);
 
 	const QList<download_job> &jobs() const { return m_jobs; }
 

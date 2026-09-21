@@ -1173,6 +1173,15 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	        [this](const QString &text) {
 		m_status_at = text.isEmpty() ? 0 : m_clock.elapsed();
 	});
+	// **First, not last.** This is the idle placeholder, so everything that
+	// follows must be able to replace it -- and it used to be posted at the
+	// end of the constructor, after the store guards below had already said
+	// their piece. `keep_or_disown` writes a permanent line saying a file
+	// could not be read and will not be written to, and "Ready" wiped it
+	// every time, so the one guard that existed reported to nobody. Measured
+	// in `test_rotation` against a damaged zoom.json: the bar read "Ready".
+	m_status->showMessage("Ready");
+	m_page_note = true;
 
 	// **Loaded here rather than with the other stores at the top, because the
 	// guard has something to say and needs somewhere to say it.** Nothing
@@ -1186,18 +1195,34 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	                "The saved extractors");
 	// Finished downloads survive a restart: the manager saves the terminal rows
 	// itself whenever they change, and this reads last time's back in.
-	const QString dl_history = QDir(QStandardPaths::writableLocation(
-	                                    QStandardPaths::AppDataLocation))
-	                               .filePath("download-history.json");
-	m_downloads->set_history_path(dl_history);
-	m_downloads->load_history(dl_history);
+	//
+	// **The path is given to the manager only if the read succeeded**, which
+	// is the order that matters rather than a tidier one. The manager writes
+	// this file by itself on the next finish, so a file it could not read
+	// would be replaced by whatever this session happens to have -- losing
+	// the rows it could not read rather than leaving them alone. With no path
+	// it does not write at all, which is what `keep_or_disown` promises the
+	// person in as many words.
+	QString dl_history = QDir(QStandardPaths::writableLocation(
+	                              QStandardPaths::AppDataLocation))
+	                         .filePath("download-history.json");
+	if (keep_or_disown(m_downloads->load_history(dl_history), &dl_history,
+	                    "The download history"))
+		m_downloads->set_history_path(dl_history);
 	// Per-tab zoom, read back so a page a person zoomed is zoomed again. Loaded
 	// before any tab opens, so `apply_zoom` sees last time's value.
+	//
+	// Same guard, and this store needed it most: `save_zoom` writes the whole
+	// map every time, so one unreadable zoom.json plus one Ctrl+= is every
+	// remembered zoom gone. `keep_or_disown` clears the path, and `save_zoom`
+	// treats an empty path as nothing to write rather than as a failure.
 	m_zoom_path = QDir(QStandardPaths::writableLocation(
 	                       QStandardPaths::AppDataLocation))
 	                  .filePath("zoom.json");
+	bool zoom_read = false;
 	if (QFile zf(m_zoom_path); zf.open(QIODevice::ReadOnly))
-		m_zoom = zoom_store::from_json(zf.readAll());
+		m_zoom = zoom_store::from_json(zf.readAll(), &zoom_read);
+	keep_or_disown(zoom_read, &m_zoom_path, "The remembered zoom levels");
 	m_tab_counts = new QLabel(this);
 	// Named so a driver can read the live-view count without scanning every
 	// label for one whose text happens to match a pattern.
@@ -1233,8 +1258,6 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_status->addPermanentWidget(m_save_hint);
 	m_status->addPermanentWidget(m_progress);
 	m_status->addPermanentWidget(m_tab_counts);
-	m_status->showMessage("Ready");
-	m_page_note = true;
 	m_find = new find_bar(this);
 	outer->addWidget(m_find);
 	connect(m_find, &find_bar::search, this,
@@ -5032,10 +5055,12 @@ void main_window::open_handed_url() {
 // probably cannot act on this second -- but they can be told, and they can
 // stop trusting that the setting stuck.
 bool main_window::saved_or_said(bool ok, const QString &what) {
-	if (!ok && m_status)
+	if (!ok && m_status) {
 		m_status->showMessage(
 		    QString("Could not save %1 — the change is in this session only.")
 		        .arg(what), 12000);
+		m_page_note = false;   // as in keep_or_disown: this is the window's
+	}
 	return ok;
 }
 
@@ -5050,6 +5075,10 @@ bool main_window::keep_or_disown(bool loaded, QString *path,
 		    QString("%1 could not be read (%2). Nothing will be saved to it "
 		             "this session, so what is in it is still there.")
 		        .arg(what, QFileInfo(*path).fileName()), 0);
+	// Not a page note: the next navigation must not retire it. Only the
+	// startup "Ready" and the crash notice are the page's to clear, and this
+	// line outlives both by design -- it is true for the whole session.
+	m_page_note = false;
 	path->clear();
 	return false;
 }

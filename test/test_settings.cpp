@@ -1482,11 +1482,57 @@ int main(int argc, char **argv) {
 		         "{\"url\":\"http://x/run\",\"status\":\"running\"}]");
 		f.close();
 		download_manager dm;
-		dm.load_history(hist);
+		check(dm.load_history(hist), "a history it can read reports success");
 		check(dm.jobs().size() == 1, "a non-terminal row in the file is ignored");
 		check(dm.jobs().size() == 1 &&
 		         dm.jobs().first().url == QUrl("http://x/done"),
 		      "and the terminal one is loaded");
+		QFile::remove(hist);
+	}
+
+	section("a damaged download history is not read as an empty one");
+	{
+		// The other half of the store above, and the more expensive one. The
+		// manager rewrites this file whenever a download finishes, so a file
+		// read as empty is REPLACED by whatever this session has -- the rows
+		// that would not parse are gone, and the file that held them is
+		// already overwritten by the time anybody wonders. `policy_engine`
+		// had to make the same distinction for the same reason.
+		//
+		// `QJsonDocument::fromJson` answers a truncated file with an empty
+		// array, which is exactly what a profile with no finished downloads
+		// looks like. Only the parse error separates them.
+		const QString hist = QDir::temp().filePath("hydra-dl-damaged.json");
+
+		QFile::remove(hist);
+		download_manager fresh;
+		check(fresh.load_history(hist),
+		      "an absent history is an ordinary first run, not a failure");
+
+		QFile f(hist);
+		check(f.open(QIODevice::WriteOnly), "wrote a truncated fixture");
+		// A real history cut off mid-row: valid JSON as far as it goes, and
+		// not valid JSON.
+		f.write("[{\"url\":\"http://x/one\",\"status\":\"done\"},"
+		         "{\"url\":\"http://x/tw");
+		f.close();
+
+		download_manager dm;
+		check(!dm.load_history(hist), "a damaged history reports failure");
+		check(dm.jobs().isEmpty(),
+		      "and loads nothing, rather than the rows it could reach");
+
+		// The point of reporting it: the caller stops writing. With no path
+		// the manager's own write is a no-op, so the damaged file is left
+		// exactly as it was for somebody to look at.
+		const QByteArray before = [&] {
+			QFile r(hist); r.open(QIODevice::ReadOnly); return r.readAll();
+		}();
+		dm.forget_finished();
+		const QByteArray after = [&] {
+			QFile r(hist); r.open(QIODevice::ReadOnly); return r.readAll();
+		}();
+		check(after == before, "with the file it could not read left alone");
 		QFile::remove(hist);
 	}
 
@@ -1509,6 +1555,22 @@ int main(int argc, char **argv) {
 		  zoom_store::from_json("{\"x\":1.0,\"y\":2.0}");
 		check(guard.size() == 1 && !guard.contains("x"),
 		      "from_json ignores a 100% row in the file");
+
+		// **An empty map and a file that did not parse are the same value.**
+		// `save_zoom` writes the whole map every time, so a zoom.json read as
+		// empty is replaced by the first Ctrl+= -- every remembered zoom gone
+		// for one bad file. Only the parse error tells the two apart, and the
+		// window hands the answer to `keep_or_disown`.
+		bool parsed = false;
+		const QHash<QString, double> none = zoom_store::from_json("{}", &parsed);
+		check(none.isEmpty() && parsed,
+		      "an empty object parses, and is genuinely no zooms");
+		zoom_store::from_json("{\"a\":1.5", &parsed);
+		check(!parsed, "a truncated object does not parse");
+		zoom_store::from_json("", &parsed);
+		check(!parsed, "and neither does an empty file");
+		zoom_store::from_json("[1,2,3]", &parsed);
+		check(!parsed, "nor valid json that is not an object");
 	}
 
 	section("a kiosk setting survives being written and read back");

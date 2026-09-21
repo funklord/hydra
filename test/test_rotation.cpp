@@ -90,6 +90,7 @@
 #include <QLineEdit>
 #include <QDialog>
 #include <QSplitter>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QTimer>
 #include <cstdio>
@@ -3978,6 +3979,116 @@ int main(int argc, char **argv) {
 			}
 		}
 		QDir(zdir).removeRecursively();
+	}
+
+	section("a zoom store it cannot read is not written over");
+	{
+		// The other direction of the section above, and the expensive one.
+		// `save_zoom` writes the whole map every time, so a zoom.json read as
+		// empty is REPLACED by the first Ctrl+= -- every remembered zoom gone
+		// for one damaged file, and the file that held them already
+		// overwritten by the time anybody wonders. Five stores here went
+		// through `keep_or_disown` for exactly this and the zoom did not.
+		//
+		// A truncated file rather than an unreadable one, so the check runs
+		// as root too: `QJsonDocument::fromJson` answers both with an empty
+		// object, which is the value a profile with no zooms also has.
+		//
+		// XDG_DATA_HOME because the window builds its own path from
+		// AppDataLocation in the constructor, which is the code under test --
+		// assigning `m_zoom_path` afterwards would skip it.
+		const QString zhome = QDir::tempPath() + "/hydra-zoom-home";
+		QDir(zhome).removeRecursively();
+		QDir().mkpath(zhome);
+		const QByteArray xdg_was = qgetenv("XDG_DATA_HOME");
+		qputenv("XDG_DATA_HOME", zhome.toUtf8());
+		const QString adir =
+		  QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+		check(adir.startsWith(zhome),
+		       QString("the data location follows XDG_DATA_HOME (%1)").arg(adir));
+		QDir().mkpath(adir);
+		const QString zpath = QDir(adir).filePath("zoom.json");
+
+		auto put = [&](const QByteArray &bytes) {
+			QFile f(zpath);
+			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			f.write(bytes);
+		};
+
+		// The control first: a good file is read and the path is kept, so a
+		// disowned path afterwards is the guard firing rather than the window
+		// never having found the file at all.
+		put("{\"n1\":1.5,\"n2\":2.0}");
+		{
+			main_window wg(&factory, &policy, &filter);
+			spin(100);
+			check(wg.m_zoom.size() == 2, "a zoom store it can read is loaded");
+			check(wg.m_zoom_path == zpath,
+			       "and the window keeps writing to it");
+		}
+
+		put("{\"n1\":1.5,\"n2\":2.");   // cut off mid-number
+		const QByteArray damaged = [&] {
+			QFile f(zpath); f.open(QIODevice::ReadOnly); return f.readAll();
+		}();
+		{
+			main_window wd(&factory, &policy, &filter);
+			wd.resize(900, 600);
+			wd.show();
+			spin(150);
+			check(wd.m_zoom.isEmpty(), "a damaged one loads nothing");
+			check(wd.m_zoom_path.isEmpty(),
+			       "and the window disowns it rather than writing over it");
+			check(wd.m_status->currentMessage().contains("could not be read"),
+			       QString("saying so, since the person is the only one who "
+			                "can fix it (bar reads \"%1\")")
+			         .arg(wd.m_status->currentMessage().left(24)));
+
+			// The whole point: zoom something and the file is still there.
+			QAction *zin = nullptr;
+			for (QAction *a : wd.findChildren<QAction *>())
+				if (a->text().remove('&') == "Zoom In") { zin = a; break; }
+			node *t = wd.m_model->add_tab(nullptr, "z", "https://z.example/");
+			emit wd.m_tree->activated(
+			  wd.m_proxy->mapFromSource(wd.m_model->index_for_node(t)));
+			spin(200);
+			if (zin)
+				zin->trigger();
+			spin(100);
+			const QByteArray still = [&] {
+				QFile f(zpath); f.open(QIODevice::ReadOnly); return f.readAll();
+			}();
+			check(still == damaged,
+			       "with the file it could not read untouched by a zoom");
+		}
+
+		// The same guard on the store beside it, and the wiring is the whole
+		// of what is left to check: `download_manager` is given its path only
+		// when the read succeeded, so a history it could not read is one it
+		// never writes to. The manager half -- no path, no write -- is
+		// `test_settings`. A good zoom.json here so the message on the bar is
+		// unambiguously the history's, the history being read first.
+		put("{}");
+		{
+			QFile h(QDir(adir).filePath("download-history.json"));
+			h.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			h.write("[{\"url\":\"http://x/a\",\"status\":\"do");
+		}
+		{
+			main_window wh(&factory, &policy, &filter);
+			spin(100);
+			check(wh.m_status->currentMessage().startsWith("The download "
+			                                                "history"),
+			       QString("a damaged download history is disowned too (bar "
+			                "reads \"%1\")")
+			         .arg(wh.m_status->currentMessage().left(24)));
+		}
+
+		if (xdg_was.isEmpty())
+			qunsetenv("XDG_DATA_HOME");
+		else
+			qputenv("XDG_DATA_HOME", xdg_was);
+		QDir(zhome).removeRecursively();
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

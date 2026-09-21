@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QString>
 #include <QtGlobal>
 
@@ -26,9 +27,19 @@ inline QByteArray to_json(const QHash<QString, double> &zoom) {
 	return QJsonDocument(o).toJson(QJsonDocument::Compact);
 }
 
-inline QHash<QString, double> from_json(const QByteArray &bytes) {
+// `ok` separates an empty map from a file that did not parse, which are the
+// same VALUE and must not be the same outcome: a store read as empty is
+// overwritten by the first save, so a zoom.json nobody can parse costs every
+// zoom in it. The caller hands the answer to `keep_or_disown`, which stops
+// writing to the file rather than replacing it.
+inline QHash<QString, double> from_json(const QByteArray &bytes,
+                                         bool *ok = nullptr) {
 	QHash<QString, double> zoom;
-	const QJsonObject o = QJsonDocument::fromJson(bytes).object();
+	QJsonParseError err{};
+	const QJsonDocument doc = QJsonDocument::fromJson(bytes, &err);
+	if (ok)
+		*ok = err.error == QJsonParseError::NoError && doc.isObject();
+	const QJsonObject o = doc.object();
 	for (auto it = o.constBegin(); it != o.constEnd(); ++it) {
 		const double f = it.value().toDouble();
 		if (f > 0.0 && !qFuzzyCompare(f, 1.0))

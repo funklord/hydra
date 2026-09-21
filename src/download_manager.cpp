@@ -2,10 +2,12 @@
 
 #include <QStandardPaths>
 #include <QFile>
+#include <QFileInfo>
 #include <QSaveFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QJsonValue>
 
 download_manager::download_manager(QObject *parent) : QObject(parent) {
@@ -350,11 +352,27 @@ bool download_manager::save_history(const QString &path) const {
 	return f.commit();
 }
 
-void download_manager::load_history(const QString &path) {
+bool download_manager::load_history(const QString &path) {
 	QFile f(path);
+	// An absent file is an ordinary first run and is not a reason to stop
+	// writing to it; a file that is there and will not open is. Only the
+	// second answers false, which is the contract the other stores here keep.
 	if (!f.open(QIODevice::ReadOnly))
-		return;
-	const QJsonArray arr = QJsonDocument::fromJson(f.readAll()).array();
+		return !QFileInfo::exists(path);
+	// **A damaged file is not a short one**, which is the distinction
+	// `policy_engine` already had to make. `QJsonDocument::fromJson` answers
+	// a truncated or corrupt file with an empty array, and an empty array is
+	// exactly what a profile with no finished downloads looks like -- so
+	// without the parse error the two are indistinguishable and the next
+	// finished download writes the empty one over the real one.
+	QJsonParseError err{};
+	const QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
+	if (err.error != QJsonParseError::NoError || !doc.isArray()) {
+		qCritical("downloads: %s did not parse; leaving it alone rather than "
+		           "treating it as empty", qPrintable(path));
+		return false;
+	}
+	const QJsonArray arr = doc.array();
 	for (const QJsonValue &v : arr) {
 		const QJsonObject o = v.toObject();
 		download_job j;
@@ -373,6 +391,7 @@ void download_manager::load_history(const QString &path) {
 		m_jobs.push_back(j);
 	}
 	emit changed();
+	return true;
 }
 
 void download_manager::pause(int id) {
