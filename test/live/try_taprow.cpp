@@ -7,6 +7,7 @@
 #include "mse_tap.h"
 #include "sample_tree.h"
 
+#include <QDir>
 #include <QAction>
 #include <QApplication>
 #include <QLineEdit>
@@ -79,7 +80,22 @@ int main(int argc, char *argv[]) {
 				std::printf("  row %d: [%s] %s\n", i,
 				             qPrintable(tree->topLevelItem(i)->text(0)),
 				             qPrintable(tree->topLevelItem(i)->text(1)));
-			x->grab().save(test_out());
+			// **A filename, and the status read.** This saved to
+			// `test_out()`, which ends in a slash -- so the one picture this
+			// driver takes went to a directory path and `QPixmap::save`
+			// answered false, unread. Measured: saving a pixmap to a path
+			// ending in `/` returns 0 and to a file returns 1.
+			//
+			// Not verified end to end, because this driver needs a url with a
+			// video on it and takes one as an argument; the mechanism is
+			// measured and the write is now reported either way, which is
+			// what the silence cost.
+			const QString shot = test_out() + "40-taprow.png";
+			QDir().mkpath(test_out());
+			if (x->grab().save(shot))
+				std::printf("  shot  %s\n", qPrintable(shot));
+			else
+				std::printf("  !!    could not write %s\n", qPrintable(shot));
 			x->close();
 			return;
 		}

@@ -24298,6 +24298,23 @@ the two `Failed -- Nothing was captured` rows from the closed-port era sitting
 above twelve completed 2.0 KiB captures, and the button row showing what is
 available while one is running.
 
+**The lens that follows is a `save()` nobody reads**, and it found one more.
+Swept across the drivers: `try_downloads` and `try_chrome` do not read theirs
+either, and both are fine -- their directories exist and their pictures are on
+disk, six and two of them. `try_taprow` is not:
+
+    x->grab().save(test_out());
+
+`test_out()` ends in a slash, so that hands `QPixmap::save` a directory path.
+Measured with a twelve-line probe rather than assumed: saving a pixmap to a
+path ending in `/` returns 0, and to a file returns 1. So the one picture that
+driver takes has never existed either.
+
+**Not verified end to end, and the note says so where the code is.** That
+driver takes a url with a video on it as an argument and is skipped in every
+sweep for exactly that reason, so the fix rests on the measured mechanism and
+on the write now being reported either way -- which is what its silence cost.
+
 **And the evidence it lacked existed and was unused.**
 `media_fixture::server` keeps a `seen` list -- *"every path this served, for a
 driver that wants to say what was asked for rather than trusting that it
