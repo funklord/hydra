@@ -8294,9 +8294,23 @@ before any class can be defined twice.
 
 So the packaged build has the **wider** inferred include path: it finds
 `theme.h` and reaches the redefinition, where the current one dies earlier.
-fmake's own sections 293 and 305 narrowed that path by letting `[project]
-exclude` reach it, which is the likelier cause of the difference than anything
-about DBus.
+
+**~~fmake's sections 293 and 305 narrowed that path.~~ Retracted by fmake, who
+tested it and it does not reproduce**, and asked for it to be unrecorded here
+because a named wrong mechanism is worse than none. On a fixture of
+`src/theme.{h,cpp}`, `src/main.cpp` and a test TU saying only
+`#include "theme.h"`, the current build finds the header; adding an exclude
+list like this tree's does not break it. The only shape that reproduced was two
+headers of the same basename, and that is not this tree either -- measured
+here, `git ls-files | grep -c '/theme\.h$'` is 1, the same for `node.h`, and
+there is no `attic/`. Their one-candidate message also differs from the one
+this tree printed.
+
+So the cause is unknown and stays unknown. What is a fact, and all that is
+claimed: the packaged build reaches `[66/72] CXX test/test_theme.cpp` and then
+the redefinition, so it resolved `theme.h`; the current one says `theme.h is on
+no include path here`. Which change produced that is fmake's to find, and they
+have said they will not name a second mechanism for it.
 
 **And the macro problem underneath is real and is this tree's**, which the
 masking hides rather than removes. `theme.h` defines `class QDBusVariant {}`
