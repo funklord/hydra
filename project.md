@@ -8351,7 +8351,20 @@ The reconciliation is inside fmake and is not guessed at here. Two details were
 sent back as possible narrowings: the inferred directory does not appear to
 reach moc either, and the word "inferred" appears zero times in a verbose run
 unless something is dropped -- so the only way to observe the positive case is
-to provoke the negative one.
+to provoke the negative one. fmake's answer to that last point is to print the
+KEPT inferred directories too, which would have settled this in one run
+instead of six exchanges; it is their change and they are putting it to their
+holder rather than slipping it in.
+
+**Two things this comparison must not be read as saying, both of which fmake
+said before anybody inferred them.** That their fixture resolves the header and
+this tree does not is *not* evidence that this tree is unusual: a two-file
+fixture is the unusual thing, and 211 entries with Qt and moc in them is nearer
+what the tool is for. And they ruled out cache staleness so this tree did not
+have to -- the cache records which fmake wrote it and discards itself when that
+changes, so alternating between the packaged and current binaries re-inferred
+from scratch every time. Two runs disagreeing about a supposedly deterministic
+set is what a stale cache looks like, and it is not that.
 
 **And the macro problem underneath is real and is this tree's**, which the
 masking hides rather than removes. `theme.h` defines `class QDBusVariant {}`
