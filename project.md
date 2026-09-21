@@ -8388,13 +8388,25 @@ theirs. `0 kept` in the real config is still why no entry among the 211
 carries `-I<root>/src`.
 
 **The un-strike above was right by accident, and the lesson is not about
-include paths.** Three mechanisms were proposed here for a discrepancy that
-had no mechanism. The tell was available throughout: **a fixture that
-reproduces a shape but not the numbers has usually been asked a different
-question, and the first thing to compare is the argv, not the tree.** It is
-the same fault as the README line this tree got wrong earlier the same day --
-naming one command and testing another -- one notch along, and the half
-neither side thought to state was the half that mattered.
+include paths.** Three mechanisms were proposed for a discrepancy that had
+none -- **two of them this tree's**, one fmake's; the artifact was real and
+the comparison was not, and that combination produces explanations from
+whoever is looking.
+
+**This tree's share is the sharper half and is worth stating as its own
+fault.** Every measurement sent across said *"with the explicit `include-dirs`
+removed so the conditions match the original"* -- a clause specifically about
+matching conditions, naming the variable that had been controlled and not the
+one that decided the answer. That is `evidence.md`'s marker of diligence
+arriving in prose rather than in a number, and worse than saying nothing,
+because it answers the question before anybody thinks to ask it.
+
+The tell was available throughout: **a fixture that reproduces a shape but
+not the numbers has usually been asked a different question.** The argv is
+one instance of what "different" can mean and not the rule; the rule is that
+the shape matching twice is not evidence the question was the same. It is the
+README line this tree got wrong earlier the same day -- naming one command
+and testing another -- one notch along.
 
 **What survives is the argument for printing both numbers, which neither side
 made while the change was about readability.** A tool printing only `kept`
