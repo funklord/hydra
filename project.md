@@ -24575,6 +24575,22 @@ hands this over as text -- `qtwebengine_view` writes
 exactly. **A value that does not parse is printed unchanged**, because a
 certificate whose expiry this cannot read is not thereby expired.
 
+**The first version compared calendar days in two different zones**, found by
+re-reading the change rather than by any test. `expiryDate()` is UTC, so a real
+certificate arrives as `...Z`, and taking its `date()` and comparing against
+`QDate::currentDate()` compares a UTC day against a local one. Measured here:
+the local offset is +2h, a `...Z` string parses with `Qt::UTC` while a bare
+`2026-09-01` parses as local, and QDateTime compares the two as *moments*. So
+it compares instants now, and a certificate that expired an hour ago says so
+in either zone.
+
+That correction has no control, and saying so is the point: the window where
+the two disagree is a few hours wide and moves with the clock, so
+demonstrating it would mean controlling the clock. What was measured is the
+premise -- the offset, and how each form parses -- which is what makes the
+change more than a preference. The fixtures are date-only and land on the same
+answer either way, so the suite cannot see the difference.
+
 `try_chrome` asserts **both directions in one run**, which is what stops the
 check passing by always or never marking: one offer is live and one is past,
 and a dialog that marked everything or nothing fails one of the two. 79 pass

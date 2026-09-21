@@ -1,6 +1,5 @@
 #include "cert_dialog.h"
 
-#include <QDate>
 #include <QDateTime>
 #include <QDialogButtonBox>
 #include <QLabel>
@@ -61,12 +60,19 @@ cert_dialog::cert_dialog(const QString &host,
 		// back is safe -- and a value that does not parse is left alone and
 		// printed as it arrived, since a certificate whose expiry this cannot
 		// read is not thereby expired.
-		const QDateTime until_dt =
-		  QDateTime::fromString(c.valid_until, Qt::ISODate);
-		const QDate until = until_dt.isValid()
-		                        ? until_dt.date()
-		                        : QDate::fromString(c.valid_until, Qt::ISODate);
-		const bool expired = until.isValid() && until < QDate::currentDate();
+		// **Instants, not dates, because the two are in different zones.**
+		// `qtwebengine_view` writes `expiryDate().toString(Qt::ISODate)` and
+		// that date is UTC, so it arrives as `...Z`; comparing its *date* part
+		// against `QDate::currentDate()`, which is local, is off by a day
+		// whenever the two disagree about which day it is. Measured here: the
+		// local offset is +2h, `...Z` parses with `Qt::UTC` and a bare
+		// `2026-09-01` parses as local, and QDateTime compares them as moments
+		// rather than as calendar days. A certificate that expired an hour ago
+		// should say so in either zone.
+		const QDateTime until = QDateTime::fromString(c.valid_until,
+		                                               Qt::ISODate);
+		const bool expired = until.isValid()
+		                      && until < QDateTime::currentDateTime();
 		m_list->addItem(QString("%1\n    issued by %2 — %3 %4")
 		                    .arg(c.subject.isEmpty()
 		                             ? QStringLiteral("(unnamed certificate)")
