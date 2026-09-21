@@ -8312,6 +8312,25 @@ the redefinition, so it resolved `theme.h`; the current one says `theme.h is on
 no include path here`. Which change produced that is fmake's to find, and they
 have said they will not name a second mechanism for it.
 
+**And the reason `src/` compiles while `test/` does not needs nothing about
+fmake at all.** `fmake --compile-commands` writes every compile with its
+arguments resolved -- `--explain` prints only the first two per target, which
+is why staring at it could never have shown file 65 of 72. Measured with
+`./fmake` at `6fb8ebe`, since the packaged binary has no such option:
+
+    src/theme.cpp         -I<root> + Qt
+    test/test_theme.cpp   -I<root> + Qt
+    in-tree -I across all 211 entries:  <root> and three .fmake/moc dirs
+
+**No entry in this tree carries `-I<root>/src`.** `src/theme.cpp` compiles
+because `#include "theme.h"` in quotes resolves relative to the including
+file's own directory and never needed a `-I`; `test/test_theme.cpp` says the
+same words from a directory where that is not true, and `-I<root>` does not
+reach `<root>/src`. So the inference fmake describes firing in their fixture --
+a test target given `-I. -Isrc` unasked -- does not fire here at all, rather
+than firing and being narrowed. That is the difference stated as a fact; the
+cause remains theirs.
+
 **And the macro problem underneath is real and is this tree's**, which the
 masking hides rather than removes. `theme.h` defines `class QDBusVariant {}`
 when `HYDRA_HAVE_DBUS` is absent -- deliberately, so a slot's signature exists
