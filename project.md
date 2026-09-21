@@ -25422,6 +25422,53 @@ The four sabotages that do land, each on the check it belongs to:
 35 clean, and `test_rotation`'s single failure is the known font pin recorded
 in *A pin that measures the desktop's font* above, unchanged at 228.
 
+## The capture that could not be written blamed the page
+
+The next lens after the two silent saves, and it came out of their shape
+rather than off a list: **a failure whose only symptom names something
+else.** `local_proxy::accept_capture` took the bytes a page posts for an MSE
+capture and appended them to a file:
+
+    QFile f(e.local_path);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Append)) {
+        f.write(body);
+        f.close();
+        e.received += body.size();
+    }
+
+No else. So a file that could not be opened dropped every chunk, `received`
+stopped moving, and the page was answered **204** anyway -- correctly, since
+it is not waiting on anything. Twelve seconds later `main_window` says *"the
+page has stopped feeding its player"*, which is the sentence quoted in
+`suspend_node`'s own comment as the thing that blames the page for something
+the browser did. Here it was literally that, and nothing downstream could
+tell the two apart.
+
+`open_capture` refuses a path it cannot create, so the exposure is what
+happens **after** a capture is open: a disk that fills, a permission that
+changes, a volume unmounted mid-film. It reports through `failed`, which
+already existed and already had a listener.
+
+**Once per capture, not once per POST.** A page feeding a player posts several
+times a second, and the same sentence re-shown is a status bar nobody can
+read. The flag lives on the entry, and the check that holds it is the one that
+separates the guard from the report: sabotaging `!e.write_failed` to `true`
+fails *"said once for the capture"* alone, and sabotaging it to `false` fails
+the other three.
+
+**And the consequence moved to the condition it follows from.** The one
+listener appended *"Watch will hand the address straight to the player"* to
+whatever it was given -- true of a proxy that could not bind, and wrong about
+a capture that cannot be written, which is still listening and still has the
+address it needs. The bind site carries its own sentence now and the handler
+shows what it is handed. A handler that knows what its signal means is a
+handler that gets it wrong the first time the signal means something else.
+
+Eight checks in `test_assembly`, which already drives the proxy over loopback;
+the POST helper reads its reply after spinning rather than with
+`waitForReadyRead`, because the server answering is in the same process and
+needs the event loop.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

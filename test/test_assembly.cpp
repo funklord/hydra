@@ -36,6 +36,7 @@
 #include <QTemporaryDir>
 #include <QTimer>
 #include <cstdio>
+#include <unistd.h>   // geteuid, for the check root cannot fail
 
 static int g_pass = 0, g_fail = 0;
 static void check(bool ok, const QString &w) {
@@ -47,6 +48,24 @@ static void spin(int ms) {
 	QEventLoop l;
 	QTimer::singleShot(ms, &l, &QEventLoop::quit);
 	l.exec();
+}
+
+// One capture chunk, posted the way the injected script posts it. The reply
+// is read after spinning rather than with waitForReadyRead, because the proxy
+// answering lives in this same process and needs the event loop to run.
+static QByteArray post_capture(const QUrl &url, const QByteArray &body) {
+	QTcpSocket s;
+	s.connectToHost(url.host(), quint16(url.port()));
+	if (!s.waitForConnected(3000))
+		return "no connection";
+	QByteArray req = "POST " + url.path().toUtf8() + " HTTP/1.1\r\n"
+	                  "Host: " + url.host().toUtf8() + "\r\n"
+	                  "Content-Length: " + QByteArray::number(body.size()) +
+	                  "\r\n\r\n" + body;
+	s.write(req);
+	s.waitForBytesWritten(3000);
+	spin(250);
+	return s.readAll();
 }
 
 // Six segments of distinguishable bytes, answered slowly enough that the
@@ -372,6 +391,56 @@ int main(int argc, char **argv) {
 		         .arg(got.size()).arg(want_b.size()));
 		check(!got.contains('p'),
 		       "with nothing from the assembly it replaced");
+	}
+
+	section("a capture the proxy cannot write is reported, not counted");
+	{
+		// The bytes were dropped and `received` simply stopped moving, so the
+		// window's watchdog said "the page has stopped feeding its player" --
+		// blaming the page for a file the browser could not write. Nothing
+		// else in the path can tell those two apart, and the page keeps
+		// posting either way because it is answered 204 regardless.
+		//
+		// `open_capture` refuses a path it cannot create, so the failure this
+		// covers is the one that arrives AFTER a capture is open: a disk that
+		// fills, a permission that changes, a removable volume unmounted.
+		QTemporaryDir cdir;
+		check(cdir.isValid(), "a scratch directory for the capture");
+		local_proxy px;
+		check(px.start(), "the proxy is listening");
+		const QString cpath = QDir(cdir.path()).filePath("capture.bin");
+		const QUrl curl = px.open_capture(cpath);
+		check(!curl.isEmpty(), "and a capture is open");
+
+		QStringList said;
+		QObject::connect(&px, &local_proxy::failed,
+		                  [&said](const QString &m) { said << m; });
+
+		check(post_capture(curl, QByteArray(64, 'x')).startsWith("HTTP/1.1 204"),
+		       "a chunk it can write is accepted");
+		check(px.captured_bytes(curl) == 64, "and counted");
+		check(said.isEmpty(), "with nothing reported");
+
+		if (::geteuid() == 0) {
+			std::printf("  --    running as root: a read-only file is still "
+			             "writable, so the failed-write checks are skipped\n");
+		} else {
+			QFile::setPermissions(cpath, QFile::ReadOwner);
+			post_capture(curl, QByteArray(64, 'y'));
+			check(px.captured_bytes(curl) == 64,
+			       "a chunk it cannot write is not counted");
+			check(said.size() == 1, "and the failure is reported");
+			check(said.size() == 1 && said.first().contains("Could not write"),
+			       "naming the write rather than the page");
+			// Once per capture, not once per POST: a page feeding a player
+			// posts several times a second.
+			post_capture(curl, QByteArray(64, 'z'));
+			post_capture(curl, QByteArray(64, 'w'));
+			check(said.size() == 1,
+			       "said once for the capture, not once for every chunk");
+			QFile::setPermissions(cpath, QFile::ReadOwner | QFile::WriteOwner);
+		}
+		px.close_capture(curl);
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

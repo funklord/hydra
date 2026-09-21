@@ -534,11 +534,14 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// download, while `media_dialog` degraded wordlessly to a naked URL. It
 	// is optional -- an upgrade tier, per the comment above -- so this
 	// reports rather than refuses.
+	//
+	// Shown as it comes, rather than with a sentence about Watch appended:
+	// the proxy also reports a capture it cannot write, where that sentence
+	// would be wrong. Each condition carries its own consequence now.
 	connect(m_local_proxy, &local_proxy::failed, this, [this](const QString &e) {
 		qWarning("%s", qPrintable(e));
 		if (m_status)
-			m_status->showMessage(e + " Watch will hand the address straight "
-			                            "to the player.", 12000);
+			m_status->showMessage(e, 12000);
 	});
 	m_local_proxy->start();
 

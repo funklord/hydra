@@ -71,7 +71,11 @@ bool local_proxy::start(quint16 port) {
 	}
 	// Loopback only: this must never be reachable from the network.
 	if (!m_server->listen(QHostAddress::LocalHost, port)) {
-		emit failed("Could not start the local proxy: " + m_server->errorString());
+		// The consequence belongs with the condition it follows from. It used
+		// to be appended by the one handler, which meant every other reason
+		// this signal might ever fire would carry a sentence about Watch.
+		emit failed("Could not start the local proxy: " + m_server->errorString() +
+		             " Watch will hand the address straight to the player.");
 		return false;
 	}
 	return true;
@@ -401,6 +405,16 @@ void local_proxy::accept_capture(QTcpSocket *client, const QString &token,
 			f.write(body);
 			f.close();
 			e.received += body.size();
+		} else if (!e.write_failed) {
+			// **Reported, because the symptom names the wrong culprit.** The
+			// bytes are dropped and `received` stops moving, and the window's
+			// watchdog then says "the page has stopped feeding its player" --
+			// which blames the page for a directory the browser cannot write.
+			// Nothing else in the path can tell the two apart.
+			e.write_failed = true;
+			emit failed("Could not write the captured stream to " +
+			             e.local_path + " (" + f.errorString() + "). The page "
+			             "is still sending; the bytes are being dropped.");
 		}
 	}
 	// 204 and close: the page is not waiting on anything from us, and keeping

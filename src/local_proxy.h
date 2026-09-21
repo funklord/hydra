@@ -132,6 +132,10 @@ private:
 		expected_length  expected;     // eventual size, or null if unknown
 		bool     capture = false;      // accepts POSTed bytes instead of serving
 		qint64   received = 0;
+		// Said once per capture rather than once per POST: a page feeding a
+		// player posts several times a second, and the same sentence repeated
+		// is a status bar nobody can read.
+		bool     write_failed = false;
 	};
 
 	void on_connection();
