@@ -25750,12 +25750,14 @@ end of a run, with the second saying it runs here and pointing at
 ceiling it never reaches, so the time is libtorrent's handshake and transfer
 rather than a sleep somebody could shorten.
 
-**Whether they belong in the default target is the holder's, because the
-number is the one that decides it.** 93 seconds to 165 is a near-doubling of
-what `make check` costs before every commit, in exchange for 56 checks over
-the only subsystem `make test` does not touch at all. Nothing here has an
-opinion; the measurement is above so that deciding it does not need taking it
-again.
+**Settled by the copyright holder 2026-09-22: they stay held back.** The
+question put was 93 seconds against 165 -- a near-doubling of what
+`make check` costs before every commit -- for 56 checks over the only
+subsystem `make test` does not touch at all. So `make test` keeps its 93
+seconds, the pair keeps its own line in the trailer saying it runs here, and
+`make test-one T=test_torrent` is how one gets run. Recorded rather than left
+open because a question already answered sends the next reader at work that
+is done, and the measurement above is what the answer was given against.
 
 **Two sweeps came back empty on the way**, recorded so the next lens is not
 one of these. Every `connect` with a lambda in `src/` passes a context object
