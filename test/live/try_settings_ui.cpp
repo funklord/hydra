@@ -30,6 +30,7 @@
 #include "settings_bundle.h"
 #include "theme.h"
 #include <QComboBox>
+#include <QAbstractSpinBox>
 #include <QLineEdit>
 #include <QEventLoop>
 #include <QTimer>
@@ -87,6 +88,62 @@ int main(int argc, char **argv) {
 	check(cats->item(0)->text().startsWith("Privacy"),
 	      "privacy comes first — it is the page about what the browser refuses "
 	      "to do on your behalf; the rest are conveniences");
+
+	section("a value longer than its box shows its beginning");
+	{
+		// **Qt leaves the cursor at the end**, for `setText` and for the
+		// constructor that takes text alike -- measured, 50 of 50 either way
+		// -- and a line edit scrolls to keep the cursor in view. So a field
+		// arrives showing its tail: the kiosk home page read
+		// `.1:39873/home?idle-home` at phone width, which is the end of a url
+		// whose host is the part that decides what the setting means. Seen in
+		// the pictures try_phone takes, which is the only place it shows.
+		//
+		// **Derived rather than named.** Asking "do these six fields do it"
+		// is a check that cannot fail about the seventh, and the seventh is
+		// whoever adds a field next. Every line edit that arrives carrying
+		// text is the population, and it is the right one: a box a person is
+		// typing in has no text yet at this point, and an empty box has no
+		// beginning to show.
+		int carried = 0;
+		QStringList wrong, looked;
+		for (QLineEdit *e : dlg.findChildren<QLineEdit *>()) {
+			// **Not the ones inside a compound control.** A QSpinBox and an
+			// editable QComboBox each own a line edit and put their own value
+			// in it; four `qt_spinbox_lineedit` turned up here on the first
+			// run, holding things like "20 s" with the cursor at the end,
+			// which is Qt's business and not this project's. The population
+			// meant is the boxes this dialog fills itself, and those are the
+			// standalone ones -- said by asking who owns the widget rather
+			// than by matching Qt's `qt_` name prefix, which is a convention
+			// where this is a fact.
+			if (qobject_cast<QAbstractSpinBox *>(e->parentWidget()) ||
+			     qobject_cast<QComboBox *>(e->parentWidget()))
+				continue;
+			if (e->text().isEmpty())
+				continue;
+			++carried;
+			looked << (e->objectName().isEmpty() ? QString("(unnamed)")
+			                                       : e->objectName());
+			if (e->cursorPosition() != 0)
+				wrong << QString("%1 (%2 of %3)")
+				            .arg(e->objectName().isEmpty()
+				                     ? e->text().left(20) : e->objectName())
+				            .arg(e->cursorPosition()).arg(e->text().size());
+		}
+		// **Named, not counted.** Three of this dialog's managers are null
+		// here -- torrents and both AI providers -- so their fields arrive
+		// empty and are not in this population. A bare number would report a
+		// green check over whichever fields happened to be filled; saying
+		// which ones lets a reader see what was not covered.
+		check(carried > 0,
+		       QString("there are populated fields to look at (%1: %2)")
+		         .arg(carried).arg(looked.join(", ")));
+		check(wrong.isEmpty(),
+		       QString("and every one shows its start (%1)")
+		         .arg(wrong.isEmpty() ? QString("all %1").arg(carried)
+		                               : wrong.join(", ")));
+	}
 
 	// Selecting a category shows its page. Wired-and-never-clicked is this
 	// project's most repeated defect, so the connection is exercised.

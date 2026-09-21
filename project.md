@@ -24626,6 +24626,53 @@ its producer. The scroll goes back to the top before each shot now, after
 everything measured has been measured, and each page is photographed from its
 start.
 
+## A value longer than its box showed its end
+
+The kiosk home page read `.1:39873/home?idle-home` at phone width -- the tail
+of a url whose host is the part that decides what the setting means. Qt leaves
+the cursor at the end of a line edit's text, and a line edit scrolls to keep the
+cursor in view, so any value longer than its box arrives showing its finish.
+Measured rather than recalled, because it decides how many places need
+changing: **both forms do it**, `setText` and the constructor that takes text,
+50 of 50 either way.
+
+Seen only in the pictures `try_phone` takes of the settings pages, which is
+what reading them was for.
+
+**One helper rather than sixteen call sites.** `put_value` sets the text and
+puts the cursor back to the start, and every field here that can hold something
+longer than itself goes through it -- a path, a url, a command line, an
+interface list, a model name. Fifteen `setText` sites and one constructor,
+rewritten mechanically with the count asserted per field so a missed or extra
+match refused to write. Left alone are the boxes a person types into: this is
+only the load, refresh and restore-defaults paths, where the cursor has no user
+meaning yet.
+
+**The guard derives its population**, in `try_settings_ui`: every line edit
+that arrives carrying text must show its start. Naming the six fields would be
+a check that cannot fail about the seventh, and the seventh is whoever adds a
+field next.
+
+That needed narrowing once. The first run failed on four `qt_spinbox_lineedit`
+-- the line edits Qt puts inside its own spin boxes, holding things like
+`20 s` with the cursor at the end, which is Qt's business. The population meant
+is the boxes this dialog fills itself, so a box owned by a QSpinBox or a
+QComboBox is skipped, asked by ownership rather than by matching Qt's `qt_`
+name prefix: one is a fact and the other a convention.
+
+**And the count names what it covered**, because three of this dialog's
+managers are null in that driver -- torrents and both AI providers -- so their
+fields arrive empty and are not in the population. It reports
+`2: download_dir, search_engine` rather than a bare 2, which is what lets a
+reader see that the kiosk field is not among them. Six fields gained object
+names for it, which is what this file already does for the widgets its tests
+reach.
+
+Controlled by removing the reset: both fields report the cursor at the end,
+`download_dir (22 of 22), search_engine (28 of 28)`, and the check fails naming
+them. The kiosk field itself is confirmed in the picture that found it, which
+now reads `http://127.0.0.1:42367/hom...` from the left.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

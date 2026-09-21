@@ -350,6 +350,27 @@ void save_from(player_launcher *players, download_manager *downloads,
 
 namespace {
 
+// **Put a value in a box and show its beginning.**
+//
+// Qt leaves the cursor at the end of the text, for both `setText` and the
+// constructor that takes one -- measured, 50 of 50 either way -- and a line
+// edit scrolls to keep the cursor in view. So a value longer than the box
+// displays its tail: the kiosk home page read `.1:39873/home?idle-home` at
+// phone width, which is the end of a url whose host is the part that matters.
+// Seen in the pictures try_phone takes of the settings pages.
+//
+// Every field here that can hold something longer than itself goes through
+// this -- a path, a url, a command line, an interface list. Left alone are the
+// boxes a person is typing into, which this is never called on: these are the
+// load, refresh and restore-defaults paths, where the cursor has no user
+// meaning yet.
+void put_value(QLineEdit *box, const QString &value) {
+	if (!box)
+		return;
+	box->setText(value);
+	box->setCursorPosition(0);
+}
+
 // Which page a per-site feature belongs on, and in which group.
 //
 // Grouped by hand because the order is an editorial judgement -- Firefox puts
@@ -1252,7 +1273,8 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 	// refuses whatever is not on it. A self-hosted SearxNG is a first-class
 	// answer here and would never have earned a menu entry.
 	v->addWidget(section_heading("Search", page));
-	m_search_engine = new QLineEdit(settings_store::search_engine(), page);
+	m_search_engine = new QLineEdit(page);
+	put_value(m_search_engine, settings_store::search_engine());
 	m_search_engine->setObjectName("search_engine");
 	m_search_engine->setPlaceholderText(settings_store::default_search_engine());
 	v->addWidget(settings_row(
@@ -1466,7 +1488,7 @@ void settings_dialog::restore_page_defaults(int page) {
 		// exactly where it was -- which is the setting they would most likely
 		// have pressed that button to undo.
 		if (m_search_engine)
-			m_search_engine->setText(settings_store::default_search_engine());
+			put_value(m_search_engine, settings_store::default_search_engine());
 		// The controller's own default, named on the class rather than
 		// retyped here -- the same rule as the fresh objects the pages below
 		// read, without constructing one that needs a bridge and a policy.
@@ -1493,7 +1515,7 @@ void settings_dialog::restore_page_defaults(int page) {
 			}
 	} else if (name.startsWith("Downloads")) {
 		download_manager fresh;
-		m_dir->setText(fresh.directory());
+		put_value(m_dir, fresh.directory());
 		if (m_torrents) {
 			// The torrent knobs read their defaults from a fresh source, which
 			// is only constructible when the build has libtorrent -- and when it
@@ -1502,7 +1524,7 @@ void settings_dialog::restore_page_defaults(int page) {
 			m_conn_global->setValue(fresh_t.connection_limit_global());
 			m_conn_torrent->setValue(fresh_t.connection_limit_per_torrent());
 			m_seed_ratio->setValue(fresh_t.seed_ratio());
-			m_interfaces->setText(fresh_t.listen_interfaces());
+			put_value(m_interfaces, fresh_t.listen_interfaces());
 			m_sequential->setChecked(fresh_t.sequential());
 		}
 	} else if (name.startsWith("Tabs")) {
@@ -1510,7 +1532,7 @@ void settings_dialog::restore_page_defaults(int page) {
 			m_live_views->setValue(main_window::k_default_live_views);
 	} else if (name.startsWith("Kiosk")) {
 		const kiosk_config d;   // the struct's own initialisers are the defaults
-		m_kiosk_home->setText(d.home.toString());
+		put_value(m_kiosk_home, d.home.toString());
 		m_kiosk_w->setValue(d.design_size.isValid() ? d.design_size.width() : 0);
 		m_kiosk_h->setValue(d.design_size.isValid() ? d.design_size.height() : 0);
 		m_kiosk_scale->setCurrentIndex(m_kiosk_scale->findData(int(d.scale)));
@@ -1527,10 +1549,10 @@ void settings_dialog::restore_page_defaults(int page) {
 	} else if (name.startsWith("AI")) {
 		ollama_provider fresh_local;
 		claude_provider fresh_remote;
-		m_ollama_url->setText(fresh_local.endpoint().toString());
-		m_ollama_model->setText(fresh_local.model());
+		put_value(m_ollama_url, fresh_local.endpoint().toString());
+		put_value(m_ollama_model, fresh_local.model());
 		m_probe_timeout->setValue(fresh_local.probe_timeout());
-		m_claude_model->setText(fresh_remote.model());
+		put_value(m_claude_model, fresh_remote.model());
 		m_ai_auto->setChecked(true);
 		// The API key is not touched: it was never stored, so it has no default
 		// to go back to, and clearing it would throw away something the user
@@ -1994,6 +2016,7 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 	v->addWidget(section_heading("What it shows", page));
 
 	m_kiosk_home = new QLineEdit(page);
+	m_kiosk_home->setObjectName("kiosk_home");
 	m_kiosk_home->setPlaceholderText("blank = whatever tab you were on");
 	v->addWidget(settings_row(
 	  "Home page",
@@ -2169,6 +2192,7 @@ void settings_dialog::build_player_page(QWidget *page) {
 
 	v->addWidget(section_heading("Custom command", page));
 	m_custom_cmd = new QLineEdit(page);
+	m_custom_cmd->setObjectName("player_command");
 	m_custom_cmd->setPlaceholderText("mpv --fullscreen %U");
 	connect(m_custom_cmd, &QLineEdit::textChanged, this,
 	         &settings_dialog::update_custom_state);
@@ -2193,6 +2217,7 @@ void settings_dialog::build_download_page(QWidget *page) {
 	auto *wh    = new QHBoxLayout(where);
 	wh->setContentsMargins(0, 0, 0, 0);
 	m_dir = new QLineEdit(where);
+	m_dir->setObjectName("download_dir");
 	auto *browse = new QPushButton("Browse…", where);
 	wh->addWidget(m_dir, 1);
 	wh->addWidget(browse);
@@ -2200,7 +2225,7 @@ void settings_dialog::build_download_page(QWidget *page) {
 		const QString d = QFileDialog::getExistingDirectory(
 		  this, "Download folder", m_dir->text());
 		if (!d.isEmpty())
-			m_dir->setText(d);
+			put_value(m_dir, d);
 	});
 	v->addWidget(settings_row("Save files to",
 	                           "Where a download lands unless something says "
@@ -2258,6 +2283,7 @@ void settings_dialog::build_download_page(QWidget *page) {
 	  m_sequential, bt));
 
 	m_interfaces = new QLineEdit(bt);
+	m_interfaces->setObjectName("torrent_interfaces");
 	m_interfaces->setPlaceholderText("0.0.0.0:6881  (blank = any interface)");
 	// The 260-pixel minimum that used to be here was reaching for the right
 	// thing by the wrong instrument. It existed so the placeholder above stays
@@ -2445,6 +2471,7 @@ void settings_dialog::build_ai_page(QWidget *page) {
 	v->addWidget(settings_row("Endpoint", "Where Ollama is listening.",
 	                           m_ollama_url, page, /*wide=*/true));
 	m_ollama_model = new QLineEdit(page);
+	m_ollama_model->setObjectName("ollama_model");
 	m_ollama_model->setPlaceholderText("llama3");
 	v->addWidget(settings_row("Model", "Which model to ask for.",
 	                           m_ollama_model, page, /*wide=*/true));
@@ -2474,6 +2501,7 @@ void settings_dialog::build_ai_page(QWidget *page) {
 
 	v->addWidget(section_heading("Claude", page));
 	m_claude_model = new QLineEdit(page);
+	m_claude_model->setObjectName("claude_model");
 	m_claude_model->setPlaceholderText("claude-opus-5");
 	v->addWidget(settings_row("Model", "Which Claude model to send to.",
 	                           m_claude_model, page, /*wide=*/true));
@@ -2575,25 +2603,25 @@ void settings_dialog::load() {
 		}
 	}
 	if (m_players)
-		m_custom_cmd->setText(m_players->custom_command());
+		put_value(m_custom_cmd, m_players->custom_command());
 
 	if (m_downloads)
-		m_dir->setText(m_downloads->directory());
+		put_value(m_dir, m_downloads->directory());
 
 	if (m_torrents) {
 		m_conn_global->setValue(m_torrents->connection_limit_global());
 		m_conn_torrent->setValue(m_torrents->connection_limit_per_torrent());
 		m_seed_ratio->setValue(m_torrents->seed_ratio());
-		m_interfaces->setText(m_torrents->listen_interfaces());
+		put_value(m_interfaces, m_torrents->listen_interfaces());
 		m_sequential->setChecked(m_torrents->sequential());
 	}
 	if (m_local_ai) {
-		m_ollama_url->setText(m_local_ai->endpoint().toString());
-		m_ollama_model->setText(m_local_ai->model());
+		put_value(m_ollama_url, m_local_ai->endpoint().toString());
+		put_value(m_ollama_model, m_local_ai->model());
 		m_probe_timeout->setValue(m_local_ai->probe_timeout());
 	}
 	if (m_external_ai)
-		m_claude_model->setText(m_external_ai->model());
+		put_value(m_claude_model, m_external_ai->model());
 
 	if (m_autofill_https)
 		m_autofill_https->setChecked(settings_store::autofill_https_only());
@@ -2635,7 +2663,7 @@ void settings_dialog::update_custom_state() {
 
 void settings_dialog::load_kiosk() {
 	const kiosk_config c = settings_store::kiosk();
-	m_kiosk_home->setText(c.home.toString());
+	put_value(m_kiosk_home, c.home.toString());
 	m_kiosk_w->setValue(c.design_size.isValid() ? c.design_size.width() : 0);
 	m_kiosk_h->setValue(c.design_size.isValid() ? c.design_size.height() : 0);
 	m_kiosk_scale->setCurrentIndex(m_kiosk_scale->findData(int(c.scale)));
