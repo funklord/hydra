@@ -8236,8 +8236,38 @@ intention nobody had carried out. Their tree was dirty with another session's
 work when it went in, so only that one file was staged, by name, and their
 three modified files were left alone.
 
-The README claimed this build worked, then said it did not, and now says what
-it does.
+**And the README was documenting the wrong invocation all along**, which fmake
+found rather than this tree. `fmake.toml` sits at the repository root and holds
+the excludes *and* `-DHYDRA_VERSION`; `fmake -C src` reads none of it, because
+its paths are written against the directory it is in. So the blocker was never
+the `VERSION` file -- the config would have supplied the define -- it was that
+the documented command bypasses this project's own configuration. Measured with
+fmake's newer build:
+
+    from the root     -Os -DHYDRA_VERSION="(link sets only; see fmake.toml)" ...
+    from src/         ../fmake.toml is one directory above the tree this build
+                      was given and is not read
+
+`tool/objsets.py` has always run it the right way -- `cwd=ROOT`, with a comment
+saying fmake compiles from the repository root -- so the tree knew and the
+README did not. It says `fmake hydra -j2` from the root now, and that builds:
+`* built hydra`, and the binary prints the config's placeholder, which is the
+proof the file was read.
+
+**Two things a root build also shows.** Seventy-two test sources do not compile
+under it, all for one reason fmake names exactly -- `node.h is on no include
+path here ... [project] include-dirs = ['src'] would find it` -- which is a
+real option this tree has not needed, since the test tree has its own Makefile
+and `objsets` only wants link sets. And `fmake -C src` writes a `.gitignore`
+holding `.fmake/` into the directory it builds; the root `.gitignore` already
+covers that, so the file existed only because of the subdirectory run and is
+removed.
+
+The guard in `main.cpp` stays. It is what makes a source-only build finish
+wherever it is rooted, and it is the shape `version_fallbacks` looks for.
+
+The README claimed this build worked, then said it did not, then said what it
+does -- and now says where to run it.
 
 **And the guard opened a hole that had to be closed in the same pass.** Before
 it, a `hydra.pro` that stopped defining `HYDRA_VERSION` was a compile error --

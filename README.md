@@ -349,7 +349,7 @@ both.** Underneath it, `hydra.pro` (qmake) builds the app and the APK, and
 same sources with no build file at all:
 
 ```sh
-fmake -C src -j2              # name a number; see the JOBS warning above
+fmake hydra -j2               # from the repository root; see the JOBS warning
 ```
 
 It works the whole build out by itself — every `Q_OBJECT`, the moc runs, the
@@ -358,13 +358,20 @@ rather than guessed. The annotations in the sources are what it cannot know:
 `@target` in `main.cpp`, and one `@pkg_optional` beside each optional
 dependency's include.
 
-**What it cannot know is the version.** `hydra.pro` passes
+**From the repository root, because that is where `fmake.toml` is.** That file
+holds the one fact no source can state -- the build directories to leave alone
+-- and it is read only by a build rooted beside it. `tool/objsets.py` already
+runs fmake that way. Run from `src/` instead and none of it applies: fmake says
+so now, and the build stops on `HYDRA_VERSION`, which the config would have
+supplied.
+
+**What no build file can know is the version.** `hydra.pro` passes
 `-DHYDRA_VERSION="<the VERSION file>"`, and a build that reads the sources
-rather than the project file has no way to see that. `main.cpp` carries a
-guarded fallback so the build finishes, and a binary built this way says
-`hydra unknown (built without a version)` where the qmake one says `hydra 0.1`.
-The number stays in `VERSION` and nowhere else. `project.md` carries the
-measurement.
+rather than the project file cannot see that. `main.cpp` carries a guarded
+fallback so a source-only build finishes wherever it is rooted, and such a
+binary says `hydra unknown (built without a version)` where the qmake one says
+`hydra 0.1`. The number stays in `VERSION` and nowhere else. `project.md`
+carries the measurement.
 
 ## Testing
 
