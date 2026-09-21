@@ -693,14 +693,27 @@ int main(int argc, char **argv) {
 		// answer. A direct emit would test only the second half.
 		node *edited = w3.m_model->add_tab(nullptr, "an edited tab",
 		                                    "https://before.example/x");
+		int opened_at = -1, opened_len = -1;
 		if (fake_view *v = edited ? show(edited) : nullptr) {
-			QTimer::singleShot(120, [] {
+			QTimer::singleShot(120, [&opened_at, &opened_len] {
 				auto *dlg = qobject_cast<QDialog *>(
 				  QApplication::activeModalWidget());
 				if (!dlg)
 					return;
-				if (auto *ln = dlg->findChild<QLineEdit *>("properties_url"))
+				if (auto *ln = dlg->findChild<QLineEdit *>("properties_url")) {
+					// **Where the field opens, read before anything types in
+					// it.** Qt leaves the cursor at the end of the text it is
+					// given -- the constructor form as much as `setText` -- and
+					// the widget scrolls to keep the cursor in view, so a url
+					// longer than the box opens showing its query string
+					// rather than its host. Read here because this is the only
+					// moment the dialog exists: it runs modally, and the
+					// caller below it has already returned by the time exec
+					// gives control back.
+					opened_at  = ln->cursorPosition();
+					opened_len = int(ln->text().size());
 					ln->setText("https://after.example/y");
+				}
 				dlg->accept();
 			});
 			w3.m_tree->edit_properties(edited);
@@ -711,6 +724,11 @@ int main(int argc, char **argv) {
 			check(edited->url == "https://after.example/y",
 			       QString("and the stored url matches what was typed (%1)")
 			         .arg(edited->url));
+			// The length is asserted with it, because a cursor at 0 in an
+			// empty box says nothing about a long value.
+			check(opened_len > 0 && opened_at == 0,
+			       QString("and the Address opens showing its start "
+			                "(cursor %1 of %2)").arg(opened_at).arg(opened_len));
 		}
 	}
 

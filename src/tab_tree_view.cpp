@@ -662,6 +662,17 @@ void tab_tree_view::edit_properties(node *n) {
 	auto *url   = new QLineEdit(n->url, &dlg);
 	url->setObjectName("properties_url");
 	auto *tags  = new QLineEdit(n->tags.join(", "), &dlg);
+	// **Show each value from its start.** Qt leaves the cursor at the end of a
+	// line edit's text -- for the constructor that takes text as much as for
+	// `setText`, measured 50 of 50 either way -- and the widget scrolls to
+	// keep the cursor in view, so a value longer than its box opens showing
+	// its finish. For the address that means the query string and not the
+	// host, which is the part that says what the row is. `settings_dialog`
+	// does the same thing through a `put_value` helper for the sixteen places
+	// it has; three lines here rather than a second copy of the helper, since
+	// extracting a shared one is not a change to make in passing.
+	for (QLineEdit *box : { title, url, tags })
+		box->setCursorPosition(0);
 	url->setPlaceholderText("about:blank");
 	tags->setPlaceholderText("comma separated");
 

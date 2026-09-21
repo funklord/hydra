@@ -24673,6 +24673,21 @@ Controlled by removing the reset: both fields report the cursor at the end,
 them. The kiosk field itself is confirmed in the picture that found it, which
 now reads `http://127.0.0.1:42367/hom...` from the left.
 
+**And the same fault was in one other place**, which is the half a fix like
+this usually leaves behind. Swept for it: every other populated line edit in
+the tree is in `tab_tree_view`'s properties dialog -- the title, the address
+and the tags, all built with the constructor that takes text. Everything else
+starts empty and is typed into, so there is nothing to show the end of. Three
+lines there rather than a second copy of `put_value`, because extracting a
+shared helper is not a change to make in passing; the comment names the
+settings one so the two are findable from each other.
+
+`test_rotation` drives that dialog modally already, and the only moment it
+exists is inside the timer that fills it, so the reading is taken there --
+`cursor 0 of 24`, with the length asserted beside it because a cursor at 0 in
+an empty box says nothing. Sabotaged, it reads `24 of 24` and fails. 376 pass
+where it was 375.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
