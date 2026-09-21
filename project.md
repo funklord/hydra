@@ -25129,6 +25129,53 @@ a header explaining why the case is normal rather than a corner, and the other
 had nothing. Nothing distinguished them from outside -- both were code that
 worked.
 
+## A guard that made you move half a gigabyte, for a reason that had expired
+
+`make -C test objsets` recomputes the link sets by asking fmake to compile the
+tree and read its symbol tables. It refused here:
+
+    cannot regenerate with an Android build present: build-android-arm64-v8a
+
+The refusal is deliberate and its comment explains why: fmake compiles what it
+finds from the repository root, `build-android-<abi>/` holds moc output from
+the Android kit's Qt, and compiling that against the desktop Qt fails fifty
+times over with an error naming moc files rather than the directory they are
+in. That cost somebody a quarter of an hour once. It declines to move the
+directory itself, on the grounds that a build directory holds an apk somebody
+may be about to install.
+
+**All of which is still true, and none of it applies any more.** fmake reads
+`.gitignore` now and says so in as many words:
+
+    * 117 source file(s) not built: git is told to ignore
+      build-android-arm64-v8a, test/build-make and 2 more directory(ies)
+
+Both builds do -- the packaged `/usr/bin/fmake` from 2026-08-04 as well as the
+current one -- so the directory the guard refuses on is one fmake was never
+going to compile. `.gitignore` has carried `/build-android*/` since the per-ABI
+naming was settled.
+
+Measured rather than argued: with the refusal bypassed, the regeneration runs
+to completion with the arm64 build in place -- *88 programs, 5218 objects, 59.3
+each on average* -- and the result is the same link sets, **object for object**.
+The diff is 124 lines each way and every one of them is a reordering; compared
+as multisets the two files are identical.
+
+So the guard now asks for a half-gigabyte move to reach a result it could have
+reached without one. It refuses on `git check-ignore` instead: a
+`build-android*` directory git is **not** told to ignore is still the case the
+message was written for, and there fmake really would compile the Android kit's
+moc against the desktop Qt.
+
+**Two things this turned up in passing.** `fmake.toml`'s comment says "the same
+directories are in `.gitignore` ... fmake does not read it, so the list is said
+twice" -- which is no longer so, and the `exclude` list it justifies may now be
+redundant. That is worth a measurement rather than a deletion, and is not done
+here. And the regeneration is **order-unstable**: the same inputs produce the
+same sets in a different order, so `make objsets` always shows a diff. Nothing
+is wrong with the file it writes; the churn just makes review noisier than it
+needs to be.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

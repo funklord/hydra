@@ -137,9 +137,29 @@ def main():
 	# Refused up front, with the fix in the message. Not moved automatically:
 	# a build directory holds an apk somebody may be about to install, and a
 	# tool that quietly relocates half a gigabyte is worse than one that asks.
+	# **Only the ones fmake would actually compile.** Both the packaged fmake
+	# and the current one skip what git ignores, and say so:
+	#
+	#     * 117 source file(s) not built: git is told to ignore
+	#       build-android-arm64-v8a, test/build-make and 2 more directory(ies)
+	#
+	# `.gitignore` has carried `/build-android*/` since the per-ABI naming was
+	# settled, so the ordinary case -- a build somebody just made -- is already
+	# invisible to fmake, and refusing on it cost a move of half a gigabyte to
+	# reach the same result. Measured: with this filter the regeneration runs
+	# with an arm64 build in place and produces the same link sets, object for
+	# object.
+	#
+	# The refusal stays for a directory git is *not* told to ignore, which is
+	# the case the message above was written for: there fmake really would
+	# compile the Android kit's moc output against the desktop Qt.
+	def ignored(path):
+		return subprocess.run(["git", "check-ignore", "-q", path],
+		                       cwd=ROOT).returncode == 0
+
 	strays = sorted(os.path.basename(d)
 	                 for d in glob.glob(os.path.join(ROOT, "build-android*"))
-	                 if os.path.isdir(d))
+	                 if os.path.isdir(d) and not ignored(d))
 	if strays:
 		return ("cannot regenerate with an Android build present: "
 		         + ", ".join(strays)
