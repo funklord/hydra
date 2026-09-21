@@ -24703,17 +24703,31 @@ a race between the request and the reply. Measured:
 So the failing runs are about this machine. Android has no such arbiter --
 `dialog_sizer` runs on a Show event and nothing argues with it.
 
-**And "a race" understates it: the request can be ignored outright.** Measured
-2026-09-21 on a third dialog, which is what made it clear. The consent dialog's
-layout floor is 140x234, so it fits a phone easily, and offscreen it does:
+**~~"A race" understates it: the request can be ignored outright.~~ That was
+wrong, and the machine said so a few hours later.** The claim came from the
+consent dialog, whose layout floor is 140x234 and which therefore fits a phone
+easily:
 
-    offscreen      asked 360x640, got 360x640   -- passes
-    under xfwm4    asked 360x640, got 720x420   -- fails
+    offscreen                        asked 360x640, got 360x640   passes
+    under xfwm4, load ~194, x2       asked 360x640, got 720x420   fails
+    under xfwm4, load ~15,  x3       asked 360x640, got 360x640   passes
 
-720x420 is the dialog's own natural size. The window manager did not answer
-late; it kept the geometry it wanted. A driver measuring what `setGeometry`
-left behind therefore measures the window manager's policy wherever one is
-running, which is the whole of why this check wants none.
+720x420 is the dialog's own natural size, and seeing it twice under a window
+manager read as the window manager keeping the geometry it wanted. **It is
+load, not policy.** On a quiet machine the same window manager honours the same
+request every time, three runs of 205 checks with nothing failing.
+
+So the original note was right and the amendment was not: it *is* a race
+between the request and the reply, and heavy load is what makes the reply land
+after the measurement. The conclusion for the driver is unchanged -- run the
+sizer checks without a window manager -- but the reason matters, because
+"ignores it" would have sent somebody looking for a window-manager hint to set,
+and there is nothing to set.
+
+**Two observations of the same dialog, hours apart, and the first was taken
+on a machine at twenty times the load of the second.** Neither reading was
+wrong; the inference from the first was, and it was published as a
+strengthening of a claim that had been correct.
 
 **The awkward part is that the two wants are in tension**, which is why this is
 recorded rather than fixed. `sweep.sh` recommends on-screen precisely because
