@@ -14,11 +14,34 @@
 # translation unit, 196 of them against the 116 that are real, and every symbol
 # in them a second definition of something already compiled from `src/`.
 #
-# The same directories are in `.gitignore`, which is where a human would look
-# to learn they are not source; fmake does not read it, so the list is said
-# twice. That is a small duplication and the alternative is worse.
+# **fmake reads `.gitignore` now, and this list is no longer the only thing
+# saying so.** It reports what it skipped -- "117 source file(s) not built: git
+# is told to ignore build-android-arm64-v8a, test/build-make and 2 more" --
+# and both the packaged build and the current one do it. Measured 2026-09-21,
+# entry by entry:
 #
-# `third_party/` is the vendored yt-dlp, which is Python.
+#     build/              exists, ignored by git    -- belt and braces
+#     test/build-make/    exists, ignored by git    -- belt and braces
+#     third_party/        exists, TRACKED           -- only this list covers it
+#     build-android-*/    exists, ignored by git    -- belt and braces
+#     build-qmake/, attic/  do not exist here
+#
+# Kept rather than pruned, because an exclude written here does not depend on
+# a tool continuing to read a file it is not obliged to read. `third_party/` is
+# the one entry that carries its own weight regardless: it is the vendored
+# yt-dlp, it is tracked, and nothing else would keep fmake out of it.
+#
+# **`build-android/**` was wrong and is now `build-android-*/**`.** The
+# directory is named per ABI -- `build-android-arm64-v8a` -- which the old
+# pattern never matched. Nothing broke, because `.gitignore` carries
+# `/build-android*/` and fmake honours it; the entry was simply not doing the
+# job it was written for.
+#
+# And the correction is unverified for the same reason, which is worth saying
+# rather than implying otherwise: while `.gitignore` covers those paths, no
+# experiment here can tell an exclude that matches from one that does not. What
+# was checked is that fmake still reads this file -- the define below still
+# reaches the compile line -- and that the directory is skipped either way.
 #
 # **`HYDRA_VERSION` is injected by the build, not written in any source.**
 # `main.cpp` prints it for `--version`, and the Makefile defines it from the
@@ -33,5 +56,5 @@
 # invite somebody to keep it in step with a file it has nothing to do with.
 [project]
 cflags  = ['-DHYDRA_VERSION="(link sets only; see fmake.toml)"']
-exclude = ["build/**", "build-android/**", "build-qmake/**",
+exclude = ["build/**", "build-android-*/**", "build-qmake/**",
             "test/build-make/**", "third_party/**", "attic/**"]
