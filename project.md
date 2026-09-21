@@ -24932,6 +24932,23 @@ carried along as amendments to a list item.
    instance was. That arm needs TalkBack deliberately back on, and it is the
    copyright holder's handset to decide about.
 
+   **And the desktop arm cannot be measured on this machine, which is a fact
+   worth having rather than an absence.** Checked 2026-09-21: `at-spi2-core`
+   and `at-spi2-common` are installed, so the bus and registry a screen reader
+   talks to are here -- but **Qt has no accessibility bridge**. There is no
+   `accessiblebridge` directory under `qt6/plugins`, and a `find` across
+   `/usr/lib` for `*qspi*` or `*accessiblebridge*` returns nothing. Without it
+   a Qt program publishes no accessible tree at all, so asking whether Orca
+   can drive this browser here would measure the missing plugin rather than
+   the browser, and any answer would be the same for every Qt application on
+   the machine.
+
+   That is why this arm has stayed a device question. It need not: installing
+   the bridge would make the desktop half testable without a handset, and the
+   controls this project has since named are what such a test would read. The
+   package is the holder's to add -- it is their machine -- and the check
+   afterwards is one command against a running window.
+
 4. **The loop works on a disguised manifest; make it work on a noisy capture.**
    Three runs in five on dramafren now return `url.includes('cf-master')` — a
    stable fragment, no tokens, the master manifest on a site with no `.m3u8`
