@@ -9,6 +9,13 @@
 // costing the user anything, and it is also why the only signal is a resize
 // that something has to be listening for.
 //
+// **That sentence was a claim about a file nothing here opens, and every
+// check below rested on it.** Delete `orientation` from the manifest and
+// Android recreates the activity; this file resizes a desktop window and
+// passes exactly as it does now. `make style` runs `tool/manifest_check.py`,
+// which fails when any of the four the design needs is missing -- so the
+// premise is checked where it lives rather than asserted here in prose.
+//
 // `main_window::update_layout_mode` is that listener, and until this file
 // nothing in the tree exercised it. The branch it takes reparents `m_sidebar`
 // out of the splitter and onto the window, shows `m_drawer_action`, and

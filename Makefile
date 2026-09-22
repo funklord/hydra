@@ -800,7 +800,7 @@ help:
 # shipped a rename that broke seven of them. Costs milliseconds and needs no
 # Android tooling, so it runs with the other gates rather than only when
 # somebody builds an APK.
-style: style-source style-docs jni seam resources
+style: style-source style-docs jni seam resources manifest
 
 jni:
 	@python3 tool/jni_check.py
@@ -819,6 +819,13 @@ seam:
 # `icon/hydra.qrc` and was found by looking. See tool/resource_check.py.
 resources:
 	@python3 tool/resource_check.py
+
+# The Android manifest against what the rest of the tree assumes about it.
+# `test_rotation`'s 399 checks are all about the resize path, and the reason
+# there IS a resize path rather than a teardown is one attribute in a file no
+# test opens. See tool/manifest_check.py.
+manifest:
+	@python3 tool/manifest_check.py
 
 style-source:
 	python3 tool/style_gate.py check

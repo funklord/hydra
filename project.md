@@ -25870,6 +25870,41 @@ The tool was written with four-space indentation and the style gate refused
 it -- 78 violations. Converted with the proof `evidence.md` names for exactly
 this: `ast.dump` before and after, identical, or the write is refused.
 
+## 399 checks resting on one attribute that nothing read
+
+`test_rotation` opens by explaining the design: `android:configChanges`
+declares `orientation|screenSize|screenLayout|...`, so Android **resizes** the
+window on a rotation rather than destroying and recreating the activity --
+"there is no save, no restore, and nothing is serialised, because nothing is
+torn down". Every check in that file is about the resize path.
+
+**Nothing opened the manifest.** Delete `orientation` from it and Android
+recreates the activity: tabs torn down, state serialised or lost, and the
+suite passes exactly as before, because it resizes a desktop window. The
+premise was written down, in prose, in a comment -- which is the form that
+reads as settled and enforces nothing.
+
+`tool/manifest_check.py`, in `make style`. Four couplings, each a name in XML
+that must match a name somewhere else, and each sabotaged before being
+believed:
+
+    orientation removed from configChanges   names the attribute and why
+    the activity class renamed in the XML    names the missing .java AND
+                                             that ANDROID_ACTIVITY is now
+                                             pointing at nothing
+    TARGET changed in the Makefile           lib_name is what Qt loads, TARGET
+                                             is what the build produces
+
+**A config change absent from the needed set is not a finding.** The manifest
+declares fourteen and may declare more; a gate pinning the whole string would
+go red for an addition somebody made on purpose. Four are named, each with the
+reason it is needed, and the rest are the manifest's business.
+
+**The claim in `test_rotation` is rewritten rather than left standing.** It
+now says the premise is checked by the gate, and where -- because the sentence
+as it was is exactly the kind `evidence.md` warns about: true when written,
+unenforced, and read by everyone after as though something were watching it.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
