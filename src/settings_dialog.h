@@ -219,7 +219,6 @@ private:
 	QSet<QString>         m_dropped_patterns;
 	QComboBox            *m_appearance     = nullptr;
 	QPushButton          *m_restore        = nullptr;
-	QStackedWidget       *m_stack          = nullptr;
 	QList<QRadioButton *> m_player_buttons;
 	QVBoxLayout    *m_player_group_layout = nullptr;
 	QLineEdit      *m_custom_cmd   = nullptr;

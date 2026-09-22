@@ -392,8 +392,13 @@ public:
 	explicit android_factory(request_filter *filter) : m_filter(filter) {}
 
 	web_view_backend *create_view(QWidget *parent) override;
+	// **Handed straight on, and not kept.** It used to be stored here as
+	// well, and nothing in this class ever read the copy: `android_view`'s
+	// static `s_external` is what `claims_external_url` consults, so the
+	// member was a second place to look that could only ever be stale. The
+	// desktop factory does read its own, which is what made the difference
+	// worth removing rather than mirroring.
 	void set_external_url_handler(external_url_handler fn) override {
-		m_external = fn;
 		android_view::set_external_handler(fn);
 	}
 	// Not wired: Android's downloads go through the platform `DownloadManager`
@@ -422,5 +427,4 @@ public:
 
 private:
 	request_filter      *m_filter = nullptr;
-	external_url_handler m_external;
 };

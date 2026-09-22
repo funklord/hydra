@@ -546,7 +546,6 @@ settings_dialog::settings_dialog(player_launcher *players,
 	outer->insertWidget(outer->indexOf(m_search) + 1, m_category_pick);
 
 	auto *stack = new QStackedWidget(this);
-	m_stack = stack;
 	stack->setObjectName("pages");
 	split->addWidget(stack, 1);
 	connect(m_categories, &QListWidget::currentRowChanged,

@@ -26379,6 +26379,42 @@ inside `#else` on `Q_OS_ANDROID`, so nothing here compiles them. What was
 measured here is the fact underneath -- zero reads of the member, and the two
 resources the Java grants.
 
+## The same lens mechanised, and the control that saved it
+
+The Android chooser above was found by reading one class. The general form is
+cheap: **a member that is written and never read**, which is what a stored
+callback nobody consults looks like from the outside.
+
+**The first sweep counted uses across the whole tree and was worthless.**
+`m_capture_chooser` is declared in *both* backends, and `qtwebengine_view`
+reads its own -- so a tree-wide count saw five uses and reported the Android
+one as fine. It found one hit, a false positive, and would have reported the
+tree clean.
+
+What caught that was running it against the case that motivated it. A sweep
+whose known positive does not appear has not been calibrated, however
+confident its output reads; `evidence.md` calls this a control having to fail
+the way the thing it controls for fails, and here the control was simply the
+finding from an hour earlier.
+
+Scoped to each class's own `.h` and `.cpp`, over **564 members**, it finds
+seven -- and the reading is the work rather than the count:
+
+    m_capture_chooser   android      deliberate, and now says so
+    m_capability_note   seam         read by a subclass; base-class members
+    m_capability_peek   seam         are out of scope for this scoping
+    m_stream_seq        assembly     false positive: `++m_stream_seq` reads
+    m_external          android      dead copy, removed
+    m_stack             settings     dead member, removed
+
+**Neither removal is a defect fixed**, and saying so matters: nothing behaved
+differently. `android_factory` stored the external-url handler *and* passed it
+to `android_view`'s static, which is what `claims_external_url` actually
+consults -- so the member was a second place to look that could only ever be
+stale, in a class whose desktop counterpart does read its own. That asymmetry
+is the thing worth removing: dead state that looks like wiring is what hid the
+real gap this lens was built from.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
