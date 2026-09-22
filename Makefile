@@ -284,7 +284,7 @@ TEST_ENV = HYDRA_MAX_LIVE_VIEWS=$(HYDRA_TEST_LIVE_VIEWS) QT_QPA_PLATFORM=offscre
 FAILED_DIR = $(TESTS_DIR)/failed
 
 .PHONY: all run test test-one drivers sweep replay deb deb-check version-check android android-build android-aab install uninstall clean veryclean distclean help style style-docs style-source check hooks jni seam \
-        resources manifest deps desktop doc
+        resources manifest deps desktop doc policy
 
 # Always delegates, never compares timestamps itself. The first version made
 # the binary a real target depending on the configure output, and `make` after
@@ -807,7 +807,7 @@ help:
 # at packaging time is finding out after every commit in between. It says what
 # it could not check rather than failing when the binary is not built.
 style: style-source style-docs jni seam resources manifest deps desktop \
-        doc version-check
+        doc policy version-check
 
 jni:
 	@python3 tool/jni_check.py
@@ -855,6 +855,14 @@ desktop:
 # breaking anything. See tool/doc_check.py.
 doc:
 	@python3 tool/doc_check.py
+
+# Every policy feature against something that enforces it. A feature the
+# shield offers and nothing acts on is a control that accepts an answer and
+# discards it, and it looks exactly like the ones that work. See
+# tool/policy_check.py, whose control is about a namespace alias that defeated
+# the first version of the sweep.
+policy:
+	@python3 tool/policy_check.py
 
 style-source:
 	python3 tool/style_gate.py check

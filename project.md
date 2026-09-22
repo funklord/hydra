@@ -26415,6 +26415,44 @@ stale, in a class whose desktop counterpart does read its own. That asymmetry
 is the thing worth removing: dead state that looks like wiring is what hid the
 real gap this lens was built from.
 
+## A feature the shield offers and nothing acts on
+
+Two sweeps of the same shape as the member one, both empty, and the second
+became a gate because the instrument that nearly broke it will break the next
+person's too.
+
+**Settings: clean.** Six user-visible settings, every one read outside
+`settings_dialog` -- kiosk, AI mode, appearance, search engine,
+HTTPS-only autofill and the live-view cap. `default_search_engine` is the
+seventh accessor and has no outside caller by design: it is the shipped
+template, named because three places inside the dialog want it rather than
+holding three copies of a string.
+
+**Policy features: clean, on the second attempt.** Nineteen features, every
+one read outside the policy and UI layer -- which is the question worth
+asking, because a feature the shield offers and nothing enforces is a control
+that takes an answer and discards it, and from the UI it looks exactly like
+the ones that work.
+
+**The first attempt reported two wired features as unenforced.** Several
+sites write `F::autoplay`, `F` being a local alias for `policy::feature`, and
+a pattern looking for `feature::autoplay` misses every one. `autoplay` is
+enforced -- `main_window` reads the policy into `view_settings` and
+`qtwebengine_view` turns it into `PlaybackRequiresUserGesture` -- and
+`desktop_site` likewise through `set_desktop_site`. Both were caught by
+reading the hits rather than counting them, which is the remedy this file
+already records for a name-based proxy.
+
+So `tool/policy_check.py` exists rather than a paragraph saying somebody
+should check this, and **its control is the alias**: a feature reachable only
+through `F::` must still be found, a use inside the policy layer must not
+count as enforcement, and a different feature's name must not match.
+Narrowing the pattern back to `feature::` makes the tool refuse rather than
+report a clean tree.
+
+Sabotaged both ways: replacing `is_allowed(F::autoplay, host)` with `true`
+names autoplay, and narrowing the pattern trips the control.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
