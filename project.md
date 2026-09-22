@@ -25767,6 +25767,64 @@ this session went looking for: `clear_run` starts one before it asks for
 anything, with a comment naming the exact symptom -- *"a clear that never
 answers leaves a dialog saying Clearing... for ever"*.
 
+## Eleven scripts this browser injects, and nothing had ever parsed one
+
+Asked which disparate things can be tested and are not, the answer with the
+worst failure mode was the JavaScript. Eleven blobs live in `src/` as C++ raw
+string literals -- the element picker, the autofill filler, the consent
+blocker, the MSE tap and its subframe relay, the cosmetic-filter stylesheet,
+the permissions shim and its device-label half, the client-hints shim, and the
+two channel bootstraps. **The compiler sees them as text.** A missing brace in
+any of them builds, ships, and does nothing on a page: `runJavaScript` reports
+a syntax error to the engine's own console, which is not this process.
+
+`test_scripts` parses all eleven, 23 checks, and it is in `make test`.
+
+**Read out of the tree rather than listed, and that is the point.** Seven of
+the eleven are `const char *` in an anonymous namespace inside a `.cpp`, so no
+test can name them, and a suite listing the four it *could* reach would be a
+check called "every script" over a population its author wrote by hand. The
+sweep finds `R"JS(` blocks in `src/*.cpp` and `src/*.h`, so one added next year
+is covered the day it is added. The sabotage that proves it is a missing
+parenthesis in `consent_blocker.cpp` -- unreachable by any accessor -- which
+fails naming the file and the line inside the blob.
+
+**Parsed, not run**, by putting each body in a function expression nothing
+calls. That is also why there is no watchdog: `site_extractor` needs one
+because it *calls* what it compiles and a tight JS loop never yields; nothing
+here is called. The one thing a wrapper permits that a page would not is a
+top-level `return`, so the suite also asserts every blob opens `(function` --
+all eleven do -- which closes exactly that hole.
+
+**And the first fixture produced a failure that looked like a finding.**
+Placeholders are `QString::arg`'s, not JavaScript, and the first substitution
+used `"x"`; `permissions_shim` writes `states = { camera: "%1" }` with the
+quotes already in the template, so it became `""x""` and the checker reported
+a SyntaxError in a perfectly good file. A bare identifier is the only
+substitution safe in both positions. The section that parses what the real
+accessors return is what actually answers for the substituted text.
+
+### `make -C test objsets` needs an fmake newer than the packaged one
+
+Adding a test source was blocked by this, so it is worth its own heading.
+`tool/objsets.py` takes `fmake` from `PATH`, which here is `/usr/bin/fmake`
+dated **2026-08-04** -- older than `[project] include-dirs`, which it
+therefore ignores. Without it `test/test_theme.cpp` reaches `theme.h` with no
+`HYDRA_HAVE_DBUS`, the stub `QDBusVariant` meets the real one, and the eject
+fails. `FMAKE=/home/claude/src/fmake/fmake python3 tool/objsets.py` succeeds:
+89 programs, 5218 objects.
+
+**That corrects a claim above by naming the binary.** The entry recording that
+`include-dirs` fixed `test_theme` was measured with the current fmake and
+written without saying so, which is the fault this tree and fmake's spent
+eight exchanges on yesterday -- *name the binary, and name the command* --
+appearing again in a paragraph written the same day.
+
+The regeneration was proved rather than read: parsed before and after, exactly
+one variable added (`OBJS_test_scripts`), one source added to the manifest,
+and **no existing link set different as a multiset**. The 131-line diff is the
+ordering churn this file already records.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

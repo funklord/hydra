@@ -53,6 +53,7 @@ the suites below are worth more than their pass counts suggest.
 | `test_helpers` | the §11.5.1 helper tier: the allowlist, the budgets, the transcript, and a script following a manifest through the sandbox |
 | `test_streamtype` | the §10 content-type tier: classification, and a fake origin answering as the real one does |
 | `test_extractor` | the generated-extractor sandbox and the rules that a proposal cannot invent a URL, return a segment, or return the page itself |
+| `test_scripts` | every piece of JavaScript this browser injects, parsed — read out of `src/` rather than from a list, because seven of the eleven are file-local `const char *` no test can name |
 | `test_extloop` | the review loop end to end with a stub provider standing in for a model |
 | `test_settings` | settings persistence, the uninstalled-player fallback, the custom-player command template |
 | `test_ytdlp` | parsing yt-dlp's answer and the format preference — the risky part is reading the JSON, not running the process |

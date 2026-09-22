@@ -68,7 +68,13 @@ OPT_DEFS   := $(if $(filter libsodium,$(OPT_PKGS)),-DHYDRA_HAVE_SODIUM) \
 # the whole variable including every -I appended below, leaving compiles that
 # fail instantly -- measured, and it read as a suspiciously fast rebuild.
 CXXFLAGS ?= -Os -g
+# `HYDRA_SRC_DIR` is for `test_scripts`, which reads the injected JavaScript
+# out of the tree rather than from a list it carries: most of those blobs are
+# file-local `const char *` in an anonymous namespace and no test can name
+# them, and a list would cover whatever its author wrote down. Absolute, from
+# `abspath`, so a suite run from anywhere finds it.
 CXXFLAGS += -std=gnu++17 -fPIC -Wall -Wextra -I$(SRC) -I. -I$(BUILD_DIR) \
+             -DHYDRA_SRC_DIR=\"$(abspath $(SRC))\" \
              $(QT_CFLAGS) $(OPT_CFLAGS) $(OPT_DEFS)
 LDFLAGS  += -Wl,--as-needed
 LDLIBS   += $(QT_LIBS) $(OPT_LIBS)
