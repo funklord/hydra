@@ -6,9 +6,13 @@
 // cannot be recalled. So the hostile cases here are the ones that look like
 // prose and are hosts, and the ones that look like hosts and are prose.
 #include "address_input.h"
+#include "scheme_rules.h"
 
 #include <QCoreApplication>
+#include <QFile>
+#include <QFileInfo>
 #include <QString>
+#include <QStringList>
 #include <QUrl>
 #include <cstdio>
 
@@ -208,6 +212,59 @@ int main(int argc, char **argv) {
 		// exists is a tree even when it parses as a url.
 		check(!argument_url(QCoreApplication::applicationFilePath()).isValid(),
 		      "an argument naming an existing file stays a tree path");
+	}
+
+	{
+		section("what the desktop entry promises the system");
+		// **The entry is a set of claims about this program, in a file the
+		// program never reads.** `packaging/hydra.desktop` registers Hydra
+		// for `x-scheme-handler/http` and `https`, and once it is the default
+		// browser every clicked link of those kinds arrives as `argv[1]` --
+		// which is what the section above is about. A scheme claimed there
+		// and refused here is a link the desktop hands over and the browser
+		// declines to open, and the person sees a browser that started and
+		// did nothing.
+		//
+		// Read from the installed file rather than listed, so adding a
+		// handler to the entry without teaching the browser about it fails
+		// here rather than on somebody's desktop.
+		QString entry;
+		for (const char *guess : { "packaging/hydra.desktop",
+		                            "../packaging/hydra.desktop",
+		                            "../../packaging/hydra.desktop" }) {
+			QFile f(QString::fromLatin1(guess));
+			if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+				entry = QString::fromUtf8(f.readAll());
+				break;
+			}
+		}
+		check(!entry.isEmpty(), "the desktop entry was found and read");
+
+		QStringList schemes;
+		for (const QString &line : entry.split('\n')) {
+			if (!line.startsWith(QLatin1String("MimeType=")))
+				continue;
+			for (const QString &type : line.mid(9).split(';', Qt::SkipEmptyParts))
+				if (type.startsWith(QLatin1String("x-scheme-handler/")))
+					schemes << type.mid(17);
+		}
+		// A floor, because the list is parsed: a changed key or a changed
+		// separator would leave it empty and the loop below would report
+		// success having checked nothing.
+		check(schemes.size() >= 2,
+		      QString("it registers %1 scheme handler(s): %2")
+		        .arg(schemes.size()).arg(schemes.join(", ")));
+		for (const QString &s : schemes)
+			check(renders_as_page(QUrl(s + "://example.com/thing")),
+			      QString("%1 is a scheme this browser renders").arg(s));
+		// The other half of the same promise: it claims `text/html`, so a
+		// file manager hands over a path as a `file:` uri. That is the case
+		// `argument_url` above had to be taught, and the claim is what makes
+		// it arrive at all.
+		check(entry.contains(QLatin1String("text/html")),
+		      "and it claims text/html, which is how a local file arrives");
+		check(renders_as_page(QUrl("file:///home/me/doc.html")),
+		      "which this browser renders too");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

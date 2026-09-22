@@ -176,6 +176,21 @@ int main(int argc, char *argv[]) {
 	android_dialogs::install();
 #endif
 	app.setApplicationName("Hydra");
+	// **The name of the desktop entry, which nothing was saying.**
+	// `packaging/hydra.desktop` exists and is installed, and this is the only
+	// call that tells a desktop which entry this process belongs to: Qt sends
+	// it as the Wayland `app_id` and uses it for the notification and taskbar
+	// identity. Left unset it falls back to `applicationName()`, which is
+	// "Hydra" and not `hydra.desktop`, so the association is by a name that
+	// does not exist.
+	//
+	// **What that costs is not measured here and is deliberately not claimed.**
+	// This machine runs X11 -- `XDG_SESSION_TYPE` and `WAYLAND_DISPLAY` are
+	// both unset -- so the symptom a wrong `app_id` produces cannot be
+	// reproduced on it. What is measured is the gap itself: the entry is
+	// `hydra.desktop`, this is the call that names one, and nothing was
+	// calling it. `tool/desktop_check.py` keeps the two in step.
+	app.setDesktopFileName(QStringLiteral("hydra"));
 
 	// **The argument may be a url rather than a tree.** The desktop entry says
 	// `Exec=hydra %U` and claims http, https and text/html, so once this is

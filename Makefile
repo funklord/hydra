@@ -800,7 +800,7 @@ help:
 # shipped a rename that broke seven of them. Costs milliseconds and needs no
 # Android tooling, so it runs with the other gates rather than only when
 # somebody builds an APK.
-style: style-source style-docs jni seam resources manifest deps
+style: style-source style-docs jni seam resources manifest deps desktop
 
 jni:
 	@python3 tool/jni_check.py
@@ -833,6 +833,14 @@ manifest:
 # different program than the one that ships. See tool/deps_check.py.
 deps:
 	@python3 tool/deps_check.py
+
+# The desktop entry against the things it names. Every claim in it fails the
+# way the qrc prefix failed: quietly, on somebody else's machine, as an
+# absence. `desktop-file-validate` owns the grammar and is run when present;
+# what this adds is whether the names are the ones this tree produces. See
+# tool/desktop_check.py.
+desktop:
+	@python3 tool/desktop_check.py
 
 style-source:
 	python3 tool/style_gate.py check

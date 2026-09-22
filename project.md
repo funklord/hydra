@@ -25965,6 +25965,55 @@ be a guess wearing a check's clothes.
 pattern and an empty one compares clean against anything -- the vacuous pass
 arriving through the instrument rather than through the data.
 
+## The desktop entry, which nothing read and which names four things
+
+`packaging/hydra.desktop` is a set of claims about this program, in a file the
+program never opens. Every one fails the way the qrc prefix failed: quietly,
+on somebody else's machine, as an absence.
+
+    Exec=hydra %U        wrong, and the menu entry does nothing
+    Icon=hydra           wrong, and the entry has no icon -- which this tree
+                         has already shipped once, by the directory rather
+                         than the name (see install-icons.sh's header)
+    StartupWMClass=      wrong, and the window is a second taskbar entry
+                         rather than the running one
+    MimeType=            a promise about which links the desktop may hand over
+
+`tool/desktop_check.py` in `make style`, and six checks in `test_address`.
+**The split is deliberate**: `desktop-file-validate` owns the grammar, the
+registered categories and the required keys, and is run when it is present --
+reimplementing any of it here would be a second opinion that goes stale, and
+its absence is reported rather than passed over, because a validator that is
+not installed is not a file that validates. What the gate adds is the half no
+external tool can know: whether the names are the ones this tree produces.
+
+**And the browser was not naming the entry at all.** `setDesktopFileName` is
+the only call that tells a desktop which `.desktop` a process belongs to --
+Qt sends it as the Wayland `app_id` -- and `main.cpp` called
+`setApplicationName("Hydra")` and stopped there. Unset, it falls back to the
+application name, so the association is by `Hydra`, and the entry is
+`hydra.desktop`.
+
+**What that costs is not measured and is deliberately not claimed.** This
+machine runs X11 -- `XDG_SESSION_TYPE` and `WAYLAND_DISPLAY` both unset -- so
+the symptom a wrong `app_id` produces cannot be reproduced on it. What *is*
+measured is the gap: the entry exists, the call exists, and nothing was
+making it. The fix is one line and is right regardless of what the symptom
+turns out to be.
+
+**The scheme claims are checked against the browser rather than against a
+list.** `test_address` reads the installed entry, pulls every
+`x-scheme-handler/`, and asks `renders_as_page()` -- the function the two
+backends share -- whether each is one this browser renders. A scheme claimed
+there and refused here is a link the desktop hands over and the browser
+declines, which the person sees as a browser that started and did nothing.
+Sabotaged by adding `x-scheme-handler/ftp`: one check red, naming ftp.
+
+Five sabotages between the two halves, each landing on its own line: the icon
+renamed, an unregistered `Categories` value (caught by the validator, not by
+me), `setDesktopFileName` deleted, a scheme the browser refuses, and the
+gate's own comparison returning early.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

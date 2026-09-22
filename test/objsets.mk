@@ -109,7 +109,8 @@ OBJSETS_SOURCES = \
 	test/live/try_ytdlp.cpp
 
 OBJS_test_address = \
-	$(BUILD_DIR)/app/address_input.o
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o
 
 OBJS_test_annoyance = \
 	$(BUILD_DIR)/app/annoyance_log.o \
