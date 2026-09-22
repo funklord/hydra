@@ -26863,6 +26863,22 @@ carried along as amendments to a list item.
    network or a device; both needed somebody to read output that was being
    produced correctly and thrown away. The sections above have the detail.
 
+   **Wrong five more times on 2026-09-22, and by then the pattern is the
+   entry's real content.** None of these needed a network or a device; each
+   needed somebody to frame it as testable.
+
+       the JavaScript this browser injects   11 blobs, parsed, nothing ever had
+       the tree a first run is seeded with   shipped, never loaded by a test
+       the shipped policy defaults           a typo was a silent no-op
+       the desktop entry's promises          checked against renders_as_page
+       four suites' hand-started servers     written in-process, ~90 lines each
+
+   So the sentence to carry forward is not about hardware. **What is left
+   untested is mostly what nobody has framed as a test yet** -- shipped data,
+   a document's own claims, a file the build writes, a promise made to the
+   desktop -- and the tell is that each of these had an owner who would have
+   said it was covered.
+
    **And it went stale again the same way, which is the entry proving its own
    point.** A second sweep asked a different question -- not "which files has
    nobody tested" but **"which files does no test so much as name"** -- and
