@@ -26220,6 +26220,42 @@ Worth more than the fix. Each was one step from a wrong finding:
 - A `find` for `download-history.json` in `~/.local/share` came back empty and
   read as "nothing was written", when the drivers write to `~/.qttest`.
 
+## The rest of the report-only drivers, read
+
+Thirteen more swept after the five above. **Six of them print a tally and
+pass** -- try_chrome 79, try_phone 205, try_pagetools 30, try_lock 15,
+try_share 13, try_tabswitch 15 -- which settles a count this session got
+wrong three times from the sources. The classification is runtime and
+`sweep.sh` owns it; **the "eight report-only" recorded here was right, and a
+grep over `test/live/*.cpp` said nineteen.** Four more are skipped with a
+stated reason, and `try_settings` skipped itself because it cannot capture
+here.
+
+So two were genuinely report-only, and both were read.
+
+**`try_look` is healthy and says why it can be believed**: *"0 problem(s)
+found by the audit of 23 surface(s), 112 button(s), 68 label(s) and 66
+combo(s)"*. A zero beside its denominators is a result; a zero alone would
+be the vacuous pass this file keeps meeting.
+
+**`try_media` has two numbers four lines apart that count different things**,
+and reading them together says the detector dropped a request:
+
+    detector: 1 item(s) filed under "127.0.0.1"
+       kind=1 hits=2  http://127.0.0.1:42945/stream.m3u8
+    video-shaped URLs seen: 3
+
+There is no defect. `hits` counts **segments** credited to the nearest
+manifest -- `media_detector.h` says so, "segment counts tell us which stream
+is playing" -- and the smells list is every video-shaped request as it went
+past, repeats included. A second fetch of the manifest raises one and not the
+other, correctly.
+
+But the whole point of a report-only driver is that a person reads it, and
+the first person to read this one drew the wrong conclusion in seconds. The
+line says what it is counting now. That is the fix this exercise produces
+when the code is right: **the output was the defect.**
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

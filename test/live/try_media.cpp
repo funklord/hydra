@@ -146,8 +146,17 @@ int main(int argc, char *argv[]) {
 			std::printf("detector found nothing, under any host\n");
 		std::printf("badge for the page the user is on (%s): %d\n",
 		             qPrintable(host), det ? det->count_for(host) : -1);
+		// **Said next to the detector's number, because the two do not count
+		// the same thing and sit four lines apart.** `hits` counts SEGMENTS
+		// credited to a manifest -- that is what answers "which stream is
+		// playing" -- while this is every video-shaped request as it went
+		// past, repeats included. A second fetch of the same manifest raises
+		// this and not that, correctly, and reading the pair without knowing
+		// so says the detector missed one. It did that to the first person
+		// who read this output.
 		const QStringList sm = log.smells();
-		std::printf("video-shaped URLs seen: %d\n", int(sm.size()));
+		std::printf("video-shaped URLs seen: %d (raw requests, repeats "
+		             "included; `hits` above counts segments)\n", int(sm.size()));
 		for (int i = 0; i < sm.size() && i < 25; ++i)
 			std::printf("   %s\n", qPrintable(sm[i]));
 	};
