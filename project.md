@@ -25905,6 +25905,31 @@ now says the premise is checked by the gate, and where -- because the sentence
 as it was is exactly the kind `evidence.md` warns about: true when written,
 unenforced, and read by everyone after as though something were watching it.
 
+## The tree a first run is seeded with, which nothing had parsed
+
+`sample-tree.txt` is what a new profile gets: `main.cpp` copies it in when no
+tree file is there -- from the source directory, from beside the binary, or
+out of `:/sample-tree.txt` on Android, which is the whole reason
+`hydra_seed.qrc` exists. Nothing had ever loaded it.
+
+The loader has the instrument already. `tree_outline::load` takes `unparsed`
+precisely because **a line it does not recognise is skipped in silence and
+then written out of existence by the first save** -- the header says so in as
+many words -- and nothing was asking it that question about this file.
+
+Eight checks in `test_tree`, read from the tree rather than from a copy,
+because a copy of the fixture tests the copy. Two sabotages, one check each:
+a line that is not a node fails *"with every line understood"*, and
+`https://example.com` cut to `example.com` fails *"every address parses with a
+scheme"*.
+
+**The count is a floor rather than a number.** The seed is content and
+somebody may add to it; what must not happen is a first run onto an empty
+tree, which is exactly what a file that parses to nothing looks like from
+outside. What is pinned instead is per-entry and is about the first launch:
+an entry with no id cannot be selected, one with no title is a blank row, and
+one whose url has no scheme opens a tab that goes nowhere.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

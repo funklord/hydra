@@ -14,6 +14,9 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QUrl>
+#include <functional>
 #include <cstdio>
 #include <unistd.h>   // geteuid, for the checks root cannot fail
 
@@ -29,6 +32,28 @@ static node *child(node *parent, int i) {
 	return (parent && i < parent->children.size()) ? parent->children[i] : nullptr;
 }
 
+// The repository root, for the shipped files this suite reads. `HYDRA_SRC_DIR`
+// is `src/`, set by `test/Makefile`; the search after it is for a build that
+// does not set it, and an empty answer is a failure rather than a skip.
+static QString repo_root() {
+#ifdef HYDRA_SRC_DIR
+	const QString up = QFileInfo(QStringLiteral(HYDRA_SRC_DIR)).path();
+	if (QFileInfo(up + "/sample-tree.txt").isFile())
+		return up;
+#endif
+	for (const char *guess : { ".", "..", "../.." })
+		if (QFileInfo(QString::fromLatin1(guess) + "/sample-tree.txt").isFile())
+			return QString::fromLatin1(guess);
+	return QString();
+}
+
+static int count_nodes(node *n) {
+	int total = 0;
+	for (node *c : n->children)
+		total += 1 + count_nodes(c);
+	return total;
+}
+
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication app(argc, argv);
@@ -36,6 +61,76 @@ int main(int argc, char **argv) {
 	const QString dir = QDir::tempPath() + "/hydra-tree-test";
 	QDir().mkpath(dir);
 	const QString path = dir + "/tree.txt";
+
+	section("the tree a first run is seeded with");
+	{
+		// **Shipped data that nothing parsed.** `sample-tree.txt` is what a
+		// new profile gets: `main.cpp` copies it into the profile directory
+		// when no tree file is there, from the source directory, from beside
+		// the binary, or out of `:/sample-tree.txt` on Android. A line in it
+		// that this loader does not recognise is skipped in silence and then
+		// written out of existence by the first save -- which is the promise
+		// `unparsed` exists to keep, and nothing was asking it about this
+		// file.
+		//
+		// Read from the tree rather than rebuilt here, because a copy of the
+		// fixture would test the copy.
+		const QString root_dir = repo_root();
+		check(!root_dir.isEmpty(),
+		      QString("the repository root was found (%1)")
+		        .arg(root_dir.isEmpty() ? QStringLiteral("(none)") : root_dir));
+
+		int flattened = 0, unparsed = 0;
+		node *seed = root_dir.isEmpty()
+		  ? nullptr
+		  : tree_outline::load(root_dir + "/sample-tree.txt", &flattened,
+		                        &unparsed);
+		check(seed != nullptr, "the shipped sample tree loads at all");
+		check(unparsed == 0,
+		      QString("with every line understood (%1 skipped)").arg(unparsed));
+		check(flattened == 0,
+		      QString("and nothing nested deeper than this can hold (%1 moved)")
+		        .arg(flattened));
+
+		if (seed) {
+			const int n = count_nodes(seed);
+			// A floor rather than a number: the seed is content and somebody
+			// may add to it. What must not happen is a first run onto an
+			// empty tree, which is what a file that parses to nothing looks
+			// like from outside.
+			check(n >= 5, QString("and it is not empty (%1 node(s))").arg(n));
+
+			// Every field a person will see. A seed entry with no id cannot
+			// be selected, and one whose url will not parse opens a tab that
+			// goes nowhere -- both on somebody's very first launch, which is
+			// the worst moment for either.
+			int no_id = 0, bad_url = 0, no_title = 0;
+			std::function<void(node *)> walk = [&](node *p) {
+				for (node *c : p->children) {
+					if (c->id.isEmpty())
+						++no_id;
+					if (c->title.trimmed().isEmpty())
+						++no_title;
+					if (!c->url.isEmpty()) {
+						const QUrl u(c->url);
+						if (!u.isValid() || u.scheme().isEmpty())
+							++bad_url;
+					}
+					walk(c);
+				}
+			};
+			walk(seed);
+			check(no_id == 0, QString("every entry has an id (%1 without)")
+			                    .arg(no_id));
+			check(no_title == 0,
+			      QString("and something to show in the row (%1 without)")
+			        .arg(no_title));
+			check(bad_url == 0,
+			      QString("and every address parses with a scheme (%1 that "
+			               "do not)").arg(bad_url));
+			delete seed;
+		}
+	}
 
 	section("a tree survives being written and read");
 	{
