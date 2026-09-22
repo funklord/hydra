@@ -26103,6 +26103,63 @@ named `seam`, so the recipe ran. Both are in `.PHONY` now, with `resources`,
 `manifest`, `deps` and `desktop`. The tell was the one that keeps working:
 **read the output and count what spoke**, rather than reading the exit code.
 
+## Torrent resume, and two fixtures that proved nothing before one did
+
+Resume data is what stops a finished torrent re-checking every piece at the
+next launch. It is written on a `save_resume_data_alert` and read back in
+`add_params`, whose comment states the rule the whole thing turns on -- *"a
+corrupt or stale file must not silently redirect the download"*. Neither half
+was tested.
+
+**The write discarded its status.** `if (f.open(...)) f.write(...)`: no
+count, no flush, no report. QFile buffers, so the count answers nothing and
+the flush is what can fail; without the file the next launch re-checks every
+piece of every torrent, which on a finished film is minutes of disk for a file
+that was complete and looks from outside like the browser having forgotten it.
+It checks all three now and warns **once per info-hash**, because that alert
+arrives on every periodic save and again at completion.
+
+### Three fixtures, and only the third was a test
+
+This is the part worth keeping.
+
+**First: a completed torrent, restarted with no seeder, is still complete.**
+Discarded before it was written. The files are on disk and libtorrent
+re-checks them, so it passes whether resume was used or ignored -- a check
+that cannot fail the way the thing it checks for fails.
+
+**Second: 23 bytes of prose in the resume file.** Written, run, green. Then
+sabotaged by deleting the guard entirely -- and **all eight checks stayed
+green**. `read_resume_data` returns empty params for garbage, and the
+`if (!resumed.ti && atp->ti)` line *inside* the guarded branch hands the real
+`torrent_info` straight back, so the download works with no guard at all. A
+check whose pass includes the failure, caught only by making the failure.
+
+**Third: a resume file that parses and belongs to a different torrent** --
+built in the test from a second `make_torrent` and written under the first
+one's hash name. That is what the guard's sentence is about, and removing the
+guard now fails two checks with `state=failed, detail=checking files`.
+
+**And a fixture fault that looked exactly like a finding.** The second
+download never got a peer: sixty seconds of `connect_peer` every 250 ms and
+`0 peer(s)` throughout, against a damaged resume file, which reads as *"a
+damaged resume file stops the download"* -- a defect, filed and wrong. The
+control was to remove the resume file instead of damaging it: it failed
+identically, which says the fixture and not the guard. Reusing `fx.seeder`
+after its first transfer completed is what does not work; a second seeder
+from the same `torrent_info` -- same info-hash, so the resume file's name is
+unchanged -- works first time.
+
+**What is not covered, and why.** The write-failure warning has no fixture.
+Forcing it needs the state directory to become unwritable between the
+download starting and the alert arriving, and the alert's timing is the
+session's rather than the test's. The warning costs a re-check rather than
+data, which is why this is recorded instead of built.
+
+`test_torrent` is 46 checks now, `test_watch` 20. Both are `HELD_BACK` rather
+than in `make test`, by the decision above, and `make test-one T=test_torrent`
+runs one.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

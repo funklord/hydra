@@ -24,6 +24,7 @@
 #include <libtorrent/magnet_uri.hpp>
 #include <libtorrent/session.hpp>
 #include <libtorrent/session_params.hpp>
+#include <libtorrent/write_resume_data.hpp>
 #include <libtorrent/settings_pack.hpp>
 #include <libtorrent/torrent_flags.hpp>
 #include <libtorrent/torrent_info.hpp>
@@ -97,6 +98,17 @@ static made_torrent make_torrent(const QString &root, const QString &name,
 	mt.ti = std::make_shared<lt::torrent_info>(buf, lt::from_span);
 	mt.magnet = QString::fromStdString(lt::make_magnet_uri(*mt.ti));
 	return mt;
+}
+
+// The same spelling `torrent_download_source::hash_string` uses -- best hash,
+// hex -- because the comparison below is between two renderings of a hash and
+// is worth nothing if they are rendered differently. That method is private,
+// so this is the one place in the tree where the two must be kept in step by
+// hand; the resume file's own name is the check that they are, since the
+// source writes it and this reads it.
+static QString hash_string_of(const std::shared_ptr<lt::torrent_info> &ti) {
+	const lt::sha1_hash h = ti->info_hashes().get_best();
+	return QByteArray(h.data(), int(h.size())).toHex();
 }
 
 // A seeder session that already has the data, listening on a known port.
@@ -368,6 +380,157 @@ static void test_consent_with_real_source() {
 	      "and the row is marked for the UI");
 }
 
+// Resume data: written on completion, read back on the next launch, and
+// refused when it is damaged. `add_params` says why the last one matters --
+// "a corrupt or stale file must not silently redirect the download" -- and
+// nothing was asking.
+//
+// **What is asserted is the precondition the code checks, not a timing
+// difference.** A completed torrent restarted with no seeder finishes either
+// way, because the files are on disk and libtorrent re-checks them; that
+// makes "it completes" useless for telling resume-used from
+// resume-ignored. What discriminates is the file itself -- does it exist,
+// does it parse, does it name this torrent -- which is exactly the three
+// things `add_params` tests before using it.
+static void test_resume_data() {
+	section("resume data is written, and a damaged one is refused");
+
+	const int our_port = 6903, seed_port = 6902;
+	fixture fx = build_fixture("resume", {"movie.bin"}, seed_port, 256 * 1024);
+	const QString state = QDir(g_tmp).filePath("resume-state");
+
+	QString hash;
+	{
+		download_manager m;
+		auto *tor = new torrent_download_source;
+		tor->set_listen_interfaces("127.0.0.1:" + QString::number(our_port));
+		tor->set_state_directory(state);
+		tor->set_seed_ratio(0.0);
+		m.add_source(tor);
+		m.set_directory(fx.dest);
+		m.set_consent("torrent", true);
+
+		QString err;
+		const int id = m.enqueue(QUrl::fromLocalFile(fx.mt.torrent_path),
+		                          "node-r", &err);
+		check(id != 0, QString("the torrent is accepted (%1)").arg(err));
+		const bool ok = pump_until([&] {
+			const download_job *j = job_by_id(m, id);
+			return j && j->terminal();
+		}, fx, our_port, 60000);
+		const download_job *j = job_by_id(m, id);
+		check(ok && j && j->status == download_state::done,
+		      "and completes, which is when resume data is last written");
+
+		// The alert that writes the file is drained by the poll, so give it a
+		// turn: the save is asked for on completion and answered later.
+		tor->save_all_resume_data();
+		for (int i = 0; i < 12; ++i)
+			spin(150);
+	}
+
+	const QStringList left = QDir(state).entryList({ "*.resume" }, QDir::Files);
+	check(left.size() == 1,
+	      QString("one resume file was written (%1)")
+	        .arg(left.isEmpty() ? QStringLiteral("none") : left.join(", ")));
+	QString rp;
+	if (!left.isEmpty()) {
+		rp = QDir(state).filePath(left.first());
+		hash = QFileInfo(left.first()).completeBaseName();
+		check(QFileInfo(rp).size() > 0,
+		      QString("and it is not empty (%1 bytes)")
+		        .arg(QFileInfo(rp).size()));
+		// The name is the info-hash, which is how `add_params` finds it at
+		// all: a file under any other name is a file nothing will ever read.
+		check(hash.size() == 40 || hash.size() == 64,
+		      QString("named by the info-hash (%1)").arg(hash));
+	}
+
+	// **A resume file that parses and belongs to a different torrent**, which
+	// is what `add_params`' guard is actually for: "a corrupt or stale file
+	// must not silently redirect the download".
+	//
+	// The first fixture here was 23 bytes of prose, and it was a check whose
+	// pass included the failure: `read_resume_data` returns empty params for
+	// garbage, and the `if (!resumed.ti && atp->ti)` line inside the branch
+	// hands the real `torrent_info` straight back, so the download works with
+	// the guard **deleted**. Sabotaged exactly that way and all eight checks
+	// stayed green. What discriminates is a file that parses, because then
+	// the params it carries are real and are somebody else's.
+	if (!rp.isEmpty()) {
+		const QString other_root = QDir(g_tmp).filePath("resume-other-src");
+		QDir().mkpath(QDir(other_root).filePath("other-payload"));
+		{
+			QFile o(QDir(other_root).filePath("other-payload/other.bin"));
+			o.open(QIODevice::WriteOnly);
+			o.write(QByteArray(64 * 1024, 'o'));
+		}
+		const made_torrent other =
+		  make_torrent(other_root, "other-payload", { "other.bin" },
+		                QDir(g_tmp).filePath("resume-other.torrent"));
+		check(other.ti && hash_string_of(other.ti) != hash,
+		      "a second torrent exists, with a different info-hash");
+
+		lt::add_torrent_params stale;
+		stale.info_hashes = other.ti->info_hashes();
+		stale.save_path   = QDir(g_tmp).filePath("nowhere").toStdString();
+		const std::vector<char> blob = lt::write_resume_data_buf(stale);
+		QFile f(rp);
+		f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+		f.write(blob.data(), qint64(blob.size()));
+		f.close();
+		check(QFileInfo(rp).size() > 0,
+		      "and its resume data is written under this torrent's name");
+
+		const QString dest2 = QDir(g_tmp).filePath("resume-again");
+		QDir().mkpath(dest2);
+
+		// **A second seeder rather than the first one again**, from the same
+		// `torrent_info` so the info-hash -- and therefore the resume file's
+		// name -- is unchanged. Reusing `fx.seeder` after its first transfer
+		// completed never produced a peer: sixty seconds of `connect_peer`
+		// every 250 ms and `0 peer(s)` throughout. That was established with
+		// a control rather than guessed at, by removing the resume file
+		// instead of damaging it and watching the run fail identically --
+		// which is what says the fixture was at fault and not the guard
+		// under test.
+		fixture fx2;
+		fx2.mt        = fx.mt;
+		fx2.data_root = fx.data_root;
+		fx2.dest      = dest2;
+		fx2.seeder    = make_seeder(seed_port + 10, fx.data_root, fx.mt.ti,
+		                             &fx2.seed_handle);
+
+		download_manager m2;
+		auto *tor2 = new torrent_download_source;
+		tor2->set_listen_interfaces("127.0.0.1:" +
+		                             QString::number(our_port + 10));
+		tor2->set_state_directory(state);
+		tor2->set_seed_ratio(0.0);
+		m2.add_source(tor2);
+		m2.set_directory(dest2);
+		m2.set_consent("torrent", true);
+
+		QString err;
+		const int id2 = m2.enqueue(QUrl::fromLocalFile(fx.mt.torrent_path),
+		                            "node-r2", &err);
+		check(id2 != 0, QString("it is accepted again (%1)").arg(err));
+		const bool ok2 = pump_until([&] {
+			const download_job *j = job_by_id(m2, id2);
+			return j && j->terminal();
+		}, fx2, our_port + 10, 60000);
+		const download_job *j2 = job_by_id(m2, id2);
+		check(ok2 && j2 && j2->status == download_state::done,
+		      QString("a resume file naming another torrent is refused, not "
+		               "followed (state=%1, detail=%2)")
+		        .arg(j2 ? int(j2->status) : -1)
+		        .arg(j2 ? j2->detail : QStringLiteral("(no job)")));
+		check(j2 && j2->received == 256 * 1024,
+		      QString("with every byte fetched afresh (%1)")
+		        .arg(j2 ? j2->received : -1));
+	}
+}
+
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication app(argc, argv);
@@ -383,6 +546,7 @@ int main(int argc, char **argv) {
 	test_single_file_download();
 	test_multi_file_and_seeding();
 	test_magnet_and_errors();
+	test_resume_data();
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

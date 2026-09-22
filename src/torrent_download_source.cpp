@@ -54,6 +54,10 @@ struct torrent_download_source::impl {
 	QSet<int>                    streaming;   // jobs asked to prioritise playback
 	QHash<int, lt::file_index_t> primary_file;// which file Watch is aiming at
 	QList<int>                   pending;     // async_add_torrent in flight, FIFO
+	// Info-hashes whose resume file could not be written. Said once each: the
+	// alert arrives on every save and on completion, so a per-alert warning
+	// would fill a log with one sentence.
+	QSet<QString>                resume_unwritten;
 };
 
 bool torrent_download_source::available() { return true; }
@@ -772,10 +776,32 @@ void torrent_download_source::poll_alerts() {
 		}
 
 		if (auto *saved = lt::alert_cast<lt::save_resume_data_alert>(a)) {
+			// **What a lost resume file costs, which is why it is said.**
+			// `add_params` reads this back and, when it is there and matches,
+			// hands libtorrent what is already on disk. Without it the next
+			// launch re-checks every piece of every torrent -- which on a
+			// finished film is minutes of disk for a file that was complete,
+			// and looks from outside like the browser having forgotten it.
+			//
+			// QFile buffers, so the write count alone answers nothing and the
+			// flush is what can fail. Once per info-hash: this alert arrives
+			// on every periodic save and again at completion.
 			const std::vector<char> buf = lt::write_resume_data_buf(saved->params);
-			QFile f(resume_path(hash_string(saved->params.info_hashes)));
-			if (f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-				f.write(buf.data(), qint64(buf.size()));
+			const QString hash = hash_string(saved->params.info_hashes);
+			const QString path = resume_path(hash);
+			QFile f(path);
+			const bool wrote =
+			  f.open(QIODevice::WriteOnly | QIODevice::Truncate) &&
+			  f.write(buf.data(), qint64(buf.size())) == qint64(buf.size()) &&
+			  f.flush();
+			if (!wrote && !m_d->resume_unwritten.contains(hash)) {
+				m_d->resume_unwritten.insert(hash);
+				qWarning("torrent: could not write %s (%s); this torrent will "
+				          "re-check every piece after a restart",
+				          qUtf8Printable(path), qUtf8Printable(f.errorString()));
+			} else if (wrote) {
+				m_d->resume_unwritten.remove(hash);
+			}
 			continue;
 		}
 
