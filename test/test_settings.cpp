@@ -622,6 +622,105 @@ int main(int argc, char **argv) {
 	// stated contract is already broken by it, with the reproduction ready for
 	// whoever settles it. When it is settled, the second half below becomes
 	// `ask` and this comment goes.
+	section("the policy file this project ships");
+	{
+		// **Shipped defaults that nothing read.** `policy.ini` is the file a
+		// profile starts from, and the loader skips anything it does not
+		// recognise **in silence**: a key whose name is not a feature and a
+		// value that is not a word both fall through
+		// `feature_from_name`/`setting_from_word` and leave the compiled
+		// default standing. A typo in it is therefore not a broken file, it
+		// is a setting that quietly is not the one written down.
+		//
+		// Read from the tree rather than rebuilt here, because a copy of the
+		// fixture tests the copy.
+		QString ini;
+		for (const char *guess : { "policy.ini", "../policy.ini",
+		                            "../../policy.ini" }) {
+			QFile f(QString::fromLatin1(guess));
+			if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+				ini = QString::fromUtf8(f.readAll());
+				break;
+			}
+		}
+		check(!ini.isEmpty(), "the shipped policy file was found and read");
+
+		QStringList keys;
+		QStringList unknown_key, unknown_value;
+		bool in_defaults = false;
+		for (const QString &raw : ini.split('\n')) {
+			const QString line = raw.trimmed();
+			if (line.startsWith('[')) {
+				in_defaults = line == QLatin1String("[defaults]");
+				continue;
+			}
+			if (!in_defaults || line.isEmpty() || line.startsWith('#') ||
+			     !line.contains('='))
+				continue;
+			const QString key = line.section('=', 0, 0).trimmed();
+			const QString val = line.section('=', 1).trimmed();
+			keys << key;
+			if (policy::feature_from_name(key) == policy::feature::count)
+				unknown_key << key;
+			if (policy::setting_from_word(val) == policy::setting::unset)
+				unknown_value << key + "=" + val;
+		}
+
+		// A floor, because the list is parsed: a changed group name or a
+		// changed separator leaves it empty and every check below passes
+		// having looked at nothing.
+		check(keys.size() >= 10,
+		      QString("[defaults] carries %1 setting(s)").arg(keys.size()));
+		check(unknown_key.isEmpty(),
+		      QString("every key names a feature this build has (%1)")
+		        .arg(unknown_key.isEmpty() ? QStringLiteral("none unknown")
+		                                    : unknown_key.join(", ")));
+		check(unknown_value.isEmpty(),
+		      QString("and every value is a word the loader understands (%1)")
+		        .arg(unknown_value.isEmpty() ? QStringLiteral("none unknown")
+		                                      : unknown_value.join(", ")));
+
+		// **The partition, not the cell.** The file is deliberately partial:
+		// it pins some features and leaves the rest to the compiled default,
+		// which is what lets a default move for somebody who has never saved
+		// a policy. Asserting that it covers everything would be choosing
+		// that policy rather than testing it -- see *The saved policy
+		// overrules a capability* in project.md, which is the copyright
+		// holder's open question.
+		//
+		// What is asserted is that the division is known. Every feature is
+		// either in the file or in this list, so a twenty-first feature makes
+		// somebody decide which side it belongs on rather than falling
+		// through unnoticed.
+		const QStringList deliberately_absent = {
+			"autoDetectMedia", "clipboardRead", "desktopSite",
+			"pointerLock", "screenShare",
+		};
+		QStringList unaccounted;
+		for (int i = 0; i < policy::feature_count(); ++i) {
+			const QString name =
+			  QString::fromLatin1(policy::feature_name(policy::feature(i)));
+			if (!keys.contains(name) && !deliberately_absent.contains(name))
+				unaccounted << name;
+		}
+		check(unaccounted.isEmpty(),
+		      QString("every feature is either shipped or listed as not (%1)")
+		        .arg(unaccounted.isEmpty() ? QStringLiteral("none unaccounted")
+		                                    : unaccounted.join(", ")));
+		// And the other direction, so the list cannot rot into naming
+		// features that no longer exist or that the file has since gained.
+		QStringList stale;
+		for (const QString &name : deliberately_absent)
+			if (keys.contains(name) ||
+			     policy::feature_from_name(name) == policy::feature::count)
+				stale << name;
+		check(stale.isEmpty(),
+		      QString("and the not-shipped list names only real, absent "
+		               "features (%1)")
+		        .arg(stale.isEmpty() ? QStringLiteral("none stale")
+		                              : stale.join(", ")));
+	}
+
 	section("a saved default overrules the capability that raised it");
 	{
 		const QString dir = QDir::tempPath() + "/hydra-policy-pinned";

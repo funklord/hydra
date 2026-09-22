@@ -800,7 +800,13 @@ help:
 # shipped a rename that broke seven of them. Costs milliseconds and needs no
 # Android tooling, so it runs with the other gates rather than only when
 # somebody builds an APK.
-style: style-source style-docs jni seam resources manifest deps desktop
+# `version-check` is here as well as in `deb`, which is where it used to live
+# alone. A version that has drifted between `VERSION`, `debian/changelog` and
+# what the binary prints is wrong from the moment it drifts, and finding out
+# at packaging time is finding out after every commit in between. It says what
+# it could not check rather than failing when the binary is not built.
+style: style-source style-docs jni seam resources manifest deps desktop \
+        version-check
 
 jni:
 	@python3 tool/jni_check.py

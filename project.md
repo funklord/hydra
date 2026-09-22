@@ -26014,6 +26014,54 @@ renamed, an unregistered `Categories` value (caught by the validator, not by
 me), `setDesktopFileName` deleted, a scheme the browser refuses, and the
 gate's own comparison returning early.
 
+## The shipped policy defaults, and asserting the partition rather than the cell
+
+`policy.ini` is what a profile starts from, and the loader skips anything it
+does not recognise **in silence**: a key that is not a feature name and a
+value that is not a word both fall through `feature_from_name` and
+`setting_from_word` and leave the compiled default standing. A typo in that
+file is not a broken file -- it is a setting that quietly is not the one
+written down.
+
+Six checks in `test_settings`, reading the shipped file. Three sabotages: a
+key spelled `javscript` (which fires two checks, because it is both an
+unrecognised key and a feature that has gone missing -- the two questions are
+separate and both are asked), a value `maybe`, and a feature deleted from the
+file.
+
+**The interesting half is what is deliberately not asserted.** The file covers
+15 of this build's 20 features. That is not an oversight to close: leaving a
+feature out of the shipped file is what lets its compiled default move for
+somebody who has never saved a policy, and asserting completeness would be
+*choosing* that policy rather than testing it -- see *The saved policy
+overrules a capability* above, which is the copyright holder's open question
+and is exactly about this.
+
+So the check is `evidence.md`'s **assert the partition, not the cell**. Every
+feature is either in the file or in a named list of five that are not, and a
+twenty-first feature makes somebody decide which side it is on rather than
+falling through unnoticed. The list is checked in both directions, so it
+cannot rot into naming features that no longer exist or that the file has
+since gained.
+
+### `version-check` ran only from `deb`
+
+A version drifted between `VERSION`, `debian/changelog` and what the binary
+prints is wrong from the moment it drifts, and the only thing asking was the
+packaging target -- so the answer arrived after every commit in between. It
+is in `make style` now as well. It already degrades honestly, saying that the
+binary was not asked when it is not built, so it costs nothing on a clean
+tree.
+
+### Java, considered and not attempted
+
+`javac` is installed here, so syntax-checking the five Android sources looked
+like the same trick `test_scripts` plays on the JavaScript. It is not:
+`javac` resolves imports, the sources import `android.*`, and without the SDK
+jar it fails on the imports rather than on the syntax -- a check that reports
+the same thing for a good file and a broken one. Recorded so the idea is not
+had twice. `tool/jni_check.py` is what covers those files today, by parsing.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
