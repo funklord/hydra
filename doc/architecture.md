@@ -1,6 +1,6 @@
 # Browser Overlord — Architecture Design Document
 
-**Status:** Design (pre-implementation)
+**Status:** Implemented on the desktop, and building for Android. This document is the design; what is built and what is not is stated per section below, and `project.md` carries the running record.
 **Target platforms:** Linux / X11 (first-class, built first); Android (first-class, deferred until the desktop version is complete) — see §19
 **UI toolkit:** Qt 6, Qt Widgets (no QML / Qt Quick) on both platforms
 **Web engine:** Qt WebEngine (`QWebEngineView`, Chromium/Blink)
@@ -346,7 +346,7 @@ A single `QWebEngineUrlRequestInterceptor` on the profile is the sensor behind t
 
 ## 11. Media-download detector and download manager
 
-**Status: done**, minus the local-proxy tier. `media_detector` rides the interceptor's observer seam and classifies by URL shape; `player_launcher` probes PATH and routes by capability; `download_manager` queues direct files with Range resume. Segment assembly, the ffmpeg remux, and the proxy that would inject request context remain the next increment.
+**Status: done**, minus the local-proxy tier. `media_detector` rides the interceptor's observer seam and classifies by URL shape; `player_launcher` probes PATH and routes by capability; `download_manager` queues direct files with Range resume. Segment assembly, the ffmpeg remux and the context-injecting proxy are built too, which this line used to say were the next increment: `hls_assembler` and `stream_assembly` do the assembly, `media_remux` the ffmpeg step, and `local_proxy` replays the page's Referer, User-Agent and cookies to the CDN -- which `test_headers` checks by asking a server what it received.
 
 **The AI backend is a user setting** (§9.1) rather than an automatic resolution repeated at each call site: Automatic (local-first), Local only, or Claude. *Local only* is the one worth naming — it makes §1's "data stays on the machine" enforceable instead of a default that lapses whenever the local model is not running, so under it the AI features become unavailable rather than silently switching to a service. Endpoint and model names persist; the API key deliberately does not, because the settings file is plain INI and a credential does not belong in one.
 
@@ -466,7 +466,7 @@ That is a deliberately higher bar than "we support torrents", and it is what dec
 
 ### 11.5 Site extractors: generated scripts, not engine code
 
-**Status: designed, not implemented.** §11.1's URL-shaped detection was measured against a real site and does not work there (see `project.md`): the manifest arrives as `cf-master.<digits>.txt?k=…`, and nothing is requested at all until a play gesture. That failure is not a bug to patch — it is the wrong layer trying to solve the problem.
+**Status: implemented.** `site_extractor` is the sandbox and the gate, `extractor_signals` the per-page request log it reads, and `extractor_dialog` the review UI; the loop is reachable as Tools → Learn This Site. What motivated it is unchanged and worth keeping: §11.1's URL-shaped detection was measured against a real site and does not work there (see `project.md`) — the manifest arrives as `cf-master.<digits>.txt?k=…`, and nothing is requested at all until a play gesture. That failure was not a bug to patch; it was the wrong layer trying to solve the problem.
 
 **Why this cannot live in C++.** Knowing how one site hides its stream is knowledge with a half-life of weeks. Encoding it in the engine means a rebuild and a release every time a site changes, for every site, forever — and it means the set of sites that work is fixed at ship time. The filter list (§12) is already data for exactly this reason. A site extractor is the same kind of thing and belongs in the same place: **produced, reviewed, stored and updated as data.**
 
@@ -564,8 +564,9 @@ Two details of the rendering are load-bearing rather than cosmetic. A refused ca
 
 ### 11.6 Capture at the sink: a Media Source tap
 
-**Status: proven on a real site, not implemented.** §11.5 proposes generating a
-parser per site. This section is the mechanism that makes extraction optional
+**Status: implemented.** `mse_tap` injects the hook and the subframe relay,
+and `media_dialog` and `main_window` consume what it reports. §11.5 proposes
+generating a parser per site. This section is the mechanism that makes extraction optional
 rather than mandatory, and the measurement that argues for it.
 
 **Whatever the transport, the page ends up handing bytes to a `<video>`.** For
@@ -631,7 +632,7 @@ the right answer was and can check a proposal against it.
 
 The AI diff/accept pipeline (Spine 3) pointed at the filter list instead of the tree.
 
-**Status: passive half done.** `filter_signals` collects the passive signals below, `filter_list::evaluate` implements step 4's static rejection plus dry-run simulation, and `filter_dialog` is the step-5 accept UI writing into a separate AI-authored list. The user-driven element picker needs the script-injection and QWebChannel plumbing that arrives with the password manager (§13.2), so it is deferred to that step.
+**Status: both halves built.** `filter_signals` collects the passive signals below, `filter_list::evaluate` implements step 4's static rejection plus dry-run simulation, and `filter_dialog` is the step-5 accept UI writing into a separate AI-authored list. The user-driven element picker was deferred here until the script-injection and QWebChannel plumbing arrived with the password manager (§13.2); that plumbing is built, and so is the picker -- `element_picker` with `picker_script`, wired from `main_window`.
 
 **1. Signal collection.** User-driven: an element-picker ("zap this") captures a leaked ad's selector, attributes, DOM snippet, and associated requests. Passive: the interceptor logs requests that slipped through but match heuristics (third-party, ad-serving shapes, high-frequency beacons) and flags likely anti-adblock overlays (a full-page element appearing right after load).
 

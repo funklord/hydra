@@ -26453,6 +26453,48 @@ report a clean tree.
 Sabotaged both ways: replacing `is_allowed(F::autoplay, host)` with `true`
 names autoplay, and narrowing the pattern trips the control.
 
+## The design document said five built things were not built
+
+`working-practice.md` makes `doc/architecture.md` authoritative and asks that
+it gain what the implementation learns. Its **`Status:` lines are
+present-tense countable claims about the tree**, which `evidence.md` names as
+the shape that rots -- and five of eleven had.
+
+    line   3   "Status: Design (pre-implementation)"
+    sec 11.2   "segment assembly, the ffmpeg remux, and the proxy ...
+                remain the next increment"
+    sec 11.5   "designed, not implemented"
+    sec 11.6   "proven on a real site, not implemented"
+    sec 12     "the element picker ... is deferred to that step"
+
+Every one is answered by one command. `site_extractor` is 642 lines and
+reachable as Tools -> Learn This Site; `mse_tap` is injected and consumed by
+`media_dialog` and `main_window`; `hls_assembler`, `stream_assembly`,
+`media_remux` and `local_proxy` are all built, and `test_headers` checks the
+last of them by asking a server what it received; `element_picker` exists
+with `picker_script` and is wired from `main_window`.
+
+**The first line is the one that costs most.** A reader opening the
+architecture document was told the project is pre-implementation, above a
+tree with 41 suites and a working browser under it.
+
+**This is not the case `working-practice.md` says to flag rather than
+resolve.** That rule is for a document and a code base disagreeing about
+*intent*, where which side is wrong is a real question and resolving it
+quickly spends the discrepancy without cashing it. A status line is a fact
+about progress, the code is the evidence, and there is no third answer
+hiding in the gap. What the rule does cover -- design prose -- is untouched.
+
+Each replacement names the files, so the next reader checks it the way this
+one was checked rather than taking it. `§11.5`'s motivating measurement is
+kept and moved into the past tense: the URL-shaped detection really did fail
+on a real site, and that is why the section exists.
+
+**And the cost of the class, stated once.** A gap claim that outlives its gap
+sends the next reader at work already done, and it is the one kind of
+sentence whose falsifier is a commit nobody connects to it -- nothing in the
+ordinary course of work brings the two together.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
