@@ -26543,6 +26543,49 @@ declaration are two uses and the threshold called that uncalled -- but the
 control was the thing being asserted a commit earlier, and it failed. A
 broken instrument pointed at a published claim is still worth running.
 
+## Auditing my own gate for the fault I had just published
+
+`policy_check` counts a feature as enforced if its name appears outside the
+policy and UI layer. That is a name-based proxy, and the commit before it was
+about a name-based proxy under-reporting -- so the gate deserved the same
+question pointed at itself: does a feature get credited for being *mentioned*
+where it is not acted on?
+
+**It does not.** Spot-checked, and every one is a real consultation:
+
+    screen_share    m_decider(origin, feature::screen_share, ...)
+    pointer_lock    Qt's MouseLock mapped to the feature
+    clipboard_read  consulted in the view
+    media_detect    is_allowed(...) in media_detector
+    cookie_notices  is_allowed(...) in consent_blocker
+    autoplay        read into view_settings, then PlaybackRequiresUserGesture
+
+### And the audit's first run said all six were unenforced
+
+    grep -rnE '(F|feature)::screen_share' src/*.cpp
+      | grep -vE 'policy|settings_dialog|site_policy'
+
+Six matches in, **zero out**. The second `grep -v` was meant to drop files,
+and it filters **lines** -- and every one of those lines contains
+`policy::feature::`, which is the word the filter was excluding. The
+exclusion ate the matches it existed to keep.
+
+The first reading of that was that this machine's `grep` is `ugrep`, where
+`\|` had already produced a spurious empty result earlier in the session.
+**That was wrong and nearly written down**: the same pattern returns 1 when
+run on its own. It is not the tool, it is filtering a stream whose lines
+carry both the path and the code.
+
+So the remedy is to filter the field rather than the line --
+`awk -F: '$1 !~ /policy/'` keeps one match where the pipeline kept none --
+and the general form is this file's own: **ask the object you mean.** A path
+filter belongs on the path, and `grep -rn` output is not a list of paths.
+
+That is the second instrument error in one investigation, and the second
+explanation of one that was itself wrong. Both were caught by re-running the
+smallest piece on its own, which costs a line and is the only thing that
+separates a broken pipeline from a finding.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
