@@ -26495,6 +26495,36 @@ sends the next reader at work already done, and it is the one kind of
 sentence whose falsifier is a commit nobody connects to it -- nothing in the
 ordinary course of work brings the two together.
 
+### The sweep finished, including the lists pointed the other way
+
+Correcting five of eleven and stopping would have left the document
+half-swept, which reads as swept. The other six were checked too, and so were
+the **"not built" lists inside them** -- the same rot with its sign reversed,
+where something listed as absent has since been written.
+
+    sec  9   undo snapshot, web-session backend, duplicate-URL merges
+             -- all three still absent. `duplicate_url` is detected and
+             shown greyed, and `tree_diff` says "advisory only" in as many
+             words, so the *acting* really is unbuilt.
+    sec 11.4 torrents implemented on desktop -- 46 checks, run today
+    sec 11.5.1 fetch half complete, DOM designed only -- unchanged
+    sec 13   **one of three was wrong**
+    sec 19   the seam -- `seam-check` passes over 166 files
+    sec 19.x the Android contingency, which is intent and not a status
+
+**§13 listed `generate-password` as not built.** It is built and wired:
+`keepass_bridge::generate_password`, called from `autofill_controller`.
+`set-login` is the interesting middle -- `keepass_protocol` has
+`set_login_request` and `parse_set_login`, and no bridge method calls them,
+so the wire format exists and nothing can send it. The line says which half
+now, because "not built" and "built with no caller" send a reader to
+different files.
+
+That was found by reading the hits rather than counting them: `set-login` and
+`generate-password` both *appear* in the bridge and the protocol, and one of
+those appearances is an implementation and the other is a comment saying it
+is missing.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
