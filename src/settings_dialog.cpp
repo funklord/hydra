@@ -1246,6 +1246,14 @@ void settings_dialog::build_privacy_page(QWidget *page) {
 				combo->setToolTip("Only meaningful on a phone. This build "
 				                   "already asks as a desktop.");
 			}
+#else
+			// The same shape for the feature the phone cannot do; see the
+			// shield, which carries the measurement.
+			if (f == policy::feature::screen_share) {
+				combo->setEnabled(false);
+				combo->setToolTip("Not available on this platform. Android's "
+				                   "WebView has no screen sharing to allow.");
+			}
 #endif
 			combo->setObjectName(QString("feature_%1").arg(policy::feature_name(f)));
 			m_feature_combos[int(f)] = combo;

@@ -280,6 +280,19 @@ public:
 	// between; storing it keeps the shell's wiring identical on both platforms
 	// instead of making `main_window` know which backend it has. If the platform
 	// grows the capability, the seam is already here.
+	// **Taken and never consulted, and that is the platform rather than an
+	// oversight.** This answers "which screen or window may this page share
+	// now", and Android's WebView exposes no `getDisplayMedia`: its
+	// `onPermissionRequest` grants `RESOURCE_VIDEO_CAPTURE` and
+	// `RESOURCE_AUDIO_CAPTURE` and nothing else, and there is no
+	// MediaProjection plumbing here to add a third. So there is no screen to
+	// pick and nothing to ask about.
+	//
+	// Kept rather than left out so the seam is the same on both backends --
+	// a shell that must ask which one it is talking to is the seam failing --
+	// and the absence is said here, on the shield and in Settings, where the
+	// feature is greyed with the reason on it. If screen capture is ever
+	// wired on this platform, this is the line that has to start reading it.
 	void set_capture_chooser(capture_chooser fn) override { m_capture_chooser = std::move(fn); }
 	// The policy peek, readable by the script builder.
 	//

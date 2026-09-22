@@ -26338,6 +26338,47 @@ the first person to read this one drew the wrong conclusion in seconds. The
 line says what it is counting now. That is the fix this exercise produces
 when the code is right: **the output was the defect.**
 
+## A callback the phone takes and never reads
+
+Derived from the seam rather than from a symptom: both backends implement all
+fifteen of `web_view_backend`'s pure virtuals, and none of the Android
+implementations is an empty body -- so nothing is missing by that measure.
+What the measure misses is a method that is implemented, compiles, looks
+wired, and whose value nothing consults. `evidence.md` has the shape: **an
+interface is only as wired as its least-used method**, and this tree has
+already paid for it once, with a keyring `erase()` that had no caller
+anywhere.
+
+`android_view::set_capture_chooser` stores what the seam hands it.
+`m_capture_chooser` appears **zero times** in `android_view.cpp`.
+
+**And that is the platform, not an oversight.** The chooser answers "which
+screen or window may this page share now", and Android's WebView exposes no
+`getDisplayMedia`: `HydraWebView.onPermissionRequest` grants
+`RESOURCE_VIDEO_CAPTURE` and `RESOURCE_AUDIO_CAPTURE` and nothing else, and
+there is no MediaProjection plumbing to add a third. So there is no screen to
+pick. Camera and microphone *are* wired -- `request_capture` goes through the
+same `permission_decider` the desktop uses -- which is what makes the one
+absence worth finding rather than assuming.
+
+**The answer was already in the tree, decided for another feature.**
+`desktop_site` cannot act on the desktop, and the shield leaves it visible and
+greyed with the reason on it, "so the panel is the same shape on both
+platforms and a policy file written on one reads sensibly on the other,
+rather than accepting an answer nothing acts on". `screen_share` on Android
+is the same property, and now gets the same treatment in the shield and in
+Settings.
+
+The seam keeps the method on both backends -- a shell that has to ask which
+backend it is talking to is the seam failing -- and the absence is said in
+three places instead: on the setter that takes the callback, and on the two
+controls a person can see.
+
+**Not testable on this machine**, and said rather than implied: both edits are
+inside `#else` on `Q_OS_ANDROID`, so nothing here compiles them. What was
+measured here is the fact underneath -- zero reads of the member, and the two
+resources the Java grants.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

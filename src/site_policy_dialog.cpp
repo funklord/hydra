@@ -244,6 +244,21 @@ site_policy_dialog::site_policy_dialog(policy_engine *engine, QWidget *parent)
 			combo->setToolTip("Only meaningful on a phone. This build already "
 			                   "asks as a desktop.");
 		}
+#else
+		// **The mirror of the line above, for the platform that cannot do
+		// it.** Android's WebView exposes no `getDisplayMedia` and grants
+		// only `RESOURCE_VIDEO_CAPTURE` and `RESOURCE_AUDIO_CAPTURE`, so
+		// there is no screen to pick and nothing reads the picker: measured,
+		// `android_view` stores the chooser the seam hands it and never
+		// consults it once. Left visible and greyed for the same reason
+		// `desktop_site` is on the desktop -- the panel keeps its shape and a
+		// policy file written on one platform still reads sensibly on the
+		// other -- rather than accepting an answer nothing acts on.
+		if (r.f == policy::feature::screen_share) {
+			combo->setEnabled(false);
+			combo->setToolTip("Not available on this platform. Android's "
+			                   "WebView has no screen sharing to allow.");
+		}
 #endif
 		connect(combo, &QComboBox::currentIndexChanged,
 		         this, [this, i](int) { on_feature_changed(i); });
