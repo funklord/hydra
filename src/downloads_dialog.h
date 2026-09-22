@@ -3,7 +3,10 @@
 #include "download_manager.h"
 
 #include <QDialog>
+#include <QDir>
+#include <QFileInfo>
 #include <QHash>
+#include <QString>
 
 class QLabel;
 class empty_state;
@@ -13,6 +16,28 @@ class QTreeWidget;
 class QTreeWidgetItem;
 class local_proxy;
 class player_launcher;
+
+// **The folder "Open Folder" would show, or empty when it is not there.**
+//
+// Inline and free, so a suite can ask it without linking the window: the
+// decision is the testable part and the button press is not.
+//
+// A finished download stays in the list across restarts, and the file it
+// names can be moved, renamed or deleted at any moment after -- so a row
+// whose folder is gone is the ordinary case rather than a strange one. It
+// was reached by reading a driver's output: `try_downloads` printed
+// thirteen rows from earlier runs, every one naming a scratch directory
+// that had since been removed.
+inline QString download_folder_to_show(const QString &path) {
+	if (path.isEmpty())
+		return QString();
+	// The containing folder, never the file. Swarms and web servers carry
+	// whatever is in them, and the standing rule (sec 11.4) is that a
+	// download is written to disk and not opened by us.
+	const QFileInfo fi(path);
+	const QString dir = fi.isDir() ? fi.absoluteFilePath() : fi.absolutePath();
+	return QFileInfo::exists(dir) ? dir : QString();
+}
 
 // The downloads window (architecture doc sec 11.2, sec 11.4).
 //

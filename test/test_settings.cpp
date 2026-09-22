@@ -7,6 +7,7 @@
 #include "cosmetic_filters.h"
 #include "policy_engine.h"
 #include "download_manager.h"
+#include "downloads_dialog.h"
 #include "zoom_store.h"
 #include <QJsonObject>
 #include <QJsonDocument>
@@ -1435,6 +1436,45 @@ int main(int argc, char **argv) {
 	// for as long as it existed, while the controller honoured it and the
 	// `fit` setting that makes it matter was on the page. Nine of ten fields
 	// persisted, which is exactly what nobody notices.
+	section("the folder a finished download went to, when it is not there");
+	{
+		// **A row outlives the file it names.** The history survives a
+		// restart, so a download whose folder has since been moved, renamed
+		// or deleted is the ordinary case -- and "Open Folder" handed the
+		// path to `QDesktopServices::openUrl` without asking, and without
+		// reading the answer. `open_url_externally` already says why that is
+		// not enough: it answers true for a great many things, and a silent
+		// nothing is the failure this project keeps writing down.
+		//
+		// Found by reading a driver's output rather than by looking at this
+		// code: `try_downloads` printed thirteen rows left over from earlier
+		// runs, every one naming a scratch directory that had been removed.
+		//
+		// The decision is a free inline function so this can ask it without
+		// linking the window; the button press is not the testable part.
+		const QString dir = QDir::tempPath() + "/hydra-dl-folder";
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString file = dir + "/clip.mp4";
+		{ QFile f(file); f.open(QIODevice::WriteOnly); f.write("x"); }
+
+		check(download_folder_to_show(file) == QDir(dir).absolutePath(),
+		      "a file that is there gives its containing folder");
+		check(download_folder_to_show(dir) == QDir(dir).absolutePath(),
+		      "and a directory download gives itself, not its parent");
+		// The file gone but the folder still there is the common half: the
+		// folder is still worth opening, which is why this is not keyed on
+		// the file.
+		QFile::remove(file);
+		check(download_folder_to_show(file) == QDir(dir).absolutePath(),
+		      "a file removed from a folder that remains still opens it");
+		QDir(dir).removeRecursively();
+		check(download_folder_to_show(file).isEmpty(),
+		      "and a folder that is gone gives nothing to open");
+		check(download_folder_to_show(QString()).isEmpty(),
+		      "as does a job with no path at all");
+	}
+
 	section("a finished download can be removed, a running one cannot");
 	{
 		download_manager dm;

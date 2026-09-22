@@ -12,6 +12,7 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QFileInfo>
+#include <QMessageBox>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -759,13 +760,27 @@ void downloads_dialog::act_open_folder() {
 	for (const download_job &j : m_downloads->jobs()) {
 		if (j.id != id || j.path.isEmpty())
 			continue;
-		// The containing folder, never the file. Swarms and web servers carry
-		// whatever is in them, and the standing rule (sec 11.4) is that a download
-		// is written to disk and not opened by us.
-		const QFileInfo fi(j.path);
-		const QString dir = fi.isDir() ? fi.absoluteFilePath()
-		                               : fi.absolutePath();
-		QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+		// **Both answers read, because a silent nothing is what this used to
+		// do.** `open_url_externally` already says why in as many words --
+		// `QDesktopServices` answers true for a great many things -- and the
+		// same call here discarded its result and never asked whether the
+		// folder was still on disk. A row outlives the file it names, so
+		// pressing this on a download whose folder has been removed did
+		// nothing at all and said nothing about why.
+		const QString dir = download_folder_to_show(j.path);
+		if (dir.isEmpty()) {
+			QMessageBox::information(
+			  this, "Open Folder",
+			  QString("That download is still in this list, but the folder it "
+			           "went to is not there any more.\n\n%1")
+			    .arg(QDir::toNativeSeparators(QFileInfo(j.path).absolutePath())));
+			return;
+		}
+		if (!QDesktopServices::openUrl(QUrl::fromLocalFile(dir)))
+			QMessageBox::information(
+			  this, "Open Folder",
+			  QString("Nothing on this system offered to open %1.")
+			    .arg(QDir::toNativeSeparators(dir)));
 		return;
 	}
 }

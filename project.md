@@ -26160,6 +26160,66 @@ data, which is why this is recorded instead of built.
 than in `make test`, by the decision above, and `make test-one T=test_torrent`
 runs one.
 
+## Reading a driver's output found a button that did nothing
+
+The named unfinished work -- eight report-only drivers print output and have
+no tally, so in a sweep's summary a run that failed at everything and one
+that succeeded are the same green line -- and reading `try_capture` once
+before found two defects. Five were swept and read this time.
+
+Four had nothing to say: `try_capture` fetched its fixture and captured 2048
+bytes, `try_mse` hooked `MediaSource` and clicked, `try_frame` reported
+`PLAIN src=/player state=same-origin`, and `try_flicker` measured the white
+opening already recorded above (`255/255/255` for three grabs, then
+`17/34/51`).
+
+**`try_downloads` printed nineteen rows and this run had enqueued two.** The
+other seventeen came from `~/.qttest/share/...` -- the drivers do isolate
+into Qt's test-mode path, so nothing of the user's was touched -- and every
+one of them named a scratch directory from an earlier run that had since been
+removed.
+
+### And that is the ordinary case, not a test artifact
+
+A finished download stays in the history across restarts. The file it names
+can be moved, renamed or deleted at any moment after, so a row whose folder
+is gone is what a real profile fills up with.
+
+`act_open_folder` handed that path's directory to `QDesktopServices::openUrl`
+**without asking whether it was there and without reading the answer** --
+while `open_url_externally`, in the same tree, checks the same call and says
+why in as many words: *"it answers true for a great many things, and a silent
+nothing is the failure this project keeps writing down"*. So pressing Open
+Folder on such a row did nothing at all and said nothing about why.
+
+The decision is a free inline function in the header, `download_folder_to_show`,
+so a suite can ask it without linking the window -- the button press is not
+the testable part. Five checks in `test_settings`, and the one that matters
+separates the two halves people conflate: **a file removed from a folder that
+remains still opens the folder**, because the folder is what the button shows.
+Sabotaging the existence check fails exactly one.
+
+### Five instrument errors in one investigation, and none of them published
+
+Worth more than the fix. Each was one step from a wrong finding:
+
+- `ls --time-style=+%H:%M:%S` dropped the date, so a binary from yesterday
+  read as newer than an object from today, and the sweep's staleness guard
+  looked wrong when it was right.
+- `-o build-make/[a-z_]+` matched compile lines as well as links, so "10
+  binaries linked" read as the whole set when it was the objects too.
+- **A background launch's exit code is the launcher's.** `nohup ... &`
+  returned 0 while `make drivers` was still running, which read as "the build
+  succeeded and did not relink" -- a build defect that did not exist. Same
+  family as a pipeline's status being the last process's.
+- Three different text patterns gave three different counts of report-only
+  drivers. The classification is **runtime** -- `sweep.sh` calls a driver
+  report-only when it exits 0 and prints `done` -- so no grep over the
+  sources can answer it, and the count in this file is a record of sweep runs
+  rather than a claim about the tree.
+- A `find` for `download-history.json` in `~/.local/share` came back empty and
+  read as "nothing was written", when the drivers write to `~/.qttest`.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
