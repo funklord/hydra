@@ -26062,6 +26062,47 @@ jar it fails on the imports rather than on the syntax -- a check that reports
 the same thing for a good file and a broken one. Recorded so the idea is not
 had twice. `tool/jni_check.py` is what covers those files today, by parsing.
 
+## 293 citations of a document nothing checked, and a gate that did not run
+
+`working-practice.md` makes the design document authoritative over the code,
+and this tree takes that seriously: **50 distinct architecture sections cited
+from 139 files**, in source comments and test headers. A number is cited
+*because* it is a stable anchor. Nothing was checking that the anchors exist.
+
+The failure is the familiar one. A renumbered or deleted section breaks no
+build; it leaves several hundred comments pointing somewhere else, and a
+comment that sends a reader to the wrong place is worse than one that sends
+them nowhere, because they arrive and believe it. Sabotaged by renumbering
+`11.5` to `11.7`: fourteen files named in one line.
+
+**Two anchor shapes, because the document has two**, and this is a real
+observation rather than a parser convenience. Numbered headings are the usual
+one; **section 12 alone** writes its parts as bold numbered paragraphs --
+`**1. Signal collection.**` -- rather than `### 12.1`, while sections 11 and
+13 both use subheadings. Eleven files cite those parts as `§12.1` to `§12.5`.
+Both shapes are read, and the summary line says so on every run, because
+making section 12 look like its neighbours is the copyright holder's to
+decide and a checker should not do it by refusing to read what is there.
+
+**A citation naming another document is not this one's.** `RFC 8216 sec
+4.3.2.2` is the HLS byte-range rule; the test is what stands immediately
+before the number rather than a list of exceptions, and the control checks
+both directions -- that an RFC is recognised and that an ordinary sentence is
+not mistaken for one.
+
+### The gate was wired in and did not run
+
+Worth more than the gate. `make style` gained `doc`, the run went green, and
+`doc-check` was not in the output: **`doc/` is a directory, make saw the
+target as an existing file with no prerequisites, and declared it up to
+date.** The same vacuous pass this session has been finding all day, produced
+by the session finding it, and it went green.
+
+`seam` was in the same state and had been working on luck alone -- nothing is
+named `seam`, so the recipe ran. Both are in `.PHONY` now, with `resources`,
+`manifest`, `deps` and `desktop`. The tell was the one that keeps working:
+**read the output and count what spoke**, rather than reading the exit code.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

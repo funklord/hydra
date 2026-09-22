@@ -283,7 +283,8 @@ TEST_ENV = HYDRA_MAX_LIVE_VIEWS=$(HYDRA_TEST_LIVE_VIEWS) QT_QPA_PLATFORM=offscre
 # after a source change and never reproducible afterwards, with nothing kept.
 FAILED_DIR = $(TESTS_DIR)/failed
 
-.PHONY: all run test test-one drivers sweep replay deb deb-check version-check android android-build android-aab install uninstall clean veryclean distclean help style style-docs style-source check hooks jni
+.PHONY: all run test test-one drivers sweep replay deb deb-check version-check android android-build android-aab install uninstall clean veryclean distclean help style style-docs style-source check hooks jni seam \
+        resources manifest deps desktop doc
 
 # Always delegates, never compares timestamps itself. The first version made
 # the binary a real target depending on the configure output, and `make` after
@@ -806,7 +807,7 @@ help:
 # at packaging time is finding out after every commit in between. It says what
 # it could not check rather than failing when the binary is not built.
 style: style-source style-docs jni seam resources manifest deps desktop \
-        version-check
+        doc version-check
 
 jni:
 	@python3 tool/jni_check.py
@@ -847,6 +848,13 @@ deps:
 # tool/desktop_check.py.
 desktop:
 	@python3 tool/desktop_check.py
+
+# Architecture-section numbers cited from the code, against the document that
+# has them. A number is cited *because* it is a stable anchor, and a renumbered
+# section leaves several hundred comments pointing somewhere else without
+# breaking anything. See tool/doc_check.py.
+doc:
+	@python3 tool/doc_check.py
 
 style-source:
 	python3 tool/style_gate.py check
