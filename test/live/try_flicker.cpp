@@ -8,6 +8,10 @@
 #include "theme.h"
 #include "settings_dialog.h"
 
+#include <QHostAddress>
+#include <QTcpServer>
+#include <QTcpSocket>
+
 #include <QApplication>
 #include <QPlatformSurfaceEvent>
 #include <QDir>
@@ -151,9 +155,72 @@ int main(int argc, char *argv[]) {
 	// recorded objection to setBackgroundColor is about -- it is the engine's
 	// default that shows through there, and what that default is worth
 	// measuring rather than assuming.
-	w.load_tree(qEnvironmentVariableIsSet("HYDRA_FLICKER_PLAIN")
-	              ? shell::plain_page_tree()
-	              : shell::local_page_tree());
+	// **A third fixture, because the flash is luck on a quiet machine.** Both
+	// pages above are `file:` urls off the local disk, so they paint before
+	// the first grab whenever the machine is not busy -- five runs on
+	// 2026-09-22, one of them under four-way CPU load, every one with the
+	// page already painted at `t+0`. The recorded runs that DID catch it
+	// caught it because the machine was loaded, which makes the whole
+	// measurement a matter of when it is taken.
+	//
+	// HYDRA_FLICKER_SLOW serves the same background-less page over loopback
+	// after a delay, so the gap between `loadStarted` and first paint is
+	// forced rather than hoped for. That is what makes "does the page area
+	// show white before the document paints" answerable on any machine --
+	// and it is the only way to test an arrangement that turns the
+	// background dark at `loadStarted`, where the open question is whether
+	// that signal comes early enough.
+	//
+	// Bounded by construction: one connection answered once, no loop, and
+	// the server dies with the process.
+	QTcpServer slow;
+	QString slow_url;
+	const int slow_ms = qEnvironmentVariableIntValue("HYDRA_FLICKER_SLOW");
+	if (slow_ms > 0 && slow.listen(QHostAddress::LocalHost, 0)) {
+		slow_url = QString("http://127.0.0.1:%1/").arg(slow.serverPort());
+		QObject::connect(&slow, &QTcpServer::newConnection, [&slow, slow_ms] {
+			QTcpSocket *c = slow.nextPendingConnection();
+			QObject::connect(c, &QTcpSocket::readyRead, c, [c, slow_ms] {
+				c->readAll();
+				// The delay is before the response, which is where a real
+				// slow site's delay is: the navigation has begun and there
+				// is nothing to paint yet.
+				// **Styled unless asked otherwise, and that is not a
+				// detail.** A background-less page is white before it paints
+				// and white after, so it cannot show the flip at all -- the
+				// first run of this fixture read 253 from `t+0` to `t+1100`
+				// and proved nothing. The flash is only visible against a
+				// page that states a colour. HYDRA_FLICKER_PLAIN switches
+				// this body to the background-less one, which is the case
+				// the setBackgroundColor objection is about.
+				const bool plain =
+				  qEnvironmentVariableIsSet("HYDRA_FLICKER_PLAIN");
+				QTimer::singleShot(slow_ms, c, [c, plain] {
+					const QByteArray body = plain
+					  ? "<!doctype html><title>slow fixture</title>"
+					     "<h1>slow fixture</h1><p>no background, no colour</p>"
+					  : "<!doctype html><title>slow fixture</title>"
+					     "<style>html,body{background:#123;color:#eee;"
+					     "margin:0;height:100%}</style>"
+					     "<h1>slow fixture</h1>";
+					c->write("HTTP/1.1 200 OK\r\nContent-Type: text/html"
+					          "\r\nContent-Length: " +
+					          QByteArray::number(body.size()) +
+					          "\r\nConnection: close\r\n\r\n" + body);
+					c->flush();
+					c->disconnectFromHost();
+				});
+			});
+		});
+		std::printf("slow fixture: %s, answering after %d ms\n",
+		             qPrintable(slow_url), slow_ms);
+	}
+
+	w.load_tree(!slow_url.isEmpty()
+	              ? shell::single_tab_tree(slow_url)
+	              : qEnvironmentVariableIsSet("HYDRA_FLICKER_PLAIN")
+	                  ? shell::plain_page_tree()
+	                  : shell::local_page_tree());
 	w.resize(1100, 780);
 	w.show();
 

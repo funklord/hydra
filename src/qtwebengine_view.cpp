@@ -4,6 +4,7 @@
 
 #include <QDataStream>
 #include <QIODevice>
+#include <QPalette>
 #include <QWebEngineView>
 #include <QWebEnginePage>
 #include <QWebEnginePermission>
@@ -389,8 +390,38 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 	                           const QString &source) {
 		emit console_message(level, text, line, source);
 	};
-	connect(m_view, &QWebEngineView::loadStarted, this,
-	         [this] { emit load_progress(0); });
+	// **Dark behind a page that has not painted, the default behind one that
+	// painted nothing.** A tab used to open onto flat white for as long as
+	// the document took to paint -- invisible on a light desktop, and on a
+	// dark one the starkest version of the fault: measured `255/255/255
+	// lo255 hi255` against a chrome of 43.
+	//
+	// Setting the background once and leaving it was measured and rejected,
+	// because it also decides what is painted behind a page that states no
+	// colours of its own: that page became black text on a 31 ground, about
+	// 1.3:1 and unreadable. Both halves of that were real, which is why this
+	// was an open question rather than an oversight.
+	//
+	// Doing it for the gap alone takes the first and not the second. Measured
+	// 2026-09-22, dark appearance, against a fixture that forces the gap:
+	//
+	//     styled page        before  255 flat     after  21/37/54
+	//                        now      31 flat     after  21/37/54
+	//     page with no background     31 flat     at rest 253, black on white
+	//
+	// So the flash goes and the page that states nothing ends exactly where
+	// it is today. `loadStarted` being early enough was the open question and
+	// is the measured part: at `t+0`, 97 ms in, the page area is already 31.
+	connect(m_view, &QWebEngineView::loadStarted, this, [this] {
+		m_view->page()->setBackgroundColor(
+		  m_view->palette().color(QPalette::Base));
+		emit load_progress(0);
+	});
+	// The UA default, not the palette: a page that states no colours expects
+	// black on white, and choosing otherwise for it is the thing that made
+	// the simpler fix unacceptable.
+	connect(m_view, &QWebEngineView::loadFinished, this,
+	         [this](bool) { m_view->page()->setBackgroundColor(Qt::white); });
 	connect(m_view, &QWebEngineView::loadProgress, this,
 	         [this](int p) { emit load_progress(p); });
 	connect(m_view, &QWebEngineView::loadFinished, this,

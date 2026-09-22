@@ -24291,7 +24291,7 @@ where a page asks for nothing.
 **The revert is part of the measurement.** With the line taken out the flash
 returns to `lo255 hi255`, so what moved was the change and not the machine.
 
-### A third arrangement, half measured, with the crux named
+### A third arrangement, measured in full, and taken
 
 The two options above are not the whole space, and the choice was being held
 open between them. A third: set the page background at `loadStarted` and put
@@ -24310,23 +24310,35 @@ fixtures:
 made the obvious fix unacceptable -- black text on a 31 ground, about 1.3:1
 -- is gone, because the ground is only dark while nothing has painted.
 
-**And the half that matters is untested, which is the point of writing this
-down rather than acting on it.** Whether the flash goes depends on
-`loadStarted` firing before the engine composites its pre-paint background,
-and that cannot be answered without a flash to watch. **It did not reproduce
-on this machine today**: five runs, including one under four-way CPU load,
-every one with the page already painted at `t+0` (`elapsed 73` to `144` ms).
-The section above records the duration as load-dependent; today it is zero.
+**The crux was whether `loadStarted` fires before the engine composites its
+pre-paint background, and it does.** That could not be answered while the
+flash was luck -- five runs, one under four-way CPU load, every one with the
+page already painted at `t+0` -- so the fixture was fixed rather than the
+question abandoned. `HYDRA_FLICKER_SLOW` serves the page over loopback after
+a delay, which forces the gap on any machine instead of waiting for the
+machine to be busy. With it, dark appearance:
 
-So the experiment that would settle it is named rather than run: **a run that
-catches the flash, with option 3 in place.** If `loadStarted` is too late the
-page would show white, then dark, then itself -- worse than either option --
-and that is the only way to find out. Setting the colour at construction
-instead removes the doubt for a tab's first navigation and reintroduces it
-for every one after, which is a fourth arrangement and not an answer.
+    styled page          t+0 .. t+750      at rest
+      as it is           255/255/255       21/37/54     flat white, the flash
+      option 3            31/31/34         21/37/54     flat, the chrome's own
+    page with no background
+      as it is           253               253 lo0 hi255   black on white
+      option 2            31                30 lo0 hi31    black on near-black
+      option 3            31/31/34         253 lo0 hi255   black on white
 
-The tree is unchanged: the experiment was applied, measured and reverted, and
-`git status` is clean.
+**Option 3 dominates both.** The flash is gone and the page that states no
+colours ends exactly where it is today, which is the whole of the objection
+that made this an open question.
+
+**Two fixture faults on the way, each of which would have proved nothing.**
+The first slow page was background-less, and a background-less page is white
+before it paints and white after -- 253 from `t+0` to `t+1100`, a run that
+looked like a measurement and could not have distinguished anything. And at
+700 ms the delay never reached the moment being measured; at 3000 ms it does,
+which is what says the driver measures the activation rather than the tree
+load.
+
+Taken, in its own commit, so disagreeing costs one revert.
 
 **And the drivers' own settings file was restored.** `try_flicker` reads
 `appearance` through `QSettings`, which under test mode is
