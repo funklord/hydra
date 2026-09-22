@@ -403,6 +403,27 @@ site nobody controls.
 | `try_settings_ui` | nothing | the settings window's layout and its site-defaults page |
 | `try_keepass` | a running KeePassXC | the §13.1 bridge — see above for the setup |
 | `try_flicker` | nothing | what is actually on screen in the moments after a tab opens |
+
+`try_flicker` reports and asserts nothing by default: what the page area holds at
+a given millisecond depends on how busy the machine is, and a check on that would
+fail for the machine rather than for the code. Two variables give it expectations:
+
+```sh
+# force the gap between navigation and first paint, and judge it
+HYDRA_FLICKER_SLOW=3000 QT_QPA_PLATFORM=offscreen ./test/build-make/try_flicker
+# the same, against a page that states no background of its own
+HYDRA_FLICKER_SLOW=3000 HYDRA_FLICKER_PLAIN=1 ... ./test/build-make/try_flicker
+```
+
+With `HYDRA_FLICKER_SLOW` the page is served over loopback after a delay, so the
+gap is forced rather than hoped for, and the early grabs have a defined answer --
+the shell's own background rather than flat white. It prints a tally in that mode
+and is judged on it; **the sweep runs it without either variable and it stays
+report-only there**, which is why a regression in the opening background is
+caught by running the line above and not by a sweep. Set `appearance=dark` in the
+drivers' settings to take the dark case, and put it back afterwards: under Qt's
+test mode that file is `~/.qttest/config/hydra/hydra.ini`, which every driver
+reads.
 | `try_downloads`, `try_watch` | network | a real HTTP download and a real torrent side by side in the downloads window |
 | `try_capture` | a site url | arming a capture from a page and watching it land in the downloads window |
 | `try_cancel` | a site url | cancelling a capture mid-recording |

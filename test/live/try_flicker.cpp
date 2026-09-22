@@ -91,6 +91,11 @@ static QRect page_rect(QWidget &w) {
 	return QRect(cur->mapTo(&w, QPoint(0, 0)), cur->size());
 }
 
+// Set only when the gap is forced; see the grab loop for why the checks are
+// conditional on it.
+static bool g_forced = false;
+static int  g_checked = 0, g_failed = 0;
+
 int main(int argc, char *argv[]) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	qtwebengine_factory::register_url_schemes(torrent_download_source::url_schemes());
@@ -175,6 +180,7 @@ int main(int argc, char *argv[]) {
 	// the server dies with the process.
 	QTcpServer slow;
 	QString slow_url;
+	g_forced = false;
 	const int slow_ms = qEnvironmentVariableIntValue("HYDRA_FLICKER_SLOW");
 	if (slow_ms > 0 && slow.listen(QHostAddress::LocalHost, 0)) {
 		slow_url = QString("http://127.0.0.1:%1/").arg(slow.serverPort());
@@ -212,6 +218,7 @@ int main(int argc, char *argv[]) {
 				});
 			});
 		});
+		g_forced = true;
 		std::printf("slow fixture: %s, answering after %d ms\n",
 		             qPrintable(slow_url), slow_ms);
 	}
@@ -247,12 +254,39 @@ int main(int argc, char *argv[]) {
 				// strip across the toolbar, above wherever the page starts.
 				const QRect chrome(0, 0, img.width(),
 				                    page.isEmpty() ? 0 : page.top());
+				const QString page_says = mean_of(img, page);
 				std::printf("t+%-5d grabbed (elapsed %lld) page=%s chrome=%s\n",
-				             ms, t.elapsed(), qPrintable(mean_of(img, page)),
+				             ms, t.elapsed(), qPrintable(page_says),
 				             qPrintable(mean_of(img, chrome)));
+				// **Judged, but only where the answer is known.** With no
+				// slow fixture this driver reports and asserts nothing: what
+				// the page area holds at a given millisecond depends on how
+				// busy the machine is, and a check on that would fail for
+				// the machine rather than for the code.
+				//
+				// With the gap forced, the early grabs have a defined
+				// answer: the page has not painted, so what shows is what
+				// the shell put behind it, and flat white is the fault this
+				// was written for. `lo255 hi255` rather than a mean, because
+				// a pale page and a white ground have the same mean and
+				// differ in their range -- which is the distinction this
+				// file's own header makes.
+				if (g_forced && ms <= 360) {
+					++g_checked;
+					if (page_says.contains(QLatin1String("lo255 hi255"))) {
+						++g_failed;
+						std::printf("  FAIL  t+%d the page area is flat white "
+						             "before the document painted\n", ms);
+					}
+				}
 			});
 		}
 		QTimer::singleShot(22000, [] {
+			// A tally only in the mode that has expectations, so the sweep's
+			// own run stays report-only and is judged as it always was.
+			if (g_forced)
+				std::printf("\n%d passed, %d failed\n",
+				             g_checked - g_failed, g_failed);
 			std::printf("done\n");
 			qApp->quit();
 		});

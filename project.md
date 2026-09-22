@@ -24340,6 +24340,30 @@ load.
 
 Taken, in its own commit, so disagreeing costs one revert.
 
+### And the driver judges it, in the mode that has an answer
+
+The fix had no regression check, because `try_flicker` is report-only -- a
+sweep would print the numbers and nobody would compare them, which is the
+class this session has spent its day on.
+
+It asserts now, **but only when the gap is forced.** Without the slow fixture
+what the page area holds at a given millisecond depends on how busy the
+machine is, and a check on that fails for the machine rather than for the
+code; with it, the early grabs have a defined answer, because the document
+has not painted and what shows is what the shell put behind it. Six checks,
+and reverting the fix fails all six -- `lo255 hi255` at `t+0` through
+`t+360`.
+
+**It is tested on the range rather than the mean**, which is this driver's
+own distinction: a pale page and a white ground have the same mean and differ
+in their range.
+
+**And the sweep's own run is unchanged.** It sets neither variable, so
+`try_flicker` prints no tally there and is judged exactly as before. That is
+honest rather than ideal: a regression in the opening background is caught by
+running the documented line, not by a sweep. `test/README.md` says so and
+gives the line.
+
 **And the drivers' own settings file was restored.** `try_flicker` reads
 `appearance` through `QSettings`, which under test mode is
 `~/.qttest/config/hydra/hydra.ini` -- shared by every driver. Setting
@@ -26227,8 +26251,9 @@ before found two defects. Five were swept and read this time.
 Four had nothing to say: `try_capture` fetched its fixture and captured 2048
 bytes, `try_mse` hooked `MediaSource` and clicked, `try_frame` reported
 `PLAIN src=/player state=same-origin`, and `try_flicker` measured the white
-opening already recorded above (`255/255/255` for three grabs, then
-`17/34/51`).
+opening then recorded above (`255/255/255` for three grabs, then `17/34/51`)
+-- **which is fixed since, in `d25997c`**, so that reading is a record of the
+day and not of the code.
 
 **`try_downloads` printed nineteen rows and this run had enqueued two.** The
 other seventeen came from `~/.qttest/share/...` -- the drivers do isolate
