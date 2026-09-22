@@ -25930,6 +25930,41 @@ outside. What is pinned instead is per-entry and is about the first launch:
 an entry with no id cannot be selected, one with no title is a blank row, and
 one whose url has no scheme opens a tab that goes nowhere.
 
+## Three lists of the same dependencies, none of which read the others
+
+`hydra.pro` names the optional packages for the application, `test/Makefile`
+for the suites, `debian/control` for the package. They agree today -- four
+packages, five feature macros -- and nothing was checking that they do. Every
+way they can disagree is silent:
+
+- **A package missing from `debian/control`** is not a build failure.
+  `packagesExist()` quietly leaves the feature out, so what ships is a browser
+  with no BitTorrent or no keyring and a line in a build log nobody reads. The
+  developer's machine has everything installed, which is exactly why the
+  person who would notice cannot.
+- **A macro missing from `test/Makefile`** means the suites compile a
+  *different program* from the one that ships, and pass. This tree has paid
+  for that shape already: `theme.h` defines a stub `QDBusVariant` without
+  `HYDRA_HAVE_DBUS`, and a translation unit reaching it while the real QtDBus
+  header is also reachable has the class twice.
+- **A package in `hydra.pro` and not in `test/Makefile`** is the same thing a
+  step earlier: the feature is in the browser and no suite can see it.
+
+`tool/deps_check.py`, in `make style`. Three sabotages, each landing on its
+own line: `liblz4-dev` removed from Build-Depends, `-DHYDRA_HAVE_LZ4` removed
+from the test build, and the comparison itself returning early -- which the
+control refuses rather than reporting agreement.
+
+**The Debian name is derived rather than mapped.** `libfoo` needs
+`libfoo-dev`, and a table here would be a fourth list to keep in step. Qt's
+modules are deliberately left alone: `QT += webenginewidgets` becomes
+`qt6-webengine-dev` by no rule this file could state, and inventing one would
+be a guess wearing a check's clothes.
+
+**Each list is also asserted non-empty**, because all five are computed by
+pattern and an empty one compares clean against anything -- the vacuous pass
+arriving through the instrument rather than through the data.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

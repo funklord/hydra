@@ -800,7 +800,7 @@ help:
 # shipped a rename that broke seven of them. Costs milliseconds and needs no
 # Android tooling, so it runs with the other gates rather than only when
 # somebody builds an APK.
-style: style-source style-docs jni seam resources manifest
+style: style-source style-docs jni seam resources manifest deps
 
 jni:
 	@python3 tool/jni_check.py
@@ -826,6 +826,13 @@ resources:
 # test opens. See tool/manifest_check.py.
 manifest:
 	@python3 tool/manifest_check.py
+
+# Three files name the same optional dependencies and none reads the others.
+# Every way they can disagree is silent: a missing Build-Depends ships a
+# feature-less package, and a missing -D compiles the suites against a
+# different program than the one that ships. See tool/deps_check.py.
+deps:
+	@python3 tool/deps_check.py
 
 style-source:
 	python3 tool/style_gate.py check
