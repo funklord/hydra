@@ -24291,6 +24291,51 @@ where a page asks for nothing.
 **The revert is part of the measurement.** With the line taken out the flash
 returns to `lo255 hi255`, so what moved was the change and not the machine.
 
+### A third arrangement, half measured, with the crux named
+
+The two options above are not the whole space, and the choice was being held
+open between them. A third: set the page background at `loadStarted` and put
+it back to the UA default at `loadFinished` -- dark behind a page that has
+not painted, white behind one that painted nothing.
+
+Measured 2026-09-22, dark appearance, offscreen, against the same two
+fixtures:
+
+    background-less page at rest     as it is   253  lo0 hi255
+                                     option 2    30  lo0 hi31
+                                     option 3   253  lo0 hi255
+    styled page                      option 3   17/34/51, unchanged
+
+**So the objection to option 2 does not apply to option 3.** The thing that
+made the obvious fix unacceptable -- black text on a 31 ground, about 1.3:1
+-- is gone, because the ground is only dark while nothing has painted.
+
+**And the half that matters is untested, which is the point of writing this
+down rather than acting on it.** Whether the flash goes depends on
+`loadStarted` firing before the engine composites its pre-paint background,
+and that cannot be answered without a flash to watch. **It did not reproduce
+on this machine today**: five runs, including one under four-way CPU load,
+every one with the page already painted at `t+0` (`elapsed 73` to `144` ms).
+The section above records the duration as load-dependent; today it is zero.
+
+So the experiment that would settle it is named rather than run: **a run that
+catches the flash, with option 3 in place.** If `loadStarted` is too late the
+page would show white, then dark, then itself -- worse than either option --
+and that is the only way to find out. Setting the colour at construction
+instead removes the doubt for a tab's first navigation and reintroduces it
+for every one after, which is a fourth arrangement and not an answer.
+
+The tree is unchanged: the experiment was applied, measured and reverted, and
+`git status` is clean.
+
+**And the drivers' own settings file was restored.** `try_flicker` reads
+`appearance` through `QSettings`, which under test mode is
+`~/.qttest/config/hydra/hydra.ini` -- shared by every driver. Setting
+`appearance=dark` there to take the dark case changes what every later driver
+sees, so a copy was taken before the edit and put back after. A measurement
+that leaves the instrument altered is a measurement the next person pays
+for.
+
 The alternative is paint-holding: keep the placeholder in the stack until the
 first paint commits, so there is no bare view to flash. It costs a timeout,
 because a load that never finishes must not strand the tab behind a
