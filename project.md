@@ -25825,6 +25825,51 @@ one variable added (`OBJS_test_scripts`), one source added to the manifest,
 and **no existing link set different as a multiset**. The 131-line diff is the
 ordering churn this file already records.
 
+## A resource path is a string, and this tree has already shipped a wrong one
+
+The second answer to "what disparate thing can be tested and is not". The
+comment at the top of `icon/hydra.qrc` records the incident: the prefix was
+`/icons` while `main.cpp` asked for `:/icon/`, **so every `addFile` found
+nothing and the application had no icon at all.** It was found by looking,
+because `QIcon::addFile` reports a missing resource by returning quietly.
+
+Nothing prevented it then and nothing prevents it now. A `:/` path is a
+string: no compiler and no linker has an opinion about it, `QFile(":/missing")`
+opens nothing, and a `QIcon` with no file in it draws nothing. The build's
+`rcc` step catches a qrc naming a file that is not on disk -- the opposite
+direction -- and nothing at all catches code naming a path no qrc publishes.
+
+`tool/resource_check.py`, wired into `make style` beside `jni` and `seam`
+because it is the same kind of thing: a whole-tree text consistency check
+rather than a unit test. 18 published paths, 4 referenced in `src/`, every one
+resolves.
+
+**Patterns are checked by their fixed prefix, because that is the shape the
+real fault had.** `QStringLiteral(":/ui/%1.svg").arg(name)` cannot be resolved
+without every `name`, but `/ui/` either is a published prefix or it is not,
+and in the incident it was not. Reproduced to prove it: putting `/icons` back
+gives *"main.cpp: asks for \":/icon/hydra-%1.png\" and no published path
+starts with /icon/hydra-"*.
+
+**The control is inside the tool and runs before any file is read**, because
+every result it gives is a silence -- a checker that has stopped resolving
+reports a clean tree in exactly the words of a real pass. It resolves a
+fabricated set with two references, one that must resolve and one that must
+not, and refuses with *"the control failed ... No result below means
+anything"* if either comes out wrong. Sabotaged by making the resolver return
+early: it refuses, rather than reporting the tree clean.
+
+**Two things the sweep must not call findings**, both met on the first run:
+`"://"` from `u.scheme() + "://"` is a url's separator and not a resource
+root, and `:/qtwebchannel/qwebchannel.js` is published by Qt WebChannel
+rather than by this tree. The second is an allowlist entry carrying its
+reason, because an allowlist without one is how a gate gets switched off by
+instalments.
+
+The tool was written with four-space indentation and the style gate refused
+it -- 78 violations. Converted with the proof `evidence.md` names for exactly
+this: `ast.dump` before and after, identical, or the write is refused.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

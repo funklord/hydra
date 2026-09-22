@@ -800,7 +800,7 @@ help:
 # shipped a rename that broke seven of them. Costs milliseconds and needs no
 # Android tooling, so it runs with the other gates rather than only when
 # somebody builds an APK.
-style: style-source style-docs jni seam
+style: style-source style-docs jni seam resources
 
 jni:
 	@python3 tool/jni_check.py
@@ -811,6 +811,14 @@ jni:
 # builds on. See tool/seam_check.py.
 seam:
 	@python3 tool/seam_check.py
+
+# Resource paths, checked rather than trusted. `:/ui/x.svg` is a string: no
+# compiler and no linker has an opinion about it, and Qt answers a missing one
+# by drawing nothing. This tree has already shipped a qrc whose prefix was
+# `/icons` while the code asked for `:/icon/`, which is recorded at the top of
+# `icon/hydra.qrc` and was found by looking. See tool/resource_check.py.
+resources:
+	@python3 tool/resource_check.py
 
 style-source:
 	python3 tool/style_gate.py check
