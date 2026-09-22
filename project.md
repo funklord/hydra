@@ -26512,18 +26512,36 @@ where something listed as absent has since been written.
     sec 19   the seam -- `seam-check` passes over 166 files
     sec 19.x the Android contingency, which is intent and not a status
 
-**§13 listed `generate-password` as not built.** It is built and wired:
-`keepass_bridge::generate_password`, called from `autofill_controller`.
-`set-login` is the interesting middle -- `keepass_protocol` has
-`set_login_request` and `parse_set_login`, and no bridge method calls them,
-so the wire format exists and nothing can send it. The line says which half
-now, because "not built" and "built with no caller" send a reader to
-different files.
+**~~§13 listed `generate-password` as not built, and `set-login` has a
+protocol half nothing can send.~~ All three of §13's "not built" are built,
+and the correction above was wrong about one of them.** Written down in the
+order it happened, because the mistake is more useful than the answer.
 
-That was found by reading the hits rather than counting them: `set-login` and
-`generate-password` both *appear* in the bridge and the protocol, and one of
-those appearances is an implementation and the other is a comment saying it
-is missing.
+    set-login          keepass_bridge::save_login, from autofill_controller
+    generate-password  keepass_bridge::generate_password, same caller
+    entry-picker UI    QInputDialog::getItem in main_window::wire_autofill,
+                       "Which login?" when a site has more than one
+
+**Each was missed by searching for the feature's name.** `set-login` is sent
+by a method called `save_login`, so grepping the bridge header for
+`set_login` found nothing and "no bridge method calls them" went into a
+commit message. The entry picker is not a class called anything like
+"picker"; it is four lines of `QInputDialog` inside `wire_autofill`.
+
+`project.md` already carries the over-reporting direction of this --
+*a name-based proxy over-reports, and the remedy is reading the hits rather
+than counting them.* **This is the under-reporting direction, and it is
+worse**, because an over-report costs a reader one look while an
+under-report is published as a fact. The remedy is the same shape pointed
+the other way: **search for what the thing does, not for what it is called**
+-- the protocol verb on the wire, the prompt the dialog shows, the type it
+constructs.
+
+What caught it was a sweep whose control was those two functions. The sweep
+was broken -- 99 hits, nearly all Qt signals, because `emit x()` and a
+declaration are two uses and the threshold called that uncalled -- but the
+control was the thing being asserted a commit earlier, and it failed. A
+broken instrument pointed at a published claim is still worth running.
 
 ## What is next (in order)
 
