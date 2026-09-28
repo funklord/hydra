@@ -27831,3 +27831,66 @@ Three sabotages, each through its own check: the flag ignored (both locked
 cases go red), the F11 arm dropped (both F11 cases), and `leaving` made always
 true -- which is caught only by the control, an ordinary key that must not
 leave in either mode.
+
+## Undo Reorganize deleted the tabs you opened since
+
+The menu entry reads *"Put the tree back the way it was before the last
+accepted reorganization"*, and the undo stays available until it is pressed --
+nothing invalidates the snapshot when the tree changes in between. So a person
+can accept a reorganization, open a tab, and then press Undo.
+
+`tree_diff::restore` deleted everything the snapshot did not know about, on the
+strength of a comment above the loop:
+
+    // Whatever the snapshot never knew about is a folder the reorganization
+    // invented.
+
+That holds only if nothing has been added since the snapshot was taken. A tab
+opened afterwards has an id the snapshot never saw, so **Undo deleted it** --
+not closed through the path that feeds Reopen Closed Tab, which is the net for
+an ordinary deletion. `delete orphan`, and gone.
+
+Measured before it was fixed, with two tabs opened after the reorganization:
+six checks red, `leaf_ids` back to the original three, and both new tabs
+unreachable from the root.
+
+**What tells a tab from an invented folder is an invariant this file already
+enforces.** `check_and_repair` *rejects* a proposal that invents a leaf id --
+there is no safe repair for a tab the model made up -- so an unknown leaf
+cannot have come from the model. It is somebody's tab. Unknown leaves go back
+now: to their own parent when that survived, to the root when it did not,
+which is the case of a tab opened inside the folder the model invented.
+
+**Re-attached rather than merely spared.** A node whose parent no longer lists
+it is invisible to the tree and to every save while still being alive, which
+is a leak wearing the appearance of a survivor -- so the checks assert the
+shape string contains the tab, not only that `find` returns something.
+
+### The sabotage found a use-after-free in the fix
+
+The first version did the whole thing in one loop: decide the parent, attach,
+and delete unknown folders as they came up. `known.contains(unknown->parent->id)`
+reads the parent, and a leaf whose parent is an unknown folder can be visited
+*after* that folder has been deleted -- so whether it crashed depended on
+`QHash`'s iteration order. It passed three runs and then segfaulted under a
+sabotage that changed nothing about ordering.
+
+Two passes now: put the leaves back while every parent pointer is still valid,
+then delete the folders. The same sabotage fails cleanly through its own nine
+checks instead of taking the process down, which is what a control has to do.
+
+### Still open, and small: a folder somebody made in the same window
+
+An unknown *folder* is still treated as the model's and deleted. A person can
+create a folder (Edit -> Add Folder) between accepting a reorganization and
+pressing Undo, and that folder goes -- its children are re-attached first, so
+no tab is lost with it, but the folder is.
+
+Closing it needs the undo state to carry **which** folders the reorganization
+invented rather than inferring it from absence: `compute` already names them
+as `change_kind::folder_new`, and `reorganize_dialog` knows which changes were
+accepted, so the ids exist and would have to be passed to `restore` alongside
+the snapshot. That is delete-by-name instead of delete-by-pattern, which is
+the rule this workspace already holds for files. Recorded rather than done:
+it changes the undo state's shape, and the loss it closes is a folder rather
+than a tab.

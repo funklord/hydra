@@ -382,16 +382,63 @@ int restore(node *root, const tree_snapshot &snap) {
 		++restored;
 	}
 
-	// Whatever the snapshot never knew about is a folder the reorganization
-	// invented. Its children have already been re-attached above, so deleting
-	// it now cannot take a tab with it.
+	// **What the snapshot does not know is not all the reorganization's.** This
+	// loop deleted every unknown node, on the strength of a comment saying
+	// "whatever the snapshot never knew about is a folder the reorganization
+	// invented" -- which holds only if nothing has been added since the
+	// snapshot was taken. The undo stays available until it is pressed and
+	// nothing invalidates it when the tree changes, so a tab opened between
+	// accepting a reorganization and pressing Undo was **deleted**: not moved,
+	// not closed through the path that feeds Reopen Closed Tab, deleted.
+	//
+	// A leaf is told from an invented folder by the invariant this file
+	// already enforces: `check_and_repair` REJECTS a proposal that invents a
+	// leaf id, so an unknown leaf cannot have come from the model. It is
+	// somebody's tab, and it goes back rather than away.
+	//
+	// It is re-attached to its own parent only when that parent survived --
+	// this loop's order is a hash's, so a parent that is itself an unknown
+	// folder may be deleted afterwards, and a node in a cleared child list is
+	// unreachable from the root while still being alive, which is a leak
+	// wearing the appearance of a survivor.
+	// **Two passes, and the second one is why.** Reading `unknown->parent->id`
+	// while deleting in the same loop is a use-after-free waiting on a hash's
+	// iteration order: a leaf whose parent is an unknown folder can be visited
+	// after that folder has been deleted, and the one-pass version of this
+	// crashed exactly that way under a sabotage that changed nothing about the
+	// order. Every parent pointer is still valid throughout the first pass,
+	// because nothing is deleted until the second.
 	for (auto it = by_id.cbegin(); it != by_id.cend(); ++it) {
 		if (known.contains(it.key()))
 			continue;
-		node *orphan = it.value();
-		orphan->children.clear();   // belt and braces: never delete a subtree
-		orphan->parent = nullptr;
-		delete orphan;
+		node *unknown = it.value();
+		if (unknown->is_folder())
+			continue;
+		// Its own parent when that survived, the root when it did not -- a
+		// parent that is itself unknown is about to go, and a node in a list
+		// that is about to be cleared is unreachable from the root while still
+		// being alive, which is a leak wearing the appearance of a survivor.
+		node *parent = (unknown->parent && unknown->parent != root &&
+		                 known.contains(unknown->parent->id))
+		                 ? unknown->parent : root;
+		unknown->parent = parent;
+		parent->children.push_back(unknown);
+	}
+
+	for (auto it = by_id.cbegin(); it != by_id.cend(); ++it) {
+		if (known.contains(it.key()))
+			continue;
+		node *unknown = it.value();
+		if (!unknown->is_folder())
+			continue;
+		// An unknown folder is still treated as the model's, because nothing
+		// here can tell it from a folder somebody made in the same window --
+		// see project.md, which records what closing that would take. Its
+		// children have been re-attached above, so this cannot take a tab with
+		// it.
+		unknown->children.clear();   // belt and braces: never delete a subtree
+		unknown->parent = nullptr;
+		delete unknown;
 	}
 
 	renumber(root);

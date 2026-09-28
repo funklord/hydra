@@ -1808,8 +1808,16 @@ QMenuBar *main_window::build_menu_bar() {
 	// says what it costs rather than only what it gives.
 	QAction *sync = follow_menu->addAction("Keep &Firefox Tabs in Sync");
 	sync->setCheckable(true);
-	sync->setStatusTip("Re-read Firefox's session every 15 seconds while it is "
-	                    "running");
+	// **The interval is read from the constant rather than restated.** Both
+	// tips said "every 15 seconds" and Chromium's has polled at 5 s since the
+	// interval was measured -- so the sentence a person reads while deciding
+	// whether to turn it on was wrong, and wrong in the same breath as
+	// claiming to be "the fresher of the two", which cannot both hold if both
+	// say 15. A number in prose beside a number in code drifts the moment one
+	// of them is right; composing it is the only version that cannot.
+	sync->setStatusTip(
+	  QString("Re-read Firefox's session every %1 seconds while it is running")
+	    .arg(session_mirror::k_default_interval_ms / 1000));
 	connect(sync, &QAction::toggled, this, [this](bool on) {
 		if (!on) {
 			m_fx_mirror->stop();
@@ -1826,8 +1834,10 @@ QMenuBar *main_window::build_menu_bar() {
 	});
 	QAction *syncc = follow_menu->addAction("Keep &Chromium Tabs in Sync");
 	syncc->setCheckable(true);
-	syncc->setStatusTip("Re-read Chromium's session every 15 seconds; it flushes "
-	                     "about every 2.5 seconds, so this is the fresher of the two");
+	syncc->setStatusTip(
+	  QString("Re-read Chromium's session every %1 seconds; it flushes about "
+	           "every 2.5 seconds, so this is the fresher of the two")
+	    .arg(session_mirror::k_chromium_interval_ms / 1000));
 	connect(syncc, &QAction::toggled, this, [this](bool on) {
 		if (!on) {
 			m_cr_mirror->stop();

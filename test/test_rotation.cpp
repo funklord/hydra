@@ -38,6 +38,7 @@
 #include <functional>
 #include "cosmetic_filters.h"
 #include "main_window.h"
+#include "session_mirror.h"
 #include "settings_dialog.h"
 #include <QFocusEvent>
 #include "address_input.h"
@@ -3257,6 +3258,55 @@ int main(int argc, char **argv) {
 	// bar at the moment somebody is deciding whether to press it, while the
 	// settings row for the same flag warns that turning it off may leave "no
 	// way out except ending the process".
+	// **The same shape as the kiosk tip below, and it was wrong.** Both
+	// "Follow Other Browsers" entries said "every 15 seconds"; Chromium's
+	// mirror has polled at 5 s since the interval was measured -- see
+	// `k_chromium_interval_ms` and the note above it -- so the sentence a
+	// person reads while deciding whether to turn it on was six times out, and
+	// wrong in the same breath as claiming to be "the fresher of the two",
+	// which cannot hold if both say 15.
+	//
+	// The tips are composed from the constants now, so this asserts the
+	// relationship rather than either number: whatever the constants say, the
+	// sentence says the same, and the two entries do not claim the same
+	// interval.
+	section("the sync entries state the interval their mirrors actually use");
+	{
+		policy_engine  spol;
+		request_filter sfilt(&spol);
+		fake_factory   sfac;
+		main_window    w(&sfac, &spol, &sfilt);
+
+		QString fx_tip, cr_tip;
+		for (QAction *a : w.findChildren<QAction *>()) {
+			if (a->text().contains("Firefox") && a->isCheckable())
+				fx_tip = a->statusTip();
+			if (a->text().contains("Chromium") && a->isCheckable())
+				cr_tip = a->statusTip();
+		}
+		check(!fx_tip.isEmpty() && !cr_tip.isEmpty(),
+		      QString("both entries are there with something to read (%1 / %2)")
+		          .arg(fx_tip.isEmpty() ? "missing" : "found",
+		                cr_tip.isEmpty() ? "missing" : "found"));
+
+		const int fx_s = session_mirror::k_default_interval_ms / 1000;
+		const int cr_s = session_mirror::k_chromium_interval_ms / 1000;
+		check(fx_tip.contains(QString("every %1 seconds").arg(fx_s)),
+		      QString("Firefox's says %1 seconds, which is what it starts with "
+		               "(%2)").arg(fx_s).arg(fx_tip));
+		check(cr_tip.contains(QString("every %1 seconds").arg(cr_s)),
+		      QString("Chromium's says %1 seconds, which is what it is passed "
+		               "(%2)").arg(cr_s).arg(cr_tip));
+		// The control. Both tips reading the same number is exactly the state
+		// the bug was in, and a check that only looked for one of them would
+		// pass there.
+		check(fx_s != cr_s,
+		      QString("and the two intervals genuinely differ (%1 against %2), "
+		               "so this is not one number twice").arg(fx_s).arg(cr_s));
+		check(!cr_tip.contains(QString("every %1 seconds").arg(fx_s)),
+		      "with Chromium's not quoting Firefox's, which is what it did");
+	}
+
 	section("the kiosk menu entry says how to get out, truthfully");
 	{
 		policy_engine  kpol;

@@ -301,6 +301,91 @@ int main(int argc, char **argv) {
 		delete orig;
 	}
 
+	section("undo does not delete a tab opened since the snapshot");
+	{
+		// **The menu entry promises to "put the tree back the way it was before
+		// the last accepted reorganization", and the undo stays available until
+		// it is pressed.** Nothing invalidates the snapshot when the tree
+		// changes in between -- so between accepting a reorganization and
+		// pressing Undo, a person can open a tab. Its id is not in the
+		// snapshot.
+		//
+		// `restore` deleted everything the snapshot did not know, on the
+		// strength of a comment saying "whatever the snapshot never knew about
+		// is a folder the reorganization invented". That is true only if
+		// nothing has been added since, and it is a `delete` rather than a
+		// move: the ordinary Reopen Closed Tab net does not cover it, because
+		// nothing went through the deletion path.
+		//
+		// The invariant that makes the distinction safe is already in this
+		// file: `check_and_repair` REJECTS a proposal that invents a leaf id,
+		// so an unknown leaf cannot be the model's -- it is somebody's tab.
+		node *orig = build_original();
+		const tree_snapshot snap = tree_diff::snapshot(orig);
+
+		// The reorganization: a1 into Play, and an invented folder holding a2.
+		node *a1 = find(orig, "a1");
+		node *play = find(orig, "f2");
+		a1->parent->children.removeAll(a1);
+		a1->parent = play;
+		play->children.push_back(a1);
+		node *invented = add(orig, mk("f-new", true, "Invented"));
+		node *a2 = find(orig, "a2");
+		a2->parent->children.removeAll(a2);
+		a2->parent = invented;
+		invented->children.push_back(a2);
+
+		// And then the person opens three tabs: one at the top level, one
+		// inside a folder that survived, and one inside the folder the model
+		// invented -- which is the arrangement with nowhere obvious to put it
+		// back, since its parent is about to be deleted.
+		add(orig, mk("t9", false, "Opened afterwards",
+		              "https://example.com/after"));
+		add(find(orig, "f1"), mk("t10", false, "And another",
+		                          "https://example.com/after2"));
+		add(invented, mk("t11", false, "Opened in the new folder",
+		                  "https://example.com/after3"));
+
+		const int restored = tree_diff::restore(orig, snap);
+		check(restored > 0, QString("restore reports what it did (%1)").arg(restored));
+		check(find(orig, "f-new") == nullptr,
+		      "the invented folder is still gone");
+		check(find(orig, "t9") != nullptr,
+		      "a tab opened at the top level since the snapshot survives");
+		check(find(orig, "t10") != nullptr,
+		      "and so does one opened inside a folder");
+		check(find(orig, "t9") && find(orig, "t9")->parent == orig,
+		      QString("the top-level one is still at the top level (%1)")
+		          .arg(find(orig, "t9") && find(orig, "t9")->parent
+		                 ? find(orig, "t9")->parent->id : QString("nowhere")));
+		check(find(orig, "t10") && find(orig, "t10")->parent &&
+		          find(orig, "t10")->parent->id == "f1",
+		      QString("and the other is still in the folder it was opened in "
+		               "(%1)")
+		          .arg(find(orig, "t10") && find(orig, "t10")->parent
+		                 ? find(orig, "t10")->parent->id : QString("nowhere")));
+		// Reachable, not merely alive: a node whose parent no longer lists it
+		// is invisible to the tree and to every save, which is a leak wearing
+		// the appearance of a survivor.
+		check(shape(orig).contains("t9") && shape(orig).contains("t10"),
+		      QString("both are reachable from the root (%1)").arg(shape(orig)));
+		check(find(orig, "t11") != nullptr,
+		      "a tab opened inside the invented folder survives the folder");
+		check(find(orig, "t11") && find(orig, "t11")->parent == orig,
+		      QString("and goes to the root, since the folder it was in is the "
+		               "one being removed (%1)")
+		          .arg(find(orig, "t11") && find(orig, "t11")->parent
+		                 ? find(orig, "t11")->parent->id : QString("nowhere")));
+		check(shape(orig).contains("t11"),
+		      QString("reachable there rather than merely alive (%1)")
+		          .arg(shape(orig)));
+		check(tree_diff::leaf_ids(orig).size() == 6,
+		      QString("six leaves: the three that were there and the three that "
+		               "were opened (%1)")
+		          .arg(tree_diff::leaf_ids(orig).join(",")));
+		delete orig;
+	}
+
 	// **The net was dropping what it was there to save.** The section above
 	// checks that a forgotten leaf comes back and lands in the right parent.
 	// It said nothing about what came back *with* it, and the answer was: id,
