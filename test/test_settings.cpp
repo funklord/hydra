@@ -1475,6 +1475,34 @@ int main(int argc, char **argv) {
 		      "as does a job with no path at all");
 	}
 
+	section("what a download row says about the tab it came from");
+	{
+		// The row used to show the raw node id -- "From tab t-5" -- which is
+		// an internal token: the tree shows titles, and the id appears
+		// nowhere a person can see. The window is handed a namer rather than
+		// the tree, so the wording is the testable part and the hover is not.
+		check(download_tab_tooltip("t-5", "Qt documentation")
+		        .contains("Qt documentation"),
+		      "a tab that is still there is named");
+		check(!download_tab_tooltip("t-5", "Qt documentation").contains("t-5"),
+		      "and its id is not shown, having nothing to map it to");
+		// The history outlives the tabs in it, so this is the ordinary case
+		// rather than an error.
+		check(download_tab_tooltip("t-5", QString())
+		        .contains("no longer in the tree"),
+		      "a tab that has gone says so");
+		check(download_tab_tooltip(QString(), QString())
+		        .contains("Not associated"),
+		      "and a download with no tab at all is unchanged");
+		// **Deliberately not claimed: that this is the same tab.** `add_tab`
+		// takes the first free suffix, so a deleted id goes to the next new
+		// tab and a restored history row can name one it never came from.
+		// The wording says "a tab called X" for that reason, and this check
+		// is what stops it drifting back to "that tab".
+		check(!download_tab_tooltip("t-5", "Something").contains("that tab"),
+		      "and no row claims to name the very tab it came from");
+	}
+
 	section("a finished download can be removed, a running one cannot");
 	{
 		download_manager dm;

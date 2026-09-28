@@ -26639,6 +26639,65 @@ Not chosen here. What is new is that the feature has a reason for not
 existing, and the reason is a conflict between two sections of the design
 rather than work nobody got to.
 
+## A download row named the tab it came from by its internal id
+
+Found by following the id-recycling invariant out of §9: **what else is keyed
+by a node id?** The state blob, the history blob, the zoom and the dirty set
+are all cleaned up when a node goes -- the delete path names each and says
+what the missing one cost. A download job carries a `node_id` too, and the
+only thing that reads it is the status tooltip, which showed it raw:
+
+    From tab t-5
+
+That is an internal token. The tree shows titles; the id appears nowhere a
+person can see, and there is nothing to map it to. It says *"Started from a
+tab called ..."* now, *"The tab this came from is no longer in the tree"*
+when the id has gone, and the "not associated" case is unchanged.
+
+**The window is handed an answer rather than the tree.** `downloads_dialog`
+takes a `download_manager`, a `player_launcher` and a `local_proxy`, and
+giving it the model for a tooltip would couple the downloads window to the
+tree. A `tab_namer` callback is the shape the seam already uses for a view's
+decider, and `main_window` is the one place that knows both.
+
+**What the wording deliberately does not claim.** `add_tab` calls
+`unused_id("t")`, which returns the first free suffix -- so a deleted id goes
+to the next new tab, and a history row restored from disk can name a tab it
+never came from. Nothing in the stored row distinguishes the two. So it reads
+"a tab called X", which is what is known, and a check exists whose only job is
+to stop that drifting back into "that tab".
+
+The decision is a free inline function, testable without the window, as
+`download_folder_to_show` beside it already is. Five checks; putting the id
+back fails three.
+
+**And one line of it was wrong for a build.** The `set_tab_namer` call went in
+under an unbraced `if`, so it ran on every open rather than once per window.
+`-Wmisleading-indentation` said so, and the style gate said so eight times --
+which is the argument for both being in `make check` rather than either.
+
+### The runtime directory the Makefile predicted
+
+`make test-one` refused before any of this ran:
+
+    install: cannot change permissions of 'test/build-make/tmp/runtime-claude'
+
+That is the incident `test/Makefile`'s own comment describes -- Qt returns an
+empty `RuntimeLocation` for a directory carrying group or other bits, so the
+harness rebuilds it `-m 700` on every run, "and what it cannot fix is a wrong
+one that already exists". This one was `drwxrwS--- funk users`, created on
+2026-09-23 by something that was not this session, and `install` cannot chmod
+a directory it does not own.
+
+The remedy is the one that comment names: **remove it**. It is empty, it is
+git-ignored build output, and the next run recreates it correctly -- it came
+back `drwx--S--- claude users`, which is 2700 and one of the three modes the
+comment records Qt accepting.
+
+Worth the heading because the comment was written as a prediction and this is
+the prediction happening: a shared tree, a second writer, and a directory
+nobody can repair in place.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is

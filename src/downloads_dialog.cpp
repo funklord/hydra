@@ -448,9 +448,10 @@ void downloads_dialog::refresh() {
 		else if (!j.detail.isEmpty())
 			status += " — " + j.detail;
 		row->setText(col_status, status);
-		row->setToolTip(col_status, j.node_id.isEmpty()
-		                                 ? QString("Not associated with a tab")
-		                                 : QString("From tab %1").arg(j.node_id));
+		row->setToolTip(col_status,
+		                 download_tab_tooltip(j.node_id,
+		                                       m_tab_namer ? m_tab_namer(j.node_id)
+		                                                   : QString()));
 
 		// Multi-file jobs list their files as children, once the file list is
 		// known -- for a magnet that is only after metadata arrives.

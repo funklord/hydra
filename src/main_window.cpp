@@ -6230,9 +6230,23 @@ void main_window::open_settings() {
 }
 
 void main_window::open_downloads() {
-	if (!m_downloads_ui)
+	if (!m_downloads_ui) {
 		m_downloads_ui = new downloads_dialog(m_downloads, m_players,
 		                                      m_local_proxy, this);
+		// The window is handed an answer rather than the tree: it asks what
+		// a node id is called, and the model is the only thing that knows.
+		// Empty for an id that is not there, which the history is full of --
+		// it outlives the tabs in it.
+		//
+		// Braced, and the brace is the point: this sat under an unbraced
+		// `if` for one build, where it ran on every open rather than once
+		// per window. `-Wmisleading-indentation` said so and the style gate
+		// said so eight times.
+		m_downloads_ui->set_tab_namer([this](const QString &id) -> QString {
+			node *n = m_model ? m_model->node_by_id(id) : nullptr;
+			return n ? n->title : QString();
+		});
+	}
 	m_downloads_ui->show();
 	m_downloads_ui->raise();
 	m_downloads_ui->activateWindow();
