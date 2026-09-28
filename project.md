@@ -27894,3 +27894,20 @@ the snapshot. That is delete-by-name instead of delete-by-pattern, which is
 the rule this workspace already holds for files. Recorded rather than done:
 it changes the undo state's shape, and the loss it closes is a folder rather
 than a tab.
+
+### And the promise either side of it, now pinned
+
+Two places say the tree is safe until you accept -- the menu entry ("nothing
+changes until you accept") and the dialog's own line ("the tree is unchanged
+until you apply") -- and nothing checked either. It is not an idle claim:
+`check_and_repair` *does* write into a tree, re-attaching leaves the model
+dropped, and the only question is which tree. It writes into the proposal, and
+`apply_reorganization` runs from `on_accept` alone.
+
+Nine checks now assert it over a proposal that needs every kind of repair --
+one refused for an invented tab id, one repaired for a dropped leaf and a
+duplicate -- and they assert **pointer identity** as well as shape, because
+the repair copies a dropped leaf with `new node(*orig)` and a version that
+moved it instead would leave the same shape here with the original's node
+living in the proposal. The sabotage that makes the repair steal the node
+turns three of them red.

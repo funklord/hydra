@@ -301,6 +301,74 @@ int main(int argc, char **argv) {
 		delete orig;
 	}
 
+	section("the tree is untouched until a proposal is applied");
+	{
+		// **Two places promise this and nothing checked it.** The menu entry
+		// says "nothing changes until you accept" and the dialog says "the tree
+		// is unchanged until you apply", and between them sits a repair pass
+		// that writes into a tree -- `check_and_repair` re-attaches leaves the
+		// model dropped, which is a mutation, and the question is only which
+		// tree it mutates. `apply_reorganization` runs from `on_accept` alone.
+		//
+		// Pointer identity as well as shape: the repair copies a dropped leaf
+		// into the proposal with `new node(*orig)`, and a version that moved it
+		// instead would leave the same shape here with the original's node
+		// living in somebody else's tree.
+		node *orig = build_original();
+		const QString before = shape(orig);
+		node *p_a1 = find(orig, "a1"), *p_a2 = find(orig, "a2"),
+		     *p_a3 = find(orig, "a3"), *p_f1 = find(orig, "f1");
+		const QString t_f1 = p_f1->title;
+
+		// A proposal that needs every kind of repair: a1 listed twice, a2
+		// dropped, a folder invented, and f1 renamed.
+		node *prop = root_of();
+		node *f = add(prop, mk("f1", true, "Renamed by the model"));
+		add(f, mk("a1", false, "One"));
+		node *g = add(prop, mk("f2", true, "Play"));
+		add(g, mk("a3", false, "Three"));
+		add(g, mk("a1", false, "One again"));
+		node *nf = add(prop, mk("f-new", true, "Invented"));
+		add(nf, mk("a9", false, "This one does not exist"));
+
+		const proposal_report rep = tree_diff::check_and_repair(orig, prop);
+		check(!rep.usable,
+		      "a proposal inventing a tab id is refused, as it should be");
+		check(shape(orig) == before,
+		      QString("and the original is untouched by the refusal (%1)")
+		          .arg(shape(orig)));
+
+		// Now a repairable one, which is the case that writes.
+		node *prop2 = root_of();
+		node *f2 = add(prop2, mk("f1", true, "Renamed by the model"));
+		add(f2, mk("a1", false, "One"));
+		add(f2, mk("a1", false, "One again"));     // duplicate
+		node *nf2 = add(prop2, mk("f-new", true, "Invented"));
+		add(nf2, mk("a3", false, "Three"));
+		// a2 simply absent.
+		const proposal_report rep2 = tree_diff::check_and_repair(orig, prop2);
+		check(rep2.usable, "a repairable proposal is usable");
+		check(!rep2.dropped_ids.isEmpty() && !rep2.duplicated_ids.isEmpty(),
+		      "and it did have to repair something");
+		const QList<tree_change> ch = tree_diff::compute(orig, prop2);
+		check(!ch.isEmpty(), "and a change list is derived from it");
+
+		check(shape(orig) == before,
+		      QString("the tree still has its own shape (%1)").arg(shape(orig)));
+		check(find(orig, "a1") == p_a1 && find(orig, "a2") == p_a2 &&
+		          find(orig, "a3") == p_a3 && find(orig, "f1") == p_f1,
+		      "and the very same nodes, not copies put back");
+		check(p_f1->title == t_f1,
+		      QString("the folder the model renamed still has its own title "
+		               "(%1)").arg(p_f1->title));
+		check(tree_diff::leaf_ids(orig) == QStringList({"a1", "a2", "a3"}),
+		      QString("with every tab where it was (%1)")
+		          .arg(tree_diff::leaf_ids(orig).join(",")));
+		delete orig;
+		delete prop;
+		delete prop2;
+	}
+
 	section("undo does not delete a tab opened since the snapshot");
 	{
 		// **The menu entry promises to "put the tree back the way it was before
