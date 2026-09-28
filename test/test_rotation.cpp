@@ -278,6 +278,24 @@ public:
 	int made = 0;
 };
 
+// **The view a node has NOW, or nothing.** A `fake_view *` captured before
+// another tab is activated points at a deleted object the moment the
+// live-view cap evicts it -- and a raw pointer is not null afterwards, so
+// every `if (v)` guard below it passes and the dereference faults. Measured:
+// with the cap at 1, activating a second tab leaves `m_views_by_id` holding
+// one entry and the first pointer dangling, and this suite segfaulted twice
+// over, at the two places that hold two views at once.
+//
+// The cap is a user setting, bounded `qBound(1, n, 64)`, so 1 is a value
+// somebody can choose -- which is what made an unexercised configuration a
+// crash rather than a curiosity. Re-reading the map at the point of use is
+// what makes the guards below mean what they say.
+static fake_view *live_view(main_window &w, node *n) {
+	return n ? static_cast<fake_view *>(w.m_views_by_id.value(n->id, nullptr))
+	          : nullptr;
+}
+
+
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QApplication app(argc, argv);
@@ -1088,29 +1106,38 @@ int main(int argc, char **argv) {
 		fake_view *va = a ? show8(a) : nullptr;
 		node *b = w8.m_model->add_tab(nullptr, "site b", "https://b.example/");
 		fake_view *vb = b ? show8(b) : nullptr;   // b in front, a behind
-		check(va && vb, "two tabs, the second one in front");
+		// Re-read: activating b may have evicted a's view, and the pointer
+		// taken before that would not be null.
+		va = live_view(w8, a);
+		vb = live_view(w8, b);
+		const bool va_ok = va != nullptr, vb_ok = vb != nullptr;
+		if (!va_ok || !vb_ok) {
+			std::printf("  --    the live-view cap is below 2, so two tabs cannot be live at once and this section cannot ask its question\n");
+		} else {
+			check(va && vb, "two tabs, the second one in front");
 
-		const QString name = cosmetic_filters::bridge_name();
-		QObject *ba = va ? va->bridges.value(name, nullptr) : nullptr;
-		QObject *bb = vb ? vb->bridges.value(name, nullptr) : nullptr;
-		check(ba && bb && ba != bb,
-		       "each view holds a cosmetic bridge of its own");
+			const QString name = cosmetic_filters::bridge_name();
+			QObject *ba = va ? va->bridges.value(name, nullptr) : nullptr;
+			QObject *bb = vb ? vb->bridges.value(name, nullptr) : nullptr;
+			check(ba && bb && ba != bb,
+			       "each view holds a cosmetic bridge of its own");
 
-		// The tab BEHIND navigates. Its bridge must answer for its own host,
-		// and the front tab's must be untouched by it.
-		if (va)
-			va->navigated_to(QUrl("https://a.example/page"));
-		spin(100);
-		auto *ca = qobject_cast<cosmetic_filters *>(ba);
-		auto *cb = qobject_cast<cosmetic_filters *>(bb);
-		const QString sa = ca ? ca->debug_state() : QString("(no bridge)");
-		const QString sb = cb ? cb->debug_state() : QString("(no bridge)");
-		check(sa.startsWith("host=a.example"),
-		       QString("a tab loading behind answers for its own host (%1)")
-		         .arg(sa.section(' ', 0, 0)));
-		check(sb.startsWith("host=b.example"),
-		       QString("while the front tab keeps its own (%1)")
-		         .arg(sb.section(' ', 0, 0)));
+			// The tab BEHIND navigates. Its bridge must answer for its own host,
+			// and the front tab's must be untouched by it.
+			if (va)
+				va->navigated_to(QUrl("https://a.example/page"));
+			spin(100);
+			auto *ca = qobject_cast<cosmetic_filters *>(ba);
+			auto *cb = qobject_cast<cosmetic_filters *>(bb);
+			const QString sa = ca ? ca->debug_state() : QString("(no bridge)");
+			const QString sb = cb ? cb->debug_state() : QString("(no bridge)");
+			check(sa.startsWith("host=a.example"),
+			       QString("a tab loading behind answers for its own host (%1)")
+			         .arg(sa.section(' ', 0, 0)));
+			check(sb.startsWith("host=b.example"),
+			       QString("while the front tab keeps its own (%1)")
+			         .arg(sb.section(' ', 0, 0)));
+		}
 	}
 
 	section("the window says when nothing is reaching the disk");
@@ -2834,28 +2861,37 @@ int main(int argc, char **argv) {
 		// Put the first tab back in front, so the tab that reports below is a
 		// genuine background tab -- the case the shared blocker got wrong.
 		if (vf) show6(front);
-		check(vf && vb, "two tabs");
+		// Re-read after the second activation and the switch back: either
+		// can have evicted the other at a low cap.
+		vf = live_view(w6, front);
+		vb = live_view(w6, back);
+		const bool va_ok = vf != nullptr, vb_ok = vb != nullptr;
+		if (!va_ok || !vb_ok) {
+			std::printf("  --    the live-view cap is below 2, so a genuine background tab cannot exist and this section cannot ask its question\n");
+		} else {
+			check(vf && vb, "two tabs");
 
-		const QString cn = consent_blocker::bridge_name();
-		auto *cb = vb ? qobject_cast<consent_blocker *>(
-		                  vb->bridges.value(cn, nullptr)) : nullptr;
-		check(cb != nullptr, "the background tab has a consent blocker");
-		if (cb) {
-			// The background tab (back.example) finds a banner it cannot
-			// answer, while front.example is the current view.
-			cb->report_unhandled("Godta alle\tAvvis alle");
-			spin(50);
-			const QString loud = w6.m_banners_action->text();
-			check(loud.contains("(1)"),
-			      QString("and a count once one is (%1)").arg(loud));
-			// The list the dialog reads holds it under the tab's OWN host,
-			// not the front tab's -- the whole point of the fix.
-			const QStringList rows = w6.m_consent->unhandled();
-			check(rows.size() == 1 &&
-			       rows.first().startsWith("back.example\t"),
-			       QString("recorded under the reporting tab's host (%1)")
-			         .arg(rows.isEmpty() ? QString("(none)")
-			                              : rows.first().section('\t', 0, 0)));
+			const QString cn = consent_blocker::bridge_name();
+			auto *cb = vb ? qobject_cast<consent_blocker *>(
+			                  vb->bridges.value(cn, nullptr)) : nullptr;
+			check(cb != nullptr, "the background tab has a consent blocker");
+			if (cb) {
+				// The background tab (back.example) finds a banner it cannot
+				// answer, while front.example is the current view.
+				cb->report_unhandled("Godta alle\tAvvis alle");
+				spin(50);
+				const QString loud = w6.m_banners_action->text();
+				check(loud.contains("(1)"),
+				      QString("and a count once one is (%1)").arg(loud));
+				// The list the dialog reads holds it under the tab's OWN host,
+				// not the front tab's -- the whole point of the fix.
+				const QStringList rows = w6.m_consent->unhandled();
+				check(rows.size() == 1 &&
+				       rows.first().startsWith("back.example\t"),
+				       QString("recorded under the reporting tab's host (%1)")
+				         .arg(rows.isEmpty() ? QString("(none)")
+				                              : rows.first().section('\t', 0, 0)));
+			}
 		}
 	}
 

@@ -26698,6 +26698,61 @@ Worth the heading because the comment was written as a prediction and this is
 the prediction happening: a shared tree, a second writer, and a directory
 nobody can repair in place.
 
+## A segfault at the smallest setting a user can choose
+
+The live-view cap is a user setting, bounded `qBound(1, n, 64)` in both the
+setter and the runtime reader -- so **1 is a value somebody can pick in
+Settings**. The harness runs at 2, "hostile on purpose". Nobody had run
+anything at 1.
+
+    make test HYDRA_TEST_LIVE_VIEWS=1   ->  test_rotation, exit 139
+
+Reproducible, and not the browser's fault: `test_rotation` captures a
+`fake_view *` from `m_views_by_id`, activates a second tab, and then
+dereferences the first. At a cap of 2 both stay live. At 1 the second
+activation evicts the first and deletes it, and **a raw pointer is not null
+afterwards** -- so `check(va && vb, ...)` passed and `va->bridges` faulted.
+That is the trap `local_proxy::serve_file` already uses a `QPointer` to avoid,
+and its comment says why in as many words.
+
+Measured rather than reasoned, with a probe printing the map either way:
+
+    cap=1   a still live? 0   b live? 1   views=1
+    cap=2   a still live? 1   b live? 1   views=2
+
+**Two sites, not one.** The same shape sits at the consent-blocker section,
+which captures a front and a back view and then switches back -- it would have
+faulted the same way had the first crash not arrived first.
+
+The fix is to re-read the map at the point of use rather than hold a pointer
+across an activation, which is what makes the `if (v)` guards already in that
+code mean what they say. Where the scenario genuinely needs two live views --
+"each view holds a bridge of its own", "a tab loading behind answers for its
+own host" -- the section now says so and skips, the pattern this suite already
+uses for the checks root cannot run.
+
+**And then the configuration was exercised for the first time.** Every offline
+suite at a cap of 1: clean, bar the known font pin. `test_rotation` is 391 at
+cap 1 and 399 at cap 2, the difference being the eight checks in the two
+sections that cannot ask their question with one live view.
+
+So no browser defect at the minimum -- but that is now a measurement rather
+than an assumption, and the crash that was hiding it is gone.
+
+### Two environment claims that decide what is possible, re-measured
+
+Item 4's next step is a compliance question about the extractor prompt, and
+the entry says the model "was never the blocker ... Ollama serves
+`qwen2.5-coder:14b` here and has throughout". **Not on this machine, today:**
+nothing listening on 11434, no `~/.ollama`, no binary on `PATH`, and curl
+reports `000`. The `evidence/` corpus `test_replay` wants is not in this
+checkout either, which the entry already says.
+
+So both halves of item 4 are blocked here, and the sentence that said one of
+them never was is a present-tense claim about an environment, quoted rather
+than re-derived. Recorded so the next session does not run `test_live_model`
+and conclude the suite is broken.
+
 ## What is next (in order)
 
 Rewritten after a session that closed most of what used to be on it. What is
