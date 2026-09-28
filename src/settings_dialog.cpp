@@ -2109,12 +2109,21 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 	  "cover rather than pretending.",
 	  m_kiosk_fit, page));
 
-	// **Only means anything under Cover, and that is why it belongs here.**
-	// `fit` is on this page and Cover crops whatever does not fit; which edges
-	// get cropped is the question a person setting up a screen actually has --
-	// keep the top of a poster, keep the bottom of a departure board. The
-	// controller has always honoured it (`aligned_rect`); there was simply no
-	// way to say anything but centre.
+	// **It means something under two of the three scaling modes, and not the
+	// default one.** This comment used to say it "only means anything under
+	// Cover" and cite `aligned_rect` as the proof that the controller honoured
+	// it -- and `aligned_rect` is called from the `scale_mode::none` branch,
+	// which has nothing to do with Cover. Read rather than recalled:
+	//
+	//     scale_mode::none       aligned_rect(design, stage, alignment)
+	//     scale_mode::geometric  m_gview->setAlignment(alignment)
+	//     scale_mode::reflow     never reads alignment at all
+	//
+	// So the question it answers -- keep the top of a poster, keep the bottom
+	// of a departure board -- is a real one, and it is asked of the crop modes
+	// rather than of `fit`. Under Reflow the viewport is the whole stage and
+	// the page is laid out into it by the engine, so there is no design
+	// rectangle to place.
 	//
 	// Nine positions rather than two combos: it is one decision, and a grid of
 	// names is how every tool that has this setting spells it.
@@ -2129,9 +2138,10 @@ void settings_dialog::build_kiosk_page(QWidget *page) {
 		m_kiosk_align->addItem(sp.name, sp.h * 3 + sp.v);
 	v->addWidget(settings_row(
 	  "Anchor",
-	  "Where the design sits when it does not fill the screen, and which "
-	  "edges are cropped when Cover makes it larger. Only Cover crops; the "
-	  "other fits leave everything on screen.",
+	  "Where the design sits on a screen it does not fill, and which edges go "
+	  "when it is larger than the screen. Applies to the two scaling modes "
+	  "that place a design rectangle — No scaling and Geometric. Reflow lays "
+	  "the page into the whole screen, so there is nothing to anchor.",
 	  m_kiosk_align, page));
 
 	m_kiosk_w = new QSpinBox(page);

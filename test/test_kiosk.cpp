@@ -18,6 +18,7 @@
 #include <QGraphicsProxyWidget>
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QPointer>
 #include <QSignalSpy>
@@ -338,6 +339,75 @@ int main(int argc, char **argv) {
 		delete home;
 	}
 
+	section("the anchor reaches the modes that place a rectangle, and no others");
+	{
+		// **A setting whose own description sent people to the wrong mode.**
+		// The settings page said the anchor governed "which edges are cropped
+		// when Cover makes it larger", and the comment above the control said
+		// it "only means anything under Cover" -- citing `aligned_rect` as the
+		// proof the controller honoured it. `aligned_rect` is called from the
+		// `scale_mode::none` branch, which has nothing to do with Cover.
+		//
+		// So this asserts the relationship the code actually has, in both
+		// directions: under a mode that places a design rectangle the anchor
+		// moves it, and under reflow there is no rectangle to move. The second
+		// half is the one that catches the description coming back.
+		auto *home = new QWidget;
+		auto *view_p = new fake_view(home);
+		fake_view &view = *view_p;
+		home->resize(400, 300);
+		home->show();
+		spin(60);
+
+		kiosk_controller k;
+		kiosk_config cfg;
+		cfg.scale = scale_mode::none;
+		cfg.design_size = QSize(320, 240);
+		cfg.alignment = Qt::AlignLeft | Qt::AlignTop;
+		k.set_config(cfg);
+		check(k.enter(&view, home), "entering succeeds");
+		spin(100);
+		const QRect top_left = view.widget()->geometry();
+		cfg.alignment = Qt::AlignRight | Qt::AlignBottom;
+		k.set_config(cfg);
+		spin(60);
+		const QRect bottom_right = view.widget()->geometry();
+		check(top_left != bottom_right,
+		      QString("under No scaling the anchor moves the design (%1,%2 to "
+		               "%3,%4)")
+		          .arg(top_left.x()).arg(top_left.y())
+		          .arg(bottom_right.x()).arg(bottom_right.y()));
+		check(top_left.size() == bottom_right.size(),
+		      "without resizing it, since the anchor is a position");
+		k.exit();
+		spin(60);
+
+		// Reflow, with Cover so that something genuinely is larger than the
+		// viewport -- which is the case the old description named.
+		cfg.scale = scale_mode::reflow;
+		cfg.fit   = fit_mode::cover;
+		cfg.alignment = Qt::AlignLeft | Qt::AlignTop;
+		k.set_config(cfg);
+		check(k.enter(&view, home), "entering again under reflow");
+		spin(100);
+		const QRect r_top_left = view.widget()->geometry();
+		const double z_top_left = view.zooms.isEmpty() ? -1.0 : view.zooms.last();
+		cfg.alignment = Qt::AlignRight | Qt::AlignBottom;
+		k.set_config(cfg);
+		spin(60);
+		check(view.widget()->geometry() == r_top_left,
+		      QString("under Reflow the anchor moves nothing -- the viewport is "
+		               "the whole stage either way (%1x%2 at %3,%4)")
+		          .arg(r_top_left.width()).arg(r_top_left.height())
+		          .arg(r_top_left.x()).arg(r_top_left.y()));
+		check(view.zooms.last() == z_top_left,
+		      "and does not change the zoom either, so nothing about Cover's "
+		      "crop is anchored");
+		k.exit();
+		spin(60);
+		delete home;
+	}
+
 	section("geometric scale borrows the page through a scene and gives it back");
 	{
 		// The historically fragile path (sec 8.3), and the failure that matters
@@ -424,6 +494,123 @@ int main(int argc, char **argv) {
 		spin(150);
 		check(page && page->parentWidget() == home, "and handed back again");
 		delete home;
+	}
+
+	section("the way out is the way the settings page says it is");
+	{
+		// **The lockdown was verified to be DESCRIBED and never to work.**
+		// `test_rotation` asserts that the Kiosk Mode menu entry stops
+		// promising "Esc returns" when `allow_escape` is off, and
+		// `test_settings` asserts the flag survives a round trip -- so the
+		// sentence and the storage are covered and the key press is not. The
+		// settings row says turning it off means "Esc and F11 will not leave",
+		// and that an unattended display is why the switch exists; a lockdown
+		// that does not lock is the failure that matters, and it is the one
+		// nothing looked at.
+		//
+		// F11 is in this because of the reason the controller gives for
+		// handling it at all: the shell is hidden while kiosk is up, so the
+		// shortcut that got somebody in reaches nothing, and the stage has to
+		// answer for it itself.
+		auto send_key = [](QWidget *to, int key) {
+			QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier);
+			QCoreApplication::sendEvent(to, &press);
+		};
+
+		struct { int key; const char *name; } keys[] = {
+			{ Qt::Key_Escape, "Esc" },
+			{ Qt::Key_F11,    "F11" },
+		};
+
+		for (const auto &kk : keys) {
+			// Allowed: the key leaves, and leaving means the widget is handed
+			// back -- the contract the first section in this file is about,
+			// reached by the route a person actually uses.
+			{
+				auto *home = new QWidget;
+				auto *layout = new QVBoxLayout(home);
+				auto *view_p = new fake_view(home);
+				fake_view &view = *view_p;
+				layout->addWidget(view.widget());
+				home->resize(400, 300);
+				home->show();
+				spin(60);
+
+				kiosk_controller k;
+				kiosk_config cfg;
+				cfg.allow_escape = true;
+				k.set_config(cfg);
+				check(k.enter(&view, home), QString("%1: entered").arg(kk.name));
+				spin(100);
+				QWidget *stage = frameless_stage(home);
+				check(stage != nullptr, QString("%1: there is a stage").arg(kk.name));
+				if (stage)
+					send_key(stage, kk.key);
+				spin(100);
+				check(!k.active(),
+				       QString("%1 leaves when the setting allows it").arg(kk.name));
+				check(view.widget()->parentWidget() == home,
+				       QString("%1: and the page is handed back").arg(kk.name));
+				delete home;
+			}
+
+			// Locked down: the same key does nothing at all, which is the
+			// direction that matters. A public screen that can be escaped is
+			// the failure this switch exists to prevent.
+			{
+				auto *home = new QWidget;
+				auto *view_p = new fake_view(home);
+				fake_view &view = *view_p;
+				home->resize(400, 300);
+				home->show();
+				spin(60);
+
+				kiosk_controller k;
+				kiosk_config cfg;
+				cfg.allow_escape = false;
+				k.set_config(cfg);
+				check(k.enter(&view, home),
+				       QString("%1: entered locked down").arg(kk.name));
+				spin(100);
+				QWidget *stage = frameless_stage(home);
+				if (stage)
+					send_key(stage, kk.key);
+				spin(100);
+				check(k.active(),
+				       QString("%1 does not leave when it is locked down")
+				         .arg(kk.name));
+				k.exit();
+				spin(80);
+				delete home;
+			}
+		}
+
+		// The control: a key that is neither must not leave in either mode, or
+		// the checks above would pass for a stage that exits on any key at all.
+		{
+			auto *home = new QWidget;
+			auto *view_p = new fake_view(home);
+			fake_view &view = *view_p;
+			home->resize(400, 300);
+			home->show();
+			spin(60);
+
+			kiosk_controller k;
+			kiosk_config cfg;
+			cfg.allow_escape = true;
+			k.set_config(cfg);
+			k.enter(&view, home);
+			spin(100);
+			QWidget *stage = frameless_stage(home);
+			if (stage)
+				send_key(stage, Qt::Key_A);
+			spin(100);
+			check(k.active(),
+			       "an ordinary key does not leave even with Esc allowed");
+			k.exit();
+			spin(80);
+			delete home;
+		}
 	}
 
 	section("idle reset walks back home");

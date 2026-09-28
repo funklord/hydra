@@ -27733,3 +27733,101 @@ question, so it is not settled here:
 The measurement above is what both answers need. The diagnostic in this
 section is independent of it and is in: whichever way the promise is settled,
 a listen that did not happen should say so.
+
+## Every claim the settings page makes, checked against the code
+
+The VPN sentence in the previous section was found by accident, while reading
+the row above the field being fixed. That is a lens: **the settings page makes
+32 statements about how this program behaves, and each one is checkable.** A
+row's description is not documentation a reader can take or leave -- it is
+what somebody consults at the moment they are deciding, and the only account
+of the behaviour most people will ever read.
+
+Extracted mechanically (every `settings_row(title, description, ...)`) and
+read one by one. What held, with the method beside it, because an absence is
+only a measurement when it says how it was taken:
+
+    the API key is "not saved -- in memory     save_from() writes ai/claude_model
+    for this session only"                     and nothing else; already asserted
+                                               against the file itself in test_settings
+    the colour scheme "engine reads it once,   theme::set_web_engine_scheme is called
+    at launch"                                 once, from main.cpp, as a Chromium flag
+                                               before the engine starts
+    cookies exclude "localStorage, IndexedDB,  the factory's own clear report says the
+    service workers ... the report below        same sentence; both read
+    says where it is"
+    "%1 stands for the terms, url-encoded"     search_url percent-encodes, tested
+    autofill "only on HTTPS pages"             autofill_controller::set_https_only,
+                                               wired per view and tested twice
+    "reflow cannot stretch ... approximates    asserted this session: stretch equals
+    with cover"                                cover, and neither is contain
+    idle reset "Never means never"             the `> 0` guard, tested
+
+Two did not hold, and they are the two this section is for.
+
+### The anchor's description sent people to the mode where it does nothing
+
+    Where the design sits when it does not fill the screen, and which edges
+    are cropped when Cover makes it larger. Only Cover crops; the other fits
+    leave everything on screen.
+
+Measured by reading every use of `m_config.alignment`:
+
+    scale_mode::none       aligned_rect(design, stage, alignment)
+    scale_mode::geometric  m_gview->setAlignment(alignment)
+    scale_mode::reflow     never reads it at all
+
+So the anchor reaches the two crop modes and **not the default one**, and
+`fit` has nothing to do with it. Under Reflow -- which is the default and what
+anybody who has not changed it is using -- the viewport is the whole stage and
+the anchor moves nothing, whatever the fit. "Only Cover crops" is wrong the
+other way too: the controller's own header calls `none` "the robust crop path",
+because a design larger than the screen is cropped there by construction.
+
+**The same misunderstanding was written down twice**, which is what makes it
+worth a section rather than a one-line fix. The comment above the control said
+it "only means anything under Cover" and cited `aligned_rect` as proof that the
+controller honoured it -- and `aligned_rect` is called from the `none` branch,
+which has nothing to do with Cover. The citation contradicted the claim it was
+offered for, in the same sentence, and nothing in the ordinary course of work
+brings a UI string and a `switch` together.
+
+Both are corrected, and the relationship is asserted in both directions:
+changing the anchor under No scaling moves the design and does not resize it,
+and changing it under Reflow with Cover moves neither the geometry nor the
+zoom. The second half is the one that catches the description coming back, and
+the sabotage that makes reflow honour the anchor turns it red.
+
+**What is left open, and is the copyright holder's:** whether Reflow with
+Cover *should* honour the anchor. It can be read as a missing feature rather
+than a wrong sentence -- Cover does zoom past the viewport, so content is cut
+off, and which edge is cut is a real question for a poster or a departure
+board. Honouring it would mean scrolling the page after layout, which is a
+different mechanism from placing a rectangle and is the engine's business
+rather than the controller's. The description now says what the code does; if
+the answer is that it should do more, the sentence goes back.
+
+### A lockdown that was verified to be described and never to work
+
+`allow_escape = false` is what makes an unattended public screen stay on the
+page it was left on. Its settings row says so plainly: "Esc and F11 will not
+leave, and on a machine with no keyboard shortcut left there may be no way out
+except ending the process. It is here because unattended displays need it."
+
+What was tested: that the **menu entry's status tip** stops promising "Esc
+returns" when the flag is off (`test_rotation`), and that the flag survives a
+round trip through the ini (`test_settings`). So the sentence and the storage
+were covered, and **the key press was not** -- nothing in the tree had ever
+sent a key to a kiosk stage. A lockdown that does not lock is the failure that
+matters, and it is the one nothing looked at.
+
+Thirteen checks now drive it: for Esc and for F11, the key leaves when the
+setting allows it *and the page is handed back*, and the same key does nothing
+at all when it is locked down. F11 is in there for the reason the controller
+gives for handling it: the shell is hidden while kiosk is up, so the shortcut
+that got somebody in reaches nothing and the stage has to answer for it.
+
+Three sabotages, each through its own check: the flag ignored (both locked
+cases go red), the F11 arm dropped (both F11 cases), and `leaving` made always
+true -- which is caught only by the control, an ordinary key that must not
+leave in either mode.
