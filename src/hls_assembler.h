@@ -46,6 +46,15 @@ public:
 	int     segments_done() const { return m_index; }
 	int     segments_total() const { return m_playlist.segments.size(); }
 	bool    finished() const { return m_finished; }
+	// **Whether the list that was assembled was still growing** -- no
+	// `#EXT-X-ENDLIST`. The parse has known this all along and nothing read
+	// it, so a capture of a live stream completed in exactly the same words as
+	// a whole VOD while the file held whatever window the playlist happened to
+	// offer. That is the intended behaviour for watching -- the tee-to-disk
+	// trick above turns a live stream into a locally seekable one -- and it is
+	// not what "saved" usually means, so the difference is worth a sentence.
+	// Only meaningful once `completed()` has been emitted.
+	bool    was_live() const { return m_playlist.is_live; }
 
 signals:
 	// Emitted as each segment lands, so a reader knows how much is playable.

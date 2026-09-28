@@ -27335,3 +27335,56 @@ emitted as a reparent, and the two passes collapsed into one. The cycle
 one is worth reading -- moving `f1` into its own child leaves
 `root[a1]`, with `f1` and its subtree detached into a ring that nothing
 owns, so the guard is holding more than tidiness.
+
+## A field written and never read: the live stream that said "saved"
+
+The last defect -- `compute()` recording a folder's position and `apply()`,
+its only reader, ignoring it -- is a lens rather than an incident. Swept
+mechanically over the 281 fields of every `struct` in `src/*.h`, counting
+`.field` and `->field` uses across `src/` and splitting writes from reads:
+**sixteen fields are written and never read.** Most are informational and
+honestly so -- `media_format::format_id` exists because yt-dlp prints it
+and hydra downloads the URL itself rather than re-invoking yt-dlp with
+`-f`, and `resolved_media::webpage_url` is the page the extractor dialog
+already holds. One was not.
+
+**`hls_playlist::is_live` was parsed, tested, and read by nothing in
+`src/`.** A playlist with no `#EXT-X-ENDLIST` is still growing, so running
+out of segments is the end of the window it published rather than the end
+of the stream -- and `hls_assembler::next_segment` says exactly that in a
+comment:
+
+    // A live playlist keeps growing, so "ran out of segments" is only the
+    // end for VOD. Re-polling a live list is the next increment; for now
+    // say plainly that what we captured is what there is.
+
+It then emits `completed()`, which is the same thing it emits for a whole
+film. Nothing said plainly, or at all. So saving a live stream produced a
+file holding whatever rolling window the playlist offered -- typically
+tens of seconds of a broadcast -- reported as `Saved <path>.` with no
+reason for anybody to look for the rest.
+
+**The snapshot is not the defect and that is why this is a message
+change.** The header is explicit that writing segments as they arrive is
+the point: a live stream becomes a locally seekable VOD, which is the
+sec 11.3 tee-to-disk trick, and for *watching* it is exactly right. What
+was wrong is that "saved" and "saved the part that existed while you
+asked" were the same sentence. `hls_assembler::was_live()` reads the field
+that was already there, and `stream_assembly` says so on both arms of the
+completion -- watching and saving.
+
+**On both messages of the save, not just the first.** The rewrap answers
+a second later and overwrites the status line, so a caveat left only on
+the earlier message is a caveat nobody ends up reading.
+
+**The VOD control is the section rather than decoration.** A note appended
+to every save passes a live-only check, so the same fixture saves an
+ENDLIST playlist and asserts the note is absent. The same pair runs for
+the watch branch, because a two-armed message with one arm tested is
+where the wrong arm sits unnoticed. Two sabotages: `was_live()` wired to
+`false` fails the live check, and the note made unconditional fails the
+control.
+
+Incidentally the fixture's VOD manifest is called `live.m3u8`, which is
+where this was hiding in plain sight: the only playlist the suite had ever
+assembled was named for the case it was not.

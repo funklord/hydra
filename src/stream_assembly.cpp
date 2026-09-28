@@ -90,14 +90,23 @@ void stream_assembly::assemble(const media_item &item,
 	});
 
 	connect(m_assembler, &hls_assembler::completed, this, [this, out, play_it] {
+		// A live list has no end, so running out of segments is the end of the
+		// *window it published* and not the end of the stream. `hls_assembler`
+		// said as much in a comment and told nobody; saying "saved" with no
+		// more than that is how somebody ends up with thirty seconds of a
+		// broadcast and no reason to look for the rest.
+		const bool live = m_assembler && m_assembler->was_live();
 		if (play_it) {
 			// **Not remuxed, deliberately.** A player already has this file
 			// open and has been reading it since the first segment landed --
 			// that is the tee-to-disk trick above. Rewrapping it now would
 			// replace the file underneath a running player to gain a container
 			// nobody is going to seek around afterwards.
-			emit status(QStringLiteral("Stream assembled; playback continues "
-			                            "locally."));
+			emit status(live
+			  ? QStringLiteral("Live stream: captured what the playlist "
+			                    "offered; playback continues locally.")
+			  : QStringLiteral("Stream assembled; playback continues "
+			                    "locally."));
 			return;
 		}
 
@@ -106,12 +115,20 @@ void stream_assembly::assemble(const media_item &item,
 		// the message says what happened either way rather than only on
 		// success -- "saved" with no mention of the container would leave
 		// somebody wondering why they have a `.ts`.
-		emit status(QString("Saved %1; rewrapping…").arg(out));
+		// The note travels to both messages rather than only the first: the
+		// rewrap answers a second later and overwrites the line, so a caveat
+		// left on the earlier one is a caveat nobody ends up looking at.
+		const QString note = live
+		  ? QStringLiteral(" Live stream, so this is the window the playlist "
+		                    "offered rather than the whole broadcast.")
+		  : QString();
+		emit status(QString("Saved %1; rewrapping…%2").arg(out, note));
 		auto *remux = new media_remux(this);
 		connect(remux, &media_remux::finished, this,
-		         [this, remux](bool ok, const QString &path, const QString &why) {
-			emit status(ok ? QString("Saved %1.").arg(path)
-			                : QString("Saved %1 — %2").arg(path, why));
+		         [this, remux, note](bool ok, const QString &path,
+		                              const QString &why) {
+			emit status(ok ? QString("Saved %1.%2").arg(path, note)
+			                : QString("Saved %1 — %2%3").arg(path, why, note));
 			remux->deleteLater();
 		});
 		remux->start(out);

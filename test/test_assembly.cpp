@@ -443,6 +443,89 @@ int main(int argc, char **argv) {
 		px.close_capture(curl);
 	}
 
+	section("a live playlist says so when it is saved, and a whole one does not");
+	{
+		// A playlist with no #EXT-X-ENDLIST is still growing, so running out of
+		// segments is the end of the window it published rather than the end of
+		// the stream. `hls_playlist` has parsed that all along as `is_live` and
+		// nothing in src/ read it, so a captured thirty seconds of a broadcast
+		// completed in exactly the same words as a whole film.
+		//
+		// The VOD control is the point of the section rather than decoration: a
+		// note appended to every save would pass the first check on its own.
+		QByteArray rolling = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n";
+		for (int i = 0; i < 2; ++i)
+			rolling += "#EXTINF:4.0,\n/seg" + QByteArray::number(i) + ".ts\n";
+		cdn.files["/rolling.m3u8"] = rolling;   // and no ENDLIST
+
+		auto save_and_listen = [&](const QString &label, const QString &path) {
+			media_item it;
+			it.kind  = media_kind::hls;
+			it.label = label;
+			it.url   = QUrl(base + path);
+			auto *sa = new stream_assembly(&players, &downloads, &proxy, nullptr);
+			QStringList lines;
+			QObject::connect(sa, &stream_assembly::status,
+			                  [&lines](const QString &t) { lines << t; });
+			sa->save(it, stream_context{});
+			QElapsedTimer el;
+			el.start();
+			while (sa->running() && el.elapsed() < 15000)
+				spin(50);
+			spin(600);   // the rewrap answers after the assembly has finished
+			delete sa;
+			return lines;
+		};
+
+		const QStringList live_said = save_and_listen("rolling.m3u8",
+		                                              "/rolling.m3u8");
+		const QStringList vod_said  = save_and_listen("live.m3u8", "/live.m3u8");
+
+		check(!live_said.isEmpty() && !vod_said.isEmpty(),
+		       "both saves reported something");
+		check(live_said.filter("Live stream").size() > 0,
+		       QString("the live one says what it captured (%1)")
+		           .arg(live_said.join(" | ")));
+		check(vod_said.filter("Live stream").size() == 0,
+		       QString("and the complete one does not, so this is not a note on "
+		                "every save (%1)").arg(vod_said.join(" | ")));
+		check(live_said.filter("Saved").size() > 0,
+		       "the live one still reports the file it wrote");
+
+		// Watching is the other branch of the same ternary and has its own
+		// wording, so it gets its own check rather than being assumed from the
+		// save above: an untested branch of a two-armed message is exactly
+		// where the wrong arm sits unnoticed.
+		auto watch_and_listen = [&](const QString &label, const QString &path) {
+			media_item it;
+			it.kind  = media_kind::hls;
+			it.label = label;
+			it.url   = QUrl(base + path);
+			auto *sa = new stream_assembly(&players, &downloads, &proxy, nullptr);
+			QStringList lines;
+			QObject::connect(sa, &stream_assembly::status,
+			                  [&lines](const QString &t) { lines << t; });
+			sa->watch(it, stream_context{});
+			QElapsedTimer el;
+			el.start();
+			while (sa->running() && el.elapsed() < 15000)
+				spin(50);
+			spin(200);
+			delete sa;
+			return lines;
+		};
+		const QStringList live_watch = watch_and_listen("rolling.m3u8",
+		                                               "/rolling.m3u8");
+		const QStringList vod_watch  = watch_and_listen("live.m3u8", "/live.m3u8");
+		check(live_watch.filter("Live stream").size() > 0,
+		       QString("watching a live list says so too (%1)")
+		           .arg(live_watch.join(" | ")));
+		check(vod_watch.filter("Live stream").size() == 0 &&
+		          vod_watch.filter("playback continues").size() > 0,
+		       QString("and watching a complete one keeps the words it had (%1)")
+		           .arg(vod_watch.join(" | ")));
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;
 }
