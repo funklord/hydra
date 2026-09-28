@@ -27648,3 +27648,88 @@ What made the download folder different is that it is **the person's own
 input**, accepted and written to the ini. Everything else in the list is a
 path the program derived, where the only question was whether a later
 failure gets reported, and it does.
+
+## A listen that never happened, and a sentence about a VPN that is not true
+
+`torrent_download_source` subscribes to `alert_category::error` and handled
+six alert types; `listen_failed_alert` was not one of them, so it arrived and
+was dropped with the ones nothing reads. `listen_interfaces` is a string
+somebody typed into the settings page, libtorrent reports a refusal through
+that alert and through nothing else, and the session goes on making outgoing
+connections -- so a typo, an address this machine does not have, or a port
+already taken looked like a slow swarm rather than a setting that did not
+take. Nothing incoming can arrive, which is most of what seeding is.
+
+**Measured with a probe against this libtorrent rather than read off the
+header**, which describes `listen_interface()` as "the network device
+libtorrent attempted to listen on, or the IP address":
+
+    asked for            alert      device   address         error
+    203.0.113.1:6881     FAILED     []       203.0.113.1     Cannot assign requested address
+    127.0.0.1:22         FAILED     [lo]     127.0.0.1       Permission denied
+    lo:6881              SUCCEEDED  -        127.0.0.1:6882  -
+    nosuchdev0:6881      none at all
+
+So the device is filled in only when the address belongs to one of this
+machine's, which is exactly not the typo case -- the warning is composed from
+the address and port, with the device added when there is one. The first
+version used `listen_interface()` alone and printed *could not listen on  (Cannot
+assign requested address)*, naming nothing. It named nothing in the test
+output too, which is how it was caught.
+
+### The silent case, which no alert covers
+
+**A device name that does not exist produces no alert of any kind**, and the
+session ends up with `listen_port() == 0` and `is_listening() == false`. It
+does **not** fall back to every interface -- measured, not assumed, because
+that would have been a privacy failure rather than a quiet one.
+
+That case needed asking rather than listening: one `is_listening()` check per
+setting, two seconds after it was applied, because binding is asynchronous and
+the first poll can arrive before it finishes. `is_listening()` is documented
+for exactly this question.
+
+### A sabotage caught a check that could not fail
+
+The check for "a new setting gets a fresh answer" set a *different* bad
+address the second time -- and a different address is a different key, so it
+warned whether or not the memory of the first was ever cleared. Removing the
+clear left the suite green. What the clear is for is somebody fixing the
+setting and putting the broken one back, which is what a person does while
+working out why their torrents are slow; the check sets the same value twice
+now and reads 1 then 2. Four sabotages, each caught through its own check.
+
+### Open, and the copyright holder's: the VPN sentence
+
+The settings row for this field says:
+
+    Hydra does not tunnel torrent traffic. If you run a VPN at the system
+    level, naming its interface here -- tun0:6881, say -- keeps torrent
+    traffic on it, and announces stop if that interface goes away.
+
+**That is not what the setting does, per libtorrent's own documentation.**
+`listen_interfaces` governs incoming TCP and uTP, and outgoing uTP, tracker
+and DHT traffic. **Outgoing TCP peer connections are bound by
+`outgoing_interfaces`, which this project does not set at all** -- so they
+leave by the default route. Outgoing TCP is how most peers are contacted, so
+a person relying on that sentence has most of their peer traffic outside the
+tunnel.
+
+Two resolutions, and this is a promise about privacy rather than a wording
+question, so it is not settled here:
+
+- **Set `outgoing_interfaces` from the same field** (it takes names or IPs
+  and no ports, so the port is stripped). The sentence becomes true. The cost
+  is a stronger confinement than exists today and a new failure mode
+  libtorrent documents: with outgoing interfaces set, a device that does not
+  exist makes *every* outgoing peer connection fail, and incoming packets to
+  a local address not in the list are rejected with `peer_blocked_alert`. For
+  a VPN user that is arguably the wanted behaviour -- nothing leaves when the
+  tunnel is down -- and it is a different program from the one shipping now.
+- **Change the sentence** to say it confines incoming connections and leaves
+  outgoing TCP to the system route. Cheap, honest, and records the present
+  behaviour as intended.
+
+The measurement above is what both answers need. The diagnostic in this
+section is independent of it and is in: whichever way the promise is settled,
+a listen that did not happen should say so.

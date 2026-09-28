@@ -200,11 +200,15 @@ endif
 # have. test/README.md says what each one wants.
 NEEDS_MORE = test_helpers_live test_live_model test_ytdlp_live test_replay
 # HELD_BACK: runs here, passes here, and is kept out of the default target for
-# its runtime alone. Measured 2026-09-22: `test_torrent` 36 s and `test_watch`
-# 33 s against a 93-second `make test`, so the pair nearly doubles the target a
-# person runs before every commit. They stand up a real libtorrent swarm
-# in-process over loopback -- no tracker, no DHT, no server to start -- and
-# `make test-one T=test_torrent` runs one now, with nothing else needed.
+# its runtime alone. Re-measured 2026-09-28: `test_torrent` 79 s and
+# `test_watch` 34 s, where 2026-09-22 recorded 36 s and 33 s. So the reason for
+# holding them back has grown rather than gone, and the pair is now most of a
+# `make test` again. Two runs of the same test_torrent binary minutes apart
+# differed by 6 s, so the number is noisy and the growth is not attributed to
+# anything here -- what is measured is the cost, not its cause. They stand up a
+# real libtorrent swarm in-process over loopback -- no tracker, no server to
+# start -- and `make test-one T=test_torrent` runs one, with nothing else
+# needed.
 HELD_BACK  = test_torrent test_watch
 ALL_SUITES = $(basename $(notdir $(wildcard test/test_*.cpp)))
 SUITES     = $(filter-out $(NEEDS_MORE) $(HELD_BACK),$(ALL_SUITES))

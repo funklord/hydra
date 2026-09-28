@@ -531,6 +531,113 @@ static void test_resume_data() {
 	}
 }
 
+// A listen that cannot succeed, and the complaint libtorrent makes about it
+// through an alert that was being dropped.
+static void test_listen_refused() {
+	section("a listen the machine refuses is said out loud");
+
+	// **An address this machine does not have**, rather than a privileged port:
+	// 203.0.113.0/24 is TEST-NET-3 and is assigned to nobody, so binding it
+	// fails with "Cannot assign requested address" for every user including
+	// root. A low port would have needed a `geteuid` guard, and a guarded check
+	// goes quiet exactly where somebody runs the suite privileged.
+	QStringList said;
+	QtMessageHandler prev = qInstallMessageHandler(nullptr);
+	qInstallMessageHandler(prev);
+	static QStringList *sink = &said;
+	static QtMessageHandler chain = prev;
+	qInstallMessageHandler([](QtMsgType t, const QMessageLogContext &c,
+	                           const QString &m) {
+		if (t == QtWarningMsg)
+			*sink << m;
+		if (chain)
+			chain(t, c, m);
+	});
+
+	{
+		auto *tor = new torrent_download_source;
+		tor->set_state_directory(QDir(g_tmp).filePath("listen-state"));
+		tor->set_listen_interfaces("203.0.113.1:6881");
+		// The alerts are drained by a 500 ms timer on the GUI thread, so this
+		// has to let the event loop run rather than sleeping.
+		QElapsedTimer t;
+		t.start();
+		while (said.filter("could not listen").isEmpty() && t.elapsed() < 8000)
+			spin(100);
+
+		const QStringList hits = said.filter("could not listen");
+		check(!hits.isEmpty(),
+		       QString("the refusal is reported (%1)")
+		         .arg(hits.isEmpty() ? QString("nothing said") : hits.first()));
+		check(hits.isEmpty() || hits.first().contains("203.0.113.1:6881"),
+		       QString("naming the address and port that were refused (%1)")
+		         .arg(hits.isEmpty() ? QString() : hits.first()));
+		check(hits.isEmpty() || hits.first().contains("seed nothing"),
+		       "and what it costs, since the session goes on working outbound");
+
+		// Said once, not once per poll: the alert arrives again on every
+		// attempt, and a warning per poll fills a log with one sentence.
+		const int after_first = said.filter("could not listen").size();
+		spin(1500);
+		check(said.filter("could not listen").size() == after_first,
+		       QString("and said once rather than once per poll (%1 then %2)")
+		         .arg(after_first).arg(said.filter("could not listen").size()));
+
+		// **A new setting gets a fresh answer, and the case that proves it is
+		// the SAME value twice.** The first version of this set a *different*
+		// address the second time -- and a different address is a different
+		// key, so it warned whether or not the memory was ever cleared. The
+		// sabotage said so: removing the clear left the suite green. What the
+		// clear is for is somebody fixing the setting and then putting the
+		// broken one back, which is what a person does while working out why
+		// their torrents are slow.
+		const int first_round = said.filter("203.0.113.1:6881").size();
+		tor->set_listen_interfaces("127.0.0.1:0");   // any port, always bindable
+		spin(1500);
+		check(said.filter("could not listen").size() == first_round,
+		       QString("a value that works says nothing (%1)")
+		         .arg(said.filter("could not listen").size()));
+
+		tor->set_listen_interfaces("203.0.113.1:6881");
+		t.restart();
+		while (said.filter("203.0.113.1:6881").size() == first_round &&
+		        t.elapsed() < 8000)
+			spin(100);
+		check(said.filter("203.0.113.1:6881").size() > first_round,
+		       QString("and the same wrong value put back is reported again "
+		                "rather than swallowed by the memory of the first "
+		                "(%1 then %2)")
+		         .arg(first_round)
+		         .arg(said.filter("203.0.113.1:6881").size()));
+
+		// **The silent case, which no alert covers.** A device name that does
+		// not exist produces no alert at all -- measured with a probe -- and
+		// the session ends up listening on nothing. It is also the shape the
+		// settings page recommends, which offers `tun0:6881` for keeping
+		// torrent traffic on a VPN: a VPN that is down is a device that is not
+		// there. So this is asked of `is_listening()` rather than of an alert,
+		// two seconds after the setting, because binding is asynchronous.
+		tor->set_listen_interfaces("nosuchdev0:6881");
+		t.restart();
+		while (said.filter("nothing is listening").isEmpty() && t.elapsed() < 8000)
+			spin(100);
+		const QStringList silent = said.filter("nothing is listening");
+		check(!silent.isEmpty(),
+		       QString("a device that does not exist is reported, though "
+		                "libtorrent says nothing about it (%1)")
+		         .arg(silent.isEmpty() ? QString("nothing said") : silent.first()));
+		check(silent.isEmpty() || silent.first().contains("nosuchdev0"),
+		       "naming the setting, which is the only identifying thing there is");
+		const int once = said.filter("nothing is listening").size();
+		spin(1500);
+		check(said.filter("nothing is listening").size() == once,
+		       QString("and asked once rather than on every poll (%1 then %2)")
+		         .arg(once).arg(said.filter("nothing is listening").size()));
+		delete tor;
+	}
+	qInstallMessageHandler(prev);
+}
+
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication app(argc, argv);
@@ -547,6 +654,7 @@ int main(int argc, char **argv) {
 	test_multi_file_and_seeding();
 	test_magnet_and_errors();
 	test_resume_data();
+	test_listen_refused();
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

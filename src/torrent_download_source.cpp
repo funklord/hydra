@@ -1,6 +1,7 @@
 #include "torrent_download_source.h"
 
 #include <QDir>
+#include <QElapsedTimer>
 #include <QList>
 #include <QSet>
 #include <QFile>
@@ -58,6 +59,18 @@ struct torrent_download_source::impl {
 	// alert arrives on every save and on completion, so a per-alert warning
 	// would fill a log with one sentence.
 	QSet<QString>                resume_unwritten;
+	// Interfaces libtorrent refused to listen on. Said once each, and cleared
+	// when the setting changes: `listen_interfaces` is a string somebody typed,
+	// so a new value deserves a fresh answer, and a machine with several
+	// addresses posts one alert per address per operation.
+	QSet<QString>                listen_failed;
+	// When the listen setting was last applied, and whether the one-shot
+	// "is anything listening at all" check has run for it. Binding is
+	// asynchronous, so the question cannot be asked at the moment the setting
+	// is applied -- and it has to be asked, because the silent case below
+	// produces no alert to hang a warning on.
+	QElapsedTimer                listen_since;
+	bool                         listen_checked = true;
 };
 
 bool torrent_download_source::available() { return true; }
@@ -213,6 +226,12 @@ void torrent_download_source::set_connection_limits(int global, int per_torrent)
 void torrent_download_source::set_listen_interfaces(const QString &interfaces) {
 	m_listen_interfaces = interfaces;
 #ifdef HYDRA_HAVE_LIBTORRENT
+	// A new setting gets a fresh answer, including the same complaint again if
+	// it is still wrong. Without this, fixing the value and then breaking it
+	// the same way in one session would be silent the second time.
+	m_d->listen_failed.clear();
+	m_d->listen_since.restart();
+	m_d->listen_checked = false;
 	if (m_d->session && !interfaces.isEmpty()) {
 		lt::settings_pack sp;
 		sp.set_str(lt::settings_pack::listen_interfaces,
@@ -805,6 +824,67 @@ void torrent_download_source::poll_alerts() {
 			continue;
 		}
 
+		if (auto *lf = lt::alert_cast<lt::listen_failed_alert>(a)) {
+			// **What a refused listen costs, which is why it is said.**
+			// `listen_interfaces` is a setting somebody typed, and libtorrent
+			// reports a refusal through this alert and through nothing else --
+			// the session goes on making outgoing connections, so a typo, an
+			// address this machine does not have, or a port already taken
+			// looks like a slow swarm rather than like a setting that did not
+			// take. Nothing incoming can arrive, which is most of what seeding
+			// is, and on a swarm with few seeds it is most of downloading too.
+			//
+			// This was subscribed to and dropped: the session asks for
+			// `alert_category::error`, so the alert was already arriving and
+			// being thrown away with the ones nothing reads.
+			// **Composed from the address, not from `listen_interface()`,
+			// because that is empty for the case somebody types.** Measured
+			// with a probe against this libtorrent rather than read off the
+			// header, which describes it as "the network device libtorrent
+			// attempted to listen on, or the IP address":
+			//
+			//     203.0.113.1:6881  device []      address [203.0.113.1]
+			//     127.0.0.1:22      device [lo]    address [127.0.0.1]
+			//
+			// So the device is filled in only when the address belongs to one
+			// of this machine's, which is exactly not the typo case. The
+			// address is what the person recognises either way, and the device
+			// is added when there is one.
+			//
+			// **And a device name that does not exist produces no alert at
+			// all** -- `nosuchdev0:6881` was measured silent -- so that class
+			// of mistake stays unreported and this cannot help it.
+			QString where;
+			if (!lf->address.is_unspecified() || lf->port != 0) {
+				where = QString::fromStdString(lf->address.to_string()) + ":" +
+				        QString::number(lf->port);
+			}
+			const QString device = QString::fromUtf8(lf->listen_interface())
+			                         .trimmed();
+			if (!device.isEmpty())
+				where += (where.isEmpty() ? QString() : QStringLiteral(" "))
+				          + "on " + device;
+			// Nothing identifying in the alert: name the setting instead, which
+			// is the thing that would have to change.
+			if (where.isEmpty())
+				where = m_listen_interfaces;
+			if (!m_d->listen_failed.contains(where)) {
+				m_d->listen_failed.insert(where);
+				// Keyed by the setting as well, so the one-shot check at the
+				// bottom of this function does not say the same thing a second
+				// time in different words when the two spellings differ --
+				// `127.0.0.1:22 on lo` against `127.0.0.1:22`.
+				m_d->listen_failed.insert(m_listen_interfaces);
+				qWarning("torrent: could not listen on %s (%s); incoming peers "
+				          "cannot arrive, so this will seed nothing and may "
+				          "download slowly",
+				          qUtf8Printable(where),
+				          qUtf8Printable(QString::fromStdString(
+				            lf->error.message())));
+			}
+			continue;
+		}
+
 		if (auto *err = lt::alert_cast<lt::torrent_error_alert>(a)) {
 			const int job = m_d->job_of_handle.value(err->handle.id(), 0);
 			if (!job)
@@ -814,6 +894,37 @@ void torrent_download_source::poll_alerts() {
 			m_d->completed.remove(job);
 			emit finished(job, false, QString::fromStdString(err->error.message()));
 			continue;
+		}
+	}
+
+	// **The silent case, which no alert covers.** Measured with a probe
+	// against this libtorrent: a `listen_interfaces` naming a device that does
+	// not exist -- `nosuchdev0:6881` -- produces **no alert of any kind**, and
+	// the session ends up with `listen_port() == 0` and `is_listening() ==
+	// false`. So nothing incoming can arrive and nothing was said. That is
+	// exactly the shape the settings page recommends: its own description
+	// offers `tun0:6881` for keeping torrent traffic on a VPN, and a VPN that
+	// is down is a device that is not there.
+	//
+	// It does not fall back to every interface, which is the one good part --
+	// measured, not assumed, because the alternative would be a privacy
+	// failure rather than a quiet one.
+	//
+	// Asked once per setting and two seconds after it was applied, because
+	// binding is asynchronous: the answer does not exist at the moment
+	// `apply_settings` returns, and the first poll can arrive before it does.
+	// `is_listening()` is documented for precisely this question.
+	if (!m_d->listen_checked && !m_listen_interfaces.isEmpty() &&
+	    m_d->listen_since.isValid() && m_d->listen_since.elapsed() > 2000) {
+		m_d->listen_checked = true;
+		if (!m_d->session->is_listening() &&
+		    !m_d->listen_failed.contains(m_listen_interfaces)) {
+			m_d->listen_failed.insert(m_listen_interfaces);
+			qWarning("torrent: nothing is listening after asking for %s; "
+			          "incoming peers cannot arrive, so this will seed nothing "
+			          "and may download slowly. A device name that does not "
+			          "exist is refused without an error.",
+			          qUtf8Printable(m_listen_interfaces));
 		}
 	}
 
