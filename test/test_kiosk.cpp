@@ -15,7 +15,11 @@
 #include <QApplication>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QGraphicsProxyWidget>
+#include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QLabel>
+#include <QPointer>
 #include <QSignalSpy>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -31,6 +35,30 @@ static void spin(int ms) {
 	QEventLoop l;
 	QTimer::singleShot(ms, &l, &QEventLoop::quit);
 	l.exec();
+}
+
+// The stage is a frameless top-level the controller makes for itself, and the
+// geometric path detaches the page from it -- so `widget()->window()` stops
+// answering and the stage has to be found rather than walked to.
+static QWidget *frameless_stage(QWidget *home) {
+	const QList<QWidget *> tops = QApplication::topLevelWidgets();
+	for (QWidget *w : tops) {
+		if (w == home || w->parentWidget())
+			continue;
+		if (w->windowFlags() & Qt::FramelessWindowHint)
+			return w;
+	}
+	return nullptr;
+}
+
+static QGraphicsProxyWidget *embedded(QGraphicsView *gv) {
+	if (!gv || !gv->scene())
+		return nullptr;
+	const QList<QGraphicsItem *> items = gv->scene()->items();
+	for (QGraphicsItem *it : items)
+		if (auto *p = qgraphicsitem_cast<QGraphicsProxyWidget *>(it))
+			return p;
+	return nullptr;
 }
 
 // A view that is only a widget, and a record of what was asked of it.
@@ -190,6 +218,211 @@ int main(int argc, char **argv) {
 		check(!view.zooms.isEmpty(), "with a single zoom factor, as cover would use");
 		k.exit();
 		spin(80);
+		delete home;
+	}
+
+	section("the four fits under reflow, and how they relate");
+	{
+		// Checking each zoom factor against a recomputed min/max would be the
+		// controller's arithmetic written twice, and would pass against a
+		// broken switch as readily as a correct one so long as the test copied
+		// the same mistake. What the header promises is a set of RELATIONS --
+		// contain never zooms past cover, actual does not zoom at all, and
+		// stretch is cover under another name -- and a relation cannot hold
+		// while one side changes.
+		auto *home = new QWidget;
+		auto *view_p = new fake_view(home);
+		fake_view &view = *view_p;
+		home->resize(800, 600);
+		home->show();
+		spin(60);
+
+		kiosk_controller k;
+		kiosk_config cfg;
+		cfg.scale = scale_mode::reflow;
+		cfg.design_size = QSize(1400, 500);   // 2.8:1, so no stage matches it
+		cfg.fit = fit_mode::contain;
+		k.set_config(cfg);
+		check(k.enter(&view, home), "entering succeeds");
+		spin(100);
+		QWidget *const stage = view.widget()->parentWidget();
+		std::printf("  --    stage %dx%d against a 1400x500 design\n",
+		             stage ? stage->width() : -1, stage ? stage->height() : -1);
+		check(!view.zooms.isEmpty(), "contain sets a zoom");
+		const double z_contain = view.zooms.isEmpty() ? -1.0 : view.zooms.last();
+
+		cfg.fit = fit_mode::cover;    k.set_config(cfg); spin(30);
+		const double z_cover = view.zooms.last();
+		cfg.fit = fit_mode::stretch;  k.set_config(cfg); spin(30);
+		const double z_stretch = view.zooms.last();
+		cfg.fit = fit_mode::actual;   k.set_config(cfg); spin(30);
+		const double z_actual = view.zooms.last();
+		std::printf("  --    contain %.4f  cover %.4f  stretch %.4f  actual %.4f\n",
+		             z_contain, z_cover, z_stretch, z_actual);
+
+		check(z_actual == 1.0, "actual means exactly 1.0, whatever the stage is");
+		check(z_stretch == z_cover,
+		      "stretch falls back to cover, which is what the header says it does");
+		if (z_contain == z_cover) {
+			// Only reachable on a stage that happens to be 2.8:1, where the
+			// two are the same number and the comparison would be vacuous.
+			std::printf("  --    this stage matches the design's aspect, so "
+			             "contain and cover coincide and are not compared\n");
+		} else {
+			check(z_contain < z_cover,
+			      "contain fits inside what cover fills, so it is the smaller zoom");
+		}
+		check(view.widget()->size() == stage->size(),
+		      "and under reflow the viewport fills the stage in every fit, since "
+		      "the page is what reflows");
+		k.exit();
+		spin(60);
+		delete home;
+	}
+
+	section("crop-via-clip keeps the viewport at its native size");
+	{
+		// scale_mode::none is the robust path and was never run. Its whole
+		// behaviour is a geometry: native size, positioned by alignment, and
+		// whatever hangs over the edge is the stage's problem.
+		auto *home = new QWidget;
+		auto *view_p = new fake_view(home);
+		fake_view &view = *view_p;
+		home->resize(800, 600);
+		home->show();
+		spin(60);
+
+		kiosk_controller k;
+		kiosk_config cfg;
+		cfg.scale = scale_mode::none;
+		cfg.design_size = QSize(640, 480);
+		cfg.alignment = Qt::AlignLeft | Qt::AlignTop;
+		k.set_config(cfg);
+		check(k.enter(&view, home), "entering succeeds");
+		spin(100);
+
+		QWidget *const stage = view.widget()->parentWidget();
+		check(stage && stage != home, "the page is on the stage");
+		std::printf("  --    stage %dx%d against a 640x480 design\n",
+		             stage ? stage->width() : -1, stage ? stage->height() : -1);
+		check(!view.zooms.isEmpty() && view.zooms.last() == 1.0,
+		      "nothing is scaled, which is the whole of what 'none' means");
+		check(view.widget()->size() == QSize(640, 480),
+		      QString("the viewport stays the design size (%1x%2), which is what "
+		               "separates this from reflow")
+		          .arg(view.widget()->width()).arg(view.widget()->height()));
+		check(view.widget()->pos() == QPoint(0, 0),
+		      "top-left alignment puts it in the corner");
+
+		cfg.alignment = Qt::AlignRight | Qt::AlignBottom;
+		k.set_config(cfg);
+		spin(40);
+		QRect g = view.widget()->geometry();
+		check(g.x() + g.width() == stage->width() &&
+		          g.y() + g.height() == stage->height(),
+		      QString("bottom-right alignment puts its far corner on the stage's "
+		               "(%1,%2 %3x%4)")
+		          .arg(g.x()).arg(g.y()).arg(g.width()).arg(g.height()));
+
+		cfg.alignment = Qt::AlignCenter;
+		k.set_config(cfg);
+		spin(40);
+		g = view.widget()->geometry();
+		const int left = g.x(), right = stage->width() - (g.x() + g.width());
+		const int top = g.y(), bottom = stage->height() - (g.y() + g.height());
+		check(qAbs(left - right) <= 1 && qAbs(top - bottom) <= 1,
+		      QString("centring leaves equal margins (%1/%2 across, %3/%4 down)")
+		          .arg(left).arg(right).arg(top).arg(bottom));
+		k.exit();
+		spin(60);
+		delete home;
+	}
+
+	section("geometric scale borrows the page through a scene and gives it back");
+	{
+		// The historically fragile path (sec 8.3), and the failure that matters
+		// is not a wrong pixel. QGraphicsProxyWidget takes ownership of what it
+		// embeds, so a teardown that deletes the scene without releasing the
+		// widget first destroys the tab -- which is the same loss the first
+		// section in this file exists to catch, by a route that section cannot
+		// reach.
+		auto *home = new QWidget;
+		auto *layout = new QVBoxLayout(home);
+		auto *view_p = new fake_view(home);
+		fake_view &view = *view_p;
+		layout->addWidget(view.widget());
+		home->resize(800, 600);
+		home->show();
+		spin(80);
+
+		QPointer<QWidget> page(view.widget());
+
+		kiosk_controller k;
+		kiosk_config cfg;
+		cfg.scale = scale_mode::geometric;
+		cfg.fit = fit_mode::contain;
+		// Deliberately not a size whose contain factor comes out at 1.0: an
+		// identity transform is what a path that never calls setTransform
+		// leaves behind, so a design that scales by one would pass this section
+		// with the transform untouched.
+		cfg.design_size = QSize(500, 400);
+		k.set_config(cfg);
+		check(k.enter(&view, home), "entering succeeds");
+		spin(150);
+
+		QPointer<QWidget> stage(frameless_stage(home));
+		check(stage != nullptr, "there is a stage");
+		QGraphicsView *gv = stage ? stage->findChild<QGraphicsView *>() : nullptr;
+		check(gv != nullptr, "with a graphics view in it");
+		check(page && page->parentWidget() == nullptr,
+		      "and the page is embedded rather than parented, since addWidget "
+		      "only takes a top-level");
+		check(page && page->size() == QSize(500, 400),
+		      QString("rendered at the design size (%1x%2) with the transform "
+		               "doing the scaling")
+		          .arg(page ? page->width() : -1).arg(page ? page->height() : -1));
+
+		QGraphicsProxyWidget *proxy = embedded(gv);
+		check(proxy != nullptr, "the scene holds the page");
+		const QTransform t_contain = proxy ? proxy->transform() : QTransform();
+		check(proxy && t_contain.m11() == t_contain.m22(),
+		      QString("contain scales both axes alike (%1, %2)")
+		          .arg(t_contain.m11()).arg(t_contain.m22()));
+		check(proxy && t_contain.m11() != 1.0,
+		      "and it is a scale rather than an identity, which is what an "
+		      "untouched transform would look like");
+
+		cfg.fit = fit_mode::stretch;
+		k.set_config(cfg);
+		spin(60);
+		const QTransform t_stretch = proxy ? proxy->transform() : QTransform();
+		std::printf("  --    stretch transform %.4f x %.4f\n",
+		             t_stretch.m11(), t_stretch.m22());
+		if (stage && stage->width() * 400 == stage->height() * 500) {
+			std::printf("  --    this stage matches the design's aspect, so "
+			             "stretch and contain coincide and are not compared\n");
+		} else {
+			check(proxy && t_stretch.m11() != t_stretch.m22(),
+			      "stretch scales the axes independently -- the thing reflow "
+			      "cannot do, and the reason this mode exists");
+		}
+
+		k.exit();
+		spin(150);
+		check(page != nullptr,
+		      "the page still exists after leaving: the proxy owned it and had "
+		      "to be made to let go");
+		check(page && page->parentWidget() == home,
+		      "and is back in the window, which is the contract");
+		check(stage == nullptr, "the stage is gone");
+
+		check(k.enter(&view, home),
+		      "and it can be entered again, so the teardown left nothing stale");
+		spin(150);
+		check(page && page->parentWidget() == nullptr, "on a second scene");
+		k.exit();
+		spin(150);
+		check(page && page->parentWidget() == home, "and handed back again");
 		delete home;
 	}
 

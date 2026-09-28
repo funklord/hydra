@@ -202,8 +202,17 @@ void kiosk_controller::exit() {
 		view_settings s;   // defaults restore scrollbars
 		m_view->apply_settings(s);
 
-		QWidget *w = m_view->widget();
+		// Ask for the widget *after* the scene has let go of it rather than
+		// before. A QGraphicsProxyWidget owns what it embeds, so a release
+		// that did not happen leaves the scene free to delete the page -- and
+		// a pointer captured above that point is then written through by the
+		// `setParent` below, which is a crash in the middle of handing a tab
+		// back rather than a tab that fails to come back. Re-reading through
+		// the QPointer costs nothing and makes the order of these two lines
+		// stop mattering: if the page is gone, this misses it and says so by
+		// not restoring, instead of taking the process with it.
 		teardown_geometric();
+		QWidget *w = m_view ? m_view->widget() : nullptr;
 		if (w) {
 			w->setParent(m_restore_to);   // null parent is fine: it just detaches
 			w->setContextMenuPolicy(Qt::DefaultContextMenu);

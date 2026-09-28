@@ -27199,3 +27199,76 @@ section 57 recorded as living outside `tests/live/`, and they run in
 the default group here because nothing in the tree says `@test live`.
 This tree's `fmake.toml` carries no `test-env`; the line is
 `test-env = ["QT_QPA_PLATFORM=offscreen"]` under `[project]`.
+
+## Kiosk: two of twelve scale-and-fit combinations had ever been run
+
+`test_kiosk` was written to prove the thing that matters most about kiosk
+mode -- that a borrowed tab widget comes back -- and it proved it on one
+path. Counted rather than assumed:
+
+    test/test_kiosk.cpp:152:    cfg.scale = scale_mode::reflow;
+    test/test_kiosk.cpp:153:    cfg.fit   = fit_mode::contain;
+    test/test_kiosk.cpp:184:    cfg.scale = scale_mode::reflow;
+    test/test_kiosk.cpp:185:    cfg.fit   = fit_mode::stretch;
+
+Three scale modes times four fits is twelve selectable pairs; two were
+exercised. Fewer than twelve are distinct behaviours -- `none` reads no
+fit and reflow reads no alignment -- but the pairs are what a kiosk
+operator picks from, and both untested scale modes are on the settings
+page. One of them is the path the header itself calls "historically
+fragile" (sec 8.3). This is the same lens that found the live-view-cap crash a few
+entries above -- a legal configuration nothing had ever run -- pointed
+at an enum instead of a number.
+
+**What the three new sections assert, and why not the arithmetic.**
+Checking each zoom factor against a recomputed `min`/`max` would be the
+controller's own switch written twice, and a test that copies the
+mistake passes with it. So the reflow section asserts *relations*
+instead: `actual` is exactly 1.0 whatever the stage is, `stretch` equals
+`cover` (which is the fallback the header promises, now pinned rather
+than described), `contain` is the smaller factor, and every fit leaves
+the viewport filling the stage -- because under reflow the page is what
+reflows. `none` is a geometry and nothing else: native size whatever
+the stage is, which is precisely what separates it from reflow, and its
+far corner where the alignment says. `geometric` reads the proxy's
+transform out of the scene through public API and shows the axes
+scaling independently, which is the one thing reflow cannot do and the
+whole reason the mode exists.
+
+**The design size is chosen so that a correct transform is not the
+identity.** `contain` against an 800x800 offscreen stage comes out at
+1.0 for an 800x400 design -- and a `geometric` path that never called
+`setTransform` at all would leave exactly that behind. 500x400 scales
+by 1.6, so the check can tell a scale from an untouched matrix.
+
+**Seven sabotages, each caught by a check in the section it belongs
+to**: `stretch` collapsing to `min` under reflow, `actual` picking up
+`sx`, `none` filling the stage like reflow, `none` ignoring the
+alignment, `geometric`'s `stretch` collapsing to one factor,
+`geometric` skipping the resize to the design size, and the ownership
+release being dropped.
+
+### The ownership sabotage crashed instead of failing, and that was a finding
+
+`QGraphicsProxyWidget` owns what it embeds, so `teardown_geometric()`
+has to `setWidget(nullptr)` before deleting the scene or the page dies
+with it. Commenting that line out is the sabotage the geometric section
+exists for -- and the suite segfaulted before reaching the check, which
+is `evidence.md`'s rule that a control has to fail *through* the check
+under test rather than merely fail.
+
+The reason was one line of ordering in `exit()`: the widget pointer was
+captured before `teardown_geometric()` and `setParent` was called
+through it afterwards. Correct as the code stands, because teardown only
+detaches -- and a use-after-free the moment anything makes that untrue.
+Re-reading `m_view->widget()` after the teardown, through the QPointer
+that is already there, costs nothing and makes the order of the two
+lines stop mattering: if the page really is gone, the restore misses it
+and the tab fails to come back, instead of taking the process down in
+the middle of handing one over. With that in, the sabotage turns two
+checks red by name.
+
+Not a live defect -- nothing in the shipped path deletes the page during
+teardown. It is the difference between a wrong answer and a crash, for a
+mode that already carries a warning about needing testing on the target
+hardware.
