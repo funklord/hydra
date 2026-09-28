@@ -105,6 +105,20 @@ signals:
 	// path lives, and clearing in one place while saving in another would be
 	// one operation split across two.
 	void annoyance_reports_cleared();
+	// **A setting that could not be honoured, for the window to say out loud.**
+	// The download folder is the case that named this: `apply()` called
+	// `mkpath` on whatever was typed and dropped the answer, so a path that
+	// cannot be created -- a typo, a read-only mount, a volume that is not
+	// plugged in, a parent that is a file -- was accepted, written to the ini,
+	// and then failed once per download with nothing connecting those failures
+	// to the setting that caused them.
+	//
+	// **Not a `QMessageBox`.** `accept()` calls `apply()` and closes the dialog
+	// immediately, so a note left in the dialog would flash and go -- and a
+	// modal in a path the suite drives is a hang waiting for somebody's
+	// fixture. The window's status bar is where this tree says "that did not
+	// happen" already, and a signal is what a test can watch.
+	void could_not_apply(const QString &text);
 
 private:
 	// Below this the category list stops being a sidebar and becomes a

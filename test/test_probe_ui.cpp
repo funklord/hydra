@@ -21,6 +21,7 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
+#include <QFileInfo>
 #include <QLabel>
 #include <QTreeWidget>
 #include <QLineEdit>
@@ -189,6 +190,68 @@ int main(int argc, char **argv) {
 		check(!ok_said.isEmpty() && !ok_said.contains("could not be saved"),
 		      QString("and a write that works is not (%1)").arg(ok_said));
 		check(QFile::exists(fine), "the file really was written");
+	}
+
+	section("a download folder that cannot be created is not adopted");
+	{
+		// `apply()` called `mkpath` on whatever was typed and dropped the
+		// answer, so an uncreatable path was stored and every download after it
+		// failed separately, with nothing to connect those failures to the
+		// setting. `set_directory` is a bare setter and refuses nothing.
+		//
+		// The unwritable path is a directory *under a regular file*, which
+		// nothing can create -- including root, so this needs no euid guard and
+		// cannot go quiet on a machine where the suite runs privileged.
+		const QString blocker = QDir(tmp).filePath("a-file-not-a-folder");
+		{
+			QFile f(blocker);
+			f.open(QIODevice::WriteOnly);
+			f.write("x");
+		}
+		const QString impossible = blocker + "/downloads";
+		const QString good_dir   = QDir(tmp).filePath("downloads-that-work");
+
+		download_manager dm;
+		dm.set_directory(good_dir);
+		QDir().mkpath(good_dir);
+		settings_dialog d(&players, &dm, nullptr, &local_ai, &external_ai);
+		QSignalSpy refused(&d, &settings_dialog::could_not_apply);
+
+		auto *box = d.findChild<QLineEdit *>("download_dir");
+		check(box != nullptr, "the folder box is there to type into");
+		check(box && box->text() == good_dir,
+		       "showing the folder the manager already has");
+
+		box->setText(impossible);
+		// Through `accept()`, which is the button a person presses: `apply()`
+		// is private, and the public route proves the whole path rather than
+		// one method of it.
+		d.accept();
+		check(refused.count() == 1,
+		       QString("the dialog says it could not be applied (%1 time(s))")
+		         .arg(refused.count()));
+		check(refused.count() == 1 &&
+		          refused.first().first().toString().contains(impossible),
+		       QString("naming the folder that was asked for (%1)")
+		         .arg(refused.count() ? refused.first().first().toString()
+		                              : QString()));
+		check(dm.directory() == good_dir,
+		       QString("and downloads still go where they were going (%1)")
+		         .arg(dm.directory()));
+		check(box && box->text() == good_dir,
+		       "with the box back to the folder in use, rather than showing one "
+		       "nothing can write to");
+
+		// The control: a folder that can be made is adopted, and silently.
+		const QString fresh = QDir(tmp).filePath("downloads-new");
+		box->setText(fresh);
+		d.accept();
+		check(refused.count() == 1,
+		       QString("a folder that can be created says nothing (%1)")
+		         .arg(refused.count()));
+		check(dm.directory() == fresh,
+		       QString("and is adopted (%1)").arg(dm.directory()));
+		check(QFileInfo(fresh).isDir(), "and created");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

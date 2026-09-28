@@ -27595,3 +27595,56 @@ instance (`it names the holder instead ()`).
 
 The end-to-end message was read rather than asserted -- `main()` links into
 no test -- by pointing `XDG_DATA_HOME` at a directory with mode 500.
+
+## A download folder nothing could create was accepted and written down
+
+The same sweep, the same shape, in the settings dialog:
+
+    if (m_downloads && !m_dir->text().trimmed().isEmpty()) {
+        QDir().mkpath(m_dir->text());          // <- the answer
+        m_downloads->set_directory(m_dir->text());
+    }
+
+`set_directory` is a bare setter -- `{ m_dir = dir; }` -- so nothing in the
+path refuses anything. A folder that cannot be created (a typo, a read-only
+mount, a volume that is not plugged in, a parent that is a file) was
+adopted, written to `downloads/directory` in the ini, and then failed once
+per download afterwards, with nothing connecting those failures to the
+setting that caused them.
+
+The answer is `load_tree`'s, one file along: keep the thing that works and
+say why. The folder in use stays in use, the box goes back to showing it
+rather than a path nothing can write to, and the dialog emits
+`could_not_apply` for the window to put in its status bar -- the same
+12-second line, and the same `m_page_note` clearing, that `saved_or_said`
+uses for a write that did not happen.
+
+**Not a `QMessageBox`, and not a note in the dialog.** `accept()` calls
+`apply()` and closes immediately, so a note in the dialog would flash and
+go; and a modal on a path the suite drives is a hang waiting for somebody's
+fixture. A signal is also the only one of the three a test can watch.
+
+**The unwritable path in the test is a directory under a regular file**,
+which nothing can create -- including root. Every other way of making a
+path unwritable needs a `geteuid` guard, and a guarded check is one that
+goes quiet exactly where somebody runs the suite privileged.
+
+Nine checks, driven through `accept()` rather than the private `apply()`,
+which is the button a person presses. Two sabotages: the folder adopted
+anyway (downloads move to a folder that does not exist, and the box keeps
+showing it), and the refusal made silent.
+
+**And the sweep is closed rather than left half-read, because the next
+person will otherwise run it again.** The other unchecked `mkpath` calls --
+`state_store`, the engine profile, the torrent state directory, the http
+download source, the annoyance log, the proxy's capture directory, the
+first-run tree seed -- are all followed immediately by an `open` or a write
+whose failure *is* reported, one per attempt, through `saved_or_said`,
+`keep_or_disown` or a job's own error. The app-data ones are also now
+unreachable from the default profile: a directory the lock file cannot be
+made in refuses the launch outright, which is the fix above this one.
+
+What made the download folder different is that it is **the person's own
+input**, accepted and written to the ini. Everything else in the list is a
+path the program derived, where the only question was whether a later
+failure gets reported, and it does.

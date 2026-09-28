@@ -2825,8 +2825,23 @@ void settings_dialog::apply() {
 	}
 
 	if (m_downloads && !m_dir->text().trimmed().isEmpty()) {
-		QDir().mkpath(m_dir->text());
-		m_downloads->set_directory(m_dir->text());
+		// **The folder is only set when it exists, and the answer is read.**
+		// `mkpath`'s result was dropped, so an uncreatable path was stored and
+		// every download after it failed separately -- and `set_directory` is a
+		// bare setter with nothing to refuse it. Keeping the folder that works
+		// and saying why is `load_tree`'s answer to the same question, one file
+		// along: the person's own file stays the one being used, and the box
+		// goes back to showing it rather than a path nothing can write to.
+		const QString want = m_dir->text();
+		if (QDir().mkpath(want)) {
+			m_downloads->set_directory(want);
+		} else {
+			put_value(m_dir, m_downloads->directory());
+			emit could_not_apply(
+			    QString("The download folder %1 could not be created. "
+			             "Downloads still go to %2.")
+			        .arg(want, m_downloads->directory()));
+		}
 	}
 
 	if (m_torrents) {

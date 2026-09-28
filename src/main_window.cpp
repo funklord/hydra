@@ -6210,6 +6210,15 @@ void main_window::open_settings() {
 	// log only to decide whether to offer the control, and this is where the
 	// file's path lives. Doing the two halves in two places is how a store
 	// ends up emptied in memory and intact on disk.
+	// The same shape as `saved_or_said`, and for the same reason: a setting the
+	// dialog could not honour is a change the person made that did not happen,
+	// and the status bar is where this window says that.
+	connect(&dlg, &settings_dialog::could_not_apply, this,
+	         [this](const QString &text) {
+		if (m_status)
+			m_status->showMessage(text, 12000);
+		m_page_note = false;
+	});
 	connect(&dlg, &settings_dialog::annoyance_reports_cleared, this, [this] {
 		if (!m_annoyances)
 			return;
