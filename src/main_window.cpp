@@ -5083,6 +5083,30 @@ bool main_window::keep_or_disown(bool loaded, QString *path,
 	return false;
 }
 
+void main_window::warn_no_tree(const QString &path) {
+	// **A refused load is not the same as nowhere to save, and saying so when
+	// there is somewhere would be a lie the person cannot check.** `load_tree`
+	// returns false in two states: refused with nothing assigned, which is
+	// this one, and refused but rescued to a `.new` name beside a file it
+	// could not read -- where the session persists perfectly well. The caller
+	// cannot tell those apart from the return value, so the condition lives
+	// here beside the claim, as `keep_or_disown`'s does.
+	if (!m_tree_path.isEmpty())
+		return;
+	qCritical("tree: nothing will be saved this session -- no tree could be "
+	           "loaded (last tried %s)", qPrintable(path));
+	if (m_status)
+		m_status->showMessage(
+		    QString("No tab tree could be opened (%1). Nothing will be saved "
+		             "this session -- tabs, view state and history are this "
+		             "window only.")
+		        .arg(path.isEmpty() ? QStringLiteral("no path")
+		                             : QFileInfo(path).fileName()), 0);
+	// As in `keep_or_disown`: true for the whole session, so the next
+	// navigation must not retire it.
+	m_page_note = false;
+}
+
 stream_context main_window::page_context(web_view_backend *v) const {
 	stream_context ctx;
 	if (!v)

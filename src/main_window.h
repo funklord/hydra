@@ -96,6 +96,27 @@ public:
 
 	bool load_tree(const QString &path);
 
+	// **Say in the window that this session has nowhere to save.** Called by
+	// `main()` when neither the tree it was asked for nor the personal one
+	// could be loaded, which leaves `m_tree_path` unset -- and every writer
+	// here is guarded on the path it never got, so the browser comes up
+	// working and persists nothing at all: no tree, no view state, no tab
+	// histories.
+	//
+	// It is the counterpart of `keep_or_disown`, which says exactly this for
+	// the policy file, the filters and the annoyance log. The tree was the one
+	// store with no such line, and the reason it went unnoticed is that
+	// `load_tree` does print one -- to stderr, which a desktop launch has
+	// nowhere to show. `main()`'s fallback also dropped the second load's
+	// return value, so even the stderr line was the first attempt's.
+	//
+	// **Silent when the window does have a path**, which is the difference
+	// between this and a warning keyed on `load_tree`'s answer: that returns
+	// false for two states, and the other one -- refused a file it could not
+	// read, rescued to a `.new` name beside it -- saves perfectly well and
+	// says so itself.
+	void warn_no_tree(const QString &path);
+
 	// What a fetch outside the engine should say about itself, for the page
 	// `v` is on: the Referer that page would send, and what this browser
 	// calls itself.

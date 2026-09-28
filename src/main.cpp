@@ -484,12 +484,26 @@ int main(int argc, char *argv[]) {
 	// Falling back to the personal tree, loudly. It is the file the same
 	// command with no argument would have opened, so the browser is the one
 	// the person already has rather than an empty imitation of it.
+	//
+	// **And the fallback's own answer is read.** It was dropped, so a machine
+	// where app data cannot be written -- a read-only home, a full disk --
+	// reached exactly the state this block exists to prevent, and the only
+	// line about it was the *first* attempt's. The same hole covered the
+	// commoner shape: with no argument the two paths are the same file, the
+	// `!=` guard skips the whole block, and nothing here says anything at all.
+	// `load_tree` does say something, on stderr, which a desktop launch has
+	// nowhere to show.
 	if (!w.load_tree(tree_path)) {
 		const QString fallback = default_tree();
+		bool loaded = false;
+		QString tried = tree_path;
 		if (fallback != tree_path) {
 			qCritical("tree: opening %s instead", qPrintable(fallback));
-			w.load_tree(fallback);
+			loaded = w.load_tree(fallback);
+			tried  = fallback;
 		}
+		if (!loaded)
+			w.warn_no_tree(tried);
 	}
 	// After the tree, so the tab lands in a loaded tree rather than being
 	// dropped when the file replaces the model underneath it.

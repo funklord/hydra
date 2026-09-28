@@ -27482,3 +27482,72 @@ Not in `cli-check`: asserting the warning means starting the browser and
 killing it, which is thirty seconds of gate for one line of stderr. It was
 verified by hand -- two arguments print it, one prints nothing -- and that
 is recorded here rather than claimed by a check.
+
+## The browser that saves nothing, and the line about it that went to stderr
+
+Swept for the shape the last two defects share -- a value computed and not
+surfaced -- in its bluntest form: a function whose whole job is to report
+failure, called in statement position with its answer dropped. The sweep
+over `src/*.cpp` over-reports badly (every `QHash::remove`, every socket
+write where a failure is not actionable), which is the right direction for
+a sweep read once by the person who ran it. Reading the hits rather than
+counting them left one that matters.
+
+`main()`'s tree fallback:
+
+    if (!w.load_tree(tree_path)) {
+        const QString fallback = default_tree();
+        if (fallback != tree_path) {
+            qCritical("tree: opening %s instead", ...);
+            w.load_tree(fallback);        // <- the answer
+        }
+    }
+
+The comment above it is explicit about what it is for: "without this the
+browser would come up working and persist nothing at all: no tree, no view
+state, no tab histories, and no hint beyond one line on stderr. Silently
+saving nothing is a worse failure than the litter this replaced." The
+fallback's own answer was dropped, so on a machine where app data cannot be
+written the block reached exactly the state it exists to prevent -- and the
+only line printed was the *first* attempt's.
+
+**The commoner shape is the `!=` guard.** With no argument the two paths are
+the same file, so when the personal tree is the thing that will not load the
+whole block is skipped and nothing here says anything at all.
+
+**And `load_tree` does say something -- on stderr.** That is the part that
+made this invisible rather than merely wrong: a browser launched from a
+desktop entry has no terminal, so the one honest line about a session that
+will save nothing goes nowhere. Every store beside the tree already says it
+*in the window*: `keep_or_disown` posts a permanent status line for the
+policy file, the filters and the annoyance log. The tree, which is the store
+that matters most, was the one with no such line.
+
+`warn_no_tree` is that line, in the same idiom, called by `main()` when
+nothing loaded.
+
+### The control caught a wrong version of the fix
+
+`load_tree` returns false in two states, and only one of them means nothing
+persists. The other is the rescue this file recorded earlier: a tree it
+could not *read* is refused and the session takes `<tree>.new` beside it, so
+it saves perfectly well -- and says so in the window itself. A warning keyed
+on the return value announced that nothing would be saved to a session that
+was saving, which is a lie the person has no way to check.
+
+So the condition lives inside `warn_no_tree` beside the claim, as
+`keep_or_disown`'s does: it returns without a word when `m_tree_path` is
+set. The test asserts both halves, and the second one is the section:
+`magnet:` is refused with nothing assigned and the warning appears, an
+unreadable file is refused with `.new` assigned and the warning stays
+silent.
+
+**The page-note check was vacuous when first written.** A fresh window has
+`m_page_note` false already, so asserting it false after the call would pass
+whether or not the warning cleared it. It sets the latch true first now, and
+the sabotage that removes `m_page_note = false` turns it red.
+
+Two sabotages, each through its own check: the status message removed (the
+bar reads `Ready`, and two checks fail), and the latch line removed.
+`main()`'s half is not covered -- no test links `main` -- and is recorded
+here as read rather than run.

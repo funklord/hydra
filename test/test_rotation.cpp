@@ -2351,6 +2351,82 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	// **And when there is no tree at all, which is the one case the rescue
+	// above cannot reach.** `load_tree` refuses a url-shaped argument and a
+	// path whose directory does not exist *before* assigning anything, so
+	// `m_tree_path` stays empty -- and then every writer in this window is
+	// guarded on a path it never got. `main()` falls back to the personal tree
+	// for exactly that, and dropped the fallback's own return value, so a
+	// machine where app data cannot be written reached the state the fallback
+	// exists to prevent with nothing said about it but the *first* attempt's
+	// stderr line. A desktop launch has no terminal to show that in.
+	section("a window with nowhere to save says so in the window");
+	{
+		// The reproduction main() meets needs an unwritable app-data directory,
+		// which is a machine state rather than a fixture. So the state is made
+		// the way load_tree makes it -- a refusal that assigns no path -- and
+		// the report is driven directly, which is the half that was missing.
+		main_window w(&factory, &policy, &filter);
+		check(!w.load_tree("magnet:?xt=urn:btih:notatree"),
+		       "a refusal that assigns no path");
+		check(w.m_tree_path.isEmpty(),
+		       QString("leaves the window with nowhere to write (%1)")
+		         .arg(w.m_tree_path.isEmpty() ? QString("nothing")
+		                                       : w.m_tree_path));
+		check(!w.m_status->currentMessage().contains("Nothing will be saved"),
+		       "and load_tree alone says nothing in the window, which is the gap");
+
+		// Set the latch first. A fresh window has it false already, so
+		// asserting it false afterwards would pass whether or not the warning
+		// clears it -- the vacuous pass this file keeps finding in its own
+		// checks rather than in the code.
+		w.m_page_note = true;
+		w.warn_no_tree("/nonexistent/where-it-would-have-gone.txt");
+		check(w.m_status->currentMessage().contains("Nothing will be saved"),
+		       QString("the warning is in the window (%1)")
+		         .arg(w.m_status->currentMessage()));
+		check(w.m_status->currentMessage().contains("where-it-would-have-gone"),
+		       "naming the file it last tried, since two paths were attempted");
+		check(!w.m_page_note,
+		       "and not as a page note, so the next navigation cannot retire a "
+		       "line that is true for the whole session");
+
+		// **The control, and it caught a wrong version of this.** `load_tree`
+		// returns false for two different states, and the other one -- refused
+		// a file it could not read, rescued to a `.new` name beside it --
+		// saves perfectly well. A warning keyed on the return value alone
+		// announced that nothing would be saved to a session that was saving.
+		if (geteuid() == 0) {
+			std::printf("  skip  running as root, which can read anything\n");
+		} else {
+			const QString dir = QDir::temp().filePath("hydra-rotation-nowhere");
+			QDir(dir).removeRecursively();
+			QDir().mkpath(dir);
+			const QString path = dir + "/tree.txt";
+			{
+				QFile f(path);
+				f.open(QIODevice::WriteOnly | QIODevice::Text);
+				f.write("- [tab] something | https://example.com/\n");
+			}
+			QFile::setPermissions(path, QFile::Permissions());
+			main_window rescued(&factory, &policy, &filter);
+			check(!rescued.load_tree(path),
+			       "a tree it cannot read is also refused");
+			check(rescued.m_tree_path == path + ".new",
+			       "and rescued to a name beside it, so this session saves");
+			rescued.m_page_note = true;
+			rescued.warn_no_tree(path);
+			check(!rescued.m_status->currentMessage()
+			          .contains("Nothing will be saved"),
+			       QString("and is not told that nothing will be saved (%1)")
+			         .arg(rescued.m_status->currentMessage()));
+			check(rescued.m_page_note,
+			       "with the page note left alone, since nothing was said");
+			QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner);
+			QDir(dir).removeRecursively();
+		}
+	}
+
 	// **The same defect as the tree, in the five stores beside it.** Each one
 	// loads a file at startup and saves it back later, and each answers "there
 	// is nothing here yet" and "I could not read what is here" with the same
