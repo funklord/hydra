@@ -27272,3 +27272,66 @@ Not a live defect -- nothing in the shipped path deletes the page during
 teardown. It is the difference between a wrong answer and a crash, for a
 mode that already carries a warning about needing testing on the target
 hardware.
+
+## The two steps that move somebody's tabs had no test
+
+The enum sweep that produced the kiosk entry above was pointed at every
+`enum class` in `src/` and asked which values no test ever names. Most of
+the hits are honest misses -- `filter_list::compiled::kind` is private and
+its three matching strategies are exercised through `blocks()`, and the
+dialog enums are set by dialogs. One was not: `change_kind` had four of
+its five values unnamed, and reading why gave a bigger finding than the
+sweep was looking for.
+
+**`tree_diff::compute` and `tree_diff::apply` were called from one place
+each in `src/` and from nowhere in `test/`.** `test_diff` is eleven
+sections about `check_and_repair` -- the "no node left behind" gate -- and
+the undo snapshot. Between those two sits the step that derives the
+change list a person ticks, and the step that applies what they ticked to
+their live tree. Neither had ever run under a test, in this file or any
+other.
+
+Eight new sections, and they are written against the guarantees the code
+states rather than against its arithmetic: each kind of change is named
+once and only where there is one, a reorder is not called a move, a
+locked node does not move however the proposal is written (sec 5.5,
+enforced at apply time because a lock has to survive a round trip through
+a model's text), nothing moves inside its own subtree, a change the
+person unticked does not happen, and a folder a leaf moves into exists
+before the move whatever order the list arrives in -- that last one with
+the list deliberately reversed, since nothing promises a dialog hands
+changes back in the order they were computed.
+
+Asserting the **whole arrangement** as a string -- `root[f1[a1],f9[a2]]`
+-- rather than one node's parent is what found the defect below. A parent
+check passes for a change that lands in the right family and the wrong
+place.
+
+### A folder the model invented did not land where it was proposed
+
+`apply()` created new folders in a pass of their own, so a move into one
+has somewhere to land, and appended each with `push_back`. The reorder
+changes beside it say where the *existing* siblings go; none of them can
+say where a folder that did not exist before goes. So the invented folder
+ended up wherever the other insertions pushed it.
+
+Measured: a proposal of `root[f9[a2], f1[a1], f2[a3]]` -- the new folder
+first -- applied as `root[f1[a1], f9[a2], f2[a3]]`. The person accepted an
+arrangement and got a different one, silently, with nothing in the diff
+list to compare against because a `New folder "News" in root` summary
+names no position.
+
+`compute()` had recorded the position all along, in `new_order`, and
+`apply()` was the only reader that ignored it. Inserting at
+`qBound(0, c.new_order, parent->children.size())` is the whole fix, and
+it makes the second case work too: two invented folders interleaved with
+surviving siblings now come out in the proposed order, which one
+insertion landing correctly could have been a coincidence of.
+
+**Seven sabotages, each caught by the section it belongs to**: the folder
+appended again, the lock check dropped, the cycle guard dropped, the
+accepted flag ignored, `duplicate_url` arriving pre-ticked, a reorder
+emitted as a reparent, and the two passes collapsed into one. The cycle
+one is worth reading -- moving `f1` into its own child leaves
+`root[a1]`, with `f1` and its subtree detached into a ring that nothing
+owns, so the guard is holding more than tidiness.

@@ -265,7 +265,16 @@ int apply(node *original, const QList<tree_change> &changes) {
 		f->type   = node_type::folder;
 		f->title  = c.new_title;
 		f->parent = parent;
-		parent->children.push_back(f);
+		// **At the position it was proposed at, rather than appended.** The
+		// reorder changes beside this one say where the *existing* siblings go,
+		// and none of them can say where a folder that did not exist before
+		// goes -- so appending leaves the invented folder wherever the other
+		// insertions happen to push it. Measured: a folder proposed first among
+		// root's children came out second, because the one sibling that had to
+		// move was inserted in front of it. The person accepted an arrangement
+		// and got a different one.
+		const int at = qBound(0, c.new_order, parent->children.size());
+		parent->children.insert(at, f);
 		by_id.insert(f->id, f);
 		++applied;
 	}

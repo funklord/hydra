@@ -17,6 +17,7 @@
 #include "node.h"
 
 #include <QCoreApplication>
+#include <algorithm>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -51,6 +52,36 @@ static node *find(node *n, const QString &id) {
 	for (node *c : n->children)
 		if (node *f = find(c, id))
 			return f;
+	return nullptr;
+}
+
+// The whole arrangement as one string: "root[f1[a1,a2],f2[a3]]". Asserting a
+// shape rather than one node's parent is what catches a change that lands in
+// the right family and the wrong place -- which is the defect this file's
+// apply() sections were written for.
+static QString shape(node *n) {
+	QString s = n->id;
+	if (n->children.isEmpty())
+		return s;
+	QStringList kids;
+	for (node *c : n->children)
+		kids << shape(c);
+	return s + "[" + kids.join(",") + "]";
+}
+
+static int count_of(const QList<tree_change> &ch, change_kind k) {
+	int n = 0;
+	for (const tree_change &c : ch)
+		if (c.kind == k)
+			++n;
+	return n;
+}
+
+static const tree_change *change_for(const QList<tree_change> &ch,
+                                      const QString &id, change_kind k) {
+	for (const tree_change &c : ch)
+		if (c.node_id == id && c.kind == k)
+			return &c;
 	return nullptr;
 }
 
@@ -323,6 +354,307 @@ int main(int argc, char **argv) {
 			check(back->children.isEmpty(),
 			      "with no subtree dragged along by the copy");
 		}
+		delete orig;
+		delete prop;
+	}
+
+	// --- compute() and apply() ------------------------------------------
+	//
+	// Everything above is check_and_repair and the undo snapshot. The two steps
+	// between them -- deriving the change list the user ticks, and applying what
+	// they ticked to their live tree -- had no test at all, in either this file
+	// or any other: `tree_diff::compute` is called once, from
+	// `reorganize_dialog`, and `tree_diff::apply` once, from `tab_tree_model`,
+	// and nothing else in the tree named either. That is the step that actually
+	// moves somebody's tabs.
+
+	section("compute names each kind of change, and only where there is one");
+	{
+		node *orig = build_original();          // f1 Work/[a1,a2]  f2 Play/[a3]
+		node *prop = root_of();
+		node *f = add(prop, mk("f1", true, "Jobs"));    // same folder, new title
+		add(f, mk("a1", false, "One"));                 // unmoved
+		node *nf = add(prop, mk("f9", true, "News"));   // invented
+		add(nf, mk("a2", false, "Two"));                // moved into it
+		node *g = add(prop, mk("f2", true, "Play"));    // pushed down one place
+		add(g, mk("a3", false, "Three"));               // unmoved
+
+		const proposal_report rep = tree_diff::check_and_repair(orig, prop);
+		check(rep.usable, "the proposal is usable");
+
+		const QList<tree_change> ch = tree_diff::compute(orig, prop);
+		check(count_of(ch, change_kind::folder_new) == 1, "one folder invented");
+		check(count_of(ch, change_kind::folder_renamed) == 1, "one folder renamed");
+		check(count_of(ch, change_kind::reparented) == 1, "one leaf reparented");
+		check(count_of(ch, change_kind::reordered) == 1,
+		      "one sibling reordered, because inserting a folder moved it down");
+		check(count_of(ch, change_kind::duplicate_url) == 0,
+		      "and no duplicate urls, since every leaf has its own");
+		check(ch.size() == 4,
+		      QString("four changes and no more -- a1 and a3 did not move, and a "
+		               "change list that names them would be asking the person to "
+		               "tick nothing (%1)")
+		          .arg(ch.size()));
+		check(change_for(ch, "f9", change_kind::folder_new) != nullptr &&
+		          change_for(ch, "f1", change_kind::folder_renamed) != nullptr &&
+		          change_for(ch, "a2", change_kind::reparented) != nullptr &&
+		          change_for(ch, "f2", change_kind::reordered) != nullptr,
+		      "each one against the node it is about");
+
+		bool all_summarised = true, all_default_accepted = true;
+		for (const tree_change &c : ch) {
+			if (c.summary.isEmpty())
+				all_summarised = false;
+			if (c.kind != change_kind::duplicate_url && !c.accepted)
+				all_default_accepted = false;
+		}
+		check(all_summarised,
+		      "every change says something, since the list is what the person reads");
+		check(all_default_accepted, "and arrives ticked");
+
+		const tree_change *rename = change_for(ch, "f1", change_kind::folder_renamed);
+		check(rename && rename->new_title == "Jobs",
+		      "the rename carries the new title rather than only the fact of it");
+		const tree_change *move = change_for(ch, "a2", change_kind::reparented);
+		check(move && move->new_parent_id == "f9",
+		      "and the move carries where it is going");
+		delete orig;
+		delete prop;
+	}
+
+	section("a folder a leaf is moved into exists before the move, in any order");
+	{
+		// apply() runs the new folders in a pass of their own, and the reason is
+		// that a change list is a list: nothing says the folder comes before the
+		// move, and a person ticking changes in a dialog can hand back any
+		// order at all. So the list is deliberately reversed here.
+		node *orig = build_original();
+		node *prop = root_of();
+		node *f = add(prop, mk("f1", true, "Work"));
+		add(f, mk("a1", false, "One"));
+		node *nf = add(prop, mk("f9", true, "News"));
+		add(nf, mk("a2", false, "Two"));
+		node *g = add(prop, mk("f2", true, "Play"));
+		add(g, mk("a3", false, "Three"));
+		tree_diff::check_and_repair(orig, prop);
+
+		QList<tree_change> ch = tree_diff::compute(orig, prop);
+		std::reverse(ch.begin(), ch.end());
+
+		const int applied = tree_diff::apply(orig, ch);
+		check(applied == ch.size(),
+		      QString("every change applied (%1 of %2)").arg(applied).arg(ch.size()));
+		node *a2 = find(orig, "a2");
+		check(a2 && a2->parent && a2->parent->id == "f9",
+		      "the leaf is in the folder that did not exist when the list was made");
+		check(shape(orig) == "root[f1[a1],f9[a2],f2[a3]]",
+		      QString("and the whole arrangement is the proposed one (%1)")
+		          .arg(shape(orig)));
+		delete orig;
+		delete prop;
+	}
+
+	section("a new folder lands where it was proposed, not merely somewhere");
+	{
+		// The invented folder goes FIRST in the proposal, which is the case the
+		// surviving reorder changes cannot repair: they say where the existing
+		// siblings go, and none of them says where the new folder goes.
+		node *orig = build_original();
+		node *prop = root_of();
+		node *nf = add(prop, mk("f9", true, "News"));
+		add(nf, mk("a2", false, "Two"));
+		node *f = add(prop, mk("f1", true, "Work"));
+		add(f, mk("a1", false, "One"));
+		node *g = add(prop, mk("f2", true, "Play"));
+		add(g, mk("a3", false, "Three"));
+		tree_diff::check_and_repair(orig, prop);
+
+		const QList<tree_change> ch = tree_diff::compute(orig, prop);
+		const tree_change *nfc = change_for(ch, "f9", change_kind::folder_new);
+		check(nfc && nfc->new_order == 0,
+		      QString("compute records the position the folder was proposed at (%1)")
+		          .arg(nfc ? nfc->new_order : -1));
+		tree_diff::apply(orig, ch);
+		check(shape(orig) == "root[f9[a2],f1[a1],f2[a3]]",
+		      QString("and apply puts it there (%1)").arg(shape(orig)));
+		delete orig;
+		delete prop;
+	}
+
+	section("two invented folders, interleaved with the ones that survive");
+	{
+		// One folder in the right place could be a coincidence of a single
+		// insertion; two, with existing siblings between them, cannot.
+		node *orig = build_original();
+		node *prop = root_of();
+		node *n1 = add(prop, mk("g1", true, "First"));
+		add(n1, mk("a1", false, "One"));
+		node *f = add(prop, mk("f1", true, "Work"));
+		add(f, mk("a2", false, "Two"));
+		node *n2 = add(prop, mk("g2", true, "Third"));
+		add(n2, mk("a3", false, "Three"));
+		add(prop, mk("f2", true, "Play"));   // empty now, and kept
+		tree_diff::check_and_repair(orig, prop);
+
+		const QList<tree_change> ch = tree_diff::compute(orig, prop);
+		check(count_of(ch, change_kind::folder_new) == 2, "both are invented");
+		tree_diff::apply(orig, ch);
+		check(shape(orig) == "root[g1[a1],f1[a2],g2[a3],f2]",
+		      QString("and the arrangement is the proposed one (%1)")
+		          .arg(shape(orig)));
+		delete orig;
+		delete prop;
+	}
+
+	section("a reorder is not a reparent");
+	{
+		node *orig = build_original();
+		node *prop = root_of();
+		node *f = add(prop, mk("f1", true, "Work"));
+		add(f, mk("a2", false, "Two"));     // swapped with a1
+		add(f, mk("a1", false, "One"));
+		node *g = add(prop, mk("f2", true, "Play"));
+		add(g, mk("a3", false, "Three"));
+		tree_diff::check_and_repair(orig, prop);
+
+		const QList<tree_change> ch = tree_diff::compute(orig, prop);
+		check(count_of(ch, change_kind::reparented) == 0,
+		      "nothing changed parent, so nothing is called a move");
+		check(count_of(ch, change_kind::reordered) == 2,
+		      QString("both of the swapped leaves are reorders (%1)")
+		          .arg(count_of(ch, change_kind::reordered)));
+		const int applied = tree_diff::apply(orig, ch);
+		check(applied == 2, QString("both applied (%1)").arg(applied));
+		check(shape(orig) == "root[f1[a2,a1],f2[a3]]",
+		      QString("and the swap happened (%1)").arg(shape(orig)));
+		node *a1 = find(orig, "a1"), *a2 = find(orig, "a2");
+		check(a1 && a2 && a2->order == 0 && a1->order == 1,
+		      "with the order fields renumbered to match the arrangement");
+		delete orig;
+		delete prop;
+	}
+
+	section("two tabs on one page are advisory, and never pre-ticked");
+	{
+		// Two leaves sharing a url is legitimate -- the same page open twice --
+		// so a merge is offered rather than done. `accepted = false` is the
+		// whole safety property here: a person who ticks everything and presses
+		// apply must not lose a tab to it.
+		node *orig = root_of();
+		node *w = add(orig, mk("f1", true, "Work"));
+		add(w, mk("a1", false, "One", "https://x.example/same"));
+		add(w, mk("a2", false, "Two", "https://x.example/same"));
+
+		node *prop = root_of();
+		node *f = add(prop, mk("f1", true, "Work"));
+		add(f, mk("a1", false, "One", "https://x.example/same"));
+		add(f, mk("a2", false, "Two", "https://x.example/same"));
+		tree_diff::check_and_repair(orig, prop);
+
+		const QList<tree_change> ch = tree_diff::compute(orig, prop);
+		check(count_of(ch, change_kind::duplicate_url) == 1,
+		      QString("the second one is reported (%1)")
+		          .arg(count_of(ch, change_kind::duplicate_url)));
+		const tree_change *d = change_for(ch, "a2", change_kind::duplicate_url);
+		check(d && !d->accepted,
+		      "unticked, because merging is destructive and this is a suggestion");
+		check(d && !d->summary.isEmpty() && d->summary.contains("a1"),
+		      "and it names the other tab, which is the only way to judge it");
+
+		QList<tree_change> ticked = ch;
+		for (tree_change &c : ticked)
+			c.accepted = true;   // the person ticks everything, including this
+		const int applied = tree_diff::apply(orig, ticked);
+		check(applied == 0,
+		      QString("ticking it applies nothing, since no merge is implemented "
+		               "(%1 applied)").arg(applied));
+		check(shape(orig) == "root[f1[a1,a2]]",
+		      QString("and both tabs are still there (%1)").arg(shape(orig)));
+		delete orig;
+		delete prop;
+	}
+
+	section("a locked node does not move, however the proposal is written");
+	{
+		// sec 5.5. The refusal is in apply() rather than in the model, because
+		// the reorganizer proposes from a serialized tree and a lock has to
+		// survive that round trip without being trusted to.
+		node *orig = build_original();
+		node *a1 = find(orig, "a1");
+		check(a1 != nullptr, "the tab this is about exists");
+		a1->locked = true;
+
+		node *prop = root_of();
+		node *f = add(prop, mk("f1", true, "Work"));
+		add(f, mk("a2", false, "Two"));
+		node *g = add(prop, mk("f2", true, "Play"));
+		add(g, mk("a1", false, "One"));    // the model moves the locked tab
+		add(g, mk("a3", false, "Three"));
+		tree_diff::check_and_repair(orig, prop);
+
+		const QList<tree_change> ch = tree_diff::compute(orig, prop);
+		check(change_for(ch, "a1", change_kind::reparented) != nullptr,
+		      "the move is proposed, since the proposal is allowed to ask");
+		const int applied = tree_diff::apply(orig, ch);
+		node *moved = find(orig, "a1");
+		check(moved && moved->parent && moved->parent->id == "f1",
+		      QString("and refused, so the tab is where the person pinned it (%1)")
+		          .arg(moved && moved->parent ? moved->parent->id : "gone"));
+		check(applied == count_of(ch, change_kind::reordered) +
+		          count_of(ch, change_kind::reparented) - 1,
+		      QString("and the refusal is not counted as applied (%1 of %2)")
+		          .arg(applied).arg(ch.size()));
+		delete orig;
+		delete prop;
+	}
+
+	section("nothing moves inside itself");
+	{
+		// Not reachable from compute(), which derives changes from a tree and
+		// so cannot describe a cycle. It is reachable from a change list, which
+		// is what apply() takes -- and the guard is in apply() for that reason.
+		node *orig = root_of();
+		node *f1 = add(orig, mk("f1", true, "Work"));
+		add(f1, mk("f1a", true, "Inner"));
+		add(orig, mk("a1", false, "One", "https://x.example/1"));
+
+		tree_change into_self;
+		into_self.kind          = change_kind::reparented;
+		into_self.node_id       = "f1";
+		into_self.new_parent_id = "f1";
+		tree_change into_child;
+		into_child.kind          = change_kind::reparented;
+		into_child.node_id       = "f1";
+		into_child.new_parent_id = "f1a";
+
+		const int a = tree_diff::apply(orig, QList<tree_change>{ into_self });
+		check(a == 0, QString("a node cannot become its own parent (%1)").arg(a));
+		const int b = tree_diff::apply(orig, QList<tree_change>{ into_child });
+		check(b == 0, QString("nor a child of its own subtree (%1)").arg(b));
+		check(shape(orig) == "root[f1[f1a],a1]",
+		      QString("and the tree is untouched by either (%1)").arg(shape(orig)));
+		delete orig;
+	}
+
+	section("a change the person unticked does not happen");
+	{
+		node *orig = build_original();
+		node *prop = root_of();
+		node *f = add(prop, mk("f1", true, "Work"));
+		add(f, mk("a1", false, "One"));
+		node *g = add(prop, mk("f2", true, "Play"));
+		add(g, mk("a2", false, "Two"));     // proposed move
+		add(g, mk("a3", false, "Three"));
+		tree_diff::check_and_repair(orig, prop);
+
+		QList<tree_change> ch = tree_diff::compute(orig, prop);
+		check(!ch.isEmpty(), "there is something to untick");
+		for (tree_change &c : ch)
+			c.accepted = false;
+		const int applied = tree_diff::apply(orig, ch);
+		check(applied == 0, QString("nothing is applied (%1)").arg(applied));
+		check(shape(orig) == "root[f1[a1,a2],f2[a3]]",
+		      QString("and the tree is exactly as it was (%1)").arg(shape(orig)));
 		delete orig;
 		delete prop;
 	}
