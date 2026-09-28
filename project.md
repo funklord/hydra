@@ -26502,10 +26502,12 @@ half-swept, which reads as swept. The other six were checked too, and so were
 the **"not built" lists inside them** -- the same rot with its sign reversed,
 where something listed as absent has since been written.
 
-    sec  9   undo snapshot, web-session backend, duplicate-URL merges
-             -- all three still absent. `duplicate_url` is detected and
-             shown greyed, and `tree_diff` says "advisory only" in as many
-             words, so the *acting* really is unbuilt.
+    sec  9   ~~all three still absent~~ -- the undo snapshot is BUILT, and
+             this line was wrong. `tree_snapshot`, `tree_diff::snapshot`
+             and `restore` are in the tree behind Edit -> Undo Reorganize.
+             It was checked with `grep -rli undo ... | head -3`, and
+             `main_window.cpp` was below the cut. The other two are
+             genuinely absent.
     sec 11.4 torrents implemented on desktop -- 46 checks, run today
     sec 11.5.1 fetch half complete, DOM designed only -- unchanged
     sec 13   **one of three was wrong**
@@ -26585,6 +26587,57 @@ That is the second instrument error in one investigation, and the second
 explanation of one that was itself wrong. Both were caught by re-running the
 smallest piece on its own, which costs a line and is the only thing that
 separates a broken pipeline from a finding.
+
+## Why duplicate-URL merges were never built, which nothing recorded
+
+§9 has listed "acting on duplicate-URL merges" as unbuilt since the section
+was written, and the reorganizer is ready for it: `tree_diff` derives the
+change with `accepted = false` because "merging is destructive", and
+`reorganize_dialog` greys the row with a comment promising "the check box
+comes back with the merge". Two lines stand between that and a working
+feature -- the `// advisory only` in `apply`, and the greying. Neither is
+hard.
+
+**It is blocked on something else, and the blocker is measured rather than
+argued.** A merge deletes a leaf. What a deleted leaf takes with it is
+already decided in this tree, by the delete-a-tab path, whose comment is the
+working sibling that explains itself:
+
+> A blob for a node that no longer exists is unreachable by anything except
+> an id collision, which is the one way it could ever be read again -- into
+> the wrong tab. **And the collision is the normal case rather than a remote
+> one** ... delete a tab left at 125% and the tab created after it opened at
+> 125%, with nothing on screen saying why.
+
+Measured, because that comment names `unused_id` and `unused_id` is also the
+function that suffixes a copy's id: `add_tab` calls `unused_id("t")`, which
+loops `t-2`, `t-3` ... and returns **the first candidate not in the index**.
+So a deleted id really is handed to the next new tab.
+
+**That collides head-on with §9.4.** The section promises "a single undo
+snapshot [that] makes any accepted change one keystroke to revert", and
+`tree_diff::restore` says in as many words what it does with a node that is
+gone: *"vanished since the snapshot; nothing to put back"*. So a merge must
+either delete everything keyed by the id -- and then undo cannot restore the
+leaf -- or keep it, and hand a live tab somebody else's history. Both branches
+break a promise the document makes.
+
+**Which is the shape `working-practice.md` says to hold open rather than
+resolve**, and the third answers are worth naming because neither branch
+contains them:
+
+- **Re-parent instead of delete.** §5.5 already has sub-tabs; a merge that
+  moves the duplicate under the original resolves the duplication visually,
+  deletes nothing, and leaves undo working exactly as it is. Cheapest, and
+  arguably what a person means by merging two rows.
+- **Defer the destructive half** until the undo snapshot is dropped.
+- **Carry the leaf's payload in the snapshot and reserve its id** until undo
+  expires -- the thorough one, and the only one that makes `restore` able to
+  re-create anything.
+
+Not chosen here. What is new is that the feature has a reason for not
+existing, and the reason is a conflict between two sections of the design
+rather than work nobody got to.
 
 ## What is next (in order)
 
