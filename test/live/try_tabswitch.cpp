@@ -130,14 +130,28 @@ int main(int argc, char **argv) {
 	       "and the last tab's view is still live");
 
 	section("switching to a tab that is still live");
-	// The one before the last: still inside the cap, and not the tab that is
-	// already showing.
-	node *live = tabs[n_tabs - 2];
-	check(f.window.m_views_by_id.contains(live->id),
-	       "its view is in the map before the switch");
-	bool late = false;
-	const qint64 live_ms = activate_and_wait(f, live, titles[n_tabs - 2], &late);
-	check(!late, "it arrived");
+	// **Only askable when two views can be live at once.** The cap is a user
+	// setting bounded `qBound(1, n, 64)`, and at 1 the only live view is the
+	// tab already showing -- so `tabs[n_tabs - 2]` is never in the map and
+	// there is no warm switch to time. Run at 1 this reported two failures:
+	// that the view was missing, and that "an evicted tab costs several times
+	// a live one (30 ms against 29)", which is worse than the first because
+	// it reads as a finding about eviction being free when both halves were
+	// measuring a cold tab.
+	qint64 live_ms = -1;
+	if (cap < 2) {
+		std::printf("  --    the live-view cap is 1, so the only live tab is "
+		             "the one showing and there is no warm switch to time\n");
+	} else {
+		// The one before the last: still inside the cap, and not the tab that
+		// is already showing.
+		node *live = tabs[n_tabs - 2];
+		check(f.window.m_views_by_id.contains(live->id),
+		       "its view is in the map before the switch");
+		bool late = false;
+		live_ms = activate_and_wait(f, live, titles[n_tabs - 2], &late);
+		check(!late, "it arrived");
+	}
 
 	section("switching to a tab the cap evicted");
 	node *cold = tabs[0];
@@ -147,9 +161,15 @@ int main(int argc, char **argv) {
 	const qint64 cold_ms = activate_and_wait(f, cold, titles[0], &cold_late);
 	check(!cold_late, "it arrived");
 
-	std::printf("\n  live switch   %5lld ms\n", (long long)live_ms);
-	std::printf("  after eviction %4lld ms\n", (long long)cold_ms);
-	std::printf("  difference     %4lld ms\n", (long long)(cold_ms - live_ms));
+	if (live_ms >= 0) {
+		std::printf("\n  live switch   %5lld ms\n", (long long)live_ms);
+		std::printf("  after eviction %4lld ms\n", (long long)cold_ms);
+		std::printf("  difference     %4lld ms\n",
+		             (long long)(cold_ms - live_ms));
+	} else {
+		std::printf("\n  after eviction %4lld ms (nothing to compare it "
+		             "with at this cap)\n", (long long)cold_ms);
+	}
 
 	// **Not asserted as a threshold.** What a restore costs depends on the
 	// page, the machine and what else is running, so a number pinned here
@@ -167,9 +187,10 @@ int main(int argc, char **argv) {
 	//
 	// Three is far under the twenty to thirty measured here, and it is what a
 	// live switch secretly doing a restore would fail.
-	check(cold_ms > live_ms * 3,
-	       QString("an evicted tab costs several times a live one "
-	                "(%1 ms against %2)").arg(cold_ms).arg(live_ms));
+	if (live_ms >= 0)
+		check(cold_ms > live_ms * 3,
+		       QString("an evicted tab costs several times a live one "
+		                "(%1 ms against %2)").arg(cold_ms).arg(live_ms));
 
 	// ## The eviction that could not write its blob
 	//

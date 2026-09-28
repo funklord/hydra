@@ -26739,6 +26739,38 @@ sections that cannot ask their question with one live view.
 So no browser defect at the minimum -- but that is now a measurement rather
 than an assumption, and the crash that was hiding it is gone.
 
+### The driver about the cap did not work at the cap's own minimum
+
+`try_tabswitch` exists to measure what a switch costs with and without a live
+view, and at a cap of 1 it reported two failures:
+
+    FAIL  its view is in the map before the switch
+    FAIL  an evicted tab costs several times a live one (30 ms against 29)
+
+**The second is worse than the first**, and is why this is worth a heading.
+It reads as a finding about eviction being free. It is not: with one live
+view the only live tab is the one showing, so the "warm" tab the driver picks
+was cold too and both halves measured the same thing. A failure that names a
+plausible wrong mechanism costs a reader the wrong look, which is exactly
+what `evidence.md` says a specific wrong cause does.
+
+It says so and skips now, and prints `after eviction 30 ms (nothing to
+compare it with at this cap)` rather than a difference between two cold
+numbers. 12 checks at cap 1, 15 at cap 2, unchanged there.
+
+**Two suites and one driver, all assuming a cap of at least two, none saying
+so.** That is the shape rather than the instance: a default that is also the
+only value anybody runs becomes a premise nothing states, and the setting has
+a spin box with 1 at the bottom of it.
+
+**Also swept: every other bounded setting, against its extremes.** The kiosk
+design size allows 0 and `relayout` returns on `design.isEmpty()` before the
+division; the idle reset allows 0 and is guarded `> 0` with the spin box
+showing "never"; the probe timeout clamps to 100. Only the live-view cap had
+anything behind it. And every other test capture of a view pointer re-reads
+the map or takes it after the last activation -- `try_autofill` opens both
+tabs before reading either, which is the safe ordering by construction.
+
 ### Two environment claims that decide what is possible, re-measured
 
 Item 4's next step is a compliance question about the extractor prompt, and
