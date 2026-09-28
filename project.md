@@ -27911,3 +27911,54 @@ the repair copies a dropped leaf with `new node(*orig)` and a version that
 moved it instead would leave the same shape here with the original's node
 living in the proposal. The sabotage that makes the repair steal the node
 turns three of them red.
+
+## The gate that checked nineteen of twenty, and said nineteen
+
+Reading the README for claims the way the settings page was read, one is a
+number: *"Twenty per-site capabilities, not the usual handful"*, followed by
+the list. The enum has twenty and the list names all twenty, so the README is
+right -- and `make style` has been printing, all session, next to it:
+
+    policy-check: 19 feature(s), every one read outside the policy and UI layer
+
+**The gate was the wrong one.** Its parser was
+
+    re.findall(r"^\t(\w+),", body, re.M)
+
+and the first enumerator is `javascript = 0,`. A trailing comma after the name
+is what the pattern wanted, and an initialiser puts something between them --
+so the one feature every page depends on is the one the gate never checked,
+and had never checked since it was written this session. The count it printed
+was the evidence and nobody compared it with anything.
+
+That is `evidence.md`'s *a name that claims exhaustiveness is not a check that
+achieved it*, in a tool written to catch exactly this class: the file's own
+docstring says a feature nobody enforces "is a control that accepts an answer
+and does nothing with it -- the shape this tree has already met twice".
+
+**The remedy is a second reading rather than a better pattern.** `policy.cpp`
+carries a descriptor table with one row per feature, indexed by the enum,
+written in different syntax for a different purpose. The gate now reads both
+and refuses when they disagree about **how many** there are. Only the number
+is comparable, deliberately: the table holds the machine names rules persist
+under, so they are camelCase and one is not the enumerator's word at all
+(`media_detect` is `autoDetectMedia` on disk). The number is the quantity that
+went wrong, and one reading of one file cannot tell a narrowed pattern from a
+shortened enum -- both come back smaller and both still look like a result.
+
+The control is inside the probe, where the file already put the alias control:
+it feeds the parser an enum containing `javascript = 0,` and refuses to report
+anything if that enumerator is not read. Reverting the pattern now fails
+through that control -- *"the control failed ... No result below means
+anything"* -- rather than quietly answering 19.
+
+Nothing was hiding behind the gap: `javascript` is enforced in
+`request_filter`, twice, which is why the gate stayed green at 20.
+
+**The other gates were checked for the same shape and are sound for a
+structural reason.** `resource_check` parses the `.qrc` files with an XML
+parser rather than a pattern, so it cannot narrow silently; `deps_check`,
+`jni_check`, `desktop_check` and `manifest_check` each compare two files
+against each other, which is the same second-reading discipline arrived at
+from the other direction. `style_gate.py` counts files with a pattern of its
+own and is spread to sixteen trees, so it is not this project's to change.

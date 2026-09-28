@@ -46,10 +46,33 @@ def pattern(name):
 
 
 def features(text):
+	r"""The enumerators, including any written with an initialiser.
+
+	**This read 19 of 20 for as long as it existed.** The pattern was
+	`^\t(\w+),` and the first enumerator is `javascript = 0,` -- so the one
+	feature every page depends on was the one the gate never checked, and the
+	count it printed said 19 beside an enum of 20 with nothing comparing them.
+	"""
 	body = re.search(r"enum class feature\s*:[^{]*\{(.*?)\}", text, re.S)
 	if not body:
 		return []
-	return [m for m in re.findall(r"^\t(\w+),", body.group(1), re.M) if m != "count"]
+	found = re.findall(r"^\t(\w+)\s*(?:=[^,]*)?,", body.group(1), re.M)
+	return [m for m in found if m != "count"]
+
+
+def table_names(text):
+	"""The same features counted a second way: the descriptor table in
+	policy.cpp, which carries one row per feature and is indexed by the enum.
+
+	**Only the number is comparable, deliberately.** These are the machine
+	names -- the JSON keys rules persist under -- so they are camelCase and
+	some are not the enumerator's word at all (`media_detect` is
+	`autoDetectMedia` on disk). What the two readings share is how many
+	features there are, which is the quantity that went wrong: one reading of
+	one file cannot tell a narrowed pattern from a shortened enum, because
+	both come back as a smaller number that still looks like a result.
+	"""
+	return re.findall(r'^\t\{ "(\w+)",', text, re.M)
 
 
 def enforcers(name, sources):
@@ -66,6 +89,13 @@ def control():
 		return "a use inside the policy layer was counted as enforcement"
 	if enforcers("camera", fake):
 		return "a different feature's name matched"
+	# The enumerator forms this has to survive. The second one is the form the
+	# first feature is written in, and missing it is what this file was doing.
+	sample = ("enum class feature : int {\n"
+	           "\tjavascript = 0,\n\tcookies,\n\tcount\n};\n")
+	if features(sample) != ["javascript", "cookies"]:
+		return ("an enumerator written with an initialiser was not read (%s)"
+		         % features(sample))
 	return None
 
 
@@ -90,6 +120,23 @@ def main():
 		       "vacuous.", file=sys.stderr)
 		return 2
 
+	body = SRC / "policy.cpp"
+	if not body.is_file():
+		print("policy-check: %s is not there, so the second reading of the "
+		       "feature list cannot be taken." % body.relative_to(ROOT),
+		       file=sys.stderr)
+		return 2
+	table = table_names(body.read_text(encoding="utf-8"))
+	if len(names) != len(table):
+		print("policy-check: the enum and policy.cpp's table disagree about "
+		       "how many features there are, so one of the two readings is "
+		       "wrong:", file=sys.stderr)
+		print("              enum  (%d): %s" % (len(names), ", ".join(names)),
+		       file=sys.stderr)
+		print("              table (%d): %s" % (len(table), ", ".join(table)),
+		       file=sys.stderr)
+		return 2
+
 	sources = {}
 	for f in sorted(os.listdir(SRC)):
 		if f.endswith((".cpp", ".h")):
@@ -105,8 +152,9 @@ def main():
 		       file=sys.stderr)
 		return 1
 
-	print("policy-check: %d feature(s), every one read outside the policy and "
-	       "UI layer" % len(names))
+	print("policy-check: %d feature(s), the enum and policy.cpp's table "
+	       "agreeing on the number, every one read outside the policy and UI "
+	       "layer" % len(names))
 	return 0
 
 
