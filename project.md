@@ -26949,11 +26949,14 @@ carried along as amendments to a list item.
    The retry is measured but not yet answered: of five runs, three never
    answered inside fifteen minutes on a loaded machine, one retry came back
    still refused and one timed out. That is a one-run result wearing a five-run
-   coat, and it wants an idle machine — **not a model, which was never the
-   blocker.** Ollama serves `qwen2.5-coder:14b` here and has throughout, so the
-   part of this item deferred for want of one never needed to be;
-   `test_live_model` runs, and the eight runs in *The live model suite, run for
-   the first time* above are the first this tree has taken.
+   coat, and it wants an idle machine. **The model is a per-machine fact and
+   this machine has none** -- re-measured 2026-09-28: nothing listening on
+   11434, no `~/.ollama`, no binary on `PATH`, curl reports `000`. See *Two
+   environment claims that decide what is possible, re-measured* above, which
+   corrects the sentence that used to sit here saying Ollama had served
+   `qwen2.5-coder:14b` throughout. The eight runs in *The live model suite, run
+   for the first time* above are real and were taken where a model was
+   serving; they are not evidence that `test_live_model` can run here now.
 
    What those runs cannot supply is the real captures this item is about:
    `evidence/` is not in this checkout and the synthetic set does not transfer.
@@ -27388,3 +27391,94 @@ control.
 Incidentally the fixture's VOD manifest is called `live.m3u8`, which is
 where this was hiding in plain sight: the only playlist the suite had ever
 assembled was named for the case it was not.
+
+## `hydra --help` opened a browser and left a file called `--help`
+
+There was no `--help`. The absence was not quiet: the flag fell past the url
+classifier, was read as the name of a tab tree, and `load_tree` did what it
+does with a tree that is not there -- created it. Measured, in a scratch
+directory:
+
+    $ hydra --help
+    (a browser window opens on an empty tree)
+    $ ls
+    --help   policy.ini   view.ini   state/
+
+Four pieces of litter rather than one, because **a tree path's directory is
+the profile directory**: `load_tree` sets `m_state`, `m_view_path` and
+`m_policy_path` beside the tree it was given. That is deliberate and
+documented -- and `load_tree` already refuses a *url-shaped* argument for
+exactly this reason, with a comment saying that opening one "empties the
+tree and scatters this window's files into the working directory".
+
+**So the guard existed and an option is not url-shaped.** `QUrl("--hepl")`
+has no scheme, so the `arg_scheme.size() > 1` test that catches
+`magnet:`, `mailto:` and the rest waved it through. `argument_url` refuses a
+leading dash one layer further out, and its own comment gives the reason --
+"a flag that is quietly treated as a page is worse than one that is
+rejected, because nothing says the option was not understood" -- but its
+caller then read the same text as a tree path, which is the thing that
+comment warns about arriving one level up.
+
+`--help` and `-h` print a usage message now, beside `--version` and above
+`QApplication` for the reason that block already records: a flag that needs
+a display is not a flag. An unrecognised option is refused with
+`hydra: unrecognised option '--hepl'` and exit 2.
+
+### The refusal has to be below `QApplication`, and that costs something
+
+Qt consumes its own switches out of `argv`, and measured, it takes **both**
+spellings: `-platform offscreen` and `--platform offscreen` are gone by the
+time `main` looks. So a leading-dash refusal above the constructor would
+refuse Qt's own options, and no spelling rule separates them from a typo --
+only a hand-kept list of Qt's option names would, which is a list that goes
+stale in a direction nobody notices.
+
+Below the constructor it needs a platform plugin. On a machine where none
+can be initialized, `hydra --hepl` aborts in Qt with Qt's message instead of
+reaching this one. That is a limit rather than an oversight: every
+invocation fails there, so the message is only unreachable where the program
+could not have run at all. It is recorded in the source beside the check,
+and it is why `--help` sits above the constructor and the refusal does not.
+
+### `make cli-check`, and the litter is half of it
+
+A gate that read only stdout would pass a version of this that prints the
+usage and then goes on to create the file -- which is the exact shape the
+defect had. So the gate runs the binary in a directory of its own and fails
+if anything is in it afterwards.
+
+Three sabotages, each caught through its own checks: the `--help` handler
+removed (both flags exit 2 and print no usage line), the refusal removed
+(the unrecognised option exits 0, says something else, and leaves `state`
+and `view.ini` behind), and `--help` made to print the usage and then fall
+through, which is the one only the litter check can see.
+
+**And the first version of the gate could be poisoned by its own failure.**
+It removed three files by name and called `rmdir`; a single failing run left
+a `policy.ini` in the directory, so every later run failed on the previous
+run's litter. A gate that stays red after one failure is a gate that gets
+switched off. It removes the whole directory now -- checking `BUILD_DIR` is
+non-empty and relative first, which is the one shape `build-and-commit.md`
+allows that in -- at the start and at the end, and it lists what it found
+before removing it.
+
+The not-built branch had the same class of bug in a different place: a
+`|| { echo ...; exit 0; }` on its own recipe line exits *that line's* shell
+successfully and make runs the next one, so the guard printed "not built"
+and then ran the checks against a binary that was not there. One shell, one
+`if`.
+
+### Measured beside it: every argument after the first is dropped
+
+`Exec=hydra %U` promises a list -- a file manager with two pages selected
+passes both -- and only `argv[1]` is ever classified or opened. The other
+arguments were discarded without a word. Saying so is one line and is in;
+**opening them is a tab each and a single-instance handover that can carry
+more than one address, which is a protocol change and the copyright
+holder's.** `guard.hand_over(open_arg)` takes one string today.
+
+Not in `cli-check`: asserting the warning means starting the browser and
+killing it, which is thirty seconds of gate for one line of stderr. It was
+verified by hand -- two arguments print it, one prints nothing -- and that
+is recorded here rather than claimed by a check.

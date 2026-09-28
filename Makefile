@@ -284,7 +284,7 @@ TEST_ENV = HYDRA_MAX_LIVE_VIEWS=$(HYDRA_TEST_LIVE_VIEWS) QT_QPA_PLATFORM=offscre
 FAILED_DIR = $(TESTS_DIR)/failed
 
 .PHONY: all run test test-one drivers sweep replay deb deb-check version-check android android-build android-aab install uninstall clean veryclean distclean help style style-docs style-source check hooks jni seam \
-        resources manifest deps desktop doc policy
+        resources manifest deps desktop doc policy cli-check
 
 # Always delegates, never compares timestamps itself. The first version made
 # the binary a real target depending on the configure output, and `make` after
@@ -530,6 +530,84 @@ version-check:
 		echo "version-check: $$file, in step (both readers agree)"; \
 	else \
 		echo "version-check: $$file, in step (no dpkg-dev; read line 1)"; \
+	fi
+
+# What the program says when it is asked from a terminal, which nothing had
+# asked it. `--help` did not exist: it fell past the url classifier, was read
+# as the name of a tab tree, and opened a browser on an empty one -- leaving a
+# file called `--help` in whatever directory the command was run from, because
+# opening a tree that is not there creates it. So a typo'd flag littered and
+# said nothing, and `argument_url` refusing a leading dash -- which it does,
+# with a comment saying why -- only moved the mistake one level up.
+#
+# **Run in a directory of its own, and the litter is half the check.** A gate
+# that only read stdout would pass a version of this that prints the usage and
+# then goes on to create the file, which is exactly the shape the defect had.
+# The directory is this rule's own, made and removed by it, and `BUILD_DIR` is
+# checked non-empty and relative first -- which is the one shape
+# `build-and-commit.md` allows a wholesale removal in. It has to be wholesale:
+# what a stray run writes is a `state/` directory whose contents are named by
+# the store rather than by anybody here, so the names cannot be listed. The
+# first version removed three names and called `rmdir`, and a single failing
+# run then left a `policy.ini` behind that made every later run fail on
+# somebody else's litter -- a gate that stays red after one failure is a gate
+# that gets switched off.
+#
+# It is removed at the END as well as the start, and the listing happens
+# before the removal, so what failed is printed rather than deleted quietly.
+#
+# **Every run is bounded**, because the regression this is written against is
+# a flag that starts the browser: unbounded, the gate would hang where it is
+# meant to fail, and a gate that hangs is one somebody interrupts rather than
+# reads. `timeout` returns 124, which is not 0, which is the check.
+cli-check:
+	@dir=$(BUILD_DIR)/cli-check; \
+	case "$(BUILD_DIR)" in \
+		""|/*) echo "cli-check: BUILD_DIR is empty or absolute, refusing to" >&2; \
+		       echo "           make or remove '$$dir'" >&2; exit 1;; \
+	esac; \
+	rm -rf "$$dir"; \
+	mkdir -p "$$dir" || exit 1; \
+	fail=0; \
+	if [ ! -x $(BUILD_DIR)/hydra ]; then \
+		echo "cli-check: $(BUILD_DIR)/hydra is not built, so the binary was"; \
+		echo "           not asked what it says"; \
+	else \
+		for flag in --help -h; do \
+			out=$$(cd "$$dir" && QT_QPA_PLATFORM=offscreen timeout 30 \
+			        ../../$(BUILD_DIR)/hydra $$flag 2>/dev/null); rc=$$?; \
+			if [ $$rc -ne 0 ]; then \
+				echo "cli-check: '$$flag' exited $$rc, not 0" >&2; fail=1; \
+			fi; \
+			case "$$out" in \
+				"Usage: hydra "*) ;; \
+				*) echo "cli-check: '$$flag' did not print a usage line" >&2; \
+				   echo "           first line: $$(printf '%s' "$$out" | \
+				        sed -n 1p)" >&2; fail=1;; \
+			esac; \
+		done; \
+		err=$$(cd "$$dir" && QT_QPA_PLATFORM=offscreen timeout 30 \
+		        ../../$(BUILD_DIR)/hydra --hepl 2>&1 >/dev/null); rc=$$?; \
+		if [ $$rc -eq 0 ]; then \
+			echo "cli-check: an unrecognised option exited 0" >&2; fail=1; \
+		fi; \
+		case "$$err" in \
+			*"unrecognised option"*) ;; \
+			*) echo "cli-check: an unrecognised option said:" >&2; \
+			   printf '%s\n' "$$err" | sed 's/^/           /' >&2; fail=1;; \
+		esac; \
+		left=$$(ls -A "$$dir"); \
+		if [ -n "$$left" ]; then \
+			echo "cli-check: asking about the command line left files" >&2; \
+			echo "           behind, in the directory it was run from:" >&2; \
+			printf '%s\n' "$$left" | sed 's/^/           /' >&2; fail=1; \
+		fi; \
+	fi; \
+	rm -rf "$$dir"; \
+	test $$fail -eq 0 || exit 1; \
+	if [ -x $(BUILD_DIR)/hydra ]; then \
+		echo "cli-check: --help and -h print a usage line, an unrecognised"; \
+		echo "cli-check: option exits non-zero, and neither leaves a file"; \
 	fi
 
 deb-check: deb
@@ -807,7 +885,7 @@ help:
 # at packaging time is finding out after every commit in between. It says what
 # it could not check rather than failing when the binary is not built.
 style: style-source style-docs jni seam resources manifest deps desktop \
-        doc policy version-check
+        doc policy version-check cli-check
 
 jni:
 	@python3 tool/jni_check.py

@@ -115,6 +115,40 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
+	// **And `--help`, for the same reason and in the same place.** There was
+	// none, and the absence was not quiet: `--help` fell past the url
+	// classifier, was read as the name of a tab tree to open, and opened a
+	// browser on an empty one -- leaving a file called `--help` in whatever
+	// directory the command was run from, because that is what opening a tree
+	// that is not there does. Measured before this was written.
+	//
+	// The text says what the program takes and nothing about what it is for;
+	// a usage message is read by somebody who already knows.
+	if (argc > 1 && (QString::fromLocal8Bit(argv[1]) == QLatin1String("--help") ||
+	                  QString::fromLocal8Bit(argv[1]) == QLatin1String("-h"))) {
+		std::printf(
+		  "Usage: hydra [FILE|URL]\n"
+		  "\n"
+		  "With no argument, opens the personal tab tree in the application's\n"
+		  "data directory, seeded from an example on first run.\n"
+		  "\n"
+		  "  FILE           a tab tree to open instead of the personal one\n"
+		  "  URL            an http, https or file address, opened as a page\n"
+		  "                 in the personal tree\n"
+		  "  --version      print the version, the Qt it runs against, and\n"
+		  "                 the copyright holder\n"
+		  "  --help, -h     print this\n"
+		  "\n"
+		  "Qt's own options are accepted as well and are consumed before any\n"
+		  "of the above is read, so -platform and -style work as usual.\n"
+		  "\n"
+		  "Environment:\n"
+		  "  HYDRA_MAX_LIVE_VIEWS   how many tabs keep a live web view, 1 to\n"
+		  "                         64; the rest are suspended. Overrides the\n"
+		  "                         setting.\n");
+		return 0;
+	}
+
 	// Desktop Linux only: force the xcb platform plugin unless the environment
 	// has already chosen one, so the X11 behaviour this design relies on
 	// (architecture doc sec 2/sec 14) stays predictable, and a Wayland session runs
@@ -207,6 +241,52 @@ int main(int argc, char *argv[]) {
 	// Classified here, above everything, because the single-instance guard
 	// below has to know what this process was asked to do before it can decide
 	// what to do about it.
+	// **An option nobody recognises is refused, not opened.**
+	// `argument_url` already declines anything beginning with `-`, and its own
+	// comment gives the reason: a flag quietly treated as a page is worse than
+	// one that is rejected, because nothing says the option was not
+	// understood. The refusal was complete on the url side and the caller then
+	// read the same text as a *tree path* -- so the thing that comment warns
+	// about happened one level up, and worse, because opening a tree that is
+	// not there creates it. `hydra --hepl` came up on an empty tree and left a
+	// file called `--hepl` behind.
+	//
+	// Here rather than beside `--version` above, because `QApplication` has by
+	// now removed the arguments Qt recognises -- measured: both `-platform
+	// offscreen` and `--platform offscreen` reach this point already gone, so
+	// refusing a leading dash before the constructor would refuse Qt's own
+	// switches, and neither spelling nor a hand-kept list of Qt's option names
+	// separates them from a typo.
+	//
+	// **The cost of being here is that this needs a platform plugin**, which
+	// the `--version` comment above paid for once: on a machine where no
+	// plugin can be initialized, `hydra --hepl` aborts in the constructor with
+	// Qt's own message rather than reaching this one. That is a limit and not
+	// an oversight -- every invocation fails there, so the option message is
+	// only unreachable where the program could not have run anyway -- and it
+	// is why `--help` is above the constructor and this is not.
+	if (argc > 1) {
+		const QString first = QString::fromLocal8Bit(argv[1]);
+		if (first.startsWith(QLatin1Char('-'))) {
+			std::fprintf(stderr, "hydra: unrecognised option '%s'\n",
+			              qUtf8Printable(first));
+			std::fprintf(stderr, "Try 'hydra --help'.\n");
+			return 2;
+		}
+	}
+
+	// **Everything after the first argument is dropped, and now says so.** The
+	// desktop entry is `Exec=hydra %U`, which promises a *list* -- a file
+	// manager with two pages selected passes both -- and only `argv[1]` is ever
+	// classified or opened. Opening the rest means a tab each and a
+	// single-instance handover that can carry more than one address, which is a
+	// protocol change and the copyright holder's; being silent about it is not.
+	if (argc > 2)
+		std::fprintf(stderr, "hydra: opening '%s' only; %d further argument(s) "
+		                      "ignored\n",
+		              qUtf8Printable(QString::fromLocal8Bit(argv[1])),
+		              argc - 2);
+
 	QString open_arg;
 	if (argc > 1) {
 		const QUrl candidate =
