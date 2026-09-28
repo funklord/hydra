@@ -27962,3 +27962,57 @@ parser rather than a pattern, so it cannot narrow silently; `deps_check`,
 against each other, which is the same second-reading discipline arrived at
 from the other direction. `style_gate.py` counts files with a pattern of its
 own and is spread to sixteen trees, so it is not this project's to change.
+
+## Opening several addresses at once, and the reason it was deferred
+
+`Exec=hydra %U` promises a list. A file manager with three pages selected
+passes all three, and only `argv[1]` was ever classified or opened -- the rest
+were discarded without a word until this session added a line saying so.
+
+**That line recorded the work as the copyright holder's, for a reason that was
+not true.** It said opening the rest "means a tab each and a single-instance
+handover that can carry more than one address, which is a protocol change".
+Measured instead of assumed: `hand_over` opens a connection, writes one
+newline-framed message and disconnects, and `accept_peer` reads one message per
+connection. **Several addresses are several calls**, which a copy of this
+program from before today already understands. There was no protocol to
+change, so there was nothing to defer -- and a question deferred for a reason
+that does not hold is the one nobody comes back to, because the deferral reads
+as care.
+
+The rules, which keep a single argument behaving exactly as it always has:
+
+- anything `argument_url` accepts is a page, and they open in the order given;
+- the **first** argument, when it is not a page, is the tree;
+- any later argument that is not a page cannot be a second tree, so it is
+  reported rather than dropped.
+
+**They live in `plan_arguments` rather than in `main()`, because `main()`
+links into no test in this tree.** Rules with cases that nothing can drive are
+rules nobody can check -- which is how the single-argument version went this
+long without anybody noticing what it did with two. Eleven checks in
+`test_address` cover the list, the two single-argument shapes unchanged, a
+tree followed by a page, two paths (the second reported), and an option after
+an address.
+
+**And back to the first tab afterwards.** Each `open_url` makes its own tab
+the live one, so three files opened from a file manager would land on the
+third; every other browser lands on the first, and so does a person's reading
+order. `open_url` returns the node it made and `show_node` is the narrow
+public half of `open_node` that a caller outside the window needs.
+
+Measured end to end, both paths:
+
+    hydra a b c                  three tabs, in order, first in front
+    hydra ./work.txt ./play.txt  the first is the tree, the second reported
+    hydra a b  (one running)     "handed 2 addresses to the copy already
+                                 running", and the running copy's tree file
+                                 has both
+
+**The handover fixture found a limit worth knowing rather than a defect.** A
+`XDG_RUNTIME_DIR` deep enough makes the socket path exceed the ~107 characters
+a Unix socket allows, and `QLocalServer::listen` fails with *Name error*. The
+running copy says so on startup -- *"cannot listen ... a second instance will
+be refused rather than handed its url"* -- which is the program behaving
+correctly; it was the scratch directory that was too long, and the test moved
+rather than the code.

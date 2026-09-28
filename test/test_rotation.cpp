@@ -3270,6 +3270,52 @@ int main(int argc, char **argv) {
 	// relationship rather than either number: whatever the constants say, the
 	// sentence says the same, and the two entries do not claim the same
 	// interval.
+	// **What `main()` does with `Exec=hydra %U`, in the half a test can
+	// reach.** The rules that turn a command line into pages and a tree are in
+	// `plan_arguments` and tested in `test_address`; this is the other half --
+	// `open_url` hands back the node it made so the caller can finish on the
+	// first address, because each `open_url` makes its own tab the live one and
+	// three files opened from a file manager would otherwise land on the third.
+	section("several addresses open in order and leave the first in front");
+	{
+		policy_engine  apol;
+		request_filter afilt(&apol);
+		fake_factory   afac;
+		main_window    w(&afac, &apol, &afilt);
+		w.show();
+		spin(120);
+
+		node *one = w.open_url(QUrl("https://one.example/a"));
+		node *two = w.open_url(QUrl("https://two.example/b"));
+		node *three = w.open_url(QUrl("https://three.example/c"));
+		check(one && two && three,
+		      "each address comes back as the node it made");
+		check(one != two && two != three,
+		      "three addresses are three tabs, not one reused");
+		check(w.m_address && w.m_address->text().contains("three.example"),
+		      QString("the last one opened is the one in front (%1)")
+		          .arg(w.m_address ? w.m_address->text() : QString()));
+
+		w.show_node(one);
+		spin(60);
+		check(w.m_address && w.m_address->text().contains("one.example"),
+		      QString("and asking for the first puts it back in front (%1)")
+		          .arg(w.m_address ? w.m_address->text() : QString()));
+
+		// Order in the tree is argument order, which is the other half of what
+		// "three files opened at once" should look like.
+		QStringList urls;
+		for (node *c : w.m_model->root()->children)
+			if (!c->url.isEmpty() && c->url.contains(".example"))
+				urls << c->url;
+		QStringList as_given;
+		as_given << "https://one.example/a" << "https://two.example/b"
+		          << "https://three.example/c";
+		check(urls == as_given,
+		      QString("and they sit in the tree in the order they were given "
+		               "(%1)").arg(urls.join(" ")));
+	}
+
 	section("the sync entries state the interval their mirrors actually use");
 	{
 		policy_engine  spol;

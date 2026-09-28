@@ -3,6 +3,7 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QLineEdit>
+#include <QStringList>
 
 class QString;
 class QUrl;
@@ -174,3 +175,27 @@ QUrl search_url(const QString &terms, const QString &tmpl);
 // An `http`/`https` argument that also names an existing file stays a tree
 // path, which is the older rule and is left alone.
 QUrl argument_url(const QString &raw);
+
+// What a whole command line means, which is `argument_url` applied to each
+// argument plus the two rules that decide the rest.
+//
+// **`Exec=hydra %U` promises a list** -- a file manager with three pages
+// selected passes all three -- and only the first argument was ever classified
+// or opened, so the others were discarded without a word. The rules keep a
+// single argument behaving exactly as it always has:
+//
+//   * anything `argument_url` accepts is a page, and they open in the order
+//     given;
+//   * the FIRST argument, when it is not a page, is the tree;
+//   * any later argument that is not a page cannot be a second tree, so it is
+//     reported rather than dropped.
+//
+// Here rather than in `main()` because these are rules with cases, and rules
+// with cases belong somewhere a test can reach -- `main()` links into no test
+// in this tree.
+struct argument_plan {
+	QStringList pages;        // urls, in the order given
+	QString     tree;         // empty when the first argument is a page
+	QStringList not_pages;    // later arguments that are neither, to report
+};
+argument_plan plan_arguments(const QStringList &args);

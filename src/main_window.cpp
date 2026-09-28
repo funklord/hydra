@@ -5581,18 +5581,24 @@ node *main_window::selected_parent() const {
 	return nullptr;
 }
 
-void main_window::open_url(const QUrl &url) {
+void main_window::show_node(node *n) {
+	if (n)
+		open_node(n);
+}
+
+node *main_window::open_url(const QUrl &url) {
 	if (!url.isValid() || url.isEmpty())
-		return;
+		return nullptr;
 	// Under the root rather than the selection: nothing is selected when this
 	// arrives from another application, and a link from outside is not a child
 	// of whatever happened to be highlighted.
 	node *t = m_model->add_tab(nullptr, QString(), url.toString());
 	if (!t)
-		return;
+		return nullptr;
 	m_tree->expandAll();
 	open_node(t);
 	update_address(url.toString(), /*force=*/true);
+	return t;
 }
 
 void main_window::new_tab() {

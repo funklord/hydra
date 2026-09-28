@@ -136,7 +136,17 @@ public:
 	// not exist, so the window came up empty and the link was silently
 	// dropped -- a browser that installs as the default browser and then
 	// discards what it is asked to open.
-	void open_url(const QUrl &url);
+	// Returns the node it made, so a caller opening several addresses can put
+	// the first one back in front afterwards -- opening three files from a file
+	// manager should land on the first, the way every other browser does, and
+	// each `open_url` makes its own tab the live one.
+	node *open_url(const QUrl &url);
+
+	// Bring a node that is already in the tree to the front. `open_node` does
+	// this and several other things and is private for that reason; this is
+	// the narrow half a caller outside the window needs, and it exists because
+	// `main()` opening three addresses has to finish on the first of them.
+	void show_node(node *n);
 
 	// Write everything that must survive the process, and suspend the live
 	// views doing it. Called by `closeEvent` and by a shutdown signal, which

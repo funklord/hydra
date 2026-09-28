@@ -215,6 +215,69 @@ int main(int argc, char **argv) {
 	}
 
 	{
+		section("a whole command line, not only its first argument");
+		// `Exec=hydra %U` promises a list -- a file manager with three pages
+		// selected passes all three -- and only the first argument was ever
+		// classified or opened. The rules are here rather than in `main()`
+		// because `main()` links into no test in this tree, and rules with
+		// cases that nothing can drive are rules nobody can check.
+		const argument_plan three = plan_arguments(
+		  { "https://a.example/1", "https://b.example/2", "file:///tmp/c.html" });
+		check(three.pages.size() == 3,
+		      QString("three addresses are three pages (%1)")
+		          .arg(three.pages.size()));
+		QStringList in_order;
+		in_order << "https://a.example/1" << "https://b.example/2"
+		          << "file:///tmp/c.html";
+		check(three.pages == in_order,
+		      QString("in the order they were given (%1)")
+		          .arg(three.pages.join(" ")));
+		check(three.tree.isEmpty() && three.not_pages.isEmpty(),
+		      "with no tree and nothing refused");
+
+		// The single-argument cases, unchanged: this is the whole reason the
+		// rules are written as "the first argument, when it is not a page".
+		const argument_plan one_page = plan_arguments({ "https://example.com/" });
+		check(one_page.pages.size() == 1 && one_page.tree.isEmpty(),
+		      "one address is still one page and no tree");
+		const argument_plan one_tree = plan_arguments({ "./tree.txt" });
+		check(one_tree.pages.isEmpty() && one_tree.tree == "./tree.txt",
+		      QString("one path is still the tree (%1)").arg(one_tree.tree));
+		check(plan_arguments({}).pages.isEmpty() &&
+		          plan_arguments({}).tree.isEmpty(),
+		      "and no arguments is neither");
+
+		// A tree and pages together: the tree is the first argument and the
+		// pages open in it, which is what `hydra work.txt https://x/` reads as.
+		const argument_plan mixed =
+		  plan_arguments({ "./work.txt", "https://x.example/" });
+		check(mixed.tree == "./work.txt" && mixed.pages.size() == 1,
+		      QString("a tree first and a page after it are both taken (%1, %2)")
+		          .arg(mixed.tree).arg(mixed.pages.join(" ")));
+
+		// And the case that must not be silent: a second thing that is not a
+		// page cannot be a second tree.
+		const argument_plan two_trees =
+		  plan_arguments({ "./work.txt", "./play.txt" });
+		check(two_trees.tree == "./work.txt",
+		      "the first non-page is still the tree");
+		check(two_trees.not_pages == QStringList({ "./play.txt" }),
+		      QString("and the second is reported rather than dropped (%1)")
+		          .arg(two_trees.not_pages.join(" ")));
+		check(two_trees.pages.isEmpty(), "with nothing to open");
+
+		// An option is not a page and is not a tree either -- `main()` refuses
+		// a leading dash before this is reached, and this says what the rules
+		// alone would do with one, so the refusal above cannot quietly become
+		// the only thing standing between a typo and a file named after it.
+		const argument_plan flagged =
+		  plan_arguments({ "https://x.example/", "--hepl" });
+		check(flagged.pages.size() == 1 &&
+		          flagged.not_pages == QStringList({ "--hepl" }),
+		      "an option after an address is reported, not opened");
+	}
+
+	{
 		section("what the desktop entry promises the system");
 		// **The entry is a set of claims about this program, in a file the
 		// program never reads.** `packaging/hydra.desktop` registers Hydra

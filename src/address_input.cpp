@@ -152,6 +152,20 @@ QUrl search_url(const QString &terms, const QString &tmpl) {
 	return QUrl(QString(tmpl).replace("%1", encoded));
 }
 
+argument_plan plan_arguments(const QStringList &args) {
+	argument_plan out;
+	for (int i = 0; i < args.size(); ++i) {
+		const QUrl candidate = argument_url(args.at(i));
+		if (candidate.isValid())
+			out.pages << candidate.toString();
+		else if (i == 0)
+			out.tree = args.at(i);
+		else
+			out.not_pages << args.at(i);
+	}
+	return out;
+}
+
 QUrl argument_url(const QString &raw) {
 	if (raw.isEmpty())
 		return QUrl();

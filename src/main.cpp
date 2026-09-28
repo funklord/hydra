@@ -127,14 +127,16 @@ int main(int argc, char *argv[]) {
 	if (argc > 1 && (QString::fromLocal8Bit(argv[1]) == QLatin1String("--help") ||
 	                  QString::fromLocal8Bit(argv[1]) == QLatin1String("-h"))) {
 		std::printf(
-		  "Usage: hydra [FILE|URL]\n"
+		  "Usage: hydra [FILE|URL]...\n"
 		  "\n"
 		  "With no argument, opens the personal tab tree in the application's\n"
 		  "data directory, seeded from an example on first run.\n"
 		  "\n"
-		  "  FILE           a tab tree to open instead of the personal one\n"
+		  "  FILE           a tab tree to open instead of the personal one.\n"
+		  "                 Only the first argument can name one\n"
 		  "  URL            an http, https or file address, opened as a page\n"
-		  "                 in the personal tree\n"
+		  "                 in the tree. Several may be given and each opens\n"
+		  "                 a tab, in the order given, ending on the first\n"
 		  "  --version      print the version, the Qt it runs against, and\n"
 		  "                 the copyright holder\n"
 		  "  --help, -h     print this\n"
@@ -275,25 +277,33 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	// **Everything after the first argument is dropped, and now says so.** The
-	// desktop entry is `Exec=hydra %U`, which promises a *list* -- a file
-	// manager with two pages selected passes both -- and only `argv[1]` is ever
-	// classified or opened. Opening the rest means a tab each and a
-	// single-instance handover that can carry more than one address, which is a
-	// protocol change and the copyright holder's; being silent about it is not.
-	if (argc > 2)
-		std::fprintf(stderr, "hydra: opening '%s' only; %d further argument(s) "
-		                      "ignored\n",
-		              qUtf8Printable(QString::fromLocal8Bit(argv[1])),
-		              argc - 2);
-
-	QString open_arg;
-	if (argc > 1) {
-		const QUrl candidate =
-		  argument_url(QString::fromLocal8Bit(argv[1]));
-		if (candidate.isValid())
-			open_arg = candidate.toString();
-	}
+	// **Every argument, not only the first.** The desktop entry is
+	// `Exec=hydra %U`, which promises a *list* -- a file manager with three
+	// pages selected passes all three -- and only `argv[1]` was ever classified
+	// or opened, so the rest were discarded without a word.
+	//
+	// This was recorded as needing a handover protocol that carries more than
+	// one address, and measuring it dissolved that: `hand_over` opens a
+	// connection, writes one newline-framed message and disconnects, and the
+	// receiver reads one message per connection. So several addresses are
+	// several calls, which an older copy of this program already understands --
+	// there is no protocol to change.
+	//
+	// The rules, which keep a single argument behaving exactly as it did:
+	// anything `argument_url` accepts is a page to open, in the order given;
+	// the *first* argument, when it is not a url, is the tree; any later
+	// argument that is not a url cannot be a second tree and is refused out
+	// loud rather than dropped.
+	QStringList raw_args;
+	for (int i = 1; i < argc; ++i)
+		raw_args << QString::fromLocal8Bit(argv[i]);
+	const argument_plan plan = plan_arguments(raw_args);
+	const QStringList open_args    = plan.pages;
+	const QString     tree_arg     = plan.tree;
+	for (const QString &bad : plan.not_pages)
+		std::fprintf(stderr, "hydra: %s is not an address and only the first "
+		                      "argument can name a tree; ignored\n",
+		              qUtf8Printable(bad));
 
 #ifndef Q_OS_ANDROID
 	// **One Hydra per profile directory**, and this is the first thing after
@@ -334,19 +344,44 @@ int main(int argc, char *argv[]) {
 		// running instance already has a tree open and swapping it underneath
 		// somebody is not what `hydra other-tree.txt` means -- so say so and
 		// stop, rather than raising a window showing a different file.
-		if (argc > 1 && open_arg.isEmpty()) {
+		if (!tree_arg.isEmpty()) {
 			qCritical("hydra is already running (%s); quit it before opening "
 			           "another tree", qPrintable(guard.owner()));
 			return 1;
 		}
 		// Nothing to open means the launcher was used twice, which is a
-		// request to see the window that already exists.
-		if (!guard.hand_over(open_arg)) {
-			qCritical("hydra is already running (%s) and is not answering; "
-			           "refusing to open the same profile twice",
-			           qPrintable(guard.owner()));
+		// request to see the window that already exists -- and that is one
+		// empty message rather than none, because an empty message is how the
+		// running copy is told to come to the front.
+		//
+		// One call per address: each is its own connection and its own
+		// newline-framed message, which is what the receiving side reads. A
+		// partial failure is reported for what did not arrive rather than
+		// collapsed into "it is not answering", because the addresses that did
+		// arrive are open in the other window and saying nothing about them
+		// would send somebody looking for pages that are already there.
+		int handed = 0, refused = 0;
+		if (open_args.isEmpty()) {
+			if (!guard.hand_over(QString()))
+				++refused;
+		} else {
+			for (const QString &u : open_args) {
+				if (guard.hand_over(u))
+					++handed;
+				else
+					++refused;
+			}
+		}
+		if (refused > 0) {
+			qCritical("hydra is already running (%s) and did not take %d of %d "
+			           "address(es); refusing to open the same profile twice",
+			           qPrintable(guard.owner()), refused,
+			           int(qMax(qsizetype(1), open_args.size())));
 			return 1;
 		}
+		if (handed > 1)
+			qInfo("hydra: handed %d addresses to the copy already running",
+			       handed);
 		return 0;
 	}
 #endif
@@ -481,8 +516,8 @@ int main(int argc, char *argv[]) {
 	};
 
 	QString tree_path;
-	if (argc > 1 && open_arg.isEmpty())
-		tree_path = QString::fromLocal8Bit(argv[1]);
+	if (!tree_arg.isEmpty())
+		tree_path = tree_arg;
 	if (tree_path.isEmpty())
 		tree_path = default_tree();
 
@@ -520,8 +555,18 @@ int main(int argc, char *argv[]) {
 	}
 	// After the tree, so the tab lands in a loaded tree rather than being
 	// dropped when the file replaces the model underneath it.
-	if (!open_arg.isEmpty())
-		w.open_url(QUrl(open_arg));
+	// In the order they were given, and then back to the first: each
+	// `open_url` makes its own tab the live one, so without this three files
+	// opened from a file manager would land on the third. Every other browser
+	// lands on the first, and so does the person's reading order.
+	node *first = nullptr;
+	for (const QString &u : open_args) {
+		node *made = w.open_url(QUrl(u));
+		if (!first)
+			first = made;
+	}
+	if (first && open_args.size() > 1)
+		w.show_node(first);
 
 #ifndef Q_OS_ANDROID
 	// What a second instance's argument does when it arrives. Registered after
