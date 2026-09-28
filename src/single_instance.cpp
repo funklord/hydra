@@ -116,6 +116,21 @@ bool single_instance::acquire() {
 	// `kill -9` leaves the browser permanently convinced it is already
 	// running. Every workaround for that is a race dressed up as a heuristic.
 	if (!m_lock.tryLock(0)) {
+		// **"Held by somebody" and "could not be made" are different answers,
+		// and this returned false for both.** An app-data directory that is
+		// not writable was therefore reported as a browser already running,
+		// naming a lock file that had never been created -- so the person was
+		// sent to quit a process that did not exist. Measured with a probe
+		// rather than read off the documentation: a read-only directory gives
+		// `PermissionError`, a directory `mkpath` could not create gives
+		// `UnknownError`, and a lock another process holds gives
+		// `LockFailedError`. Anything that is not the last one is this
+		// process's own inability to write.
+		if (m_lock.error() != QLockFile::LockFailedError) {
+			m_locked_out = true;
+			m_owner.clear();   // there is nobody to name
+			return false;
+		}
 		qint64 pid = 0;
 		QString host;
 		QString name;

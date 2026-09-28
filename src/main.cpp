@@ -317,6 +317,19 @@ int main(int argc, char *argv[]) {
 	single_instance guard(
 	  QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
 	if (!guard.acquire()) {
+		// **A lock that could not be made is not a browser already running.**
+		// This printed "hydra is already running" for both, naming a lock file
+		// that had never been created -- so an app-data directory that is not
+		// writable sent somebody to quit a process that did not exist. There
+		// is nothing to hand over either: the socket is keyed on the same
+		// directory and nobody is listening.
+		if (guard.locked_out()) {
+			qCritical("hydra cannot create its lock file (%s), so it cannot "
+			           "tell whether another copy is running; refusing to open "
+			           "the profile rather than risk two writers in it",
+			           qPrintable(guard.lock_path()));
+			return 1;
+		}
 		// A tree path is the one argument that cannot be handed over. The
 		// running instance already has a tree open and swapping it underneath
 		// somebody is not what `hydra other-tree.txt` means -- so say so and

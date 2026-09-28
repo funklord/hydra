@@ -65,6 +65,27 @@ public:
 	// refused instance prints. Empty until `acquire()` has failed.
 	QString owner() const { return m_owner; }
 
+	// **Whether the lock could not be created at all, as against being held.**
+	// `QLockFile::tryLock` answers false for both and the caller could not tell
+	// them apart, so an app-data directory that is not writable was reported
+	// as "hydra is already running (an instance that left <path> behind)" --
+	// naming a lock file that was never created and sending somebody to quit a
+	// browser that is not running. Measured, the two arrive as distinct
+	// `QLockFile::error()` values: a read-only directory gives
+	// `PermissionError`, a directory that could not be created gives
+	// `UnknownError`, and a lock another process holds gives
+	// `LockFailedError`.
+	//
+	// True is not "you may start": it still means this process must not open
+	// the directory, because nothing can arbitrate between two writers when
+	// the arbiter cannot be written. It means the sentence printed about it is
+	// a different sentence.
+	bool locked_out() const { return m_locked_out; }
+
+	// The path the lock was attempted at, for that sentence. There is no
+	// owner to name in this case, so the file is the only fact there is.
+	QString lock_path() const { return m_lock_path; }
+
 private:
 	void accept_peer();
 	void deliver(const QString &message);
@@ -76,6 +97,9 @@ private:
 	// Whether this process is the one holding the directory. The destructor
 	// needs it: a refused instance must take nothing away on its way out.
 	bool m_primary = false;
+	// Set when `acquire()` failed because the lock file could not be made,
+	// rather than because somebody holds it. See `locked_out()`.
+	bool m_locked_out = false;
 
 	std::function<void(const QString &)> m_handler;
 	// Messages that arrived before the window existed. The handler needs the

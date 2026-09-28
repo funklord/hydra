@@ -83,6 +83,62 @@ int main(int argc, char **argv) {
 		      QString("with the pid holding it (%1)").arg(second.owner()));
 	}
 
+	section("a lock that cannot be made is not a lock somebody holds");
+	{
+		// `tryLock` answers false for both, and the caller could not tell them
+		// apart -- so an app-data directory that is not writable was reported
+		// as "hydra is already running (an instance that left <path> behind)",
+		// naming a lock file that had never been created and sending somebody
+		// to quit a browser that was not running.
+		//
+		// **The error values were measured rather than read off the
+		// documentation**, and the first guess would have been dead code: a
+		// directory `mkpath` cannot create gives `UnknownError`, not
+		// `PermissionError`. Both shapes are exercised here for that reason.
+		if (geteuid() == 0) {
+			std::printf("  skip  running as root, which can write anywhere\n");
+		} else {
+			const QString ro = root + "/read-only";
+			QDir().mkpath(ro);
+			QFile::setPermissions(ro, QFile::ReadOwner | QFile::ExeOwner);
+
+			single_instance shut_out(ro + "/data");
+			check(!shut_out.acquire(),
+			       "a directory it cannot write is not acquired");
+			check(shut_out.locked_out(),
+			       "and says the lock could not be made");
+			check(shut_out.owner().isEmpty(),
+			       QString("naming nobody, because there is nobody (%1)")
+			         .arg(shut_out.owner().isEmpty() ? QString("empty")
+			                                          : shut_out.owner()));
+			check(!shut_out.lock_path().isEmpty() &&
+			          shut_out.lock_path().startsWith(ro),
+			       QString("with the path it tried (%1)")
+			         .arg(shut_out.lock_path()));
+
+			single_instance shut_out_2(ro);
+			check(!shut_out_2.acquire() && shut_out_2.locked_out(),
+			       "and the same for a directory that exists and is read-only, "
+			       "which Qt reports as a different error");
+
+			QFile::setPermissions(ro, QFile::ReadOwner | QFile::WriteOwner |
+			                           QFile::ExeOwner);
+
+			// The control, and the whole point of the section: a lock that IS
+			// held must still report an owner rather than this.
+			single_instance holder(root + "/held");
+			check(holder.acquire(), "a writable directory is acquired");
+			single_instance refused(root + "/held");
+			check(!refused.acquire(), "a second instance is refused");
+			check(!refused.locked_out(),
+			       "and does NOT say the lock could not be made, which is what "
+			       "separates the two answers");
+			check(!refused.owner().isEmpty(),
+			       QString("it names the holder instead (%1)")
+			         .arg(refused.owner()));
+		}
+	}
+
 	section("a different directory is a different application");
 	{
 		// The whole reason everything is keyed on the directory rather than on

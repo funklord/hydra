@@ -27551,3 +27551,47 @@ Two sabotages, each through its own check: the status message removed (the
 bar reads `Ready`, and two checks fail), and the latch line removed.
 `main()`'s half is not covered -- no test links `main` -- and is recorded
 here as read rather than run.
+
+## "hydra is already running", said by a hydra that could not write a file
+
+Met while trying to reproduce the no-tree state above by pointing `HOME` at
+a directory with no write permission. The browser refused to start and said:
+
+    hydra is already running (an instance that left
+    .../Hydra/instance.lock behind); quit it before opening another tree
+
+Nothing was running, and that file did not exist. `single_instance::acquire`
+treated every `QLockFile::tryLock` failure as "somebody holds it", so an
+app-data directory that cannot be written was reported as a second copy of
+the browser -- sending the person to quit a process that is not there, and
+naming a lock file as evidence that was never created.
+
+`QLockFile` does distinguish them, and the values were **measured with a
+probe rather than read off the documentation, which is what stopped the fix
+being dead code**: the first guess was `PermissionError` for both.
+
+    writable directory           tryLock=1  error=0 (NoError)
+    read-only directory          tryLock=0  error=2 (PermissionError)
+    directory mkpath could not
+      create                     tryLock=0  error=3 (UnknownError)
+    held by another process      tryLock=0  error=1 (LockFailedError)
+
+So the test is `error() != LockFailedError`, which is both unwritable shapes
+and anything Qt adds later, rather than a list of the two seen.
+
+`locked_out()` says which answer it was, `lock_path()` gives the only fact
+there is in that case, and `main()` prints a different sentence -- that it
+cannot tell whether another copy is running, and is refusing rather than
+risking two writers in one profile. **Still a refusal**, deliberately:
+nothing can arbitrate between two writers when the arbiter itself cannot be
+written. Only the sentence changes.
+
+Nine checks in `test_instance`, and the two sabotages fail in opposite
+directions, which is what makes them worth running rather than one of them:
+the branch removed gives the phantom owner back (`naming nobody, because
+there is nobody (an instance that left ... behind)`), and the branch applied
+to every failure loses the real owner in the case that *is* a second
+instance (`it names the holder instead ()`).
+
+The end-to-end message was read rather than asserted -- `main()` links into
+no test -- by pointing `XDG_DATA_HOME` at a directory with mode 500.
