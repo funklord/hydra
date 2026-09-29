@@ -216,7 +216,13 @@ pass=0 fail=0 report=0 failed=""
 skip_reason() {
 	case "$1" in
 		try_extract) echo "a capture tool; takes a url argument" ;;
-		try_watch)   echo "needs a live network" ;;
+		# **`try_watch` was skipped here for a network it never needed.** The
+		# torrent half brings its own seeder on 127.0.0.1 with no tracker and no
+		# DHT; the http half asked port 8830, which nothing in this tree serves,
+		# and it reads in a log as a stalled download rather than as an absent
+		# server. It uses the in-process media fixture now, exactly as
+		# `try_downloads` was fixed to -- whose comment said "after this only
+		# try_watch belongs there". Neither does.
 		# **Four more that take a url, and were not named here.** They ran in
 		# every sweep with no argument and were counted as report-only
 		# successes -- "ran to the end" is true of a driver that navigated

@@ -28372,3 +28372,70 @@ Neither was caught by reading the code. What caught both was that the number
 disagreed with what the directory plainly held -- three where one was true, then
 zero -- which is the argument for measuring an instrument rather than trusting
 it, made against an instrument three lines long.
+
+## try_watch ran for the first time, and the Watch path is not reliable
+
+The sweep skipped this driver as needing "a live network", and the sibling it
+was fixed beside said as much: `try_downloads`' own comment ends *"Its README
+row lists it beside try_watch under 'network'; after this only try_watch belongs
+there."* Picking that up found three reasons it could not run, none of them a
+network.
+
+**Its payload did not exist.** The driver copies
+`$HYDRA_TEST_OUT/media/sintel.mkv` -- a real video, so the external player has
+something it can decode -- and **nothing in this tree writes that file**. So the
+copy failed, the torrent's main file was 0 bytes, and the Watch press below
+waits for `received > 1200000` of a 302 KB torrent: it can never fire. The
+driver spun until the sweep killed it, with `video: 0 bytes` the only sign and
+nobody reading it, because the skip meant it never ran. A real file is still
+used when it is there; otherwise five megabytes of synthetic bytes stand in, as
+`try_downloads` does, and the log says which -- because that decides whether the
+player failing to appear is a finding.
+
+**Its http half asked port 8830**, which nothing in this tree serves. Pointed
+at the in-process media fixture, whose `/trailer.mp4` route exists for exactly
+this and is 256 KiB so progress is a number that moves.
+
+**Its destination was not cleared.** The seed root was; the download directory
+was not, so libtorrent rechecked a previous run's finished files, found every
+piece, and the torrent went straight to seeding -- and the Watch press needs it
+*mid-flight*. Measured exactly that way: the first run after the payload fix
+clicked Watch, the second could not.
+
+With those three, the driver reaches its own end: `torrent at 1210368/5552128 --
+Watch enabled: yes`, `Watch clicked`, `done`, rc 0. That is the property it
+exists for -- watching a torrent while it is still downloading -- observed here
+for the first time.
+
+### And then it crashes, about half the time, after the Watch click
+
+Seven runs of the current code: **one reached `done`, two died with SIGSEGV
+immediately after `Watch clicked`, and the rest were killed at the bound** --
+two of those without ever reaching the click, because the mid-flight window is
+narrow even with the destination cleared. Under `gdb --batch` it ran to
+completion once and did not crash, which is what "intermittent" means rather
+than evidence against it.
+
+**Today's Range fix is in that path and has been cleared by experiment rather
+than by argument.** Watch publishes the incomplete file through `local_proxy`
+and mpv fetches it with ranges, so the parser rewritten in `28c6508` is a
+suspect no amount of reading it settles. Reverted to the old parser and run
+three times: **two SIGSEGV with the same signature, one killed**. The crash
+predates the change.
+
+So it is an open, intermittent crash in the Watch path -- proxy publication,
+player launch, and a torrent still writing -- and the reproduction is one
+command now that the driver runs. What is *not* established is where: no
+backtrace has been captured, because the one run under a debugger did not
+crash. Recorded rather than guessed at, and not attributed to any of the three
+components until something names a frame.
+
+### The offscreen noise, and a helper with no caller
+
+Two smaller things the reading turned up. The driver shelled out to `import`
+against the root window, which cannot work offscreen and printed *"unable to
+open X server"* into every log; it is asked for only where there is a display
+now, and it stays because a whole-screen shot is the only way to see the player
+*beside* the browser, which no per-window grab can answer. And a second
+`import`-based helper had no caller at all -- `grab()` replaced it -- so it went,
+with the warning it produced on every rebuild.

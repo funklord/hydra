@@ -6,6 +6,7 @@
 #include "qtwebengine_factory.h"
 #include "torrent_download_source.h"
 #include "download_manager.h"
+#include "media_fixture.h"
 #include "sample_tree.h"
 
 #include <QAction>
@@ -14,6 +15,7 @@
 #include <QDir>
 #include <QFile>
 #include <QMessageBox>
+#include <QGuiApplication>
 #include <QProcess>
 #include <QPushButton>
 #include <QTimer>
@@ -48,9 +50,11 @@ static QString test_out() {
 static const QString OUTDIR =
   test_out();
 
-static void screen(const QString &n) {
-	QProcess::execute("import", {"-window", "root", OUTDIR + n});
-}
+// **The `import`-based screenshot helper is gone, not silenced.** It shelled
+// out to ImageMagick against the root window and had no caller left: `grab()`
+// below replaced it, in-process, "so a blanked screen cannot turn the evidence
+// into a black rectangle". Keeping it cost a warning on every rebuild and a
+// dependency on the one tool whose absence is why `try_settings` skips.
 
 // In-process capture of a specific window, so a blanked screen cannot turn the
 // evidence into a black rectangle.
@@ -78,6 +82,30 @@ int main(int argc, char *argv[]) {
 	QApplication app(argc, argv);
 	app.setApplicationName("Hydra");
 
+	// --- something for the http half to actually fetch ---------------------
+	//
+	// **The sibling driver's fix, which its own comment left for this one.**
+	// `try_downloads` enqueued `http://127.0.0.1:8830/trailer.mp4` with nothing
+	// listening on 8830 -- no fixture, no helper started, no port any other
+	// driver serves -- so the job sat at `0/-1` and read in the log as a
+	// download that stalled rather than a server that was never there. It was
+	// pointed at the in-process media fixture, whose `/trailer.mp4` route
+	// exists for this: 256 KiB, big enough that progress is a number that
+	// moves. That comment ends "after this only try_watch belongs there", and
+	// this is that.
+	//
+	// The sweep skipped this driver as needing "a live network", which was
+	// never what it needed: the torrent half brings its own seeder on
+	// 127.0.0.1 with no tracker and no DHT, and the http half wanted one local
+	// file. Both are in-process now, so the skip is gone.
+	media_fixture::server fixture;
+	const QString http_base = fixture.start();
+	if (http_base.isEmpty()) {
+		std::printf("HYDRA-SKIP: the fixture server could not listen\n");
+		return 1;
+	}
+	std::printf("serving: %s\n", qPrintable(http_base));
+
 	// --- a torrent to actually download, with a seeder for it --------------
 	const QString root = OUTDIR + "seed";
 	QDir(root).removeRecursively();
@@ -89,11 +117,34 @@ int main(int argc, char *argv[]) {
 		for (int i = 0; i < bytes; ++i) b[i] = char((i * 131) & 0xff);
 		f.write(b);
 	};
-	QFile::copy(OUTDIR + "media/sintel.mkv", root + "/Sintel/sintel.mkv");
+	// **The payload, and nothing in this tree produced it.** This copied
+	// `$HYDRA_TEST_OUT/media/sintel.mkv` -- a real video, so that the external
+	// player would have something it could decode -- and no driver, fixture or
+	// make target writes that file. So the copy failed, `vsize` was 0, the
+	// torrent's main file was empty, and the Watch press below waits for
+	// `received > 1200000` bytes that could never arrive: the driver spun until
+	// the sweep killed it at five minutes, with `video: 0 bytes` the only sign
+	// and nobody reading it, because the sweep skipped this driver as needing
+	// "a live network".
+	//
+	// A real file is still used when it is there -- that is what makes the
+	// `pgrep ffplay` line below mean anything -- and otherwise five megabytes
+	// of synthetic bytes stand in, which is what `try_downloads` does. Said
+	// either way, because which one it was decides whether the player failing
+	// to appear is a finding.
+	const bool have_real =
+	  QFile::copy(OUTDIR + "media/sintel.mkv", root + "/Sintel/sintel.mkv") &&
+	  QFileInfo(root + "/Sintel/sintel.mkv").size() > 0;
+	if (!have_real) {
+		QFile::remove(root + "/Sintel/sintel.mkv");
+		write("sintel.mkv", 5 * 1024 * 1024);
+	}
 	write("sample.mkv", 300 * 1024);     // a decoy that sorts first
 	write("readme.txt", 2048);
 	const qint64 vsize = QFileInfo(root + "/Sintel/sintel.mkv").size();
-	std::printf("video: %lld bytes\n", vsize);
+	std::printf("video: %lld bytes (%s)\n", vsize,
+	             have_real ? "a real file, so a player can decode it"
+	                        : "synthetic, so no player will decode it");
 
 	lt::file_storage fs;
 	fs.add_file("Sintel/readme.txt", 2048);
@@ -145,6 +196,18 @@ int main(int argc, char *argv[]) {
 		tor->set_listen_interfaces("127.0.0.1:6931");
 	if (dm)
 		dm->set_directory(OUTDIR + "dl");
+	// **Emptied first, because last run's download is this run's problem.**
+	// The seed root above is already cleared; the destination was not, so
+	// libtorrent rechecked the files a previous run had finished, found every
+	// piece present, and the torrent went straight to seeding. The Watch press
+	// below needs it *mid-flight* -- `received > 1200000 && !complete()` -- so
+	// a complete-on-arrival torrent means that branch is never taken and the
+	// driver spins until the sweep kills it. Measured exactly that way: the
+	// first run after the payload fix clicked Watch, the second could not.
+	//
+	// Named and under this driver's own output, which is the one shape a
+	// wholesale removal is allowed in.
+	QDir(OUTDIR + "dl").removeRecursively();
 	QDir().mkpath(OUTDIR + "dl");
 
 	// Keep introducing the seeder to us; no tracker, no DHT.
@@ -184,7 +247,7 @@ int main(int argc, char *argv[]) {
 			break;
 		case 5: {
 			QString err;
-			const int id = dm->enqueue(QUrl("http://127.0.0.1:8830/trailer.mp4"),
+			const int id = dm->enqueue(QUrl(http_base + "trailer.mp4"),
 			                            QString(), &err);
 			std::printf("http download queued: id=%d %s\n", id, qPrintable(err));
 			break;
@@ -255,7 +318,16 @@ int main(int argc, char *argv[]) {
 				}
 			} else if (watched && ++after == 8) {
 				grab("Downloads", "22-after-watch.png");
-				QProcess::execute("import", {"-window", "root", OUTDIR + "23-screen.png"});
+				// **The whole screen, and only where there is one.** `grab()`
+				// above takes one window; this is the shot that shows the
+				// player *beside* the browser, which is the question at this
+				// moment and which no per-window grab can answer. Offscreen it
+				// cannot work at all -- it printed `import: unable to open X
+				// server` into the log every run -- so it is asked for only
+				// when a real display is there.
+				if (QGuiApplication::platformName() != QLatin1String("offscreen"))
+					QProcess::execute("import",
+					                   {"-window", "root", OUTDIR + "23-screen.png"});
 				QProcess p2;
 				p2.start("pgrep", {"-a", "ffplay"});
 				p2.waitForFinished(3000);
