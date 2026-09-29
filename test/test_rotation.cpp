@@ -77,6 +77,7 @@
 #include <QScrollBar>
 #include <QDir>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QCheckBox>
 #include <QMessageBox>
 #include <QPushButton>
@@ -4148,20 +4149,61 @@ int main(int argc, char **argv) {
 		}
 		// Not ours, and must be left alone: the prune vouches for the
 		// directory, but only for the names it writes itself.
+		//
+		// **`notes.txt` alone is a control that cannot fail**, because the
+		// glob never offered it: it tests the wildcard rather than the prune's
+		// judgement. The files that separate the two are the ones the glob DOES
+		// match and the prune did not write -- another tree's copies in the
+		// shared `backup/`, and a name of this tree's with no stamp. They are
+		// dated 2025 so a prune that takes them as its own would keep them and
+		// delete this tree's real copies.
 		{
 			QFile f(bpath + "/notes.txt");
 			f.open(QIODevice::WriteOnly | QIODevice::Text);
 			f.write("somebody's own file\n");
+		}
+		for (int i = 0; i < 10; ++i) {
+			QFile f(bpath + "/" +
+			         QString("tree-work-20250101-%1.txt")
+			           .arg(i, 6, 10, QChar('0')));
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("another tree's copy\n");
+		}
+		// **And the pair that sorts the other way, which is the destructive
+		// direction.** `tree-work-...` happens to sort after every
+		// `tree-2026...` because a letter is above a digit, so a prefix prune
+		// spares it and deletes this tree's instead. A sibling named
+		// `tree-2.txt` -- as ordinary a name as any -- backs up to
+		// `tree-2-2025...`, and `-` sorts BELOW a digit, so those land at the
+		// front of the list and a prefix prune deletes somebody else's copies
+		// outright.
+		for (int i = 0; i < 4; ++i) {
+			QFile f(bpath + "/" +
+			         QString("tree-2-20250101-%1.txt")
+			           .arg(i, 6, 10, QChar('0')));
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("the tree-2 sibling's copy\n");
+		}
+		{
+			QFile f(bpath + "/tree-notes.txt");
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("matches the glob, carries no stamp\n");
 		}
 
 		main_window w6(&factory, &policy, &filter);
 		check(w6.load_tree(path), "a tree that loads, with 105 copies behind it");
 
 		const QDir bdir(bpath);
-		const QStringList held =
-		  bdir.entryList(QStringList{ "tree-*.txt" }, QDir::Files, QDir::Name);
+		// This tree's own, by the shape it writes: the glob would answer for
+		// the other tree's copies as well, which is the thing under test.
+		const QRegularExpression mine("\\Atree-\\d{8}-\\d{6}(-\\d+)?\\.txt\\z");
+		QStringList held;
+		for (const QString &f :
+		      bdir.entryList(QStringList{ "tree-*.txt" }, QDir::Files, QDir::Name))
+			if (mine.match(f).hasMatch())
+				held << f;
 		check(held.size() == 100,
-		       QString("leaves a hundred (%1)").arg(held.size()));
+		       QString("leaves a hundred of this tree's (%1)").arg(held.size()));
 		check(!QFileInfo::exists(bpath + "/tree-20260101-000000.txt") &&
 		       !QFileInfo::exists(bpath + "/tree-20260101-000005.txt"),
 		       "the oldest are the ones that went");
@@ -4169,6 +4211,27 @@ int main(int argc, char **argv) {
 		       "the newest staged copy is still there");
 		check(QFileInfo::exists(bpath + "/notes.txt"),
 		       "and a file it did not write is untouched");
+		// **The two directions, and only one of them can go red here.** A
+		// prefix prune counts the fifteen strangers toward the hundred, so
+		// the count above falls to 89 and catches it. The `tree-work-` and
+		// `tree-notes` names then survive for a reason that has nothing to do
+		// with the prune's judgement -- they sort last -- so those two checks
+		// record the state rather than discriminating, which is worth saying
+		// rather than letting them read as evidence.
+		check(QFileInfo::exists(bpath + "/tree-work-20250101-000000.txt") &&
+		       QFileInfo::exists(bpath + "/tree-work-20250101-000009.txt"),
+		      "another tree's copies in the same backup/ are not this tree's "
+		      "to prune");
+		check(QFileInfo::exists(bpath + "/tree-notes.txt"),
+		      "nor is a name that matches the glob and carries no stamp");
+		// This one does discriminate: `tree-2-...` sorts ahead of every
+		// `tree-2026...`, so a prefix prune deletes it rather than sparing it.
+		check(bdir.entryList(QStringList{ "tree-2-*.txt" },
+		                      QDir::Files).size() == 4,
+		      QString("and a sibling tree's copies that sort AHEAD of this "
+		               "tree's are not deleted in its place (%1 of 4)")
+		        .arg(bdir.entryList(QStringList{ "tree-2-*.txt" },
+		                             QDir::Files).size()));
 	}
 
 	section("switching tabs abandons an element pick in progress");

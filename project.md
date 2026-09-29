@@ -27879,6 +27879,54 @@ Two passes now: put the leaves back while every parent pointer is still valid,
 then delete the folders. The same sabotage fails cleanly through its own nine
 checks instead of taking the process down, which is what a control has to do.
 
+### The backup prune matched a prefix and called it a name
+
+`backup_tree` keeps a hundred copies of the tree in a `backup/` beside it and
+deletes the rest. Its own comment says the prune "walks only the directory this
+creates, and only names of the shape this writes", which is the bargain
+`CLAUDE.md` asks for where a wildcard is unavoidable -- and the code matched
+`base + "-*" + tail`, which is a prefix rather than a shape.
+
+**The backup directory is `info.absolutePath() + "/backup"`, so it is shared by
+every tree file in one directory**, and that is what makes the difference real:
+
+    tree.txt      prunes  tree-*.txt
+    tree-2.txt    writes  tree-2-20250101-000000.txt   <- matches the above
+    tree-work.txt writes  tree-work-20250101-000000.txt <- so does this
+
+It goes wrong in both directions, and which one depends on where the stranger
+falls in a plain name sort -- which is the sort, because the stamp is written
+most-significant-first and nothing was checking the names carried a stamp at
+all:
+
+- **`tree-work-...` sorts after every `tree-2026...`**, a letter being above a
+  digit, so it reads as the newest and is kept. It still counts toward the
+  hundred, so the rotation fires early and deletes this tree's own oldest
+  copies to make room for somebody else's.
+- **`tree-2-...` sorts ahead of every `tree-2026...`**, `-` being below a
+  digit, so it goes to the front of the list and is deleted outright. Measured
+  with the sabotage: **all four of the sibling's copies gone, and `tree.txt`'s
+  own count down to 89.**
+
+The prune filters the glob's answer through the shape it writes --
+`base-YYYYMMDD-hhmmss` with the collision suffix optional -- so the comment's
+claim is now true. That also restores the premise the sort rests on: name-order
+is date-order only over names that carry a stamp.
+
+The pattern is deliberately **not** a function-local `static`. `base` and
+`tail` differ per tree, and a static would pin the first tree's pattern for the
+life of the process, which is the same defect one layer up from the one being
+fixed.
+
+**The existing control could not fail.** The section already dropped a
+`notes.txt` in the directory and checked it survived -- but `notes.txt` never
+matched `tree-*.txt`, so it tested the wildcard rather than the prune's
+judgement. What separates the two is a file the glob DOES match and the prune
+did not write. Three are there now, and only one of them discriminates: the
+`tree-2-...` copies, because they are the ones a prefix prune reaches. The
+other two are recorded as state rather than evidence, in the test, so they do
+not read as a guarantee they never gave.
+
 ### And then the folder somebody made in the same window, closed the same way
 
 The first fix kept unknown *leaves* and went on deleting unknown *folders*,

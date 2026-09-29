@@ -115,6 +115,7 @@
 #include <QStandardPaths>
 #include <QDataStream>
 #include <QCloseEvent>
+#include <QRegularExpression>
 #include <QSet>
 
 #include <memory>
@@ -2737,11 +2738,35 @@ static QString backup_tree(const QString &tree) {
 		return QString();
 	}
 
+	// **The glob is a prefilter, and the shape is what decides.** A wildcard
+	// after the base name is not "the names this writes": with two trees in
+	// one directory, `tabs.json` and `tabs-work.json` share a `backup/`, and
+	// `tabs-*.json` matches every copy of the other one. It matters in both
+	// directions. Those files count toward the hundred, so the rotation fires
+	// early; and a plain name sort puts every `tabs-work-...` after every
+	// `tabs-2026...`, because a letter sorts above a digit -- so the other
+	// tree's copies read as the newest and are kept while this tree's own are
+	// deleted. The comment above this function claims the prune touches only
+	// the names it writes, and a prefix is not a name.
+	//
+	// It also restores the premise the sort rests on. Name-order is date-order
+	// only for names carrying the stamp; anything else matching the glob sorts
+	// wherever its characters fall and drags real copies past the cut with it.
+	// Not `static`: `base` and `tail` differ per tree, and a function-local
+	// static would pin the first tree's pattern for the life of the process --
+	// the same mistake one layer up from the one this is fixing.
+	const QRegularExpression shape(
+	  "\\A" + QRegularExpression::escape(base) +
+	  "-\\d{8}-\\d{6}(-\\d+)?" + QRegularExpression::escape(tail) + "\\z");
+
 	// Oldest first: the stamp is written most-significant-first, so a plain
 	// name sort is a date sort.
 	QDir d(dir);
-	const QStringList held =
-	  d.entryList(QStringList{ base + "-*" + tail }, QDir::Files, QDir::Name);
+	QStringList held;
+	for (const QString &f :
+	      d.entryList(QStringList{ base + "-*" + tail }, QDir::Files, QDir::Name))
+		if (shape.match(f).hasMatch())
+			held << f;
 	for (int i = 0; i < held.size() - k_backup_keep; ++i)
 		QFile::remove(d.filePath(held.at(i)));
 	return dir + "/" + name;
