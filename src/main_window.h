@@ -142,6 +142,18 @@ public:
 	// each `open_url` makes its own tab the live one.
 	node *open_url(const QUrl &url);
 
+	// One address, opened the way a command line or a handover means it: a page
+	// becomes a tab and anything else goes to whatever can take it, which for a
+	// magnet is the torrent source. Returns the node when it made one, so a
+	// caller opening several can finish on the first page.
+	//
+	// **Both callers route through here rather than each deciding.** `main()`
+	// and the single-instance handler used `open_url` directly, which makes a
+	// tab out of whatever it is given -- so a magnet arriving that way became a
+	// tab with the magnet as its title, which is the defect
+	// `open_new_window`'s comment records for links with `target="_blank"`.
+	node *open_argument(const QUrl &url);
+
 	// Bring a node that is already in the tree to the front. `open_node` does
 	// this and several other things and is private for that reason; this is
 	// the narrow half a caller outside the window needs, and it exists because

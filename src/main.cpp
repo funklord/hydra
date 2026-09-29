@@ -298,9 +298,9 @@ int main(int argc, char *argv[]) {
 	for (int i = 1; i < argc; ++i)
 		raw_args << QString::fromLocal8Bit(argv[i]);
 	const argument_plan plan = plan_arguments(raw_args);
-	const QStringList open_args    = plan.pages;
-	const QString     tree_arg     = plan.tree;
-	for (const QString &bad : plan.not_pages)
+	const QStringList open_args = plan.opens;
+	const QString     tree_arg  = plan.tree;
+	for (const QString &bad : plan.not_paths)
 		std::fprintf(stderr, "hydra: %s is not an address and only the first "
 		                      "argument can name a tree; ignored\n",
 		              qUtf8Printable(bad));
@@ -561,7 +561,7 @@ int main(int argc, char *argv[]) {
 	// lands on the first, and so does the person's reading order.
 	node *first = nullptr;
 	for (const QString &u : open_args) {
-		node *made = w.open_url(QUrl(u));
+		node *made = w.open_argument(QUrl(u));
 		if (!first)
 			first = made;
 	}
@@ -605,7 +605,7 @@ int main(int argc, char *argv[]) {
 			w.activateWindow();
 		}
 		if (!message.isEmpty())
-			w.open_url(QUrl(message));
+			w.open_argument(QUrl(message));
 	});
 #endif
 

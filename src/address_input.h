@@ -186,16 +186,25 @@ QUrl argument_url(const QString &raw);
 //
 //   * anything `argument_url` accepts is a page, and they open in the order
 //     given;
-//   * the FIRST argument, when it is not a page, is the tree;
-//   * any later argument that is not a page cannot be a second tree, so it is
-//     reported rather than dropped.
+//   * **an argument carrying any other scheme is still something to open**,
+//     not a tree. `hydra magnet:?xt=...` used to become a tree path, be
+//     refused by `load_tree` for being a url, and be dropped -- with a torrent
+//     engine in the same process. The scheme test is `load_tree`'s own: more
+//     than one character, which spares a Windows drive letter;
+//   * the FIRST argument, when it carries no scheme, is the tree;
+//   * any later argument that carries no scheme cannot be a second tree, so it
+//     is reported rather than dropped.
 //
 // Here rather than in `main()` because these are rules with cases, and rules
 // with cases belong somewhere a test can reach -- `main()` links into no test
 // in this tree.
 struct argument_plan {
-	QStringList pages;        // urls, in the order given
-	QString     tree;         // empty when the first argument is a page
-	QStringList not_pages;    // later arguments that are neither, to report
+	// Everything to open, in the order given: pages and any other scheme
+	// something in this browser can take. Which of the two an entry is,
+	// `renders_as_page` decides at the moment it is opened -- one answer, in
+	// one place, shared with the engines (see `scheme_rules.h`).
+	QStringList opens;
+	QString     tree;         // empty when the first argument is not a path
+	QStringList not_paths;    // later arguments that are neither, to report
 };
 argument_plan plan_arguments(const QStringList &args);

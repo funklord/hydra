@@ -5581,6 +5581,18 @@ node *main_window::selected_parent() const {
 	return nullptr;
 }
 
+node *main_window::open_argument(const QUrl &url) {
+	if (!url.isValid() || url.isEmpty())
+		return nullptr;
+	if (renders_as_page(url))
+		return open_url(url);
+	// `open_external_url` already answers for the rest: it refuses a page,
+	// says so when nothing can take the scheme, and otherwise starts the
+	// download -- which is the path an in-page magnet link takes.
+	open_external_url(url);
+	return nullptr;
+}
+
 void main_window::show_node(node *n) {
 	if (n)
 		open_node(n);

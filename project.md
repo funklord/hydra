@@ -28016,3 +28016,61 @@ running copy says so on startup -- *"cannot listen ... a second instance will
 be refused rather than handed its url"* -- which is the program behaving
 correctly; it was the scratch directory that was too long, and the test moved
 rather than the code.
+
+## A magnet handed to the command line was refused as a tree and dropped
+
+Measured, with a torrent engine in the same process:
+
+    $ hydra "magnet:?xt=urn:btih:abcdef...&dn=Test"
+    tree: magnet:?xt=... is a magnet url, not a tree; refusing to open it as
+          one, because doing so empties the tree and scatters this window's
+          files into the working directory
+    tree: opening .../Hydra/tree.txt instead
+
+`load_tree`'s refusal is right and is not the question: the argument had
+already been classified as a tree path, because `argument_url` accepts only
+`http`, `https` and `file`, and everything it declined became the tree. So the
+one line about it went to stderr, which a desktop launch has nowhere to show,
+and the browser came up on the personal tree with the magnet gone.
+
+**The rule that was missing is the one `load_tree` already applies.** It tells
+a url from a path by the scheme *as written*, and by its length -- more than
+one character, which spares a Windows drive letter. `plan_arguments` uses the
+same test now: an argument carrying any other scheme is something to open
+rather than a tree, and which of the two it is gets decided when it is opened.
+
+### Both callers route through one door now
+
+`main()` and the single-instance handler each called `open_url`, which makes a
+tab out of whatever it is given. So a magnet reaching either -- which it now
+can -- would have become a tab titled with the whole magnet string, the exact
+defect `open_new_window`'s comment records for links with `target="_blank"`.
+
+`open_argument` is that door: `renders_as_page` decides, a page becomes a tab,
+and anything else goes to `open_external_url`, which already refuses a page,
+says so when nothing can take the scheme, and otherwise starts the download --
+the path an in-page magnet link takes. One answer about what a scheme means,
+in the file both engines already share it from.
+
+`mailto:` is the probe in `test_rotation` rather than a magnet, deliberately:
+nothing in that window can take it, so the routing is observable without
+starting a real libtorrent session and its consent dialog inside the suite.
+The magnet's onward path is the in-page path, which `test_torrent` covers.
+
+Two sabotages: the scheme test removed turns four checks in `test_address`
+red (the magnet becomes the tree again), and the router made to open
+everything as a page turns four in `test_rotation` red.
+
+### Not done, and it is the holder's: claiming the scheme
+
+`packaging/hydra.desktop` claims `text/html`, `text/xml`,
+`application/xhtml+xml` and the `http`/`https` scheme handlers. It does **not**
+claim `x-scheme-handler/magnet`, so the desktop does not route magnets here --
+this fix is about not losing one that arrives, not about asking for them.
+
+Claiming it would make Hydra the system's magnet handler, which is a decision
+about how this program presents itself rather than a bug, and it has a cost in
+the gate: `desktop_check` verifies every scheme the entry claims against
+`renders_as_page`, and a magnet is deliberately not a page. The gate would need
+to know that a claimed scheme may be a download instead -- which is true and
+worth saying, and is a different change from this one.

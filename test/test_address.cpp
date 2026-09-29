@@ -223,27 +223,27 @@ int main(int argc, char **argv) {
 		// cases that nothing can drive are rules nobody can check.
 		const argument_plan three = plan_arguments(
 		  { "https://a.example/1", "https://b.example/2", "file:///tmp/c.html" });
-		check(three.pages.size() == 3,
+		check(three.opens.size() == 3,
 		      QString("three addresses are three pages (%1)")
-		          .arg(three.pages.size()));
+		          .arg(three.opens.size()));
 		QStringList in_order;
 		in_order << "https://a.example/1" << "https://b.example/2"
 		          << "file:///tmp/c.html";
-		check(three.pages == in_order,
+		check(three.opens == in_order,
 		      QString("in the order they were given (%1)")
-		          .arg(three.pages.join(" ")));
-		check(three.tree.isEmpty() && three.not_pages.isEmpty(),
+		          .arg(three.opens.join(" ")));
+		check(three.tree.isEmpty() && three.not_paths.isEmpty(),
 		      "with no tree and nothing refused");
 
 		// The single-argument cases, unchanged: this is the whole reason the
 		// rules are written as "the first argument, when it is not a page".
 		const argument_plan one_page = plan_arguments({ "https://example.com/" });
-		check(one_page.pages.size() == 1 && one_page.tree.isEmpty(),
+		check(one_page.opens.size() == 1 && one_page.tree.isEmpty(),
 		      "one address is still one page and no tree");
 		const argument_plan one_tree = plan_arguments({ "./tree.txt" });
-		check(one_tree.pages.isEmpty() && one_tree.tree == "./tree.txt",
+		check(one_tree.opens.isEmpty() && one_tree.tree == "./tree.txt",
 		      QString("one path is still the tree (%1)").arg(one_tree.tree));
-		check(plan_arguments({}).pages.isEmpty() &&
+		check(plan_arguments({}).opens.isEmpty() &&
 		          plan_arguments({}).tree.isEmpty(),
 		      "and no arguments is neither");
 
@@ -251,9 +251,9 @@ int main(int argc, char **argv) {
 		// pages open in it, which is what `hydra work.txt https://x/` reads as.
 		const argument_plan mixed =
 		  plan_arguments({ "./work.txt", "https://x.example/" });
-		check(mixed.tree == "./work.txt" && mixed.pages.size() == 1,
+		check(mixed.tree == "./work.txt" && mixed.opens.size() == 1,
 		      QString("a tree first and a page after it are both taken (%1, %2)")
-		          .arg(mixed.tree).arg(mixed.pages.join(" ")));
+		          .arg(mixed.tree).arg(mixed.opens.join(" ")));
 
 		// And the case that must not be silent: a second thing that is not a
 		// page cannot be a second tree.
@@ -261,10 +261,10 @@ int main(int argc, char **argv) {
 		  plan_arguments({ "./work.txt", "./play.txt" });
 		check(two_trees.tree == "./work.txt",
 		      "the first non-page is still the tree");
-		check(two_trees.not_pages == QStringList({ "./play.txt" }),
+		check(two_trees.not_paths == QStringList({ "./play.txt" }),
 		      QString("and the second is reported rather than dropped (%1)")
-		          .arg(two_trees.not_pages.join(" ")));
-		check(two_trees.pages.isEmpty(), "with nothing to open");
+		          .arg(two_trees.not_paths.join(" ")));
+		check(two_trees.opens.isEmpty(), "with nothing to open");
 
 		// An option is not a page and is not a tree either -- `main()` refuses
 		// a leading dash before this is reached, and this says what the rules
@@ -272,9 +272,39 @@ int main(int argc, char **argv) {
 		// the only thing standing between a typo and a file named after it.
 		const argument_plan flagged =
 		  plan_arguments({ "https://x.example/", "--hepl" });
-		check(flagged.pages.size() == 1 &&
-		          flagged.not_pages == QStringList({ "--hepl" }),
+		check(flagged.opens.size() == 1 &&
+		          flagged.not_paths == QStringList({ "--hepl" }),
 		      "an option after an address is reported, not opened");
+
+		// **A scheme that is not a page is still something to open.**
+		// `hydra magnet:?xt=...` became a tree path, was refused by `load_tree`
+		// for being a url, and was dropped -- with a torrent engine in the same
+		// process. Which of the two an entry is, `renders_as_page` decides when
+		// it is opened; what this asserts is that it is not mistaken for a
+		// tree.
+		const QString mag = "magnet:?xt=urn:btih:"
+		                     "abcdef0123456789abcdef0123456789abcdef01";
+		const argument_plan magnet = plan_arguments({ mag });
+		check(magnet.opens == QStringList({ mag }),
+		      QString("a magnet is something to open (%1)")
+		          .arg(magnet.opens.join(" ")));
+		check(magnet.tree.isEmpty(),
+		      QString("and not the tree, which is what it used to be (%1)")
+		          .arg(magnet.tree));
+		const argument_plan mailto = plan_arguments({ "mailto:someone@x.test" });
+		check(mailto.opens.size() == 1 && mailto.tree.isEmpty(),
+		      "and so is a mailto, which nothing here can take -- refusing it "
+		      "out loud is the window's job, not this one's");
+
+		// The control, and the reason the test is on the scheme's *length*: a
+		// Windows drive letter parses as a one-character scheme and is a path,
+		// which is `load_tree`'s own rule.
+		const argument_plan drive = plan_arguments({ "C:/Users/me/tree.txt" });
+		check(drive.tree == "C:/Users/me/tree.txt" && drive.opens.isEmpty(),
+		      QString("a drive letter is still a path (%1)").arg(drive.tree));
+		const argument_plan rel = plan_arguments({ "./tree.txt", "magnet:?xt=1" });
+		check(rel.tree == "./tree.txt" && rel.opens.size() == 1,
+		      "and a tree first with a magnet after it takes both");
 	}
 
 	{

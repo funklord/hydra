@@ -3314,6 +3314,35 @@ int main(int argc, char **argv) {
 		check(urls == as_given,
 		      QString("and they sit in the tree in the order they were given "
 		               "(%1)").arg(urls.join(" ")));
+
+		// **An address that is not a page must not become a tab.** Both
+		// callers route through `open_argument` for this: `open_url` makes a
+		// tab out of whatever it is given, so a magnet handed over used to
+		// become a tab titled with the whole magnet string -- the defect
+		// `open_new_window`'s comment records for links with `target=_blank`,
+		// reachable again through the command line.
+		//
+		// `mailto:` is the probe rather than a magnet, deliberately: nothing
+		// in this window can take it, so the routing is observable without
+		// starting a real torrent session and its consent dialog inside this
+		// suite.
+		const int before = w.m_model->root()->children.size();
+		node *made = w.open_argument(QUrl("mailto:someone@x.test"));
+		spin(60);
+		check(made == nullptr, "a mailto makes no node");
+		check(w.m_model->root()->children.size() == before,
+		      QString("and no row in the tree (%1 then %2)")
+		          .arg(before).arg(w.m_model->root()->children.size()));
+		check(w.m_status && w.m_status->currentMessage()
+		                       .contains("Nothing here can open"),
+		      QString("and the window says nothing can take it (%1)")
+		          .arg(w.m_status ? w.m_status->currentMessage() : QString()));
+
+		// The control: a page still becomes a tab through the same door.
+		node *page = w.open_argument(QUrl("https://four.example/d"));
+		check(page != nullptr, "and a page still becomes a node");
+		check(w.m_model->root()->children.size() == before + 1,
+		      "and a row");
 	}
 
 	section("the sync entries state the interval their mirrors actually use");

@@ -155,13 +155,25 @@ QUrl search_url(const QString &terms, const QString &tmpl) {
 argument_plan plan_arguments(const QStringList &args) {
 	argument_plan out;
 	for (int i = 0; i < args.size(); ++i) {
-		const QUrl candidate = argument_url(args.at(i));
-		if (candidate.isValid())
-			out.pages << candidate.toString();
-		else if (i == 0)
-			out.tree = args.at(i);
+		const QString raw = args.at(i);
+		const QUrl candidate = argument_url(raw);
+		if (candidate.isValid()) {
+			out.opens << candidate.toString();
+			continue;
+		}
+		// **A scheme that is not a page is not a path either.** Read as
+		// written, so nothing is invented: `QUrl(raw)` gives a magnet its
+		// scheme and gives a path none. The length test is `load_tree`'s, and
+		// it is there for the same reason -- a Windows drive letter parses as a
+		// one-character scheme and is a path.
+		if (QUrl(raw).scheme().size() > 1) {
+			out.opens << raw;
+			continue;
+		}
+		if (i == 0)
+			out.tree = raw;
 		else
-			out.not_pages << args.at(i);
+			out.not_paths << raw;
 	}
 	return out;
 }
