@@ -65,9 +65,14 @@ public:
 // differs, so that plumbing stays in the per-platform interceptor and this
 // stays shared.
 //
-// Thread note: decide() may be called off the UI thread. It only reads the
-// policy engine, which is mutated on the UI thread and tolerates a stale
-// snapshot.
+// Thread note: decide() may be called off the UI thread -- on Android it is,
+// from the WebView's network thread. It only reads the policy engine and the
+// filter list, and both take a read lock for exactly that. **The sentence here
+// used to say the policy engine "tolerates a stale snapshot", which was an
+// argument about when a value was written standing in for one about a span of
+// memory**; see `policy_engine.h`, which now says what actually makes the read
+// safe. A reader who believed the old sentence would have concluded that any
+// class read from this callback needs no lock.
 class request_filter {
 public:
 	explicit request_filter(policy_engine *engine);

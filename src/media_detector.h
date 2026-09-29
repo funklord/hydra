@@ -72,10 +72,16 @@ class media_detector : public QObject, public request_observer {
 	Q_OBJECT
 public:
 	// **The policy engine is consulted per request and is not owned.** Reading
-	// it from this thread is what `policy_engine` already documents as safe --
-	// the rule set is mutated only on the UI thread and reads tolerate a stale
-	// snapshot, which is the same licence `request_filter` runs under from the
-	// same callback.
+	// it from this thread is safe because `policy_engine::effective_setting`
+	// takes a read lock, which is the same licence `request_filter` runs under
+	// from the same callback.
+	//
+	// **This cited a different reason and the reason was wrong.** It said the
+	// rule set "tolerates a stale snapshot" -- quoting a sentence in
+	// `policy_engine.h` that argued about when a value was written where the
+	// question was a span of memory, and under which this read was a
+	// use-after-free waiting for the UI thread to add a rule. The read here was
+	// never the defect; the licence it was granted under was.
 	//
 	// Optional, so a driver or a test can build a detector with no policy at
 	// all and get the old behaviour: with none, everything is watched.
