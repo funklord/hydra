@@ -89,6 +89,29 @@ own, which are the two things easy to forget by hand. Driven directly it is:
 QT_QPA_PLATFORM=offscreen ./test/build-make/test_seam
 ```
 
+#### Under the sanitizers
+
+```sh
+make test-sanitize                    # all of them
+make test-sanitize T=test_settings    # or just one
+```
+
+Same suites, built with ASan and UBSan into `test/build-san` and run out of
+it, so the ordinary build is untouched and the two can coexist. It is a
+separate target because a sanitized suite runs at roughly the factor ASan
+costs, which turns the sweep into a long job rather than a quick one.
+
+Two things worth knowing before using it. **`make` rebuilds on timestamps, not
+on flags**, so changing the sanitizer arguments invalidates nothing — clear
+`test/build-san` when you change them, or you will debug an error you have
+already fixed. And **leaks are off** (`detect_leaks=0`): Qt and Chromium hold
+allocations at exit by design and their reports bury the use-after-free and
+overflow findings this is for. Turning leaks on is one word in the root
+Makefile and is worth its own pass, a suite at a time.
+
+`policy_engine`'s rule-set lock is the worked example of what it catches —
+see `project.md`.
+
 ### Need a helper server
 
 Start the helper, run the suite, stop the helper.

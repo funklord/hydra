@@ -51,6 +51,8 @@
 #                        build; the ones needing a helper, a torrent library
 #                        or a model are listed but not run (see test/README.md)
 #   make test-one T=x -- build and run a single suite, e.g. T=test_theme
+#   make test-sanitize -- the same suites under ASan and UBSan, into
+#                        test/build-san; T=x for one of them
 #   make drivers      -- build the live drivers (expensive; see JOBS below)
 #   make sweep        -- build them and run them all, with a summary (offscreen;
 #                        SWEEP_ONSCREEN=1 uses the real display)
@@ -136,6 +138,13 @@ BUILD_DIR  ?= build
 # many the moment anything wants to move it.
 TEST_BUILD ?= build-make
 TESTS_DIR  ?= test/$(TEST_BUILD)
+# **Every suites tree `clean` must walk, not only the selected one.**
+# `TESTS_DIR` names whichever build this invocation is pointed at, so a plain
+# `make clean` after a `make test-sanitize` would remove `test/build-make` and
+# leave `test/build-san` -- which is the larger of the two, and invisible
+# because the clean reports exactly what it did remove. Named rather than
+# globbed, per `CLAUDE.md`: two directories this build creates, both listed.
+TEST_BUILD_DIRS = test/build-make test/build-san
 TREE       ?= sample-tree.txt
 
 PREFIX ?= $(HOME)/.local
@@ -851,7 +860,7 @@ uninstall:
 # `..`, and not `.` itself. Anything else is refused and said out loud, because
 # a clean that silently skipped what it was asked to remove is its own problem.
 clean:
-	@for d in $(sort $(BUILD_DIR) $(TESTS_DIR) $(ANDROID_BUILD_DIR) $(ANDROID_BUILD_DIRS)); do \
+	@for d in $(sort $(BUILD_DIR) $(TESTS_DIR) $(TEST_BUILD_DIRS) $(ANDROID_BUILD_DIR) $(ANDROID_BUILD_DIRS)); do \
 	   case "$$d" in \
 	     "" ) echo "refusing to remove an empty path"; continue ;; \
 	     /* ) echo "refusing to remove absolute path: $$d"; continue ;; \
