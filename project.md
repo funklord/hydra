@@ -28371,6 +28371,37 @@ The driver is the control, run in the right order: before the split it read
 `cookies now allowed: 1` with two checks red, and after it reads `0` with 48 of
 48 passing -- including the framed cases, so the relay still does its own job.
 
+### The rest of that family, swept, with the lens written down
+
+One bug of a shape is a reason to look at its siblings rather than to stop, so
+the other places a page's own world can post into an isolated-world listener
+were read: `grep -rn "addEventListener('message'" src/` finds two relays, and
+`__hydra` finds every message name either sends.
+
+    consent_blocker  __hydra_consent_need   asks the top frame for the rules
+                     __hydra_consent_rules  top frame answers a child
+                     __hydra_consent_did    the one that was wrong, now split
+                     __hydra_consent_none   labels of a box nothing answered
+    mse_tap          __hydra_mse            a media url a frame observed
+
+**Neither of the two remaining is the same defect, and the reason is the same
+property in both: the privileged half of the fact does not come from the
+message.** `report_unhandled` takes the labels from the page and the **host
+from `m_host`**, the shell's own record of what is loaded, so a forged message
+can only raise a notice about the page that sent it. `__hydra_mse` adds a url
+to the media list, which is a list of things the person may choose to
+download -- a page that wanted one there could put a link on itself.
+
+`__hydra_consent_rules` is the interesting one and it is guarded: a child that
+has already started ignores a later rules message (`if (started) return`), so a
+page cannot re-arm the matcher with patterns of its own choosing once it is
+running. That guard was there already.
+
+Recorded because an empty sweep is a measurement only if its lens is written
+down: the question asked was *which side of this message is trusted*, and the
+answer that makes the other four safe is that the trusted half is read from the
+shell rather than from the message.
+
 ### And the whole live sweep was unrunnable from this account, silently
 
 Finding the above needed `try_consent` to run, and it exited **1 with no output
