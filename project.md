@@ -28314,3 +28314,61 @@ they all already read, so no driver needed editing to be covered. It says so
 when it cannot create the directory, which is the half that was missing.
 
 `test/README.md` said the old path; it says the new one and why.
+
+## The live sweep, run from this account for the first time
+
+The per-uid scratch fix above is what made this possible, so it is worth
+recording what it found. All forty-two drivers rebuilt, then run offscreen in
+five batches:
+
+    24 drivers with a tally      830 checks, 0 failures
+     7 report-only               ran to the end; read, see below
+     5 skipped, each saying why  a url, a live network, a model, KeePassXC,
+                                 and one that cannot capture here
+
+Nothing failed. The largest are `try_phone` at 205 checks over thirteen
+windows, `try_settings_ui` at 91 and `try_chrome` at 79; `try_consent` is the
+48 from the section above.
+
+**The report-only logs are the half nobody judges**, and this project's record
+says twice that reading them is where defects came from. Read fresh:
+
+- `try_flicker` -- eleven grabs from t+0 to t+2600, every one `page=17/34/51`,
+  the fixture's dark page. **No white frame at t+0**, which is the fix this
+  session made to `loadStarted`, measured on a run that did not know about it.
+- `try_media` -- the detector files one HLS item under the page's host with two
+  hits, and the badge says 1. `blocked: 0` is correct here rather than a
+  finding: the fixture's ad-shaped paths are all on `127.0.0.1`, which is no
+  ad host, and the AI-authored filter list starts empty.
+- `try_frame`, `try_mse`, `try_look`, `try_downloads`, `try_capture` -- nothing
+  wrong in any of them. `try_frame`'s whole output is
+  `PLAIN src=/player state=same-origin`: it exists to say what a *plain*
+  QWebEngineView sees, so a fault can be attributed to this browser or to the
+  site, and it has no verdict of its own by design.
+
+### Two mis-steps in one three-line instrument, both caught by measuring it
+
+`try_capture` prints every row of the downloads list, deliberately -- "a
+report-only driver exists to be read, so the answer is to print what is there
+and let the reader see which row is theirs". By the time it ran from a second
+account that list was **twenty-five rows spanning nine days**, because the
+download history persists under `~/.qttest` on purpose, and the row this run
+wrote was the last of them. So the rows are marked rather than filtered, which
+keeps the author's decision and removes the reading cost.
+
+The first version marked **three** rows: it asked whether the file was in the
+output directory, and that directory belongs to the driver rather than to the
+run, so two files days old satisfied it. A proxy that does not discriminate,
+which is the fault this session has been finding in other people's code all
+day.
+
+The second version marked **none**, and the reason is worse: the set of
+pre-existing files was built from `entryList().cbegin()` and
+`entryList().cend()` -- iterators into two *different temporaries*, which is
+undefined behaviour. One listing held in a local, and it marks exactly one row
+of twenty-seven.
+
+Neither was caught by reading the code. What caught both was that the number
+disagreed with what the directory plainly held -- three where one was true, then
+zero -- which is the argument for measuring an instrument rather than trusting
+it, made against an instrument three lines long.

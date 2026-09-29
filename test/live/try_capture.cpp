@@ -11,6 +11,8 @@
 #include <QAction>
 #include <QApplication>
 #include <QDir>
+#include <QFileInfo>
+#include <QSet>
 #include <QLineEdit>
 #include <QTimer>
 #include <QTreeView>
@@ -72,6 +74,19 @@ int main(int argc, char *argv[]) {
 	w.resize(1100, 760);
 	w.show();
 	QDir().mkpath(outdir);
+	// **What was already here, so a row written by this run can be named.**
+	// The directory is the driver's, not the run's -- captures from earlier runs
+	// sit in it -- so "the file exists in outdir" does not answer "this run
+	// wrote it". Measured: the first version of the marker below used exactly
+	// that and marked three rows, two of them days old. What discriminates is
+	// the difference.
+	// **One listing, held in a local.** Written as a QSet built from
+	// `entryList().cbegin()` and `entryList().cend()`, which are iterators into
+	// two *different* temporaries -- undefined behaviour, and it showed as the
+	// marker naming no rows at all where the previous version named three. The
+	// measurement disagreeing with both was what said the instrument was wrong.
+	const QStringList before_files = QDir(outdir).entryList(QDir::Files);
+	const QSet<QString> already(before_files.cbegin(), before_files.cend());
 	if (auto *dm = w.findChild<download_manager *>())
 		dm->set_directory(outdir);
 
@@ -145,13 +160,32 @@ int main(int argc, char *argv[]) {
 					if (tree) {
 						std::printf("t+%-6d %d row(s) in the list\n", t,
 						             tree->topLevelItemCount());
-						for (int i = 0; i < tree->topLevelItemCount(); ++i)
-							std::printf("t+%-6d   row %d: %s | %s | %s | %s\n",
-							             t, i,
-							             qPrintable(tree->topLevelItem(i)->text(0)),
+						for (int i = 0; i < tree->topLevelItemCount(); ++i) {
+							// **Marked, not filtered.** The note above decided
+							// to print every row and let the reader find
+							// theirs, and that is right -- but by the time this
+							// ran from a second account the list was
+							// twenty-five rows spanning nine days of runs, and
+							// the row this run wrote was the last of them.
+							// Naming it costs nothing and hides nothing.
+							//
+							// **Against the directory listing taken before the
+							// capture was armed**, because the output directory
+							// belongs to the driver rather than to the run: the
+							// first version asked only whether the file was in
+							// it and marked three rows, two of them days old.
+							const QString name =
+							  tree->topLevelItem(i)->text(0);
+							const bool mine =
+							  !already.contains(name) &&
+							  QFileInfo(QDir(outdir).filePath(name)).exists();
+							std::printf("t+%-6d   row %d: %s | %s | %s | %s%s\n",
+							             t, i, qPrintable(name),
 							             qPrintable(tree->topLevelItem(i)->text(1)),
 							             qPrintable(tree->topLevelItem(i)->text(3)),
-							             qPrintable(tree->topLevelItem(i)->text(4)));
+							             qPrintable(tree->topLevelItem(i)->text(4)),
+							             mine ? "   <- this run" : "");
+						}
 					}
 					return;
 				}
