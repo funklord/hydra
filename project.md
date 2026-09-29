@@ -28224,3 +28224,25 @@ which is `nodiscard`. Both are marked rather than left, and a full rebuild of
 `src/` after them reports **no warnings at all**. A warning nobody reads is
 what stops the next one being visible, which is this project's own stated
 reason for having them on.
+
+### The two flags the file carries and nothing had read back
+
+`test_tree` already holds the sweep this would have been -- *"found by comparing
+`node`'s fields against what `write_node` emits"* -- and it found the tags bug
+and recorded which fields are deliberately absent. What it did not do is put
+`locked` and `renamed` through the file. Both are written and both are parsed,
+and no test had asked whether they come back.
+
+They are not decoration. `node.h` says of `locked` that "it has to survive
+being written to the outline file and read back", and `tree_diff::apply`
+refuses to move a locked node **at apply time** -- so a lock that did not
+survive a restart would let the reorganizer move somebody's pinned tabs on the
+next run, which is the one thing the lock exists to prevent. `renamed` is what
+stops a page title overwriting the title a person chose.
+
+Eight checks, with the control in the same file: an ordinary tab must come back
+with both flags false, or every check passes for a reader that defaults them to
+true. Four sabotages, and they separate: dropping the tab's `locked=1` write
+fails only the tab's check, dropping the folder's fails only the folder's, so
+the two writes are covered independently rather than by one assertion that
+happens to cover both.

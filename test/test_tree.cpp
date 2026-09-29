@@ -697,6 +697,96 @@ int main(int argc, char **argv) {
 		      "with no empty tags= field on any line");
 	}
 
+	// **The two flags the file carries and nothing had read back.** The tags
+	// section above exists because a field was missing from the writer
+	// altogether; these two are written and parsed, and no test had put them
+	// through the file. They are not decoration: `node.h` says of `locked`
+	// that "it has to survive being written to the outline file and read
+	// back", `tree_diff::apply` refuses to move a locked node *at apply time*
+	// -- so a lock that did not survive a restart would let the reorganizer
+	// move pinned tabs on the next run -- and `renamed` is what stops a page
+	// title overwriting the one somebody chose.
+	section("the lock and a chosen title survive the tree file");
+	{
+		const QString dir = QDir::temp().filePath("hydra-tree-flags");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString path = dir + "/tree.txt";
+
+		node root;
+		root.id = "root";
+		root.type = node_type::folder;
+
+		auto *pinned = new node;
+		pinned->id       = "t1";
+		pinned->type     = node_type::unopened_tab;
+		pinned->title    = "The name I gave it";
+		pinned->url      = "https://example.com/a";
+		pinned->locked   = true;
+		pinned->renamed  = true;
+		pinned->parent   = &root;
+		root.children.push_back(pinned);
+
+		// A folder can be locked too, and the writer says why: the half of a
+		// lock that pins a row beside its siblings means the same for a folder.
+		auto *shelf = new node;
+		shelf->id     = "f1";
+		shelf->type   = node_type::folder;
+		shelf->title  = "Pinned shelf";
+		shelf->locked = true;
+		shelf->parent = &root;
+		root.children.push_back(shelf);
+
+		// The control, in the same file: an ordinary tab must come back with
+		// both flags false, or every check below passes for a reader that
+		// simply defaults them to true.
+		auto *ordinary = new node;
+		ordinary->id     = "t2";
+		ordinary->type   = node_type::unopened_tab;
+		ordinary->title  = "Whatever the page called itself";
+		ordinary->url    = "https://example.com/b";
+		ordinary->parent = &root;
+		root.children.push_back(ordinary);
+
+		check(tree_outline::save(path, &root), "the tree saves");
+		node *back = tree_outline::load(path);
+		check(back != nullptr && back->children.size() == 3,
+		       QString("and loads with all three rows (%1)")
+		         .arg(back ? back->children.size() : -1));
+		if (back && back->children.size() == 3) {
+			node *t1 = back->children[0];
+			check(t1->locked,
+			       "the tab's lock survives, which is what the pin is");
+			check(t1->renamed,
+			       "and so does the fact that the title is the person's own");
+			check(t1->title == "The name I gave it",
+			       QString("with the title itself (%1)").arg(t1->title));
+			check(back->children[1]->locked,
+			       "a locked folder comes back locked as well");
+			check(!back->children[2]->locked && !back->children[2]->renamed,
+			       QString("and an ordinary tab comes back with neither (%1/%2)")
+			         .arg(back->children[2]->locked)
+			         .arg(back->children[2]->renamed));
+		}
+		delete back;
+
+		// And nothing is written for the ordinary one, which is what keeps the
+		// file readable -- the writer's own reason for emitting these only when
+		// true.
+		QFile ff(path);
+		ff.open(QIODevice::ReadOnly);
+		const QStringList lines =
+		  QString::fromUtf8(ff.readAll()).split('\n', Qt::SkipEmptyParts);
+		int flagged = 0;
+		for (const QString &l : lines)
+			if (l.contains("locked=") || l.contains("named="))
+				++flagged;
+		check(flagged == 2,
+		       QString("two of the three lines carry a flag at all (%1)")
+		         .arg(flagged));
+		QDir(dir).removeRecursively();
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }
