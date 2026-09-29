@@ -50,6 +50,53 @@ static void spin(int ms) {
 	l.exec();
 }
 
+// One GET against the proxy, with an optional Range header exactly as written.
+// The reply is read after spinning for the same reason `post_capture` does: the
+// proxy answering lives in this process and needs the event loop to run.
+static QByteArray fetch(const QUrl &url, const QByteArray &range = QByteArray()) {
+	QTcpSocket s;
+	s.connectToHost(url.host(), quint16(url.port()));
+	if (!s.waitForConnected(3000))
+		return "no connection";
+	QByteArray req = "GET " + url.path().toUtf8() + " HTTP/1.1\r\n"
+	                  "Host: " + url.host().toUtf8() + "\r\n";
+	if (!range.isEmpty())
+		req += "Range: " + range + "\r\n";
+	req += "\r\n";
+	s.write(req);
+	s.waitForBytesWritten(3000);
+	QByteArray all;
+	QElapsedTimer t;
+	t.start();
+	while (t.elapsed() < 3000) {
+		spin(60);
+		all += s.readAll();
+		if (s.state() == QAbstractSocket::UnconnectedState)
+			break;
+	}
+	return all;
+}
+
+// The status line's code, and one header's value, from a whole response.
+static int status_of(const QByteArray &response) {
+	const QList<QByteArray> parts = response.left(64).split(' ');
+	return parts.size() > 1 ? parts.at(1).toInt() : -1;
+}
+static QByteArray header_value(const QByteArray &response, const char *name) {
+	const int head_end = response.indexOf("\r\n\r\n");
+	const QByteArray head = head_end < 0 ? response : response.left(head_end);
+	for (const QByteArray &line : head.split('\n')) {
+		const QByteArray l = line.trimmed();
+		if (l.startsWith(QByteArray(name) + ":"))
+			return l.mid(int(strlen(name)) + 1).trimmed();
+	}
+	return {};
+}
+static QByteArray body_of(const QByteArray &response) {
+	const int head_end = response.indexOf("\r\n\r\n");
+	return head_end < 0 ? QByteArray() : response.mid(head_end + 4);
+}
+
 // One capture chunk, posted the way the injected script posts it. The reply
 // is read after spinning rather than with waitForReadyRead, because the proxy
 // answering lives in this same process and needs the event loop to run.
@@ -524,6 +571,99 @@ int main(int argc, char **argv) {
 		          vod_watch.filter("playback continues").size() > 0,
 		       QString("and watching a complete one keeps the words it had (%1)")
 		           .arg(vod_watch.join(" | ")));
+	}
+
+	section("what the proxy does with a Range header it cannot parse");
+	{
+		// **Every byte a player receives goes through this**, and a range is
+		// the mechanism by which seeking works at all. The cases below are the
+		// ones a hand-rolled parser gets wrong: `toLongLong()` answers 0 on a
+		// value it cannot read and says so only through an `ok` flag nobody
+		// passed it, so a malformed or multipart range came out as `0-0` and
+		// the proxy served **one byte** with a 206 and a Content-Range saying
+		// so. A player seeking into a stream is then told, truthfully, that it
+		// received exactly what it was promised.
+		QTemporaryDir rdir;
+		check(rdir.isValid(), "a scratch directory to publish from");
+		const QString rpath = QDir(rdir.path()).filePath("clip.bin");
+		QByteArray payload;
+		for (int i = 0; i < 1000; ++i)
+			payload += char('a' + (i % 26));
+		{
+			QFile f(rpath);
+			f.open(QIODevice::WriteOnly);
+			f.write(payload);
+		}
+
+		local_proxy rpx;
+		check(rpx.start(), "the proxy is listening");
+		const QUrl url = rpx.publish_file(rpath, "video/mp2t");
+		check(!url.isEmpty(), "and the file is published");
+
+		const QByteArray whole = fetch(url);
+		check(status_of(whole) == 200,
+		      QString("no Range is 200 (%1)").arg(status_of(whole)));
+		check(body_of(whole).size() == 1000,
+		      QString("with the whole file (%1 bytes)").arg(body_of(whole).size()));
+
+		const QByteArray first = fetch(url, "bytes=0-99");
+		check(status_of(first) == 206,
+		      QString("a plain range is 206 (%1)").arg(status_of(first)));
+		check(header_value(first, "Content-Range") == "bytes 0-99/1000",
+		      QString("with the range it served (%1)")
+		          .arg(QString::fromUtf8(header_value(first, "Content-Range"))));
+		check(body_of(first).size() == 100,
+		      QString("and 100 bytes (%1)").arg(body_of(first).size()));
+
+		const QByteArray openended = fetch(url, "bytes=900-");
+		check(status_of(openended) == 206 &&
+		          header_value(openended, "Content-Range") == "bytes 900-999/1000",
+		      QString("an open-ended range runs to the end (%1)")
+		          .arg(QString::fromUtf8(header_value(openended, "Content-Range"))));
+
+		const QByteArray suffix = fetch(url, "bytes=-100");
+		check(status_of(suffix) == 206 &&
+		          header_value(suffix, "Content-Range") == "bytes 900-999/1000",
+		      QString("a suffix range is the last hundred (%1)")
+		          .arg(QString::fromUtf8(header_value(suffix, "Content-Range"))));
+
+		const QByteArray past = fetch(url, "bytes=2000-");
+		check(status_of(past) == 416,
+		      QString("a range past the end is 416 (%1)").arg(status_of(past)));
+		check(header_value(past, "Content-Range") == "bytes */1000",
+		      QString("naming the size it has (%1)")
+		          .arg(QString::fromUtf8(header_value(past, "Content-Range"))));
+
+		// The two the parser was getting wrong. A multipart range is legal to
+		// refuse and legal to answer with its first part; it is not legal to
+		// answer with one byte and call it the first part. An unreadable value
+		// is a syntactically invalid header, which RFC 7233 says to ignore --
+		// so the whole file, 200, as if it had not been sent.
+		const QByteArray multi = fetch(url, "bytes=0-99,200-299");
+		check(status_of(multi) == 206,
+		      QString("a multipart range is answered with one part (%1)")
+		          .arg(status_of(multi)));
+		check(header_value(multi, "Content-Range") == "bytes 0-99/1000",
+		      QString("which is its first, not its first byte (%1)")
+		          .arg(QString::fromUtf8(header_value(multi, "Content-Range"))));
+		check(body_of(multi).size() == 100,
+		      QString("and 100 bytes of it (%1)").arg(body_of(multi).size()));
+
+		const QByteArray junk = fetch(url, "bytes=abc-def");
+		check(status_of(junk) == 200,
+		      QString("a range that cannot be read is ignored, not guessed "
+		               "(%1)").arg(status_of(junk)));
+		check(body_of(junk).size() == 1000,
+		      QString("so the whole file is served (%1 bytes)")
+		          .arg(body_of(junk).size()));
+		check(header_value(junk, "Content-Range").isEmpty(),
+		      "and no Content-Range is claimed for a range nobody asked for");
+
+		const QByteArray half_junk = fetch(url, "bytes=100-nonsense");
+		check(status_of(half_junk) == 200 && body_of(half_junk).size() == 1000,
+		      QString("and half a range is the same answer (%1, %2 bytes)")
+		          .arg(status_of(half_junk)).arg(body_of(half_junk).size()));
+		rpx.unpublish_all();
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

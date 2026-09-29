@@ -201,19 +201,40 @@ void local_proxy::serve_file(QTcpSocket *client, const entry &e,
 	bool partial = false;
 	const QByteArray range = header_of(head, "Range");
 	if (range.startsWith("bytes=")) {
-		const QByteArray spec = range.mid(6);
+		// **The first range of a multipart request, and nothing guessed.**
+		// `toLongLong()` answers 0 for a value it cannot read and says so only
+		// through an `ok` flag, which nothing here passed it -- so
+		// `bytes=0-99,200-299` read its end as `99,200-299`, got 0, and served
+		// **one byte** under `Content-Range: bytes 0-0/...`, which is a lie a
+		// player has no way to catch. `bytes=abc-def` did the same, and
+		// `bytes=100-nonsense` came out as 100..0 and answered 416 for a range
+		// that was perfectly satisfiable.
+		//
+		// Answering a multipart range with its first part is allowed; a
+		// syntactically invalid one is ignored, which RFC 7233 requires and is
+		// also the only honest option -- the whole file, as if the header had
+		// not been sent.
+		QByteArray spec = range.mid(6).trimmed();
+		const int comma = spec.indexOf(',');
+		if (comma >= 0)
+			spec = spec.left(comma).trimmed();
 		const int dash = spec.indexOf('-');
 		if (dash >= 0) {
 			const QByteArray a = spec.left(dash).trimmed();
 			const QByteArray b = spec.mid(dash + 1).trimmed();
-			if (!a.isEmpty()) {
-				start = a.toLongLong();
-				if (!b.isEmpty())
-					end = qMin<qint64>(b.toLongLong(), size - 1);
-			} else if (!b.isEmpty()) {
-				start = qMax<qint64>(0, size - b.toLongLong());   // suffix range
+			bool a_ok = true, b_ok = true;
+			const qint64 from = a.isEmpty() ? 0 : a.toLongLong(&a_ok);
+			const qint64 to   = b.isEmpty() ? 0 : b.toLongLong(&b_ok);
+			if (a_ok && b_ok && !(a.isEmpty() && b.isEmpty())) {
+				if (!a.isEmpty()) {
+					start = from;
+					if (!b.isEmpty())
+						end = qMin<qint64>(to, size - 1);
+				} else {
+					start = qMax<qint64>(0, size - to);   // suffix range
+				}
+				partial = true;
 			}
-			partial = true;
 		}
 	}
 	if (start >= size || start > end) {

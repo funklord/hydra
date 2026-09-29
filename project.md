@@ -28074,3 +28074,45 @@ the gate: `desktop_check` verifies every scheme the entry claims against
 `renders_as_page`, and a magnet is deliberately not a page. The gate would need
 to know that a claimed scheme may be a download instead -- which is true and
 worth saying, and is a different change from this one.
+
+## The proxy answered a range it could not read with one byte, and said so
+
+`local_proxy` serves a growing capture or an incomplete torrent file to an
+external player, and a `Range` request is the whole mechanism by which seeking
+works. Its parser used `toLongLong()` without the `ok` flag, and
+`QByteArray::toLongLong` answers **0** for a value it cannot read. Measured
+against a published 1000-byte file:
+
+    Range: bytes=0-99,200-299   206, Content-Range: bytes 0-0/1000, 1 byte
+    Range: bytes=abc-def        206, Content-Range: bytes 0-0/1000, 1 byte
+    Range: bytes=100-nonsense   416, no body
+
+The first two are the shape that matters: **the response is internally
+consistent and wrong.** A player asked for a hundred bytes from somewhere,
+received one, and was told in a `Content-Range` that one byte is exactly what
+it was given -- so nothing downstream has any reason to retry or complain, and
+the symptom is a stream that will not seek rather than an error anybody can
+read. The third answers "Range Not Satisfiable" for a range that is perfectly
+satisfiable.
+
+Two independent halves to the fix, and the sabotages show they catch different
+things:
+
+- **The first range of a multipart request, not its first byte.** Answering
+  `bytes=0-99,200-299` with its first part is allowed; answering it with one
+  byte is not. `spec` is cut at the comma.
+- **A range that cannot be read is ignored rather than guessed at**, which RFC
+  7233 requires and is the only honest option -- the whole file, 200, as if the
+  header had not been sent. Guessing is what turned `abc-def` into `0-0`.
+
+Sixteen checks in `test_assembly`, including the cases that already worked --
+a plain range, an open-ended one, a suffix, and a range past the end answering
+416 with `bytes */1000` -- because a parser rewrite is exactly where those stop
+working and nothing had asserted them either. The sabotage that drops the `ok`
+check turns four red; the one that drops the comma cut turns three red, and by
+a different route: without the cut, `99,200-299` is unreadable, so the whole
+header is ignored and the answer is the entire file rather than one byte.
+
+This was the only place in the tree that *parses* a range. The proxy's upstream
+path forwards the player's header verbatim, and `http_download_source` and
+`hls_assembler` write ranges rather than reading them.
