@@ -82,6 +82,16 @@ void hls_assembler::fetch_manifest(const QUrl &url) {
 		}
 		m_playlist = hls::parse(reply->readAll(), url);
 
+		// **A manifest that was not understood is refused, not assembled.**
+		// The only thing that sets this is a byte range whose numbers could not
+		// be read, and a byte range decides which bytes of which file a segment
+		// is -- so carrying on would write a file made of the wrong bytes and
+		// call it finished. See `hls_playlist::error`.
+		if (!m_playlist.error.isEmpty()) {
+			emit failed("Playlist not understood: " + m_playlist.error);
+			return;
+		}
+
 		if (m_playlist.is_master) {
 			const hls_variant *v = hls::best_variant(m_playlist);
 			if (!v) {

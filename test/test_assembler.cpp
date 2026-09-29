@@ -17,6 +17,7 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
+#include <QFileInfo>
 #include <QSignalSpy>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -234,6 +235,39 @@ int main(int argc, char **argv) {
 		check(!a.finished(),
 		      "and does not claim to have finished — a half file that says it is "
 		      "whole is worse than an error");
+	}
+
+	section("a manifest whose byte range cannot be read is refused");
+	{
+		// **The failure this replaces produced a file rather than an error.**
+		// `#EXT-X-BYTERANGE:abc@def` used to parse as length 0, length 0 means
+		// "the whole file" to `next_segment` -- it builds no `Range` header for
+		// one -- so a manifest of slices was fetched as whole files,
+		// concatenated, and reported complete. A wrong file that says it is
+		// whole is the same class as the half file the section above is about,
+		// and harder to notice.
+		server.files["/badrange.m3u8"] =
+		  "#EXTM3U\n"
+		  "#EXT-X-BYTERANGE:abc@def\n"
+		  "#EXTINF:4,\n"
+		  "slices.bin\n"
+		  "#EXT-X-ENDLIST\n";
+		server.files["/slices.bin"] = QByteArray(4096, 'z');
+
+		hls_assembler a;
+		QSignalSpy bad(&a, &hls_assembler::failed);
+		const QString out = dir + "/badrange.ts";
+		check(!run(a, QUrl(base + "/badrange.m3u8"), out, 6000),
+		       "it does not report success");
+		check(bad.count() == 1, "it reports the failure once");
+		check(bad.count() == 1 &&
+		          bad.first().first().toString().contains("not understood"),
+		       QString("saying the manifest was not understood (%1)")
+		         .arg(bad.count() ? bad.first().first().toString() : QString()));
+		check(!a.finished(), "and does not claim to have finished");
+		check(QFileInfo(out).size() == 0,
+		       QString("with nothing written, rather than the whole file where a "
+		                "slice was meant (%1 bytes)").arg(QFileInfo(out).size()));
 	}
 
 	section("a manifest that is not there");

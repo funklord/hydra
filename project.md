@@ -28116,3 +28116,51 @@ header is ignored and the answer is the entire file rather than one byte.
 This was the only place in the tree that *parses* a range. The proxy's upstream
 path forwards the player's header verbatim, and `http_download_source` and
 `hls_assembler` write ranges rather than reading them.
+
+## A manifest of slices was fetched as whole files, and reported complete
+
+The Range fix above is a lens as much as a fix: **`toLongLong()` answers 0 for
+a value it cannot read and says so only through an `ok` flag a caller has to
+ask for.** Swept over `src/` for that shape on external input, and read the
+hits rather than counted them.
+
+One mattered. `#EXT-X-BYTERANGE:<length>[@<offset>]` is how an HLS playlist
+says a segment is a *slice of a larger file*, and `hls_playlist` read both
+numbers without their status. So a length that could not be read came out as
+**0** -- and `hls_assembler::next_segment` treats 0 as "no range to ask for":
+
+    if (seg.byte_length > 0) { ...build the Range header... }
+
+A manifest of slices was therefore fetched as whole files, concatenated, and
+reported **complete**. Measured, by reverting the fix under the new test: 4096
+bytes written where a slice was meant, `completed()` emitted, and nothing
+anywhere saying the manifest had not been understood. That is the same class
+as the half file the section beside it guards -- *"a half file that says it is
+whole is worse than an error"* -- and harder to notice, because the file is the
+size it should be.
+
+`hls_playlist` carries an `error` now, set only by the byte range, and
+`hls_assembler` refuses a manifest it did not understand before fetching
+anything. Four shapes are covered because each used to come out as zero and
+zero means something else: `abc@def`, a bare `0`, an empty value, `100@x` and
+`@500`. The control is a byte range that reads correctly and is honoured --
+without it the checks would pass for a parser that called every manifest
+broken.
+
+**Only the byte range sets the error, and the reasoning is the point.** It is
+the one field that decides *which bytes* are fetched. `BANDWIDTH` that cannot
+be read leaves a variant at 0, which changes which stream `best_variant` picks
+-- a worse choice rather than a wrong file. `#EXT-X-TARGETDURATION`,
+`#EXT-X-MEDIA-SEQUENCE` and `#EXTINF`'s duration are read by nothing that
+decides anything: the first two by nothing at all, and the third only by
+`total_duration()`, which has no caller in `src/`.
+
+**The other two hits on external input are left alone, with the reason, so the
+sweep is not run again.** `local_proxy`'s `Content-Length` comes from this
+browser's own injected capture script over a token-gated loopback endpoint; an
+unreadable value yields an empty chunk, which shows up as `captured_bytes` not
+moving and is already reported. And `bridge_invoker::convert` refuses by type
+before converting -- *"a silent conversion here would be the page choosing what
+the shell believes"* -- which is this fix's rule, written down before the bug
+it describes was found elsewhere. Everything else the sweep found is
+`QVariant` role data inside the program.

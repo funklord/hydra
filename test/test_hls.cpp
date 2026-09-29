@@ -185,6 +185,55 @@ int main(int argc, char **argv) {
 		          .arg(f.variants.size()));
 		check(f.variants[0].bandwidth == 1000,
 		      "and the variant that is left is the real one");
+
+		// **A byte range whose numbers cannot be read is refused, not guessed
+		// at.** `toLongLong()` answers 0 for what it cannot read, a length of 0
+		// means "the whole file" to the assembler -- it builds no Range header
+		// for one -- and the result was a slice request silently turned into a
+		// whole-file one, concatenated with its neighbours and reported
+		// complete. So the parse says it did not understand the manifest, and
+		// the assembler refuses it.
+		const QByteArray bad_range =
+		  "#EXTM3U\n"
+		  "#EXT-X-BYTERANGE:abc@def\n"
+		  "#EXTINF:4,\n"
+		  "one.ts\n"
+		  "#EXT-X-ENDLIST\n";
+		const hls_playlist br = hls::parse(bad_range, base);
+		check(!br.error.isEmpty(),
+		      QString("an unreadable byte range is reported (%1)").arg(br.error));
+		check(br.error.contains("abc@def"),
+		      "naming the line, which is the only thing that can be acted on");
+
+		// Each shape that used to come out as zero, and zero is the value that
+		// means something else.
+		for (const QByteArray &spec : { QByteArray("#EXT-X-BYTERANGE:0\n"),
+		                                 QByteArray("#EXT-X-BYTERANGE:\n"),
+		                                 QByteArray("#EXT-X-BYTERANGE:100@x\n"),
+		                                 QByteArray("#EXT-X-BYTERANGE:@500\n") }) {
+			const QByteArray text = "#EXTM3U\n" + spec +
+			                         "#EXTINF:4,\none.ts\n#EXT-X-ENDLIST\n";
+			const hls_playlist p = hls::parse(text, base);
+			check(!p.error.isEmpty(),
+			       QString("%1 is refused")
+			         .arg(QString::fromUtf8(spec).trimmed()));
+		}
+
+		// The control: a byte range that reads correctly says nothing, and the
+		// section above already proves it is honoured. Without this the check
+		// would pass for a parser that called every manifest broken.
+		const QByteArray good_range =
+		  "#EXTM3U\n"
+		  "#EXT-X-BYTERANGE:1000@2000\n"
+		  "#EXTINF:4,\n"
+		  "one.ts\n"
+		  "#EXT-X-ENDLIST\n";
+		const hls_playlist gr = hls::parse(good_range, base);
+		check(gr.error.isEmpty(),
+		      QString("a byte range that reads is not reported (%1)").arg(gr.error));
+		check(gr.segments.size() == 1 && gr.segments[0].byte_length == 1000 &&
+		          gr.segments[0].byte_offset == 2000,
+		      "and is the slice it says");
 	}
 
 	section("no base url");

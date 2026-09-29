@@ -31,6 +31,21 @@ struct hls_playlist {
 	double target_duration = 0.0;
 	QList<hls_variant> variants;
 	QList<hls_segment> segments;
+	// **Why a parser that cannot fail needed somewhere to say so.** A
+	// `#EXT-X-BYTERANGE` whose numbers cannot be read used to come out as
+	// length 0 and offset 0, because `toLongLong()` answers 0 for a value it
+	// cannot read -- and length 0 means "the whole file" to the assembler,
+	// which builds no `Range` header for it. So a malformed manifest produced
+	// a *wrong file*: whole media where a slice was meant, concatenated with
+	// its neighbours, with nothing anywhere saying the manifest had not been
+	// understood.
+	//
+	// Only the byte range sets this, because only it decides which bytes are
+	// fetched. `BANDWIDTH` that cannot be read leaves a variant at 0 and
+	// changes which stream is picked, which is a worse choice rather than a
+	// wrong file; the durations and the media sequence are read by nothing
+	// that decides anything. Empty means the manifest parsed.
+	QString error;
 
 	double total_duration() const;
 };

@@ -68,11 +68,25 @@ hls_playlist parse(const QByteArray &text, const QUrl &base) {
 			continue;
 		}
 		if (line.startsWith("#EXT-X-BYTERANGE:")) {
-			// len[@offset]
+			// len[@offset], and both are read with their status rather than
+			// guessed at: `toLongLong()` answers 0 for what it cannot read, a
+			// length of 0 means "the whole file" to the assembler, and the
+			// result is a slice request silently turned into a whole-file one.
+			// A manifest this cannot understand is refused instead.
 			const QString v = line.section(':', 1);
-			pending_length = v.section('@', 0, 0).toLongLong();
 			const QString off = v.section('@', 1, 1);
-			pending_offset = off.isEmpty() ? -1 : off.toLongLong();
+			bool len_ok = false, off_ok = true;
+			const qint64 len = v.section('@', 0, 0).trimmed().toLongLong(&len_ok);
+			const qint64 at =
+			  off.isEmpty() ? -1 : off.trimmed().toLongLong(&off_ok);
+			if (!len_ok || !off_ok || len <= 0 || (!off.isEmpty() && at < 0)) {
+				if (out.error.isEmpty())
+					out.error = QStringLiteral("byte range not understood: %1")
+					              .arg(line.trimmed());
+				continue;
+			}
+			pending_length = len;
+			pending_offset = at;
 			continue;
 		}
 		if (line.startsWith("#EXT-X-STREAM-INF:")) {
