@@ -28858,3 +28858,120 @@ now, and it stays because a whole-screen shot is the only way to see the player
 *beside* the browser, which no per-window grab can answer. And a second
 `import`-based helper had no caller at all -- `grab()` replaced it -- so it went,
 with the warning it produced on every rebuild.
+
+## Adding one source file cost an afternoon, and none of it was the file
+
+A DASH manifest parser is written -- `src/dash_manifest.{h,cpp}` and
+`test/test_dash.cpp`, 40 checks passing -- and **it is not committed, because
+adding a source file to this tree is currently impossible.**
+
+`test/objsets.mk` holds the per-binary link sets, and `test/Makefile` refuses
+to build when its source list disagrees with the tree. So a new file requires
+`make -C test objsets`, and that fails.
+
+### Three diagnoses, two of them mine and wrong
+
+**First: an fmake bug in `@pkg_optional`.** The failure is a collision in
+`test/test_theme.cpp`: `src/theme.h` defines a stub `QDBusVariant` when
+`HYDRA_HAVE_DBUS` is absent so the header keeps one shape either way, the test
+constructs a real one, and the two meet. fmake's README says `@pkg_optional
+NAME defines MACRO` defines the macro *for the whole tree*, and
+`src/theme.cpp` carries that annotation, so the macro should have been there.
+Reported to fmake with the reproduction, and the mechanism flagged as a guess.
+
+**Second, and it withdrew the first: the failing run was not the fmake anybody
+meant.** `tool/objsets.py` resolves the binary as `$FMAKE` or PATH. With
+`FMAKE` unset, PATH gives `/usr/bin/fmake` -- root-owned, **2026-08-04**,
+build `5af02348` -- while `objsets.mk`'s own header records that its contents
+came from `/home/claude/src/fmake/fmake`, a different build entirely. Eight
+weeks of fmake's development, including fixes in the paths this touches, were
+not in the binary whose failure was being reported as current.
+
+Two probes I had sent as evidence were against the *tree* build while the
+failure came from the *packaged* one. Two different tools, compared without
+noticing, which is the mistake `objsets.mk`'s header already warns about.
+
+**Third, from fmake and measured by them: the current build fails too, and at
+the other end of the same feature.** The macro goes tree-wide; the package's
+cflags do not. So `test_theme.cpp` takes `theme.h`'s real-package branch and
+`<QDBusVariant>` is then on no include path at all. They have a fix in hand.
+
+    5af02348   macro not tree-wide   -> the stub branch, and a collision
+    c45bf146   macro tree-wide,      -> the real branch, and a missing header
+               cflags not
+
+**So neither fmake on this machine builds this tree**, and they fail
+differently. That is the state as of 2026-09-29; fmake's fix is uncommitted
+and is theirs to land.
+
+### The hydra defect underneath it, which is the part worth fixing here
+
+Not that PATH held a stale fmake -- what is on PATH is the machine's business
+-- but that **nothing checked**. `objsets.py` already wrote the binary's path
+and mtime into the generated file, a remedy chosen after an earlier stale
+install dropped 23 targets silently. That provenance was in the file the whole
+time and did not stop the same substitution costing an afternoon a second
+time, because **a line you have to already suspect is not a check.**
+
+It compares now. `--version` prints the build identity in parentheses --
+`fmake 1.0 (5af02348)` against `fmake 1.0 (c45bf146)` -- which the script's
+own comment and the generated header both said it did not, and which is what
+diagnosed this. The identity is recorded and compared; a mismatch refuses and
+names both binaries; `FMAKE=` names the one you mean and
+`OBJSETS_ACCEPT_FMAKE=1` takes a newer one deliberately.
+
+**The identity rather than the mtime, and the reason is not fussiness.** A
+rebuild moves the mtime whether or not the tool changed, so an mtime
+comparison cries wolf on every build of fmake *and* stays silent about a
+second copy with an older date. It gets both cases wrong in opposite
+directions. The first version of this fix compared path and mtime; fmake's
+correction is what replaced it.
+
+And a `--version` with no identity in it **refuses outright** rather than
+recording nothing, because recording nothing is the state the file was already
+in and is how it failed twice.
+
+### One control fired, the other is blocked, and the difference is stated
+
+    $ FMAKE=<shim printing "fmake 1.0"> make -C test objsets
+    ... printed no build identity for --version, so this cannot tell it from
+    another copy. It is the one thing that distinguishes two fmakes;
+    refusing rather than recording nothing.
+    make: *** Error 1
+
+Seen to refuse, before running anything. The identity-mismatch half needs a
+successful regeneration to write an identity for it to disagree with, so it is
+blocked behind fmake's fix and **is not claimed to work.** fmake supplied both
+controls, and the mismatch one is the real case rather than a contrived
+identity: `5af02348` against a file generated by `c45bf146`.
+
+### The artifact in the tree cannot be reproduced
+
+`objsets.mk` records its generator as `/home/claude/src/fmake/fmake` at mtime
+`2026-09-21 23:05`. That is neither binary now on the machine: fmake's tree
+build has moved many times since, twice within an hour of this being written.
+So the link sets committed here were computed by a build that no longer
+exists, and nobody can re-derive them.
+
+That is not a complaint about fmake -- it is what pinning a generated artifact
+to a build identity means when the tool is under active development, and it
+arrives from the opposite direction to the problem above. Recording the
+identity at least makes the divergence visible instead of silent, which is as
+far as this tree can fix it alone.
+
+### What is held, and why it is held rather than committed
+
+`src/dash_manifest.{h,cpp}` and `test/test_dash.cpp` stay out of the tree
+until `make objsets` works. Committing them would make `make test` refuse for
+everybody, which is a worse trade than waiting: the guard exists because a
+link set describing a tree that has moved on fails as an undefined symbol a
+long way from the file somebody added.
+
+The parser itself is finished and measured -- the four addressing modes
+(`SegmentTimeline`, `SegmentTemplate@duration`, `SegmentList`, `SegmentBase`),
+template identifiers with printf widths, `$Time$` as the timeline's clock
+rather than the segment index, BaseURL resolution down four levels, and six
+refusals where a manifest would otherwise yield a *wrong* segment list rather
+than none. `best_video` and `best_audio` are two calls because DASH hands the
+streams out separately and assembling only the video is how a silent file gets
+produced by something that looks like it worked.
