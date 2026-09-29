@@ -27879,6 +27879,107 @@ Two passes now: put the leaves back while every parent pointer is still valid,
 then delete the folders. The same sabotage fails cleanly through its own nine
 checks instead of taking the process down, which is what a control has to do.
 
+## A rule set read from another thread, and a note saying that was fine
+
+`policy_engine`'s header carried this, and it is the wrong *kind* of argument
+rather than a wrong fact:
+
+    the rule set is only mutated from the UI thread and reads tolerate a
+    stale snapshot
+
+Tolerating staleness is a claim about *when* a value was written. What the
+reader needs is a claim about a *span of memory*: `effective_setting` walks
+`m_rules` by reference, `set_setting` can `push_back` into it, and a QVector
+that reallocates frees the buffer the reader is walking. Reading a rule one
+edit out of date is harmless. Reading a freed one is not, and no amount of
+tolerance for staleness covers it. `evidence.md` has this exact shape under *A
+justification about time cannot protect a span of memory*.
+
+### Which thread, measured rather than inherited
+
+Three files in this tree say the interceptor runs off the UI thread, and
+before acting on that it was worth asking. A temporary `qWarning` in
+`qtwebengine_interceptor::interceptRequest`, run under `try_adblock_fix`:
+
+    INTERCEPT-THREAD: current=0x56191dc5fbd0 app=0x56191dc5fbd0 same=1
+                      name=Qt mainThread
+
+**On Qt 6.8.2 the desktop interceptor runs on the main thread**, so the desktop
+crosses nothing today -- which is exactly why this has never bitten here. The
+boundary is Android's, and it is not in doubt:
+`HydraWebView.shouldInterceptRequest` says in its own comment that every
+subresource "passes through here, on a network thread", and it reaches this
+class through `android_view::should_block` while the UI thread is free to
+toggle a per-site permission from the shield.
+
+`filter_list` already pays for that boundary with a `QReadWriteLock` and says
+so. `policy_engine` was the one that did not.
+
+### Proved, in both directions, outside the suite
+
+A probe linking `policy_engine.cpp` alone -- 4000 `set_setting` calls on the
+main thread against a reader thread in `effective_setting` -- built with
+`-fsanitize=address` and run three times:
+
+    ERROR: AddressSanitizer: heap-use-after-free ... READ of size 8 thread T1
+      #2 policy_engine::match_pattern(...)              policy_engine.cpp:157
+      #3 policy_engine::effective_setting_unlocked(...)                 :194
+    freed by thread T0 here:
+      #1 QArrayDataPointer<policy_engine::rule>::reallocateAndGrow(...)
+      #5 QList<policy_engine::rule>::push_back(...)
+
+Three of three. With the lock restored, three clean runs, 4000 rules, about
+1300 concurrent reads. That is the fix demonstrated rather than argued, and
+the frames name the mechanism the header now describes.
+
+The probe is a scratch file rather than a tree one, because **`test/Makefile`
+has no sanitizer mode** -- `SANITIZE=1` reaches the application build only, so
+no suite in this project can be run under ASan by any target. That is a real
+gap and a separate piece of work; it is why the proof lives in a commit message
+and a comment instead of in a check.
+
+### Adding the lock introduced a deadlock, and the check for it is mechanical
+
+`QReadWriteLock` is not recursive, so every call between the class's own public
+methods becomes a deadlock the moment they take it -- and the compiler says
+nothing. `load` sets the defaults it reads out of the INI, through the public
+`set_global_default`, while already holding the write lock. `make test-one
+T=test_settings` hung at **zero CPU**; `gdb -p <pid> --batch -ex "bt 20"` named
+it in one command:
+
+    #12 policy_engine::set_global_default   policy_engine.cpp:236
+    #13 policy_engine::load_unlocked                         :380
+    #14 policy_engine::load                                  :313
+
+Reading the diff again is not what finds the rest of them. This is:
+
+    grep -nE "(^|[^_[:alnum:]])(set_setting|effective_setting|global_default|
+              setting_for|is_allowed|rules)\(" policy_engine.cpp
+      | grep -v "policy_engine::" | grep -v "_unlocked"
+
+Every hit must be a call from an unlocked context. One survived the first pass
+by eye and was caught by that; what is left is `is_allowed` calling
+`effective_setting`, which acquires once and is correct.
+
+So the shape is `_unlocked` helpers for everything reachable from a locked
+context -- `global_default`, `set_global_default`, `effective_setting` and the
+whole of `load` -- with each public entry point acquiring exactly once, and
+`changed()` emitted after the lock is released, because a signal delivered
+under a lock invites a slot that asks this class a question back.
+
+### What the suite section is for, since it is not this
+
+The section added to `test_settings` **does not catch the race**: sabotaged,
+with both locks removed, it passed three times out of three. A freed QVector
+buffer is still mapped, and a two-bit setting read out of it parses to a legal
+value, so neither a crash nor the bad-value counter fires. It says so in the
+test, because a check quoted for a guarantee it never gave is worse than no
+check.
+
+What it does guard is the deadlock above -- which is not hypothetical, having
+just happened -- and that all 4000 writes land. Those are worth a section; the
+race needs the sanitizer, and the sanitizer needs the gap named above.
+
 ### A watch run that never transferred read as a proxy fault
 
 `test_watch` failed once in five runs, and what it printed pointed at the

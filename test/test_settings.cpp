@@ -1,5 +1,8 @@
 // Settings persistence and the custom-player command template.
 #include "settings_dialog.h"
+
+#include <atomic>
+#include <thread>
 #include "kiosk_controller.h"
 #include "request_filter.h"
 #include "scheme_rules.h"
@@ -1895,6 +1898,99 @@ int main(int argc, char **argv) {
 		               "kiosk_config gained or lost a field: store it in "
 		               "kiosk()/set_kiosk, offer it on the kiosk page, and "
 		               "add it to the round trip above");
+	}
+
+	// **A rule set read from one thread while another adds to it.**
+	//
+	// `policy_engine`'s header used to say reads "tolerate a stale snapshot",
+	// which is an argument about *when* a value was written offered in defence
+	// of a *span of memory*. `effective_setting` walks `m_rules` by reference
+	// and `set_setting` can `push_back` into it; a QVector that reallocates
+	// frees the buffer the reader is walking, and no tolerance for staleness
+	// covers that.
+	//
+	// The boundary is Android's: `HydraWebView.shouldInterceptRequest` runs "on
+	// a network thread" and reaches this class through
+	// `android_view::should_block`, while the UI thread is free to toggle a
+	// per-site permission. Measured on Qt 6.8.2, the desktop interceptor runs
+	// on the main thread and crosses nothing -- which is why this was invisible
+	// here.
+	//
+	// **What this section catches, and what it does not.** Sabotaged -- both
+	// locks removed -- it passed three times out of three: a freed QVector
+	// buffer is still mapped, and a two-bit setting read out of it parses to a
+	// legal value, so neither a crash nor the counter below fires. So this is
+	// not the proof that the lock is needed, and must not be quoted as one.
+	//
+	// What it does guard is the other hazard, which is not hypothetical: adding
+	// a lock turns every call between the class's own public methods into a
+	// deadlock, and `load` kept one -- the suite hung at zero CPU until a
+	// `gdb -p` named the frame. This section deadlocks if that comes back, and
+	// asserts every write landed.
+	//
+	// **The race itself was proved outside the suite**, because `test/Makefile`
+	// has no sanitizer mode, so nothing here can be run under one. A probe
+	// linking `policy_engine.cpp` alone, built with `-fsanitize=address` and
+	// doing exactly what this section does, reported on every one of three runs:
+	//
+	//     ERROR: AddressSanitizer: heap-use-after-free ... READ of size 8
+	//       #2 policy_engine::match_pattern(...) policy_engine.cpp:157
+	//       #3 policy_engine::effective_setting_unlocked(...) :194
+	//     freed by thread T0 here:
+	//       #1 QArrayDataPointer<policy_engine::rule>::reallocateAndGrow(...)
+	//       #5 QList<policy_engine::rule>::push_back(...)
+	//
+	// and with the locks restored, three clean runs, 4000 rules, ~1300 reads.
+	//
+	// Bounded by construction: the writer runs a fixed number of iterations and
+	// the reader stops on the flag it sets.
+	section("locking the rule set neither deadlocks nor drops a write");
+	{
+		policy_engine eng;
+		eng.set_global_default(policy::feature::javascript, policy::setting::allow);
+
+		std::atomic<bool> writing{true};
+		std::atomic<int>  reads{0};
+		std::atomic<int>  bad{0};
+
+		std::thread reader([&] {
+			while (writing.load(std::memory_order_relaxed)) {
+				const policy::setting got =
+				  eng.effective_setting(policy::feature::javascript,
+				                         "shop.example.com");
+				// Any of the three is a legitimate answer while rules arrive;
+				// anything else means the read saw something that is not a
+				// setting, which is what walking a freed buffer looks like
+				// when it does not simply crash.
+				if (got != policy::setting::allow && got != policy::setting::block &&
+				    got != policy::setting::ask)
+					bad.fetch_add(1, std::memory_order_relaxed);
+				reads.fetch_add(1, std::memory_order_relaxed);
+			}
+		});
+
+		// Enough to force the vector to reallocate many times over: QVector
+		// grows geometrically, so the reallocations are the early pushes and
+		// the count only has to be comfortably past them.
+		for (int i = 0; i < 4000; ++i)
+			eng.set_setting(QString("site%1.example.com").arg(i),
+			                 policy::feature::javascript,
+			                 (i % 2) ? policy::setting::block : policy::setting::allow);
+
+		writing.store(false, std::memory_order_relaxed);
+		reader.join();
+
+		// Weak by the measurement above -- it passes unlocked too -- and kept
+		// because a value that is not a setting is worth failing on if it ever
+		// does appear. It is not evidence that the lock works.
+		check(bad.load() == 0,
+		      QString("every concurrent read answered with a setting (%1 bad "
+		               "of %2 reads)").arg(bad.load()).arg(reads.load()));
+		check(reads.load() > 0,
+		      QString("and the reader actually ran (%1 reads)").arg(reads.load()));
+		check(eng.rules().size() == 4000,
+		      QString("every rule the writer added is there (%1)")
+		          .arg(eng.rules().size()));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

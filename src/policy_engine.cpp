@@ -1,6 +1,8 @@
 #include "policy_engine.h"
 
 #include <QFile>
+#include <QReadLocker>
+#include <QWriteLocker>
 #include <QVariant>
 #include <QSettings>
 #include <QFileInfo>
@@ -174,6 +176,14 @@ const policy_engine::rule *policy_engine::find_rule(const QString &pattern) cons
 }
 
 setting policy_engine::effective_setting(feature f, const QString &host) const {
+	// The cross-thread entry point: Android's interceptor reaches this from a
+	// network thread while the UI thread may be adding a rule. See the header.
+	QReadLocker locker(&m_lock);
+	return effective_setting_unlocked(f, host);
+}
+
+setting policy_engine::effective_setting_unlocked(feature f,
+                                                   const QString &host) const {
 	setting best = setting::unset;
 	int best_spec = -1;
 	for (const rule &r : m_rules) {
@@ -188,7 +198,7 @@ setting policy_engine::effective_setting(feature f, const QString &host) const {
 	}
 	if (best != setting::unset)
 		return best;
-	return global_default(f);
+	return global_default_unlocked(f);
 }
 
 // **Only `allow` allows, which is a change and the point of it.** This read
@@ -209,6 +219,11 @@ bool policy_engine::is_allowed(feature f, const QString &host) const {
 // added without a constructor line would have been granted to every site
 // silently, and the failure would look like the feature working.
 setting policy_engine::global_default(feature f) const {
+	QReadLocker locker(&m_lock);
+	return global_default_unlocked(f);
+}
+
+setting policy_engine::global_default_unlocked(feature f) const {
 	const setting s = policy::get_setting(m_global_defaults, f);
 	return s == setting::unset ? setting::block : s;
 }
@@ -217,22 +232,35 @@ setting policy_engine::global_default(feature f) const {
 // `block` becomes `allow` -- would have thrown `ask` away on the way in, and
 // silently: the setter would accept it and the getter would answer `allow`.
 void policy_engine::set_global_default(feature f, setting s) {
+	{
+		QWriteLocker locker(&m_lock);
+		set_global_default_unlocked(f, s);
+	}
+	emit changed();   // outside the lock: a slot may ask this class a question
+}
+
+void policy_engine::set_global_default_unlocked(feature f, setting s) {
 	m_global_defaults = policy::with_setting(m_global_defaults, f, s);
-	emit changed();
 }
 
 setting policy_engine::setting_for(const QString &pattern, feature f) const {
+	QReadLocker locker(&m_lock);
 	const rule *r = find_rule(pattern);
 	return r ? policy::get_setting(r->bits, f) : setting::unset;
 }
 
 void policy_engine::set_setting(const QString &pattern, feature f, setting s) {
-	rule *r = find_rule(pattern);
-	if (!r) {
-		m_rules.push_back({pattern, 0});
-		r = &m_rules.last();
+	{
+		// The write that made the old note wrong: `push_back` can reallocate,
+		// and a reader walking the vector is walking the buffer it frees.
+		QWriteLocker locker(&m_lock);
+		rule *r = find_rule(pattern);
+		if (!r) {
+			m_rules.push_back({pattern, 0});
+			r = &m_rules.last();
+		}
+		r->bits = policy::with_setting(r->bits, f, s);
 	}
-	r->bits = policy::with_setting(r->bits, f, s);
 	emit changed();
 }
 
@@ -254,7 +282,8 @@ bool policy_engine::load_json(const QString &path) {
 	for (auto it = gd.begin(); it != gd.end(); ++it) {
 		const feature f = policy::feature_from_name(it.key());
 		if (f != feature::count)
-			set_global_default(f, policy::setting_from_word(it.value().toString()));
+			set_global_default_unlocked(f,
+			                             policy::setting_from_word(it.value().toString()));
 	}
 
 	m_rules.clear();
@@ -273,12 +302,25 @@ bool policy_engine::load_json(const QString &path) {
 		}
 		m_rules.push_back(r);
 	}
-	emit changed();
-	return true;
+	return true;   // `load` emits changed() once, after releasing the lock
 }
 
 
 bool policy_engine::load(const QString &path) {
+	bool ok = false;
+	{
+		QWriteLocker locker(&m_lock);
+		ok = load_unlocked(path);
+	}
+	if (ok)
+		emit changed();   // outside the lock, as every mutation here does
+	return ok;
+}
+
+// Assumes the write lock. It replaces the whole rule set, which is the harshest
+// version of the hazard the header describes: a reader mid-walk would be
+// walking a vector that is being cleared and refilled.
+bool policy_engine::load_unlocked(const QString &path) {
 	// INI first, and the old JSON if that is what is there.
 	//
 	// The file moved from JSON to INI because everything in it is a value or a
@@ -335,7 +377,7 @@ bool policy_engine::load(const QString &path) {
 				const feature fe = policy::feature_from_name(key);
 				const setting st = policy::setting_from_word(f.value(key).toString());
 				if (fe != feature::count && st != setting::unset)
-					set_global_default(fe, st);
+					set_global_default_unlocked(fe, st);   // the lock is held
 			}
 			f.endGroup();
 			f.beginGroup("sites");
@@ -353,8 +395,7 @@ bool policy_engine::load(const QString &path) {
 					m_rules.push_back(r);
 			}
 			f.endGroup();
-			emit changed();
-			return true;
+			return true;   // `load` emits changed() once, after unlocking
 		}
 	}
 
@@ -383,6 +424,10 @@ bool policy_engine::save(const QString &path) const {
 	// It also stops lying to the QSettings cache, which keys a shared
 	// QConfFile on the path: removing the file behind its back left the
 	// cached object describing a file that was not there.
+	// Read-locked for the same reason the reads are: this walks `m_rules`, and
+	// a save racing a rule the user has just added would walk a freed buffer.
+	QReadLocker locker(&m_lock);
+
 	QSettings f(path, QSettings::IniFormat);
 	f.clear();
 	f.setValue("hydra/format", k_format);
@@ -392,7 +437,7 @@ bool policy_engine::save(const QString &path) const {
 	for (int i = 0; i < policy::feature_count(); ++i) {
 		const auto fe = static_cast<feature>(i);
 		f.setValue(policy::feature_name(fe),
-		            policy::setting_word(global_default(fe)));
+		            policy::setting_word(global_default_unlocked(fe)));
 	}
 	f.endGroup();
 
