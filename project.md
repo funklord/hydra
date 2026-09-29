@@ -28425,10 +28425,99 @@ predates the change.
 
 So it is an open, intermittent crash in the Watch path -- proxy publication,
 player launch, and a torrent still writing -- and the reproduction is one
-command now that the driver runs. What is *not* established is where: no
-backtrace has been captured, because the one run under a debugger did not
-crash. Recorded rather than guessed at, and not attributed to any of the three
-components until something names a frame.
+command now that the driver runs. Where it is remained open at that point, and
+the next section is what a debugger and a sanitizer had to say. It is still not
+attributed to any of the three components: a backtrace that names Qt's own
+signal dispatch names no caller of ours.
+
+### The backtrace, and the one it does not contain
+
+The sentence above said no backtrace had been captured, on the strength of a
+single clean run under `gdb`. That was one run. Four more:
+
+    QT_QPA_PLATFORM=offscreen timeout 300 gdb --batch -ex run -ex "bt 25" \
+      --args ./build-make/try_watch
+
+**Three reached `Watch clicked` and all three died with SIGSEGV; the fourth was
+killed at the 300 s bound before ever reaching the click.** So under a debugger
+it is three of three, not one clean run -- the earlier clean run was a run that
+got there and survived, and a run that does not get there says nothing either
+way. The bound is the thing to watch when reading these: a `rc=124` with no
+`Watch clicked` in the log is not evidence about the crash.
+
+All three faulted at **the same address**, which for an intermittent fault is
+the useful part: whatever this is, it is one site rather than roving
+corruption. The stack is fourteen frames and hydra appears in exactly one of
+them, the bottom:
+
+    #0  0x00007ffff5fe4032 in ??? ()                  libQt6Core
+    #1  QIODevice::channelReadyRead(int)              libQt6Core
+    #2  ??? ()                                        libQt6Network
+    #3  ??? ()                                        libQt6Network
+    #4  QApplicationPrivate::notify_helper(QObject*, QEvent*)
+    #5  QCoreApplication::notifyInternal2(QObject*, QEvent*)
+    #6-10  the glib event dispatcher
+    #11 QEventLoop::exec(...)
+    #12 QCoreApplication::exec()
+    #13 main at live/try_watch.cpp:350
+
+**Frame 0 can be named without installing anything**, which is worth recording
+because the instinct is to go and fetch debug symbols first. A return address
+in an exported function plus that function's offset from `nm -D` gives the load
+base, and the base maps any other address back to a file offset:
+
+    nm -DC --defined-only /lib/x86_64-linux-gnu/libQt6Core.so.6
+
+`QIODevice::channelReadyRead(int)` sits at `0x166880`, the frame 1 return
+address is `0x7ffff5f668c5`, so the library is loaded at `0x7ffff5e00000` and
+frame 0 is at offset `0x1e4032`. That falls between `QObject::property` and
+`QMetaObject::activate` at `0x1e47c0` -- immediately before all three `activate`
+overloads and exported under none of them. The unexported function occupying
+the bytes just before `activate`, reached from a signal emitter, is
+`doActivate`, which every `activate` overload tail-calls. That identification
+is inference from the layout rather than a symbol anybody read, and it is the
+only step here that is.
+
+So the fault is **inside Qt's signal activation, while a Qt Network object
+emits `channelReadyRead`, at the top-level event loop.** Two things follow, and
+the second is the one that cost an hour of looking in the wrong place:
+
+- **`serve_file`'s nested event loop is not on the stack.** The hazard recorded
+  in `local_proxy.cpp` above the streaming wait -- a client destroyed under a
+  loop the frame is pumping -- cannot be this crash, because that frame is not
+  running when it happens. That hazard stays documented and stays unproven; it
+  is not the explanation, which is what it would have become had nobody looked
+  at the stack.
+- **No hydra frame is anywhere in the chain.** Whatever object is invalid, our
+  code is not in the call that finds it. That is consistent with a receiver we
+  own having gone away, and equally consistent with something entirely inside
+  Qt; the backtrace does not separate those.
+
+**ASan and UBSan were run and found nothing, and that narrows rather than
+clears.** Built without touching the tree, which `test/Makefile` allows because
+it takes `CXXFLAGS` with `?=` and appends its own with `+=`:
+
+    CXXFLAGS="-Os -g -fsanitize=address,undefined -fno-omit-frame-pointer" \
+    LDFLAGS="-fsanitize=address,undefined" \
+    make -C test BUILD_DIR=build-asan -j4 build-asan/try_watch
+
+Two runs under `ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=print_stacktrace=1`,
+both `rc=0`, zero sanitizer reports, both reaching `done`. Read carefully that
+is worth less than it looks. ASan instruments the allocations in code it
+compiled -- hydra's -- and Qt here is a distribution build it did not compile,
+so a use-after-free of an object allocated *inside* libQt6Core or libQt6Network
+is invisible to it. A clean ASan run says the fault is probably not in hydra's
+own heap; it says nothing about Qt's. And two runs against a fault that appears
+about half the time is weak on its own terms, doubly so when the instrument
+slows the process enough to close the window.
+
+**What would name it is Qt debug symbols**, which turn frames 0, 2 and 3 into
+file and line and would say which object is being activated. That means
+`debuginfod` or `libqt6core6-dbgsym`, both of which fetch from the network and
+install onto this machine, so it is the copyright holder's call rather than a
+session's. Until then the entry stays where it is: reproducible in one command,
+one faulting site, Qt's signal dispatch on a network device, and no component
+of ours named.
 
 ### The offscreen noise, and a helper with no caller
 
