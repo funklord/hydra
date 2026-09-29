@@ -27879,21 +27879,48 @@ Two passes now: put the leaves back while every parent pointer is still valid,
 then delete the folders. The same sabotage fails cleanly through its own nine
 checks instead of taking the process down, which is what a control has to do.
 
-### Still open, and small: a folder somebody made in the same window
+### And then the folder somebody made in the same window, closed the same way
 
-An unknown *folder* is still treated as the model's and deleted. A person can
-create a folder (Edit -> Add Folder) between accepting a reorganization and
-pressing Undo, and that folder goes -- its children are re-attached first, so
-no tab is lost with it, but the folder is.
+The first fix kept unknown *leaves* and went on deleting unknown *folders*,
+which left the same defect one node type along: create a folder (Edit -> Add
+Folder) between accepting a reorganization and pressing Undo and it went. Its
+children were re-attached, so no tab went with it, but the folder did -- and
+nothing about a node can tell the two apart, because a folder the model
+invented and a folder the person made are the same node with a different
+author.
 
-Closing it needs the undo state to carry **which** folders the reorganization
-invented rather than inferring it from absence: `compute` already names them
-as `change_kind::folder_new`, and `reorganize_dialog` knows which changes were
-accepted, so the ids exist and would have to be passed to `restore` alongside
-the snapshot. That is delete-by-name instead of delete-by-pattern, which is
-the rule this workspace already holds for files. Recorded rather than done:
-it changes the undo state's shape, and the loss it closes is a folder rather
-than a tab.
+**So the undo record names what the reorganization created rather than
+inferring it from absence**, which is the rule this workspace already holds for
+deleting files. `tree_snapshot` gained `invented_folders`; `reorganize_dialog`
+fills it from the accepted `change_kind::folder_new` changes, whose `node_id`
+is by construction the id `apply` gives the folder it creates; `restore`
+deletes the ids it is handed and keeps every other node it does not recognise.
+
+Three choices in that are worth the sentence, because each had an alternative
+that looks tidier:
+
+- **The ids live in the snapshot struct, not beside it.** They are not part of
+  the recorded structure -- those nodes did not exist when it was taken -- and
+  the honest-looking alternative is a second member on `main_window` next to
+  `m_undo`. That is two things that have to be kept in step by hand, which is
+  the failure this project already wrote down about the tab bar. One record
+  cannot be half-carried.
+- **An empty list deletes nothing.** A reorganization that invented no folder
+  names none, so every folder is somebody's. The undo state is in memory and
+  is discarded when used, so there are no records from before the field
+  existed and no migration to get wrong.
+- **A doomed folder's children are re-attached before anything is deleted**,
+  which is the two-pass shape the earlier use-after-free bought. A folder made
+  *inside* the model's folder is the case with nowhere obvious to go, and it
+  goes to the root.
+
+**Two sabotages, in opposite directions, each failing through its own
+checks.** Inferring from absence again -- the old behaviour -- turns exactly
+the eight new checks red and leaves the older sections green, because those
+now name `f-new` and it still goes. Naming nothing turns six red, four of them
+in the sections that were already there. Neither reaches the other's checks,
+which is what says the two sections are testing different things rather than
+one thing twice.
 
 ### And the promise either side of it, now pinned
 

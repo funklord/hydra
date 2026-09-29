@@ -2120,9 +2120,13 @@ void main_window::open_reorganizer() {
 
 	// sec 9.4: snapshot before applying, so any accepted change is one keystroke
 	// to revert. Structure only -- payloads follow ids and are never touched.
-	const tree_snapshot before = m_model->take_snapshot();
+	tree_snapshot before = m_model->take_snapshot();
 	reorganize_dialog dlg(m_model, chosen, this);
 	if (dlg.exec() == QDialog::Accepted) {
+		// Which folders the model invented, so Undo can delete those by name
+		// instead of deleting everything the snapshot does not recognise --
+		// which is also a folder the person made while the undo was waiting.
+		before.invented_folders = dlg.invented_folders();
 		m_undo = before;
 		m_undo_action->setEnabled(true);
 		m_tree->expandAll();

@@ -29,6 +29,13 @@ public:
 	                   QWidget *parent = nullptr);
 	~reorganize_dialog() override;
 
+	// Ids of the folders the accepted changes invented, for the undo record.
+	// Undo deletes the folders it is told about rather than every node the
+	// snapshot does not recognise, which is what stopped it removing a folder
+	// somebody created while the undo was still available. Meaningful only
+	// after `exec()` has returned `Accepted`; empty otherwise.
+	QStringList invented_folders() const;
+
 private slots:
 	void on_send();
 	void on_reply(const QString &text);

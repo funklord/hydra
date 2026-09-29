@@ -45,6 +45,25 @@ struct tree_snapshot_entry {
 
 struct tree_snapshot {
 	QList<tree_snapshot_entry> entries;
+
+	// **Ids of the folders the accepted reorganization invented.** Not part of
+	// the recorded structure -- these nodes did not exist when the snapshot was
+	// taken -- but part of the same undo record, and filled in by whoever
+	// accepts the changes.
+	//
+	// It is here rather than in a second variable beside the snapshot because
+	// the two are useless apart and would have to be kept in step by hand.
+	// `restore` deletes the folders this names and keeps every other node it
+	// does not recognise, which is delete-by-name rather than delete-by-absence:
+	// a folder somebody created between accepting and pressing Undo is not in
+	// the snapshot either, and inferring the model's from absence deleted it.
+	//
+	// Empty means the reorganization invented none, so nothing is deleted. That
+	// is the safe direction by construction, and there are no records from
+	// before this field existed -- the undo state is in memory only and is
+	// discarded when it is used.
+	QStringList invented_folders;
+
 	bool valid() const { return !entries.isEmpty(); }
 };
 
@@ -87,10 +106,13 @@ QStringList leaf_ids(node *root);
 
 tree_snapshot snapshot(node *root);
 
-// Puts `root` back into the recorded shape. Nodes the snapshot does not know
-// about are folders the reorganization invented, and are deleted -- their
-// children are re-attached first, so nothing is lost with them. Returns the
-// number of nodes restored.
+// Puts `root` back into the recorded shape.
+//
+// Nodes the snapshot does not know about are kept and re-attached -- to their
+// own parent where it survived, to the root where it did not. The exception is
+// the folders `snap.invented_folders` names, which are the reorganization's own
+// and are deleted; their children are re-attached first, so nothing is lost
+// with them. Returns the number of nodes restored.
 int restore(node *root, const tree_snapshot &snap);
 
 }  // namespace tree_diff

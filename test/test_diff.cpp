@@ -266,7 +266,7 @@ int main(int argc, char **argv) {
 	section("undo: a snapshot puts the tree back");
 	{
 		node *orig = build_original();
-		const tree_snapshot snap = tree_diff::snapshot(orig);
+		tree_snapshot snap = tree_diff::snapshot(orig);
 		check(snap.valid(), "a snapshot is taken");
 
 		// Rearrange as an accepted proposal would: move a1 into Play, invent a
@@ -282,6 +282,7 @@ int main(int argc, char **argv) {
 		a2->parent = invented;
 		invented->children.push_back(a2);
 		find(orig, "f1")->title = "Renamed";
+		snap.invented_folders << "f-new";   // what the accepted changes created
 
 		const int restored = tree_diff::restore(orig, snap);
 		check(restored > 0, QString("restore reports what it did (%1)").arg(restored));
@@ -290,7 +291,7 @@ int main(int argc, char **argv) {
 		check(find(orig, "f1") && find(orig, "f1")->title == "Work",
 		      "the renamed folder has its name back");
 		check(find(orig, "f-new") == nullptr,
-		      "the invented folder is gone, since the snapshot never knew it");
+		      "the invented folder is gone, since the record names it");
 		check(find(orig, "a2") != nullptr,
 		      "and the tab that was inside it is not gone with it");
 		check(find(orig, "a2")->parent->id == "f1",
@@ -389,7 +390,7 @@ int main(int argc, char **argv) {
 		// file: `check_and_repair` REJECTS a proposal that invents a leaf id,
 		// so an unknown leaf cannot be the model's -- it is somebody's tab.
 		node *orig = build_original();
-		const tree_snapshot snap = tree_diff::snapshot(orig);
+		tree_snapshot snap = tree_diff::snapshot(orig);
 
 		// The reorganization: a1 into Play, and an invented folder holding a2.
 		node *a1 = find(orig, "a1");
@@ -413,6 +414,12 @@ int main(int argc, char **argv) {
 		                          "https://example.com/after2"));
 		add(invented, mk("t11", false, "Opened in the new folder",
 		                  "https://example.com/after3"));
+
+		// **What the model invented is named, not inferred.** The undo record
+		// carries the ids the accepted changes created, which is what lets the
+		// section below keep a folder the person made -- indistinguishable
+		// from this one by any property of the node.
+		snap.invented_folders << "f-new";
 
 		const int restored = tree_diff::restore(orig, snap);
 		check(restored > 0, QString("restore reports what it did (%1)").arg(restored));
@@ -451,6 +458,79 @@ int main(int argc, char **argv) {
 		      QString("six leaves: the three that were there and the three that "
 		               "were opened (%1)")
 		          .arg(tree_diff::leaf_ids(orig).join(",")));
+		delete orig;
+	}
+
+	section("undo does not delete a folder made since the snapshot");
+	{
+		// **The same defect one fix later, and the same cost.** Unknown leaves
+		// were kept and unknown folders were still deleted, because nothing
+		// about a node says who made it: a folder the model invented and a
+		// folder the person made between accepting and pressing Undo are the
+		// same node with a different author.
+		//
+		// So the undo record names the ids the accepted changes created, and
+		// `restore` deletes those. That is delete-by-name rather than
+		// delete-by-absence, which is the rule this workspace already holds
+		// for removing files.
+		node *orig = build_original();
+		tree_snapshot snap = tree_diff::snapshot(orig);
+
+		// The reorganization invents one folder and moves a2 into it.
+		node *invented = add(orig, mk("f-model", true, "Invented"));
+		node *a2 = find(orig, "a2");
+		a2->parent->children.removeAll(a2);
+		a2->parent = invented;
+		invented->children.push_back(a2);
+		snap.invented_folders << "f-model";
+
+		// Then the person makes a folder of their own and puts a new tab in
+		// it -- and another folder inside the model's, which is the case with
+		// nowhere obvious to go back to.
+		node *mine = add(orig, mk("f-mine", true, "Mine"));
+		add(mine, mk("t20", false, "In my folder", "https://example.com/mine"));
+		node *nested = add(invented, mk("f-nested", true, "Mine, inside theirs"));
+
+		tree_diff::restore(orig, snap);
+
+		check(find(orig, "f-model") == nullptr,
+		      "the folder the record names is gone");
+		check(find(orig, "f-mine") != nullptr,
+		      "the folder the person made is not");
+		check(shape(orig).contains("f-mine"),
+		      QString("and is reachable from the root (%1)").arg(shape(orig)));
+		check(find(orig, "t20") != nullptr &&
+		          find(orig, "t20")->parent == mine,
+		      "the tab in it is still in it");
+		check(shape(orig).contains("t20"),
+		      QString("reachable there rather than merely alive (%1)")
+		          .arg(shape(orig)));
+		check(find(orig, "f-nested") != nullptr &&
+		          find(orig, "f-nested")->parent == orig,
+		      "a folder made inside the model's goes to the root rather than "
+		      "away with it");
+		check(shape(orig).contains("f-nested"),
+		      QString("reachable there too (%1)").arg(shape(orig)));
+		check(nested->parent == orig, "and its parent pointer agrees");
+		delete orig;
+	}
+
+	// **An empty list deletes nothing, which is the safe direction.** A
+	// reorganization that invented no folder names none, and every folder in
+	// the tree is then somebody's.
+	section("undo with nothing named deletes no folder");
+	{
+		node *orig = build_original();
+		const tree_snapshot snap = tree_diff::snapshot(orig);
+		node *mine = add(orig, mk("f-only-mine", true, "Mine"));
+		add(mine, mk("t21", false, "In it", "https://example.com/only"));
+
+		tree_diff::restore(orig, snap);
+		check(find(orig, "f-only-mine") != nullptr,
+		      "a folder made after the snapshot survives an undo that names "
+		      "nothing");
+		check(shape(orig).contains("f-only-mine") && shape(orig).contains("t21"),
+		      QString("with its tab, both reachable (%1)").arg(shape(orig)));
 		delete orig;
 	}
 

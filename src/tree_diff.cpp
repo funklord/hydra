@@ -382,63 +382,64 @@ int restore(node *root, const tree_snapshot &snap) {
 		++restored;
 	}
 
-	// **What the snapshot does not know is not all the reorganization's.** This
-	// loop deleted every unknown node, on the strength of a comment saying
+	// **What the snapshot does not know is not the reorganization's.** This
+	// deleted every unknown node, on the strength of a comment saying
 	// "whatever the snapshot never knew about is a folder the reorganization
 	// invented" -- which holds only if nothing has been added since the
 	// snapshot was taken. The undo stays available until it is pressed and
 	// nothing invalidates it when the tree changes, so a tab opened between
 	// accepting a reorganization and pressing Undo was **deleted**: not moved,
-	// not closed through the path that feeds Reopen Closed Tab, deleted.
+	// not closed through the path that feeds Reopen Closed Tab, deleted. A
+	// folder created in the same window went the same way, for the same reason
+	// and one fix later.
 	//
-	// A leaf is told from an invented folder by the invariant this file
-	// already enforces: `check_and_repair` REJECTS a proposal that invents a
-	// leaf id, so an unknown leaf cannot have come from the model. It is
-	// somebody's tab, and it goes back rather than away.
-	//
-	// It is re-attached to its own parent only when that parent survived --
-	// this loop's order is a hash's, so a parent that is itself an unknown
-	// folder may be deleted afterwards, and a node in a cleared child list is
-	// unreachable from the root while still being alive, which is a leak
-	// wearing the appearance of a survivor.
-	// **Two passes, and the second one is why.** Reading `unknown->parent->id`
+	// So the reorganization's folders are **named** rather than inferred from
+	// absence, which is the rule this workspace already holds for deleting
+	// files. Everything else unknown is kept: a tab, because
+	// `check_and_repair` REJECTS a proposal that invents a leaf id and an
+	// unknown leaf therefore cannot be the model's, and a folder, because
+	// nobody but the person could have made it.
+	QSet<QString> doomed;
+	for (const QString &id : snap.invented_folders) {
+		if (known.contains(id))
+			continue;              // the snapshot knew it: not the model's
+		node *n = by_id.value(id, nullptr);
+		if (n && n->is_folder())
+			doomed.insert(id);
+	}
+
+	// **Two passes, and the second one is why.** Reading `kept->parent->id`
 	// while deleting in the same loop is a use-after-free waiting on a hash's
-	// iteration order: a leaf whose parent is an unknown folder can be visited
+	// iteration order: a node whose parent is a doomed folder can be visited
 	// after that folder has been deleted, and the one-pass version of this
 	// crashed exactly that way under a sabotage that changed nothing about the
 	// order. Every parent pointer is still valid throughout the first pass,
 	// because nothing is deleted until the second.
 	for (auto it = by_id.cbegin(); it != by_id.cend(); ++it) {
-		if (known.contains(it.key()))
+		if (known.contains(it.key()) || doomed.contains(it.key()))
 			continue;
-		node *unknown = it.value();
-		if (unknown->is_folder())
-			continue;
+		node *kept = it.value();
 		// Its own parent when that survived, the root when it did not -- a
-		// parent that is itself unknown is about to go, and a node in a list
-		// that is about to be cleared is unreachable from the root while still
-		// being alive, which is a leak wearing the appearance of a survivor.
-		node *parent = (unknown->parent && unknown->parent != root &&
-		                 known.contains(unknown->parent->id))
-		                 ? unknown->parent : root;
-		unknown->parent = parent;
-		parent->children.push_back(unknown);
+		// doomed parent's child list is about to be cleared, and a node in a
+		// cleared list is unreachable from the root while still being alive,
+		// which is a leak wearing the appearance of a survivor.
+		node *parent = (kept->parent && kept->parent != root &&
+		                 by_id.contains(kept->parent->id) &&
+		                 !doomed.contains(kept->parent->id))
+		                 ? kept->parent : root;
+		kept->parent = parent;
+		parent->children.push_back(kept);
 	}
 
-	for (auto it = by_id.cbegin(); it != by_id.cend(); ++it) {
-		if (known.contains(it.key()))
+	for (const QString &id : doomed) {
+		node *invented = by_id.value(id, nullptr);
+		if (!invented)
 			continue;
-		node *unknown = it.value();
-		if (!unknown->is_folder())
-			continue;
-		// An unknown folder is still treated as the model's, because nothing
-		// here can tell it from a folder somebody made in the same window --
-		// see project.md, which records what closing that would take. Its
-		// children have been re-attached above, so this cannot take a tab with
-		// it.
-		unknown->children.clear();   // belt and braces: never delete a subtree
-		unknown->parent = nullptr;
-		delete unknown;
+		// Its children have been re-attached above, so this cannot take a tab
+		// -- or a folder somebody made inside it -- with it.
+		invented->children.clear();   // belt and braces: never delete a subtree
+		invented->parent = nullptr;
+		delete invented;
 	}
 
 	renumber(root);

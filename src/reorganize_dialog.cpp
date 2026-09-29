@@ -177,6 +177,17 @@ void reorganize_dialog::show_diff() {
 	say("Reviewing proposal. The tree is unchanged until you apply.");
 }
 
+QStringList reorganize_dialog::invented_folders() const {
+	// `apply` gives a new folder the change's own `node_id`, so the accepted
+	// folder_new changes name exactly the folders that were created -- and
+	// nothing else in the list creates a node.
+	QStringList out;
+	for (const tree_change &c : m_change_list)
+		if (c.accepted && c.kind == change_kind::folder_new)
+			out << c.node_id;
+	return out;
+}
+
 void reorganize_dialog::on_accept() {
 	for (int i = 0; i < m_change_list.size() && i < m_changes->count(); ++i)
 		m_change_list[i].accepted = (m_changes->item(i)->checkState() == Qt::Checked);
