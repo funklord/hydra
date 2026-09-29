@@ -27879,6 +27879,36 @@ Two passes now: put the leaves back while every parent pointer is still valid,
 then delete the folders. The same sabotage fails cleanly through its own nine
 checks instead of taking the process down, which is what a control has to do.
 
+### A watch run that never transferred read as a proxy fault
+
+`test_watch` failed once in five runs, and what it printed pointed at the
+wrong thing:
+
+      FAIL  caught the transfer mid-flight (prefix was 0 of 6291456)
+      FAIL  the job completes
+      FAIL  the whole file is readable (0)
+      FAIL  the proxy serves it all (17)
+      FAIL  byte-identical to the original
+
+The last two name the proxy, and the proxy was not involved: a prefix of zero
+means nothing was ever there to serve. Every check after the first is
+downstream of a transfer that did not start, and a reader arriving at
+*"the proxy serves it all (17)"* has no reason to look further up.
+
+**The cause is not established.** The run followed one the harness had killed
+mid-suite, which is the obvious suspect -- so that was tried deliberately: the
+binary killed with `SIGKILL` at the same point, then run again immediately. It
+passed. One attempt against one observation, and non-reproduction is what
+"intermittent" means, so the suspicion is recorded rather than closed. Four
+other runs the same evening were clean, including the same suite before and
+after the change, so it is not the tree.
+
+What did change is the completion check's message, which now carries the job's
+state and the readable byte count and says the checks below depend on it.
+Proved by making the check fail -- comparing against `failed` rather than
+`done` -- and reading the line it produced, since a message nothing has
+produced is the half of a diagnostic that rots.
+
 ### The backup prune matched a prefix and called it a name
 
 `backup_tree` keeps a hundred copies of the tree in a `backup/` beside it and

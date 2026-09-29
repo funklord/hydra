@@ -277,7 +277,20 @@ int main(int argc, char **argv) {
 	t.restart();
 	while (!job()->terminal() && t.elapsed() < 60000)
 		pump(500);
-	check(job()->status == download_state::done, "the job completes");
+	// **Say why, because everything below this is downstream of it.** Seen
+	// once: a run where the transfer never started at all reported "the proxy
+	// serves it all (17)" and "byte-identical to the original" red, which
+	// sends the reader to the proxy -- and a bare "the job completes" gives
+	// them no reason to look anywhere else. A prefix of zero cannot be a proxy
+	// fault: nothing was ever there to serve. The state and the readable count
+	// are what separate the two, and they cost one line.
+	check(job()->status == download_state::done,
+	      QString("the job completes (state %1, contiguous_bytes %2 of %3, "
+	               "where -1 means complete; the checks below are downstream "
+	               "of this one)")
+	          .arg(int(job()->status))
+	          .arg(tor->contiguous_bytes(id, rel))
+	          .arg(payload));
 	// Once the source releases a finished job it no longer has a handle, and
 	// -1 ("trust the file's size") is then the correct answer: the file is
 	// complete, so its size is finally an honest statement about its contents.
