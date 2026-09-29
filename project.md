@@ -27996,6 +27996,41 @@ pass, one suite at a time. And a sanitized suite runs at roughly the factor
 ASan costs, so the whole sweep is a long job rather than a quick one, which is
 why this is a separate target and not a flag on the default.
 
+### The first sweep, and the one suite its own guard killed
+
+Every offline suite under ASan and UBSan, 2026-09-29: **39 clean on the first
+run, and the fortieth killed before `main` by a cap it sets on itself.**
+
+    FAIL test_tree_scale  ERROR: Failed to mmap
+
+That is not a defect in anything it tests. `test_tree_scale` builds
+deliberately expensive shapes, so it calls `setrlimit(RLIMIT_AS)` for two
+gigabytes at startup -- a runaway then fails as a `bad_alloc` inside the
+process instead of reaching the OOM killer, which this machine has met twice.
+ASan reserves its shadow mapping, tens of terabytes of address space and
+almost none of it resident, *before* `main` runs; a two-gigabyte `RLIMIT_AS`
+makes that reservation fail. **The two cannot both hold**, and the message the
+collision produces reads like a finding about the code under test.
+
+So the cap is skipped when the file is compiled with the sanitizer, detected
+at compile time -- `__SANITIZE_ADDRESS__` for gcc, `__has_feature` for clang
+-- and the suite says out loud that it is running uncapped. It then passes: 19
+checks, no sanitizer findings.
+
+**What that costs is worth stating rather than waving away.** `RLIMIT_AS`
+bounds a runaway so it cannot reach the OOM killer. Under ASan, an outsized
+single request is refused by ASan's own allocator and reported, and the
+sanitized sweep is a deliberate act rather than something `make test` runs --
+but a *gradual* climb has nothing bounding it there. The two arrangements are
+not equivalent and the comment says so.
+
+**And "39 clean" is a narrower claim than it looks.** ASan instruments the
+code it compiled, which is hydra's; Qt here is a distribution build it did not
+compile, so a use-after-free of an object allocated inside libQt6Core stays
+invisible exactly as it did for the Watch crash. What the sweep establishes is
+that hydra's own allocations are sound over the paths these suites exercise.
+That is worth having and it is not a clean bill of health.
+
 ### Adding the lock introduced a deadlock, and the check for it is mechanical
 
 `QReadWriteLock` is not recursive, so every call between the class's own public

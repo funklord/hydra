@@ -61,11 +61,33 @@ int main(int argc, char **argv) {
 	// below what would trouble the machine; a shape that wants more fails as a
 	// bad_alloc in this process, which is a test result rather than an
 	// incident.
+	//
+	// **Not under AddressSanitizer, where the cap and the tool cannot both
+	// exist.** ASan reserves its shadow mapping -- tens of terabytes of address
+	// space, almost none of it resident -- before `main` runs, and an
+	// `RLIMIT_AS` of two gigabytes makes that reservation fail. The process
+	// then dies before any test with `ERROR: Failed to mmap`, which is a
+	// message about this cap and reads like a defect in the code under test.
+	// Measured on the first sanitized sweep: 39 suites clean and this one
+	// killed by its own guard.
+	//
+	// Skipping it costs little of what the cap is for. RLIMIT_AS bounds a
+	// runaway so it cannot reach the OOM killer, and under ASan the allocator
+	// refuses an outsized request itself and reports it; the sweep is also a
+	// deliberate act rather than something `make test` runs. What is lost is
+	// the bound on a *gradual* climb, which is worth saying rather than
+	// pretending the two arrangements are equivalent.
+#if defined(__SANITIZE_ADDRESS__) || \
+     (defined(__has_feature) && __has_feature(address_sanitizer))
+	note("address sanitizer: address space left uncapped, since RLIMIT_AS "
+	      "and ASan's shadow reservation cannot both hold");
+#else
 	{
 		struct rlimit lim { 2ull << 30, 2ull << 30 };
 		if (setrlimit(RLIMIT_AS, &lim) != 0)
 			note("could not cap address space; continuing uncapped");
 	}
+#endif
 	note(extreme ? "extreme shapes enabled"
 	              : "modest sizes; HYDRA_SCALE_EXTREME=1 for the rest");
 
