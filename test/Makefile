@@ -26,7 +26,20 @@
 # something in it changed. It also stops linking the test-side moc into all of
 # them: two programs need it.
 
+# **`SANITIZE=1` gets its own build directory, and that is the load-bearing
+# half.** Objects compiled with the sanitizers cannot be linked against objects
+# compiled without them: the plain ones carry no `__ubsan_*` or `__asan_*`
+# symbols and the link fails as an undefined reference a long way from the
+# cause, which is exactly how this was met -- a hand-rolled sanitized build
+# reusing a directory whose objects had been compiled with different
+# `-fsanitize=` arguments, and a link error naming a moc file.
+#
+# `?=` on both so a caller naming BUILD_DIR still wins.
+ifdef SANITIZE
+BUILD_DIR ?= build-san
+else
 BUILD_DIR ?= build-make
+endif
 SRC        = ../src
 CXX       ?= g++
 JOBS      ?= 2
@@ -78,6 +91,31 @@ CXXFLAGS += -std=gnu++17 -fPIC -Wall -Wextra -I$(SRC) -I. -I$(BUILD_DIR) \
              $(QT_CFLAGS) $(OPT_CFLAGS) $(OPT_DEFS)
 LDFLAGS  += -Wl,--as-needed
 LDLIBS   += $(QT_LIBS) $(OPT_LIBS)
+
+# The sanitizers, mirroring the switch the application build already has in the
+# root Makefile. Appended after the block above so a caller's `CXXFLAGS=` from
+# the environment is still honoured, and on the LINK line as well as the
+# compile -- forgetting that half is what produces an undefined `__asan_init`.
+#
+# `-fno-omit-frame-pointer` is not decoration: without it an ASan report names
+# the failing frame and little above it, and what makes such a report useful is
+# the chain from the frame back to the caller that supplied the pointer.
+#
+# **`-fno-sanitize=vptr`, and it is not caution.** UBSan's dynamic-type check
+# emits a reference to a class's typeinfo at every polymorphic cast, and this
+# tree's per-binary link sets are a closure computed over the symbols the
+# ordinary build needs (`tool/objsets.py`). A class whose typeinfo nothing else
+# in that closure requires is then simply absent, and the link fails with
+# `undefined reference to typeinfo for consent_blocker` -- measured, on
+# test_settings, while the plain build of the same suite links. The choice is
+# between dropping the check and widening every object set to satisfy it; the
+# rest of UBSan -- the integer, bounds and alignment checks -- costs nothing and
+# stays.
+ifdef SANITIZE
+CXXFLAGS += -fsanitize=address,undefined -fno-sanitize=vptr \
+            -fno-omit-frame-pointer
+LDFLAGS  += -fsanitize=address,undefined -fno-sanitize=vptr
+endif
 
 # --- the app, compiled once ------------------------------------------------
 #

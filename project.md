@@ -27932,11 +27932,69 @@ Three of three. With the lock restored, three clean runs, 4000 rules, about
 1300 concurrent reads. That is the fix demonstrated rather than argued, and
 the frames name the mechanism the header now describes.
 
-The probe is a scratch file rather than a tree one, because **`test/Makefile`
-has no sanitizer mode** -- `SANITIZE=1` reaches the application build only, so
-no suite in this project can be run under ASan by any target. That is a real
-gap and a separate piece of work; it is why the proof lives in a commit message
-and a comment instead of in a check.
+The probe was a scratch file rather than a tree one, because **`test/Makefile`
+had no sanitizer mode** -- `SANITIZE=1` reached the application build only, so
+no suite in this project could be run under ASan by any target. That is closed
+now, below, and the same defect is the worked example that proves it.
+
+### And the suites can be run under the sanitizers now
+
+`make test-sanitize`, or `make test-sanitize T=test_settings` for one. It
+mirrors the switch the application build already had rather than inventing a
+convention, and three details in it were paid for by getting them wrong first:
+
+- **Its own build directory, `test/build-san`.** Sanitized and plain objects
+  cannot be linked together -- the plain ones carry no `__asan_*` or
+  `__ubsan_*` symbols -- and the failure arrives as an undefined reference
+  naming a moc
+  file, a long way from the cause. Met while hand-rolling the probe above,
+  reusing one directory across two different `-fsanitize=` argument sets.
+- **`-fno-sanitize=vptr`.** UBSan's dynamic-type check emits a typeinfo
+  reference at every polymorphic cast, and this tree's per-binary link sets are
+  a closure computed over the symbols the *ordinary* build needs
+  (`tool/objsets.py`). A class whose typeinfo nothing else in that closure
+  requires is simply absent: `undefined reference to typeinfo for
+  consent_blocker`, linking `test_settings`, while the plain build of the same
+  suite links. The choice was between dropping that one check and widening
+  every object set to satisfy it. The rest of UBSan -- integer, bounds,
+  alignment -- costs nothing and stays.
+- **The sanitizer options are appended inside the sub-make, not passed to it.**
+  Overriding `TEST_ENV` from outside froze `TMPDIR` at the plain build's temp
+  tree, which would have had a sanitized run and an ordinary one sharing one
+  scratch directory -- a fault this project paid for separately the same day.
+
+`TEST_BUILD` also names the suites' build directory once. `test` was building
+into a literal `build-make/` and running out of `$(TESTS_DIR)`, which are the
+same directory said two ways, and two ways is one too many as soon as something
+wants to move it.
+
+**The target was seen to fail, which is the only reason to claim anything for
+it.** Pointed at the deliberately unlocked `policy_engine`:
+
+    ERROR: AddressSanitizer: heap-use-after-free ... READ of size 8 thread T7
+      #3 policy_engine::match_pattern(...)              policy_engine.cpp:145
+      #4 policy_engine::effective_setting_unlocked(...)                 :194
+      #5 operator()                                 test_settings.cpp:1959
+    rc=2
+
+and with the lock restored, `rc=0`, zero sanitizer reports, 285 passed. That is
+the same defect the scratch probe found, now found by a target anybody can run.
+
+**The trap that cost two runs is worth more than the target.** `make` rebuilds
+on timestamps, not on flags, so changing the `-fsanitize=` arguments
+invalidates nothing: the `-fno-sanitize=vptr` fix appeared not to work,
+reporting the identical link error, because `settings_dialog.o` was still the
+object compiled
+a run earlier. Clearing `test/build-san` is what a flag change needs -- and it
+is a second argument for the separate directory, since that clearing must not
+take the plain build with it.
+
+**Two limits, stated rather than discovered later.** `detect_leaks=0`,
+because Qt and Chromium hold allocations at exit by design and their reports
+would bury a use-after-free; turning it on is one word and is worth its own
+pass, one suite at a time. And a sanitized suite runs at roughly the factor
+ASan costs, so the whole sweep is a long job rather than a quick one, which is
+why this is a separate target and not a flag on the default.
 
 ### Adding the lock introduced a deadlock, and the check for it is mechanical
 

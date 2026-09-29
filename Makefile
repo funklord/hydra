@@ -129,7 +129,13 @@ JOBS ?= 2
 
 TARGET     = hydra
 BUILD_DIR  ?= build
-TESTS_DIR  ?= test/build-make
+# The suites' build directory, named once because `test` both builds into it
+# and runs out of it, and `test-sanitize` moves both together. It used to be
+# the literal `build-make/` in the build step and `$(TESTS_DIR)` in the run
+# step, which are the same directory said two ways -- and two ways is one too
+# many the moment anything wants to move it.
+TEST_BUILD ?= build-make
+TESTS_DIR  ?= test/$(TEST_BUILD)
 TREE       ?= sample-tree.txt
 
 PREFIX ?= $(HOME)/.local
@@ -278,6 +284,15 @@ HYDRA_TEST_LIVE_VIEWS ?= 2
 TEST_ENV = HYDRA_MAX_LIVE_VIEWS=$(HYDRA_TEST_LIVE_VIEWS) QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test \
            QTWEBENGINE_CHROMIUM_FLAGS=--mute-audio \
            TMPDIR=$(CURDIR)/$(TEST_TMP)
+# Appended here rather than passed by `test-sanitize`, so that everything in
+# TEST_ENV is expanded in the sub-make that knows TEST_BUILD. Overriding it from
+# outside froze TMPDIR at the plain build's directory, which is how a sanitized
+# run would have shared its scratch with an ordinary one -- two suites in one
+# temp tree being a fault this project has already paid for once today.
+ifdef SANITIZE
+TEST_ENV += ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:print_stacktrace=1 \
+            UBSAN_OPTIONS=print_stacktrace=1
+endif
 
 # Where a failing suite's whole output is kept. This target used to print the
 # tail line and the first five FAIL lines and throw the rest away, which is fine
@@ -287,7 +302,7 @@ TEST_ENV = HYDRA_MAX_LIVE_VIEWS=$(HYDRA_TEST_LIVE_VIEWS) QT_QPA_PLATFORM=offscre
 # after a source change and never reproducible afterwards, with nothing kept.
 FAILED_DIR = $(TESTS_DIR)/failed
 
-.PHONY: all run test test-one drivers sweep replay deb deb-check version-check android android-build android-aab install uninstall clean veryclean distclean help style style-docs style-source check hooks jni seam \
+.PHONY: all run test test-one test-sanitize drivers sweep replay deb deb-check version-check android android-build android-aab install uninstall clean veryclean distclean help style style-docs style-source check hooks jni seam \
         resources manifest deps desktop doc policy cli-check
 
 # Always delegates, never compares timestamps itself. The first version made
@@ -392,7 +407,7 @@ test:
 		exit 1; \
 	 fi
 	@for t in $(SUITES); do $(MAKE) --no-print-directory -C test -j$(JOBS) \
-	   build-make/$$t >/dev/null || exit 1; done
+	   $(TEST_BUILD)/$$t >/dev/null || exit 1; done
 	@mkdir -p $(TEST_TMP)
 	@install -d -m 700 $(TEST_RUNTIME)
 	@fail=0; for t in $(SUITES); do \
@@ -413,10 +428,35 @@ test:
 
 test-one:
 	@test -n "$(T)" || { echo "usage: make test-one T=test_theme"; exit 2; }
-	@$(MAKE) --no-print-directory -C test -j$(JOBS) build-make/$(T)
+	@$(MAKE) --no-print-directory -C test -j$(JOBS) $(TEST_BUILD)/$(T)
 	@mkdir -p $(TEST_TMP)
 	@install -d -m 700 $(TEST_RUNTIME)
 	@$(TEST_ENV) ./$(TESTS_DIR)/$(T)
+
+# **The suites under ASan and UBSan**, which until now no target could do:
+# `SANITIZE=1` reached the application build only, so a defect this class of
+# tool is built to find had to be demonstrated with a hand-rolled probe outside
+# the tree. See project.md, where the rule-set race is the worked example.
+#
+#   make test-sanitize            every offline suite
+#   make test-sanitize T=test_x   one of them
+#
+# It builds into `test/build-san` and runs out of it, because sanitized and
+# plain objects cannot be linked together -- `test/Makefile` says why at the
+# switch itself. Nothing is shared with `build-make`, so the two can coexist
+# and neither invalidates the other.
+#
+# **`detect_leaks=0`, deliberately and not forever.** Qt and Chromium hold
+# allocations at exit by design, and a leak report from them buries the two
+# things this is for -- a use-after-free and an overflow. Turning it on is one
+# word here and is worth doing as its own pass, against one suite at a time.
+#
+# The suites get slower by roughly the factor ASan costs, so `test` running
+# them all is a long job rather than a quick one; that is the reason this is a
+# separate target and not a flag on the default.
+test-sanitize:
+	@$(MAKE) --no-print-directory SANITIZE=1 TEST_BUILD=build-san \
+	   $(if $(T),test-one T=$(T),test)
 
 # Separate from `test` because it is a different order of cost: each driver
 # compiles the whole app and links WebEngine, and they want a real display.
