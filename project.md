@@ -28996,3 +28996,42 @@ refusals where a manifest would otherwise yield a *wrong* segment list rather
 than none. `best_video` and `best_audio` are two calls because DASH hands the
 streams out separately and assembling only the video is how a silent file gets
 produced by something that looks like it worked.
+
+### And it has no caller, which is half a feature
+
+`hls::parse` has exactly one consumer in the tree -- `hls_assembler` -- so the
+honest parallel for `dash::parse` is a DASH assembler, and until there is one
+**this parser is correct code that nothing runs.** That is this project's own
+distinction between a correct function and a working feature, and it is worth
+saying here rather than leaving the commit to read as finished.
+
+What the next increment costs, because the shape is a decision rather than a
+transcription:
+
+`hls_assembler` is not a thin wrapper around a segment list. It carries three
+retry attempts per segment at 400 ms, a run counter so a timer pending from a
+previous press cannot drive the next run, master-to-media redirect hops, byte
+ranges, and a growing-file contract that makes a live stream locally seekable.
+Every one of those is general over *any* ordered list of segment URLs, and a
+DASH representation is exactly that plus an initialisation segment.
+
+So the two shapes are:
+
+- **A parallel `dash_assembler`**, mirroring the file. Lower risk to a working
+  class, and it duplicates about two hundred lines of retry, run-guard and
+  append logic that would then have two places to be wrong.
+- **Extract the fetch-and-append engine** and let both feed it a list. Better
+  engineering, and it is a refactor of code that works and was paid for in
+  incidents -- the run counter and the per-segment retries each exist because
+  something went wrong once.
+
+**And DASH has a second question HLS does not.** A DASH manifest hands out
+video and audio separately, so one assembled representation is a silent file.
+Finishing the job means either two files and a mux, which changes
+`media_remux::arguments` from one input to two, or assembling only the video
+and calling it done -- which is the failure `best_audio` exists to make
+visible.
+
+Neither is picked here. A refactor of a working class and an interface change
+to the remux are not decisions to make in passing at the end of the piece of
+work that revealed them.
