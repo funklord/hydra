@@ -29035,3 +29035,62 @@ visible.
 Neither is picked here. A refactor of a working class and an interface change
 to the remux are not decisions to make in passing at the end of the piece of
 work that revealed them.
+
+## A scheme handler nothing owned, and a guarantee credited to the wrong thing
+
+Swept for comments citing another file's behaviour -- the shape that produced
+two stale citations earlier the same day -- and `qtwebengine_factory`'s
+destructor was the one that looked wrong:
+
+    // **Ours now, so we delete it** -- it used to be Qt's default profile,
+    // which must not be deleted. Reaching here means the window and every
+    // page went first, which `main()`'s declaration order guarantees.
+
+### The guard written for it was wrong, and measuring is what stopped it
+
+A destructor that deletes a shared profile on the strength of two locals'
+declaration order twenty-two lines apart, with nothing checking, reads as a
+use-after-free waiting for somebody to tidy `main()`. So a guard was written:
+count the views the factory made, held weakly, and on finding survivors **leak
+the profile with a loud warning** rather than delete it under live pages -- a
+leak at process teardown costing nothing against a crash on exit costing a
+day.
+
+Then the premise was measured and the guard thrown away. **`main_window`'s
+constructor takes the factory by pointer**, so a window cannot be declared
+before one; all 31 call sites in the tree are locals in that shape, and locals
+are destroyed in reverse order. The ordering is enforced by the language, not
+by a convention anybody could reverse.
+
+The comment is corrected rather than guarded, and in the direction nobody
+expects: what it credits is weaker than what actually holds. What *would*
+break it is a factory on the heap deleted early, or one whose scope is
+narrower than a view it made, and no caller does either.
+
+**Worth keeping as the method rather than the result.** The guard would have
+defended a case that cannot occur, and its comment overstated the danger to
+justify itself -- which is the wrong-justification class this file has three
+other entries about, committed here two hours after the last of them. Writing
+the guard is what forced the measurement that killed it; reading the comment
+harder would not have.
+
+### What the sweep did find: one object nothing owned
+
+`m_scheme_handler` is `new`ed with no parent and installed with
+`installUrlSchemeHandler`, which **does not take ownership** -- it watches the
+handler's `destroyed` and forgets it then. So nothing ever deleted it: one
+object per factory, for the life of the process.
+
+Small, and not only a leak. Its `on_url` lambda captures `this`, so once the
+factory is gone the handler is an object with a dangling capture --
+unreachable only because the profile that dispatches to it dies in the same
+destructor, two statements later. That is a coincidence of ordering standing
+in for ownership, which is the same shape as the paragraph above.
+
+It is deleted before the profile now, so the profile is still there to notice
+through `destroyed`. Verified by the one instrument available: no offline
+suite can construct a `QWebEngineProfile`, so the check is a live driver, and
+`try_adblock_fix` tears down **two** factories in one run -- 7 passed, 0
+failed, no crash at either teardown. That is weaker than a unit test and it is
+what exists.
+

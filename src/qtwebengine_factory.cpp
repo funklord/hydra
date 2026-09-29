@@ -431,9 +431,32 @@ qtwebengine_factory::~qtwebengine_factory() {
 		m_profile->cookieStore()->setCookieFilter(nullptr);
 	}
 	delete m_interceptor;
+
+	// **The scheme handler was leaked, and it held a pointer to this.**
+	// `installUrlSchemeHandler` does not take ownership -- it watches the
+	// handler's `destroyed` and forgets it then -- so nothing deleted this and
+	// one object per factory stayed for the life of the process. Harmless on
+	// its own; less so because its `on_url` captures `this`, so after the
+	// factory goes the handler is an object with a dangling capture that
+	// nothing can reach only because the profile that dispatched to it is
+	// about to go too. Deleting it here removes both, and it goes before the
+	// profile so the profile is still there to notice.
+	delete m_scheme_handler;
+	m_scheme_handler = nullptr;
+
 	// **Ours now, so we delete it** -- it used to be Qt's default profile,
-	// which must not be deleted. Reaching here means the window and every page
-	// went first, which `main()`'s declaration order guarantees.
+	// which must not be deleted. It is only safe once every page using it has
+	// gone, and what makes that true is not the order two locals happen to be
+	// declared in: `main_window`'s constructor takes the factory, so a window
+	// cannot be declared before one. All 31 call sites in the tree are locals
+	// in that shape, and locals are destroyed in reverse order, so the window
+	// goes first by construction rather than by convention.
+	//
+	// The comment here used to credit `main()`'s declaration order, which reads
+	// as something a person could reverse and get wrong. They cannot, while the
+	// constructor takes a pointer. What would break it is a factory allocated
+	// on the heap and deleted early, or one whose scope is narrower than a view
+	// it made -- and no caller does either.
 	delete m_profile;
 	m_profile = nullptr;
 }
