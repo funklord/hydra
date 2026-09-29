@@ -9,13 +9,16 @@
 # differ, because a link set describing a tree that has moved on fails
 # as an undefined symbol a long way from the file somebody added.
 #
-# Which fmake answered, because it cannot be asked afterwards: every
-# build of it reports the same version, so an installed copy and the
-# tree it came from are indistinguishable, and the difference between
-# two of them here was 23 targets quietly missing. If this file is
-# wrong, start with whether this is the fmake you meant.
+# Which fmake answered. Every build prints `fmake 1.0`, so the version
+# alone tells two of them apart from nothing -- the build identity in
+# parentheses after it does, and that is what is recorded here. The
+# difference between two copies was once 23 targets quietly missing,
+# and a stale install has since cost an hour a second time, so
+# `tool/objsets.py` refuses to run when this identity is not the one
+# it is about to use. `FMAKE` names a different binary;
+# `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (mtime 2026-09-21 23:05)
+#     /home/claude/src/fmake/fmake  (build c45bf146, mtime 2026-09-29 21:25)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -27,6 +30,7 @@ OBJSETS_SOURCES = \
 	test/test_bundle.cpp \
 	test/test_credstore.cpp \
 	test/test_crypto.cpp \
+	test/test_dash.cpp \
 	test/test_diff.cpp \
 	test/test_dlheaders.cpp \
 	test/test_empty_state.cpp \
@@ -187,6 +191,9 @@ OBJS_test_credstore = \
 OBJS_test_crypto = \
 	$(BUILD_DIR)/app/box_crypto.o
 
+OBJS_test_dash = \
+	$(BUILD_DIR)/app/dash_manifest.o
+
 OBJS_test_diff = \
 	$(BUILD_DIR)/app/tree_diff.o
 
@@ -339,12 +346,12 @@ OBJS_test_probe_ui = \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
+	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/app/settings_dialog.o \
 	$(BUILD_DIR)/app/download_manager.o \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
-	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
