@@ -109,6 +109,17 @@ enum class setting : quint8 { unset = 0, allow = 1, block = 2, ask = 3 };
 
 inline int feature_count() { return static_cast<int>(feature::count); }
 
+// **Two bits each into a quint64 is a ceiling of 32, and the 33rd would be
+// undefined behaviour rather than a wrong answer.** `get_setting` shifts by
+// `2 * int(f)`, and a shift of 64 or more on a 64-bit value is UB in C++ --
+// so the feature after the ceiling would not merely collide, it would be
+// whatever the compiler felt like that day. There are 20 today and the count
+// has grown twice; this is the guard that turns the next ten into a compile
+// error instead of a silent one.
+static_assert(2 * static_cast<int>(feature::count) <= 64,
+               "a 2-bit-per-feature quint64 holds 32 features; widen the "
+               "packing before adding another");
+
 // Stable machine name (JSON keys).
 const char *feature_name(feature f);
 // Human label (UI).

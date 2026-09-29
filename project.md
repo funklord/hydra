@@ -28164,3 +28164,63 @@ before converting -- *"a silent conversion here would be the page choosing what
 the shell believes"* -- which is this fix's rule, written down before the bug
 it describes was found elsewhere. Everything else the sweep found is
 `QVariant` role data inside the program.
+
+## A format number written by every save and read by nobody
+
+`policy.ini` and `site-rules.ini` both open with
+
+    [hydra]
+    format=1
+    kind=policy
+
+and `format` was **written by `save()` and read nowhere**. `kind` is checked;
+the number is not. Meanwhile `save()` calls `clear()` -- deliberately, so that
+a rule the user deleted stops existing -- and the two facts together are the
+defect: a file from a **newer build** was read for the parts this build
+understands and then rewritten *without the rest*, on the first change made
+anywhere.
+
+Measured, by reverting the guard under the new end-to-end test: an 88-byte
+policy file carrying `example.com=javascript:block, somethingNew:block` came
+back **413 bytes**, a full default policy written over it, with
+`somethingNew` gone. That is the same destruction `keep_or_disown` was written
+for -- which measured 31 bytes becoming 406 -- reached by a file that is not
+damaged in any way.
+
+**The remedy was already in the tree, one store over.** `settings_bundle`
+refuses an unmarked file and refuses a newer format, naming both numbers, and
+says why in its own comment: "any INI would otherwise be accepted and silently
+apply nothing, which looks identical to a successful import of an empty
+backup". The two stores that hold the rules themselves did not do it.
+
+They do now, and the refusal is a `false` from `load` rather than a message,
+because that is what makes it safe instead of merely loud: the caller hands it
+to `keep_or_disown`, which gives up the path, tells the person *"the site
+settings could not be read. Nothing will be saved to it this session, so what
+is in it is still there"*, and leaves the file exactly as it was. Asserted end
+to end -- window built, shown, closed -- and the file comes back byte-identical
+with the unknown rule in it.
+
+**A missing number means 1 rather than "refuse", and that is the one judgement
+here.** The format exists so the file can be read and repaired by hand, and
+`hydra/kind` is what says the file is ours; somebody editing it should not have
+to know about a version marker. The bundle refuses an unmarked file because it
+imports a file the user picked from anywhere, which is a different question.
+
+### Two things found beside it
+
+**The packing has a ceiling of 32 features and the 33rd would be undefined
+behaviour**, not a wrong answer: `get_setting` shifts by `2 * int(f)`, and a
+shift of 64 or more on a 64-bit value is UB. There are 20 today and the count
+has grown twice. That is a `static_assert` now -- a compile error instead of a
+silent one, which is the trade this tree already makes elsewhere.
+
+**And the warning-clean build had drifted by exactly two.** Touching `policy.h`
+forced a rebuild wide enough to show them, and neither was mine:
+`consent_blocker::report_dismissed` ignores its `what` parameter -- deliberately,
+as the comment under it explains, since the list that held the banner text is
+gone -- and `site_rules` calls `QRegularExpression::match` for its timing alone,
+which is `nodiscard`. Both are marked rather than left, and a full rebuild of
+`src/` after them reports **no warnings at all**. A warning nobody reads is
+what stops the next one being visible, which is this project's own stated
+reason for having them on.

@@ -805,6 +805,54 @@ int main(int argc, char **argv) {
 		      "with both rules, which is what the damaged one would have "
 		      "silently halved");
 
+		// **A file from a newer build, which used to be read and then
+		// truncated.** `hydra/format` was written by `save()` and read by
+		// nobody, and `save()` calls `clear()` -- so a policy file carrying
+		// rules for a feature this build does not have was read for the parts
+		// it understood and rewritten without the rest, on the first change
+		// made anywhere. `settings_bundle` has refused a newer format all
+		// along; these two stores did not.
+		const QString newer = dir + "/newer.ini";
+		{
+			QFile f(newer);
+			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			f.write("[hydra]\nformat=99\nkind=policy\n\n"
+			         "[sites]\nexample.com=javascript:block\n");
+		}
+		policy_engine future;
+		check(!future.load(newer),
+		      "a policy file from a newer build is refused rather than read in "
+		      "part");
+
+		// Two controls. The same file at this build's format loads, so the
+		// refusal is about the number and not about the file; and a file with
+		// no format at all still loads, because the file is meant to be
+		// readable and repairable by hand and `hydra/kind` is what says it is
+		// ours.
+		const QString same = dir + "/same.ini";
+		{
+			QFile f(same);
+			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			f.write("[hydra]\nformat=1\nkind=policy\n\n"
+			         "[sites]\nexample.com=javascript:block\n");
+		}
+		policy_engine present;
+		check(present.load(same) &&
+		          present.setting_for("example.com", policy::feature::javascript) ==
+		            policy::setting::block,
+		      "the same file at this build's format loads, with its rule");
+		const QString unmarked = dir + "/unmarked.ini";
+		{
+			QFile f(unmarked);
+			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			f.write("[hydra]\nkind=policy\n\n"
+			         "[sites]\nexample.com=javascript:block\n");
+		}
+		policy_engine handwritten;
+		check(handwritten.load(unmarked),
+		      "and one with no format line at all is still read, since a person "
+		      "editing it should not have to know about the marker");
+
 		QDir(dir).removeRecursively();
 	}
 

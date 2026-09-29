@@ -236,6 +236,11 @@ void policy_engine::set_setting(const QString &pattern, feature f, setting s) {
 	emit changed();
 }
 
+// The on-disk format this build writes and is willing to read. One place,
+// because a number written in one function and compared in another is two
+// numbers as soon as one of them moves.
+static constexpr int k_format = 1;
+
 bool policy_engine::load_json(const QString &path) {
 	QFile file(path);
 	if (!file.open(QIODevice::ReadOnly))
@@ -300,6 +305,30 @@ bool policy_engine::load(const QString &path) {
 		f.allKeys();
 		const QString kind = f.value("hydra/kind").toString();
 		if (f.status() == QSettings::NoError && kind == "policy") {
+			// **The format number was written and read by nobody, and `save()`
+			// calls `clear()`.** So a file from a newer build was read for the
+			// parts this one understands and then rewritten *without the rest*
+			// -- every per-site rule for a feature this build does not have,
+			// deleted, on the first change made anywhere. `settings_bundle`
+			// already refuses a newer format and names both numbers; this is
+			// that discipline in the store that holds the rules themselves.
+			//
+			// A missing number means 1, not "refuse": the file is meant to be
+			// readable and repairable by hand, `hydra/kind` is what says it is
+			// ours, and somebody editing it should not have to know about a
+			// version marker.
+			//
+			// Returning false is what makes this safe rather than merely loud:
+			// the caller hands it to `keep_or_disown`, which gives up the path
+			// and says so, leaving the file exactly as it was.
+			const int format = f.value("hydra/format", k_format).toInt();
+			if (format > k_format) {
+				qCritical("policy: %s is format %d and this build reads %d; "
+				           "refusing to read it, because saving would rewrite it "
+				           "without the parts it does not understand",
+				           qPrintable(path), format, k_format);
+				return false;
+			}
 			m_rules.clear();
 			f.beginGroup("defaults");
 			for (const QString &key : f.allKeys()) {
@@ -356,7 +385,7 @@ bool policy_engine::save(const QString &path) const {
 	// cached object describing a file that was not there.
 	QSettings f(path, QSettings::IniFormat);
 	f.clear();
-	f.setValue("hydra/format", 1);
+	f.setValue("hydra/format", k_format);
 	f.setValue("hydra/kind", "policy");
 
 	f.beginGroup("defaults");

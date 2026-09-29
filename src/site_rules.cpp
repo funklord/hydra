@@ -164,7 +164,10 @@ QString site_rules::why_unsafe(const site_rule &r) {
 		const QString bait = QString('a').repeated(40) + QChar('!');
 		QElapsedTimer clock;
 		clock.start();
-		re.match(bait);
+		// The result is not the point -- this is timed, not inspected -- and
+		// `QRegularExpression::match` is `nodiscard`. Cast rather than left, so
+		// the build's own warnings stay a signal.
+		(void)re.match(bait);
 		const qint64 ms = clock.elapsed();
 		if (ms > k_pattern_budget_ms)
 			return QString("takes %1 ms to decide one label, which would stop "
@@ -281,6 +284,11 @@ site_rules site_rules::from_json(const QJsonObject &o) {
 	return r;
 }
 
+// The on-disk format this build writes and is willing to read. One place, for
+// the reason `policy_engine` has one: a number written in one function and
+// compared in another is two numbers as soon as one of them moves.
+static constexpr int k_format = 1;
+
 bool site_rules::load_json(const QString &path) {
 	QFile f(path);
 	if (!f.open(QIODevice::ReadOnly))
@@ -316,6 +324,22 @@ bool site_rules::load(const QString &path) {
 		f.allKeys();
 		const QString kind = f.value("hydra/kind").toString();
 		if (f.status() == QSettings::NoError && kind == "siteRules") {
+			// **Written and read by nobody, while `save()` calls `clear()`.**
+			// A file from a newer build was read for the parts this one
+			// understands and rewritten without the rest -- see the same guard
+			// in `policy_engine::load`, and `settings_bundle`, which has
+			// refused a newer format all along. A missing number means 1: the
+			// file is meant to be readable by hand and `hydra/kind` is what
+			// says it is ours. False is what the caller's `keep_or_disown`
+			// needs to give up the path and leave the file alone.
+			const int format = f.value("hydra/format", k_format).toInt();
+			if (format > k_format) {
+				qCritical("consent rules: %s is format %d and this build reads "
+				           "%d; refusing to read it, because saving would "
+				           "rewrite it without the parts it does not "
+				           "understand", qPrintable(path), format, k_format);
+				return false;
+			}
 			// Built-ins are not in the file and must not be dropped by reading
 			// one: start from the defaults and add what was stored, exactly as
 			// the JSON path does through from_json.
@@ -368,7 +392,7 @@ bool site_rules::save(const QString &path) const {
 	// cached object describing a file that is not there.
 	QSettings f(path, QSettings::IniFormat);
 	f.clear();
-	f.setValue("hydra/format", 1);
+	f.setValue("hydra/format", k_format);
 	f.setValue("hydra/kind", "siteRules");
 
 	f.beginWriteArray("rules");

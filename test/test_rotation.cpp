@@ -2510,6 +2510,64 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	// **The same guard, reached by a file that is not damaged at all.** The
+	// section above feeds the stores garbage; this one feeds them a perfectly
+	// well-formed policy file from a *newer build*, which is the case
+	// `hydra/format` exists for and which nothing read. Read in part and then
+	// rewritten by `save()`'s `clear()`, it would lose every rule for a feature
+	// this build does not have -- so the refusal has to reach the same
+	// `keep_or_disown` and leave the file alone.
+	section("a policy file from a newer build is left alone, not truncated");
+	{
+		const QString dir = QDir::temp().filePath("hydra-rotation-newer");
+		QDir(dir).removeRecursively();
+		QDir().mkpath(dir);
+		const QString tree = dir + "/tree.txt";
+		{
+			QFile f(tree);
+			f.open(QIODevice::WriteOnly | QIODevice::Text);
+			f.write("- [t1] unopened_tab | A tab | https://example.com/\n");
+		}
+		const QByteArray body =
+		  "[hydra]\nformat=99\nkind=policy\n\n"
+		  "[sites]\nexample.com=javascript:block, somethingNew:block\n";
+		const QString pol = dir + "/policy.ini";
+		{
+			QFile f(pol);
+			f.open(QIODevice::WriteOnly);
+			f.write(body);
+		}
+
+		{
+			main_window w(&factory, &policy, &filter);
+			check(w.load_tree(tree), "the tree loads, so the window is usable");
+			check(w.m_policy_path.isEmpty(),
+			       QString("and the policy path is given up rather than kept "
+			                "(%1)")
+			         .arg(w.m_policy_path.isEmpty() ? QString("given up")
+			                                        : w.m_policy_path));
+			check(w.m_status &&
+			          w.m_status->currentMessage().contains("could not be read"),
+			       QString("with the window saying so (%1)")
+			         .arg(w.m_status ? w.m_status->currentMessage() : QString()));
+			w.show();
+			spin(150);
+			w.close();
+			spin(150);
+		}
+
+		QFile after(pol);
+		after.open(QIODevice::ReadOnly);
+		const QByteArray now = after.readAll();
+		check(now == body,
+		       QString("the file is exactly as it was, including the rule this "
+		                "build cannot represent (%1 bytes, was %2)")
+		         .arg(now.size()).arg(body.size()));
+		check(now.contains("somethingNew"),
+		       "and the unknown feature's rule is still in it");
+		QDir(dir).removeRecursively();
+	}
+
 	// **The fixture the section above said was missing.** That one asserted
 	// `site-rules.ini` was unchanged after a window closed, and the sabotage
 	// showed the assertion could not fail: nothing writes the consent rules on

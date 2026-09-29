@@ -670,6 +670,40 @@ int main(int argc, char **argv) {
 			check(after.value("hydra/kind").toString() == "siteRules",
 			       "and the file is still this store's own");
 		}
+
+		// **And a file from a newer build, which `clear()` makes dangerous.**
+		// The stray-key check above is the good half of `clear()`: it drops
+		// what an older shape left behind. The other half is that it drops
+		// what a *newer* shape put there deliberately -- and `hydra/format`
+		// was written by `save()` and read by nobody, so a file carrying rules
+		// this build cannot represent was read in part and rewritten without
+		// the rest. `settings_bundle` has refused a newer format all along;
+		// this store did not.
+		{
+			const QString future = dir + "/future.ini";
+			{
+				QSettings f(future, QSettings::IniFormat);
+				f.setValue("hydra/format", 99);
+				f.setValue("hydra/kind", "siteRules");
+				f.sync();
+			}
+			site_rules newer;
+			check(!newer.load(future),
+			       "a consent-rules file from a newer build is refused");
+
+			// The control: the same file at this build's format is read, so the
+			// refusal is about the number rather than about the file.
+			const QString same = dir + "/same.ini";
+			{
+				QSettings f(same, QSettings::IniFormat);
+				f.setValue("hydra/format", 1);
+				f.setValue("hydra/kind", "siteRules");
+				f.sync();
+			}
+			site_rules present;
+			check(present.load(same),
+			       "and the same file at this build's format is read");
+		}
 		QDir(dir).removeRecursively();
 	}
 

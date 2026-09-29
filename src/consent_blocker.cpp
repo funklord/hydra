@@ -344,6 +344,13 @@ site_rule consent_blocker::rule_from_label(const QString &label,
 }
 
 void consent_blocker::report_dismissed(const QString &what, const QString &choice) {
+	// **`what` is deliberately unused**, and the parameter stays because the
+	// injected script calls this with both arguments. See the note below: the
+	// list that held the banner text is gone, and nothing else ever read it.
+	// Marked rather than left, so the build's own warning stays the signal it
+	// is meant to be.
+	Q_UNUSED(what);
+
 	// The host is the shell's, never the page's. A frame cannot get a
 	// relaxation applied to a site it does not speak for.
 	const QString host = m_host;
