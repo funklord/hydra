@@ -56,7 +56,28 @@
 // whether the factory is a local in `main()` or a member built in
 // `shell::fixture`'s member-initialiser list, where no statement of the
 // driver's own could be sequenced ahead of it.
+//
+// **And where its scratch lands, for the same reason and a second incident.**
+// Every driver reads `HYDRA_TEST_OUT` and falls back to a fixed
+// `/tmp/hydra-test`, which belongs to whichever account created it first.
+// Measured on this machine: that directory is another user's, mode 0775, so a
+// second account cannot write in it -- and `try_consent` answered by exiting 1
+// **before printing anything at all**, because the two failure paths in its
+// setup are bare `return 1`s. Thirty-three drivers share that default, so the
+// whole live sweep was unrunnable from this account with nothing to read about
+// why.
+//
+// `sweep.sh` fixed exactly this shape for its own log directory and recorded it
+// as "the second time this exact shape has cost something here". It is the
+// third: the drivers' scratch kept the fixed name. Set per-uid here rather than
+// in thirty-three `main()`s, which is the same argument this file already makes
+// about the profile -- and it works through the environment variable they all
+// already read, so no driver has to be edited to be covered.
+#include <QDir>
 #include <QStandardPaths>
+
+#include <cstdio>
+#include <unistd.h>
 
 namespace {
 
@@ -64,7 +85,24 @@ namespace {
 // type with a non-trivial constructor is not something -Wunused-variable
 // complains about, and the intent reads at the point of definition.
 struct test_paths {
-	test_paths() { QStandardPaths::setTestModeEnabled(true); }
+	test_paths() {
+		QStandardPaths::setTestModeEnabled(true);
+
+		// An explicit choice is left alone; the sweep sets one of its own.
+		if (qEnvironmentVariableIsSet("HYDRA_TEST_OUT"))
+			return;
+		const QString mine =
+		  QStringLiteral("/tmp/hydra-test-%1").arg(::getuid());
+		// **Said, not assumed.** A driver that cannot write its scratch is the
+		// failure this is about, and a silent one is what made it expensive:
+		// if the per-uid path cannot be made either, the driver is about to
+		// fail for that reason and this is the only place that knows it.
+		if (!QDir().mkpath(mine))
+			std::fprintf(stderr, "live: cannot create %s, so this driver has "
+			                      "nowhere to write and will fail\n",
+			              qUtf8Printable(mine));
+		qputenv("HYDRA_TEST_OUT", mine.toUtf8());
+	}
 };
 
 const test_paths g_test_paths;

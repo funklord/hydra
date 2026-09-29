@@ -374,7 +374,12 @@ clicking the actual buttons. There is no synthetic input available here (no
 shipping path.
 
 Set `HYDRA_TEST_OUT` to choose where screenshots and captures land; it defaults
-to `/tmp/hydra-test/`.
+to `/tmp/hydra-test-<uid>/`, which `live/live_paths.cpp` creates before `main()`
+runs. **Per-uid because the fixed name was not:** on a machine where two
+accounts work in this tree, `/tmp/hydra-test` belongs to whichever got there
+first, and the second one cannot write in it — which made thirty-three drivers
+exit 1 before printing anything, since their setup's failure paths are bare
+`return 1`s. `sweep.sh` had already fixed the same shape for its own logs.
 
 **Their browsing profile is not yours.** `live/live_paths.cpp` is linked into
 every driver by `test/Makefile` and puts `QStandardPaths` into test mode before

@@ -122,6 +122,26 @@ public slots:
 	// host it applies to is the one the shell set.
 	void report_dismissed(const QString &what, const QString &choice);
 
+	// **The same report, relayed from a subframe, and it does NOT relax
+	// cookies.** A frame cannot hold a bridge, so the top frame's script passes
+	// a child's dismissal on through `window.postMessage` -- and a message event
+	// names no sender this side can trust: any frame on the page, or the page's
+	// own script, can send one. Measured with `try_consent`'s `/impostor` page:
+	// a page with no banner at all posted that message and had `cookies: allow`
+	// written for its site, over a block the person had set.
+	//
+	// So the relayed path records the dismissal and stops there. **That is
+	// more correct rather than merely safer**: the relaxation exists so a
+	// consent *cookie* can be stored, and a banner answered inside a
+	// cross-origin frame records its choice in that frame's own cookie, which
+	// is third-party from the page and deliberately still blocked. Relaxing the
+	// top site's first-party cookies never made a framed answer stick.
+	//
+	// A dismissal the top frame performed itself still arrives through
+	// `report_dismissed`, and that is the one case the page cannot fake: the
+	// script lives in an isolated world the page cannot reach.
+	void report_dismissed_in_frame(const QString &what, const QString &choice);
+
 	// A banner that *was* found and could not be answered: consent-shaped, on
 	// screen, and not one button in it matched anything we know. `labels` is
 	// what it offered, tab-separated.

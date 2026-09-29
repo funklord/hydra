@@ -28246,3 +28246,71 @@ true. Four sabotages, and they separate: dropping the tab's `locked=1` write
 fails only the tab's check, dropping the folder's fails only the folder's, so
 the two writes are covered independently rather than by one assertion that
 happens to cover both.
+
+## A page could lift its own cookie block by posting one message
+
+The consent blocker answers cookie banners, and to make an answer stick it
+writes a per-site rule allowing **first-party** cookies -- a consent choice is
+recorded in a cookie, so without that the banner returns on the next load. That
+trade is deliberate, documented, visible in the shield and undoable.
+
+What was not deliberate is who can trigger it.
+
+A subframe cannot hold a bridge -- Qt puts the QWebChannel transport in the main
+frame alone -- so a CMP shipped as an iframe reports through the top frame: the
+child posts `__hydra_consent_did` and the top frame's script passes it to C++.
+The listener is in `ApplicationWorld`, which the page cannot read or rewrite,
+and the file's comment says what that protects: a child "cannot talk it into
+acting on a page where the user turned this off, and cannot report on behalf of
+a site it is not on". Both true. **What it does not say is that a `message`
+event names no sender at all.**
+
+**Measured, with a real engine.** `try_consent` gained an `/impostor` page: no
+banner, nothing consent-shaped, nothing clickable, and a main-world script that
+posts the relay's message to its own window. With `cookies: block` set for the
+host a moment before:
+
+    page posted: 1   cookies now allowed: 1
+
+So a `message` event *does* cross from the page's own world into the isolated
+one, and a site the person had blocked cookies for had that block lifted by
+asking. Any third-party iframe on the page can do the same, since the relay
+exists for frames.
+
+### The fix is narrower than a guard, and it is more correct
+
+A relayed dismissal now arrives through `report_dismissed_in_frame`, which
+records the answer and changes no policy; a dismissal the top frame performed
+itself still goes to `report_dismissed` and still relaxes. That is the one path
+a page cannot fake, because the script performing it lives in a world the page
+cannot reach.
+
+**And the relayed relaxation never did what it was for.** The relaxation exists
+so a consent *cookie* can be stored. A banner answered inside a cross-origin
+frame records its choice in **that frame's** cookie, which is third-party from
+the page and deliberately still blocked -- so lifting the top site's
+first-party block never made a framed answer stick. The case that could be
+abused was the case that did not work.
+
+The driver is the control, run in the right order: before the split it read
+`cookies now allowed: 1` with two checks red, and after it reads `0` with 48 of
+48 passing -- including the framed cases, so the relay still does its own job.
+
+### And the whole live sweep was unrunnable from this account, silently
+
+Finding the above needed `try_consent` to run, and it exited **1 with no output
+at all**. Every driver takes its scratch directory from `HYDRA_TEST_OUT` and
+falls back to a fixed `/tmp/hydra-test` -- which on this machine belongs to
+another account, mode 0775. Thirty-three drivers share that default, and the two
+failure paths in a driver's setup are bare `return 1`s, so the answer to "why
+did the sweep report nothing" was nowhere.
+
+`sweep.sh` fixed exactly this shape for its own log directory and wrote down
+that it was "the second time this exact shape has cost something here". This is
+the third. The default is per-uid now -- `/tmp/hydra-test-<uid>` -- decided in
+`live/live_paths.cpp`, which is the translation unit already linked into every
+driver for the same kind of reason, and set through the environment variable
+they all already read, so no driver needed editing to be covered. It says so
+when it cannot create the directory, which is the half that was missing.
+
+`test/README.md` said the old path; it says the new one and why.

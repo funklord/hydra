@@ -147,6 +147,34 @@ static const char *k_framed_foreign = R"HTML(
 <p>article text</p>
 <iframe src="__OTHER__/foreign-inner" width="700" height="200"></iframe>)HTML";
 
+// **No banner at all, and a main-world script posting the relay's message.**
+// The relay exists because a subframe cannot hold a bridge, so the top frame
+// takes `__hydra_consent_did` from a child and passes it to C++ -- and
+// `report_dismissed` writes a per-site rule allowing first-party cookies, so
+// that the answer can be recorded. The question this page asks is whether a
+// page can send that message itself: the injected script and the bridge live in
+// `ApplicationWorld`, which the page cannot read or rewrite, but a `message`
+// event is dispatched on the window and may be delivered to listeners in every
+// world.
+//
+// If it can, a site the user has blocked cookies for gets them allowed by
+// asking, with no banner anywhere. Either answer is worth having, and only a
+// real engine can give one.
+static const char *k_impostor = R"HTML(
+<p>no banner, nothing consent-shaped, nothing clicked</p>
+<script>
+var shout = function () {
+  try {
+    window.postMessage({ __hydra_consent_did:
+      { label: 'Accept all', as: 'accept' } }, '*');
+  } catch (e) {}
+  fetch('/clicked?what=' + encodeURIComponent('posted'));
+};
+shout();
+setTimeout(shout, 400);
+setTimeout(shout, 1200);
+</script>)HTML";
+
 class origin : public QTcpServer {
 public:
 	QHash<QString, QString> clicked;    // path -> label
@@ -190,6 +218,7 @@ public:
 				else if (target.startsWith("/framed-foreign"))
 					inner = k_framed_foreign;
 				else if (target.startsWith("/framed"))     inner = k_framed;
+				else if (target.startsWith("/impostor"))   inner = k_impostor;
 				QByteArray page_inner(inner);
 				page_inner.replace("__OTHER__",
 				                    "http://127.0.0.2:" + QByteArray::number(port));
@@ -659,6 +688,44 @@ int main(int argc, char *argv[]) {
 	       QString("with its labels intact through the relay (%1 field(s): %2)")
 	         .arg(framed_fields.size()).arg(framed_fields.join(" / ")));
 
+
+	// **Can a page relax its own cookies by sending the relay's message?**
+	// `report_dismissed` writes `cookies: allow` for the site, and the relay
+	// takes that instruction from a `postMessage` whose sender it cannot
+	// identify -- any frame, or the page's own script. The bridge itself is in
+	// `ApplicationWorld` and out of the page's reach; whether a `message` event
+	// crosses from the main world into that one is a question about this
+	// engine, not about this code, so it is measured here rather than reasoned
+	// about.
+	std::printf("\n== a page with no banner, posting the relay's message ==\n");
+	policy.set_setting("127.0.0.1", policy::feature::cookie_notices,
+	                    policy::setting::block);   // banner-answering back on
+	policy.set_setting("127.0.0.1", policy::feature::cookies,
+	                    policy::setting::block);
+	check(!policy.is_allowed(policy::feature::cookies, "127.0.0.1"),
+	       "cookies start blocked again");
+	load("/impostor", 8000);
+	const bool posted = !clicked_on("/impostor").isEmpty();
+	const bool relaxed = policy.is_allowed(policy::feature::cookies, "127.0.0.1");
+	std::printf("  page posted: %d   cookies now allowed: %d\n",
+	             int(posted), int(relaxed));
+	check(posted,
+	       "the page's own script ran, so the question was actually asked");
+	// **The message does cross worlds, measured.** Before the relay was split
+	// into its own bridge method this read `cookies now allowed: 1` -- a page
+	// with no banner had its own first-party block lifted by asking. So the
+	// listener does receive what the page's main-world script posts, and the
+	// guard cannot be "the page cannot reach this": it has to be that the
+	// relayed path changes no policy.
+	check(!relaxed,
+	       relaxed
+	         ? "A PAGE RELAXED ITS OWN COOKIES by posting the relay's message, "
+	           "with no banner anywhere"
+	         : "a relayed dismissal records the answer and changes no rule, so "
+	           "posting the message gains a page nothing");
+	check(policy.setting_for("127.0.0.1", policy::feature::cookies) ==
+	          policy::setting::block,
+	       "and the rule the person set is still the rule");
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

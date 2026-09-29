@@ -193,9 +193,15 @@ const char *k_script = R"JS(
       return;
     }
     if (TOP && e.data.__hydra_consent_did && bridge) {
+      // **A different method from the one this frame's own click uses**, and
+      // the difference is that this one changes no policy. A message event
+      // names no sender the shell can trust -- any frame, or the page's own
+      // script in the world it does control -- and the version that relaxed
+      // first-party cookies from here let a page with no banner ask for its
+      // block to be lifted. Measured; see `report_dismissed_in_frame`.
       var d = e.data.__hydra_consent_did;
-      bridge.report_dismissed(String(d.label || '').slice(0, 60),
-                               String(d.as || '').slice(0, 20));
+      bridge.report_dismissed_in_frame(String(d.label || '').slice(0, 60),
+                                        String(d.as || '').slice(0, 20));
       return;
     }
     if (TOP && e.data.__hydra_consent_none && bridge) {
@@ -341,6 +347,18 @@ site_rule consent_blocker::rule_from_label(const QString &label,
 	// built-in set.
 	r.note = "learned from a banner that could not be answered";
 	return r;
+}
+
+void consent_blocker::report_dismissed_in_frame(const QString &what,
+                                                 const QString &choice) {
+	// A child frame's dismissal, relayed by the top frame. Recorded, and no
+	// policy change -- see the header for why that is the correct half rather
+	// than the cautious one.
+	Q_UNUSED(what);
+	const QString host = m_host;
+	if (host.isEmpty() || !active_for(host))
+		return;
+	emit acted(host, choice.left(20));
 }
 
 void consent_blocker::report_dismissed(const QString &what, const QString &choice) {
