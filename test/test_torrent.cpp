@@ -645,9 +645,38 @@ int main(int argc, char **argv) {
 	check(torrent_download_source::available(),
 	      "built with libtorrent support");
 
-	g_tmp = QDir::temp().filePath("hydra-torrent-test");
+	// **Per-process, and checked, for the reason `test_settings` records.** This
+	// was `hydra-torrent-test`, a fixed name in a shared /tmp, and on a machine
+	// where two accounts build this tree the second account cannot remove or
+	// write in the first's directory -- `/tmp` is sticky, so `removeRecursively`
+	// fails, `mkpath` is a no-op on a path that already exists, and every write
+	// afterwards fails with nothing reading the status. It arrives as failures
+	// in the code under test rather than as a word about the directory.
+	//
+	// Met while running this suite by hand to check a claim in the architecture
+	// document, which is the way it is met: `make test-one` sets `TMPDIR` into
+	// the tree and the wrapper therefore guards only the way somebody did not
+	// run it.
+	g_tmp = QDir::temp().filePath(
+	  QString("hydra-torrent-test-%1").arg(QCoreApplication::applicationPid()));
 	QDir(g_tmp).removeRecursively();
-	QDir().mkpath(g_tmp);
+	if (!QDir().mkpath(g_tmp)) {
+		std::fprintf(stderr, "cannot create %s -- refusing to run\n",
+		              qPrintable(g_tmp));
+		return 2;
+	}
+	{
+		// mkpath succeeding is not being able to write, and the original failure
+		// was a write rather than a create.
+		QFile probe(QDir(g_tmp).filePath(".writable"));
+		if (!probe.open(QIODevice::WriteOnly)) {
+			std::fprintf(stderr, "cannot write in %s (%s) -- refusing to run\n",
+			              qPrintable(g_tmp), qPrintable(probe.errorString()));
+			return 2;
+		}
+		probe.close();
+		QFile::remove(probe.fileName());
+	}
 
 	test_consent_with_real_source();
 	test_single_file_download();
@@ -655,6 +684,14 @@ int main(int argc, char **argv) {
 	test_magnet_and_errors();
 	test_resume_data();
 	test_listen_refused();
+
+	// **Counted, not merely attempted**, and this suite used not to remove its
+	// tree at all: six swarms' worth of seeded data and resume state stayed in
+	// /tmp after every run. A cleanup whose failure is invisible is how a green
+	// suite fills a disk, so the removal's result is a check like any other.
+	const bool swept = QDir(g_tmp).removeRecursively();
+	check(swept && !QDir(g_tmp).exists(),
+	      QString("the scratch tree is gone afterwards (%1)").arg(g_tmp));
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

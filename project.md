@@ -30162,3 +30162,46 @@ writes records the badge will not show, and they stay in the map until the next
 policy change. That is the person's own request being honoured, and it is also a
 per-site record for a site they had switched off -- which of those it should be
 is a decision rather than a defect.
+
+## A heading said not implemented above a status line saying implemented
+
+`### 11.4 BitTorrent downloads (scope decided; not implemented)` was the
+architecture document's heading, and the sentence directly beneath it read
+**Status: implemented on desktop**, naming `torrent_download_source`, magnet
+links, multi-file jobs, resume keyed by info-hash, seeding with a ratio policy
+and an end-to-end run against a real swarm. A reader skimming headings -- which
+is what headings are for -- concluded the opposite of the paragraph they sit on.
+
+Checked rather than taken from the status line, since one sentence agreeing with
+another sentence is one witness: 935 lines in `src/torrent_download_source.cpp`,
+54 checks in a suite of its own, the README advertising it as a feature, and the
+suite run today at **56 passed, 0 failed**. The parenthetical is gone; the
+status line below carries the status, as it does for every other section.
+
+Swept for the same claim elsewhere and there is none: the phrase exists in no
+other document, no header and no source comment.
+
+### And running that suite by hand was blocked by the fourteen
+
+`test_torrent` wrote to `/tmp/hydra-torrent-test`, a fixed name in a shared
+directory, and this machine has one of those owned by the other account -- so
+the suite could not be run by hand to witness the claim. `make test-one` sets
+`TMPDIR` into the tree and works, which is exactly the shape recorded above: **a
+wrapper guards only the way somebody did not run it**, and running one suite
+directly is what checking one claim looks like.
+
+So it gets the same three parts `test_settings` got -- a per-process name, a
+create-and-write guard that exits 2 rather than reporting failures in the code
+under test, and a removal asserted as a check. It also **never removed its tree
+at all**: six swarms' worth of seeded data, torrents and resume state stayed in
+/tmp after every run, and nothing said so because a green suite and a filling
+disk look identical from outside.
+
+Proved both ways, by hand with no `TMPDIR`: 56 passed, 0 failed with nothing
+left in /tmp, and `TMPDIR` pointing at a mode-500 directory prints
+`cannot create ... -- refusing to run` and exits 2.
+
+**Two of the fourteen closed, both because they bit somebody.** That is the rule
+this is following rather than an argument for sweeping the other twelve: the
+ones that bite are the ones worth the change, and the record above says how to
+recognise the next.
