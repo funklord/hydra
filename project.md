@@ -29441,6 +29441,23 @@ The guard refused the run before it was accepted deliberately. Third firing,
 second that nobody arranged -- same path, different build, both printing
 `fmake 1.0`.
 
+**And the status this all rests on was confirmed rather than assumed.** fmake
+reported fixing `--explain` and `--compile-commands`, both of which had been
+exiting 0 over a compile error. Neither has a consumer here: this tree calls
+`--eject make-fragment` and `--version` and nothing else, checked by grep
+across `tool/`, both Makefiles and the workflow. So the fault never reached
+hydra -- which is consistent with the QDBusVariant failure having surfaced as
+*"fmake --eject failed"* instead of passing silently, and that is the single
+thing that made the whole misdiagnosis recoverable.
+
+The dependency runs the other way too and is worth stating where a future
+reader will meet it: **`--eject`'s exit status is load-bearing.**
+`tool/objsets.py` has exactly one guard on it, and everything downstream --
+including the identity comparison -- assumes a non-zero status from a tree that
+did not compile. The identity guard cannot cover that gap, because it compares
+*which* fmake ran and not whether it succeeded. Signalled to fmake as a fact
+about one of their consumers rather than as a request.
+
 ### A claim of mine that its own evidence contradicted
 
 Reporting an orphaned fixture process to fmake, this tree also asserted that
