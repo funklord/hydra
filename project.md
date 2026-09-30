@@ -29719,3 +29719,70 @@ live driver. Offline covers the wiring from `page_context` to the factory, and
 `test_headers` covers the proxy replaying whatever the field holds. **The
 middle link is the one with no check**, which is where a reader should look
 first if cookies stop arriving.
+
+## The shield's escape hatch reached the interceptor and not the page
+
+`request_filter::decide` skips the whole imported filter list for a site whose
+`ads` setting is `allow`, and says why in the code:
+
+> turning ads back on for a site the shield says is broken has to turn *all*
+> of this off, or the escape hatch only half works and the page still fails
+> for a reason the user was told they had disabled.
+
+**`cosmetic_filters` had never heard of the policy.** Zero mentions of it in
+either file; `feature::ads` was consulted in `request_filter.cpp` and in
+`main_window.cpp`'s anti-adblock handler and nowhere else. So allowing ads on
+a site stopped the requests and went on hiding the elements -- the exact
+half-working escape its sibling's comment forbids, with the worse ending:
+somebody who allowed ads *to un-break a page* got a page still broken, by us,
+after turning off the thing they were told was breaking it.
+
+The rule was written down in one half of a pair and obeyed by that half only,
+which is why reading `request_filter` found nothing wrong. It is the shape
+already recorded twice in this file -- a correct function that nothing calls
+-- with the call site being a check rather than a function.
+
+### Found by asking which injections consult the policy, not by a symptom
+
+The sweep was over the eight `DocumentCreation` scripts, asking of each
+whether the per-site switch reaches it. `consent_blocker`'s injected script
+asks `bridge.active_now()` before acting, with a retry for the
+host-not-yet-known race; `media_detector` gates on `feature::media_detect` at
+`media_detector.cpp:78`. `cosmetic_filters` was the one that asked nothing.
+
+**A lens derived from the last defect rather than a category list**: the
+previous find was a value with two consumers where only one was wired, and
+"one rule, two enforcement points" is that shape one level up.
+
+### The policy is optional, and that is what keeps the old tests honest
+
+`selectors_for` takes a `const policy_engine *` defaulting to null, meaning
+"no per-site opinion -- filter everything the list covers". The six existing
+cosmetic checks pass no policy and are unchanged, and the new section asserts
+the null case explicitly so that is a decision rather than an accident of
+their call sites.
+
+`main_window` passes `m_policy`. Nothing else needed wiring:
+`on_policy_changed` already reloads the current view, and reloading is what
+makes the change visible -- the stylesheet is written at load and nothing
+removes it afterwards, which the removal path two thousand lines up had
+already worked out and said.
+
+### The assertion is the agreement, not either verdict
+
+    with no rule        blocks: yes   hides: yes
+    ads = allow         blocks: no    hides: no
+    subdomain, exact    blocks: yes   hides: yes    <- the test was wrong here
+    subdomain, *.host   blocks: no    hides: no
+
+The third row is the model correcting the test. An exact-host pattern does not
+cover subdomains -- `match_pattern` does that only for `*.domain.tld` -- so
+the check written as "a subdomain of the allowed site is allowed as well"
+failed, and deserved to. What replaced it asks both halves about the subdomain
+and asserts they say the same thing, which is true whichever way the model
+goes; and the fourth row is what shows the cosmetic half goes through the
+policy's own matching rather than comparing strings.
+
+Sabotaged by deleting the guard: three checks red, all of them in the new
+section, including the agreement one. The subdomain row stays green under
+sabotage, which is correct -- it is the row where nothing was allowed.

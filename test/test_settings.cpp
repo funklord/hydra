@@ -1195,6 +1195,86 @@ int main(int argc, char **argv) {
 		      "a cosmetic rule with no site is applied to no site");
 	}
 
+	// **The escape hatch, which reached the interceptor and not here.**
+	// `request_filter::decide` skips the whole imported list for a site whose
+	// `ads` setting is `allow`, because a half-working escape leaves the page
+	// failing for a reason the person was told they had turned off. Cosmetic
+	// rules are the other half of that list and were not skipped, so allowing
+	// ads to un-break a page left its elements hidden by us.
+	section("cosmetic rules: allowing ads for a site stops hiding too");
+	{
+		// Both halves of one list, because that is what the check is about: a
+		// network rule for the requests and a cosmetic rule for the elements.
+		filter_list list;
+		auto rule = [&](const char *text) {
+			filter_rule r;
+			filter_list::parse_rule(QString::fromLatin1(text), &r);
+			list.add(r);
+		};
+		rule("||cdn.news.example^");
+		rule("news.example##.ad-banner");
+
+		policy_engine pol;
+		request_filter f(&pol);
+		f.set_filter_list(&list);
+		request_context ctx;
+		ctx.site_host    = "news.example";
+		ctx.request_host = "cdn.news.example";
+		ctx.url          = QUrl("https://cdn.news.example/ad-banner.png");
+
+		// **The relationship, not either value.** What is asserted is that the
+		// two halves of one list answer the same switch -- so this fails if
+		// either side stops honouring it, and it cannot pass by both sides
+		// happening to be off. It also fails against the code before the fix,
+		// where the network half moved and the cosmetic half did not.
+		const bool blocked_before = f.decide(ctx).block;
+		const bool hidden_before =
+		  !cosmetic_filters::selectors_for(&list, "news.example", &pol).isEmpty();
+		check(blocked_before && hidden_before,
+		      "with no per-site rule, the list both blocks and hides");
+
+		pol.set_setting("news.example", policy::feature::ads,
+		                 policy::setting::allow);
+		const bool blocked_after = f.decide(ctx).block;
+		const bool hidden_after =
+		  !cosmetic_filters::selectors_for(&list, "news.example", &pol).isEmpty();
+		check(!blocked_after && !hidden_after,
+		      "and allowing ads for the site stops both, not just the requests");
+		check(blocked_before == hidden_before && blocked_after == hidden_after,
+		      "the two halves of one list never disagree about one site");
+
+		// The null policy is still the old behaviour, which is what the checks
+		// above this section rely on -- said here so that is a decision rather
+		// than an accident of their call sites.
+		check(!cosmetic_filters::selectors_for(&list, "news.example").isEmpty(),
+		      "no policy means no per-site opinion, so everything is filtered");
+
+		// **An exact-host allowance does not reach a subdomain**, and this check
+		// was written the other way round and failed, which is the model
+		// correcting the test: `match_pattern` covers subdomains only for a
+		// `*.domain.tld` pattern. What matters is that the cosmetic half agrees
+		// with the network half about that too, rather than inventing its own
+		// host comparison -- so both are asked, and the assertion is that they
+		// say the same thing.
+		request_context sub = ctx;
+		sub.site_host    = "sport.news.example";
+		sub.request_host = "cdn.news.example";
+		check(f.decide(sub).block &&
+		        !cosmetic_filters::selectors_for(&list, "sport.news.example", &pol)
+		             .isEmpty(),
+		      "an exact-host allowance reaches neither half on a subdomain");
+
+		// And a wildcard pattern reaches both, which is what shows the cosmetic
+		// half goes through the policy's own matching rather than comparing
+		// strings: a host that is not spelled like the pattern is still allowed.
+		pol.set_setting("*.news.example", policy::feature::ads,
+		                 policy::setting::allow);
+		check(!f.decide(sub).block &&
+		        cosmetic_filters::selectors_for(&list, "sport.news.example", &pol)
+		            .isEmpty(),
+		      "and a *.news.example allowance reaches both");
+	}
+
 	// What a system player is told the stream is. Android's ACTION_VIEW needs a
 	// media type or the chooser offers every app that claims http -- which means
 	// a browser, and handing the stream to a browser is a loop back to here.

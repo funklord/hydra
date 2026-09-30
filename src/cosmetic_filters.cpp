@@ -1,4 +1,6 @@
 #include "cosmetic_filters.h"
+
+#include "policy_engine.h"
 #include "filter_list.h"
 
 #include <QJsonArray>
@@ -13,13 +15,23 @@ void cosmetic_filters::set_page_host(const QString &host) {
 
 QString cosmetic_filters::debug_state() const {
 	return QStringLiteral("host=%1 selectors=%2")
-	    .arg(m_host, selectors_for(m_list, m_host).join(','));
+	    .arg(m_host, selectors_for(m_list, m_host, m_policy).join(','));
 }
 
 QStringList cosmetic_filters::selectors_for(const filter_list *list,
-                                             const QString &host) {
+                                             const QString &host,
+                                             const policy_engine *policy) {
 	QStringList out;
 	if (!list || host.isEmpty())
+		return out;
+	// **The shield's escape hatch, honoured here as it is in the interceptor.**
+	// `request_filter::decide` skips the whole imported list for a site whose
+	// `ads` setting is `allow`, on the stated grounds that a half-working escape
+	// leaves the page failing for a reason the person was told they had turned
+	// off. Cosmetic rules are the other half of that list and were not skipped,
+	// so they went on hiding elements after somebody allowed ads to un-break a
+	// page. Same check, same feature, same reason.
+	if (policy && policy->is_allowed(policy::feature::ads, host))
 		return out;
 	for (const filter_rule &r : list->rules()) {
 		if (!r.cosmetic)
@@ -54,7 +66,7 @@ QStringList cosmetic_filters::selectors_for(const filter_list *list,
 
 QString cosmetic_filters::selectors_json() const {
 	QJsonArray arr;
-	for (const QString &s : selectors_for(m_list, m_host))
+	for (const QString &s : selectors_for(m_list, m_host, m_policy))
 		arr.append(s);
 	return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
 }

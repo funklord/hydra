@@ -3735,11 +3735,21 @@ void main_window::open_node(node *n, bool load_now) {
 		// depended on what happened to be in front when it loaded.
 		//
 		// Parented to the view, so it goes when the view does, and given the
-		// host from this view's own navigation below. `consent_blocker` has
-		// the same shape and the same fault; it is wired into the window
-		// more widely and is recorded in project.md rather than changed
-		// here.
-		auto *cosmetic = new cosmetic_filters(m_filters, view);
+		// host from this view's own navigation below.
+		//
+		// **`consent_blocker` had the same fault and no longer does**, which
+		// this comment went on asserting. It was true when written and false a
+		// few hours later: the next commit gave each view its own blocker and
+		// kept `m_consent` as the window aggregator -- which is the code twenty
+		// lines above. A comment saying a bug is outstanding sends the next
+		// reader hunting one that is gone, and points them at a project.md entry
+		// that was updated in the same commit that falsified this.
+		//
+		// **The policy**, so the shield's "allow ads here" reaches the cosmetic
+		// half as well as the interceptor. `on_policy_changed` reloads the
+		// current view, which is what makes the change visible: a stylesheet
+		// is written at load and nothing removes it afterwards.
+		auto *cosmetic = new cosmetic_filters(m_filters, m_policy, view);
 		cosmetic->set_page_host(QUrl::fromUserInput(n->url).host());
 		view->set_script_bridge(cosmetic, cosmetic_filters::bridge_name());
 		view->inject_script("hydra-cosmetic", cosmetic_filters::script_source());

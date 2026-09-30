@@ -5,6 +5,7 @@
 #include <QStringList>
 
 class filter_list;
+class policy_engine;
 
 // The cosmetic half of the filter-evolution loop (architecture doc sec 12).
 //
@@ -26,8 +27,21 @@ class filter_list;
 class cosmetic_filters : public QObject {
 	Q_OBJECT
 public:
-	explicit cosmetic_filters(const filter_list *list, QObject *parent = nullptr)
-	    : QObject(parent), m_list(list) {}
+	// **The policy, because the shield's escape hatch has to reach here too.**
+	// `request_filter` states the rule this class was breaking: "turning ads
+	// back on for a site the shield says is broken has to turn *all* of this
+	// off, or the escape hatch only half works and the page still fails for a
+	// reason the user was told they had disabled." Network rules stopped for
+	// such a site and cosmetic ones kept hiding elements, so somebody who
+	// allowed ads to un-break a page got a page that was still broken -- by us,
+	// after they had turned off the thing that broke it.
+	//
+	// Optional, so a test or a driver can build one with no policy and get the
+	// old behaviour: with none, every host is filtered.
+	explicit cosmetic_filters(const filter_list *list,
+	                           const policy_engine *policy = nullptr,
+	                           QObject *parent = nullptr)
+	    : QObject(parent), m_list(list), m_policy(policy) {}
 
 	// The object name the injected script expects on the bridge.
 	static const char *bridge_name() { return "hydraCosmetic"; }
@@ -39,7 +53,10 @@ public:
 	// The selectors for one host, without the bridge. Shared with the tests, and
 	// with anything that wants to know what would be hidden without asking a
 	// live page.
-	static QStringList selectors_for(const filter_list *list, const QString &host);
+	// `policy` may be null, which means "no per-site opinion" and filters
+	// everything the list covers -- the behaviour before the shield reached here.
+	static QStringList selectors_for(const filter_list *list, const QString &host,
+	                                  const policy_engine *policy = nullptr);
 
 	// For HYDRA_FILTER_DEBUG only.
 	QString debug_state() const;
@@ -49,6 +66,7 @@ public slots:
 	QString selectors_json() const;
 
 private:
-	const filter_list *m_list = nullptr;
-	QString            m_host;
+	const filter_list   *m_list   = nullptr;
+	const policy_engine *m_policy = nullptr;
+	QString              m_host;
 };
