@@ -30016,3 +30016,127 @@ demanded whitespace after the number, so `## 1. Overview and scope` -- a period
 instrument before the document is what turned seventeen into five plus an RFC
 citation, and five was the real finding. `4.3.2.2` is RFC 8216's and is excluded
 by reading the words before it rather than by a number range.
+
+## The badge had two sources and the switch reached one of them
+
+The fix above stops the media detector recording for a site whose Auto-detect
+media is off, and drops what it already had. **The badge has a second source.**
+`refresh_media_affordance` shows it when `found > 0 || playing`, and `playing`
+comes from the sec 11.6 MSE tap -- which has no policy at all. So a page the tap
+had seen playing kept its badge, its "Media (playing)" label and its tooltip
+after watching was turned off for that site: the setting's own sentence, still
+only half kept, one commit later.
+
+Third instance of one rule with two enforcement points in a day. The first was
+the ads switch reaching the interceptor and not the cosmetic filters; the second
+was this setting stopping the recording and not clearing it; this is the same
+setting again, at the other recorder.
+
+### Asked in the shell, because only the shell knows the right host
+
+The tap is keyed by the hostname each reporting **frame** claims. On a page
+whose player is a third-party iframe that is not the site the setting belongs
+to, and it is a page-supplied string besides -- the header says in as many words
+that everything arriving there is a claim rather than a fact. Gating inside the
+tap would therefore consult the wrong host exactly where it matters, and consult
+a value the page chose.
+
+`refresh_media_affordance` has the first-party host of the view in front of
+somebody, which is what the setting is about. So the question is asked there,
+and the record is dropped there too -- hiding alone is the shape the detector's
+own comment refuses, because it leaves the record standing and merely declines
+to mention it.
+
+**The limit, stated rather than papered over:** a record the tap filed under an
+iframe's own hostname is not reachable from that host, so it is not dropped.
+Closing that needs the tap to know each report's first-party host, which means
+either a per-view tap (the shape `consent_blocker` moved to) or the shell
+mapping frame host to page host. Neither is this change.
+
+### The clear announces itself, and the condition on it is load-bearing
+
+`mse_tap::clear_site` did not emit `site_updated`, the same pair of defects
+`media_detector::clear_site` carried: no caller anywhere, so nothing had ever
+shown that the thing a caller would need was missing.
+
+It emits now, and **only when something was actually removed** -- which is not
+tidiness. The shell refreshes the badge on that signal, and the refresh is what
+calls `clear_site`, so an unconditional emit would call back into a second
+clear for ever. Returning when nothing was held ends it after one round.
+
+Worth saying plainly: no caller needs that emit today, because the one caller
+refreshes the badge itself. It is there so the three clearing paths agree rather
+than leaving the per-site one as the odd member, which is the state that
+produced both of these.
+
+### Connected to `changed()`, for the reason the last commit learned
+
+Not to `on_policy_changed`, which is the shield dialog's slot only -- and the
+global default for this setting lives in the settings dialog, so hanging it
+there would have left the badge up for somebody who turned watching off for
+everything. That is the mistake the previous commit made and corrected inside
+itself; this is what not repeating it looks like.
+
+Sabotaged twice, each fails the same two checks and nothing else: removing the
+gate in the renderer, and removing the connection.
+
+### The lens is not new here either
+
+Reading a setting's user-visible words against the code has already paid out in
+this tree once: *the HTTPS-only autofill switch the description already
+promised* is a section of `test_rotation`, written because `policy.cpp` had
+always said autofill was "limited to HTTPS pages unless that requirement is
+turned off" while `set_https_only`'s only caller in the whole tree was a test.
+Same lens, same shape of find, and worth knowing before anyone reports this
+round as a new idea.
+
+### And the bridge surface was swept, with nothing to report
+
+Recorded because an empty sweep is only a measurement if it says what it looked
+for. Five objects are registered as page bridges -- `hydraAutofill`,
+`hydraPicker`, the consent blocker, the cosmetic filters and the MSE tap -- and
+every page-reachable method on them was read against the question *what can a
+hostile page make this do with the arguments it chooses*:
+
+- **`autofill_controller::request_credentials(origin)`** and `offer_to_save`
+  take a page-supplied origin, and `blocked_reason` refuses unless it equals the
+  shell's own `m_origin`, so everything after that comparison is checking the
+  shell's value. The request to KeePassXC is made with `m_origin`, never the
+  argument.
+- **`element_picker::element_picked(json)`** returns immediately unless a pick
+  is armed, and the comment there records the same class of finding -- an
+  unarmed call was once processed as though somebody had clicked.
+- **`consent_blocker::report_dismissed`** takes the host from the shell and
+  relaxes first-party cookies only, and the relayed subframe variant relaxes
+  nothing at all, having been caught doing so by `try_consent`'s `/impostor`
+  page. The header's claim that the direct path cannot be faked holds: the
+  channel is exposed in the isolated world, which the page's own scripts cannot
+  reach.
+- **`mse_tap::report`** clamps every field and bounds the map per site.
+- **`cosmetic_filters::selectors_json`** answers for the host the shell set, and
+  now for the policy as well.
+
+So the next lens is not this one. What it did turn up is the finding above: the
+gap was not in what a page can *say* to a bridge, but in what the shell does
+with a record after a setting changes.
+
+### Why `add_item` is not gated, checked rather than assumed
+
+`media_detector::add_item` has no policy check, which looks like the same gap
+one layer along, and is not. Its three callers were enumerated and every one is
+a deliberate act by the person at the keyboard: `apply_extractor`, whose two
+callers are the Media dialog opening and the result of Learn This Site; the
+finished capture, which somebody started from Tools; and the yt-dlp handoff,
+which is Find Media on This Page. None runs on navigation.
+
+Auto-detect media is about **watching a site's requests**, and its own words say
+it "does not stop the page playing anything". Refusing a stream somebody went to
+the menu and asked for would be a different setting, and a surprising one. So
+the division is: `on_request` is gated because it is automatic, and `add_item`
+is not because it never is.
+
+**Left for the holder:** an explicit ask on a site whose watching is off still
+writes records the badge will not show, and they stay in the map until the next
+policy change. That is the person's own request being honoured, and it is also a
+per-site record for a site they had switched off -- which of those it should be
+is a decision rather than a defect.

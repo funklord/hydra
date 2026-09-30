@@ -200,7 +200,20 @@ int mse_tap::clear_all() {
 }
 
 void mse_tap::clear_site(const QString &site_host) {
-	m_by_site.remove(site_host);
+	// **Conditional, and that is load-bearing rather than tidy.** The shell
+	// refreshes the badge on this signal, and the refresh is what calls this
+	// when a site's watching has been turned off -- so an unconditional emit
+	// would call back into a second `clear_site` for ever. Returning when
+	// nothing was held ends it after one round, and it also avoids repainting
+	// a badge for a site that had no record to drop.
+	if (!m_by_site.remove(site_host))
+		return;
+	// **Emitted, which this did not do.** `clear_all` below announces every site
+	// it drops, because the badge is driven by this signal and a clear that says
+	// nothing empties the record while leaving the button up. The per-site
+	// version was written without it and had no caller anywhere, so nothing had
+	// ever shown the fault -- the same pair `media_detector::clear_site` carried.
+	emit site_updated(site_host);
 }
 
 QStringList mse_tap::sites() const {

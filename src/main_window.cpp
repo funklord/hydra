@@ -572,6 +572,18 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	settings_store::load_into(m_players, m_downloads, m_torrents, nullptr, nullptr);
 	connect(m_media, &media_detector::site_updated,
 	         this, &main_window::on_media_found, Qt::QueuedConnection);
+	// **The badge follows the switch, from wherever the switch was moved.**
+	// `on_policy_changed` is connected to the shield's dialog only, and the
+	// global default for Auto-detect media lives in the settings dialog -- so
+	// hanging this off that slot would have left the badge standing for
+	// somebody who turned watching off for everything. `changed()` is emitted
+	// by every mutation the engine has, which is the one place that cannot be
+	// forgotten; the detector's own drop is connected the same way and for the
+	// same reason.
+	connect(m_policy, &policy_engine::changed, this, [this] {
+		if (web_view_backend *v = current_view())
+			refresh_media_affordance(v->url().host());
+	});
 	// The security spine is wired up before we get here: the factory owns the
 	// profile with the interceptor and cookie filter already installed on it
 	// (architecture doc sec 6/sec 7.3), and the policy engine is shared with them.
@@ -2150,6 +2162,36 @@ void main_window::refresh_media_affordance(const QString &site_host) {
 	web_view_backend *v = current_view();
 	if (!v || v->url().host() != site_host)
 		return;   // detection on a background tab; don't retitle this one
+
+	// **The MSE half of the same switch, which the detector's fix did not
+	// reach.** Auto-detect media says "turning it off empties the media badge
+	// here", and the badge has two sources: the detector's URL-shaped finds and
+	// the sec 11.6 tap. The detector refuses to record for a site whose setting
+	// is off, so `found` is already zero -- and `playing` came from the tap,
+	// which has no policy at all, so the badge went on saying "Media (playing)"
+	// for a site whose watching had been turned off.
+	//
+	// **Asked here rather than in the tap, because only here is the host
+	// right.** The tap is keyed by the hostname each reporting *frame* claims,
+	// which on a page whose player is a third-party iframe is not the site the
+	// setting belongs to -- and it is a page-supplied string besides. This
+	// function has the first-party host of the view in front of somebody, which
+	// is what the setting is about.
+	if (m_policy &&
+	    !m_policy->is_allowed(policy::feature::media_detect, site_host)) {
+		// Dropped as well as hidden. Hiding alone is the shape the detector's
+		// own comment refuses: it would leave the record standing and merely
+		// decline to mention it, which looks like privacy and is bookkeeping.
+		//
+		// Only under this name. A record filed by an iframe under its own
+		// hostname is not reachable from here, and pretending otherwise would
+		// be worse than the limit: see project.md, which says what closing that
+		// would take.
+		if (m_mse)
+			m_mse->clear_site(site_host);
+		m_media_action->setVisible(false);
+		return;
+	}
 
 	const int  found   = m_media->count_for(site_host);
 	const bool playing = m_mse && m_mse->active_for(site_host);

@@ -3856,6 +3856,65 @@ int main(int argc, char **argv) {
 		       "the badge is told, rather than being left showing a count");
 	}
 
+	// **The other half of "turning it off empties the media badge here".** The
+	// detector was fixed to drop a site's records when its watching is turned
+	// off; the badge has a second source -- the sec 11.6 tap -- which has no
+	// policy at all, so a page the tap had seen playing kept its badge.
+	section("turning auto-detect off hides a badge the MSE tap put up");
+	{
+		policy_engine  pol;
+		request_filter filt(&pol);
+		fake_factory   fac;
+		main_window w12(&fac, &pol, &filt);
+		w12.resize(900, 600);
+		w12.show();
+		spin(150);
+
+		node *n = w12.m_model->add_tab(nullptr, "tapped",
+		                                "https://tapped.example/watch");
+		emit w12.m_tree->activated(
+		  w12.m_proxy->mapFromSource(w12.m_model->index_for_node(n)));
+		spin(200);
+
+		// Nothing URL-shaped, which is the case the tap exists for: the badge
+		// can only be up because of what the page reported.
+		w12.m_mse->report("tapped.example", "video/mp4", 8192, 5, 2.0, 120.0);
+		spin(150);
+		check(w12.m_media->count_for("tapped.example") == 0,
+		       "the detector found nothing url-shaped, as this case needs");
+		check(w12.m_media_action->isVisible() &&
+		       w12.m_media_action->text() == "Media (playing)",
+		       QString("the tap alone puts the badge up (%1)")
+		         .arg(w12.m_media_action->isVisible()
+		                ? w12.m_media_action->text() : QString("hidden")));
+
+		// No explicit refresh: the window listens to the engine's `changed()`,
+		// which is what makes this work from the settings dialog as well as
+		// from the shield. `on_policy_changed` is the shield's slot only, and
+		// hanging it there would have missed the global default.
+		pol.set_setting("tapped.example", policy::feature::media_detect,
+		                 policy::setting::block);
+		spin(150);
+		check(!w12.m_media_action->isVisible(),
+		       QString("turning watching off takes the badge down (%1)")
+		         .arg(w12.m_media_action->isVisible()
+		                ? w12.m_media_action->text() : QString("hidden")));
+		// Dropped as well as hidden, which is the distinction the detector's
+		// own comment draws: hiding alone leaves the record and declines to
+		// mention it, and that looks like privacy while being bookkeeping.
+		check(w12.m_mse->streams_for("tapped.example").isEmpty(),
+		       "and the record with it, rather than merely not mentioning it");
+
+		// And it comes back when the setting does, so the drop is the setting
+		// being obeyed rather than the tap being broken.
+		pol.set_setting("tapped.example", policy::feature::media_detect,
+		                 policy::setting::allow);
+		w12.m_mse->report("tapped.example", "video/mp4", 8192, 5, 2.0, 120.0);
+		spin(150);
+		check(w12.m_media_action->isVisible(),
+		       "allowing it again lets a fresh report put the badge back");
+	}
+
 	// One controller per view now, so the setting is read where a tab opens
 	// rather than off a single window-wide object. This reaches it.
 	auto autofill_of = [&](main_window &w) -> autofill_controller * {
