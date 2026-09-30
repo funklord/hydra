@@ -26,10 +26,19 @@ class filter_signals;
 class filter_dialog : public QDialog {
 	Q_OBJECT
 public:
+	// **`ads_allowed` is whether this site's shield has ads turned back on**,
+	// and it is here because a rule accepted for such a site does nothing.
+	// `request_filter::decide` skips the whole imported list for it, and since
+	// the cosmetic half was taught the same switch the hiding stops there too --
+	// so the whole of what this dialog accepts is inert on that one site until
+	// somebody changes it back.
+	//
+	// A boolean rather than the engine: the dialog needs one fact and handing
+	// it a `policy_engine` invites it to grow opinions about policy.
 	filter_dialog(filter_signals *signals_source, filter_list *list,
 	               ai_provider *provider, const QString &site_host,
 	               const picked_element &picked = picked_element{},
-	               QWidget *parent = nullptr);
+	               bool ads_allowed = false, QWidget *parent = nullptr);
 
 	// **Cancels whatever it asked for.** The provider outlives this dialog --
 	// it belongs to the window -- and `ai_provider::finished` carries no
@@ -55,6 +64,7 @@ private:
 	ai_provider    *m_provider = nullptr;
 	QString         m_site;
 	picked_element  m_picked;
+	bool            m_ads_allowed = false;
 
 	QStackedWidget *m_pages   = nullptr;
 	QPlainTextEdit *m_payload = nullptr;
@@ -68,6 +78,11 @@ private:
 	// the page requested. A sentence that has to be read before pressing Send
 	// cannot share a widget with progress.
 	QLabel         *m_provider_note = nullptr;
+	// **Shown only when this site has ads allowed**, and separate from
+	// `m_provider_note` for the reason that note records: a sentence that has to
+	// be read before pressing a button cannot share a widget with anything that
+	// gets rewritten. These are two such sentences and they are different facts.
+	QLabel         *m_inert_note = nullptr;
 	// **The status line, which takes no room when it has nothing to say.**
 	//
 	// Splitting the provider sentence into its own label left this one empty

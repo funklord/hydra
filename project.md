@@ -30278,3 +30278,101 @@ builds. `sweep.sh`'s own note is that these drivers are intermittent in the
 aggregate and that a failure is not a finding until it repeats alone; at that
 load neither a pass nor a failure would have been worth recording. The previous
 full sweep, 2026-09-29, had every driver with a result line at 0 failed.
+
+## Accepting a filter rule for a site whose ads are allowed does nothing
+
+`request_filter::decide` skips the whole imported list for a site whose `ads`
+setting is `allow`, and the cosmetic half was taught the same switch earlier
+today. Both are right. What follows from the pair is that **everything the
+filter-evolution dialog accepts is inert on exactly the site somebody is
+looking at**, if that site has its shield relaxed -- the rule is proposed, dry
+run, accepted, written and saved, the dialog closes, and the page is unchanged.
+
+The dialog said nothing about it. That is the shape this tree has spent days
+removing: a control that works and changes nothing anybody can see.
+
+**My own change widened it.** Before the cosmetic half honoured the switch, a
+cosmetic rule accepted on such a site did hide its element, so the inertness was
+partial and the zap at least appeared to work. Making the two halves agree --
+which is what the interceptor's own comment asks for -- made the whole of the
+dialog's output inert there. Closing the gap the fix opened belongs with the
+fix, not with whoever meets it.
+
+### Said, not refused
+
+The rules are still worth accepting. They apply the moment the allowance is
+lifted, and somebody may be building a list to use later. So this is a sentence
+rather than a block:
+
+    Note: ads are allowed for news.example in the shield, so rules accepted
+    here — network and cosmetic alike — will not apply on this site until
+    that is changed back.
+
+It names the site, names both halves, and says where to change it, because "it
+will not apply" without the last part is a dead end rather than a warning.
+
+### Its own label, for the reason the label beside it already records
+
+`filter_dialog::m_provider_note` carries a paragraph about why the sentence
+naming the provider cannot share a widget with progress: the working line gets
+rewritten -- "Asking…", a probe result, a failure -- and a sentence that has to
+be read before pressing a button would be gone before anybody read it. This is
+a second such sentence and a different fact, so it gets a third label rather
+than being appended to either.
+
+Passed in as a `bool` rather than by handing the dialog the policy engine. It
+needs one fact; a `policy_engine *` invites it to grow opinions about policy,
+and the shell already has the host and the engine in the same function.
+
+### The check is the pair, which is what makes it worth having
+
+    ads blocked (ordinary)   the label exists and is hidden
+    ads allowed              the label is shown, names the site, names the
+                             cosmetic half, and points at the shield
+
+A check that only looked for the note when ads are allowed would pass for a
+dialog that shows it always -- and a warning on every site is one nobody reads,
+which is worse than silence. Both dialogs are built in the same section from one
+fixture so the only difference between them is the flag.
+
+Sabotaged in both directions, since the pair is only worth the lines if each
+half can fail:
+
+    always warn   "on an ordinary site there is nothing to read" goes red,
+                  alone
+    never warn    the two checks that read the text go red, alone
+
+Neither sabotage disturbed anything else in the suite.
+
+### And the sentence after the dialog said "applied to", which was not true
+
+`offer_confirmation` runs when the dialog closes: it puts *"N rules applied to
+<host>. If the page stops working, the toolbar can undo them."* in the status
+bar and raises the "Still working?" toolbar item. On a site whose shield allows
+ads **nothing was applied**, so the claim was false and the question was about a
+change that could not have happened.
+
+Its own first guard already makes the argument -- *"Nothing added means nothing
+to have broken, and an 'is it still working?' after a no-op is the kind of
+prompt that teaches people to ignore prompts."* Rules that cannot apply are a
+no-op with a count attached, and the guard did not cover them because nobody had
+connected the two facts.
+
+So it says what happened instead, and raises nothing:
+
+    2 rules saved. Ads are allowed for loud.example in the shield, so they
+    are not in force here and nothing on this page has changed.
+
+Checked as a pair again, one window and one call differing only in the site's
+setting: an ordinary site holds the rules and offers the confirmation, a site
+with ads allowed holds nothing and offers nothing. Reached through
+`QMetaObject::invokeMethod` because the slot is private -- which is not a
+liberty taken here: `try_confirm` drives the same slot the same way, four times,
+and that driver exists for this prompt. Called directly rather than through the
+dialog, because what is under test is the decision this function makes and not
+the dialog above it.
+
+Sabotaged: with the guard removed, "with ads allowed there is nothing to
+confirm" goes red alone, reporting `2 held, offered=1`. `try_confirm` itself is
+unaffected either way -- it uses a default engine, where `ads` is `block`, so
+the new arm is not on its path.

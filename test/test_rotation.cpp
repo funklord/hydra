@@ -3231,6 +3231,93 @@ int main(int argc, char **argv) {
 		          .arg(rules ? rules->topLevelItemCount() : -1));
 	}
 
+	// **A rule accepted for a site whose ads are allowed does nothing.** The
+	// interceptor skips the whole imported list for such a site, and the
+	// cosmetic half was taught the same switch earlier today -- so everything
+	// this dialog accepts is inert on the one page in front of somebody, and it
+	// used to say nothing about that.
+	section("the filter dialog says when what it accepts will not apply");
+	{
+		stub_ai prov;
+		filter_signals sig;
+		filter_list list;
+
+		// **Asserted as the pair, not as one state.** A check that only looks
+		// for the note when ads are allowed passes for a dialog that shows it
+		// always, which would be worse than silence: a warning on every site
+		// is one nobody reads.
+		filter_dialog quiet(&sig, &list, &prov, "site.example",
+		                     picked_element{}, false);
+		filter_dialog loud(&sig, &list, &prov, "site.example",
+		                    picked_element{}, true);
+		auto *quiet_note = quiet.findChild<QLabel *>("inert_note");
+		auto *loud_note  = loud.findChild<QLabel *>("inert_note");
+
+		check(quiet_note != nullptr && loud_note != nullptr,
+		      "both dialogs have the label, so its absence cannot pass for "
+		      "silence");
+		check(loud_note && !loud_note->isHidden() &&
+		        loud_note->text().contains("site.example") &&
+		        loud_note->text().contains("shield"),
+		      QString("with ads allowed it says so, names the site and points "
+		               "at the shield (%1)")
+		          .arg(loud_note ? loud_note->text() : QString("(no label)")));
+		check(quiet_note && quiet_note->isHidden(),
+		      "and on an ordinary site there is nothing to read");
+		check(loud_note && loud_note->text().contains("cosmetic"),
+		      "and it covers both halves of the list rather than only requests");
+	}
+
+	// **And the sentence after the dialog said "applied to", which was not
+	// true.** The status line and the "Still working?" toolbar item both follow
+	// an accept, and on a site whose shield allows ads nothing was applied --
+	// so the claim was false and the question was about a change that could not
+	// have happened. `offer_confirmation`'s own guard already makes that
+	// argument for the empty case: an "is it still working?" after a no-op is
+	// the kind of prompt that teaches people to ignore prompts.
+	section("no 'did that break anything?' for rules that cannot apply");
+	{
+		policy_engine  pol;
+		request_filter filt(&pol);
+		fake_factory   fac;
+		main_window w13(&fac, &pol, &filt);
+		const QStringList added{ "||ads.example^", "quiet.example##.ad" };
+
+		// A private slot, reached the way a driver reaches one. Called directly
+		// rather than through the whole dialog, because what is under test is
+		// the decision this function makes and not the dialog above it.
+		const bool ordinary = QMetaObject::invokeMethod(
+		  &w13, "offer_confirmation", Qt::DirectConnection,
+		  Q_ARG(QStringList, added), Q_ARG(QString, "quiet.example"));
+		check(ordinary, "the slot is reachable by name");
+		check(!w13.m_unconfirmed_rules.isEmpty() &&
+		        w13.m_unconfirmed_host == "quiet.example" &&
+		        w13.m_confirm_action && w13.m_confirm_action->isVisible(),
+		      QString("on an ordinary site the rules are held for confirmation "
+		               "and the toolbar offers it (%1 held)")
+		          .arg(w13.m_unconfirmed_rules.size()));
+
+		// The same call, differing only in the site's setting -- which is what
+		// makes this the pair rather than two separate facts.
+		pol.set_setting("loud.example", policy::feature::ads,
+		                 policy::setting::allow);
+		w13.m_unconfirmed_rules.clear();
+		w13.m_unconfirmed_host.clear();
+		if (w13.m_confirm_action)
+			w13.m_confirm_action->setVisible(false);
+		QMetaObject::invokeMethod(
+		  &w13, "offer_confirmation", Qt::DirectConnection,
+		  Q_ARG(QStringList, added), Q_ARG(QString, "loud.example"));
+		check(w13.m_unconfirmed_rules.isEmpty() &&
+		        w13.m_unconfirmed_host.isEmpty() &&
+		        w13.m_confirm_action && !w13.m_confirm_action->isVisible(),
+		      QString("and with ads allowed there is nothing to confirm (%1 "
+		               "held, offered=%2)")
+		          .arg(w13.m_unconfirmed_rules.size())
+		          .arg(w13.m_confirm_action
+		                 ? int(w13.m_confirm_action->isVisible()) : -1));
+	}
+
 	// **The proxy exists to make a fetch look like the page's**, and its own
 	// header names the three things a CDN checks: Referer, cookies and
 	// User-Agent. The shell built that context with the Referer alone -- in

@@ -2350,8 +2350,15 @@ void main_window::open_filter_evolution() {
 		for (const filter_rule &r : m_filters->rules())
 			before.insert(r.text);
 
-	filter_dialog dlg(m_signals, m_filters, chosen, v->url().host(),
-	                   m_picker->last(), this);
+	// **Whether this site's shield has ads allowed**, so the dialog can say that
+	// what it accepts will not apply here. The interceptor skips the whole list
+	// for such a site and the cosmetic half now does the same, which means every
+	// rule accepted below is inert on the one page in front of somebody.
+	const QString host = v->url().host();
+	filter_dialog dlg(m_signals, m_filters, chosen, host, m_picker->last(),
+	                   m_policy && m_policy->is_allowed(policy::feature::ads,
+	                                                     host),
+	                   this);
 	if (dlg.exec() != QDialog::Accepted)
 		return;
 	if (!m_filters_path.isEmpty())
@@ -2372,6 +2379,30 @@ void main_window::offer_confirmation(const QStringList &added,
                                       const QString &host) {
 	if (added.isEmpty() || host.isEmpty())
 		return;
+
+	// **"Applied to" was not true on a site whose shield allows ads**, and
+	// neither was the question that followed. The interceptor skips the whole
+	// imported list for such a site and the cosmetic half does the same, so the
+	// rules were saved and are not in force here -- nothing on the page changed,
+	// so nothing on the page can have broken.
+	//
+	// The comment on the guard above is the same argument: "Nothing added means
+	// nothing to have broken, and an 'is it still working?' after a no-op is the
+	// kind of prompt that teaches people to ignore prompts." Rules that cannot
+	// apply are a no-op with a count attached.
+	//
+	// Said rather than silent, because the person has just accepted rules and a
+	// browser that answers that with nothing is worse than one that explains.
+	if (m_policy && m_policy->is_allowed(policy::feature::ads, host)) {
+		m_status->showMessage(
+		    QString("%1 rule%2 saved. Ads are allowed for %3 in the shield, so "
+		             "they are not in force here and nothing on this page has "
+		             "changed.")
+		        .arg(added.size()).arg(added.size() == 1 ? "" : "s").arg(host),
+		    12000);
+		return;
+	}
+
 	m_unconfirmed_rules = added;
 	m_unconfirmed_host  = host;
 	if (m_confirm_action)

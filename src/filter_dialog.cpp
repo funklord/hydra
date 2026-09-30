@@ -31,9 +31,11 @@ const char *k_system_prompt =
 
 filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
                               ai_provider *provider, const QString &site_host,
-                              const picked_element &picked, QWidget *parent)
+                              const picked_element &picked, bool ads_allowed,
+                              QWidget *parent)
   : QDialog(parent), m_signals(signals_source), m_list(list),
-    m_provider(provider), m_site(site_host), m_picked(picked) {
+    m_provider(provider), m_site(site_host), m_picked(picked),
+    m_ads_allowed(ads_allowed) {
 	setWindowTitle("Evolve ad filters");
 	resize(820, 560);
 	build_ui();
@@ -90,6 +92,30 @@ void filter_dialog::build_ui() {
 	m_provider_note->setText(
 	  provider_note(m_provider, "Review exactly what will be sent."));
 	outer->addWidget(m_provider_note);
+
+	// **Said before anything is accepted, because acceptance would be inert.**
+	// A site whose shield has ads allowed is skipped by the interceptor for the
+	// whole imported list, and by the cosmetic half for the same switch -- so a
+	// rule accepted here is written, saved, listed, and does nothing on the one
+	// page somebody is looking at. That is exactly the shape this tree keeps
+	// removing: a control that works and changes nothing visible.
+	//
+	// Not a refusal. The rules are still worth having: they apply the moment the
+	// allowance is lifted, and somebody may be building a list for later. What
+	// is not acceptable is letting them believe it took effect now.
+	m_inert_note = new QLabel(this);
+	m_inert_note->setObjectName("inert_note");
+	m_inert_note->setWordWrap(true);
+	if (m_ads_allowed) {
+		m_inert_note->setText(
+		  QString("Note: ads are allowed for %1 in the shield, so rules "
+		           "accepted here — network and cosmetic alike — will not "
+		           "apply on this site until that is changed back.")
+		      .arg(m_site.isEmpty() ? QStringLiteral("this site") : m_site));
+		outer->addWidget(m_inert_note);
+	} else {
+		m_inert_note->hide();
+	}
 
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
