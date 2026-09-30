@@ -482,9 +482,17 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 			// the engine asks about and only had nowhere to record an answer.
 			// Both default to block, so the behaviour is what it always was.
 			//
-			// What remains below genuinely has no home. Desktop capture and
-			// the local font list are refused, and the refusal is at least
-			// visible now: the debug line is the same one the answered
+			// **Desktop capture is not among what has no home, and this said
+			// it was.** `screen_share` exists and answers it -- but through
+			// `desktopMediaRequested` below rather than here, because a yes/no
+			// cannot carry a surface and Qt splits the flow for that reason. So
+			// these arms refuse a permission type that is not the route screen
+			// sharing takes, and a reader who stopped at this comment would
+			// conclude the capability is absent when the picker and its shield
+			// question are twenty lines down.
+			//
+			// What genuinely has no home is the local font list. The refusal is
+			// at least visible: the debug line is the same one the answered
 			// permissions get, and without it "we refused" and "we granted and
 			// the engine could not deliver" looked identical from the page's
 			// side, which cost a diagnosis once already.

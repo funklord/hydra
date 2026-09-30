@@ -6198,7 +6198,25 @@ did so silently. `policy::feature` has no member for `ClipboardReadWrite`,
 `MouseLock`, `DesktopVideoCapture`, `DesktopAudioVideoCapture` or
 `LocalFontsAccess`, and none was invented -- adding one is a change to the
 enum, the INI encoding, the settings page and the shield, which is its own
-piece of work rather than something to take in passing. Each is named as its
+piece of work rather than something to take in passing.
+
+**~~None was invented~~ -- three of the five have since been, and this
+sentence outlived that.** Re-measured 2026-10-01: `clipboard_read`,
+`pointer_lock` and `screen_share` are features now, the first two answered
+in this mapping and the third through `desktopMediaRequested`, which is the
+route `getDisplayMedia` actually takes.
+
+Both desktop-capture permission *types* are still refused in the switch, and
+that is not a gap: what I checked is that `screen_share` is asked on the
+signal, not whether Qt raises the permission as well as the signal. If it
+does and the refusal arrives first, the picker would never open -- and the
+report that produced the `cancel()` work said the picker did open, which is
+the only evidence here either way. `LocalFontsAccess` is the one with
+nowhere at all to record an answer. The paragraph below is kept
+because the reasoning for *not* inventing a member in passing is unchanged
+and is why each of the three arrived as its own piece of work; what has
+changed is the count, which nothing in the ordinary course of reading brings
+back to this line. Each is named as its
 own `case`, so a new Qt member warns rather than joining the refused pile, and
 the refusal is now reported under `HYDRA_PERM_DEBUG` by the enum's *key* rather
 than its number:
@@ -13183,9 +13201,12 @@ could not have caught a fault here.
 **Not verified: that a Teams meeting connects.** Nothing here has met a real
 call. Three necessary conditions were missing and are now present; whether they
 are sufficient is a different claim and needs an account, a meeting and the
-handset. Two known risks sit beyond them and are unaffected by this work:
-screen sharing is still refused on both platforms — `DesktopVideoCapture` falls
-to the deny branch and there is no source picker — and the session-cookie policy
+handset. Two known risks sat beyond them and were unaffected by this work:
+~~screen sharing is still refused on both platforms — `DesktopVideoCapture`
+falls to the deny branch and there is no source picker~~ — **half of that is
+closed, re-measured 2026-10-01: the desktop has `screen_share` in the shield
+and `screen_picker` behind it, answering `desktopMediaRequested`; Android still
+has no answer for `getDisplayMedia` at all** — and the session-cookie policy
 recorded against Teams by name still discards the SSO cookie on exit.
 
 ## Wanted: an indicator for the AI batch jobs
