@@ -29015,7 +29015,7 @@ ranges, and a growing-file contract that makes a live stream locally seekable.
 Every one of those is general over *any* ordered list of segment URLs, and a
 DASH representation is exactly that plus an initialisation segment.
 
-So the two shapes are:
+Two shapes were considered and **a third one was found and taken**:
 
 - **A parallel `dash_assembler`**, mirroring the file. Lower risk to a working
   class, and it duplicates about two hundred lines of retry, run-guard and
@@ -29024,6 +29024,11 @@ So the two shapes are:
   engineering, and it is a refactor of code that works and was paid for in
   incidents -- the run counter and the per-segment retries each exist because
   something went wrong once.
+- **Convert, in the one handler that already parses a manifest.** The engine is
+  general over an ordered list of segment URLs *already*; nothing needed
+  extracting, because nothing needed to be shared -- a DASH representation
+  becomes that list and everything below the parse is untouched. One branch,
+  no duplication, no refactor. See the entry below.
 
 **And DASH has a second question HLS does not.** A DASH manifest hands out
 video and audio separately, so one assembled representation is a silent file.
@@ -29156,3 +29161,79 @@ The lens that paid out was the one derived from the last find rather than
 chosen in advance -- the scheme handler came from sweeping cross-file
 citations, and this came from sweeping what the scheme handler suggested.
 
+## DASH assembles through the HLS engine, and refuses a silent file
+
+The parser landed with no caller and two shapes offered for the next piece.
+Neither was needed. **The engine below the manifest parse is already general
+over an ordered list of segment URLs** -- the retries, the run guard, the
+growing-file contract -- and a DASH representation is exactly that list plus
+an initialisation segment that goes first. So `hls_assembler`'s manifest
+handler converts an MPD into the list it already walks: one branch, no second
+assembler, and no refactor of a class whose guards were each paid for by an
+incident.
+
+### The grammar is decided by the body, not the URL
+
+An `.mpd` served as `.m3u8` is a CDN's business, and plenty of manifest URLs
+carry no extension at all. HLS opens with `#EXTM3U` by specification and an
+MPD is XML, so the two are distinguishable at the first non-space byte -- and
+**anything else is refused rather than parsed as the likelier one**, for the
+reason both parsers refuse what they cannot address: a wrong grammar yields a
+wrong segment list, and a wrong segment list assembles a file that plays and
+is not the programme.
+
+### Separate audio is refused, which is the whole of what is not done
+
+A DASH manifest hands video and audio out separately and this assembles one
+list into one file. Taking the video alone produces a file that plays
+perfectly and is silent -- the failure `dash::best_audio` exists to make
+visible -- so a manifest with a separate audio stream is refused, naming the
+audio as the part that is missing.
+
+Combining them means two assembled files and a mux, which is one input more
+than `media_remux::arguments` takes. That is a deliberate interface change and
+is **not** made here. So what works today is a muxed or video-only MPD, and
+what is refused is named; both are more than "DASH assembly is not
+implemented" and neither is a silent file.
+
+### What the sabotages separate, including one that does not
+
+Two, and the second is the interesting one:
+
+    audio refusal removed    -> 2 red: it completes, and says nothing
+    grammar sniff removed    -> 4 red: every MPD is "neither grammar"
+
+Under the second, *"separate audio is refused rather than assembled"* stays
+**green** -- it is refused, just for the wrong reason -- and its companion,
+*"naming the audio as what is missing"*, is what catches that. Neither check
+discriminates alone and the pair does, which is worth recording because the
+green one would otherwise read as coverage it does not provide.
+
+### Five of the new checks failed first, on a waiting loop that did not wait
+
+`processEvents(AllEvents, 25)` returns as soon as the queue is empty, so a
+counted loop of 400 of them finished in milliseconds and every assertion below
+read a state that had not happened yet. The file already has `spin(ms)`, which
+runs a real event loop against a timer, and the sections around it use it. A
+fixture fault, failing loudly rather than passing vacuously -- which is the
+direction to be wrong in -- and the corrected loops say why `spin` and not
+`processEvents`.
+
+### And the guard from yesterday refused its author
+
+Regenerating the link sets for the new dependency was refused:
+
+    recorded:      /home/claude/src/fmake/fmake  (build c45bf146)
+    about to run:  /home/claude/src/fmake/fmake  (build 42843076)
+
+**Same path, different tool** -- fmake had been rebuilt in the meantime. That
+is the case a path comparison cannot see and an mtime comparison reports as
+noise on every rebuild while staying silent about an older second copy; only
+the identity separates the case that matters from the case that does not.
+First firing that nobody arranged, and it fired on the person who wrote it.
+
+Accepted deliberately with `OBJSETS_ACCEPT_FMAKE=1`. The result is 90 programs
+and 5260 objects, and **the entire diff is `dash_manifest.o` joining the 40
+link sets that contain `hls_assembler.o`** -- the closure working out a
+consequence nobody listed. Three builds of fmake across two days now agree on
+that closure apart from what this tree added to it.

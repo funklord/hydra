@@ -64,6 +64,8 @@ signals:
 
 private:
 	void fetch_manifest(const QUrl &url);
+	// Fills `m_playlist` from an MPD, or emits `failed` and returns false.
+	bool assemble_dash(const QByteArray &body, const QUrl &url);
 	void next_segment();
 
 	// Attempts per segment, and the step between them. Three is enough for the

@@ -148,7 +148,11 @@ public:
 			// The manifest answers at once; segments are what is paced, so
 			// that the assembly is demonstrably mid-flight and not merely
 			// slow to start.
-			const int wait = path.endsWith(".m3u8") ? 0 : k_delay_ms;
+			// A manifest answers at once whichever grammar it is in; segments
+			// are what is paced, so that an assembly is demonstrably
+			// mid-flight and not merely slow to start.
+			const int wait = (path.endsWith(".m3u8") || path.endsWith(".mpd"))
+			                   ? 0 : k_delay_ms;
 			QTimer::singleShot(wait, s, [this, s, path] {
 				if (!files.contains(path)) {
 					s->write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n"
@@ -529,6 +533,131 @@ int main(int argc, char **argv) {
 			                                : said.first().left(40)));
 			fx.close_capture(furl);
 		}
+	}
+
+	section("an MPD is assembled through the same engine, or refused by name");
+	{
+		// **The engine below the manifest is general over an ordered list of
+		// segment URLs**, and a DASH representation is exactly that plus an
+		// initialisation segment that goes first -- so DASH converts into the
+		// same list rather than getting a second assembler. These drive
+		// `hls_assembler` directly, because the manifest grammar is what is
+		// under test and `stream_assembly` adds a player and a proxy to it.
+		const QString base = QString("http://127.0.0.1:%1").arg(cdn.port);
+		cdn.files["/init.mp4"]  = QByteArray("INIT");
+		cdn.files["/s1.m4s"]    = QByteArray("ONE");
+		cdn.files["/s2.m4s"]    = QByteArray("TWO");
+		cdn.files["/one.mpd"]   =
+		  QByteArray("<?xml version=\"1.0\"?>\n"
+		              "<MPD mediaPresentationDuration=\"PT4S\"><Period>\n"
+		              "  <AdaptationSet mimeType=\"video/mp4\">\n"
+		              "    <Representation id=\"v\" bandwidth=\"1\">\n"
+		              "      <SegmentList>\n"
+		              "        <Initialization sourceURL=\"/init.mp4\"/>\n"
+		              "        <SegmentURL media=\"/s1.m4s\"/>\n"
+		              "        <SegmentURL media=\"/s2.m4s\"/>\n"
+		              "      </SegmentList>\n"
+		              "    </Representation>\n"
+		              "  </AdaptationSet></Period></MPD>\n");
+
+		QTemporaryDir odir;
+		check(odir.isValid(), "a scratch directory to assemble into");
+		const QString out = QDir(odir.path()).filePath("dash.mp4");
+
+		hls_assembler as;
+		QStringList failures;
+		bool done = false;
+		QObject::connect(&as, &hls_assembler::failed,
+		                  [&failures](const QString &m) { failures << m; });
+		QObject::connect(&as, &hls_assembler::completed,
+		                  [&done] { done = true; });
+		as.start(QUrl(base + "/one.mpd"), stream_context{}, out);
+		// **`spin` rather than `processEvents`**: the latter returns as soon as
+		// the queue is empty, so a loop of 400 of them finished in milliseconds
+		// and every check below it read a state that had not happened yet. Five
+		// of them failed that way before this line was right, which is a
+		// fixture fault failing loudly rather than a check passing vacuously.
+		for (int i = 0; i < 120 && !done && failures.isEmpty(); ++i)
+			spin(50);
+
+		check(done && failures.isEmpty(),
+		       QString("an MPD with one video stream assembles (%1)")
+		           .arg(failures.isEmpty() ? QString("completed") : failures.first()));
+		const QByteArray got = [&out] {
+			QFile f(out); f.open(QIODevice::ReadOnly); return f.readAll();
+		}();
+		check(got == QByteArray("INITONETWO"),
+		       QString("with the init segment first and the media in order "
+		                "(%1)").arg(QString::fromLatin1(got)));
+
+		// **Refused rather than assembled silently.** Video without its audio
+		// plays perfectly and says nothing, which is the one outcome worse
+		// than refusing.
+		cdn.files["/split.mpd"] =
+		  QByteArray("<?xml version=\"1.0\"?>\n"
+		              "<MPD mediaPresentationDuration=\"PT4S\"><Period>\n"
+		              "  <AdaptationSet mimeType=\"video/mp4\">\n"
+		              "    <Representation id=\"v\" bandwidth=\"1\">\n"
+		              "      <SegmentList><SegmentURL media=\"/s1.m4s\"/>"
+		              "</SegmentList>\n"
+		              "    </Representation></AdaptationSet>\n"
+		              "  <AdaptationSet mimeType=\"audio/mp4\">\n"
+		              "    <Representation id=\"a\" bandwidth=\"1\">\n"
+		              "      <SegmentList><SegmentURL media=\"/s2.m4s\"/>"
+		              "</SegmentList>\n"
+		              "    </Representation></AdaptationSet>\n"
+		              "</Period></MPD>\n");
+		hls_assembler as2;
+		QStringList f2;
+		bool done2 = false;
+		QObject::connect(&as2, &hls_assembler::failed,
+		                  [&f2](const QString &m) { f2 << m; });
+		QObject::connect(&as2, &hls_assembler::completed,
+		                  [&done2] { done2 = true; });
+		as2.start(QUrl(base + "/split.mpd"), stream_context{},
+		           QDir(odir.path()).filePath("split.mp4"));
+		for (int i = 0; i < 120 && !done2 && f2.isEmpty(); ++i)
+			spin(50);
+		check(!done2 && f2.size() == 1,
+		       QString("separate audio is refused rather than assembled (%1)")
+		           .arg(done2 ? QString("it completed") : QString("refused")));
+		check(f2.size() == 1 && f2.first().contains("audio"),
+		       QString("naming the audio as what is missing (%1)")
+		           .arg(f2.isEmpty() ? QString("nothing said") : f2.first().left(48)));
+
+		// Neither grammar: refused rather than parsed as the wrong one.
+		cdn.files["/plain.txt"] = QByteArray("this is not a manifest");
+		hls_assembler as3;
+		QStringList f3;
+		QObject::connect(&as3, &hls_assembler::failed,
+		                  [&f3](const QString &m) { f3 << m; });
+		as3.start(QUrl(base + "/plain.txt"), stream_context{},
+		           QDir(odir.path()).filePath("plain.bin"));
+		for (int i = 0; i < 120 && f3.isEmpty(); ++i)
+			spin(50);
+		check(f3.size() == 1 && f3.first().contains("neither"),
+		       QString("a body in neither grammar is refused (%1)")
+		           .arg(f3.isEmpty() ? QString("nothing said") : f3.first().left(48)));
+
+		// An MPD the parser refuses is refused here too, with its reason.
+		cdn.files["/bad.mpd"] =
+		  QByteArray("<?xml version=\"1.0\"?>\n"
+		              "<MPD><Period><AdaptationSet mimeType=\"video/mp4\">\n"
+		              "  <SegmentTemplate duration=\"2\" timescale=\"1\""
+		              " media=\"/s$Number$.m4s\"/>\n"
+		              "  <Representation id=\"v\" bandwidth=\"1\"/>\n"
+		              "</AdaptationSet></Period></MPD>\n");
+		hls_assembler as4;
+		QStringList f4;
+		QObject::connect(&as4, &hls_assembler::failed,
+		                  [&f4](const QString &m) { f4 << m; });
+		as4.start(QUrl(base + "/bad.mpd"), stream_context{},
+		           QDir(odir.path()).filePath("bad.bin"));
+		for (int i = 0; i < 120 && f4.isEmpty(); ++i)
+			spin(50);
+		check(f4.size() == 1 && f4.first().contains("MPD not understood"),
+		       QString("and an MPD the parser refuses carries its reason (%1)")
+		           .arg(f4.isEmpty() ? QString("nothing said") : f4.first().left(48)));
 	}
 
 	section("a live playlist says so when it is saved, and a whole one does not");

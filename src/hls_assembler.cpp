@@ -1,5 +1,7 @@
 #include "hls_assembler.h"
 
+#include "dash_manifest.h"
+
 #include <QTimer>
 
 #include <QFile>
@@ -80,7 +82,31 @@ void hls_assembler::fetch_manifest(const QUrl &url) {
 			emit failed("Manifest fetch failed: " + reply->errorString());
 			return;
 		}
-		m_playlist = hls::parse(reply->readAll(), url);
+		const QByteArray body = reply->readAll();
+
+		// **Which kind of manifest this is, decided by what it says rather
+		// than by the URL.** An `.mpd` served as `.m3u8` or the other way
+		// round is a CDN's business and not a reason to parse the wrong
+		// grammar; and the extension is absent entirely from plenty of
+		// manifest URLs. HLS opens with `#EXTM3U` by specification and an MPD
+		// is XML, so the two are distinguishable at the first non-space byte.
+		// Anything else is refused rather than guessed at, for the same reason
+		// the parsers refuse what they cannot address: a wrong grammar yields
+		// a wrong segment list, and a wrong segment list assembles a file that
+		// plays and is not the programme.
+		const QByteArray head = body.trimmed().left(7);
+		if (head.startsWith('<')) {
+			if (!assemble_dash(body, url))
+				return;
+			next_segment();
+			return;
+		}
+		if (!head.startsWith("#EXTM3U")) {
+			emit failed("The manifest is neither an HLS playlist nor an MPD.");
+			return;
+		}
+
+		m_playlist = hls::parse(body, url);
 
 		// **A manifest that was not understood is refused, not assembled.**
 		// The only thing that sets this is a byte range whose numbers could not
@@ -114,6 +140,67 @@ void hls_assembler::fetch_manifest(const QUrl &url) {
 		}
 		next_segment();
 	});
+}
+
+// **DASH, turned into the one thing everything below this understands: an
+// ordered list of segment URLs.** The engine after this point -- the retries,
+// the run guard, the growing-file contract -- is general over any such list,
+// and a DASH representation is exactly one plus an initialisation segment that
+// goes first. So this converts rather than duplicating, which is why there is
+// no second assembler.
+//
+// The class is called `hls_assembler` and now assembles both. The name is
+// narrower than the job; renaming it touches every user and is a mechanical
+// change of its own rather than something to bundle here.
+//
+// Returns false having emitted `failed`.
+bool hls_assembler::assemble_dash(const QByteArray &body, const QUrl &url) {
+	const dash_manifest m = dash::parse(body, url);
+	// The same refusal the HLS path makes, for the same reason: `dash::parse`
+	// sets this only for what decides which bytes are fetched.
+	if (!m.error.isEmpty()) {
+		emit failed("MPD not understood: " + m.error);
+		return false;
+	}
+	const dash_representation *v = dash::best_video(m);
+	if (!v) {
+		emit failed("The MPD offered no video stream to assemble.");
+		return false;
+	}
+
+	// **A DASH manifest hands video and audio out separately, and this
+	// assembles one list into one file.** Taking the video alone would produce
+	// a file that plays perfectly and is silent -- the failure `best_audio`
+	// exists to make visible -- so where there is a separate audio stream this
+	// refuses and says which part is missing. Combining the two means two
+	// assembled files and a mux, which is an input more than `media_remux`
+	// takes, and that is a change to make deliberately rather than here.
+	if (dash::best_audio(m)) {
+		emit failed("This MPD carries its audio separately from its video, "
+		             "and assembling the two into one file is not implemented. "
+		             "The video alone would play silently, so it is refused "
+		             "rather than handed over.");
+		return false;
+	}
+
+	m_playlist = hls_playlist{};
+	m_playlist.is_master = false;
+	m_playlist.is_live   = m.is_live;
+	if (!v->init.isEmpty()) {
+		hls_segment init;
+		init.url = v->init;
+		m_playlist.segments.push_back(init);
+	}
+	for (const QUrl &u : v->segments) {
+		hls_segment seg;
+		seg.url = u;
+		m_playlist.segments.push_back(seg);
+	}
+	if (m_playlist.segments.isEmpty()) {
+		emit failed("The MPD's video stream listed no segments.");
+		return false;
+	}
+	return true;
 }
 
 void hls_assembler::next_segment() {

@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build c45bf146, mtime 2026-09-29 21:25)
+#     /home/claude/src/fmake/fmake  (build 42843076, mtime 2026-09-30 10:33)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -133,7 +133,8 @@ OBJS_test_annoyance = \
 OBJS_test_assembler = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
-	$(BUILD_DIR)/app/hls_playlist.o
+	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o
 
 OBJS_test_assembly = \
 	$(BUILD_DIR)/app/local_proxy.o \
@@ -158,6 +159,7 @@ OBJS_test_assembly = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o
 
@@ -493,6 +495,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
@@ -734,6 +737,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -865,6 +869,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -1003,6 +1008,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
@@ -1127,6 +1133,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -1258,6 +1265,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -1394,6 +1402,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -1520,6 +1529,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -1651,6 +1661,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -1782,6 +1793,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -1913,6 +1925,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -2044,6 +2057,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -2176,6 +2190,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -2307,6 +2322,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -2437,6 +2453,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -2570,6 +2587,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -2704,6 +2722,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -2836,6 +2855,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -2963,6 +2983,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -3094,6 +3115,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -3237,6 +3259,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -3368,6 +3391,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -3494,6 +3518,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -3627,6 +3652,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -3763,6 +3789,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -3891,6 +3918,7 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -4027,6 +4055,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -4153,6 +4182,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -4292,6 +4322,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o
@@ -4415,6 +4446,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -4556,6 +4588,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -4719,6 +4752,7 @@ OBJS_try_share = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -4845,6 +4879,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -4981,6 +5016,7 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -5107,6 +5143,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -5238,6 +5275,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -5369,6 +5407,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
@@ -5500,6 +5539,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
+	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
