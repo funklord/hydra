@@ -29413,3 +29413,62 @@ tabs where the structure is one -- tabs for nesting, spaces for alignment, and
 a tab used to align. Found by reading the exit status: the words the gate
 prints are "convention violation", so a grep for `error` or `fail` would have
 reported nothing and passed.
+
+## Four builds of fmake, one closure
+
+fmake landed the `@pkg_optional` fix this tree reported -- the macro
+tree-wide, the annotation read from the sources the build compiles, and an
+optional package's paths following its macro. Regenerated against it, and
+**the closure is byte-identical**: 90 programs, 5260 objects, and the only
+line that moved in the generated file is the one naming which fmake answered.
+
+    -#     .../fmake  (build 42843076, mtime 2026-09-30 10:33)
+    +#     .../fmake  (build a1d19ab9, mtime 2026-09-30 12:05)
+
+Diffed with that line filtered out, so it is every per-binary set over 90
+programs agreeing exactly. Four builds now across two days: the 2026-09-21 one
+that generated the file first, `c45bf146`, `42843076`, and this.
+
+**What that establishes is narrower than it sounds, and the narrow version is
+the useful one.** It says their fix moved no closure here -- which is the
+interesting direction, because this tree was never an instance of the bug and
+a fix that *had* shifted its link sets would have been the surprise. It says
+nothing about whether the fix works: their fixture answers that, and this tree
+structurally cannot, because the shape it repairs is the one hydra does not
+have.
+
+The guard refused the run before it was accepted deliberately. Third firing,
+second that nobody arranged -- same path, different build, both printing
+`fmake 1.0`.
+
+### A claim of mine that its own evidence contradicted
+
+Reporting an orphaned fixture process to fmake, this tree also asserted that
+its directory "is still there". **The output in hand said otherwise**: the
+`ls` of that path printed nothing at all, and the three `du` lines being read
+were other fixture directories. An empty result was read as truncated output
+rather than as an absent directory.
+
+fmake's account is that their own post-kill sweep had removed it while two
+processes still held it open, so it was visible through `/proc` alone -- the
+deleted-cwd case, and the same class as this workspace's 693 GB of deleted
+logs at a scale of 16 KB.
+
+**The lesson is not about directories.** An empty result and a truncated one
+are indistinguishable in the output, and the difference matters exactly as
+much as the claim built on it -- which is the absence rule in `evidence.md`
+arriving from the one direction it does not list: not a search that could not
+find, but a reader who could not tell "nothing" from "not shown".
+
+### And the part of their reply worth keeping
+
+Their leak was a kill of an earlier suite rather than the fixture, and the
+fixture's assertion is already the leak-count shape this workspace recommends
+-- it greps for its own tree path and requires the list empty. The fault was
+that the `--ppid 1` sweep ran after the first suite they killed and not after
+the second.
+
+**A check that is right and not run has the same outcome as a check that is
+wrong.** The only difference is where you look afterwards, and it is the more
+expensive of the two for exactly that reason: a wrong check eventually gets
+corrected, and a skipped one leaves no trace of having been skipped.

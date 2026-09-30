@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build 42843076, mtime 2026-09-30 10:33)
+#     /home/claude/src/fmake/fmake  (build a1d19ab9, mtime 2026-09-30 12:05)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
