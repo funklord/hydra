@@ -41,7 +41,23 @@ QString media_mime_for(const QUrl &url) {
 }
 
 media_detector::media_detector(policy_engine *policy, QObject *parent)
-  : QObject(parent), m_policy(policy) {}
+  : QObject(parent), m_policy(policy) {
+	// **Connected here so that no caller can forget.** The first version of
+	// this had the shell call `drop_disallowed()` from its shield handler,
+	// which covered the shield and not the settings dialog -- and the settings
+	// dialog is where the global default for this setting lives, so turning
+	// watching off for everything left every record standing. That is the same
+	// defect as the one this whole change is about, reproduced in the fix for
+	// it: one rule with two enforcement points, one of them wired.
+	//
+	// `changed()` is emitted by every mutation the engine has, from wherever it
+	// was made, so there is one point and it is this one. It also fires while
+	// rules are loaded at startup, where there is nothing recorded yet and the
+	// pass is a no-op.
+	if (m_policy)
+		connect(m_policy, &policy_engine::changed,
+		         this, &media_detector::drop_disallowed);
+}
 
 media_kind media_detector::classify(const QUrl &url, bool *saveable) {
 	*saveable = false;
@@ -192,6 +208,39 @@ int media_detector::clear_all() {
 }
 
 void media_detector::clear_site(const QString &site_host) {
-	QMutexLocker guard(&m_lock);
-	m_by_site.remove(site_host);
+	{
+		QMutexLocker guard(&m_lock);
+		m_by_site.remove(site_host);
+	}
+	// **Emitted, which this did not do.** `clear_all` says why a clear has to
+	// announce itself -- the badge is driven by this signal, so emptying the
+	// list silently leaves the number over it saying there were seven -- and
+	// this function was written without it. It had no caller anywhere, so
+	// nothing had ever shown the fault; the two defects hid each other.
+	emit site_updated(site_host, 0);
+}
+
+int media_detector::drop_disallowed() {
+	if (!m_policy)
+		return 0;
+	// **Every site, not only the one in front.** A per-site switch can be
+	// changed from the shield for a tab that is not current, and a record left
+	// standing for a site whose watching has just been turned off is the thing
+	// this exists to remove. The map holds one entry per site visited this
+	// session, so walking it is cheaper than deciding which entry to look at.
+	QStringList dropped;
+	{
+		QMutexLocker guard(&m_lock);
+		for (auto it = m_by_site.begin(); it != m_by_site.end();) {
+			if (m_policy->is_allowed(policy::feature::media_detect, it.key())) {
+				++it;
+				continue;
+			}
+			dropped << it.key();
+			it = m_by_site.erase(it);
+		}
+	}
+	for (const QString &s : dropped)
+		emit site_updated(s, 0);
+	return int(dropped.size());
 }

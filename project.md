@@ -29846,3 +29846,75 @@ They are not fixed here: this is one suite's bug found by being bitten, and
 converting the other fourteen is a sweep with no request behind it. The shape is recorded so the next person bitten recognises it in
 one command -- `id -un` against `ls -ld` on the directory -- rather than
 reading the seven innocent sections.
+
+## A setting whose own words promised more than the code did
+
+The shield says this about Auto-detect media:
+
+> Whether to watch this site's requests for video and audio worth saving.
+> Turning it off empties the media badge here; it does not stop the page
+> playing anything.
+
+`media_detector::on_request` refuses to record anything for a site whose
+`media_detect` is not allowed, and the comment there argues the case well: the
+alternative was gating at the badge, which "would still be recording every
+stream a site served and merely declining to mention them, so turning the
+setting off would look like privacy and be bookkeeping."
+
+**It is right about new requests and silent about the old ones.** Everything
+found before the switch was flipped stayed in `m_by_site`, stayed on the badge
+with its count, and stayed offerable to Save and Watch. So the sentence "empties
+the media badge here" was a promise nothing kept -- and the records were still
+exactly the bookkeeping that comment refuses to keep.
+
+### `clear_site` had no caller and would not have worked
+
+The method for this existed on all five per-site observers and, as
+`main_window` already records, had no caller anywhere in `src/`. So it had
+never run -- which is why its second defect had never shown: **it did not emit
+`site_updated`**, the signal the badge is driven by. `clear_all` five lines
+above it says why that matters, in as many words, and the per-site version was
+written without it. The two faults hid each other: no caller, so no evidence
+that the thing a caller would need was missing.
+
+### The fix was wired in the wrong place first, which is the same defect again
+
+The first version had `main_window::on_policy_changed` call a new
+`drop_disallowed()`. That slot is connected to the shield's dialog and to
+nothing else, and **the setting's global default lives in the settings
+dialog** -- so turning watching off for everything would have left every record
+standing. One rule, two enforcement points, one of them wired: the defect this
+whole change is about, reproduced inside the fix for it, hours after writing it
+up.
+
+The detector connects itself to `policy_engine::changed` in its constructor
+instead. Every mutation the engine has emits that, from wherever it was made,
+so there is one point and no caller to forget. The test asserts it by setting a
+rule and reading the count -- no explicit call anywhere -- and separately by
+moving the *global default*, which is the case the shell's handler would have
+missed.
+
+Sabotaged three ways: dropping the `connect` fails four checks; removing
+`clear_site`'s emit fails only the `clear_site` check; removing
+`drop_disallowed`'s emit fails only the badge check.
+
+### The lens, and what it also cleared
+
+Found by reading the twenty features' user-visible help strings against the
+code, on the argument that a promise made to somebody in the settings UI is a
+claim like any other and nobody re-derives it. `ads` was the first find -- its
+help already said "Allowing them here also turns off those rules for the site",
+which was false for cosmetic rules until the commit above -- and this was the
+second.
+
+Cleared on the way, so the next sweep starts elsewhere: every one of the twenty
+features has at least one enforcement site outside `policy.cpp`,
+`policy_engine.cpp` and the settings UI. Two looked absent and were not --
+`autoplay` and `desktop_site` are read through the `using F = policy::feature`
+alias in `main_window::apply_policy`, which a grep for `feature::` cannot see.
+**A pattern that misses an alias reports an absence in the same words as a real
+one**, and the only reason it was caught is that both were checked by reading
+rather than by trusting the count. Seven features can be set to `ask`, each has
+a prompt phrase, and the desktop's permission mapping covers all seven on the
+Qt this tree builds against; the `default:` arm that once denied three of them
+silently is in a branch for a Qt version this tree cannot compile, and says so.

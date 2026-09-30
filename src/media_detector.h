@@ -99,6 +99,24 @@ public:
 	media_item primary_for(const QString &site_host) const;
 
 	void clear_site(const QString &site_host);
+
+	// Forget the sites whose watching has been turned off, and say how many.
+	//
+	// **The setting's own words were a promise nothing kept.** "Turning it off
+	// empties the media badge here" is what the shield says about
+	// Auto-detect media, and `on_request` refusing to record anything new only
+	// half delivers it: everything found before the switch was flipped stayed
+	// in the list, stayed on the badge, and stayed offerable to Save and Watch.
+	// So a person who turned watching off for a site went on being shown what
+	// had been watched.
+	//
+	// The policy lives here already, so the question is asked where the records
+	// are rather than by a caller that would have to enumerate both -- and the
+	// constructor connects it to the engine's `changed()`, so an edit made from
+	// anywhere reaches it and no caller has to remember. Public and returning a
+	// count so a test can call it directly and read what it did.
+	int drop_disallowed();
+
 	// Forget every site at once, for "Clear browsing data".
 	//
 	// **This is a browsing record and it was not being cleared.** The shell's

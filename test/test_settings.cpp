@@ -1395,6 +1395,96 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	// **What the setting says it does, which was half true.** Every case above
+	// builds a fresh detector and flips the switch before anything is recorded,
+	// so none of them reaches the branch where a record already exists -- and
+	// that is the branch the shield's own words are about: "Turning it off
+	// empties the media badge here."
+	section("turning auto-detect off drops what was already found");
+	{
+		request_context ctx;
+		ctx.site_host    = "video.test";
+		ctx.request_host = "cdn.test";
+		ctx.url          = QUrl("https://cdn.test/movie.mp4");
+		request_context other = ctx;
+		other.site_host = "keep.test";
+
+		policy_engine policy;
+		media_detector det(&policy);
+
+		// Recorded first, which is what the sections above never do.
+		det.on_request(ctx, request_decision{});
+		det.on_request(other, request_decision{});
+		check(det.count_for("video.test") == 1 && det.count_for("keep.test") == 1,
+		      "two sites recorded while both are allowed");
+
+		// The badge is driven by this signal, so a drop that emitted nothing
+		// would empty the list and leave the number over it unchanged. That is
+		// `clear_all`'s own argument, and `clear_site` was written without it.
+		QStringList announced;
+		QObject::connect(&det, &media_detector::site_updated, &det,
+		                  [&announced](const QString &host, int count) {
+			announced << QString("%1=%2").arg(host).arg(count);
+		});
+
+		// **No explicit call.** The detector connects itself to the engine's
+		// `changed()`, so this is the whole of what the shell does -- and that
+		// is the point: the first version had the window's shield handler call
+		// `drop_disallowed`, which covered the shield and not the settings
+		// dialog where this setting's global default lives.
+		policy.set_setting("video.test", policy::feature::media_detect,
+		                    policy::setting::block);
+
+		check(det.count_for("video.test") == 0,
+		      "setting the rule is enough -- the detector heard it itself");
+		check(det.count_for("keep.test") == 1,
+		      "and a site that is still allowed keeps its own");
+		check(announced == QStringList{ "video.test=0" },
+		      QString("the badge is told, once, for the site that lost its "
+		               "records (%1)").arg(announced.join(", ")));
+
+		// Idempotent, because `on_policy_changed` runs on every policy edit and
+		// most of them change nothing here. A second pass announcing again
+		// would repaint the badge for a site that has not changed.
+		announced.clear();
+		check(det.drop_disallowed() == 0 && announced.isEmpty(),
+		      "a second pass drops nothing and says nothing");
+
+		// A global default is the case the shell's handler would have missed,
+		// and the connection does not care which mutation it was.
+		det.on_request(other, request_decision{});
+		check(det.count_for("keep.test") == 1, "keep.test is recorded again");
+		announced.clear();
+		policy.set_global_default(policy::feature::media_detect,
+		                          policy::setting::block);
+		check(det.count_for("keep.test") == 0 &&
+		        announced == QStringList{ "keep.test=0" },
+		      QString("turning it off globally reaches a site with no rule of "
+		               "its own (%1)").arg(announced.join(", ")));
+		policy.set_global_default(policy::feature::media_detect,
+		                          policy::setting::allow);
+
+		// And `clear_site` announces now, which is the other half of the same
+		// defect: it had no caller, so nothing had ever shown that it did not.
+		// The connection above is still live -- a second one would have made
+		// the list read `keep.test=0, keep.test=0` and hidden whether this
+		// emits once, which is how this check failed on its first run.
+		det.on_request(other, request_decision{});
+		announced.clear();
+		det.clear_site("keep.test");
+		check(det.count_for("keep.test") == 0 &&
+		        announced == QStringList{ "keep.test=0" },
+		      QString("clear_site empties the site and says so, once (%1)")
+		          .arg(announced.join(", ")));
+
+		// No policy, no opinion: a driver's detector must not have its records
+		// swept by a call that cannot know whether anything is disallowed.
+		media_detector bare;
+		bare.on_request(ctx, request_decision{});
+		check(bare.drop_disallowed() == 0 && bare.count_for("video.test") == 1,
+		      "a detector with no policy drops nothing");
+	}
+
 	section("the languages this browser asks for");
 	{
 		// The real thing this machine reports -- duplicated, and carrying

@@ -6626,6 +6626,14 @@ void main_window::open_site_controls() {
 void main_window::on_policy_changed() {
 	if (!m_policy_path.isEmpty())
 		saved_or_said(m_policy->save(m_policy_path), "the site settings");
+
+	// **Not the place to drop the detector's records**, though it was in a
+	// first attempt. This slot is connected to the shield's dialog only, so a
+	// media_detect change made in the settings dialog -- which is where the
+	// global default for it lives -- would not have reached it. The detector
+	// connects itself to `policy_engine::changed` instead, which every mutation
+	// emits from wherever it was made.
+
 	if (web_view_backend *v = current_view()) {
 		apply_policy(v, v->url().host());
 		v->reload();
