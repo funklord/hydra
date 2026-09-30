@@ -123,19 +123,19 @@ QString player_launcher::warning_for(const media_item &item) const {
 	if (!is_manifest(item) || e->native_streams)
 		return QString();
 
-	// HLS reaches a player like this only after being assembled into one
-	// progressive file (sec 11.3), so it is no longer a limitation to report.
-	if (item.kind == media_kind::hls)
-		return QString();
-
-	// DASH has no assembly step, so the manifest goes over as-is and whether
-	// that works is the player's business. For a custom command we do not know
-	// what it can do, and saying it "cannot" would be an overclaim.
-	if (e->id == QLatin1String(custom_id()))
-		return "DASH assembly is not implemented, so the manifest is handed "
-		       "over unchanged — this will only work if your player reads DASH.";
-	return QString("%1 cannot play DASH, and DASH assembly is not implemented.")
-	           .arg(e->label);
+	// **Neither kind reaches a player as a manifest any more.** HLS has been
+	// assembled into one progressive file since sec 11.3 landed, and DASH is
+	// assembled through the same engine now, so a player that cannot read
+	// manifests is no longer a limitation worth reporting for either.
+	//
+	// The two messages that used to stand here said DASH assembly was not
+	// implemented. It is, with one gap: an MPD that carries its audio
+	// separately is refused rather than assembled into a silent file. That
+	// cannot be said from here -- nothing has fetched the manifest at this
+	// point, so a warning would be a guess about a file nobody has read -- and
+	// the assembler says it precisely, at the moment it knows, through the
+	// status line.
+	return QString();
 }
 
 void player_launcher::set_custom_command(const QString &cmd) {

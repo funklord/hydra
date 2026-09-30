@@ -535,6 +535,61 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	section("the dialog routes a DASH row to the assembler, as it does HLS");
+	{
+		// **The condition that makes any of this reachable.** The dialog sent
+		// HLS to the assembler and handed every other manifest straight to the
+		// player, so an MPD reached the assembler from nowhere -- the engine
+		// could take one and nothing gave it one. Driven through the button
+		// rather than the private method, which is how the section above
+		// drives Watch and is the only door a person has.
+		cdn.files["/init.mp4"] = QByteArray("INIT");
+		cdn.files["/s1.m4s"]   = QByteArray("ONE");
+		cdn.files["/s2.m4s"]   = QByteArray("TWO");
+		cdn.files["/routed.mpd"] =
+		  QByteArray("<?xml version=\"1.0\"?>\n"
+		              "<MPD mediaPresentationDuration=\"PT4S\"><Period>\n"
+		              "  <AdaptationSet mimeType=\"video/mp4\">\n"
+		              "    <Representation id=\"v\" bandwidth=\"1\">\n"
+		              "      <SegmentList>\n"
+		              "        <Initialization sourceURL=\"/init.mp4\"/>\n"
+		              "        <SegmentURL media=\"/s1.m4s\"/>\n"
+		              "        <SegmentURL media=\"/s2.m4s\"/>\n"
+		              "      </SegmentList>\n"
+		              "    </Representation>\n"
+		              "  </AdaptationSet></Period></MPD>\n");
+
+		media_detector det2;
+		media_item mpd;
+		mpd.kind  = media_kind::dash;
+		mpd.label = "routed.mpd";
+		mpd.url   = QUrl(base + "/routed.mpd");
+		det2.add_item("example.invalid", mpd);
+
+		stream_assembly asm2(&players, &downloads, &proxy, nullptr);
+		media_dialog dlg2(&det2, &players, &downloads, &proxy, &tap,
+		                   &asm2, nullptr);
+		dlg2.set_site("example.invalid", "n2", stream_context{});
+
+		QPushButton *w = nullptr;
+		for (QPushButton *b : dlg2.findChildren<QPushButton *>())
+			if (b->text().contains("Watch"))
+				w = b;
+		check(w && w->isEnabled(),
+		       "a DASH row offers Watch with a player that reads no manifests");
+		if (w) {
+			w->click();
+			for (int i = 0; i < 120 && !asm2.running() &&
+			                  asm2.output_path().isEmpty(); ++i)
+				spin(50);
+			check(!asm2.output_path().isEmpty(),
+			       QString("and pressing it starts an assembly rather than "
+			                "handing the MPD to the player (%1)")
+			           .arg(asm2.output_path().isEmpty() ? QString("nothing")
+			                                              : QString("started")));
+		}
+	}
+
 	section("an MPD is assembled through the same engine, or refused by name");
 	{
 		// **The engine below the manifest is general over an ordered list of

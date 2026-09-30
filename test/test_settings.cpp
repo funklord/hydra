@@ -330,13 +330,18 @@ int main(int argc, char **argv) {
 		      QString("HLS warns about nothing — it is assembled first (%1)")
 		          .arg(p.warning_for(hls)));
 		check(p.warning_for(file).isEmpty(), "a direct file warns about nothing");
-		const QString d = p.warning_for(dash);
-		check(!d.isEmpty(), "DASH still warns — there is no assembly for it");
-		check(!d.contains("cannot play"),
-		      QString("and does not overclaim what a custom command cannot do (%1)")
-		          .arg(d));
-		check(d.contains("not implemented"),
-		      "naming the real limitation instead");
+
+		// **DASH warned here until it was assembled too.** The two messages
+		// that stood in this place said assembly was not implemented, and it
+		// is: an MPD is converted into the same segment list HLS becomes and
+		// walked by the same engine. What remains is one gap -- an MPD whose
+		// audio is separate is refused rather than assembled into a silent
+		// file -- and it cannot be reported from here, because nothing has
+		// fetched the manifest at this point and a warning would be a guess
+		// about a file nobody has read. The assembler says it when it knows.
+		check(p.warning_for(dash).isEmpty(),
+		      QString("DASH warns about nothing either, being assembled first "
+		               "(%1)").arg(p.warning_for(dash)));
 
 		// A native player takes a manifest directly and needs no warning.
 		bool tested_native = false;

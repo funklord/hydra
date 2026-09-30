@@ -29237,3 +29237,53 @@ and 5260 objects, and **the entire diff is `dash_manifest.o` joining the 40
 link sets that contain `hls_assembler.o`** -- the closure working out a
 consequence nobody listed. Three builds of fmake across two days now agree on
 that closure apart from what this tree added to it.
+
+## And the assembly was unreachable, which is the same mistake one layer up
+
+`media_dialog::watch` routed to the assembler on `item.kind ==
+media_kind::hls` and handed every other manifest straight to the player. So
+the DASH branch added to `hls_assembler` could take an MPD and **nothing ever
+gave it one**: the engine was reachable from a test and from nowhere a person
+can press.
+
+That is the failure named two commits earlier about the parser -- a correct
+function is not a working feature -- repeated at the next layer by the same
+hand, and found only while chasing a stale warning message rather than by
+noticing it. **The lesson is not "check for callers"**, which was already
+written down; it is that writing the check down did not stop it, and what did
+was going to look at a sentence the change had falsified somewhere else.
+
+`is_assemblable(item)` names the condition once. Four decisions ask it --
+Watch's routing, Save's routing, whether a row can be fetched, and whether it
+can be watched -- and a fourth spelling would have been a fourth thing to keep
+in step.
+
+### The message the change falsified, and where the gap is reported instead
+
+`player_launcher::warning_for` carried two sentences saying DASH assembly was
+not implemented, one of them for a custom command. It is implemented. What
+remains is a single gap -- an MPD carrying its audio separately is refused
+rather than assembled into a silent file -- and **it cannot be reported from
+there**: nothing has fetched the manifest at warning time, so a warning would
+be a guess about a file nobody has read. The assembler says it precisely, at
+the moment it knows, through the status line every other assembly failure
+uses.
+
+The test that pinned those sentences now asserts the new behaviour rather than
+being deleted -- "DASH warns about nothing either, being assembled first".
+
+### The pair that discriminates, and the half that does not
+
+    old HLS-only routing restored:
+      "pressing Watch starts an assembly"   -> RED
+      "a DASH row offers Watch"             -> green
+
+A row with a player available offers Watch either way, so only the check that
+observes the *consequence* separates the routing from the affordance. Second
+instance of that shape in one piece of work, after the audio refusal and its
+companion, and worth stating as the general form: **an affordance check and a
+consequence check are not two witnesses, and the affordance one is the one
+that looks like coverage.**
+
+It is driven through the button rather than the private method, which is how
+the section above it drives Watch and is the only door a person has.

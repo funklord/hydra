@@ -40,8 +40,16 @@ void gate(QAbstractButton *b, bool ok, const QString &why) {
 // routes it to the segment assembler instead, so asking the sources alone
 // would grey a row that works. That is the trap in gating on `accepts()` by
 // itself.
+// Manifest kinds the segment assembler can turn into one local file. Named
+// once because three decisions ask it -- whether Save is offered, whether Watch
+// assembles, and whether a row is greyed -- and a fourth answer would be a
+// fourth thing to keep in step.
+bool is_assemblable(const media_item &item) {
+	return item.kind == media_kind::hls || item.kind == media_kind::dash;
+}
+
 bool can_fetch(const media_item &item, download_manager *dm, QString *why) {
-	if (item.kind == media_kind::hls)
+	if (is_assemblable(item))
 		return true;
 	if (!dm) {
 		*why = "Downloads are not available in this window.";
@@ -69,7 +77,7 @@ bool can_watch(const media_item &item, player_launcher *pl, QString *why) {
 		*why = "No player is configured in this window.";
 		return false;
 	}
-	if (item.kind == media_kind::hls && !pl->selected_handles_streams())
+	if (is_assemblable(item) && !pl->selected_handles_streams())
 		return true;
 	if (pl->installed().isEmpty() && pl->custom_command().trimmed().isEmpty()) {
 		*why = "No media player was found. Install one, or set a command in Settings.";
@@ -263,7 +271,15 @@ void media_dialog::repopulate() {
 void media_dialog::watch(const media_item &item) {
 	// A player that cannot take a manifest gets an assembled progressive file
 	// instead -- "the app compensates in the proxy for what the player lacks".
-	if (item.kind == media_kind::hls && !m_players->selected_handles_streams()) {
+	//
+	// **DASH comes here too now.** The assembler converts an MPD into the same
+	// segment list it walks for HLS, so the routing question is the player's
+	// capability rather than the manifest's grammar. Where an MPD carries its
+	// audio separately the assembly refuses and says so, which reaches the
+	// person through the same status line as any other assembly failure --
+	// later than a warning would, and precise, where a warning at this point
+	// could only guess because nothing has fetched the manifest yet.
+	if (is_assemblable(item) && !m_players->selected_handles_streams()) {
 		if (m_assembly)
 			m_assembly->watch(item, m_ctx);
 		else
@@ -305,8 +321,9 @@ void media_dialog::watch(const media_item &item) {
 }
 
 void media_dialog::save(const media_item &item) {
-	// HLS is saveable now: fetch the segments and concatenate them (sec 11.2).
-	if (item.kind == media_kind::hls) {
+	// HLS and DASH are saveable: fetch the segments and concatenate them
+	// (sec 11.2). Same engine, same refusal for an MPD whose audio is separate.
+	if (is_assemblable(item)) {
 		if (m_assembly)
 			m_assembly->save(item, m_ctx);
 		else
