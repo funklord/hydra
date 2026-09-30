@@ -29969,3 +29969,50 @@ rather than by trusting the count. Seven features can be set to `ask`, each has
 a prompt phrase, and the desktop's permission mapping covers all seven on the
 Qt this tree builds against; the `default:` arm that once denied three of them
 silently is in a branch for a Qt version this tree cannot compile, and says so.
+
+## Twenty-six source citations pointed at headings that did not exist
+
+Section 12 of the architecture document -- the filter-evolution loop -- numbers
+its five steps as bold paragraphs, `**1. Signal collection.**` through
+`**5. Diff and accept.**`, while every other multi-part section of that document
+uses `### N.M` headings. The code cites the steps as `sec 12.1` to `sec 12.5`,
+from fourteen files, and the mapping is exact -- the picker is 12.1, the
+snippet stripping is 12.2, the rule syntax is 12.3, `filter_list::evaluate` is
+12.4 and `filter_dialog` is 12.5.
+
+**So the citations were right and unfindable.** A reader grepping the document
+for `12.4` got nothing and could not tell which of five paragraphs was meant.
+The five steps have headings now, keeping their own names, and the section's own
+two references to "step 4" and "the step-5 accept UI" cite the numbers instead.
+
+### The method, because the number is only worth quoting with it
+
+    python3 - <<'EOF'
+    import io, re, glob
+    doc = io.open("doc/architecture.md", encoding="utf-8").read()
+    have = set(re.findall(r"^#+\s+([0-9]+(?:\.[0-9]+)*)\.?(?:\s|$)", doc, re.M))
+    files = (glob.glob("src/*.cpp") + glob.glob("src/*.h")
+             + glob.glob("test/*.cpp") + glob.glob("test/*.h")
+             + glob.glob("test/live/*.cpp")
+             + glob.glob("android/src/se/vibes/hydra/*.java"))
+    cited = {}
+    for f in sorted(files):
+        for m in re.finditer(r"(RFC \d+ )?sec ([0-9]+(?:\.[0-9]+)*)",
+                              io.open(f, encoding="utf-8").read()):
+            if m.group(1):
+                continue          # an RFC section, not one of ours
+            cited.setdefault(m.group(2), set()).add(f)
+    print({k: sorted(v) for k, v in cited.items() if k not in have} or "all resolve")
+    EOF
+
+**400 citations across 277 files, 50 distinct sections, all resolving** after
+the change. Not made into a gate: the document's section numbers move about
+once a quarter and a standing check with nothing to catch is a check people
+learn to ignore, so the command is recorded here for whoever next moves one.
+
+**The first run of it reported seventeen unresolved and was wrong.** The regex
+demanded whitespace after the number, so `## 1. Overview and scope` -- a period
+-- did not match, and eleven top-level sections read as missing. Suspecting the
+instrument before the document is what turned seventeen into five plus an RFC
+citation, and five was the real finding. `4.3.2.2` is RFC 8216's and is excluded
+by reading the words before it rather than by a number range.

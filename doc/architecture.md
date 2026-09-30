@@ -632,17 +632,27 @@ the right answer was and can check a proposal against it.
 
 The AI diff/accept pipeline (Spine 3) pointed at the filter list instead of the tree.
 
-**Status: both halves built.** `filter_signals` collects the passive signals below, `filter_list::evaluate` implements step 4's static rejection plus dry-run simulation, and `filter_dialog` is the step-5 accept UI writing into a separate AI-authored list. The user-driven element picker was deferred here until the script-injection and QWebChannel plumbing arrived with the password manager (§13.2); that plumbing is built, and so is the picker -- `element_picker` with `picker_script`, wired from `main_window`.
+**Status: both halves built.** `filter_signals` collects the passive signals below, `filter_list::evaluate` implements §12.4's static rejection plus dry-run simulation, and `filter_dialog` is the §12.5 accept UI writing into a separate AI-authored list. The user-driven element picker was deferred here until the script-injection and QWebChannel plumbing arrived with the password manager (§13.2); that plumbing is built, and so is the picker -- `element_picker` with `picker_script`, wired from `main_window`.
 
-**1. Signal collection.** User-driven: an element-picker ("zap this") captures a leaked ad's selector, attributes, DOM snippet, and associated requests. Passive: the interceptor logs requests that slipped through but match heuristics (third-party, ad-serving shapes, high-frequency beacons) and flags likely anti-adblock overlays (a full-page element appearing right after load).
+### 12.1 Signal collection
 
-**2. Context serialization.** The payload — page URL, offending element's selector/attributes/snippet, candidate requests, and which active filters failed — with personal data stripped from the snippet.
+User-driven: an element-picker ("zap this") captures a leaked ad's selector, attributes, DOM snippet, and associated requests. Passive: the interceptor logs requests that slipped through but match heuristics (third-party, ad-serving shapes, high-frequency beacons) and flags likely anti-adblock overlays (a full-page element appearing right after load).
 
-**3. AI proposal.** Rules in standard EasyList / uBO syntax — network (`||ads.example.com^`) and cosmetic (`example.com##.ad-banner`) — each tagged with scope (site-specific vs generic) and a breadth/confidence estimate.
+### 12.2 Context serialization
 
-**4. Validation with dry-run — the safety core.** Statically reject dangerously broad rules (hiding generic tags globally, matching a whole TLD, blocking a first-party essential). Then *simulate* each rule against the page's captured requests/DOM and show exactly what it would block or hide.
+The payload — page URL, offending element's selector/attributes/snippet, candidate requests, and which active filters failed — with personal data stripped from the snippet.
 
-**5. Diff and accept.** Proposed rules render as a diff against the current set, each individually acceptable with its dry-run preview. Accepted rules merge into a **separate AI/user-authored list**, kept apart from imported EasyList so scheduled upstream updates never clobber custom rules (de-dup on import).
+### 12.3 AI proposal
+
+Rules in standard EasyList / uBO syntax — network (`||ads.example.com^`) and cosmetic (`example.com##.ad-banner`) — each tagged with scope (site-specific vs generic) and a breadth/confidence estimate.
+
+### 12.4 Validation with dry-run — the safety core
+
+Statically reject dangerously broad rules (hiding generic tags globally, matching a whole TLD, blocking a first-party essential). Then *simulate* each rule against the page's captured requests/DOM and show exactly what it would block or hide.
+
+### 12.5 Diff and accept
+
+Proposed rules render as a diff against the current set, each individually acceptable with its dry-run preview. Accepted rules merge into a **separate AI/user-authored list**, kept apart from imported EasyList so scheduled upstream updates never clobber custom rules (de-dup on import).
 
 **Regression feedback.** A small "known-clean" page set is re-run when filters change to catch a new rule that broke a page (false-positive hide), paired with a one-click "this rule broke the site" revert that feeds back as a negative signal. Anti-adblock countermeasures are just another rule category the AI proposes into when the user flags a nagging site — measured and rule-based, no separate subsystem.
 
