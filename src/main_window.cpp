@@ -5155,14 +5155,29 @@ stream_context main_window::page_context(web_view_backend *v) const {
 	// guessed. A wrong User-Agent is worse than the transport's own, which is
 	// at least honest about being a library; `local_proxy` only sets the
 	// header when this is non-empty.
-	if (m_factory)
+	if (m_factory) {
 		ctx.user_agent = m_factory->user_agent();
+		// **The half that was missing.** `local_proxy` has replayed
+		// `ctx.cookies` to the CDN since sec 11.3, and nothing ever filled it --
+		// so a stream whose CDN checks cookies answered 403 and the context
+		// looked complete. The factory watches the engine's store now; a backend
+		// that cannot answer returns empty and the header is simply not sent.
+		ctx.cookies = m_factory->cookie_header_for(v->url());
+	}
 	return ctx;
 }
 
 void main_window::forget_shell_caches() {
 	const int answers = int(m_session_permissions.size());
 	m_session_permissions.clear();
+
+	// **The observed cookies are a browsing record and go with the rest.** The
+	// engine's own jar is cleared elsewhere in this path; this is the mirror
+	// kept so a stream can carry the page's context, and a clear that dropped
+	// one and not the other would leave the browser able to replay cookies it
+	// had been told to forget.
+	if (m_factory)
+		m_factory->forget_cookies();
 
 	// **The allowance goes with the record of it, or the two disagree.**
 	// `m_antiadblock_fixed` is only the note that a host has been dealt with;

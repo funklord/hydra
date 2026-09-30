@@ -2439,11 +2439,12 @@ that an MPD with separate audio is refused rather than assembled. ~~the ffmpeg
 remux — concatenated MPEG-TS is directly playable, which is why this works
 without one, but fMP4 segments would need their init segment and a real remux~~
 — the init segment is prepended now, and what the remux would still buy is the
-*mux* of a separate audio stream. Re-polling a
-live playlist as it grows (what is captured is what was in the list when it was
-read)~~ -- done, and the bound it needed is below; and cookie capture, since the
-context carries Referer and User-Agent but
-reading cookies back needs cookie-store integration.
+*mux* of a separate audio stream. ~~Re-polling a live playlist as it grows
+(what is captured is what was in the list when it was read)~~ -- done, and the
+stall bound it needed is below. ~~What is left of the list is cookie capture:
+the context carries Referer and User-Agent, and reading cookies back needs
+cookie-store integration.~~ -- done; see *The cookies were replayed and never
+observed* below. **Nothing is left of this list.**
 
 **Routing the browser through it is deliberately not attempted.** §10's other
 use — response inspection for real Content-Types and manifest bodies — means
@@ -29647,3 +29648,74 @@ already written beside the live caveat it joins.
 The consumer was wired in the same change. Twice this week this tree shipped
 capability with no caller, and a signal nobody connects is that mistake in its
 smallest form.
+
+## The cookies were replayed and never observed
+
+`local_proxy` has replayed `stream_context::cookies` to the CDN since sec
+11.3, and `test_headers` checks it by asking a server what it received.
+**Nothing ever filled the field.** So a stream whose CDN checks cookies
+answered 403 while the context looked complete: the replaying half was built
+and tested and the observing half did not exist.
+
+`QWebEngineCookieStore` emits `cookieAdded` and `cookieRemoved` and offers no
+reader, so watching is the only way to know what a page carried.
+
+### `QNetworkCookieJar` rather than a map, since matching is the hard part
+
+Domain suffixes, path prefixes, `secure` and expiry are what decide whether a
+cookie belongs on a request, and Qt has written and tested that. A hand-rolled
+`QHash<host, cookies>` would be re-implementing it, badly, in the one place
+where getting it wrong sends somebody's session cookie somewhere it does not
+belong. `cookiesForUrl()` is the whole reason to hold a jar.
+
+**So the jar's matching is deliberately not tested here.** It is Qt's
+invariant, and asserting it in this tree would be asserting somebody else's.
+
+### Three compile errors, each of which moved the design
+
+- **`qtwebengine_factory` is not a `QObject`**, so it cannot parent the jar or
+  own a connection. Rather than making it one, the cookie *store* is the
+  context object: it lives exactly as long as the profile and is deleted with
+  it, and the lambdas capture `this`, which outlives the profile for the same
+  reason.
+  That is the ownership this file already had rather than a new shape.
+- **`setAllCookies` is protected**, being there for subclasses. Clearing
+  replaces the jar instead: a four-line subclass written to reach one protected
+  method is a class somebody has to explain, and a fresh jar is unarguably
+  empty. The handlers read `m_cookies` when they run, so they follow the new
+  one.
+- **The jar is unparented, so exactly one line deletes it** -- beside the
+  scheme handler fixed earlier the same day for precisely this. Adding a second
+  unowned object to that destructor hours after removing one would have been
+  careless.
+
+### It is wired into Clear browsing data, in the same change
+
+The mirror is a record of where somebody has been. This tree has twice found a
+cache a clear did not reach, and **a browser able to replay cookies it had
+been told to forget is worse than one that cannot replay them at all.**
+
+### The check that matters is which url was asked about
+
+    sabotage                      cookies arrive    asked about this page
+    field never filled            RED               RED
+    asked about the wrong url     green             RED
+
+The fake factory answers the same string whatever url it is handed, so a check
+confirming that cookies arrived **passes** on a wiring that asks about another
+page. Only `last_asked` catches it.
+
+And the consequence of that bug is not a broken feature: hydra would replay
+**another site's cookies to this CDN**. A 403 is a nuisance; handing site A's
+session cookie to site B's server is a leak. Third instance in one day of the
+same shape -- an affordance check and a consequence check are not two
+witnesses, and the affordance one is the one that looks like coverage.
+
+### What has no automated check, said rather than implied
+
+The observing half -- `cookieAdded` reaching the jar, and `cookie_header_for`
+asking it -- needs a real `QWebEngineProfile` and is reachable only from a
+live driver. Offline covers the wiring from `page_context` to the factory, and
+`test_headers` covers the proxy replaying whatever the field holds. **The
+middle link is the one with no check**, which is where a reader should look
+first if cookies stop arriving.

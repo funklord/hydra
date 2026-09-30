@@ -45,6 +45,25 @@ public:
 	// library.
 	virtual QString user_agent() const { return QString(); }
 
+	// **The cookies the page carried, for a `Cookie` header the CDN expects.**
+	// A naked stream URL frequently answers 403 because the CDN wants the same
+	// context the page had (architecture doc sec 11.3), and `local_proxy` already
+	// replays whatever `stream_context::cookies` holds -- it was the observing
+	// half that did not exist, so the field was always empty for a stream found
+	// by detection.
+	//
+	// Empty by default and empty where a backend cannot answer, which is the
+	// same discipline as `user_agent()` above: `local_proxy` sets the header
+	// only when this is non-empty, so an unknowing backend sends no cookies
+	// rather than wrong ones.
+	virtual QString cookie_header_for(const QUrl &) const { return QString(); }
+
+	// Forget the observed cookies. Part of "Clear browsing data": the mirror
+	// below is a record of where somebody has been, and a clear that left it
+	// standing would be the same fault this tree has already found twice in
+	// other caches.
+	virtual void forget_cookies() {}
+
 	// Called when the engine is handed a URL it will not render as a page --
 	// a `magnet:` link being the motivating case (sec 11.4). The shell decides
 	// what to do with it; the engine's only job is to hand it over and not

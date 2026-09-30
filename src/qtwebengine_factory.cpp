@@ -13,6 +13,8 @@
 #include <QFile>
 #include <QNetworkCookie>
 #include <QTimer>
+#include <QNetworkCookie>
+#include <QNetworkCookieJar>
 #include <QWebEngineProfile>
 #include <QWebEngineView>
 #include <QWebEngineUrlRequestJob>
@@ -199,6 +201,28 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 	  [f](const QWebEngineCookieStore::FilterRequest &r) {
 		  return f->allow_cookie(r.firstPartyUrl.host(), r.thirdParty);
 	  });
+
+	// **Watch what the engine stores, because it cannot be asked afterwards.**
+	// `QWebEngineCookieStore` has `cookieAdded`/`cookieRemoved` and no reader,
+	// so a stream's `Cookie` header can only come from having listened. The
+	// filter above has already refused anything policy says no to, so what
+	// arrives here is what the page was allowed to keep.
+	//
+	// **The cookie store is the context object, because this class is not a
+	// QObject.** It cannot parent the jar or own a connection, so the store --
+	// which lives exactly as long as the profile, and is deleted with it in the
+	// destructor -- carries both. The lambdas capture `this`, which outlives the
+	// profile for the same reason.
+	m_cookies = new QNetworkCookieJar;
+	QWebEngineCookieStore *store = m_profile->cookieStore();
+	QObject::connect(store, &QWebEngineCookieStore::cookieAdded, store,
+	                  [this](const QNetworkCookie &c) {
+		m_cookies->insertCookie(c);
+	});
+	QObject::connect(store, &QWebEngineCookieStore::cookieRemoved, store,
+	                  [this](const QNetworkCookie &c) {
+		m_cookies->deleteCookie(c);
+	});
 
 	// Links that are not pages (sec 11.4). Installed per scheme main() registered;
 	// with none registered this does nothing and such links behave as before.
@@ -444,6 +468,11 @@ qtwebengine_factory::~qtwebengine_factory() {
 	delete m_scheme_handler;
 	m_scheme_handler = nullptr;
 
+	// Unparented, for the reason above: this class is not a QObject, so nothing
+	// deletes the jar but this line.
+	delete m_cookies;
+	m_cookies = nullptr;
+
 	// **Ours now, so we delete it** -- it used to be Qt's default profile,
 	// which must not be deleted. It is only safe once every page using it has
 	// gone, and what makes that true is not the order two locals happen to be
@@ -459,6 +488,31 @@ qtwebengine_factory::~qtwebengine_factory() {
 	// it made -- and no caller does either.
 	delete m_profile;
 	m_profile = nullptr;
+}
+
+QString qtwebengine_factory::cookie_header_for(const QUrl &url) const {
+	if (!m_cookies)
+		return QString();
+	// `cookiesForUrl` is what makes the jar worth using: it applies the domain
+	// suffix, the path prefix, `secure` and expiry, which is the fiddly part and
+	// not this project's to re-implement.
+	const QList<QNetworkCookie> ours = m_cookies->cookiesForUrl(url);
+	QStringList pairs;
+	for (const QNetworkCookie &c : ours)
+		pairs << QString::fromUtf8(c.name()) + QLatin1Char('=') +
+		          QString::fromUtf8(c.value());
+	return pairs.join(QStringLiteral("; "));
+}
+
+void qtwebengine_factory::forget_cookies() {
+	if (!m_cookies)
+		return;
+	// **Replaced rather than emptied**, because `setAllCookies` is protected --
+	// it is there for subclasses -- and a fresh jar is unarguably empty where a
+	// subclass written to reach one method would be a class to explain. The
+	// handlers above read `m_cookies` when they run, so they follow the new one.
+	delete m_cookies;
+	m_cookies = new QNetworkCookieJar;
 }
 
 web_view_backend *qtwebengine_factory::create_view(QWidget *parent) {

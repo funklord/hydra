@@ -4,6 +4,7 @@
 
 #include <QStringList>
 
+class QNetworkCookieJar;
 class QWebEngineProfile;
 class magnet_scheme_handler;
 class request_filter;
@@ -43,7 +44,23 @@ public:
 	// check against it fails while looking like a finding about cookies.
 	QWebEngineProfile *profile() const { return m_profile; }
 
+	// See `web_view_factory`. The jar below is the observing half of sec 11.3's
+	// context replay -- the replaying half has been in `local_proxy` all along.
+	QString cookie_header_for(const QUrl &url) const override;
+	void    forget_cookies() override;
+
 private:
+	// **A mirror of what the engine stored, because the engine cannot be
+	// asked.** `QWebEngineCookieStore` emits cookies as they arrive and offers
+	// no way to read them back, so watching is the only way to know what the
+	// page carried. `QNetworkCookieJar` is then the right holder rather than a
+	// hand-rolled map: domain suffixes, path prefixes, `secure` and expiry are
+	// its job and it already does them correctly.
+	//
+	// In memory only, dies with the process, and cleared by "Clear browsing
+	// data" -- it is a record of where somebody has been, and this tree has
+	// twice found a cache a clear did not reach.
+	QNetworkCookieJar  *m_cookies     = nullptr;
 	QWebEngineProfile  *m_profile     = nullptr;
 	request_filter     *m_filter      = nullptr;
 	qtwebengine_interceptor *m_interceptor = nullptr;

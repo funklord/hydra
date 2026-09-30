@@ -275,8 +275,21 @@ public:
 	// how a backend says it cannot -- and the empty case is asserted below,
 	// because that is the one that must not be turned into a guess.
 	QString user_agent() const override { return ua; }
+	// The same shape for the cookies, and the same reason: the base returns
+	// empty, which is how a backend says it cannot observe them, and that case
+	// is asserted too. `last_asked` is kept because *which url* the shell asks
+	// about is the part a wrong wiring would get wrong silently -- cookies for
+	// the wrong page are worse than none.
+	QString cookie_header_for(const QUrl &u) const override {
+		last_asked = u;
+		return cookies;
+	}
+	void forget_cookies() override { cookies.clear(); ++forgotten; }
 
 	QString ua;
+	QString cookies;
+	mutable QUrl last_asked;
+	int forgotten = 0;
 	int made = 0;
 };
 
@@ -3230,7 +3243,8 @@ int main(int argc, char **argv) {
 		policy_engine  pol;
 		request_filter filt(&pol);
 		fake_factory   fac;
-		fac.ua = "Mozilla/5.0 (Test) HydraTest/1.0";
+		fac.ua      = "Mozilla/5.0 (Test) HydraTest/1.0";
+		fac.cookies = "sid=abc123; pref=dark";
 		main_window w9(&fac, &pol, &filt);
 
 		auto *v = fac.create_view(nullptr);
@@ -3244,6 +3258,17 @@ int main(int argc, char **argv) {
 		      QString("and the browser's own User-Agent goes with it (%1)")
 		          .arg(ctx.user_agent));
 
+		// **The cookies, which `local_proxy` has replayed since sec 11.3 while
+		// nothing filled them.** A CDN that checks cookies answered 403 and the
+		// context looked complete, because the replaying half was built and
+		// tested and the observing half did not exist.
+		check(ctx.cookies == fac.cookies,
+		      QString("the page's cookies go with it too (%1)")
+		          .arg(ctx.cookies));
+		check(fac.last_asked == QUrl("https://site.example/watch/7"),
+		      QString("asked for the page being watched, not some other url "
+		               "(%1)").arg(fac.last_asked.toString()));
+
 		// **The control, and it is the half that must not be "fixed".** A
 		// backend that cannot say what it sends returns empty, and the field
 		// stays empty: `local_proxy` then sends no User-Agent header at all,
@@ -3255,6 +3280,9 @@ int main(int argc, char **argv) {
 		check(none.user_agent.isEmpty(),
 		      QString("a backend that cannot say leaves it empty (%1)")
 		          .arg(none.user_agent));
+		check(none.cookies.isEmpty(),
+		      QString("and a backend that cannot observe cookies sends none "
+		               "rather than wrong ones (%1)").arg(none.cookies));
 		check(none.referer == "https://site.example/watch/7",
 		      "while the Referer, which the shell does know, is still there");
 
