@@ -29458,6 +29458,26 @@ did not compile. The identity guard cannot cover that gap, because it compares
 *which* fmake ran and not whether it succeeded. Signalled to fmake as a fact
 about one of their consumers rather than as a request.
 
+**And fmake pinned it, which changes what this tree relies on.** They report a
+case asserting the exit status of all eleven compiling modes -- ten non-zero
+over a tree with one file that will not compile, and `--dry-run`'s honest zero
+asserted in the same case so the fix cannot degenerate into "anything that did
+not build fails". The eject forms are asked of fmake rather than listed, so a
+seventh is covered the day somebody adds one rather than the day somebody
+remembers the case.
+
+So `objsets.py`'s single guard now rests on a contract with a test behind it
+rather than on observed behaviour. Recorded because the difference is
+invisible from here: nothing in this tree changed, and what this tree depends
+on did.
+
+Their framing of why is the part worth borrowing. They had fixed two modes and
+were about to assert those two; naming a consumer's dependency made them
+measure the **population** -- eleven modes, including two eject forms they had
+not checked, because a claim about a population needs the whole population.
+That is `evidence.md`'s *assert the partition instead of the cell*, reached
+from the direction of somebody else's bug report.
+
 ### A claim of mine that its own evidence contradicted
 
 Reporting an orphaned fixture process to fmake, this tree also asserted that
