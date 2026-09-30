@@ -29786,3 +29786,63 @@ policy's own matching rather than comparing strings.
 Sabotaged by deleting the guard: three checks red, all of them in the new
 section, including the agreement one. The subdomain row stays green under
 sabotage, which is correct -- it is the row where nothing was allowed.
+
+## Seven failures about torrent caps were a directory owned by another user
+
+Running `test_settings` by hand reported seven failures -- the global and
+per-torrent connection caps, the seed ratio, and four about the custom player
+command -- in code none of the day's work had touched. The cause was
+`/tmp/hydra-settings-test`, a fixed path the suite removed and recreated at
+startup, **left behind by a run under a different account.** `/tmp` is sticky,
+so only its owner may unlink it; `removeRecursively` failed, `mkpath` was a
+no-op on a path that already existed, and every `QFile::open` afterwards
+failed. **No status was read anywhere in that chain**, so the setup's failure
+arrived as seven defects in the code under test.
+
+Two changes, because the failure had two halves:
+
+- **The scratch tree is per-process** --
+  `hydra-settings-test-<applicationPid>` -- so no other run can own it. It is
+  removed at the end of `main`, by the process that made it, and never by a
+  sweep over `hydra-settings-test*`: that would delete a concurrent run's tree.
+- **Startup refuses rather than proceeding.** `mkpath` is checked, and a write
+  probe follows it because the original failure was a write and not a create.
+  Either failure prints the path and the reason and exits 2 -- distinct from 1,
+  which is a real test failure.
+
+The removal is a check like any other, asserting the directory is gone, so a
+leak becomes a red suite rather than a quiet accumulation.
+
+### `make test` was never exposed, which is the whole argument for the fix
+
+`TEST_ENV` sets `TMPDIR=$(CURDIR)/test/tmp`, so the runner hands every suite a
+private scratch tree inside the repository and none of them can collide. The
+seven failures were only ever reachable by running the binary by hand -- and
+the Makefile's own comment beside that line says the tree had already paid for
+"two suites in one temp tree" once.
+
+So the hazard was known and the answer was put in the wrapper. **A wrapper
+guards only the way somebody did not run it**, and running a suite directly is
+what chasing one failing check looks like: `make test-one` exists, and nobody
+reaching for `./build-make/test_settings` is doing anything unreasonable. The
+guard belongs in the program, with the runner's `TMPDIR` left as the
+convenience it is.
+
+Proved both ways: with the guard, `TMPDIR` pointing at a mode-500 directory
+prints `cannot create ... -- refusing to run` and exits 2; without the fix the
+suite reported `280 passed, 8 failed` and named nothing that was true. It is
+`290 passed, 0 failed` in the default `/tmp` now, with no `TMPDIR` override
+and funk's old directory still sitting there unused.
+
+**Twenty other suites name a temp path, and fourteen of them create a
+fixed-name directory under it.** Counted with `grep -ln 'QDir::temp()\|QDir::tempPath()' *.cpp`
+for the population, then `mkpath|mkdir` against
+`applicationPid|getpid|QTemporaryDir` per file: 21 name one, 15 of the other
+20 create a directory, and only `test_instance` among those gives it a unique
+name. `test_seam` names a path and creates nothing. So fourteen carry this
+hazard today.
+
+They are not fixed here: this is one suite's bug found by being bitten, and
+converting the other fourteen is a sweep with no request behind it. The shape is recorded so the next person bitten recognises it in
+one command -- `id -un` against `ls -ld` on the directory -- rather than
+reading the seven innocent sections.

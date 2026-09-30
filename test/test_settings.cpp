@@ -64,9 +64,44 @@ int main(int argc, char **argv) {
 	QCoreApplication app(argc, argv);
 
 	// Never touch the real user config.
-	const QString tmp = QDir::temp().filePath("hydra-settings-test");
+	//
+	// **Per-process, and checked, because a fixed name in a shared /tmp is not
+	// this suite's to reuse.** It was `hydra-settings-test`, removed and
+	// recreated at startup -- which works until the directory belongs to
+	// somebody else. On a machine where two accounts build this tree, the first
+	// run leaves a 0775 directory owned by whoever ran it, `removeRecursively`
+	// then fails for the second (a sticky /tmp lets only the owner unlink), the
+	// `mkpath` is a no-op because the path already exists, and every `QFile`
+	// afterwards fails to open. Nothing read those statuses, so the run reported
+	// seven failures about torrent connection caps and a custom player command
+	// -- code that is entirely correct -- and said nothing at all about the
+	// directory. The diagnosis cost more than the bug.
+	//
+	// So: a name no other process shares, and a guard that stops rather than
+	// letting an unusable scratch tree be reported as a defect in the code.
+	// Removed at the end of main, where the process that made it is the one
+	// deleting it -- never a sweep over `hydra-settings-test*`, which would take
+	// a concurrent run's tree with it.
+	const QString tmp = QDir::temp().filePath(
+	    QString("hydra-settings-test-%1").arg(QCoreApplication::applicationPid()));
 	QDir(tmp).removeRecursively();
-	QDir().mkpath(tmp);
+	if (!QDir().mkpath(tmp)) {
+		std::fprintf(stderr, "cannot create %s -- refusing to run\n",
+		              qPrintable(tmp));
+		return 2;
+	}
+	{
+		// mkpath succeeding is not the same as being able to write, and the
+		// original failure was a write rather than a create.
+		QFile probe(tmp + "/.writable");
+		if (!probe.open(QIODevice::WriteOnly)) {
+			std::fprintf(stderr, "cannot write in %s (%s) -- refusing to run\n",
+			              qPrintable(tmp), qPrintable(probe.errorString()));
+			return 2;
+		}
+		probe.close();
+		QFile::remove(tmp + "/.writable");
+	}
 	QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, tmp);
 
 	section("defaults when nothing has been saved");
@@ -2077,6 +2112,13 @@ int main(int argc, char **argv) {
 		      QString("every rule the writer added is there (%1)")
 		          .arg(eng.rules().size()));
 	}
+
+	// **Counted, not merely attempted.** A cleanup whose failure is invisible is
+	// how a suite leaks a scratch tree per run while reporting all-passed, so the
+	// removal's result is a check like any other.
+	const bool swept = QDir(tmp).removeRecursively();
+	check(swept && !QDir(tmp).exists(),
+	      QString("the scratch tree is gone afterwards (%1)").arg(tmp));
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
