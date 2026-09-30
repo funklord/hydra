@@ -2433,9 +2433,13 @@ selection; then master → variant → segments assembled in order into one file
 the right size; then serving it with a mid-file range, a suffix range, and a
 range past EOF correctly returning 416.
 
-**Still missing from §10–§11:** DASH assembly (HLS only), the ffmpeg remux —
-concatenated MPEG-TS is directly playable, which is why this works without one,
-but fMP4 segments would need their init segment and a real remux — re-polling a
+**Still missing from §10–§11:** ~~DASH assembly (HLS only)~~ — done, through
+the same engine; see *DASH assembles through the HLS engine* below, and note
+that an MPD with separate audio is refused rather than assembled. ~~the ffmpeg
+remux — concatenated MPEG-TS is directly playable, which is why this works
+without one, but fMP4 segments would need their init segment and a real remux~~
+— the init segment is prepended now, and what the remux would still buy is the
+*mux* of a separate audio stream. Re-polling a
 live playlist as it grows (what is captured is what was in the list when it was
 read), and cookie capture, since the context carries Referer and User-Agent but
 reading cookies back needs cookie-store integration.
@@ -2908,12 +2912,17 @@ that clipped on some font sizes, which is worse than a scrollbar.
 the local proxy "does not exist yet" and that mplayer's manifest weakness was
 merely *reported*; both stopped being true once `hls_assembler` landed. HLS is
 assembled into one progressive file before it reaches a non-native player, so
-only DASH — which has no assembly step — is still reported. A **Custom…**
+~~only DASH — which has no assembly step — is still reported~~ — **DASH is
+assembled through the same engine now and is reported nowhere.** A **Custom…**
 player is treated as *not* handling manifests: nothing here knows what the
 command is, assembling first works whatever it turns out to be, and assuming a
-capability that is missing fails at playback with nothing to point at. The DASH
-warning for a custom command says the limitation is ours rather than claiming
-the player "cannot" do something we have no way to know.
+capability that is missing fails at playback with nothing to point at. ~~The
+DASH warning for a custom command says the limitation is ours rather than
+claiming the player "cannot" do something we have no way to know.~~ Both DASH
+warnings are gone: what is left of the limitation is an MPD whose audio is
+separate, and that is refused by the assembler at the moment it reads the
+manifest rather than guessed at by a warning written before anything fetched
+it.
 
 Persistence is `QSettings` (INI, user scope, explicit `hydra/hydra` path so it
 does not move if the app name is edited). **Saved values are applied by

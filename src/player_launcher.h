@@ -28,11 +28,16 @@ struct player_entry {
 //    segment requests and seekability follows the source.
 //
 // Capability-aware routing: mpv and VLC take a manifest directly; classic
-// mplayer is weak at HLS/DASH. That is no longer merely *reported* -- HLS is
-// assembled into one progressive file first (`hls_assembler`, served through
-// the local proxy, sec 10/sec 11.3), so "only mplayer installed" still yields a
-// seekable stream. DASH has no assembly step yet and is the one case still
-// reported rather than compensated for.
+// mplayer is weak at HLS/DASH. That is no longer merely *reported* -- both
+// kinds are assembled into one progressive file first (`hls_assembler`, served
+// through the local proxy, sec 10/sec 11.3), so "only mplayer installed" still
+// yields a seekable stream.
+//
+// **DASH was the one case still reported rather than compensated for, and is
+// not any more.** What is left of it is narrower and is not reported from here:
+// an MPD carrying its audio separately is refused by the assembler rather than
+// turned into a silent file, and that cannot be known at the moment a warning
+// would be written, because nothing has fetched the manifest yet.
 //
 // A **Custom...** player is deliberately treated as *not* handling manifests,
 // because nothing here knows what it is. Assembling first works for every

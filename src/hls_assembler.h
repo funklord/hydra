@@ -12,7 +12,14 @@ class QFile;
 class QNetworkAccessManager;
 class QNetworkReply;
 
-// Turns an HLS stream into one growing local file (architecture doc sec 11.3).
+// Turns a manifest -- HLS or DASH -- into one growing local file (architecture
+// doc sec 11.3).
+//
+// **The name is narrower than the job.** An MPD is converted into the same
+// ordered segment list an HLS playlist becomes, and everything below the parse
+// is shared, so there is no second assembler; renaming this class touches every
+// user and is a mechanical change of its own rather than one to fold into a
+// behavioural one.
 //
 // This is what "the app compensates in the proxy for what the player lacks"
 // means concretely. Classic mplayer is strong on progressive files and weak at
@@ -26,9 +33,15 @@ class QNetworkReply;
 //
 // Deliberately simple: segments are fetched strictly in order, one at a time.
 // Concatenated MPEG-TS is directly playable, which is why this works at all
-// without a remux; fMP4 segments would need their init segment prepended and a
-// real remux to be seekable, and that is the ffmpeg step sec 11.2 describes and
-// this does not do.
+// without a remux.
+//
+// **fMP4 needs its initialisation segment first, and gets it.** That sentence
+// used to say this class did not do it, which DASH made false: a representation
+// contributes its init segment as the first entry of the list, so the
+// concatenation is a valid fMP4 that ffmpeg can rewrap. What is still not done
+// is the *mux* -- combining a separate audio stream with the video -- which
+// needs two assembled files and an input more than `media_remux` takes, and is
+// why an MPD with separate audio is refused rather than assembled.
 class hls_assembler : public QObject {
 	Q_OBJECT
 public:
