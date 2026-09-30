@@ -10,6 +10,8 @@
 // a desktop; the decision does not.
 #include "theme.h"
 
+#include <QStringList>
+
 #include "node.h"
 #include "tab_tree_model.h"
 #include <QFile>
@@ -598,16 +600,25 @@ int main(int argc, char **argv) {
 			      QString("%1: Light (%2) is the window's (%3), not the text's "
 			               "(%4)").arg(what).arg(light_role).arg(win).arg(text));
 
-			check(p.color(QPalette::Light).lightness() >
-			          p.color(QPalette::Midlight).lightness() &&
-			      p.color(QPalette::Midlight).lightness() >
-			          p.color(QPalette::Mid).lightness() &&
-			      p.color(QPalette::Mid).lightness() >
-			          p.color(QPalette::Dark).lightness() &&
-			      p.color(QPalette::Dark).lightness() >
-			          p.color(QPalette::Shadow).lightness(),
-			      QString("%1: and they run Light > Midlight > Mid > Dark > "
-			               "Shadow").arg(what));
+			// **Derived from `shading`, not spelled out beside it.** This was
+			// five hand-written comparisons and a message naming the five roles
+			// in prose -- two copies of the order, and `names` was left unused
+			// because the prose had absorbed it. A role added to `shading`
+			// above would have been collected into the lists and compared by
+			// nothing. Walking the array cannot drift from it, and the report
+			// names the pair that broke rather than restating the whole order.
+			QString broke;
+			for (int i = 1; i < 5 && broke.isEmpty(); ++i) {
+				const int hi = p.color(shading[i - 1]).lightness();
+				const int lo = p.color(shading[i]).lightness();
+				if (hi <= lo)
+					broke = QString(" -- %1 (%2) is not lighter than %3 (%4)")
+					            .arg(names[i - 1]).arg(hi).arg(names[i]).arg(lo);
+			}
+			check(broke.isEmpty(),
+			      QString("%1: and they run %2%3").arg(what,
+			          QStringList(std::begin(names), std::end(names))
+			              .join(QStringLiteral(" > ")), broke));
 		}
 
 		// **And the thing itself: can the text be read on it.** The checks
