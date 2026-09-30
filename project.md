@@ -30205,3 +30205,76 @@ left in /tmp, and `TMPDIR` pointing at a mode-500 directory prints
 this is following rather than an argument for sweeping the other twelve: the
 ones that bite are the ones worth the change, and the record above says how to
 recognise the next.
+
+## `-fsyntax-only` cannot see an unused function, so the sweep that used it could not either
+
+`858e93d` swept the test and driver sources for warnings with
+`-fsyntax-only -Wall -Wextra` over all 92, on the stated grounds that it "needs
+no linking, so the whole population costs minutes rather than thirty WebEngine
+links". The population was right and the instrument was not.
+
+Measured with a two-line probe, one static function nobody calls and one unused
+local:
+
+    g++ -fsyntax-only -Wall -Wextra   [-Wunused-variable]
+    g++ -c -o /dev/null -Wall -Wextra [-Wunused-function] [-Wunused-variable]
+    g++ -Os -c -o /dev/null           [-Wunused-function] [-Wunused-variable]
+
+So **that mode reports an unused variable and says nothing about an unused
+function**, and "the four warnings in the test and driver sources" was a claim
+about what the mode can see rather than about the sources. Re-measured with real
+compiles and the build's own flags: **two more, both `-Wunused-function`**, and
+nothing else in 92 files.
+
+Both are superseded helpers rather than dead weight, which is why neither had a
+caller:
+
+- `try_autofill`'s file-scope `read_pw` is the same function as the `pw` lambda
+  the two-tab section defines inline and uses. The consequence check that reads
+  the filled field is alive; only the earlier copy of the reader is not.
+- `try_downloads`' `screen` shells out to `import -window root`, and `grab`
+  replaced it with an in-process `QWidget::grab` whose own comment says why:
+  "`import` reaches into X, and a modal dialog holding a pointer grab is
+  exactly when that stalls." Its `<QProcess>` include went with it; nothing
+  else in the file used it.
+
+### The instrument was wrong three ways and each was caught differently
+
+- **The mode**, above: caught by building a probe with a known answer rather
+  than by trusting the flag.
+- **The population.** The first run globbed `test_*.cpp` and `live/try_*.cpp`
+  and reported 90. The tree holds 92: `live/live_paths.cpp` and
+  `live/repro_share.cpp` match neither pattern. Caught by counting a second
+  way -- `find . -name '*.cpp'` minus the two globs -- which is the remedy
+  `evidence.md` gives for a scope number, and the only reason the count is
+  right. Both compile clean.
+- **The output.** `-MMD -MP` are in the build's flags and, with `-o /dev/null`,
+  try to open `/dev/null.d` and fail on permission -- which would have sent
+  every file to "no warnings". Filtered out deliberately, this being the shape
+  fuzznet's probe met and recorded.
+
+The sweep carries a positive control that compiles that probe first and exits
+without reporting anything if it does not warn about both, so silence is
+silence.
+
+### One thing observed and not explained
+
+`test_theme.cpp:576`'s unused `names` array -- fixed in `e7e2616` -- **was
+visible to `-fsyntax-only` with the build's flags at `858e93d`**, measured
+against that commit's copy of the file, and was not among the four. What
+explains it is not established. A candidate: without `-DHYDRA_HAVE_DBUS` that
+file does not compile at all, `theme.h`'s stub `QDBusVariant` colliding with
+the real one -- the collision `fmake.toml` records -- and a sweep counting
+`warning:` lines over a file that errors reports none. That is a mechanism, not
+a finding, and it is written as one. With the build's real flags all 92 compile.
+
+### What is not done: the live drivers
+
+`make drivers` rebuilt all of them and the targeted set for today's changes --
+`try_filters` for cosmetic hiding in a real page, `try_chrome` for the toolbar,
+`try_media`, `try_mse`, `try_tap`, `try_taprow`, `try_subframe` -- was not run,
+because the machine was at a load average of **35** from other sessions'
+builds. `sweep.sh`'s own note is that these drivers are intermittent in the
+aggregate and that a failure is not a finding until it repeats alone; at that
+load neither a pass nor a failure would have been worth recording. The previous
+full sweep, 2026-09-29, had every driver with a result line at 0 failed.

@@ -15,7 +15,6 @@
 #include <QDir>
 #include <QFile>
 #include <QMessageBox>
-#include <QProcess>
 #include <QPushButton>
 #include <QTimer>
 #include <QTreeView>
@@ -46,10 +45,6 @@ static QString test_out() {
 
 static const QString OUTDIR =
   test_out();
-
-static void screen(const QString &n) {
-	QProcess::execute("import", {"-window", "root", OUTDIR + n});
-}
 
 // In-process capture of a specific window, so a blanked screen cannot turn the
 // evidence into a black rectangle.

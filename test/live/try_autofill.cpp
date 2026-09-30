@@ -71,18 +71,6 @@ static bool wait_for(const std::function<bool()> &done, int max_ms = 8000) {
 	return done();
 }
 
-static QString read_pw(web_view_backend *v) {
-	auto *view = qobject_cast<QWebEngineView *>(v->widget());
-	if (!view || !view->page()) return QString("(no page)");
-	QString out; QEventLoop loop;
-	view->page()->runJavaScript(
-	  "(document.querySelector('input[type=password]')||{}).value||''",
-	  [&](const QVariant &r) { out = r.toString(); loop.quit(); });
-	QTimer::singleShot(3000, &loop, &QEventLoop::quit);
-	loop.exec();
-	return out;
-}
-
 // A login form, over plain HTTP on loopback.
 class origin : public QTcpServer {
 public:
