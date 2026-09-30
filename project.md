@@ -29296,3 +29296,54 @@ that looks like coverage.**
 
 It is driven through the button rather than the private method, which is how
 the section above it drives Watch and is the only door a person has.
+
+## The DASH audio gap is two different problems, and only one is a decision
+
+The open item this leaves was recorded as "`media_remux` needs a second
+input". That is true and it is not the useful shape of it. Reading
+`stream_assembly::assemble` and `hls_assembler`'s contract splits it in two,
+and the halves want different things.
+
+### Save is implementable, and needs nobody's permission
+
+Assemble the video into one file, the audio into another, mux them with
+ffmpeg, report the result. Every piece is present: the assembler already holds
+the parsed manifest and both representations -- it is the only thing in the
+tree that does -- and `media_remux::arguments` is a pure static function with
+its own tests, so a two-input form is additive rather than a change to the
+existing one.
+
+The work, named so it can be picked up cold: a second pass through the
+assembler's own machinery with `m_playlist.segments` set to the audio list and
+a second output file; an `audio_path()` that is empty unless a second stream
+was assembled; `media_remux` taking `(video, audio, out)` with `-map 0:v:0
+-map 1:a:0`; and the coordinator muxing on `completed` when that path is
+non-empty. Bounded, and about three hours with its tests and sabotages.
+
+### Watch cannot have it, and that is structural rather than unfinished
+
+**A mux needs both streams complete, and watching starts before either is.**
+The tee-to-disk trick is the whole point of assembling for a player that reads
+no manifests: the player opens the growing file after the first segment lands
+and reads it as it fills. `stream_assembly` says so where it declines to
+rewrap a watched file -- "a player already has this file open ... rewrapping
+it now would replace the file underneath a running player".
+
+So for a split-audio MPD, Watch has exactly two honest behaviours and no
+third:
+
+- **Refuse**, as it does today, naming the audio as what is missing.
+- **Assemble both fully, mux, then launch** -- which works, and gives up the
+  property the feature exists for. A ten-minute stream becomes a ten-minute
+  wait before anything plays.
+
+**That is the decision, and it is the copyright holder's**: it trades a
+headline behaviour for coverage of a manifest shape, and which way that goes
+is not a technical question. Recorded here rather than put in a message,
+because the same question reaches whoever reads this next and a message is the
+copy that does not get re-read.
+
+Nothing about the refusal is provisional in the meantime. It names the audio,
+it happens at the moment the manifest is read, and it is what the assembler's
+own comment says it is -- the alternative being a file that plays perfectly
+and is silent.
