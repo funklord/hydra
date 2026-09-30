@@ -490,6 +490,47 @@ int main(int argc, char **argv) {
 		px.close_capture(curl);
 	}
 
+	section("a capture that opens and then cannot be written is not counted");
+	{
+		// **The case the section above does not reach.** Making the file
+		// read-only makes the *open* fail, which was always handled. What was
+		// not is an open that succeeds and a write that does not: the write's
+		// result was discarded and `received` advanced by what the page sent
+		// rather than by what reached the disk. That removes the one symptom
+		// either half has, because the reason a failure is reported at all is
+		// that otherwise `received` stops and the watchdog blames the page.
+		//
+		// `/dev/full` is the portable way to ask for it on Linux: it opens,
+		// accepts a truncate, and fails every write with ENOSPC -- a disk that
+		// fills, without needing one.
+		if (!QFileInfo("/dev/full").isWritable()) {
+			std::printf("  --    no writable /dev/full here, so a write "
+			             "that fails after a successful open cannot be "
+			             "forced\n");
+		} else {
+			local_proxy fx;
+			check(fx.start(), "the proxy is listening");
+			const QUrl furl = fx.open_capture("/dev/full");
+			check(!furl.isEmpty(), "and a capture opens on /dev/full");
+
+			QStringList said;
+			QObject::connect(&fx, &local_proxy::failed,
+			                  [&said](const QString &m) { said << m; });
+
+			check(post_capture(furl, QByteArray(64, 'x'))
+			          .startsWith("HTTP/1.1 204"),
+			       "the page is still answered 204, as it must be");
+			check(fx.captured_bytes(furl) == 0,
+			       QString("and nothing is counted, because nothing landed "
+			                "(%1)").arg(fx.captured_bytes(furl)));
+			check(said.size() == 1 && said.first().contains("Could not write"),
+			       QString("with the write named rather than the page (%1)")
+			           .arg(said.isEmpty() ? QString("nothing said")
+			                                : said.first().left(40)));
+			fx.close_capture(furl);
+		}
+	}
+
 	section("a live playlist says so when it is saved, and a whole one does not");
 	{
 		// A playlist with no #EXT-X-ENDLIST is still growing, so running out of

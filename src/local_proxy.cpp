@@ -422,11 +422,38 @@ void local_proxy::accept_capture(QTcpSocket *client, const QString &token,
 	entry &e = m_published[token];
 	if (!body.isEmpty()) {
 		QFile f(e.local_path);
+		// **Opening is not the only way this fails, and the other way credited
+		// the bytes anyway.** `write` was called for its side effect and
+		// `received` advanced by what the page sent rather than by what reached
+		// the disk, so a write that failed part-way -- a full disk, a quota, a
+		// removable volume pulled out mid-capture -- kept `received` moving.
+		// That is precisely the signal the branch below depends on: the reason
+		// an unwritable directory is reported here is that otherwise `received`
+		// stops and the watchdog blames the page. Crediting unwritten bytes
+		// removes the one symptom either of them has.
+		//
+		// `close()` is where a buffered short write surfaces, which is
+		// `http_download_source::teardown`'s reason for flushing at the one
+		// point that can answer; here the file is opened and closed per POST,
+		// so the close IS that point.
+		bool wrote = false;
+		QString why;
 		if (f.open(QIODevice::WriteOnly | QIODevice::Append)) {
-			f.write(body);
+			const qint64 put     = f.write(body);
+			// `close()` returns void, so the flush is what reports; the error
+			// state survives the close, and both are read.
+			const bool   flushed = f.flush();
 			f.close();
-			e.received += body.size();
-		} else if (!e.write_failed) {
+			wrote = (put == body.size()) && flushed &&
+			         f.error() == QFileDevice::NoError;
+			if (wrote)
+				e.received += put;
+			else
+				why = f.errorString();
+		} else {
+			why = f.errorString();
+		}
+		if (!wrote && !e.write_failed) {
 			// **Reported, because the symptom names the wrong culprit.** The
 			// bytes are dropped and `received` stops moving, and the window's
 			// watchdog then says "the page has stopped feeding its player" --
@@ -434,7 +461,7 @@ void local_proxy::accept_capture(QTcpSocket *client, const QString &token,
 			// Nothing else in the path can tell the two apart.
 			e.write_failed = true;
 			emit failed("Could not write the captured stream to " +
-			             e.local_path + " (" + f.errorString() + "). The page "
+			             e.local_path + " (" + why + "). The page "
 			             "is still sending; the bytes are being dropped.");
 		}
 	}

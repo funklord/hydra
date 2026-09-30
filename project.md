@@ -29094,3 +29094,65 @@ suite can construct a `QWebEngineProfile`, so the check is a live driver, and
 failed, no crash at either teardown. That is weaker than a unit test and it is
 what exists.
 
+## A capture credited bytes it had not written
+
+`local_proxy::accept_capture` took the page's POSTed chunk, wrote it, and did
+this:
+
+    f.write(body);
+    f.close();
+    e.received += body.size();
+
+The write's result was discarded and `received` advanced by what the page sent
+rather than by what reached the disk.
+
+**Which removes the only symptom either half of the failure has.** The branch
+beside it exists because an unwritable capture is otherwise indistinguishable
+from a page that stopped sending: the bytes are dropped, `received` stops
+moving, and the window's watchdog says *"the page has stopped feeding its
+player"* -- blaming the page for a directory the browser cannot write.
+Crediting unwritten bytes keeps `received` moving, so neither the report nor
+the watchdog fires and the capture quietly produces a short file.
+
+It counts what landed now: the write's count against the body's size, the
+flush -- `close()` returns void, so the flush is what reports -- and the
+file's error state, which survives the close.
+
+### The existing test covered the other failure, and said so
+
+There was already a section for this: *"a capture the proxy cannot write is
+reported, not counted"*. It makes the file read-only, which makes the **open**
+fail, and that path was always handled. Its own comment claims it covers "the
+one that arrives AFTER a capture is open", and a permission change does not --
+it arrives at the next open.
+
+**What was uncovered is an open that succeeds and a write that does not**, and
+forcing it needs no full disk: `/dev/full` opens, accepts a truncate, and
+fails every write with ENOSPC. Three checks, and the old behaviour fails
+exactly two of them -- 64 bytes credited that never landed, and nothing said
+-- while leaving the read-only section green, so the two sections are testing
+different things rather than one thing twice.
+
+### Three lenses that came up empty, with their method
+
+Swept on the way to this, and recorded because an empty result is a
+measurement only if its lens is written down:
+
+- **Host matching by substring.** Every site-scoped comparison in `src/` uses
+`host == x || host.endsWith("." + x)`; there is no `contains()` anywhere in
+that family, so `evil-example.com` cannot match `example.com`. - **Objects
+created with `new` and no parent.** One instance, the scheme handler fixed
+above. Every other candidate is owned: `download_manager::add_source`
+reparents and says "Takes ownership" in the header, `kiosk_controller` deletes
+its scene on both paths, `network_fetcher` deletes its thread. - **Writes
+whose result is ignored.** The socket writes are Qt's buffered queue and safe;
+`hls_assembler` checks its count and its flush with the incident recorded
+above it; and `http_download_source::teardown` deliberately checks at the
+flush rather than per write, because QFile buffers and "every `write` in the
+handlers above can return a full count and still have written nothing". Only
+the capture path above was wrong.
+
+The lens that paid out was the one derived from the last find rather than
+chosen in advance -- the scheme handler came from sweeping cross-file
+citations, and this came from sweeping what the scheme handler suggested.
+
