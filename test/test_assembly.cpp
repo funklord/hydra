@@ -602,6 +602,7 @@ int main(int argc, char **argv) {
 		cdn.files["/init.mp4"]  = QByteArray("INIT");
 		cdn.files["/s1.m4s"]    = QByteArray("ONE");
 		cdn.files["/s2.m4s"]    = QByteArray("TWO");
+		cdn.files["/s3.m4s"]    = QByteArray("THREE");
 		cdn.files["/one.mpd"]   =
 		  QByteArray("<?xml version=\"1.0\"?>\n"
 		              "<MPD mediaPresentationDuration=\"PT4S\"><Period>\n"
@@ -653,12 +654,17 @@ int main(int argc, char **argv) {
 		              "<MPD mediaPresentationDuration=\"PT4S\"><Period>\n"
 		              "  <AdaptationSet mimeType=\"video/mp4\">\n"
 		              "    <Representation id=\"v\" bandwidth=\"1\">\n"
+		              // **Two video segments against one audio segment, on
+		              // purpose.** With one each, an index that restarted per
+		              // list would go 1 then 1 -- never decreasing -- so the
+		              // monotonic check could not fail. Two then one makes it
+		              // drop from 2 to 1 if the offset is ever lost.
 		              "      <SegmentList><SegmentURL media=\"/s1.m4s\"/>"
-		              "</SegmentList>\n"
+		              "<SegmentURL media=\"/s2.m4s\"/></SegmentList>\n"
 		              "    </Representation></AdaptationSet>\n"
 		              "  <AdaptationSet mimeType=\"audio/mp4\">\n"
 		              "    <Representation id=\"a\" bandwidth=\"1\">\n"
-		              "      <SegmentList><SegmentURL media=\"/s2.m4s\"/>"
+		              "      <SegmentList><SegmentURL media=\"/s3.m4s\"/>"
 		              "</SegmentList>\n"
 		              "    </Representation></AdaptationSet>\n"
 		              "</Period></MPD>\n");
@@ -713,6 +719,61 @@ int main(int argc, char **argv) {
 		check(f4.size() == 1 && f4.first().contains("MPD not understood"),
 		       QString("and an MPD the parser refuses carries its reason (%1)")
 		           .arg(f4.isEmpty() ? QString("nothing said") : f4.first().left(48)));
+
+		// **Given somewhere to put it, the audio is assembled too.** Same
+		// engine, a second pass, a second file -- which is what makes a mux
+		// possible, and what Save asks for where Watch cannot.
+		hls_assembler as5;
+		QStringList f5;
+		bool done5 = false;
+		QList<QPair<int, int>> steps;   // (done, total) as reported
+		QObject::connect(&as5, &hls_assembler::failed,
+		                  [&f5](const QString &m) { f5 << m; });
+		QObject::connect(&as5, &hls_assembler::completed,
+		                  [&done5] { done5 = true; });
+		QObject::connect(&as5, &hls_assembler::progress,
+		                  [&steps](qint64, int d, int t) { steps << qMakePair(d, t); });
+		const QString v_out = QDir(odir.path()).filePath("split-v.mp4");
+		const QString a_out = v_out + ".audio";
+		as5.start(QUrl(base + "/split.mpd"), stream_context{}, v_out, a_out);
+		for (int i = 0; i < 120 && !done5 && f5.isEmpty(); ++i)
+			spin(50);
+
+		check(done5 && f5.isEmpty(),
+		       QString("an MPD with separate audio assembles when asked (%1)")
+		           .arg(f5.isEmpty() ? QString("completed") : f5.first()));
+		check(as5.audio_path() == a_out,
+		       QString("and says where the audio went (%1)")
+		           .arg(as5.audio_path().isEmpty() ? QString("nowhere")
+		                                            : QString("named")));
+		const auto slurp = [](const QString &path) {
+			QFile f(path); f.open(QIODevice::ReadOnly); return f.readAll();
+		};
+		check(slurp(v_out) == QByteArray("ONETWO"),
+		       QString("the video file holds both video segments (%1)")
+		           .arg(QString::fromLatin1(slurp(v_out))));
+		check(slurp(a_out) == QByteArray("THREE"),
+		       QString("and the audio file only the audio one, not all three "
+		                "in one (%1)").arg(QString::fromLatin1(slurp(a_out))));
+
+		// **Progress over the whole job, not the current list.** Each pass
+		// replaces the segment list, so a bar fed the list's own index would
+		// reach the end of the video, drop to zero and climb again -- which
+		// reads as a restarted download. Monotonic and one total throughout.
+		bool monotonic = true, one_total = true;
+		for (int i = 1; i < steps.size(); ++i) {
+			if (steps[i].first < steps[i - 1].first)
+				monotonic = false;
+			if (steps[i].second != steps[0].second)
+				one_total = false;
+		}
+		check(steps.size() >= 2 && monotonic,
+		       QString("progress never walks backwards across the two passes "
+		                "(%1 reports)").arg(steps.size()));
+		check(one_total && !steps.isEmpty() && steps[0].second == 3,
+		       QString("and the total is the whole job throughout (%1)")
+		           .arg(steps.isEmpty() ? QString("none")
+		                                 : QString::number(steps[0].second)));
 	}
 
 	section("a live playlist says so when it is saved, and a whole one does not");

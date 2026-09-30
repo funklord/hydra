@@ -122,7 +122,15 @@ void stream_assembly::assemble(const media_item &item,
 		  ? QStringLiteral(" Live stream, so this is the window the playlist "
 		                    "offered rather than the whole broadcast.")
 		  : QString();
-		emit status(QString("Saved %1; rewrapping…%2").arg(out, note));
+		// **Two files or one, decided by what the assembler found.** A DASH
+		// manifest carrying its audio separately produced a second file, and
+		// neither half is the programme; `audio_path()` is non-empty exactly
+		// then, so it answers "mux or rewrap" without a second flag to keep in
+		// step with it.
+		const QString audio = m_assembler ? m_assembler->audio_path() : QString();
+		emit status(audio.isEmpty()
+		  ? QString("Saved %1; rewrapping…%2").arg(out, note)
+		  : QString("Saved %1; combining video and audio…%2").arg(out, note));
 		auto *remux = new media_remux(this);
 		connect(remux, &media_remux::finished, this,
 		         [this, remux, note](bool ok, const QString &path,
@@ -131,7 +139,10 @@ void stream_assembly::assemble(const media_item &item,
 			                : QString("Saved %1 — %2%3").arg(path, why, note));
 			remux->deleteLater();
 		});
-		remux->start(out);
+		if (audio.isEmpty())
+			remux->start(out);
+		else
+			remux->start_mux(out, audio);
 	});
 
 	connect(m_assembler, &hls_assembler::failed, this,
@@ -140,5 +151,13 @@ void stream_assembly::assemble(const media_item &item,
 	});
 
 	emit status(QStringLiteral("Fetching manifest…"));
-	m_assembler->start(item.url, ctx, out);
+	// **Only saving asks for the audio, and the asymmetry is the point.** A mux
+	// needs both streams complete; watching hands the player a file that is
+	// still growing, from the first segment. So Save passes somewhere to put a
+	// separately-carried audio stream and Watch does not -- which is what makes
+	// the assembler refuse such a manifest for Watch rather than produce a file
+	// that plays perfectly and is silent. Whether Watch should instead wait for
+	// both and play afterwards is recorded in project.md as the holder's.
+	m_assembler->start(item.url, ctx, out,
+	                    play_it ? QString() : out + QStringLiteral(".audio"));
 }

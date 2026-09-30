@@ -64,8 +64,38 @@ public:
 			                 out };
 	}
 
+	// **Muxing two assembled streams, which is a different job from rewrapping
+	// one.** A DASH manifest hands video and audio out separately, so the
+	// assembler produces two files and neither is the programme; this is the
+	// step that makes one that is. `-c copy` still: both sides were encoded by
+	// whoever published them and re-encoding either would be a quality loss
+	// nobody asked for.
+	//
+	// The maps are explicit. Without them ffmpeg's default selection takes one
+	// stream of each kind by its own heuristic, which is right almost always
+	// and silent when it is not; saying `0:v:0` and `1:a:0` means the first
+	// video of the first input and the first audio of the second, which is what
+	// the assembler wrote and nothing else.
+	static QStringList arguments(const QString &video, const QString &audio,
+	                              const QString &out) {
+		return QStringList{ QStringLiteral("-y"),
+			                 QStringLiteral("-loglevel"), QStringLiteral("error"),
+			                 QStringLiteral("-i"), video,
+			                 QStringLiteral("-i"), audio,
+			                 QStringLiteral("-c"), QStringLiteral("copy"),
+			                 QStringLiteral("-map"), QStringLiteral("0:v:0"),
+			                 QStringLiteral("-map"), QStringLiteral("1:a:0"),
+			                 out };
+	}
+
 	// Rewrap `assembled`. Emits exactly once.
 	void start(const QString &assembled);
+
+	// Mux `video` and `audio` into one file. Emits exactly once, and removes
+	// **both** inputs on success rather than the one `start` removes -- two
+	// half-programmes left beside the result are two files that look like
+	// downloads and play as neither.
+	void start_mux(const QString &video, const QString &audio);
 
 signals:
 	// `path` is the file to keep -- the remuxed one when this worked, and the
@@ -74,5 +104,16 @@ signals:
 	void finished(bool ok, const QString &path, const QString &message);
 
 private:
+	// Both entry points are the same three steps -- run ffmpeg, let the
+	// *artifact* decide, then clean up -- and only the wording and what gets
+	// removed differ. Shared, because the artifact check is where the reasoning
+	// lives and two copies of it is one copy too many.
+	// `verb` and `past` are both passed rather than one derived from the other:
+	// deriving "combined" from "combine" is string surgery that reads worse than
+	// two arguments and is wrong for the next verb somebody adds.
+	void run(const QStringList &args, const QString &out,
+	          const QStringList &remove_on_success, const QString &keep_on_failure,
+	          const QString &verb, const QString &past);
+
 	QProcess *m_proc = nullptr;
 };

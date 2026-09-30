@@ -50,11 +50,30 @@ public:
 
 	// Fetch `manifest`, pick the best variant if it is a master playlist, then
 	// stream its segments into `output_path`.
+	// `audio_output_path`, when given, is where a **separately-carried audio
+	// stream** is assembled. DASH hands video and audio out apart, and one
+	// assembled representation is not the programme: with a path here the audio
+	// is fetched into it after the video and the caller muxes the two; without
+	// one, a manifest that carries them separately is refused rather than
+	// turned into a file that plays perfectly and is silent.
+	//
+	// **The choice belongs to the caller because only the caller knows what the
+	// file is for.** Saving can wait for both streams and mux; watching cannot,
+	// because the player has the growing file open from the first segment and a
+	// mux needs both complete. So Save passes a path and Watch does not, and the
+	// refusal is not a limitation of this class but the honest answer to the
+	// question Watch is asking.
 	void start(const QUrl &manifest, const stream_context &ctx,
-	            const QString &output_path);
+	            const QString &output_path,
+	            const QString &audio_output_path = QString());
 	void stop();
 
 	QString output_path() const { return m_path; }
+	// Where the audio landed, or empty when there was none to assemble -- which
+	// is every HLS stream and every MPD that carries one muxed representation.
+	// A caller muxes when this is non-empty and does not when it is not, so it
+	// needs no separate flag for "was there audio".
+	QString audio_path() const { return m_audio_done ? m_audio_path : QString(); }
 	qint64  bytes_written() const { return m_written; }
 	int     segments_done() const { return m_index; }
 	int     segments_total() const { return m_playlist.segments.size(); }
@@ -100,6 +119,21 @@ private:
 
 	stream_context m_ctx;
 	hls_playlist   m_playlist;
+	// The audio pass: where it goes, the list it will walk, and whether it has
+	// run. Three rather than one because "asked for" and "happened" are
+	// different questions -- a manifest with no separate audio is asked for and
+	// never happens, and `audio_path()` must answer about the second.
+	QString        m_audio_path;
+	QList<hls_segment> m_audio_pending;
+	bool           m_audio_done = false;
+	// **So progress does not walk backwards between the two passes.** Each pass
+	// replaces `m_playlist.segments`, so `m_index` and the list's size are about
+	// the current list alone; a bar fed those would reach the end of the video,
+	// drop to zero and start again, which reads as a restarted download rather
+	// than as the second half of one. These carry the whole job: what earlier
+	// passes finished, and what every pass will amount to.
+	int            m_segments_base  = 0;
+	int            m_segments_all   = 0;
 	QString m_path;
 	qint64  m_written  = 0;
 	int     m_index    = 0;

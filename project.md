@@ -29304,21 +29304,22 @@ input". That is true and it is not the useful shape of it. Reading
 `stream_assembly::assemble` and `hls_assembler`'s contract splits it in two,
 and the halves want different things.
 
-### Save is implementable, and needs nobody's permission
+### Save is implementable, and needs nobody's permission -- and is done
 
 Assemble the video into one file, the audio into another, mux them with
-ffmpeg, report the result. Every piece is present: the assembler already holds
-the parsed manifest and both representations -- it is the only thing in the
-tree that does -- and `media_remux::arguments` is a pure static function with
-its own tests, so a two-input form is additive rather than a change to the
-existing one.
+ffmpeg, report the result. Every piece was present: the assembler already
+held the parsed manifest and both representations -- it is the only thing in
+the tree that does -- and `media_remux::arguments` is a pure static function
+with its own tests, so a two-input form is additive rather than a change to
+the existing one.
 
-The work, named so it can be picked up cold: a second pass through the
-assembler's own machinery with `m_playlist.segments` set to the audio list and
-a second output file; an `audio_path()` that is empty unless a second stream
-was assembled; `media_remux` taking `(video, audio, out)` with `-map 0:v:0
--map 1:a:0`; and the coordinator muxing on `completed` when that path is
-non-empty. Bounded, and about three hours with its tests and sabotages.
+Built as specified, in the four pieces this entry named: a second pass
+through the assembler's own machinery with `m_playlist.segments` set to the
+audio list and a second output file; an `audio_path()` that is empty unless a
+second stream was assembled; `media_remux` taking `(video, audio, out)` with
+`-map 0:v:0 -map 1:a:0`; and the coordinator muxing on `completed` when that
+path is non-empty. See *Save muxes what the manifest kept apart* below for
+what the building turned up, which the specification did not predict.
 
 ### Watch cannot have it, and that is structural rather than unfinished
 
@@ -29347,3 +29348,68 @@ Nothing about the refusal is provisional in the meantime. It names the audio,
 it happens at the moment the manifest is read, and it is what the assembler's
 own comment says it is -- the alternative being a file that plays perfectly
 and is silent.
+
+## Save muxes what the manifest kept apart
+
+The four pieces the entry above specified, built. What it did not predict is
+below, and the items are of one kind: an accounting claim and a control,
+neither of which the design named.
+
+### The maps are stated because the default is right almost always
+
+`-map 0:v:0 -map 1:a:0`. Without them ffmpeg picks one stream of each kind by
+its own heuristic, which is correct nearly every time and **silent when it is
+not** -- and "nearly every time" is not a property to build a save path on.
+Both inputs are removed on success rather than the one a rewrap removes: two
+half-programmes left beside the result are two files that look like downloads
+and play as neither.
+
+Both entry points share one runner now, because the artifact-decides check --
+ffmpeg can exit zero having written nothing usable -- is where the reasoning
+lives and two copies of it is one too many.
+
+### The audio path is the caller's argument, not a setting
+
+Only the caller knows what the file is for. Save can wait for both streams and
+mux; Watch cannot, because the player has the growing file open from the first
+segment. So `start()` takes an optional audio output path: with one, a
+separately-carried audio stream is assembled into it; without one, such a
+manifest is refused exactly as before.
+
+**That makes the refusal the honest answer to Watch's question rather than a
+limitation of the assembler**, which is what it looked like while it was the
+only behaviour.
+
+### The progress bar would have walked backwards, which is today's other bug
+
+Each pass replaces `m_playlist.segments`, so `m_index` and the list's size are
+about the current list alone. Fed those, a bar reaches the end of the video,
+**drops to zero and climbs again** -- reading as a restarted download rather
+than as the second half of one. It reports over the whole job now, and the
+plain HLS case is unchanged because there the current list *is* the whole job.
+
+This is the same error as *A capture credited bytes it had not written*
+earlier the same day: a number measuring the wrong population and looking like
+progress. That one shipped and was found by a lens; this one was caught while
+writing it, which is the only difference between them.
+
+### A control that could not fail, strengthened rather than trusted
+
+The first fixture gave each stream one segment. With the whole-job offset
+removed, the monotonic check saw 1 then 1 -- never decreasing -- so it stayed
+**green** while only the total caught the sabotage. Two video segments against
+one audio makes a lost offset drop 2 to 1, and then the same sabotage turns
+both red.
+
+Noticing cost one sabotage run and the fix cost two lines. **Reading which
+checks fired, rather than that something did, is the whole of it** -- the
+third time in two days that a green check turned out to be incapable of being
+anything else.
+
+### And the style gate caught what a grep would not have
+
+`make style` returned 2 on a wrapped lambda parameter list indented with two
+tabs where the structure is one -- tabs for nesting, spaces for alignment, and
+a tab used to align. Found by reading the exit status: the words the gate
+prints are "convention violation", so a grep for `error` or `fail` would have
+reported nothing and passed.

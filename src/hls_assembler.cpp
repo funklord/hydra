@@ -34,7 +34,8 @@ QNetworkReply *hls_assembler::get(const QUrl &url, const QByteArray &range) {
 }
 
 void hls_assembler::start(const QUrl &manifest, const stream_context &ctx,
-                           const QString &output_path) {
+                           const QString &output_path,
+                           const QString &audio_output_path) {
 	stop();
 	// A new run, so anything deferred by the last one can tell it is stale.
 	// Everything below is reset except `m_playlist`, which is what made the
@@ -49,6 +50,11 @@ void hls_assembler::start(const QUrl &manifest, const stream_context &ctx,
 	m_finished  = false;
 	m_stopped   = false;
 	m_redirects = 0;
+	m_audio_path = audio_output_path;
+	m_audio_pending.clear();
+	m_audio_done = false;
+	m_segments_base = 0;
+	m_segments_all  = 0;
 
 	m_file = new QFile(m_path, this);
 	if (!m_file->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -175,12 +181,33 @@ bool hls_assembler::assemble_dash(const QByteArray &body, const QUrl &url) {
 	// refuses and says which part is missing. Combining the two means two
 	// assembled files and a mux, which is an input more than `media_remux`
 	// takes, and that is a change to make deliberately rather than here.
-	if (dash::best_audio(m)) {
-		emit failed("This MPD carries its audio separately from its video, "
-		             "and assembling the two into one file is not implemented. "
-		             "The video alone would play silently, so it is refused "
-		             "rather than handed over.");
+	const dash_representation *a = dash::best_audio(m);
+	if (a && m_audio_path.isEmpty()) {
+		emit failed("This MPD carries its audio separately from its video, and "
+		             "combining the two needs a file to put the audio in, which "
+		             "this caller did not ask for. The video alone would play "
+		             "silently, so it is refused rather than handed over.");
 		return false;
+	}
+	if (a) {
+		// **Kept rather than fetched now.** The video is what a player can
+		// start on and what a progress bar is about, so it goes first and the
+		// audio follows when its list is exhausted -- the same engine, a second
+		// time, into a second file.
+		if (!a->init.isEmpty()) {
+			hls_segment init;
+			init.url = a->init;
+			m_audio_pending.push_back(init);
+		}
+		for (const QUrl &u : a->segments) {
+			hls_segment seg;
+			seg.url = u;
+			m_audio_pending.push_back(seg);
+		}
+		if (m_audio_pending.isEmpty()) {
+			emit failed("The MPD's audio stream listed no segments.");
+			return false;
+		}
 	}
 
 	m_playlist = hls_playlist{};
@@ -200,6 +227,9 @@ bool hls_assembler::assemble_dash(const QByteArray &body, const QUrl &url) {
 		emit failed("The MPD's video stream listed no segments.");
 		return false;
 	}
+	// Both lists are known here and nowhere earlier, which is why the totals are
+	// set here rather than in `start`.
+	m_segments_all = m_playlist.segments.size() + m_audio_pending.size();
 	return true;
 }
 
@@ -207,6 +237,37 @@ void hls_assembler::next_segment() {
 	if (m_stopped)
 		return;
 	if (m_index >= m_playlist.segments.size()) {
+		// **The video list is done; the audio list may not have started.** One
+		// assembly, two passes, because a DASH manifest's audio is a second
+		// ordered list of segments and this engine walks exactly that.
+		if (!m_audio_pending.isEmpty() && !m_audio_done) {
+			if (m_file) {
+				m_file->flush();
+				m_file->close();
+				delete m_file;
+				m_file = nullptr;
+			}
+			m_file = new QFile(m_audio_path, this);
+			if (!m_file->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+				// The video is on disk and playable, silently. Say which half
+				// exists rather than reporting a failed assembly, because the
+				// caller decides what a video without sound is worth.
+				emit failed("Cannot write the audio to " + m_audio_path +
+				             " — the video is assembled without it.");
+				delete m_file;
+				m_file = nullptr;
+				return;
+			}
+			m_segments_base    += m_playlist.segments.size();
+			m_playlist.segments = m_audio_pending;
+			m_audio_pending.clear();
+			m_audio_done = true;
+			m_index      = 0;
+			m_attempt    = 0;
+			next_segment();
+			return;
+		}
+
 		// A live playlist keeps growing, so "ran out of segments" is only the
 		// end for VOD. Re-polling a live list is the next increment; for now
 		// say plainly that what we captured is what there is.
@@ -285,7 +346,13 @@ void hls_assembler::next_segment() {
 			m_written += body.size();
 		}
 		++m_index;
-		emit progress(m_written, m_index, m_playlist.segments.size());
+		// Reported over the whole job rather than the current list: see
+		// `m_segments_base`. `m_segments_all` is zero for a plain HLS assembly,
+		// where the current list *is* the whole job, so the fallback keeps that
+		// case saying exactly what it always said.
+		emit progress(m_written, m_segments_base + m_index,
+		               m_segments_all > 0 ? m_segments_all
+		                                  : m_playlist.segments.size());
 		next_segment();
 	});
 }

@@ -196,6 +196,26 @@ int main(int argc, char **argv) {
 		check(!media_remux::target_for("/tmp/a.ts").endsWith(".ts"),
 		      "and the output is never the input, which would truncate it mid-write");
 
+		// **The mux form, which is a different job from the rewrap.** Two
+		// inputs, `-c copy` still, and the maps explicit: ffmpeg's default
+		// stream selection is right almost always and silent when it is not,
+		// and "almost always" is not a property to build a save path on.
+		const QStringList mx = media_remux::arguments("/tmp/v.mp4", "/tmp/a.mp4",
+		                                               "/tmp/both.mp4");
+		check(mx.indexOf("-i") >= 0 && mx.count("-i") == 2,
+		       QString("the mux names two inputs (%1)").arg(mx.count("-i")));
+		check(mx.indexOf("/tmp/v.mp4") == mx.indexOf("-i") + 1,
+		       "video first, because 0:v:0 refers to it");
+		check(mx.contains("-map") && mx.contains("0:v:0") &&
+		          mx.contains("1:a:0"),
+		       QString("with both maps stated rather than left to ffmpeg (%1)")
+		           .arg(mx.join(' ')));
+		check(mx.indexOf("copy") > 0 && mx.last() == "/tmp/both.mp4",
+		       "copying the streams, output last");
+		check(!mx.contains("-vn") && !mx.contains("-an"),
+		       "and dropping neither side, which a stray -an would do "
+		       "silently");
+
 		const QStringList a = media_remux::arguments("/tmp/in.ts", "/tmp/out.mp4");
 		check(a.contains("copy") && a.contains("-c"),
 		      "it rewraps rather than re-encodes");
