@@ -55,6 +55,8 @@ void hls_assembler::start(const QUrl &manifest, const stream_context &ctx,
 	m_audio_done = false;
 	m_segments_base = 0;
 	m_segments_all  = 0;
+	m_live_url      = QUrl();
+	m_next_sequence = 0;
 
 	m_file = new QFile(m_path, this);
 	if (!m_file->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -144,6 +146,11 @@ void hls_assembler::fetch_manifest(const QUrl &url) {
 			emit failed("Playlist listed no segments.");
 			return;
 		}
+		// What to ask again, and the number after the last segment this run is
+		// about to take. Both are only meaningful for HLS; see the header.
+		m_live_url      = url;
+		m_next_sequence = m_playlist.media_sequence + m_playlist.segments.size();
+		m_live_idle.start();
 		next_segment();
 	});
 }
@@ -233,6 +240,122 @@ bool hls_assembler::assemble_dash(const QByteArray &body, const QUrl &url) {
 	return true;
 }
 
+// Re-read the media playlist and continue into whatever it has grown.
+//
+// **What makes this terminate is stated rather than hoped for.** Three things
+// end it: the playlist saying it is complete (`#EXT-X-ENDLIST`, which the parse
+// reports as no longer live), no growth for `k_live_stall_ms`, and `stop()`.
+// Nothing here waits on a remote file choosing to stop, which is the shape
+// `running-code.md` refuses to let anybody run.
+//
+// The poll interval is the playlist's own target duration, floored, because a
+// list advertising a tenth of a second would otherwise be fetched ten times a
+// second and a list advertising nothing would be fetched continuously.
+int hls_assembler::live_stall_ms() {
+	// Read once and cached: a value that changed under a running assembly would
+	// make the bound a property of when it was consulted.
+	static const int ms = [] {
+		bool ok = false;
+		const int v = qEnvironmentVariableIntValue("HYDRA_LIVE_STALL_MS", &ok);
+		return (ok && v > 0) ? v : k_live_stall_ms;
+	}();
+	return ms;
+}
+
+void hls_assembler::poll_live() {
+	const int wait = qMax(k_live_poll_min_ms,
+	                       int(m_playlist.target_duration * 1000.0));
+	const int run  = m_run;
+	QTimer::singleShot(wait, this, [this, run] {
+		// The run counter, for the reason the one above `m_run` gives: a timer
+		// pending from a previous press must not drive this one.
+		if (m_stopped || run != m_run)
+			return;
+
+		m_reply = get(m_live_url);
+		QNetworkReply *reply = m_reply;
+		connect(reply, &QNetworkReply::finished, this, [this, reply, run] {
+			reply->deleteLater();
+			if (m_stopped || run != m_run)
+				return;
+			if (reply->error() != QNetworkReply::NoError) {
+				// A poll that fails is not an assembly that failed: everything
+				// fetched so far is on disk and playable. Stop and say what is
+				// there, rather than throwing away a capture over one refused
+				// request.
+				finish_live("the playlist could not be re-read: " +
+				             reply->errorString());
+				return;
+			}
+
+			const hls_playlist fresh = hls::parse(reply->readAll(), m_live_url);
+			if (!fresh.error.isEmpty()) {
+				finish_live("the playlist stopped being understood: " +
+				             fresh.error);
+				return;
+			}
+
+			// **New is a number, not an address.** A live playlist may reuse a
+			// URL for different content; `#EXT-X-MEDIA-SEQUENCE` is what the
+			// specification makes monotonic, so what has been taken already is
+			// `m_next_sequence` and everything at or beyond it is new.
+			QList<hls_segment> fresh_segments;
+			for (int i = 0; i < fresh.segments.size(); ++i) {
+				const int seq = fresh.media_sequence + i;
+				if (seq >= m_next_sequence)
+					fresh_segments.push_back(fresh.segments.at(i));
+			}
+
+			if (fresh_segments.isEmpty()) {
+				// **A list that has not grown is not a list that has ended**,
+				// so this is where the stall bound earns its place: without it
+				// a stream that simply pauses would be polled for ever.
+				if (m_live_idle.elapsed() > live_stall_ms()) {
+					finish_live(QString());
+					return;
+				}
+				// Still live and still quiet: ask again after the interval.
+				m_playlist.is_live        = fresh.is_live;
+				m_playlist.target_duration = fresh.target_duration;
+				if (!fresh.is_live) {
+					finish_live(QString());
+					return;
+				}
+				poll_live();
+				return;
+			}
+
+			m_live_idle.restart();
+			m_segments_base    += m_playlist.segments.size();
+			m_playlist          = fresh;
+			m_playlist.segments = fresh_segments;
+			m_next_sequence    += fresh_segments.size();
+			m_index             = 0;
+			m_attempt           = 0;
+			// The total is not knowable for a growing list, so it is reported as
+			// what is known: everything taken so far plus this round. A bar fed
+			// this climbs and never walks backwards, which is the property the
+			// two-pass case established.
+			m_segments_all      = m_segments_base + fresh_segments.size();
+			next_segment();
+		});
+	});
+}
+
+// End a live assembly, saying why when there is a reason beyond "it ended".
+// Success either way: what was fetched is on disk and playable, and calling a
+// captured window a failure would throw away the thing that worked.
+void hls_assembler::finish_live(const QString &why) {
+	if (m_file) {
+		m_file->flush();
+		m_file->close();
+	}
+	m_finished = true;
+	if (!why.isEmpty())
+		emit status_note(why);
+	emit completed();
+}
+
 void hls_assembler::next_segment() {
 	if (m_stopped)
 		return;
@@ -268,9 +391,17 @@ void hls_assembler::next_segment() {
 			return;
 		}
 
-		// A live playlist keeps growing, so "ran out of segments" is only the
-		// end for VOD. Re-polling a live list is the next increment; for now
-		// say plainly that what we captured is what there is.
+		// **A live playlist keeps growing, so running out of segments is only
+		// the end for VOD.** Ask it again rather than calling the window it
+		// happened to offer the whole broadcast -- which is what makes the
+		// tee-to-disk trick work for live at all: sec 11.3 promises full
+		// backward seek over everything captured, and that was true only of
+		// whatever one read of the playlist contained.
+		if (!m_live_url.isEmpty() && m_playlist.is_live && !m_stopped) {
+			poll_live();
+			return;
+		}
+
 		if (m_file) {
 			m_file->flush();
 			m_file->close();

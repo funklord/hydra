@@ -63,6 +63,12 @@ private:
 	void assemble(const media_item &item, const stream_context &ctx,
 	               bool play_it);
 
+	// Why a live capture stopped, when it stopped for a reason. Set by the
+	// assembler's note and folded into the completion message, because a note
+	// emitted just before `completed` would be overwritten a moment later by
+	// the line saying what was saved -- the same reason the live caveat below
+	// travels to both messages rather than only the first.
+	QString           m_live_note;
 	player_launcher  *m_players   = nullptr;   // injected, not owned
 	download_manager *m_downloads = nullptr;   // injected, not owned
 	local_proxy      *m_proxy     = nullptr;   // injected, not owned

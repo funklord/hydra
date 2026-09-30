@@ -135,6 +135,12 @@ class slow_cdn : public QTcpServer {
 public:
 	quint16 port = 0;
 	QHash<QString, QByteArray> files;
+	// **A path that answers differently the second time**, which is what a
+	// growing live playlist is. Set `then[path]` and the first request gets
+	// `files[path]` while every later one gets `then[path]`; without it a
+	// fixture cannot express the only interesting property of a live list.
+	QHash<QString, QByteArray> then;
+	QHash<QString, int>        asked;
 
 	void incomingConnection(qintptr fd) override {
 		auto *s = new QTcpSocket(this);
@@ -158,7 +164,10 @@ public:
 					s->write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n"
 					          "Connection: close\r\n\r\n");
 				} else {
-					const QByteArray body = files.value(path);
+					const int n = ++asked[path];
+					const QByteArray body =
+					  (n > 1 && then.contains(path)) ? then.value(path)
+					                                 : files.value(path);
 					s->write("HTTP/1.1 200 OK\r\nContent-Type: "
 					          "application/octet-stream\r\nContent-Length: " +
 					          QByteArray::number(body.size()) +
@@ -172,6 +181,14 @@ public:
 };
 
 int main(int argc, char **argv) {
+	// **The live stall bound, shortened so cases can reach it.** A live
+	// playlist that stops growing ends the assembly after
+	// `HYDRA_LIVE_STALL_MS`, thirty seconds by default -- the right answer for
+	// a stream that is merely slow and impossible for a suite to wait out. Set
+	// before anything runs, so the rolling-playlist section below exercises the
+	// stall path rather than only the `#EXT-X-ENDLIST` one.
+	qputenv("HYDRA_LIVE_STALL_MS", "1500");
+
 	QApplication app(argc, argv);
 
 	slow_cdn cdn;
@@ -535,6 +552,82 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	section("a live playlist is asked again, and its new segments are taken");
+	{
+		// **The window a live list happened to offer was the whole capture.**
+		// sec 11.3 promises the tee-to-disk trick gives full backward seek over
+		// everything captured; that was true only of one read of the playlist.
+		// The list is re-read now and whatever it has grown is appended.
+		cdn.files["/g1.ts"] = QByteArray("AAAA");
+		cdn.files["/g2.ts"] = QByteArray("BBBB");
+		cdn.files["/g3.ts"] = QByteArray("CCCC");
+		cdn.files["/g4.ts"] = QByteArray("DDDD");
+		// First read: two segments, still live. TARGETDURATION 1 so the poll
+		// interval sits on its floor and the case takes seconds.
+		cdn.files["/grow.m3u8"] =
+		  QByteArray("#EXTM3U\n#EXT-X-TARGETDURATION:1\n"
+		              "#EXT-X-MEDIA-SEQUENCE:0\n"
+		              "#EXTINF:1,\n/g1.ts\n#EXTINF:1,\n/g2.ts\n");
+		// Second read: two more, and an end so the case terminates on the
+		// playlist rather than on the stall bound -- thirty seconds of no
+		// growth is the right production answer and the wrong test.
+		cdn.then["/grow.m3u8"] =
+		  QByteArray("#EXTM3U\n#EXT-X-TARGETDURATION:1\n"
+		              "#EXT-X-MEDIA-SEQUENCE:0\n"
+		              "#EXTINF:1,\n/g1.ts\n#EXTINF:1,\n/g2.ts\n"
+		              "#EXTINF:1,\n/g3.ts\n#EXTINF:1,\n/g4.ts\n"
+		              "#EXT-X-ENDLIST\n");
+
+		QTemporaryDir gdir;
+		check(gdir.isValid(), "a scratch directory for the growing capture");
+		const QString gout = QDir(gdir.path()).filePath("grow.ts");
+
+		hls_assembler ga;
+		QStringList gfail;
+		bool gdone = false;
+		QList<int> gsteps;
+		QObject::connect(&ga, &hls_assembler::failed,
+		                  [&gfail](const QString &m) { gfail << m; });
+		QObject::connect(&ga, &hls_assembler::completed,
+		                  [&gdone] { gdone = true; });
+		QObject::connect(&ga, &hls_assembler::progress,
+		                  [&gsteps](qint64, int d, int) { gsteps << d; });
+		ga.start(QUrl(QString("http://127.0.0.1:%1/grow.m3u8").arg(cdn.port)),
+		          stream_context{}, gout);
+		for (int i = 0; i < 200 && !gdone && gfail.isEmpty(); ++i)
+			spin(50);
+
+		check(gdone && gfail.isEmpty(),
+		       QString("the assembly completes (%1)")
+		           .arg(gfail.isEmpty() ? QString("completed") : gfail.first()));
+		const QByteArray got = [&gout] {
+			QFile f(gout); f.open(QIODevice::ReadOnly); return f.readAll();
+		}();
+		check(got == QByteArray("AAAABBBBCCCCDDDD"),
+		       QString("with the segments the second read added, in order (%1)")
+		           .arg(QString::fromLatin1(got)));
+		check(cdn.asked.value("/grow.m3u8") >= 2,
+		       QString("the playlist really was asked again (%1 times)")
+		           .arg(cdn.asked.value("/grow.m3u8")));
+		// **The two already-taken segments are not fetched twice.** The second
+		// playlist lists all four; what makes the first two old is the media
+		// sequence, not their absence.
+		check(cdn.asked.value("/g1.ts") == 1 && cdn.asked.value("/g2.ts") == 1,
+		       QString("and the first two are not re-fetched (%1, %2)")
+		           .arg(cdn.asked.value("/g1.ts"))
+		           .arg(cdn.asked.value("/g2.ts")));
+		bool climbs = true;
+		for (int i = 1; i < gsteps.size(); ++i)
+			if (gsteps[i] < gsteps[i - 1])
+				climbs = false;
+		check(gsteps.size() >= 4 && climbs,
+		       QString("progress climbs across the re-poll rather than "
+		                "restarting (%1 reports)").arg(gsteps.size()));
+		check(!ga.was_live(),
+		       "and the capture knows the list ended, since the second read "
+		       "carried ENDLIST");
+	}
+
 	section("the dialog routes a DASH row to the assembler, as it does HLS");
 	{
 		// **The condition that makes any of this reachable.** The dialog sent
@@ -786,6 +879,13 @@ int main(int argc, char **argv) {
 		//
 		// The VOD control is the point of the section rather than decoration: a
 		// note appended to every save would pass the first check on its own.
+		//
+		// **And this now exercises the live stall bound**, which nothing did
+		// before. `/rolling.m3u8` never grows, so re-polling finds nothing and
+		// the assembly ends on the bound -- reachable here only because
+		// `HYDRA_LIVE_STALL_MS` is set at the top of this file. Before
+		// re-polling existed, running out of segments simply ended the
+		// assembly and there was no bound to reach.
 		QByteArray rolling = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n";
 		for (int i = 0; i < 2; ++i)
 			rolling += "#EXTINF:4.0,\n/seg" + QByteArray::number(i) + ".ts\n";

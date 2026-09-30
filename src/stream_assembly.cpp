@@ -54,6 +54,7 @@ void stream_assembly::assemble(const media_item &item,
 	// below differ per press -- the output path and whether to play -- so
 	// connecting once up front is not available either.
 	m_assembler->disconnect(this);
+	m_live_note.clear();
 
 	if (play_it && !m_scratch.isValid()) {
 		// Nowhere to write means no assembly, said once rather than as a
@@ -102,11 +103,15 @@ void stream_assembly::assemble(const media_item &item,
 			// that is the tee-to-disk trick above. Rewrapping it now would
 			// replace the file underneath a running player to gain a container
 			// nobody is going to seek around afterwards.
-			emit status(live
-			  ? QStringLiteral("Live stream: captured what the playlist "
-			                    "offered; playback continues locally.")
-			  : QStringLiteral("Stream assembled; playback continues "
-			                    "locally."));
+			emit status(
+			  live ? QStringLiteral("Live stream: captured what the playlist "
+			                         "offered; playback continues locally.")
+			            + (m_live_note.isEmpty()
+			                 ? QString()
+			                 : QStringLiteral(" It stopped because ")
+			                     + m_live_note + QStringLiteral("."))
+			       : QStringLiteral("Stream assembled; playback continues "
+			                         "locally."));
 			return;
 		}
 
@@ -118,10 +123,13 @@ void stream_assembly::assemble(const media_item &item,
 		// The note travels to both messages rather than only the first: the
 		// rewrap answers a second later and overwrites the line, so a caveat
 		// left on the earlier one is a caveat nobody ends up looking at.
-		const QString note = live
-		  ? QStringLiteral(" Live stream, so this is the window the playlist "
-		                    "offered rather than the whole broadcast.")
-		  : QString();
+		const QString note =
+		  (live ? QStringLiteral(" Live stream, so this is what the playlist "
+		                          "offered while it was being read.")
+		         : QString())
+		  + (m_live_note.isEmpty() ? QString()
+		                            : QStringLiteral(" It stopped because ")
+		                                + m_live_note + QStringLiteral("."));
 		// **Two files or one, decided by what the assembler found.** A DASH
 		// manifest carrying its audio separately produced a second file, and
 		// neither half is the programme; `audio_path()` is non-empty exactly
@@ -149,6 +157,15 @@ void stream_assembly::assemble(const media_item &item,
 	         [this](const QString &e) {
 		emit status("Assembly failed: " + e);
 	});
+
+	// **A live capture that stopped for a reason says the reason.** It arrives
+	// before `completed`, so the note is on screen and then replaced by the
+	// saved-or-playing line -- which is the wrong way round for something a
+	// person needs to keep. Held and appended to the completion message
+	// instead, for the reason the live caveat below is: a line that is
+	// overwritten a second later is a line nobody reads.
+	connect(m_assembler, &hls_assembler::status_note, this,
+	         [this](const QString &note) { m_live_note = note; });
 
 	emit status(QStringLiteral("Fetching manifest…"));
 	// **Only saving asks for the audio, and the asymmetry is the point.** A mux

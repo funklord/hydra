@@ -2441,7 +2441,8 @@ without one, but fMP4 segments would need their init segment and a real remux~~
 — the init segment is prepended now, and what the remux would still buy is the
 *mux* of a separate audio stream. Re-polling a
 live playlist as it grows (what is captured is what was in the list when it was
-read), and cookie capture, since the context carries Referer and User-Agent but
+read)~~ -- done, and the bound it needed is below; and cookie capture, since the
+context carries Referer and User-Agent but
 reading cookies back needs cookie-store integration.
 
 **Routing the browser through it is deliberately not attempted.** §10's other
@@ -29569,3 +29570,80 @@ Verified by more than the compiler going quiet. `try_settings_ui` computes
 that assertion with different code now, so it was rebuilt and run: 91 passed,
 and the rewritten check reports `ok` by name. `test_model` is 299 passed. A
 syntax check cannot say the count is the same; only running it can.
+
+## A live capture asks the playlist again
+
+`hls_assembler` said this itself: *"Re-polling a live list is the next
+increment; for now say plainly that what we captured is what there is."* So a
+live capture got the window the playlist happened to offer when it was read,
+while sec 11.3 promises the tee-to-disk trick gives full backward seek over
+everything captured. It re-reads the list now and appends whatever it has
+grown.
+
+### Three things end it, and none is the playlist's cooperation
+
+`#EXT-X-ENDLIST` -- which the parse reports as no longer live -- no growth for
+the stall bound, and `stop()`. `local_proxy` already holds this shape for the
+same reason, and a poll loop whose end condition is a remote file's
+willingness to stop growing is a loop with no end condition, which is what
+`running-code.md` refuses to let anybody run.
+
+The interval is the playlist's own target duration with a floor, because a
+list advertising a tenth of a second would otherwise be fetched ten times a
+second and one advertising nothing would be fetched continuously.
+
+### New is a number, and the sabotage showed why that matters
+
+A live playlist may reuse a URL for different content, so what has been taken
+is `#EXT-X-MEDIA-SEQUENCE` and not a set of addresses. The test proves it
+rather than asserting it politely: the second playlist lists **all four**
+segments, so "not seen before" would re-fetch the first two.
+
+Taking every listed segment instead produces `AAAABBBBAAAABBBBCCCCDDDD` -- and
+in the rolling section, which never grows, it **spirals**: `2/2, 4/4, 6/6,
+8/8`, re-appending the same two segments on every poll until the bound stops
+it. So the sequence is not only avoiding duplicate downloads; without it **a
+live capture grows without bound while the stream sits still.** That
+consequence was worth a sabotage rather than a user.
+
+### DASH dynamic is not re-polled, and says so
+
+An MPD with `type="dynamic"` is live too, but continuing a segment template is
+a different mechanism from re-reading a growing list. The poll is gated on
+having come from the HLS path rather than on the `is_live` flag both share,
+which is the difference between a feature that declines a case and one that
+silently does the wrong thing to it.
+
+### The change broke three checks, and that was the useful part
+
+`"a live playlist says so when it is saved"` serves a list with no `ENDLIST`
+that never grows. With re-polling, running out of segments is no longer the
+end, so the assembly waited for the stall bound and the section's spin gave up
+first.
+
+Their expectation was still right -- a live save completes with its caveat --
+and what changed is how long it legitimately takes to know a stream has
+stopped. Truncating at the first gap is the failure re-polling exists to
+remove, so the tests were not re-baselined to suit the code.
+
+**What the red actually exposed is that the bound was unreachable by any
+test.** Thirty seconds is the right production answer and impossible for a
+suite to wait out, so before this the only live cases that could finish were
+ones ending on `ENDLIST` and the stall path was exercised by nothing -- a gap
+this file was about to record as known and leave. It reads
+`HYDRA_LIVE_STALL_MS` once per run now, the same idiom as the live-view cap
+and the scale sizes, and the suite sets 1500 ms. One change fixed the three
+checks and gave the bound its first test.
+
+### A note that a completed assembly still needs to make
+
+A poll that fails is not an assembly that failed: everything fetched is on
+disk and playable. `failed` would throw the capture away and `completed` alone
+hides the difference, so the reason travels beside the success -- and is
+**held** rather than emitted, then folded into the completion message, because
+a line overwritten a second later is a line nobody reads. That is the reason
+already written beside the live caveat it joins.
+
+The consumer was wired in the same change. Twice this week this tree shipped
+capability with no caller, and a signal nobody connects is that mistake in its
+smallest form.

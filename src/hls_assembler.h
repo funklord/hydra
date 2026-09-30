@@ -4,6 +4,7 @@
 #include "local_proxy.h"
 
 #include <QObject>
+#include <QElapsedTimer>
 #include <QPointer>
 #include <QString>
 #include <QUrl>
@@ -93,18 +94,55 @@ signals:
 	void progress(qint64 bytes, int segments_done, int segments_total);
 	void completed();
 	void failed(const QString &message);
+	// **Something a completed assembly still needs to say.** A live capture that
+	// ended because the playlist could no longer be read is not a failure --
+	// everything fetched is on disk and playable -- and it is not the same event
+	// as a stream that ended. `failed` would throw the capture away and
+	// `completed` alone would hide the difference, so this carries the reason
+	// alongside the success. Emitted before `completed`, and only when there is
+	// something to say.
+	void status_note(const QString &message);
 
 private:
 	void fetch_manifest(const QUrl &url);
 	// Fills `m_playlist` from an MPD, or emits `failed` and returns false.
 	bool assemble_dash(const QByteArray &body, const QUrl &url);
 	void next_segment();
+	// **Ask a live playlist for what it has grown**, and continue into whatever
+	// it lists beyond what has already been fetched. Called only when the list
+	// ran out while still being live; ends the assembly when the playlist stops
+	// growing or says it is complete.
+	void poll_live();
+	// End a live assembly as a success, with an optional reason.
+	void finish_live(const QString &why);
 
 	// Attempts per segment, and the step between them. Three is enough for the
 	// blip this exists for and small enough that a segment which will never
 	// arrive fails in about two seconds rather than hanging the assembly.
 	static constexpr int k_segment_attempts = 3;
 	static constexpr int k_retry_ms         = 400;
+
+	// **A live capture has to stop on something, and it is not the playlist.**
+	// `local_proxy` already holds this shape for the same reason -- no growth
+	// for this long, give up -- because a poll loop whose end condition is a
+	// remote file's willingness to stop growing is a loop with no end
+	// condition. Thirty seconds is several segments at any ordinary target
+	// duration, so a stream that is merely slow is not mistaken for one that
+	// has ended.
+	static constexpr int k_live_stall_ms = 30000;
+	// **The bound, overridable, because a bound no test can reach is a bound
+	// nobody checks.** Thirty seconds is the right production answer and the
+	// wrong suite: a case that waits for it takes thirty seconds, so before this
+	// existed the only live cases that could finish were ones ending on
+	// `#EXT-X-ENDLIST`, and the stall path was exercised by nothing. Read once
+	// per run from `HYDRA_LIVE_STALL_MS`, the same shape as the live-view cap
+	// and the scale sizes -- a test knob in the environment rather than an API
+	// nobody but a test would call.
+	static int live_stall_ms();
+	// The floor under the poll interval, which is otherwise the playlist's own
+	// target duration. A manifest advertising a tenth of a second would
+	// otherwise have this fetching it ten times a second.
+	static constexpr int k_live_poll_min_ms = 1000;
 	QNetworkReply *get(const QUrl &url, const QByteArray &range = QByteArray());
 
 	QNetworkAccessManager *m_net = nullptr;
@@ -134,6 +172,20 @@ private:
 	// passes finished, and what every pass will amount to.
 	int            m_segments_base  = 0;
 	int            m_segments_all   = 0;
+
+	// **Live re-polling.** `m_live_url` is the media playlist to ask again, and
+	// is set only on the HLS path: an MPD with `type="dynamic"` is also live,
+	// and continuing a segment template is a different mechanism from re-reading
+	// a growing list, so DASH is deliberately not re-polled and says so rather
+	// than being covered by the same flag.
+	//
+	// `m_next_sequence` is the discriminator for "new". A live playlist can
+	// reuse a URL for different content, and `#EXT-X-MEDIA-SEQUENCE` is the
+	// number the specification makes monotonic -- so what has already been
+	// fetched is a number and not a set of addresses.
+	QUrl           m_live_url;
+	int            m_next_sequence = 0;
+	QElapsedTimer  m_live_idle;
 	QString m_path;
 	qint64  m_written  = 0;
 	int     m_index    = 0;
