@@ -29864,9 +29864,39 @@ name. `test_seam` names a path and creates nothing. So fourteen carry this
 hazard today.
 
 They are not fixed here: this is one suite's bug found by being bitten, and
-converting the other fourteen is a sweep with no request behind it. The shape is recorded so the next person bitten recognises it in
-one command -- `id -un` against `ls -ld` on the directory -- rather than
-reading the seven innocent sections.
+converting the other fourteen is a sweep with no request behind it. The shape
+is recorded so the next person bitten recognises it in one command -- `id -un`
+against `ls -ld` on the directory -- rather than reading the seven innocent
+sections.
+
+### And this is a class this project has already paid for once
+
+Recorded above, under *The sweep reported a two-week-old result as a current
+one*: `test/live/sweep.sh` wrote to `/tmp/hydra-sweep`, the directory already
+existed owned by another account, every redirect failed, and one driver came
+back with a plausible result from a log written two weeks earlier. That pass
+swept `test/live/` and found **thirty fixed `/tmp/hydra-*` paths across the
+drivers**, made twenty-nine redirectable, and gave `sweep.sh` itself
+`OUT=${HYDRA_SWEEP_OUT:-/tmp/hydra-sweep-$(id -u)}`.
+
+**What it did not cover is `test/test_*.cpp`**, and the reason is in the
+Makefile: `TEST_ENV` already hands the suites a private `TMPDIR`, so from the
+runner's point of view they were answered. That is the decision this change
+disagrees with, and only for the suites -- the drivers keep theirs.
+
+**The remedy here is deliberately stronger than the one that pass chose, and
+the difference is worth stating rather than looking like drift.** `id -u`
+separates two accounts and nothing else: two runs by one account still collide,
+which is the ordinary case when somebody starts a suite while the last one is
+still finishing. `applicationPid()` separates every run, and it is affordable
+here only because the suite can remove its own directory at exit -- a shell
+script whose output is meant to outlive `clean` cannot, which is why
+`sweep.sh`'s answer is the right one for `sweep.sh`.
+
+Measured on this machine while writing this: **24 `/tmp/hydra-*` entries, 45
+MB, 21 of them owned by the other account.** Not removed -- they are somebody
+else's files in a sticky directory, and the rule about deleting by name rather
+than by pattern applies hardest to a prefix with another user's work under it.
 
 ## A setting whose own words promised more than the code did
 
