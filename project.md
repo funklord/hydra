@@ -29970,52 +29970,74 @@ a prompt phrase, and the desktop's permission mapping covers all seven on the
 Qt this tree builds against; the `default:` arm that once denied three of them
 silently is in a branch for a Qt version this tree cannot compile, and says so.
 
-## Twenty-six source citations pointed at headings that did not exist
+## I rebuilt two gates by hand and then overstepped with one of them
 
-Section 12 of the architecture document -- the filter-evolution loop -- numbers
-its five steps as bold paragraphs, `**1. Signal collection.**` through
-`**5. Diff and accept.**`, while every other multi-part section of that document
-uses `### N.M` headings. The code cites the steps as `sec 12.1` to `sec 12.5`,
-from fourteen files, and the mapping is exact -- the picker is 12.1, the
-snippet stripping is 12.2, the rule syntax is 12.3, `filter_list::evaluate` is
-12.4 and `filter_dialog` is 12.5.
+**This section replaces one that was wrong in three ways.** It reported that
+twenty-six source citations pointed at nothing, that no gate checked them, and
+it gave a file count that was the number of files *searched* rather than the
+number citing. Rewritten rather than appended to, because a reader who finds
+both believes the one that sounds more careful.
 
-**So the citations were right and unfindable.** A reader grepping the document
-for `12.4` got nothing and could not tell which of five paragraphs was meant.
-The five steps have headings now, keeping their own names, and the section's own
-two references to "step 4" and "the step-5 accept UI" cite the numbers instead.
+What actually happened. Section 12 of the architecture document writes its five
+steps as bold numbered paragraphs, `**1. Signal collection.**` through
+`**5. Diff and accept.**`, where every other multi-part section uses `### N.M`
+headings; the code cites those steps as `sec 12.1` to `sec 12.5`. That much is
+real, and the mapping is exact.
 
-### The method, because the number is only worth quoting with it
+**But `tool/doc_check.py` already resolves them**, and has a docstring saying
+so: it reads *both* anchor shapes deliberately, and its own words are that
+"making section 12 look like sections 11 and 13 is the copyright holder's to
+decide, and is not something a checker should do by refusing to read what is
+there." It runs in `make style` and prints, on every run:
 
-    python3 - <<'EOF'
-    import io, re, glob
-    doc = io.open("doc/architecture.md", encoding="utf-8").read()
-    have = set(re.findall(r"^#+\s+([0-9]+(?:\.[0-9]+)*)\.?(?:\s|$)", doc, re.M))
-    files = (glob.glob("src/*.cpp") + glob.glob("src/*.h")
-             + glob.glob("test/*.cpp") + glob.glob("test/*.h")
-             + glob.glob("test/live/*.cpp")
-             + glob.glob("android/src/se/vibes/hydra/*.java"))
-    cited = {}
-    for f in sorted(files):
-        for m in re.finditer(r"(RFC \d+ )?sec ([0-9]+(?:\.[0-9]+)*)",
-                              io.open(f, encoding="utf-8").read()):
-            if m.group(1):
-                continue          # an RFC section, not one of ours
-            cited.setdefault(m.group(2), set()).add(f)
-    print({k: sorted(v) for k, v in cited.items() if k not in have} or "all resolve")
-    EOF
+    doc-check: 50 section(s) cited from 141 file(s), every one resolves;
+               §12's parts are bold numbered paragraphs rather than
+               headings, unlike every other section
 
-**400 citations across 277 files, 50 distinct sections, all resolving** after
-the change. Not made into a gate: the document's section numbers move about
-once a quarter and a standing check with nothing to catch is a check people
-learn to ignore, so the command is recorded here for whoever next moves one.
+So the finding was not a finding. **It was the gate's own summary line,
+rediscovered by hand and then misread as a gap** -- and the fix committed for it
+gave §12 the headings, which is the one thing that tool says is not a worker's
+to do. Reverted; the paragraphs are as they were.
 
-**The first run of it reported seventeen unresolved and was wrong.** The regex
-demanded whitespace after the number, so `## 1. Overview and scope` -- a period
--- did not match, and eleven top-level sections read as missing. Suspecting the
-instrument before the document is what turned seventeen into five plus an RFC
-citation, and five was the real finding. `4.3.2.2` is RFC 8216's and is excluded
-by reading the words before it rather than by a number range.
+**The same thing happened twice in one sitting**, which is what makes it worth a
+section. A sweep here mapped all twenty policy features to their enforcement
+sites and reported the set complete; `make style` prints
+
+    policy-check: 20 feature(s), the enum and policy.cpp's table agreeing
+                  on the number, every one read outside the policy and UI
+                  layer
+
+which is that sweep, mechanised, with the two shapes of grep failure already
+handled. Reading `make style`'s output costs one command and would have replaced
+both.
+
+### The lesson is specific, and it is not "be careful"
+
+**Where a tree has gates, their output is the first place to look and not the
+last.** `evidence.md` says to prefer the artifact a gate leaves over a fresh
+measurement of where it came from; these gates print their artifact on every
+run, and a hand-rolled version of a check that already exists is the
+two-documents-one-witness failure with the author supplying both.
+
+And the sharper half: **a gate that reports an inconsistency it deliberately
+tolerates is recording a decision, not a defect.** Its summary line reads like a
+complaint. It is a note saying somebody chose to leave this alone, and the
+choice belongs to whoever owns the document.
+
+### For the holder, since the question is now measured
+
+§12's five parts are cited by fourteen files as `12.1` through `12.5` and are
+not headings, so a plain grep of the document for `12.4` finds nothing -- a
+reader has to know the shape or run the gate. `doc_check.py` handles both and
+says whose call it is. Nothing is broken either way; it is a question of whether
+the document should be uniform.
+
+### What the numbers actually are
+
+**50 distinct sections, cited from 141 files, every one resolving** -- the gate's
+count, which is the one to quote. The "400 across 277 files" in the replaced
+section counted the files it globbed, not the files that cite anything, and it
+went into a commit message that way.
 
 ## The badge had two sources and the switch reached one of them
 
