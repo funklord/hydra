@@ -115,8 +115,13 @@ int main(int argc, char *argv[]) {
 	auto report = [&](const char *when) {
 		const QString host = QUrl(target).host();
 		std::printf("\n===== %s =====\n", when);
+		// `size()` is a `qsizetype`, which is 64-bit here, and `%d` reads 32.
+		// Passing it undefined behaviour that happens to work on this calling
+		// convention -- the low half lands in the register the directive reads
+		// -- which is exactly why it survived. Narrowed deliberately: a host
+		// count that overflows an int is not a case this driver has.
 		std::printf("requests seen: %d across %d hosts\n",
-		             log.total(), log.hosts().size());
+		             log.total(), int(log.hosts().size()));
 		QStringList hs = log.hosts().values();
 		hs.sort();
 		std::printf("hosts: %s\n", qPrintable(hs.join(", ").left(600)));

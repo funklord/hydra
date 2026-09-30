@@ -368,10 +368,19 @@ int main(int argc, char **argv) {
 		auto *view = dr.findChild<QTreeWidget *>("site_rules");
 		check(view && view->topLevelItemCount() == 2,
 		      "the learned rules are listed");
-		check(view && view->topLevelItemCount() ==
-		          [&]{ int n = 0; for (const site_rule &r : blocker.rules().all())
-				               if (!r.builtin) ++n; return n; }(),
-				  "and the built-ins are not, since they come from the program");
+		// **Counted into a name rather than inside the check.** This was a
+		// lambda whose `for` body was the `if` and whose `return` followed
+		// the loop -- correct, and laid out so that it reads as returning
+		// after the first non-builtin rule. The compiler said so twice
+		// (`-Wmisleading-indentation`), and a reader has no way to tell code
+		// that looks like that bug from code that is it. Naming the quantity
+		// says what the assertion is about as well as removing the trap.
+		int learned = 0;
+		for (const site_rule &r : blocker.rules().all())
+			if (!r.builtin)
+				++learned;
+		check(view && view->topLevelItemCount() == learned,
+		      "and the built-ins are not, since they come from the program");
 
 		QString flagged_text, host_text;
 		for (int i = 0; i < view->topLevelItemCount(); ++i) {

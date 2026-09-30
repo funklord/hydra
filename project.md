@@ -29509,3 +29509,63 @@ the second.
 wrong.** The only difference is where you look afterwards, and it is the more
 expensive of the two for exactly that reason: a wrong check eventually gets
 corrected, and a skipped one leaves no trace of having been skipped.
+
+## Four warnings in the test tree, and only one was a defect
+
+The application builds warning-free; the test and driver sources had never
+been swept. `-fsyntax-only -Wall -Wextra` over all 92 of them needs no
+linking, so the whole population costs minutes rather than thirty WebEngine
+links:
+
+    -Wformat=                  1   undefined behaviour
+    -Wmisleading-indentation   2   correct code that reads as a bug
+    -Wsign-compare             1   correct for the values it compares
+
+**The breakdown is the finding, not the total.** "Four warnings" and "four
+undefined behaviours" are different reports, and only the split tells them
+apart.
+
+### The one that could misbehave
+
+`try_media` passed `log.hosts().size()` -- a 64-bit `qsizetype` -- to
+`printf`'s `%d`. Varargs promotion puts the value where the directive reads 32
+bits, which is undefined and **works by accident of this calling convention**:
+the low half lands in the register `%d` reads. That is precisely why it
+survived. Narrowed with an explicit `int(...)`, deliberately: a host count
+that overflows an int is not a case a driver has.
+
+### The two that were right and read wrong
+
+A lambda inside a `check`, whose `for` body was the `if` and whose `return`
+followed the loop -- correct, and laid out so that it reads as returning after
+the first non-builtin rule:
+
+    [&]{ int n = 0; for (const site_rule &r : blocker.rules().all())
+             if (!r.builtin) ++n; return n; }()
+
+**A reader has no way to tell code that looks like that bug from code that is
+it**, which is the same failure as a comment that is right about the what and
+misleading about the why -- three of those were corrected in this tree the
+same day. Fixed by removing the construct rather than reindenting it: the
+count goes into a named local before the check, which says what the assertion
+is about as well as removing the trap.
+
+### And the argument for doing all four
+
+None of the other three could have broken anything. The reason to fix them is
+that **four standing warnings is how a fifth goes unnoticed** -- the drivers
+were the unswept part of the tree, and a warning that appears there tomorrow
+is now visibly new.
+
+### The control was the sweep's own earlier run
+
+Same command, same 92 files: **4 hits before the fixes and 0 after.** That is
+the instrument demonstrated capable of speaking rather than assumed silent,
+which matters here because an empty sweep and an unfinished one look identical
+-- so the completion line was waited for rather than the log being read when
+it happened to look right.
+
+Verified by more than the compiler going quiet. `try_settings_ui` computes
+that assertion with different code now, so it was rebuilt and run: 91 passed,
+and the rewritten check reports `ok` by name. `test_model` is 299 passed. A
+syntax check cannot say the count is the same; only running it can.

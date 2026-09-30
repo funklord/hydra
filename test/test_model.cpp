@@ -160,8 +160,13 @@ int main(int argc, char **argv) {
 			const QString shown = model.data(hidx, Qt::DisplayRole).toString();
 			check(shown == "2 back",
 			      QString("which says how many pages are behind it (%1)").arg(shown));
+			// `toInt()` is signed and a `QFlags` OR is not, so this compared
+			// across signedness and the int was converted. Harmless for two
+			// small positive flags, and still worth saying which type the
+			// comparison is in: the next flag combination written here
+			// inherits whichever answer this line implies.
 			check(model.data(hidx, Qt::TextAlignmentRole).toInt() ==
-			          (Qt::AlignRight | Qt::AlignVCenter),
+			          int(Qt::AlignRight | Qt::AlignVCenter),
 			      "right-aligned, so the numbers line up down the tree");
 			// The column is an annotation and nothing else: an icon here would
 			// give every row a second one, and a tooltip would replace the
