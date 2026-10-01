@@ -30727,3 +30727,75 @@ wrong was the url it was asked about, two layers up. **No sweep would have found
 this** -- the header is built correctly, sent correctly, and arrives at the
 wrong host, and every check in the tree about it asserted that a Cookie header
 arrives rather than asking whose it was.
+
+## A redirecting stream url reached the player as a 302 with no Location
+
+Found by reading the rest of `local_proxy` after the cookie fix, and settled by
+experiment rather than by argument -- the first hypothesis was wrong, which is
+the reason the experiment was worth running.
+
+**The hypothesis:** the upstream path sets no redirect policy, so it takes
+`QNetworkAccessManager`'s default, and it writes a status line and headers from
+inside `metaDataChanged`. If that signal fires for an intermediate 30x as well
+as for the final response, a player gets two status lines in one response. Every
+sibling in the tree is explicit where this one is silent:
+
+    stream_probe      sets NoLessSafeRedirectPolicy
+    network_fetcher   the same, explicitly
+    hls_assembler     counts hops itself, refusing past one
+    local_proxy       nothing
+
+**What the experiment said.** An opt-in 302 route on the shared `echo_server`,
+published through the proxy, with the client's status and byte count printed:
+
+    client saw 302, 0 byte(s), err=Unknown protocol specified
+
+So no double write -- and worse than that. The proxy relayed the 30x status and
+**not** its `Location`, because the relay list is `Content-Type`,
+`Content-Length`, `Content-Range` and `Accept-Ranges`: right for a 200, silent
+for a redirect. The player got a 302 with nowhere to go and zero bytes. Watch or
+Save on any stream whose url redirects -- which is what a signed CDN url does on
+its way to a regional edge -- produced nothing, with no diagnosis.
+
+### Followed in the proxy, not handed to the player
+
+Relaying the `Location` would have been one line and is the wrong fix: the
+player would fetch the edge itself, naked, with no Referer, User-Agent or
+cookies -- the 403 this whole class exists to prevent. So `fetch_upstream` is a
+function that calls itself, bounded at five hops, and a 30x is recognised before
+anything reaches the client: once a status line has gone to the player there is
+no taking it back.
+
+Followed by hand rather than with `RedirectPolicyAttribute` for a reason the
+previous commit supplies: Qt re-sends the raw headers it was given, including a
+`Cookie` built for the host before the hop. Each hop asks
+`stream_context::cookies_for` about the url it is about to fetch.
+
+### The test found a second bug in the fix
+
+`publish` had resolved the cookie header once, for the upstream, and stored it.
+With a redirect that stored value is a cookie for the host *before* the hop and
+`fetch_upstream` would have sent it to the host *after* -- the leak the previous
+commit closed, re-entered by the new path. The check that counts who is asked
+per hop reported `/via/two then /via/two then /stream` and that third entry is
+what gave it away.
+
+Asking lives in one place now, the only code that knows which url is about to be
+requested. Publishing asks nobody, and the suite says so.
+
+### What is pinned
+
+    the final response arrives, with the Referer still on it
+    the resolver is asked about each url in turn   /via/two then /stream
+    publishing asks nobody
+    a 302 with no usable Location                 502 to the player
+    a redirect loop                               508, after 6 hops
+    the body carries no second status line
+
+Sabotaged by treating a 30x as an ordinary response, which is what the code did
+before: five of those go red at once.
+
+`echo_server` gained an opt-in `redirect_from` / `redirect_to` and a count. Both
+its users were re-run -- `test_headers` 23 of 23, `test_dlheaders` 12 of 12 --
+because a shared fixture's default behaviour is the one thing a new flag must
+not move.

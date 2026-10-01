@@ -28,6 +28,14 @@ class echo_server : public QTcpServer {
 public:
 	bool       range_aware  = false;
 	QByteArray content_type = "application/json";
+	// **An opt-in 302, for asking what a consumer does with a redirect.**
+	// Empty by default, so every existing user answers exactly as before. When
+	// set, a request whose target starts with this prefix gets a 302 to
+	// `redirect_to` and nothing else -- which is what a signed CDN url does on
+	// its way to a regional edge.
+	QByteArray redirect_from;
+	QByteArray redirect_to = "/stream";
+	int        redirects_served = 0;
 
 	// The base url, once listening. Empty when it could not.
 	QString start() {
@@ -54,6 +62,21 @@ protected:
 				return;
 			const QByteArray head = buf.left(end);
 			m_buf.remove(s);
+
+			if (!redirect_from.isEmpty()) {
+				const int sp = head.indexOf(' ');
+				const QByteArray target =
+				  head.mid(sp + 1, head.indexOf(' ', sp + 1) - sp - 1);
+				if (target.startsWith(redirect_from)) {
+					++redirects_served;
+					s->write("HTTP/1.1 302 Found\r\nLocation: " + redirect_to +
+					          "\r\nContent-Length: 0\r\n"
+					          "Connection: close\r\n\r\n");
+					s->flush();
+					s->disconnectFromHost();
+					return;
+				}
+			}
 
 			// Keys lowercased, values as sent, as both python files did: a
 			// header name is case-insensitive on the wire and Qt sends them

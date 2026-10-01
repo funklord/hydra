@@ -168,6 +168,25 @@ private:
 	void serve_file(QTcpSocket *client, const entry &e, const QByteArray &head,
 	                 bool head_only);
 
+	// Fetch `url` upstream with this entry's context and relay it to `client`.
+	//
+	// **It calls itself on a redirect**, which is why it is a function rather
+	// than the inline block it was. A signed CDN url answering 302 to a
+	// regional edge used to end here: the status was relayed to the player and
+	// `Location` was not -- the relay list is `Content-Type`, `Content-Length`,
+	// `Content-Range` and `Accept-Ranges`, which is right for a 200 and silent
+	// for a 30x -- so the player got `302` with nowhere to go and zero bytes.
+	//
+	// Followed here rather than by the player, because the player fetching the
+	// edge itself would fetch it naked: no Referer, no User-Agent, no cookies,
+	// which is the 403 this whole class exists to prevent. And followed by hand
+	// rather than by `RedirectPolicyAttribute`, because Qt re-sends the raw
+	// headers it was given -- including a `Cookie` built for the host before
+	// the hop. Each hop asks `stream_context::cookies_for` about the url it is
+	// actually about to fetch.
+	void fetch_upstream(QTcpSocket *client, const entry &e, const QUrl &url,
+	                     const QByteArray &head, int hops);
+
 	QTcpServer            *m_server = nullptr;
 	QNetworkAccessManager *m_net    = nullptr;
 	QHash<QString, entry>  m_published;

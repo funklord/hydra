@@ -1,5 +1,6 @@
 #include "local_proxy.h"
 
+#include <memory>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -110,12 +111,13 @@ QUrl local_proxy::publish(const QUrl &upstream, const stream_context &ctx) {
 	entry e;
 	e.upstream = upstream;
 	e.ctx      = ctx;
-	// **Resolved here, for the host this entry will fetch**, rather than at send
-	// time: `publish` runs on the UI thread where the jar lives, and a request
-	// built later must not be the first place anybody asks. An extractor's named
-	// header wins, because it knows this CDN and a jar lookup does not.
-	if (e.ctx.cookies.isEmpty() && e.ctx.cookies_for)
-		e.ctx.cookies = e.ctx.cookies_for(upstream);
+	// **Not resolved here, and that is a correction.** This did cache the
+	// header at publish time, for the upstream -- which is right until the
+	// fetch redirects, when the cached value is a cookie for the host before
+	// the hop and `fetch_upstream` would send it to the host after. The test
+	// that counts who is asked per hop is what found it. Asking lives in one
+	// place now, `fetch_upstream`, which is the only code that knows which url
+	// is about to be requested.
 	m_published.insert(token, e);
 
 	QUrl local;
@@ -519,14 +521,29 @@ void local_proxy::serve(QTcpSocket *client, const QByteArray &head,
 		return;
 	}
 
-	QNetworkRequest req(e.upstream);
-	// The context the CDN expects, replayed from the page that loaded it.
+	fetch_upstream(client, e, e.upstream, head, 0);
+}
+
+void local_proxy::fetch_upstream(QTcpSocket *client, const entry &e,
+                                  const QUrl &url, const QByteArray &head,
+                                  int hops) {
+	// **Five, which is what browsers settle on.** A loop is the thing being
+	// bounded; the number is not interesting beyond being small, and a stream
+	// that needs more hops than a browser allows is not one to chase.
+	static constexpr int k_max_hops = 5;
+
+	QNetworkRequest req(url);
+	// The context the CDN expects, replayed from the page that loaded it --
+	// and re-asked per hop, because a redirect can land on another host and a
+	// cookie belongs to the host it was set for.
 	if (!e.ctx.referer.isEmpty())
 		req.setRawHeader("Referer", e.ctx.referer.toUtf8());
 	if (!e.ctx.user_agent.isEmpty())
 		req.setRawHeader("User-Agent", e.ctx.user_agent.toUtf8());
-	if (!e.ctx.cookies.isEmpty())
-		req.setRawHeader("Cookie", e.ctx.cookies.toUtf8());
+	const QString ck = (e.ctx.cookies.isEmpty() && e.ctx.cookies_for)
+	                     ? e.ctx.cookies_for(url) : e.ctx.cookies;
+	if (!ck.isEmpty())
+		req.setRawHeader("Cookie", ck.toUtf8());
 	for (auto it = e.ctx.extra.cbegin(); it != e.ctx.extra.cend(); ++it) {
 		if (it.key().isEmpty() || it.value().isEmpty())
 			continue;
@@ -540,11 +557,44 @@ void local_proxy::serve(QTcpSocket *client, const QByteArray &head,
 
 	QNetworkReply *reply = m_net->get(req);
 
-	connect(reply, &QNetworkReply::metaDataChanged, client, [reply, client] {
-		if (client->state() != QAbstractSocket::ConnectedState)
+	// **Decided once, before anything is written.** A redirect has to be
+	// recognised while the response is still the proxy's to swallow: once a
+	// status line has gone to the player there is no taking it back.
+	auto redirected = std::make_shared<bool>(false);
+
+	connect(reply, &QNetworkReply::metaDataChanged, client,
+	         [this, reply, client, e, head, hops, url, redirected] {
+		if (*redirected || client->state() != QAbstractSocket::ConnectedState)
 			return;
 		const int code =
 		  reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
+		const bool is_redirect = code == 301 || code == 302 || code == 303 ||
+		                          code == 307 || code == 308;
+		if (is_redirect) {
+			*redirected = true;
+			const QByteArray where = reply->rawHeader("Location");
+			const QUrl to = where.isEmpty()
+			                  ? QUrl()
+			                  : url.resolved(QUrl::fromEncoded(where.trimmed()));
+			reply->abort();
+			// **Said, not silent.** A 30x with no usable Location, or one hop
+			// too many, used to reach the player as a status it could not act
+			// on. The player needs an error it can report rather than an
+			// empty 302.
+			if (!to.isValid() || to.scheme().isEmpty()) {
+				send_simple(client, 502,
+				             "upstream redirected without a usable Location");
+				return;
+			}
+			if (hops + 1 > k_max_hops) {
+				send_simple(client, 508, "upstream redirected too many times");
+				return;
+			}
+			fetch_upstream(client, e, to, head, hops + 1);
+			return;
+		}
+
 		client->write(status_line(code ? code : 200));
 		// Relay the headers that make seeking work, unmodified.
 		for (const char *name : {"Content-Type", "Content-Length",
@@ -557,13 +607,18 @@ void local_proxy::serve(QTcpSocket *client, const QByteArray &head,
 	});
 
 	// Stream rather than buffer: a video is not something to hold in memory.
-	connect(reply, &QNetworkReply::readyRead, client, [reply, client] {
-		if (client->state() == QAbstractSocket::ConnectedState)
+	connect(reply, &QNetworkReply::readyRead, client,
+	         [reply, client, redirected] {
+		if (!*redirected && client->state() == QAbstractSocket::ConnectedState)
 			client->write(reply->readAll());
 	});
 
-	connect(reply, &QNetworkReply::finished, client, [reply, client] {
-		if (client->state() == QAbstractSocket::ConnectedState) {
+	connect(reply, &QNetworkReply::finished, client,
+	         [reply, client, redirected] {
+		// **Nothing on a hop.** The next request owns the socket now, and
+		// disconnecting here would close it under the response being fetched.
+		if (!*redirected &&
+		    client->state() == QAbstractSocket::ConnectedState) {
 			client->write(reply->readAll());
 			client->disconnectFromHost();
 		}
