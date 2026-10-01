@@ -31019,3 +31019,52 @@ case where the two formulas are equal. The hazard needs the second read to have
 *dropped* something, and nothing in the suite had ever written a playlist that
 moved its window. Same shape as the byte-range find an hour earlier: the fixture
 could express the safe case and not the dangerous one.
+
+## A live MPD is one window, and the message said otherwise
+
+Found while reading the completion path for a different question -- whether a
+live stream with separate audio could write video into the audio file -- which
+it cannot, because the two features belong to different grammars and cannot
+combine. That is worth recording as a swept pair:
+
+    poll_live        HLS only: `m_live_url` is set in the HLS branch alone
+    audio pass       DASH only: `m_audio_pending` is filled by assemble_dash
+
+So the audio file cannot be polled into, and a live DASH cannot grow an audio
+list. Checked rather than assumed, because the completion path runs both one
+after the other and the file handle moves between them.
+
+**What the reading did turn up is the asymmetry itself.** `assemble_dash` sets
+`is_live` from the manifest and leaves `m_live_url` empty, so the poll guard
+never fires -- a live MPD is captured as the one window it offered. The caller
+said the same sentence for both:
+
+> Live stream, so this is what the playlist offered while it was being read.
+
+True for HLS, which re-reads. For DASH it is what the manifest offered in **one**
+read, and the comment immediately above that line warns about exactly this
+outcome: *"saying 'saved' with no more than that is how somebody ends up with
+thirty seconds of a broadcast and no reason to look for the rest."* The sentence
+was the "no more than that", wearing a caveat's clothes.
+
+### Two sentences, told apart by what the assembly actually did
+
+`polled_live()` answers whether the playlist was re-read, which is not the same
+question as `was_live()` and is the one a caller needs to describe what it got:
+
+    HLS    Live stream, so this is what the playlist offered while it was
+           being read.
+    DASH   Live stream, and this is the one window the manifest offered -- it
+           is not re-read as it grows, so there is likely more.
+
+### Not implemented, said rather than silent
+
+Continuing a growing MPD means re-deriving `$Number$` and `$Time$` addressing
+across reads, which is a feature. What was wrong was not that it is missing but
+that nothing said so -- the save looked like a complete live capture. The header
+records the gap at the accessor, where somebody wiring DASH re-polling will be
+standing.
+
+Checked as a pair and sabotaged both ways, since a sentence on every live save
+says nothing about either: forcing the discriminator true drops the DASH
+sentence and forcing it false drops the HLS one, each failing alone.

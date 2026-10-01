@@ -89,6 +89,21 @@ public:
 	// Only meaningful once `completed()` has been emitted.
 	bool    was_live() const { return m_playlist.is_live; }
 
+	// **Whether this assembly kept re-reading the playlist**, which is not the
+	// same question as whether the stream was live and is the one a caller
+	// needs in order to describe what it got.
+	//
+	// Re-reading is implemented for HLS, where `m_live_url` is set and
+	// `poll_live` walks the growing list. **A live MPD is captured as the one
+	// window it offered**: `assemble_dash` sets `is_live` from the manifest and
+	// leaves `m_live_url` empty, so the poll guard never fires. That is a
+	// missing feature rather than a bug -- continuing a growing MPD means
+	// re-deriving `$Number$` and `$Time$` addressing across reads -- and it was
+	// silent, which is the part that was wrong: the caller said "this is what
+	// the playlist offered while it was being read" for both, and for DASH it
+	// is what the manifest offered in one read.
+	bool    polled_live() const { return !m_live_url.isEmpty(); }
+
 signals:
 	// Emitted as each segment lands, so a reader knows how much is playable.
 	void progress(qint64 bytes, int segments_done, int segments_total);

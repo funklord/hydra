@@ -97,6 +97,20 @@ void stream_assembly::assemble(const media_item &item,
 		// more than that is how somebody ends up with thirty seconds of a
 		// broadcast and no reason to look for the rest.
 		const bool live = m_assembler && m_assembler->was_live();
+		// **Live, and whether the playlist was read more than once.** HLS
+		// re-reads a growing list; a live MPD is captured as the one window it
+		// offered, because continuing one means re-deriving `$Number$` and
+		// `$Time$` addressing across reads and that is not built. The sentence
+		// below used to be the same for both, which is how somebody ends up
+		// with thirty seconds of a broadcast and a message implying otherwise
+		// -- the exact outcome the comment above this one warns about.
+		const bool followed = m_assembler && m_assembler->polled_live();
+		const QString live_said =
+		  followed ? QStringLiteral("Live stream, so this is what the playlist "
+		                             "offered while it was being read.")
+		           : QStringLiteral("Live stream, and this is the one window "
+		                             "the manifest offered -- it is not re-read "
+		                             "as it grows, so there is likely more.");
 		if (play_it) {
 			// **Not remuxed, deliberately.** A player already has this file
 			// open and has been reading it since the first segment landed --
@@ -104,8 +118,7 @@ void stream_assembly::assemble(const media_item &item,
 			// replace the file underneath a running player to gain a container
 			// nobody is going to seek around afterwards.
 			emit status(
-			  live ? QStringLiteral("Live stream: captured what the playlist "
-			                         "offered; playback continues locally.")
+			  live ? live_said + QStringLiteral(" Playback continues locally.")
 			            + (m_live_note.isEmpty()
 			                 ? QString()
 			                 : QStringLiteral(" It stopped because ")
@@ -124,9 +137,7 @@ void stream_assembly::assemble(const media_item &item,
 		// rewrap answers a second later and overwrites the line, so a caveat
 		// left on the earlier one is a caveat nobody ends up looking at.
 		const QString note =
-		  (live ? QStringLiteral(" Live stream, so this is what the playlist "
-		                          "offered while it was being read.")
-		         : QString())
+		  (live ? QStringLiteral(" ") + live_said : QString())
 		  + (m_live_note.isEmpty() ? QString()
 		                            : QStringLiteral(" It stopped because ")
 		                                + m_live_note + QStringLiteral("."));

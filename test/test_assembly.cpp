@@ -1241,6 +1241,58 @@ int main(int argc, char **argv) {
 		check(live_said.filter("Saved").size() > 0,
 		       "the live one still reports the file it wrote");
 
+		// **A live MPD is one window, and said so separately.** HLS re-reads a
+		// growing list; DASH does not -- `assemble_dash` sets `is_live` and
+		// leaves the poll url empty, so the guard never fires -- and both used
+		// to report "what the playlist offered while it was being read". For
+		// DASH that is what the manifest offered in one read, which is the
+		// thirty-seconds-of-a-broadcast outcome this section's own comment
+		// warns about, with a sentence implying otherwise.
+		cdn.files["/livempd.mpd"] =
+		  QByteArray("<?xml version=\"1.0\"?>\n<MPD type=\"dynamic\">\n"
+		              "  <Period><AdaptationSet mimeType=\"video/mp4\">\n"
+		              "    <Representation id=\"v\" bandwidth=\"900000\">\n"
+		              "      <SegmentList>\n"
+		              "        <SegmentURL media=\"/seg0.ts\"/>\n"
+		              "        <SegmentURL media=\"/seg1.ts\"/>\n"
+		              "      </SegmentList>\n"
+		              "    </Representation>\n"
+		              "  </AdaptationSet></Period>\n</MPD>\n");
+		auto save_dash = [&](const QString &path) {
+			media_item it;
+			it.kind  = media_kind::dash;
+			it.label = "live mpd";
+			it.url   = QUrl(base + path);
+			auto *sa = new stream_assembly(&players, &downloads, &proxy, nullptr);
+			QStringList lines;
+			QObject::connect(sa, &stream_assembly::status,
+			                  [&lines](const QString &t) { lines << t; });
+			sa->save(it, stream_context{});
+			QElapsedTimer el;
+			el.start();
+			while (sa->running() && el.elapsed() < 15000)
+				spin(50);
+			spin(600);
+			delete sa;
+			return lines;
+		};
+		const QStringList mpd_said = save_dash("/livempd.mpd");
+
+		check(mpd_said.filter("Live stream").size() > 0,
+		      QString("a live MPD is still called live (%1)")
+		          .arg(mpd_said.join(" | ")));
+		check(mpd_said.filter("one window").size() > 0,
+		      QString("and says it is one window, with likely more (%1)")
+		          .arg(mpd_said.join(" | ")));
+		// **The pair**: the HLS save must NOT say that, or the sentence is
+		// just a caveat on every live save and says nothing about either.
+		check(live_said.filter("one window").size() == 0,
+		      QString("while the re-read HLS one does not (%1)")
+		          .arg(live_said.join(" | ")));
+		check(live_said.filter("while it was being read").size() > 0,
+		      QString("and says what it did instead (%1)")
+		          .arg(live_said.join(" | ")));
+
 		// Watching is the other branch of the same ternary and has its own
 		// wording, so it gets its own check rather than being assumed from the
 		// save above: an untested branch of a two-armed message is exactly
