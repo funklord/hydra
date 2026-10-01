@@ -30750,12 +30750,41 @@ published through the proxy, with the client's status and byte count printed:
 
     client saw 302, 0 byte(s), err=Unknown protocol specified
 
-So no double write -- and worse than that. The proxy relayed the 30x status and
-**not** its `Location`, because the relay list is `Content-Type`,
-`Content-Length`, `Content-Range` and `Accept-Ranges`: right for a 200, silent
-for a redirect. The player got a 302 with nowhere to go and zero bytes. Watch or
-Save on any stream whose url redirects -- which is what a signed CDN url does on
-its way to a regional edge -- produced nothing, with no diagnosis.
+The proxy relayed the 30x status and **not** its `Location`, because the relay
+list is `Content-Type`, `Content-Length`, `Content-Range` and `Accept-Ranges`:
+right for a 200, silent for a redirect. The player got a 302 with nowhere to go
+and zero bytes. Watch or Save on any stream whose url redirects -- which is what
+a signed CDN url does on its way to a regional edge -- produced nothing, with no
+diagnosis.
+
+### This entry said "no double write", and that was wrong
+
+The sentence that opened this paragraph, and the commit message that went with
+it, concluded that `metaDataChanged` does not fire twice. **It fires twice.**
+Measured afterwards with a plain `QNetworkAccessManager` against the same
+fixture:
+
+    metaDataChanged fired 2 time(s): 302, 200; final 200;
+    fixture served 1 redirect(s)
+
+So Qt does follow the redirect by default, and **both** faults were real: the
+proxy wrote a 302 header block from the first emission and a 200 header block
+from the second, into one response, with no `Location` in either. What the
+client surfaced was the first -- it errored on a 302 it could not follow and
+delivered no body -- which is why the symptom looked like a single bug and why
+the wrong conclusion was easy to reach from one measurement.
+
+**And the check that was supposed to see the double write passed vacuously.**
+It read `!raw.contains("HTTP/1.1")` over a body that was empty, because the
+client had errored before delivering one. `!raw.isEmpty() &&` is the other half
+and is there now. A vacuous pass, written during a day spent cataloguing them,
+and found by going back to measure a claim rather than by the check itself.
+
+The fix is unaffected either way, which is why a wrong conclusion did not
+produce wrong code: the first emission carries the 30x, `fetch_upstream` decides
+there, and the later ones are guarded by the flag it sets. That property is
+pinned too -- the first emission's status must be in the 300s -- because it is
+the one the design rests on.
 
 ### Followed in the proxy, not handed to the player
 
@@ -30794,6 +30823,13 @@ requested. Publishing asks nobody, and the suite says so.
 
 Sabotaged by treating a 30x as an ordinary response, which is what the code did
 before: five of those go red at once.
+
+**What this cost and what it did not.** The wrong conclusion reached the record
+and a commit message and nothing else: the code was written to be correct under
+either answer, the suite pins the property it actually depends on, and the
+correction above is in the file a reader looks in. The commit message stays
+wrong, because rewriting pushed history is worse than a sentence that `git log
+-S` will put next to its correction.
 
 `echo_server` gained an opt-in `redirect_from` / `redirect_to` and a count. Both
 its users were re-run -- `test_headers` 23 of 23, `test_dlheaders` 12 of 12 --

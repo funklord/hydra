@@ -188,12 +188,18 @@ int main(int argc, char **argv) {
 		          .arg(server.redirects_served));
 
 		// **The property that matters**, read off the bytes the client got:
-		// exactly one response. `QNetworkAccessManager` on this side parses
-		// what the proxy wrote, so a second status line inside the body is
-		// what a second header write looks like from here.
-		check(!raw.contains("HTTP/1.1"),
-		      QString("the client's body carries no second status line (%1)")
-		          .arg(QString::fromUtf8(raw.left(60))));
+		// exactly one response. A second status line inside the body is what a
+		// second header write looks like from here.
+		//
+		// **`!raw.isEmpty()` is half the check and the first version left it
+		// out.** Without the fix the client errors on the relayed 302 and
+		// delivers no body at all, so "carries no second status line" passed
+		// over zero bytes -- a vacuous pass, in a check written to catch
+		// exactly this kind of thing.
+		check(!raw.isEmpty() && !raw.contains("HTTP/1.1"),
+		      QString("the client's body is there and carries no second status "
+		               "line (%1 byte(s): %2)").arg(raw.size())
+		          .arg(QString::fromUtf8(raw.left(50))));
 		// And the redirect was actually followed to something: the echo
 		// server's JSON, not an empty 302 body.
 		const QJsonObject after = QJsonDocument::fromJson(raw).object();
@@ -258,6 +264,51 @@ int main(int argc, char **argv) {
 		check(code6 == 502,
 		      QString("the player is told upstream redirected nowhere (%1)")
 		          .arg(code6));
+	}
+
+	// **How many times `metaDataChanged` fires across a redirect**, measured
+	// because the proxy's correctness rests on it and because the record of
+	// this work claimed an answer that had not been measured. The guard in
+	// `fetch_upstream` is written for either answer -- the first emission
+	// swallows the 30x and sets a flag the rest check -- so this pins the Qt
+	// behaviour rather than choosing the design.
+	std::printf("\n== how Qt reports a redirect ==\n");
+	{
+		server.redirect_from = "/meta";
+		server.redirect_to   = "/stream";
+		server.redirects_served = 0;
+
+		QNetworkAccessManager plain;
+		QNetworkReply *r8 = plain.get(QNetworkRequest(QUrl(base + "/meta/x")));
+		int metas = 0;
+		QList<int> codes;
+		QObject::connect(r8, &QNetworkReply::metaDataChanged, r8,
+		                  [r8, &metas, &codes] {
+			++metas;
+			codes << r8->attribute(
+			  QNetworkRequest::HttpStatusCodeAttribute).toInt();
+		});
+		QEventLoop l8;
+		QObject::connect(r8, &QNetworkReply::finished, &l8, &QEventLoop::quit);
+		QTimer::singleShot(15000, &l8, &QEventLoop::quit);
+		l8.exec();
+		const int final_code =
+		  r8->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+		QStringList seen;
+		for (int c : codes)
+			seen << QString::number(c);
+		std::printf("  ..    metaDataChanged fired %d time(s): %s; final %d; "
+		             "fixture served %d redirect(s)\n",
+		             metas, qPrintable(seen.join(", ")), final_code,
+		             server.redirects_served);
+		r8->deleteLater();
+
+		// Whatever the count, the one thing the proxy needs is that the first
+		// emission carries the 30x -- because that is where it decides, before
+		// anything has been written to the player.
+		check(!codes.isEmpty() && codes.first() >= 300 && codes.first() < 400,
+		      QString("the first emission carries the redirect's status (%1)")
+		          .arg(seen.isEmpty() ? QStringLiteral("none") : seen.first()));
 	}
 
 	// And a loop is bounded rather than chased.
