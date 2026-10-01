@@ -40,8 +40,10 @@ struct hls_playlist {
 	// its neighbours, with nothing anywhere saying the manifest had not been
 	// understood.
 	//
-	// Only the byte range sets this, because only it decides which bytes are
-	// fetched. `BANDWIDTH` that cannot be read leaves a variant at 0 and
+	// Set by the byte range, because only it decides which bytes are fetched,
+	// and by `#EXT-X-KEY`, because an encrypted stream cannot be assembled at
+	// all -- the segments would be concatenated as ciphertext and reported as
+	// a saved file. `BANDWIDTH` that cannot be read leaves a variant at 0 and
 	// changes which stream is picked, which is a worse choice rather than a
 	// wrong file; the durations and the media sequence are read by nothing
 	// that decides anything. Empty means the manifest parsed.

@@ -59,6 +59,44 @@ hls_playlist parse(const QByteArray &text, const QUrl &base) {
 			out.is_live = false;   // a complete VOD list
 			continue;
 		}
+		// **An encrypted playlist is refused, not concatenated.**
+		// `#EXT-X-KEY:METHOD=AES-128,URI="..."` says every segment from here on
+		// is AES-encrypted, and this engine does not decrypt: it would fetch
+		// them, concatenate the ciphertext, write it out and report a saved
+		// file. What the person gets is noise and a confusing complaint from
+		// ffmpeg about a container, with nothing anywhere saying the stream was
+		// encrypted. Most commercial HLS is.
+		//
+		// `METHOD=NONE` is the tag turning encryption *off* for the segments
+		// that follow and is not a refusal -- a playlist may carry it after an
+		// encrypted stretch, and refusing it would reject a clear stream for
+		// saying so.
+		//
+		// Decrypting is a feature: the key has to be fetched, and AES-128-CBC
+		// needs the IV, which is either the tag's or the segment's sequence
+		// number. Refusing by name is what this `error` field is for, and it is
+		// the difference between "we cannot do this" and a file that is not the
+		// programme.
+		if (line.startsWith("#EXT-X-KEY:")) {
+			const QString v = line.section(':', 1);
+			// The attribute list is comma-separated; METHOD is the first by
+			// specification but read by name rather than by position.
+			QString method;
+			for (const QString &attr : v.split(',')) {
+				const QString a = attr.trimmed();
+				if (a.startsWith("METHOD=", Qt::CaseInsensitive)) {
+					method = a.mid(7).trimmed();
+					break;
+				}
+			}
+			if (!method.isEmpty() &&
+			     method.compare("NONE", Qt::CaseInsensitive) != 0) {
+				if (out.error.isEmpty())
+					out.error = "the segments are encrypted (METHOD=" + method +
+					             "), which this cannot decrypt";
+			}
+			continue;
+		}
 		if (line.startsWith("#EXT-X-MEDIA-SEQUENCE:")) {
 			out.media_sequence = line.section(':', 1).toInt();
 			continue;

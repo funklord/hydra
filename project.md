@@ -31068,3 +31068,51 @@ standing.
 Checked as a pair and sabotaged both ways, since a sentence on every live save
 says nothing about either: forcing the discriminator true drops the DASH
 sentence and forcing it false drops the HLS one, each failing alone.
+
+## An encrypted HLS stream was saved as ciphertext and reported as done
+
+Nothing in `hls_playlist` read `#EXT-X-KEY`. **Most commercial HLS is
+encrypted**, so this is not a corner: `METHOD=AES-128` with a key URI says
+every segment from that point is AES-encrypted, and the parser treated such a
+playlist as an ordinary one. The segments were fetched, the ciphertext was
+concatenated, the file was written, and the save was reported as finished --
+followed by a complaint from ffmpeg about a container, which is the only hint
+anybody got and points at the wrong thing entirely.
+
+Measured on the sabotage, with the tag ignored again:
+
+    the save does not report success        FAIL
+    and says the stream is encrypted       ((said nothing))
+    no segment was fetched                 (1 request(s))
+    and no bytes were written              (4096)
+
+### Refused by name, which is what this `error` field is for
+
+    Playlist not understood: the segments are encrypted (METHOD=AES-128),
+    which this cannot decrypt
+
+Decrypting is a feature: the key has to be fetched, and AES-128-CBC needs the
+IV, which is either the tag's or the segment's sequence number. The parser's own
+contract already says what to do with what it cannot address -- the byte-range
+case set `error` for exactly this reason -- and the refusal lands at the
+manifest, before any segment request goes out. Nothing fetched, nothing
+written.
+
+### The negative half, because a one-sided check would have been worse
+
+`METHOD=NONE` is the tag turning encryption *off* for the segments that follow.
+A playlist may carry it after an encrypted stretch, and refusing it would reject
+a clear stream for saying it is clear. So the suite asserts both, and a third
+case reads `METHOD` by name rather than by position:
+
+    METHOD=AES-128, URI=...                refused, naming AES-128
+    METHOD=NONE                            parses, segments intact
+    URI=..., METHOD=SAMPLE-AES             refused, naming SAMPLE-AES
+
+### Found by asking the parser what it does not know
+
+The question was the one the day's other finds suggested: what in this grammar
+can make the segment list wrong, rather than absent? `#EXT-X-BYTERANGE` was
+already handled and already tested. `#EXT-X-KEY` was not mentioned anywhere in
+the file -- a grep for it in `hls_playlist.cpp` and `.h` returned nothing, which
+is the whole of how this was found.

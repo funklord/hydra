@@ -1136,6 +1136,51 @@ int main(int argc, char **argv) {
 	// while nothing is missed. A playlist that drops segments we never saw --
 	// a slow CDN, a slow disk, a pause -- leaves the mark below the sequence
 	// numbers still in the window, so the next poll takes them again.
+	// **The consequence of the parser's refusal, which is the half that
+	// matters.** `hls_playlist` reports an encrypted playlist now; this asks
+	// what a *save* does with it, because the old behaviour was to fetch the
+	// segments, concatenate the ciphertext, write it out and report a saved
+	// file.
+	section("saving an encrypted stream refuses instead of writing noise");
+	{
+		cdn.redirect_from.clear();
+		cdn.then.clear();
+		cdn.files["/e0.ts"] = QByteArray(k_seg_size, 'x');
+		cdn.files["/enc.m3u8"] =
+		  QByteArray("#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		              "#EXT-X-KEY:METHOD=AES-128,URI=\"/k\"\n"
+		              "#EXTINF:4.0,\n/e0.ts\n#EXT-X-ENDLIST\n");
+
+		QTemporaryDir edir;
+		const QString out = edir.filePath("enc.ts");
+		hls_assembler as;
+		bool done = false;
+		QString why;
+		QObject::connect(&as, &hls_assembler::completed, [&] { done = true; });
+		QObject::connect(&as, &hls_assembler::failed,
+		                  [&why](const QString &e) { why = e; });
+
+		stream_context ctx;
+		as.start(QUrl(base + "/enc.m3u8"), ctx, out);
+		QElapsedTimer t;
+		t.start();
+		while (t.elapsed() < 8000 && !done && why.isEmpty())
+			spin(50);
+
+		check(!done, "the save does not report success");
+		check(why.contains("encrypted"),
+		      QString("and says the stream is encrypted (%1)")
+		          .arg(why.isEmpty() ? QStringLiteral("(said nothing)") : why));
+		// Nothing fetched and nothing written: the refusal is at the manifest,
+		// before any segment request goes out.
+		check(cdn.asked.value("/e0.ts", 0) == 0,
+		      QString("no segment was fetched (%1 request(s))")
+		          .arg(cdn.asked.value("/e0.ts", 0)));
+		check(QFileInfo(out).size() == 0 || !QFileInfo::exists(out),
+		      QString("and no bytes were written (%1)")
+		          .arg(QFileInfo(out).size()));
+	}
+
 	section("a live playlist that jumped ahead is not re-taken");
 	{
 		cdn.redirect_from.clear();

@@ -236,6 +236,52 @@ int main(int argc, char **argv) {
 		      "and is the slice it says");
 	}
 
+	// **An encrypted playlist is refused rather than concatenated.** Nothing
+	// read `#EXT-X-KEY`, so the segments were fetched, the ciphertext was
+	// concatenated and written out, and the save was reported as done: what the
+	// person gets is noise and a complaint from ffmpeg about a container, with
+	// nothing saying the stream was encrypted. Most commercial HLS is.
+	section("an encrypted playlist is refused by name");
+	{
+		const QByteArray enc =
+		  "#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		  "#EXT-X-KEY:METHOD=AES-128,URI=\"https://k.example/k\",IV=0x0\n"
+		  "#EXTINF:4.0,\n/s0.ts\n#EXTINF:4.0,\n/s1.ts\n#EXT-X-ENDLIST\n";
+		const hls_playlist p = hls::parse(enc, QUrl("https://c.example/v.m3u8"));
+		check(!p.error.isEmpty(),
+		      QString("refused (%1)").arg(p.error.isEmpty()
+		        ? QStringLiteral("parsed happily") : p.error));
+		check(p.error.contains("encrypted") && p.error.contains("AES-128"),
+		      QString("and the message names what it cannot do, with the "
+		               "method (%1)").arg(p.error));
+
+		// **METHOD=NONE is the tag turning encryption off and is not a
+		// refusal.** A playlist may carry it after an encrypted stretch, and
+		// refusing it would reject a clear stream for saying it is clear --
+		// which is the half a one-sided check would miss.
+		const QByteArray cleared =
+		  "#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		  "#EXT-X-KEY:METHOD=NONE\n"
+		  "#EXTINF:4.0,\n/s0.ts\n#EXT-X-ENDLIST\n";
+		const hls_playlist c = hls::parse(cleared, QUrl("https://c.example/v.m3u8"));
+		check(c.error.isEmpty(),
+		      QString("METHOD=NONE parses (%1)").arg(c.error));
+		check(c.segments.size() == 1,
+		      QString("and its segments are there (%1)").arg(c.segments.size()));
+
+		// Read by name rather than by position, so an attribute list that puts
+		// METHOD second is still understood.
+		const QByteArray reordered =
+		  "#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		  "#EXT-X-KEY:URI=\"https://k.example/k\",METHOD=SAMPLE-AES\n"
+		  "#EXTINF:4.0,\n/s0.ts\n#EXT-X-ENDLIST\n";
+		const hls_playlist r = hls::parse(reordered, QUrl("https://c.example/v.m3u8"));
+		check(!r.error.isEmpty() && r.error.contains("SAMPLE-AES"),
+		      QString("METHOD after URI is still found (%1)")
+		          .arg(r.error.isEmpty() ? QStringLiteral("parsed happily")
+		                                  : r.error));
+	}
+
 	section("no base url");
 	{
 		const QByteArray text = "#EXTM3U\n#EXTINF:4,\nhttps://a.example/s.ts\n";
