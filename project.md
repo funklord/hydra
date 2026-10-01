@@ -30937,3 +30937,43 @@ That is `evidence.md`'s *a test can name the hazard exactly and cover only the
 safe path*, one layer out: the suite covered the assembler thoroughly and could
 not reach the branch where a range matters, because nothing in the fixture ever
 made a range matter.
+
+## The same hazard in DASH, where the byte-range check cannot see it
+
+Asked straight after the HLS one, because the two grammars share every line
+below the parser: does DASH have a way to put several segments in one file, and
+what does this tree do with it?
+
+It does -- `<SegmentURL media="all.m4s" mediaRange="0-999"/>`, which is
+`#EXT-X-BYTERANGE` by another name -- and the parser read `media` and dropped
+`mediaRange`. So every entry named the same whole file. The assembler would
+fetch it once per segment **with no `Range` header**, which means the length
+check added for the HLS case cannot fire: there is no range to compare against.
+N copies, written out and reported as a finished save, with nothing in the tree
+able to notice.
+
+### Refused rather than approximated, and that is the proportionate fix
+
+`dash_representation::segments` is a `QList<QUrl>` with nowhere to carry a
+range, so honouring `mediaRange` means changing that type and the conversion in
+`assemble_dash`. That is a feature. Dropping the attribute is worse than either
+option, so the parser refuses and names what it refused:
+
+    a SegmentURL carries mediaRange, which names a byte range of one file
+    -- this addressing is not supported rather than approximated
+
+Which is this parser's own policy for everything it cannot address, and the
+reason it has an `error` field at all: *a wrong segment list assembles a file
+that plays and is not the programme.*
+
+Sabotaged by dropping the attribute again: the manifest parses happily and
+builds **two** segments from one file, which is the corruption with the numbers
+in it.
+
+### What is still true of SegmentBase, checked while here
+
+`<SegmentBase>` with an `<Initialization range=...>` is left alone and that is
+correct, as the comment there already said: the representation is one file, the
+range names a slice *of that same file*, and fetching the file whole already
+carries it. Reading the range would be the bug. Confirmed rather than assumed,
+because the two cases look alike and only one of them is safe to ignore.

@@ -171,6 +171,42 @@ int main(int argc, char **argv) {
 		      QString("and so is the init (%1)").arg(r.init.toString()));
 	}
 
+	// **A SegmentURL carrying `mediaRange` is refused, not approximated.**
+	// It says the segment is bytes a..b of one file, which is DASH's
+	// `#EXT-X-BYTERANGE`. `dash_representation::segments` is a list of urls
+	// with nowhere to put a range, so dropping it would make every entry name
+	// the same whole file -- fetched once per segment, with no `Range` header
+	// for `hls_assembler`'s length check to catch, and N copies written out as
+	// a finished save.
+	section("a SegmentURL with a byte range is refused by name");
+	{
+		const QByteArray xml =
+		  "<?xml version=\"1.0\"?>\n"
+		  "<MPD>\n"
+		  "  <BaseURL>https://other.example/x/</BaseURL>\n"
+		  "  <Period><AdaptationSet mimeType=\"video/mp4\">\n"
+		  "    <Representation id=\"v1\" bandwidth=\"900000\">\n"
+		  "      <SegmentList>\n"
+		  "        <SegmentURL media=\"all.m4s\" mediaRange=\"0-999\"/>\n"
+		  "        <SegmentURL media=\"all.m4s\" mediaRange=\"1000-1999\"/>\n"
+		  "      </SegmentList>\n"
+		  "    </Representation>\n"
+		  "  </AdaptationSet></Period>\n"
+		  "</MPD>\n";
+		const dash_manifest m = dash::parse(xml, base);
+		check(!m.error.isEmpty() && m.error.contains("mediaRange"),
+		      QString("refused, and the message names the attribute (%1)")
+		          .arg(m.error.isEmpty() ? QStringLiteral("(parsed happily)")
+		                                  : m.error));
+		// **The consequence, which is what makes the refusal worth having.**
+		// Dropping the range leaves two entries naming one file; refusing
+		// leaves nothing for the assembler to fetch twice.
+		const int segs = m.representations.isEmpty()
+		                   ? 0 : m.representations.first().segments.size();
+		check(segs == 0,
+		      QString("and no segment list was built from it (%1)").arg(segs));
+	}
+
 	section("one file, addressed by SegmentBase");
 	{
 		// The `<Initialization range=...>` here is a byte range of the same

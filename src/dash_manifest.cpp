@@ -459,6 +459,24 @@ dash_manifest parse(const QByteArray &xml, const QUrl &base) {
 				if (!stack.last().list.present)
 					continue;
 				const QString media = a.value("media").toString();
+				// **A range we would drop is a refusal, not a segment.**
+				// `mediaRange` says this segment is bytes a..b of `media`,
+				// which is DASH's `#EXT-X-BYTERANGE`: several segments inside
+				// one file. `dash_representation::segments` is a list of urls
+				// with nowhere to carry a range, so honouring it is a feature
+				// rather than a parse -- and ignoring it is worse than either.
+				// Every SegmentURL would name the same whole file, the
+				// assembler would fetch it once per segment with no `Range`
+				// header to check against, and the output would be N copies
+				// reported as a finished save. That is the shape the
+				// byte-range check in `hls_assembler` exists for, and it
+				// cannot see this one because no range is ever sent.
+				if (a.hasAttribute(QLatin1String("mediaRange"))) {
+					refuse("a SegmentURL carries mediaRange, which names a byte "
+					        "range of one file -- this addressing is not "
+					        "supported rather than approximated");
+					continue;
+				}
 				if (media.isEmpty())
 					refuse("a SegmentURL names no media");
 				else
