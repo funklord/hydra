@@ -485,9 +485,32 @@ void hls_assembler::next_segment() {
 			                .arg(m_index).arg(m_attempt).arg(reply->errorString()));
 			return;
 		}
+		const QByteArray body = reply->readAll();
+
+		// **A byte range that was not honoured is a wrong segment, not a
+		// slow one.** `#EXT-X-BYTERANGE` puts several segments inside one
+		// file and each fetch asks for its slice. A server that ignores
+		// `Range` answers 200 with the *whole* file and no error at all, so
+		// this used to append the entire file once per slice: three ranges
+		// over a 1 MB file wrote 3 MB, called it finished, and handed the
+		// player a concatenation that decodes well enough to play and is not
+		// the programme. The worst shape a media bug has.
+		//
+		// Checked on the length rather than on the status, because that is
+		// the thing that matters and needs no interpreting: a 206 for
+		// `bytes=a-b` carries exactly b-a+1 bytes, so anything else is wrong
+		// whatever the status line said. It catches a truncated answer too.
+		const hls_segment &got = m_playlist.segments.at(m_index);
+		if (got.byte_length > 0 && body.size() != got.byte_length) {
+			emit failed(QString("Segment %1 asked for %2 bytes and got %3: the "
+			                     "server ignored the byte range, so the file "
+			                     "would not be the programme.")
+			                .arg(m_index).arg(got.byte_length).arg(body.size()));
+			return;
+		}
+
 		// Landed, so the next segment starts with a full budget of its own.
 		m_attempt = 0;
-		const QByteArray body = reply->readAll();
 		if (m_file) {
 			// Flushed so a reader can play what has landed so far -- and
 			// read, because that is where a full disk surfaces. Both results

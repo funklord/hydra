@@ -1040,6 +1040,57 @@ int main(int argc, char **argv) {
 	// Qt would carry that same Cookie to a host that never set it. `localhost`
 	// and `127.0.0.1` are different origins to Qt while being the same machine,
 	// which is what makes this measurable on loopback at all.
+	// **A server that ignores `Range` used to produce a file that plays and is
+	// not the programme.** `#EXT-X-BYTERANGE` puts several segments inside one
+	// file; each fetch asks for its slice; and this fixture ignores `Range`
+	// entirely -- it serves `files[path]` whole -- which is exactly the CDN
+	// this is about. Three slices of a 1 MB file wrote 3 MB and reported
+	// success.
+	section("a byte range the server ignored is refused, not appended");
+	{
+		cdn.redirect_from.clear();
+		const int slice = k_seg_size;
+		const QByteArray whole = QByteArray(slice, 'r') + QByteArray(slice, 's')
+		                          + QByteArray(slice, 't');
+		cdn.files["/one.ts"] = whole;
+		QByteArray man = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n";
+		for (int i = 0; i < 3; ++i) {
+			man += "#EXT-X-BYTERANGE:" + QByteArray::number(slice) + "@" +
+			        QByteArray::number(qint64(i) * slice) + "\n"
+			        "#EXTINF:4.0,\n/one.ts\n";
+		}
+		man += "#EXT-X-ENDLIST\n";
+		cdn.files["/ranged.m3u8"] = man;
+
+		QTemporaryDir work;
+		const QString out = work.filePath("ranged.ts");
+		hls_assembler as;
+		bool done = false;
+		QString why;
+		QObject::connect(&as, &hls_assembler::completed, [&] { done = true; });
+		QObject::connect(&as, &hls_assembler::failed,
+		                  [&why](const QString &e) { why = e; });
+
+		stream_context ctx;
+		as.start(QUrl(base + "/ranged.m3u8"), ctx, out);
+		QElapsedTimer t;
+		t.start();
+		while (t.elapsed() < 8000 && !done && why.isEmpty())
+			spin(50);
+
+		check(!done, "the assembly does not report success");
+		check(why.contains("byte range"),
+		      QString("and says the range was ignored (%1)")
+		          .arg(why.isEmpty() ? QStringLiteral("(said nothing)") : why));
+		// **The consequence, not just the message.** Before this the file was
+		// three whole copies; the point is that it is not written as though it
+		// were the programme.
+		check(QFileInfo(out).size() < whole.size(),
+		      QString("and the output is not three copies of the file (%1 of "
+		               "%2 byte(s))").arg(QFileInfo(out).size())
+		          .arg(whole.size()));
+	}
+
 	section("a redirect to another origin is not followed");
 	{
 		cdn.cookie_seen.clear();

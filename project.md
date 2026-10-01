@@ -30892,3 +30892,48 @@ message.
 The first was the bug, the second was its residue, and the last two were closed
 by not asking. That is the whole of the path from a page's cookie jar to a
 request leaving this browser.
+
+## A byte range the server ignored was appended whole and called finished
+
+The worst shape a media bug has, and the third find in a row from reading this
+path rather than sweeping it.
+
+`#EXT-X-BYTERANGE` puts several segments inside one file: each fetch asks for
+its slice with a `Range` header. A server that ignores `Range` answers **200
+with the whole file** and no error at all -- and the segment handler took
+`reply->readAll()` and appended it. Three slices of a file therefore wrote three
+whole copies of that file, reported success, and handed the player a
+concatenation that decodes well enough to play and is not the programme.
+
+Demonstrated by sabotaging the new check, against a fixture that ignores `Range`
+because it always has:
+
+    the assembly does not report success                    FAIL
+    and says the range was ignored                         ((said nothing))
+    and the output is not three copies of the file         (36864 of 12288)
+
+36864 bytes where the file is 12288. Nothing anywhere said a word.
+
+### Checked on the length, not on the status
+
+A 206 for `bytes=a-b` carries exactly `b-a+1` bytes, so the length is the thing
+that matters and needs no interpreting -- it catches a server that answered 200
+with everything, and a truncated answer, without this code having an opinion
+about status lines. The message says what was asked for and what came:
+
+    Segment 0 asked for 4096 bytes and got 12288: the server ignored the
+    byte range, so the file would not be the programme.
+
+### Why nothing had caught it
+
+Every existing check on this path asserts that the assembled bytes equal the
+concatenated segments the fixture served -- and the fixture serves whole files,
+so a playlist without byte ranges can never show this. The hazard needed a
+playlist *with* `#EXT-X-BYTERANGE`, which no test had, against a server that
+ignores ranges, which every test had. One of the two conditions was always
+present and the other never was.
+
+That is `evidence.md`'s *a test can name the hazard exactly and cover only the
+safe path*, one layer out: the suite covered the assembler thoroughly and could
+not reach the branch where a range matters, because nothing in the fixture ever
+made a range matter.
