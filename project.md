@@ -30469,3 +30469,79 @@ is the method that now emits `site_updated`; 6 of 6 with no change.
 Afterwards: no orphaned driver or `QtWebEngineProcess` reparented to init, no
 deleted files held open, and `/` unchanged at 86%. The two GLES and Vulkan
 lines at the top of each log are offscreen rendering with no GPU, not failures.
+
+## A capability refused by policy reached the page and not the person
+
+`policy_engine`'s note on the `ask` defaults records what this cost once
+already:
+
+> a blocked camera reaches the page as a `NotAllowedError` and reaches the
+> person as nothing at all, so a video call that Hydra deliberately stopped is
+> indistinguishable from one that is simply broken -- which is exactly how it
+> presented here, and cost a diagnosis before the cause was found to be this
+> line.
+
+Three features moved to `ask` for that, which is the right half for a
+capability a prompt can reach somebody about. **Two are still refused outright
+by default and neither wants a prompt**: a browser that asks about notifications
+on every site is the thing browsers stopped doing, and reading the clipboard is
+not a question worth interrupting a page for.
+
+So they get the other half, which this file has had twenty lines away since
+`popups` was written: *"Blocked a window %1 tried to open. Allow popups for this
+site to let it through."* The capability path now says the same kind of thing:
+
+    Blocked notifications for asks.example. The shield can allow it for
+    this site.
+    Blocked clipboard reading for asks.example. The shield can allow it
+    for this site.
+
+### Measured first, because the answer decided whether this was worth doing
+
+Of the six capabilities the engine asks about, the defaults are
+`geolocation = ask`, `camera = allow`, `microphone = allow`,
+`pointer_lock = ask`, `notifications = block`, `clipboard_read = block`, with
+`screen_share = ask` arriving on its own signal. So **exactly two are silent by
+default**, which is what makes a status line affordable: the fear was a page
+polling `getUserMedia` narrating itself, and that case prompts rather than
+refuses.
+
+Said once per site per capability per run, in its own set rather than in
+`m_session_permissions` -- that one holds an answer a person gave, and reusing
+it would make having been told the same thing as having been asked. Cleared by
+Clear browsing data, so the first attempt after a forget is explained again.
+
+### The fake view was dropping the decider, which is the gap under the gap
+
+`fake_view::set_permission_decider(permission_decider) override {}` -- a no-op
+setter, five lines above a comment explaining why that is wrong for the one
+below it: *"a no-op setter with a base-class getter means the shell can be asked
+what it decided and always hear 1.0, so a zoom carried into the wrong tab is
+invisible."* The same argument covers this setter and nobody had applied it, so
+the whole permission path was unreachable from the suite and no check about it
+could exist.
+
+It keeps the decider now, and the section calls it directly with an origin and a
+feature. The first draft jumped past the checks with a `goto` when the decider
+was absent, and the style gate caught the label sitting one tab shallower than
+its block -- replaced with a plain guard, which reads better and was the only
+thing the `goto` was buying.
+
+`test_kiosk.cpp` has a second fake view with the same no-op setter. Left as it
+is: that suite asks nothing about permissions, so keeping the decider there
+would be machinery defending a case nothing exercises. Named here so whoever
+needs it next knows where the second one is.
+
+The message reaches Android too, since both backends answer the one decider the
+shell installs -- and the status bar exists there.
+
+### The pair that makes it mean something
+
+    notifications (block)   the sentence appears, names the site and the shield
+    the same again          nothing
+    clipboard_read (block)  its own sentence
+    camera (allow)          nothing at all
+
+The last row is what stops the others passing for a shell that narrates every
+request. Sabotaged both ways: saying it every time fails "only once per site and
+capability" alone, and never saying it fails the two that read the text.

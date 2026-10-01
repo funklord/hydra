@@ -198,7 +198,14 @@ public:
 		last_settings = s;
 		++settings_applied;
 	}
-	void set_permission_decider(permission_decider) override {}
+	// **Kept, not dropped**, for the reason the note under `last_settings`
+	// gives about a no-op setter: a shell that installs a decider nothing can
+	// reach is a shell whose permission answers no test can ask about, and
+	// "refused silently" is exactly the failure that path exists to prevent.
+	permission_decider perm_decider;
+	void set_permission_decider(permission_decider fn) override {
+		perm_decider = std::move(fn);
+	}
 	void set_capture_chooser(capture_chooser) override {}
 	// Recorded and answered, for the reason `last_settings` is: a no-op setter
 	// with a base-class getter means the shell can be asked what it decided
@@ -3316,6 +3323,82 @@ int main(int argc, char **argv) {
 		          .arg(w13.m_unconfirmed_rules.size())
 		          .arg(w13.m_confirm_action
 		                 ? int(w13.m_confirm_action->isVisible()) : -1));
+	}
+
+	// **A capability refused by policy said nothing.** `policy_engine`'s note
+	// on the `ask` defaults records what that cost once already -- a blocked
+	// camera reaching the page as a NotAllowedError and the person as nothing,
+	// so a call Hydra stopped looked like a call that was broken. Three
+	// features were moved to `ask` for it; notifications and clipboard reading
+	// are still refused outright by default and neither wants a prompt, so they
+	// get the other half: the sentence `popups` has always had.
+	section("a capability refused by policy says so, once");
+	{
+		policy_engine  pol;
+		request_filter filt(&pol);
+		fake_factory   fac;
+		main_window w14(&fac, &pol, &filt);
+		w14.resize(900, 600);
+		w14.show();
+		spin(150);
+
+		node *n = w14.m_model->add_tab(nullptr, "asking",
+		                                "https://asks.example/page");
+		emit w14.m_tree->activated(
+		  w14.m_proxy->mapFromSource(w14.m_model->index_for_node(n)));
+		spin(200);
+		auto *v = static_cast<fake_view *>(
+		  w14.m_views_by_id.value(n->id, nullptr));
+		check(v && v->perm_decider,
+		      "the shell installed a permission decider the suite can reach");
+		// Guarded rather than jumped out of: every check below dereferences
+		// the decider, and a label at a different indent than its block is
+		// what the style gate noticed about the first draft of this.
+		if (v && v->perm_decider) {
+			const QUrl origin("https://asks.example/");
+			bool answered = false, granted = true;
+			auto take = [&](bool g) { answered = true; granted = g; };
+
+			// Notifications default to block, so this is the silent path.
+			w14.m_status->clearMessage();
+			v->perm_decider(origin, policy::feature::notifications, take);
+			spin(50);
+			const QString said = w14.m_status->currentMessage();
+			check(answered && !granted, "the refusal still reaches the page");
+			check(said.contains("asks.example") && said.contains("shield") &&
+			        said.toLower().contains("notification"),
+			      QString("and reaches the person, naming the site and the "
+			               "shield (%1)").arg(said.isEmpty() ? QString("(nothing "
+			               "was said)") : said));
+
+			// **Once**, because a page may ask in a loop and a status bar that
+			// narrates every attempt is one nobody reads.
+			w14.m_status->clearMessage();
+			v->perm_decider(origin, policy::feature::notifications, take);
+			spin(50);
+			check(w14.m_status->currentMessage().isEmpty(),
+			      QString("and only once per site and capability (%1)")
+			          .arg(w14.m_status->currentMessage()));
+
+			// A different capability on the same site is a different fact.
+			w14.m_status->clearMessage();
+			v->perm_decider(origin, policy::feature::clipboard_read, take);
+			spin(50);
+			check(w14.m_status->currentMessage().toLower().contains("clipboard"),
+			      QString("a second capability is its own sentence (%1)")
+			          .arg(w14.m_status->currentMessage()));
+
+			// **And an allowed one says nothing at all**, which is what keeps
+			// the check above from passing for a shell that narrates every
+			// request. Camera defaults to allow.
+			w14.m_status->clearMessage();
+			v->perm_decider(origin, policy::feature::camera, take);
+			spin(50);
+			check(answered && granted &&
+			        w14.m_status->currentMessage().isEmpty(),
+			      QString("a granted capability is silent (%1)")
+			          .arg(w14.m_status->currentMessage()));
+		}
 	}
 
 	// **The proxy exists to make a fetch look like the page's**, and its own

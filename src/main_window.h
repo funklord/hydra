@@ -789,6 +789,16 @@ public:
 	// default to unchecked without condemning anyone to answering forever.
 	QHash<QString, bool> m_session_permissions;
 
+	// **Which refusals have already been said out loud**, keyed the same way as
+	// the answers above and for the same reason: a page may ask in a loop, and a
+	// browser that narrates every attempt is one whose status bar nobody reads.
+	// Once per site per capability per run.
+	//
+	// Not merged with `m_session_permissions`: that records an *answer a person
+	// gave*, and reusing it would make having been told the same thing as having
+	// been asked.
+	QSet<QString> m_capability_said;
+
 	QHash<QString, web_view_backend *> m_views_by_id;  // node id -> live view
 	// Which tabs are part way through a load, how far, and when it began.
 	// Kept for every view rather than the current one, because the question is

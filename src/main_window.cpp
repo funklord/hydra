@@ -4042,11 +4042,50 @@ void main_window::open_node(node *n, bool load_now) {
 				                            policy::setting_word(s));
 
 			if (s != policy::setting::ask) {
-				// The ordinary case, and it answers without touching the
+				const bool granted = (s == policy::setting::allow);
+
+				// **Refused out loud, which this was not.** `policy_engine`'s
+				// own note on the `ask` defaults says why: "a blocked camera
+				// reaches the page as a `NotAllowedError` and reaches the person
+				// as nothing at all, so a video call that Hydra deliberately
+				// stopped is indistinguishable from one that is simply broken --
+				// which is exactly how it presented here, and cost a diagnosis
+				// before the cause was found to be this line." That was fixed by
+				// moving three features to `ask`, which is the half that suits a
+				// capability a prompt can reach somebody about.
+				//
+				// Two are still refused silently by default -- notifications and
+				// clipboard reading -- and neither wants a prompt: a browser that
+				// asks about notifications on every site is the thing browsers
+				// stopped doing, and reading the clipboard is not a question
+				// worth interrupting for. So they get the other half, which is
+				// the one `popups` has always had twenty lines of this file
+				// away: say it, name the setting, and let the shield be where it
+				// is changed.
+				//
+				// Said once per site per capability per run, for the reason the
+				// prompt is: a page may ask in a loop.
+				if (!granted) {
+					const QString said = host + QChar('\n') +
+					  QString::fromLatin1(policy::feature_name(f));
+					if (!m_capability_said.contains(said)) {
+						m_capability_said.insert(said);
+						m_status->showMessage(
+						  QString("Blocked %1 for %2. The shield can allow it "
+						           "for this site.")
+						      .arg(QString::fromLatin1(policy::feature_label(f))
+						             .toLower(),
+						            host.isEmpty() ? QStringLiteral("this page")
+						                           : host),
+						  8000);
+					}
+				}
+
+				// The ordinary case otherwise, answered without touching the
 				// screen. `allow` or anything else -- `block`, and `unset`,
 				// which the engine resolves to block rather than leaving a
 				// feature nobody configured wide open.
-				answer(s == policy::setting::allow);
+				answer(granted);
 				return;
 			}
 
@@ -5253,6 +5292,11 @@ stream_context main_window::page_context(web_view_backend *v) const {
 void main_window::forget_shell_caches() {
 	const int answers = int(m_session_permissions.size());
 	m_session_permissions.clear();
+	// **And what has been said about refusals**, so the first attempt after a
+	// forget is explained again. It is not a browsing record worth counting --
+	// nothing in it is a site's doing -- but leaving it behind would make a
+	// cleared browser quieter than a fresh one about the same refusal.
+	m_capability_said.clear();
 
 	// **The observed cookies are a browsing record and go with the rest.** The
 	// engine's own jar is cleared elsewhere in this path; this is the mirror
