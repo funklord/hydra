@@ -352,9 +352,29 @@ void hls_assembler::poll_live() {
 
 			m_live_idle.restart();
 			m_segments_base    += m_playlist.segments.size();
+			// **Derived from this list, not advanced by a count.** This read
+			// `m_next_sequence += fresh_segments.size()`, which is the same
+			// number only while nothing is missed. Fall behind the live window
+			// -- a slow CDN, a slow disk, a pause -- and the playlist comes back
+			// having dropped segments we never saw: taking 5 segments at
+			// sequence 20..24 while expecting 15 advanced the mark to 20, so
+			// the next poll found 20..24 still in the window, all at or beyond
+			// the mark, and appended them a second time. The output then has
+			// duplicated chunks, plays, and is not the programme.
+			//
+			// **And it still reports success**, which is what makes it bad
+			// rather than merely wrong: the second take pushes the mark past
+			// the window, the poll after that finds nothing new, the stall
+			// bound fires and the capture is announced as finished. A loop
+			// would have been noticed.
+			//
+			// The initial fetch has always used the right formula twenty lines
+			// up; this is the same one. The next unseen sequence is the one
+			// after the last in the list just read, whatever we managed to take
+			// from it.
+			m_next_sequence     = fresh.media_sequence + fresh.segments.size();
 			m_playlist          = fresh;
 			m_playlist.segments = fresh_segments;
-			m_next_sequence    += fresh_segments.size();
 			m_index             = 0;
 			m_attempt           = 0;
 			// The total is not knowable for a growing list, so it is reported as

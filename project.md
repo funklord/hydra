@@ -30977,3 +30977,45 @@ correct, as the comment there already said: the representation is one file, the
 range names a slice *of that same file*, and fetching the file whole already
 carries it. Reading the range would be the bug. Confirmed rather than assumed,
 because the two cases look alike and only one of them is safe to ignore.
+
+## Falling behind a live playlist duplicated what had already been taken
+
+In the live re-poll written earlier the same day, which is the third time today
+that reading my own recent code found the bug in it.
+
+The mark for "new" is `m_next_sequence`, and the poll advanced it by the number
+of segments taken:
+
+    m_next_sequence += fresh_segments.size();
+
+The initial fetch has always derived it instead, twenty lines up:
+
+    m_next_sequence = m_playlist.media_sequence + m_playlist.segments.size();
+
+**The two agree only while nothing is missed.** Fall behind the live window -- a
+slow CDN, a slow disk, a pause -- and the playlist comes back having dropped
+segments nobody saw. Taking five segments at sequence 20..24 while expecting 15
+advanced the mark to 20, which is still inside the window, so the next poll
+found 20..24 at or beyond the mark and appended them a second time.
+
+### It still reports success, which is what makes it bad
+
+Measured on the sabotage, with a window that jumps from 0..1 to 4..5:
+
+    1111 2222 5555 6666 5555 6666
+
+One block duplicated, the mark then pushed past the window, the poll after that
+finding nothing new, the stall bound firing, and the capture announced as
+finished in 4768 ms. **An endless loop would have been noticed.** The first
+version of the test comment claimed exactly that -- that the poll would never
+stop -- and the sabotage said otherwise, which is the second comment today
+corrected by running the thing it described.
+
+### Why the existing test could not see it
+
+`a live playlist is asked again, and its new segments are taken` keeps
+`#EXT-X-MEDIA-SEQUENCE:0` in both reads and grows the list, which is the no-gap
+case where the two formulas are equal. The hazard needs the second read to have
+*dropped* something, and nothing in the suite had ever written a playlist that
+moved its window. Same shape as the byte-range find an hour earlier: the fixture
+could express the safe case and not the dangerous one.

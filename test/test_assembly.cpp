@@ -1130,6 +1130,61 @@ int main(int argc, char **argv) {
 		                 : QStringLiteral("not asked")));
 	}
 
+	// **Falling behind the live window used to duplicate what was already
+	// taken.** The mark for "new" was advanced by the number of segments
+	// taken rather than derived from the list read, and the two agree only
+	// while nothing is missed. A playlist that drops segments we never saw --
+	// a slow CDN, a slow disk, a pause -- leaves the mark below the sequence
+	// numbers still in the window, so the next poll takes them again.
+	section("a live playlist that jumped ahead is not re-taken");
+	{
+		cdn.redirect_from.clear();
+		cdn.then.clear();
+		cdn.files["/h1.ts"] = QByteArray("1111");
+		cdn.files["/h2.ts"] = QByteArray("2222");
+		cdn.files["/h5.ts"] = QByteArray("5555");
+		cdn.files["/h6.ts"] = QByteArray("6666");
+		// First read: sequence 0 and 1, still growing.
+		cdn.files["/jump.m3u8"] =
+		  QByteArray("#EXTM3U\n#EXT-X-TARGETDURATION:1\n"
+		              "#EXT-X-MEDIA-SEQUENCE:0\n"
+		              "#EXTINF:1,\n/h1.ts\n#EXTINF:1,\n/h2.ts\n");
+		// Every later read: the window has moved to 4 and 5, and 2 and 3 are
+		// gone -- which is what being behind looks like. Still live, and the
+		// same answer every time.
+		cdn.then["/jump.m3u8"] =
+		  QByteArray("#EXTM3U\n#EXT-X-TARGETDURATION:1\n"
+		              "#EXT-X-MEDIA-SEQUENCE:4\n"
+		              "#EXTINF:1,\n/h5.ts\n#EXTINF:1,\n/h6.ts\n");
+
+		QTemporaryDir jdir;
+		const QString out = jdir.filePath("jump.ts");
+		hls_assembler as;
+		bool done = false;
+		QObject::connect(&as, &hls_assembler::completed, [&] { done = true; });
+
+		stream_context ctx;
+		as.start(QUrl(base + "/jump.m3u8"), ctx, out);
+		QElapsedTimer t;
+		t.start();
+		while (t.elapsed() < 12000 && !done)
+			spin(50);
+
+		// **It still finishes with the bug, which is what makes it bad.**
+		// Measured on the sabotage: the mark lands on 6 after taking 4 and 5
+		// twice, the third poll finds nothing new, the stall bound fires and
+		// the capture is reported as finished -- with one block duplicated.
+		// An endless loop would at least be noticed.
+		check(done, QString("the assembly finishes (%1 ms)").arg(t.elapsed()));
+
+		QFile f(out);
+		f.open(QIODevice::ReadOnly);
+		const QByteArray got = f.readAll();
+		check(got == QByteArray("1111222255556666"),
+		      QString("and each segment appears once, in order (%1)")
+		          .arg(QString::fromUtf8(got)));
+	}
+
 	section("a live playlist says so when it is saved, and a whole one does not");
 	{
 		// A playlist with no #EXT-X-ENDLIST is still growing, so running out of
