@@ -20,6 +20,23 @@ hls_assembler::~hls_assembler() {
 
 QNetworkReply *hls_assembler::get(const QUrl &url, const QByteArray &range) {
 	QNetworkRequest req(url);
+	// **Same origin only, and that is about the Cookie below.** Qt follows a
+	// redirect by default and builds the follow-up from this request's raw
+	// headers -- measured: a 302 from `/hop` to `/d.m3u8` arrived carrying the
+	// `Cookie` set for `/hop`, which the resolver was never asked about for the
+	// second url. Within one origin that is correct, because the cookie belongs
+	// to that host either way. Across origins it is a cookie sent to a host
+	// that never set it, which is the leak the per-url resolver closed, by a
+	// route the resolver is not consulted on.
+	//
+	// So the hop is allowed where it is harmless and refused where it is not.
+	// The honest cost: a manifest or segment that redirects to another host now
+	// fails instead of being fetched -- a manifest says so, a segment retries
+	// and then says so. Following it properly means re-asking the resolver per
+	// hop, which is what `local_proxy::fetch_upstream` does and is a piece of
+	// work rather than an attribute.
+	req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+	                  QNetworkRequest::SameOriginRedirectPolicy);
 	// The same context injection the proxy does -- a CDN that 403s a naked
 	// stream URL will 403 our segment fetches too (sec 11.3).
 	if (!m_ctx.referer.isEmpty())

@@ -30835,3 +30835,60 @@ wrong, because rewriting pushed history is worse than a sentence that `git log
 its users were re-run -- `test_headers` 23 of 23, `test_dlheaders` 12 of 12 --
 because a shared fixture's default behaviour is the one thing a new flag must
 not move.
+
+## The assembler let Qt carry a cookie across a hop it never asked about
+
+The route the per-url resolver does not cover, found by following the edges of
+the fix that introduced it rather than by a sweep.
+
+`hls_assembler::get` sets `Cookie` for the url it is about to fetch and then
+lets Qt follow any redirect. **Qt builds the follow-up from this request's raw
+headers**, measured against the fixture:
+
+    asked about /hop/signed, /D0.ts; /d.m3u8 saw cookie 'hop=1'
+
+The resolver was asked about `/hop/signed` and never about `/d.m3u8`, and the
+second request carried the first's cookie anyway. Within one origin that is
+correct -- the cookie belongs to that host whichever path is asked for -- and
+across origins it is a cookie sent to a host that never set it, which is exactly
+what the resolver closed on the direct path.
+
+### Same origin only, which is where the carry is harmless
+
+    req.setAttribute(RedirectPolicyAttribute, SameOriginRedirectPolicy);
+
+One attribute per request, no new state. A same-origin hop is still followed and
+still carries the cookie, correctly. A cross-origin hop is refused by Qt before
+anything leaves, and the assembler already has somewhere to put that: a manifest
+reports it, a segment retries and then reports it.
+
+**The honest cost, stated rather than discovered:** a manifest or segment that
+redirects to another host now fails where it previously fetched. Following it
+properly means re-asking the resolver per hop, which is what
+`local_proxy::fetch_upstream` does -- and that is a piece of work rather than an
+attribute, because the assembler has three fetch sites with different retry
+state behind them and a hop has to re-enter each one.
+
+### Measurable on loopback because `localhost` is not `127.0.0.1`
+
+Different origins to Qt, the same machine to everything else, which is what
+makes a cross-origin redirect testable here at all:
+
+    a same-origin hop carries it, which is where it belongs     hop=1
+    the assembly stops and says why      Manifest fetch failed: Insecure redirect
+    and the other origin was never asked at all                 not asked
+
+Sabotaged by removing the attribute, which is what the code did before: the
+other origin **is** asked and receives `hop=1`. The leak is in the failure
+message.
+
+### Where this leaves the four consumers
+
+    local_proxy       follows by hand, re-asking per hop            closed
+    hls_assembler     follows within one origin, refuses across     closed
+    network_fetcher   never asks the resolver, no cookies at all    closed
+    stream_probe      no resolver, and its one caller supplies none closed
+
+The first was the bug, the second was its residue, and the last two were closed
+by not asking. That is the whole of the path from a page's cookie jar to a
+request leaving this browser.

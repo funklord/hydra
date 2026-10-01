@@ -143,6 +143,9 @@ public:
 	QHash<QString, int>        asked;
 	// Which cookies each path's request carried, empty when it carried none.
 	QHash<QString, QByteArray> cookie_seen;
+	// An opt-in 302, to ask what the assembler and Qt do with a hop.
+	QString    redirect_from;
+	QByteArray redirect_to;
 
 	void incomingConnection(qintptr fd) override {
 		auto *s = new QTcpSocket(this);
@@ -162,6 +165,15 @@ public:
 				const QByteArray l = line.trimmed();
 				if (l.toLower().startsWith("cookie:"))
 					cookie_seen[path] = l.mid(7).trimmed();
+			}
+			if (!redirect_from.isEmpty() && path.startsWith(redirect_from)) {
+				++asked[path];
+				s->write("HTTP/1.1 302 Found\r\nLocation: " + redirect_to +
+				          "\r\nContent-Length: 0\r\n"
+				          "Connection: close\r\n\r\n");
+				s->flush();
+				s->disconnectFromHost();
+				return;
 			}
 			// The manifest answers at once; segments are what is paced, so
 			// that the assembly is demonstrably mid-flight and not merely
@@ -961,6 +973,110 @@ int main(int argc, char **argv) {
 		        cdn.cookie_seen.value("/c.m3u8") == "named=by-extractor",
 		      QString("an extractor's named Cookie still goes out (%1)")
 		          .arg(QString::fromUtf8(cdn.cookie_seen.value("/c.m3u8"))));
+	}
+
+	// **What Qt carries across a hop that the assembler did not ask about.**
+	// `hls_assembler` sets `Cookie` for the url it is fetching and then lets
+	// Qt follow a redirect, and Qt builds the follow-up from the original
+	// request's raw headers. If it carries the Cookie over, a hop onto another
+	// host sends a cookie that host never set -- the leak the per-url resolver
+	// closed, by a route the resolver is never consulted on.
+	//
+	// Measured rather than argued, and on loopback both ends are 127.0.0.1, so
+	// what this can show is the *carry-over* and not a cross-host send. That is
+	// the mechanism; the host argument follows from it.
+	section("what a redirect carries that nobody was asked about");
+	{
+		cdn.cookie_seen.clear();
+		cdn.asked.clear();
+		QByteArray man = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		                  "#EXTINF:4.0,\n/D0.ts\n#EXT-X-ENDLIST\n";
+		cdn.files["/d.m3u8"]  = man;
+		cdn.files["/D0.ts"]   = QByteArray(k_seg_size, 'd');
+		cdn.redirect_from = "/hop";
+		cdn.redirect_to   = "/d.m3u8";
+
+		QTemporaryDir work;
+		hls_assembler as;
+		bool done = false;
+		QObject::connect(&as, &hls_assembler::completed, [&] { done = true; });
+
+		QStringList asked_about;
+		stream_context ctx;
+		ctx.referer = "https://site.example/watch/1";
+		ctx.cookies_for = [&asked_about](const QUrl &to) {
+			asked_about << to.path();
+			// Answer only for the url the hop starts from, so anything the
+			// second request carries was carried rather than asked for.
+			return to.path().startsWith("/hop") ? QString("hop=1") : QString();
+		};
+		as.start(QUrl(base + "/hop/signed"), ctx, work.filePath("d.ts"));
+		QElapsedTimer t;
+		t.start();
+		while (t.elapsed() < 8000 && !done)
+			spin(50);
+
+		std::printf("  ..    asked about %s; /d.m3u8 saw cookie '%s'\n",
+		             qPrintable(asked_about.join(", ")),
+		             qPrintable(QString::fromUtf8(
+		               cdn.cookie_seen.value("/d.m3u8"))));
+
+		check(done, "the assembly finished through the redirect");
+		check(asked_about.contains("/hop/signed"),
+		      "the resolver was asked about the url the hop starts from");
+		check(!asked_about.contains("/d.m3u8"),
+		      "and never about the url Qt followed to, which is the point");
+		// **Qt carries it, measured, and within one origin that is correct.**
+		// The cookie belongs to that host whichever path is asked for, so this
+		// records the behaviour rather than objecting to it. What must not
+		// happen is the same carry across origins, which the next block asks.
+		check(cdn.cookie_seen.value("/d.m3u8") == QByteArray("hop=1"),
+		      QString("a same-origin hop carries it, which is where it belongs "
+		               "(%1)")
+		          .arg(QString::fromUtf8(cdn.cookie_seen.value("/d.m3u8"))));
+	}
+
+	// **And a hop to another origin is refused rather than followed**, because
+	// Qt would carry that same Cookie to a host that never set it. `localhost`
+	// and `127.0.0.1` are different origins to Qt while being the same machine,
+	// which is what makes this measurable on loopback at all.
+	section("a redirect to another origin is not followed");
+	{
+		cdn.cookie_seen.clear();
+		cdn.files["/e.m3u8"] = QByteArray("#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		                                   "#EXTINF:4.0,\n/D0.ts\n"
+		                                   "#EXT-X-ENDLIST\n");
+		cdn.redirect_from = "/cross";
+		cdn.redirect_to   = QByteArray("http://localhost:") +
+		                     QByteArray::number(cdn.port) + "/e.m3u8";
+
+		QTemporaryDir work;
+		hls_assembler as;
+		bool done = false;
+		QString why;
+		QObject::connect(&as, &hls_assembler::completed, [&] { done = true; });
+		QObject::connect(&as, &hls_assembler::failed,
+		                  [&why](const QString &e) { why = e; });
+
+		stream_context ctx;
+		ctx.cookies_for = [](const QUrl &to) {
+			return to.path().startsWith("/cross") ? QString("hop=1")
+			                                       : QString();
+		};
+		as.start(QUrl(base + "/cross/signed"), ctx, work.filePath("e.ts"));
+		QElapsedTimer t;
+		t.start();
+		while (t.elapsed() < 8000 && !done && why.isEmpty())
+			spin(50);
+
+		check(!done && !why.isEmpty(),
+		      QString("the assembly stops and says why (%1)")
+		          .arg(why.isEmpty() ? QStringLiteral("(said nothing)") : why));
+		check(!cdn.cookie_seen.contains("/e.m3u8"),
+		      QString("and the other origin was never asked at all (%1)")
+		          .arg(cdn.cookie_seen.contains("/e.m3u8")
+		                 ? QString::fromUtf8(cdn.cookie_seen.value("/e.m3u8"))
+		                 : QStringLiteral("not asked")));
 	}
 
 	section("a live playlist says so when it is saved, and a whole one does not");
