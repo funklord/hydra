@@ -30545,3 +30545,49 @@ shell installs -- and the status bar exists there.
 The last row is what stops the others passing for a shell that narrates every
 request. Sabotaged both ways: saying it every time fails "only once per site and
 capability" alone, and never saying it fails the two that read the text.
+
+## A plain reload was unobservable, and the escape hatch rests on one
+
+`fake_view` counts `reload_bypass_cache` and asserts on it; the note beside that
+counter distinguishes the two deliberately -- *"cache-bypassing reload
+specifically, not a plain one"* -- and plain `reload()` was `override {}`. So
+every claim in the shell that rests on a plain reload had nothing checking it,
+and one of those claims is a comment written today:
+
+> `on_policy_changed` reloads the current view, which is what makes the change
+> visible: a stylesheet is written at load and nothing removes it afterwards.
+
+That is load-bearing rather than decorative. A cosmetic rule is applied by a
+stylesheet the injected script writes at document creation, and the
+interceptor's decisions are taken while a page is assembled -- so a site whose
+shield has just changed shows the change on its **next** load and not before.
+Remove the reload and the whole ads escape hatch stops taking effect until
+somebody navigates, silently, which is the half-working escape the rest of this
+day was spent removing.
+
+### Derived from the last find rather than from a list
+
+The previous commit's real gap was a no-op setter in the same fake hiding the
+whole permission path. So the next lens was *the fake's other no-ops*, and there
+are six: `back`, `forward`, `reload`, `set_capture_chooser`,
+`set_external_url_handler`, `set_download_handler`. `reload` is the one that
+backs a claim somebody had already written down, which is what made it first
+rather than one of six.
+
+The other five are left, named here so the next person has the list: the
+capture chooser hides the screen-share picker's wiring the same way the
+permission decider did, and the two factory handlers hide what the shell does
+with an external url and a download note. None of them has a claim resting on it
+today.
+
+### Both halves, because either alone is satisfiable without the other
+
+    the view is reloaded once              0 -> 1
+    the live settings are re-applied       1 -> 2
+
+Re-applying carries javascript, images, autoplay and popups, which the engine
+reads live; the reload carries everything decided while a page is built. A check
+on one would pass a shell that had dropped the other.
+
+Sabotaged separately: removing the reload fails the first alone, removing the
+`apply_policy` call fails the second alone.

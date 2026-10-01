@@ -184,7 +184,12 @@ public:
 	}
 	void back() override {}
 	void forward() override {}
-	void reload() override {}
+	// **Counted, where `reload_bypass_cache` below has always been.** The note
+	// there distinguishes the two and only the cache-bypassing one was
+	// observable, so every claim in the shell that rests on a plain reload --
+	// and the ads escape hatch rests on one -- had nothing checking it.
+	int  reloads = 0;
+	void reload() override { ++reloads; }
 	// Recorded, for the reason the others are: proves the shell asked for a
 	// cache-bypassing reload specifically, not a plain one.
 	int  reload_bypassed = 0;
@@ -3398,6 +3403,57 @@ int main(int argc, char **argv) {
 			        w14.m_status->currentMessage().isEmpty(),
 			      QString("a granted capability is silent (%1)")
 			          .arg(w14.m_status->currentMessage()));
+		}
+	}
+
+	// **The reload is what carries a policy change into the page**, and nothing
+	// checked it. A cosmetic rule is applied by a stylesheet the injected
+	// script writes at document creation, and the interceptor's decisions are
+	// taken as a page is assembled -- so a site whose shield has just changed
+	// shows the change on its next load and not before. `on_policy_changed`
+	// reloads for that reason, and comments in two places now say so.
+	//
+	// Remove the reload and the whole ads escape hatch stops taking effect
+	// until somebody navigates, silently, which is the half-working escape this
+	// day's work was spent removing.
+	section("a policy change reloads the page it is about");
+	{
+		policy_engine  pol;
+		request_filter filt(&pol);
+		fake_factory   fac;
+		main_window w15(&fac, &pol, &filt);
+		w15.resize(900, 600);
+		w15.show();
+		spin(150);
+
+		node *n = w15.m_model->add_tab(nullptr, "shielded",
+		                                "https://shield.example/page");
+		emit w15.m_tree->activated(
+		  w15.m_proxy->mapFromSource(w15.m_model->index_for_node(n)));
+		spin(200);
+		auto *v = static_cast<fake_view *>(
+		  w15.m_views_by_id.value(n->id, nullptr));
+		check(v != nullptr, "a tab is open on the site");
+
+		if (v) {
+			// From here, so the opening load does not count toward the check.
+			const int before = v->reloads;
+			const int applied = v->settings_applied;
+
+			QMetaObject::invokeMethod(&w15, "on_policy_changed",
+			                           Qt::DirectConnection);
+			spin(100);
+
+			// **Both halves, because either alone is satisfiable without the
+			// other.** Re-applying the view settings carries javascript,
+			// images, autoplay and popups, which the engine reads live; the
+			// reload is what carries everything decided while a page is built.
+			check(v->reloads == before + 1,
+			      QString("the view is reloaded once (%1 -> %2)")
+			          .arg(before).arg(v->reloads));
+			check(v->settings_applied > applied,
+			      QString("and the live settings are re-applied with it (%1 -> "
+			               "%2)").arg(applied).arg(v->settings_applied));
 		}
 	}
 
