@@ -141,6 +141,8 @@ public:
 	// fixture cannot express the only interesting property of a live list.
 	QHash<QString, QByteArray> then;
 	QHash<QString, int>        asked;
+	// Which cookies each path's request carried, empty when it carried none.
+	QHash<QString, QByteArray> cookie_seen;
 
 	void incomingConnection(qintptr fd) override {
 		auto *s = new QTcpSocket(this);
@@ -151,6 +153,16 @@ public:
 				return;
 			const QByteArray target = head.mid(4, head.indexOf(' ', 4) - 4);
 			const QString path = QString::fromUtf8(target);
+			// **What came with it**, for the one question a fixture that only
+			// counts requests cannot answer: which cookies a segment fetch
+			// carried. Recorded per path, empty string when the header is
+			// absent, so "no Cookie" and "never asked for" stay apart.
+			cookie_seen[path] = QByteArray();
+			for (const QByteArray &line : head.split('\n')) {
+				const QByteArray l = line.trimmed();
+				if (l.toLower().startsWith("cookie:"))
+					cookie_seen[path] = l.mid(7).trimmed();
+			}
 			// The manifest answers at once; segments are what is paced, so
 			// that the assembly is demonstrably mid-flight and not merely
 			// slow to start.
@@ -867,6 +879,88 @@ int main(int argc, char **argv) {
 		       QString("and the total is the whole job throughout (%1)")
 		           .arg(steps.isEmpty() ? QString("none")
 		                                 : QString::number(steps[0].second)));
+	}
+
+	// **Every fetch the assembler makes asked about the page, not about itself.**
+	// A manifest, its segments and a separate audio track can sit on different
+	// hosts, and `stream_context::cookies` was filled once from the page's own
+	// address -- so a page's session cookie went out with every segment request
+	// wherever it went. It asks the resolver about the url being fetched now.
+	section("a segment fetch carries only cookies that belong to its host");
+	{
+		cdn.cookie_seen.clear();
+		QByteArray man = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n";
+		for (int i = 0; i < 2; ++i) {
+			cdn.files["/C" + QString::number(i) + ".ts"] =
+			  QByteArray(k_seg_size, char('a' + i));
+			man += "#EXTINF:4.0,\n/C" + QByteArray::number(i) + ".ts\n";
+		}
+		man += "#EXT-X-ENDLIST\n";
+		cdn.files["/c.m3u8"] = man;
+
+		QTemporaryDir work;
+		hls_assembler as;
+		bool done = false;
+		QObject::connect(&as, &hls_assembler::completed, [&] { done = true; });
+
+		// A resolver that behaves like a cookie jar: the page's cookies for the
+		// page's host, nothing for anyone else. The fixture is on 127.0.0.1.
+		QList<QUrl> asked;
+		stream_context ctx;
+		ctx.referer = "https://site.example/watch/1";
+		ctx.cookies_for = [&asked](const QUrl &to) {
+			asked << to;
+			return to.host() == "site.example" ? QString("sid=abc123")
+			                                    : QString();
+		};
+		as.start(QUrl(base + "/c.m3u8"), ctx, work.filePath("c.ts"));
+		QElapsedTimer t;
+		t.start();
+		while (t.elapsed() < 8000 && !done)
+			spin(50);
+		check(done, "the assembly finished");
+
+		// Asked about each url it fetched, rather than once about the page.
+		check(asked.size() >= 3,
+		      QString("the resolver was asked per fetch (%1 time(s))")
+		          .arg(asked.size()));
+		bool only_fetched = !asked.isEmpty();
+		for (const QUrl &u : asked)
+			if (u.host() != "127.0.0.1")
+				only_fetched = false;
+		check(only_fetched,
+		      "and always about the host being fetched, never about the page");
+
+		// **The check the old shape could not pass.** Every path the fixture
+		// served saw no Cookie at all, where a page-filled field sent
+		// `sid=abc123` to all three.
+		QStringList leaked;
+		for (auto it = cdn.cookie_seen.cbegin(); it != cdn.cookie_seen.cend();
+		     ++it)
+			if (!it.value().isEmpty())
+				leaked << it.key() + "=" + QString::fromUtf8(it.value());
+		check(leaked.isEmpty(),
+		      QString("no fetch carried the page's cookies (%1)")
+		          .arg(leaked.isEmpty() ? QStringLiteral("none did")
+		                                 : leaked.join(", ")));
+
+		// And a named header still goes out, which is what keeps the check
+		// above from passing for an assembler that sends no cookies ever.
+		cdn.cookie_seen.clear();
+		bool done2 = false;
+		hls_assembler named;
+		QObject::connect(&named, &hls_assembler::completed,
+		                  [&] { done2 = true; });
+		stream_context with;
+		with.cookies = "named=by-extractor";
+		named.start(QUrl(base + "/c.m3u8"), with, work.filePath("c2.ts"));
+		t.restart();
+		while (t.elapsed() < 8000 && !done2)
+			spin(50);
+		check(done2 &&
+		        cdn.cookie_seen.value("/c.m3u8") == "named=by-extractor",
+		      QString("an extractor's named Cookie still goes out (%1)")
+		          .arg(QString::fromUtf8(cdn.cookie_seen.value("/c.m3u8"))));
 	}
 
 	section("a live playlist says so when it is saved, and a whole one does not");

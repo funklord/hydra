@@ -30591,3 +30591,139 @@ on one would pass a shell that had dropped the other.
 
 Sabotaged separately: removing the reload fails the first alone, removing the
 `apply_policy` call fails the second alone.
+
+## The page's cookies were being sent to whatever host held the stream
+
+**This is the most serious thing found today, and it was introduced today.**
+`745999d` gave the factory a cookie jar and filled `stream_context::cookies`
+with `cookie_header_for(v->url())` -- the **page's** url. Three consumers then
+sent that header somewhere else:
+
+    local_proxy        to the stream's host, on every Watch and Save
+    hls_assembler      to the manifest, every segment, and a separate audio
+                       track -- each of which can be a different host
+    network_fetcher    to whatever url a model-written extractor asked for,
+                       bounded only by the hosts the page itself requested
+
+So on a page whose video sits on an unrelated CDN -- which is the ordinary
+shape of the web -- Hydra handed that CDN the first-party session cookie. By
+the third route it would hand it to any third party the page had requested,
+including every ad and tracker host, if a learned extractor named one.
+
+The tree had already written the sentence that condemns this, about a different
+bug in the same feature: *"A 403 is a nuisance; handing site A's session cookie
+to site B's server is a leak."*
+
+### What the feature actually wants, which is what fixes it
+
+`local_proxy`'s header says the job is to make a fetch look like the page's own:
+*"the CDN expects the same Referer, cookies and User-Agent the page carried."*
+A browser fetching that stream sends the cookies **for the stream's host** --
+the page's own cookies when the CDN is same-site, by domain match, and none when
+it is a stranger. `QNetworkCookieJar::cookiesForUrl` answers exactly that.
+
+So `cookies` stops being a header filled from the page and becomes two fields:
+
+- **`cookies`** -- an explicit header somebody named, which is a learned
+  extractor saying which cookies its CDN checks. It wins, because a rule written
+  for one CDN knows more than a jar lookup.
+- **`cookies_for`** -- ask what this browser would send to a given url. The
+  proxy resolves it at publish time for the upstream; the assembler asks per
+  fetch.
+
+**`network_fetcher` deliberately does not ask.** It builds requests on its own
+thread and the resolver reads a jar that is not thread safe. The cost is stated
+in the code rather than hidden: a helper fetch carries no cookies unless an
+extractor named them, so a manifest behind a session cookie is a site the pure
+tier cannot open. The alternative was the third route above.
+
+### Both suites now hold the check the old shape could not pass
+
+`test_headers`, against a real echo server:
+
+    the resolver was asked about the upstream    http://127.0.0.1:.../stream
+    a host the page's cookies do not belong to gets none
+    while the Referer still arrives             (so it is not a dead entry)
+    a named Cookie wins, and the jar is not even asked
+
+`test_assembly`, whose fixture now records the Cookie header per path:
+
+    the resolver was asked per fetch             3 times
+    always about the host being fetched, never about the page
+    no fetch carried the page's cookies
+    an extractor's named Cookie still goes out
+
+The last line in each pair is what stops the others passing for a browser that
+sends no cookies at all.
+
+### Sabotaged by reintroducing the bug, which is the strongest form available
+
+Asking the resolver about `ctx.referer` instead of the url being fetched is
+precisely what the code did before. In the proxy that fails two checks and puts
+`sid=abc123` on the CDN request; in the assembler it fails two and the message
+names all three paths that carried it:
+
+    no fetch carried the page's cookies
+      (/c.m3u8=sid=abc123, /C1.ts=sid=abc123, /C0.ts=sid=abc123)
+
+### And `media_dialog` carried a comment saying the field was never filled
+
+Stale since `745999d`, with its own replacement stacked directly underneath --
+which is how a reader ends up believing the older of two adjacent comments. The
+first is gone and the second says which of the two cookie fields wins.
+
+### One property is unchanged and worth naming: the header is a snapshot
+
+The proxy resolves at publish time, so a cookie the site sets after Watch was
+pressed is not in what the entry sends. That was true before -- the field was
+captured once when the context was built, which is earlier -- so this is no
+worse and slightly fresher. The assembler asks per fetch and has no such
+window. Said rather than discovered: a CDN that rotates a token mid-stream would
+need the proxy to ask per request, which is a change to make when something
+needs it rather than now.
+
+### A fourth consumer, found by enumerating rather than by remembering
+
+The three above were the ones that came to mind. A grep for every reader of the
+field found `stream_probe`, which fetches a candidate address to say what it
+really serves -- "with the page's own context", as its caller puts it.
+
+It is **not** a leak today and is not changed: its one caller, the extractor
+dialog, builds a fresh context holding a Referer and whatever the extractor
+named, so there is no page-filled header to send. What it has instead is a note,
+because the trap is laid for the next person: the natural way to make the probe
+work on a CDN that checks cookies is to hand it `page_context(v)`, get nothing,
+and "fix" it by filling the field from the page -- which is the bug, re-entered
+by the one route the fix does not cover. The comment says to ask the resolver
+about the probed url.
+
+### Two checks asserted the defect, and that is the sharpest part of this
+
+`test_rotation`'s cookie section, written in the same commit as the bug, read:
+
+    check(ctx.cookies == fac.cookies, "the page's cookies go with it too");
+    check(fac.last_asked == QUrl("https://site.example/watch/7"),
+          "asked for the page being watched, not some other url");
+
+Both passed, both were written carefully, and **both pinned the leak**. The
+second is the worse one: its own message argues for the wrong thing -- *not some
+other url* -- because the question it was guarding against was "did we ask about
+the wrong page", and nobody had asked "should the question be about a page at
+all". The commit that introduced them records a real find behind that second
+check, a fake factory answering the same string whatever url it was handed, and
+the fix for it was to pin the url. The url pinned was the page's.
+
+So this is `evidence.md`'s *a test that would pass against the old code*, met
+from the other side: a test that passes **only** against the old code. Rewritten
+rather than deleted, to assert the contract that replaced it -- nothing is
+pre-filled, a resolver is handed over, and the resolver asks about the url it is
+given, checked with a url deliberately on another host.
+
+### How it was found, which was not by a lens
+
+Reading `cookie_header_for` for correctness, having gone looking for something
+to do after the day's lenses came up empty. The function is right; what was
+wrong was the url it was asked about, two layers up. **No sweep would have found
+this** -- the header is built correctly, sent correctly, and arrives at the
+wrong host, and every check in the tree about it asserted that a Cookie header
+arrives rather than asking whose it was.

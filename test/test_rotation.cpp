@@ -3484,16 +3484,33 @@ int main(int argc, char **argv) {
 		      QString("and the browser's own User-Agent goes with it (%1)")
 		          .arg(ctx.user_agent));
 
-		// **The cookies, which `local_proxy` has replayed since sec 11.3 while
-		// nothing filled them.** A CDN that checks cookies answered 403 and the
-		// context looked complete, because the replaying half was built and
-		// tested and the observing half did not exist.
-		check(ctx.cookies == fac.cookies,
-		      QString("the page's cookies go with it too (%1)")
-		          .arg(ctx.cookies));
-		check(fac.last_asked == QUrl("https://site.example/watch/7"),
-		      QString("asked for the page being watched, not some other url "
-		               "(%1)").arg(fac.last_asked.toString()));
+		// **These two checks asserted the defect, and are rewritten rather than
+		// deleted.** They read `ctx.cookies == fac.cookies` and `last_asked ==`
+		// the page -- which is exactly the bug: a header built for the page and
+		// then sent by the proxy to the stream's host, by the assembler to every
+		// segment's, and by the helper fetcher to whatever a generated script
+		// asked for. The contract is the other way round now: the shell hands
+		// over a way to ask, and the question is about the url being fetched.
+		check(ctx.cookies.isEmpty(),
+		      QString("no Cookie header is assumed for a destination nobody has "
+		               "named yet (%1)").arg(ctx.cookies.isEmpty()
+		                 ? QStringLiteral("empty") : ctx.cookies));
+		check(static_cast<bool>(ctx.cookies_for),
+		      "and a resolver is handed over instead");
+
+		// Asked about the url given, which is the whole property. A page-shaped
+		// answer here would be the old bug wearing the new field's name.
+		if (ctx.cookies_for) {
+			fac.last_asked = QUrl();
+			const QUrl elsewhere("https://cdn.other.test/seg/1.ts");
+			const QString answered = ctx.cookies_for(elsewhere);
+			check(fac.last_asked == elsewhere,
+			      QString("the resolver asks about the url it is given (%1)")
+			          .arg(fac.last_asked.toString()));
+			check(answered == fac.cookies,
+			      QString("and returns what the jar said for it (%1)")
+			          .arg(answered));
+		}
 
 		// **The control, and it is the half that must not be "fixed".** A
 		// backend that cannot say what it sends returns empty, and the field

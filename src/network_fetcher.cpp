@@ -36,6 +36,15 @@ public slots:
 			req.setRawHeader("Referer", m_ctx.referer.toUtf8());
 		if (!m_ctx.user_agent.isEmpty())
 			req.setRawHeader("User-Agent", m_ctx.user_agent.toUtf8());
+		// **`cookies` only, and never `cookies_for`.** This builds requests on
+		// the fetcher's own thread and the resolver reads a cookie jar that
+		// lives on the UI thread's side, so asking from here would be a data
+		// race -- see `stream_context::cookies_for`. What that costs is stated
+		// rather than hidden: a helper fetch carries no cookies unless a
+		// learned extractor named them, so a manifest behind a session cookie
+		// is a site the pure tier cannot open. The alternative was sending the
+		// page's cookies to whatever host a generated script asked for, which
+		// is every third party the page happened to request.
 		if (!m_ctx.cookies.isEmpty())
 			req.setRawHeader("Cookie", m_ctx.cookies.toUtf8());
 		for (auto it = m_ctx.extra.cbegin(); it != m_ctx.extra.cend(); ++it)

@@ -17,7 +17,29 @@ class QNetworkAccessManager;
 struct stream_context {
 	QString referer;
 	QString user_agent;
+	// **An explicit Cookie header somebody named**, which is a learned
+	// extractor saying which cookies its CDN checks. It wins over the resolver
+	// below, because a rule written for one site's CDN knows more than a jar
+	// lookup does.
 	QString cookies;
+
+	// **What this browser would send to a given URL** -- asked per destination
+	// rather than once for the page, which is the whole point of it.
+	//
+	// It replaces a `cookies` field that `page_context` filled from the *page's*
+	// url. Every consumer then sent that header to somewhere else: the proxy to
+	// the stream's host, the assembler to each segment's, the helper fetcher to
+	// whatever a generated script asked for. On a page whose video sits on an
+	// unrelated CDN that is the page's session cookie going to a third party,
+	// which no browser would do -- and this feature's whole job is to look like
+	// the browser's own request for that stream. Asking the jar about the url
+	// being fetched answers that exactly: a same-site CDN still gets the
+	// cookies, by domain match, and a stranger gets none.
+	//
+	// **UI thread only.** It reads a `QNetworkCookieJar`, which is not thread
+	// safe, so a consumer that builds requests on another thread must not call
+	// it -- `network_fetcher` is that consumer and deliberately does not.
+	std::function<QString(const QUrl &)> cookies_for;
 
 	// Anything else a particular stream needs. The three above are what a CDN
 	// usually checks and are kept named for that reason; this carries whatever

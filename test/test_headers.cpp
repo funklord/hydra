@@ -71,6 +71,77 @@ int main(int argc, char **argv) {
 	check(got.value("origin").toString() == "https://site.example",
 	      "and a second one");
 
+	// **The resolver is asked about the stream's url, not the page's.**
+	// `ctx.cookies` was filled once from `v->url()` and sent to whatever host
+	// the entry fetched, so a page whose video sits on an unrelated CDN handed
+	// that CDN its session cookie. The field is a resolver now and the proxy
+	// asks it at publish time, for the upstream.
+	{
+		stream_context jar;
+		jar.referer = "https://site.example/watch/1";
+		QList<QUrl> asked;
+		jar.cookies_for = [&asked](const QUrl &to) {
+			asked << to;
+			// What a jar answers: the page's cookies for the page's host, and
+			// nothing for a stranger. The echo server is on 127.0.0.1, so a
+			// resolver that behaves like `cookiesForUrl` says nothing here.
+			return to.host() == "site.example" ? QString("sid=abc123")
+			                                    : QString();
+		};
+
+		const QUrl second = proxy.publish(QUrl(upstream), jar);
+		check(second.isValid(), "published with a resolver instead of a header");
+		check(asked.size() == 1 && asked.first() == QUrl(upstream),
+		      QString("the resolver was asked about the upstream (%1)")
+		          .arg(asked.isEmpty() ? QString("(not asked)")
+		                                : asked.first().toString()));
+
+		QNetworkReply *r2 = net.get(QNetworkRequest(second));
+		QEventLoop l2;
+		QObject::connect(r2, &QNetworkReply::finished, &l2, &QEventLoop::quit);
+		QTimer::singleShot(15000, &l2, &QEventLoop::quit);
+		l2.exec();
+		const QJsonObject saw = QJsonDocument::fromJson(r2->readAll()).object();
+
+		// **The check the old shape could not pass.** A resolver that answers
+		// only for the page sends nothing to a CDN on another host -- where the
+		// page-filled field sent `sid=abc123` to it.
+		check(!saw.contains("cookie") ||
+		        saw.value("cookie").toString().isEmpty(),
+		      QString("and a host the page's cookies do not belong to gets none "
+		               "(%1)").arg(saw.value("cookie").toString()));
+		// Not silence about everything: the rest of the context still arrives,
+		// so the check above is about cookies and not about a dead entry.
+		check(saw.value("referer").toString() == jar.referer,
+		      QString("while the Referer still arrives (%1)")
+		          .arg(saw.value("referer").toString()));
+		r2->deleteLater();
+	}
+
+	// And an extractor's named header wins over the resolver, which is what
+	// the two fields are for: a rule written for one CDN knows more than a jar.
+	{
+		stream_context named;
+		named.cookies = "named=by-extractor";
+		bool asked = false;
+		named.cookies_for = [&asked](const QUrl &) {
+			asked = true;
+			return QString("from=the-jar");
+		};
+		const QUrl third = proxy.publish(QUrl(upstream), named);
+		QNetworkReply *r3 = net.get(QNetworkRequest(third));
+		QEventLoop l3;
+		QObject::connect(r3, &QNetworkReply::finished, &l3, &QEventLoop::quit);
+		QTimer::singleShot(15000, &l3, &QEventLoop::quit);
+		l3.exec();
+		const QJsonObject saw = QJsonDocument::fromJson(r3->readAll()).object();
+		check(saw.value("cookie").toString() == "named=by-extractor",
+		      QString("a named Cookie wins (%1)")
+		          .arg(saw.value("cookie").toString()));
+		check(!asked, "and the jar is not even asked");
+		r3->deleteLater();
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

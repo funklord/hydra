@@ -26,8 +26,16 @@ QNetworkReply *hls_assembler::get(const QUrl &url, const QByteArray &range) {
 		req.setRawHeader("Referer", m_ctx.referer.toUtf8());
 	if (!m_ctx.user_agent.isEmpty())
 		req.setRawHeader("User-Agent", m_ctx.user_agent.toUtf8());
-	if (!m_ctx.cookies.isEmpty())
-		req.setRawHeader("Cookie", m_ctx.cookies.toUtf8());
+	// **Asked about this url, not about the page.** A manifest, its variants,
+	// its segments and a separate audio track can each sit on a different host,
+	// and the field this used to read was filled once from the page's own
+	// address -- so every segment fetch carried the page's cookies wherever it
+	// went. An extractor's named header still wins; otherwise the jar is asked
+	// what the browser would send here, which is nothing for a stranger.
+	const QString jar = (m_ctx.cookies.isEmpty() && m_ctx.cookies_for)
+	                      ? m_ctx.cookies_for(url) : m_ctx.cookies;
+	if (!jar.isEmpty())
+		req.setRawHeader("Cookie", jar.toUtf8());
 	if (!range.isEmpty())
 		req.setRawHeader("Range", range);
 	return m_net->get(req);

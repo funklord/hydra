@@ -110,6 +110,12 @@ QUrl local_proxy::publish(const QUrl &upstream, const stream_context &ctx) {
 	entry e;
 	e.upstream = upstream;
 	e.ctx      = ctx;
+	// **Resolved here, for the host this entry will fetch**, rather than at send
+	// time: `publish` runs on the UI thread where the jar lives, and a request
+	// built later must not be the first place anybody asks. An extractor's named
+	// header wins, because it knows this CDN and a jar lookup does not.
+	if (e.ctx.cookies.isEmpty() && e.ctx.cookies_for)
+		e.ctx.cookies = e.ctx.cookies_for(upstream);
 	m_published.insert(token, e);
 
 	QUrl local;

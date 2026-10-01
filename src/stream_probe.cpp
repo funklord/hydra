@@ -109,6 +109,12 @@ void stream_probe::probe(const QUrl &url, const stream_context &ctx,
 		req.setRawHeader("Referer", ctx.referer.toUtf8());
 	if (!ctx.user_agent.isEmpty())
 		req.setRawHeader("User-Agent", ctx.user_agent.toUtf8());
+	// **`cookies` only, and deliberately not filled from the page.** Its one
+	// caller builds a context carrying nothing but a Referer and whatever the
+	// extractor named, so this cannot carry the page's cookies to a candidate
+	// on another host -- which is the leak `stream_context::cookies_for`
+	// exists to have closed. If this ever wants cookies, ask that resolver
+	// about `url`; do not fill the field from the page's address.
 	if (!ctx.cookies.isEmpty())
 		req.setRawHeader("Cookie", ctx.cookies.toUtf8());
 	for (auto it = ctx.extra.cbegin(); it != ctx.extra.cend(); ++it)

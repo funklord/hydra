@@ -291,15 +291,16 @@ void media_dialog::watch(const media_item &item) {
 	// Hand the player a localhost URL when the proxy is up, so the CDN sees
 	// the page's own context rather than a naked request (sec 11.3).
 	//
-	// **Referer and User-Agent, and cookies only when a learned extractor
-	// named them.** `page_context` fills the first two; nothing observes the
-	// engine's cookie jar, so `ctx.cookies` is empty for a stream found by
-	// watching requests. The proxy sends the header when the field is set --
-	// see `local_proxy.cpp` -- so the gap is the supplier and not the
-	// plumbing. Recorded in project.md.
+	// **This said cookies were never filled, and they are.** `page_context`
+	// observed the engine's store from the commit that added the jar, and the
+	// sentence here went on describing the gap that change closed -- with its
+	// own replacement stacked directly beneath it, which is how a reader ends up
+	// believing the older of two adjacent comments.
+	//
 	// The page's own context, overlaid with anything this particular stream
-	// asked for. A learned extractor names the headers its CDN checks, and
-	// they are useless if they stop here.
+	// asked for. A learned extractor names the headers its CDN checks, and they
+	// are useless if they stop here -- so a `Cookie` it named wins over what the
+	// jar would say about the stream's host.
 	stream_context ctx = m_ctx;
 	for (auto it = item.headers.cbegin(); it != item.headers.cend(); ++it) {
 		const QString k = it.key().toLower();

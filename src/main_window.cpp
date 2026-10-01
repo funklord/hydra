@@ -5279,12 +5279,20 @@ stream_context main_window::page_context(web_view_backend *v) const {
 	// header when this is non-empty.
 	if (m_factory) {
 		ctx.user_agent = m_factory->user_agent();
-		// **The half that was missing.** `local_proxy` has replayed
-		// `ctx.cookies` to the CDN since sec 11.3, and nothing ever filled it --
-		// so a stream whose CDN checks cookies answered 403 and the context
-		// looked complete. The factory watches the engine's store now; a backend
-		// that cannot answer returns empty and the header is simply not sent.
-		ctx.cookies = m_factory->cookie_header_for(v->url());
+		// **The half that was missing.** `local_proxy` has replayed cookies to
+		// the CDN since sec 11.3, and nothing ever filled the field -- so a
+		// stream whose CDN checks cookies answered 403 and the context looked
+		// complete. The factory watches the engine's store now; a backend that
+		// cannot answer returns empty and the header is simply not sent.
+		//
+		// **A resolver rather than a header**, because the first version filled
+		// it from `v->url()` -- the page -- and every consumer sent that to
+		// somewhere else. See `stream_context::cookies_for`: what goes out is
+		// now what this browser would send to the url being fetched.
+		web_view_factory *factory = m_factory;
+		ctx.cookies_for = [factory](const QUrl &to) {
+			return factory->cookie_header_for(to);
+		};
 	}
 	return ctx;
 }
