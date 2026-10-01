@@ -6105,6 +6105,13 @@ void main_window::learn_this_site() {
 			ranked << r.url.toString();
 		helpers->set_candidates(ranked);
 		dlg.use_helpers(helpers.get());
+	} else {
+		// **Said explicitly, because the dialog cannot tell this apart from not
+		// having been told.** `extractor_fetch` defaults to block, so this is
+		// the ordinary path: the script gets no fetch surface, and a person
+		// teaching a site needs to know that before they read "no stream
+		// found" and blame the page.
+		dlg.use_helpers(nullptr);
 	}
 
 	if (dlg.exec() != QDialog::Accepted)

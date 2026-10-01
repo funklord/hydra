@@ -587,6 +587,47 @@ int main(int argc, char **argv) {
 		          .arg(script ? script->toPlainText().left(40) : QString()));
 	}
 
+	// **`extractor_fetch` defaults to block, so the pure tier is the ordinary
+	// path** -- the script gets no `hydra`, cannot open a manifest, finds
+	// nothing, and the person teaching the site reads "no stream found" and
+	// blames the page. The dialog says so now, before Send.
+	section("the dialog says when the extractor cannot fetch");
+	{
+		extractor_signals sig;
+		extractor_store   store;
+		stub_provider   prov;
+		const QUrl page("https://site.example/watch/1");
+
+		// **The pair, one fixture, the tier as the only difference.** A check
+		// that only looked for the note on the pure tier would pass for a dialog
+		// that shows it always -- and a note on every site is one nobody reads.
+		helper_allowlist allow;
+		// Never called: the dialog is only constructed and read, not sent.
+		helper_fetcher none = [](const QUrl &, qint64, int) {
+			return fetch_result{};
+		};
+		helper_host host(&allow, none, helper_budget{});
+
+		extractor_dialog pure(&sig, &store, &prov, "site.example", page);
+		pure.use_helpers(nullptr);
+		extractor_dialog fetching(&sig, &store, &prov, "site.example", page);
+		fetching.use_helpers(&host);
+
+		auto *pure_note = pure.findChild<QLabel *>("tier_note");
+		auto *fetch_note = fetching.findChild<QLabel *>("tier_note");
+		check(pure_note != nullptr && fetch_note != nullptr,
+		      "both dialogs carry the label, so its absence cannot pass for "
+		      "silence");
+		check(pure_note && !pure_note->text().isEmpty() &&
+		        pure_note->text().contains("cannot fetch") &&
+		        pure_note->text().contains("Extractor may fetch"),
+		      QString("on the pure tier it says so and names the control (%1)")
+		          .arg(pure_note ? pure_note->text() : QString("(no label)")));
+		check(fetch_note && fetch_note->text().isEmpty(),
+		      QString("and with the tier on there is nothing to read (%1)")
+		          .arg(fetch_note ? fetch_note->text() : QString("(no label)")));
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

@@ -30376,3 +30376,96 @@ Sabotaged: with the guard removed, "with ads allowed there is nothing to
 confirm" goes red alone, reporting `2 held, offered=1`. `try_confirm` itself is
 unaffected either way -- it uses a default engine, where `ads` is `block`, so
 the new arm is not on its path.
+
+## The extractor could not fetch and nothing said so
+
+`extractor_fetch` is the sec 11.5.1 helper tier: it lets a learned extractor
+fetch a manifest the page already asked for, which is what a site hiding its
+stream behind one needs. **It defaults to block**, and `learn_this_site` builds
+the helper host only when the site allows it -- so on an ordinary site the
+generated script "gets no `hydra` at all and cannot tell the surface exists",
+as the comment there says.
+
+The script then cannot open a manifest, finds nothing, and the person teaching
+the site reads **no stream found** and blames the page. The reason is a
+permission in its default state, which makes this the ordinary path rather than
+an unusual configuration -- the opposite of the `ads` cases above, where the
+inertness needed somebody to have changed a setting.
+
+Said in the dialog, beside the payload, before Send:
+
+    The extractor cannot fetch anything on this site, so it has only the
+    addresses above to work from — it cannot open a manifest to look
+    inside. 'Extractor may fetch' in the shield turns that on.
+
+### The dialog says what it can see, not why
+
+It has no policy and should not guess at one. What it can see is `m_helpers`:
+null means there is no fetch surface. So the sentence states that and names the
+control, which is the part somebody can act on -- "it cannot fetch" without the
+last clause is a dead end rather than a note.
+
+**The shell now calls `use_helpers(nullptr)` explicitly on the blocked path.**
+Not called and called-with-null were the same state from inside the dialog and
+different facts, and only the explicit call lets the note be set at all. The
+header says so at the declaration, because the next caller will have the same
+choice to make.
+
+### Its own label, which is now the third of these
+
+`m_provider_note` carries the argument: a sentence that has to be read before
+pressing a button cannot share a widget with the status line, which gets
+rewritten. This is the same kind of sentence about a different fact, in the
+second dialog to need one today.
+
+Two labels in two dialogs is not yet a shared thing worth extracting, and
+`harmonization.md` says not to extract one in passing. Worth saying rather than
+leaving implied: if a third dialog grows one, that is the moment.
+
+### And this closes the class
+
+Swept for the same shape -- a control whose output is inert with nothing saying
+so -- across the four accept paths:
+
+    filter dialog        ads allowed    fixed above
+    status after accept  ads allowed    fixed above
+    consent dialog       cookie_notices no instance: a site set to `allow`
+                                        never gets the script, so it cannot
+                                        appear in the missed-banner list the
+                                        dialog reads, and there is nothing to
+                                        write a rule for
+    extractor dialog     extractor_fetch this entry
+
+Nothing else accepts something that a per-site setting can make inert.
+
+Sabotaged both ways, each failing alone: always warn fails "with the tier on
+there is nothing to read", never warn fails "on the pure tier it says so and
+names the control".
+
+## The live drivers ran, and today's changes hold in a real page
+
+The run deferred earlier for a load average of 35 was taken at 0.8, against
+drivers rebuilt from the current tree:
+
+    try_filters    7 passed, 0 failed    cosmetic hiding, in the page's own view
+    try_chrome    79 passed, 0 failed    the toolbar, badge included
+    try_subframe   6 passed, 0 failed    the MSE tap across iframes
+    try_media      ran to the end        3 video-shaped URLs seen, m3u8 detected
+    try_mse        ran to the end        MediaSource hooked, SourceBuffer added
+    try_tap        skipped               takes a url
+    try_taprow     skipped               takes a url
+
+**`try_filters` is the one that matters most**, because it asks the page rather
+than the bridge: it writes `127.0.0.1##.ad-banner` into the AI list, navigates,
+and reads `getComputedStyle(...).display` for both the advert and the content
+beside it. So the cosmetic half still hides what it should after being taught
+the `ads` switch -- which the offline checks cannot show, since they stop at
+`selectors_for` while the live path runs through the injected script and the
+bridge.
+
+`try_subframe` calls `mse_tap::clear_site` twice between its navigations, which
+is the method that now emits `site_updated`; 6 of 6 with no change.
+
+Afterwards: no orphaned driver or `QtWebEngineProcess` reparented to init, no
+deleted files held open, and `/` unchanged at 86%. The two GLES and Vulkan
+lines at the top of each log are offscreen rendering with no GPU, not failures.

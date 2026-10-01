@@ -81,6 +81,13 @@ public:
 
 	// Run proposals with the helper tier. Null, the default, is the pure tier:
 	// the script gets no `hydra` and there is nothing to show.
+	//
+	// **Call it either way.** The shell passes null when `extractor_fetch` is
+	// blocked for the site, which is the default -- and that is the state worth
+	// saying out loud, because the script then cannot open a manifest and the
+	// failure arrives as "no stream found" with the reason invisible. Passing
+	// null explicitly is what lets this set the note; leaving it uncalled looks
+	// the same from in here and says nothing.
 	void use_helpers(helper_host *helpers);
 
 private:
@@ -138,6 +145,11 @@ private:
 	// the page requested. A sentence that has to be read before pressing Send
 	// cannot share a widget with progress.
 	QLabel         *m_provider_note = nullptr;
+	// **What the script will be allowed to do**, set by `use_helpers` and shown
+	// only when the answer is "nothing". Its own label for the reason the one
+	// above records: a sentence that has to be read before pressing Send cannot
+	// share a widget with the status line, which gets rewritten.
+	QLabel         *m_tier_note = nullptr;
 	// **The status line, which takes no room when it has nothing to say.**
 	//
 	// Splitting the provider sentence into its own label left this one empty

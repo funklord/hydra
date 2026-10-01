@@ -290,7 +290,25 @@ QString extractor_dialog::transcript_text(const QList<helper_call> &calls) {
 	return lines.join('\n');
 }
 
-void extractor_dialog::use_helpers(helper_host *helpers) { m_helpers = helpers; }
+void extractor_dialog::use_helpers(helper_host *helpers) {
+	m_helpers = helpers;
+	if (!m_tier_note)
+		return;
+	// **Says what the script can do, not why.** The dialog cannot see the
+	// policy and should not guess at one; what it can see is that there is no
+	// fetch surface, and naming the control is the part somebody can act on.
+	// "It cannot fetch" without that is a dead end rather than a note.
+	if (m_helpers) {
+		m_tier_note->clear();
+		m_tier_note->hide();
+		return;
+	}
+	m_tier_note->setText(
+	  "The extractor cannot fetch anything on this site, so it has only the "
+	  "addresses above to work from — it cannot open a manifest to look "
+	  "inside. 'Extractor may fetch' in the shield turns that on.");
+	m_tier_note->show();
+}
 
 void extractor_dialog::show_transcript() {
 	const QString text =
@@ -520,6 +538,14 @@ void extractor_dialog::build_ui() {
 	  m_provider, "This is the list of addresses this page requested; read it "
 	               "before sending."));
 	outer->addWidget(m_provider_note);
+
+	// Built here and filled by `use_helpers`, which the shell calls after
+	// construction because only the shell knows the site's setting.
+	m_tier_note = new QLabel(this);
+	m_tier_note->setObjectName("tier_note");
+	m_tier_note->setWordWrap(true);
+	outer->addWidget(m_tier_note);
+	m_tier_note->hide();
 
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
