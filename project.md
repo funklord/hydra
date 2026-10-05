@@ -31228,3 +31228,50 @@ grammar can make the segment list wrong, as opposed to absent. `#EXT-X-I-FRAME
 -STREAM-INF` was checked too and is already safe -- `startsWith("#EXT-X-STREAM
 -INF:")` does not match it, so a trick-play variant is never chosen as the best
 one, which would have saved a keyframe slideshow as the programme.
+
+## And the same encryption hole in DASH, unfixed an hour after HLS's
+
+`#EXT-X-KEY` was closed in HLS and `<ContentProtection>` was still open in
+DASH. Same fault, other grammar, found by asking the DASH question
+deliberately rather than waiting for it to turn up -- which is the lesson of
+the day repeating itself: **every fix to one of these two grammars is a question
+to ask of the other, and asking it opportunistically missed this for an hour.**
+
+An encrypted MPD -- CENC, Widevine, PlayReady, ClearKey, any of them -- parsed
+as ordinary. The ciphertext was fetched, concatenated, written out and reported
+as a saved file, with ffmpeg then complaining about a container.
+
+    the segments are encrypted (urn:mpeg:dash:mp4protection:2011),
+    which this cannot decrypt
+
+### Scoped to the representation, which the parser's own stack does for free
+
+`<ContentProtection>` can sit on an AdaptationSet or a Representation, and the
+level stack pushes a **copy** of its parent -- so recording it on the level
+makes a protected AdaptationSet's tag reach its Representations while a sibling
+AdaptationSet keeps its own answer. The refusal then lands in `build_segments`,
+where the representation being built is the one whose answer it is.
+
+That is not conservatism for its own sake: a clear manifest must not be refused
+because the tag exists in the grammar, and the suite checks exactly that --
+the same manifest without the element parses and keeps its one segment.
+
+### What is still conservative, and said so rather than hidden
+
+A manifest mixing a protected AdaptationSet with a clear one is refused whole,
+because `error` is one field and the first refusal wins. The more exact answer
+is to skip protected representations and refuse only when none is left. That is
+a pathological manifest and refusing it is defensible; the choice is recorded
+here so the next person does not have to infer it from the code.
+
+### The four DASH features, to match the four HLS tags
+
+    SegmentTemplate / Timeline   handled
+    SegmentList + mediaRange     refused by name -- several segments in one
+                                 file, with nowhere to carry the range
+    SegmentBase + Initialization left alone, correctly: the range names a
+                                 slice of the one file being fetched whole
+    ContentProtection            refused by name, by scheme
+
+Both grammars have now been asked the same question and answered it the same
+way.

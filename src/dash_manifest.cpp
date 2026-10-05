@@ -156,6 +156,10 @@ struct level {
 	seg_template tmpl;
 	seg_list     list;
 	bool         segment_base = false;
+	// **`<ContentProtection>` seen at or above this element.** The stack pushes
+	// a copy of its parent, so a flag set on an AdaptationSet reaches its
+	// Representations and a sibling AdaptationSet keeps its own answer.
+	QString      protection;
 };
 
 // **A ceiling on how many segment URLs a manifest can ask for.** The count in
@@ -171,6 +175,13 @@ constexpr qint64 k_segment_ceiling = 100000;
 // that got here. Refuses rather than shortens: see `dash_manifest::error`.
 template <typename Refuse>
 void build_segments(const level &l, dash_representation *rep, Refuse refuse) {
+	// Before any addressing is read: an encrypted representation has nothing
+	// this can assemble, whichever way its segments are named.
+	if (!l.protection.isEmpty()) {
+		refuse("the segments are encrypted (" + l.protection +
+		        "), which this cannot decrypt");
+		return;
+	}
 	// **An explicit list wins**, being the one mode that states the answer
 	// rather than describing how to compute it.
 	if (l.list.present) {
@@ -482,6 +493,27 @@ dash_manifest parse(const QByteArray &xml, const QUrl &base) {
 				else
 					stack.last().list.media.push_back(
 					  stack.last().base.resolved(QUrl(media)));
+				continue;
+			}
+
+			// **An encrypted MPD is refused, not concatenated** -- the same
+			// fault `#EXT-X-KEY` was in the other grammar, and it was still
+			// here an hour after that one was fixed. `<ContentProtection>` says
+			// the segments are encrypted, whatever system the `schemeIdUri`
+			// names; without it the ciphertext is fetched, concatenated,
+			// written out and reported as a saved file, with ffmpeg then
+			// complaining about a container.
+			//
+			// Recorded on the level rather than refused here, so that a
+			// manifest's clear AdaptationSet is not condemned by a protected
+			// sibling's tag -- the stack's copy-on-push does that inheritance
+			// for free. The refusal lands in `build_segments`, where the
+			// representation being built is the one whose answer this is.
+			if (name == QLatin1String("ContentProtection")) {
+				const QString scheme = a.value("schemeIdUri").toString().trimmed();
+				if (stack.last().protection.isEmpty())
+					stack.last().protection =
+					  scheme.isEmpty() ? QStringLiteral("unnamed scheme") : scheme;
 				continue;
 			}
 

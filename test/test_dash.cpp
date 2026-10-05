@@ -171,6 +171,56 @@ int main(int argc, char **argv) {
 		      QString("and so is the init (%1)").arg(r.init.toString()));
 	}
 
+	// **An encrypted MPD is refused by name**, which is `#EXT-X-KEY`'s fault in
+	// the other grammar -- and it was still here an hour after that one was
+	// fixed. Without this the ciphertext is fetched, concatenated, written out
+	// and reported as a saved file.
+	section("an encrypted representation is refused, by scheme");
+	{
+		const QByteArray xml =
+		  "<?xml version=\"1.0\"?>\n<MPD>\n"
+		  "  <Period><AdaptationSet mimeType=\"video/mp4\">\n"
+		  "    <ContentProtection schemeIdUri=\"urn:mpeg:dash:mp4protection:"
+		  "2011\" value=\"cenc\"/>\n"
+		  "    <Representation id=\"v1\" bandwidth=\"900000\">\n"
+		  "      <SegmentList>\n"
+		  "        <SegmentURL media=\"s1.m4s\"/>\n"
+		  "      </SegmentList>\n"
+		  "    </Representation>\n"
+		  "  </AdaptationSet></Period>\n</MPD>\n";
+		const dash_manifest m = dash::parse(xml, base);
+		check(!m.error.isEmpty() && m.error.contains("encrypted"),
+		      QString("refused (%1)").arg(m.error.isEmpty()
+		        ? QStringLiteral("parsed happily") : m.error));
+		check(m.error.contains("mp4protection"),
+		      QString("and the message names the scheme (%1)").arg(m.error));
+
+		// **On the AdaptationSet, inherited by its Representation.** The level
+		// stack pushes a copy of its parent, which is what makes that work --
+		// and what keeps the next case honest.
+		const int segs = m.representations.isEmpty()
+		                   ? 0 : m.representations.first().segments.size();
+		check(segs == 0,
+		      QString("and no segment list was built from it (%1)").arg(segs));
+
+		// **A clear manifest is not condemned by the tag existing in the
+		// grammar**, which is the check that stops this from being a refusal of
+		// every MPD.
+		const QByteArray clear =
+		  "<?xml version=\"1.0\"?>\n<MPD>\n"
+		  "  <Period><AdaptationSet mimeType=\"video/mp4\">\n"
+		  "    <Representation id=\"v1\" bandwidth=\"900000\">\n"
+		  "      <SegmentList>\n"
+		  "        <SegmentURL media=\"s1.m4s\"/>\n"
+		  "      </SegmentList>\n"
+		  "    </Representation>\n"
+		  "  </AdaptationSet></Period>\n</MPD>\n";
+		const dash_manifest c = dash::parse(clear, base);
+		check(c.error.isEmpty() && !c.representations.isEmpty() &&
+		        c.representations.first().segments.size() == 1,
+		      QString("a clear manifest still parses (%1)").arg(c.error));
+	}
+
 	// **A SegmentURL carrying `mediaRange` is refused, not approximated.**
 	// It says the segment is bytes a..b of one file, which is DASH's
 	// `#EXT-X-BYTERANGE`. `dash_representation::segments` is a list of urls
