@@ -236,6 +236,71 @@ int main(int argc, char **argv) {
 		      "and is the slice it says");
 	}
 
+	// **`#EXT-X-MAP` is the fMP4 initialisation segment**, and nothing read it:
+	// the fragments were concatenated with no `moov` box, written out, and the
+	// save reported as finished. DASH's equivalent has always been handled, so
+	// this is the same field and the same prepend for the other grammar.
+	section("the initialisation segment is read and resolved");
+	{
+		const QByteArray fmp4 =
+		  "#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		  "#EXT-X-MAP:URI=\"init.mp4\"\n"
+		  "#EXTINF:4.0,\n/s0.m4s\n#EXTINF:4.0,\n/s1.m4s\n#EXT-X-ENDLIST\n";
+		const hls_playlist p = hls::parse(fmp4, QUrl("https://c.example/v/x.m3u8"));
+		check(p.error.isEmpty(), QString("it parses (%1)").arg(p.error));
+		check(p.init == QUrl("https://c.example/v/init.mp4"),
+		      QString("the init url is resolved against the playlist (%1)")
+		          .arg(p.init.toString()));
+		check(p.init_length == -1 && p.init_offset == -1,
+		      "and carries no range when the tag names none");
+		// **Not a segment**, which is the part a careless parse would get
+		// wrong: the init is fetched first and is not one of the media
+		// segments the live mark counts.
+		check(p.segments.size() == 2,
+		      QString("the media segments are still two (%1)")
+		          .arg(p.segments.size()));
+
+		// A ranged MAP: the tag may name a slice of a larger file.
+		const QByteArray ranged =
+		  "#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		  "#EXT-X-MAP:URI=\"all.mp4\",BYTERANGE=\"800@0\"\n"
+		  "#EXTINF:4.0,\n/s0.m4s\n#EXT-X-ENDLIST\n";
+		const hls_playlist r = hls::parse(ranged, QUrl("https://c.example/v/x.m3u8"));
+		check(r.error.isEmpty() && r.init_length == 800 && r.init_offset == 0,
+		      QString("a ranged init is read (%1, %2..%3)")
+		          .arg(r.error).arg(r.init_offset).arg(r.init_length));
+
+		// **A second, different MAP is refused**, because an initialisation
+		// that changes part way through is not one file. Taking the first and
+		// ignoring the rest is the silent-wrong-output shape again.
+		const QByteArray changed =
+		  "#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		  "#EXT-X-MAP:URI=\"a.mp4\"\n#EXTINF:4.0,\n/s0.m4s\n"
+		  "#EXT-X-MAP:URI=\"b.mp4\"\n#EXTINF:4.0,\n/s1.m4s\n"
+		  "#EXT-X-ENDLIST\n";
+		const hls_playlist c = hls::parse(changed, QUrl("https://c.example/v/x.m3u8"));
+		check(!c.error.isEmpty() && c.error.contains("changes part way"),
+		      QString("a changing initialisation is refused (%1)")
+		          .arg(c.error.isEmpty() ? QStringLiteral("parsed happily")
+		                                  : c.error));
+		// And repeating the *same* one is not a change, which playlists do.
+		const QByteArray repeated =
+		  "#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		  "#EXT-X-MAP:URI=\"a.mp4\"\n#EXTINF:4.0,\n/s0.m4s\n"
+		  "#EXT-X-MAP:URI=\"a.mp4\"\n#EXTINF:4.0,\n/s1.m4s\n"
+		  "#EXT-X-ENDLIST\n";
+		const hls_playlist rep = hls::parse(repeated, QUrl("https://c.example/v/x.m3u8"));
+		check(rep.error.isEmpty() && rep.segments.size() == 2,
+		      QString("the same one twice is not a change (%1)").arg(rep.error));
+
+		const QByteArray empty_uri =
+		  "#EXTM3U\n#EXT-X-MAP:BYTERANGE=\"8@0\"\n"
+		  "#EXTINF:4.0,\n/s0.m4s\n#EXT-X-ENDLIST\n";
+		const hls_playlist e = hls::parse(empty_uri, QUrl("https://c.example/v/x.m3u8"));
+		check(!e.error.isEmpty() && e.error.contains("no usable URI"),
+		      QString("a MAP with no URI is refused (%1)").arg(e.error));
+	}
+
 	// **An encrypted playlist is refused rather than concatenated.** Nothing
 	// read `#EXT-X-KEY`, so the segments were fetched, the ciphertext was
 	// concatenated and written out, and the save was reported as done: what the

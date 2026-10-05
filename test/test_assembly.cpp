@@ -1136,6 +1136,107 @@ int main(int argc, char **argv) {
 	// while nothing is missed. A playlist that drops segments we never saw --
 	// a slow CDN, a slow disk, a pause -- leaves the mark below the sequence
 	// numbers still in the window, so the next poll takes them again.
+	// **The consequence of reading `#EXT-X-MAP`: the init lands first.** Without
+	// it the fragments were concatenated with no `moov` box -- unplayable,
+	// written out, reported as a finished save. Asserted on the bytes, in
+	// order, because "the init was fetched" would pass for an assembly that
+	// fetched it last.
+	section("an fMP4 playlist writes its initialisation segment first");
+	{
+		cdn.redirect_from.clear();
+		cdn.then.clear();
+		cdn.asked.clear();
+		cdn.files["/i.mp4"]  = QByteArray("INIT");
+		cdn.files["/f0.m4s"] = QByteArray("AAAA");
+		cdn.files["/f1.m4s"] = QByteArray("BBBB");
+		cdn.files["/fmp4.m3u8"] =
+		  QByteArray("#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		              "#EXT-X-MAP:URI=\"/i.mp4\"\n"
+		              "#EXTINF:4.0,\n/f0.m4s\n#EXTINF:4.0,\n/f1.m4s\n"
+		              "#EXT-X-ENDLIST\n");
+
+		QTemporaryDir fdir;
+		const QString out = fdir.filePath("fmp4.mp4");
+		hls_assembler as;
+		bool done = false;
+		QString why;
+		QObject::connect(&as, &hls_assembler::completed, [&] { done = true; });
+		QObject::connect(&as, &hls_assembler::failed,
+		                  [&why](const QString &e) { why = e; });
+
+		stream_context ctx;
+		as.start(QUrl(base + "/fmp4.m3u8"), ctx, out);
+		QElapsedTimer t;
+		t.start();
+		while (t.elapsed() < 8000 && !done && why.isEmpty())
+			spin(50);
+
+		check(done, QString("the assembly finishes (%1)")
+		                .arg(why.isEmpty() ? QStringLiteral("no error") : why));
+		QFile f(out);
+		f.open(QIODevice::ReadOnly);
+		check(f.readAll() == QByteArray("INITAAAABBBB"),
+		      "the initialisation segment is first, then the fragments in order");
+		check(cdn.asked.value("/i.mp4", 0) == 1,
+		      QString("and it was fetched exactly once (%1)")
+		          .arg(cdn.asked.value("/i.mp4", 0)));
+	}
+
+	// **A live fMP4 list must not write the initialisation again per poll**,
+	// and the live mark must not shift because of it. The prepend happens once,
+	// after the mark is taken, and a poll replaces the segment list without
+	// re-adding the init -- all three of which are claims that were reasoned
+	// about when the prepend was written and are measured here.
+	section("a live fMP4 list writes its initialisation once");
+	{
+		cdn.asked.clear();
+		cdn.files["/j.mp4"]  = QByteArray("INIT");
+		cdn.files["/g0.m4s"] = QByteArray("AAAA");
+		cdn.files["/g1.m4s"] = QByteArray("BBBB");
+		cdn.files["/g2.m4s"] = QByteArray("CCCC");
+		// First read: sequence 0 and 1, still growing.
+		cdn.files["/lfmp4.m3u8"] =
+		  QByteArray("#EXTM3U\n#EXT-X-TARGETDURATION:1\n"
+		              "#EXT-X-MEDIA-SEQUENCE:0\n"
+		              "#EXT-X-MAP:URI=\"/j.mp4\"\n"
+		              "#EXTINF:1,\n/g0.m4s\n#EXTINF:1,\n/g1.m4s\n");
+		// Later reads: one more segment, and an end so this finishes on the
+		// playlist rather than on the stall bound.
+		cdn.then["/lfmp4.m3u8"] =
+		  QByteArray("#EXTM3U\n#EXT-X-TARGETDURATION:1\n"
+		              "#EXT-X-MEDIA-SEQUENCE:0\n"
+		              "#EXT-X-MAP:URI=\"/j.mp4\"\n"
+		              "#EXTINF:1,\n/g0.m4s\n#EXTINF:1,\n/g1.m4s\n"
+		              "#EXTINF:1,\n/g2.m4s\n#EXT-X-ENDLIST\n");
+
+		QTemporaryDir ldir;
+		const QString out = ldir.filePath("lfmp4.mp4");
+		hls_assembler as;
+		bool done = false;
+		QObject::connect(&as, &hls_assembler::completed, [&] { done = true; });
+
+		stream_context ctx;
+		as.start(QUrl(base + "/lfmp4.m3u8"), ctx, out);
+		QElapsedTimer t;
+		t.start();
+		while (t.elapsed() < 12000 && !done)
+			spin(50);
+		check(done, QString("the assembly finishes (%1 ms)").arg(t.elapsed()));
+
+		QFile f(out);
+		f.open(QIODevice::ReadOnly);
+		const QByteArray got = f.readAll();
+		// One init, then every segment once: the init not repeated on the poll,
+		// and the mark not shifted by it -- a shifted mark would have re-taken
+		// `g1` and shown up here as `AAAABBBBBBBBCCCC`.
+		check(got == QByteArray("INITAAAABBBBCCCC"),
+		      QString("one init, then each fragment once (%1)")
+		          .arg(QString::fromUtf8(got)));
+		check(cdn.asked.value("/j.mp4", 0) == 1,
+		      QString("the init was fetched once across both reads (%1)")
+		          .arg(cdn.asked.value("/j.mp4", 0)));
+	}
+
 	// **The consequence of the parser's refusal, which is the half that
 	// matters.** `hls_playlist` reports an encrypted playlist now; this asks
 	// what a *save* does with it, because the old behaviour was to fetch the

@@ -59,6 +59,74 @@ hls_playlist parse(const QByteArray &text, const QUrl &base) {
 			out.is_live = false;   // a complete VOD list
 			continue;
 		}
+		// **`#EXT-X-MAP` is the initialisation segment, and it was read by
+		// nothing.** fMP4 HLS -- which is most modern HLS, because it is what
+		// lets one set of segments serve HLS and DASH alike -- puts the `moov`
+		// box in a separate file and names it here. Concatenating the fragments
+		// without it produces a file with no initialisation at all: unplayable,
+		// written out, and reported as a finished save, with ffmpeg then
+		// failing to rewrap it and pointing at a container problem that is not
+		// the cause.
+		//
+		// DASH's equivalent has always been handled -- `dash_representation`
+		// carries an `init` and `assemble_dash` pushes it in front of the
+		// segments -- so this is the same field and the same prepend for the
+		// other grammar, not new machinery.
+		//
+		// **A second, different MAP is refused.** The tag may appear again
+		// mid-playlist when the initialisation changes, and a stream whose
+		// initialisation changes part way through is not one file. Taking the
+		// first and ignoring the rest would be the silent-wrong-output shape
+		// this whole section is about.
+		if (line.startsWith("#EXT-X-MAP:")) {
+			const QString v = line.section(':', 1);
+			QUrl       uri;
+			qint64     off = -1, len = -1;
+			for (const QString &attr : v.split(',')) {
+				const QString a = attr.trimmed();
+				if (a.startsWith("URI=", Qt::CaseInsensitive)) {
+					QString raw = a.mid(4).trimmed();
+					if (raw.startsWith('"') && raw.endsWith('"') &&
+					     raw.size() >= 2)
+						raw = raw.mid(1, raw.size() - 2);
+					if (!raw.isEmpty())
+						uri = base.isEmpty() ? QUrl(raw) : base.resolved(QUrl(raw));
+				} else if (a.startsWith("BYTERANGE=", Qt::CaseInsensitive)) {
+					QString raw = a.mid(10).trimmed();
+					if (raw.startsWith('"') && raw.endsWith('"') &&
+					     raw.size() >= 2)
+						raw = raw.mid(1, raw.size() - 2);
+					bool len_ok = false, off_ok = true;
+					len = raw.section('@', 0, 0).trimmed().toLongLong(&len_ok);
+					const QString at = raw.section('@', 1, 1).trimmed();
+					off = at.isEmpty() ? 0 : at.toLongLong(&off_ok);
+					if (!len_ok || !off_ok || len <= 0) {
+						if (out.error.isEmpty())
+							out.error = "an EXT-X-MAP byte range that cannot be "
+							             "read (" + raw + ")";
+						len = off = -1;
+					}
+				}
+			}
+			if (!uri.isValid() || uri.isEmpty()) {
+				if (out.error.isEmpty())
+					out.error = "an EXT-X-MAP names no usable URI";
+				continue;
+			}
+			if (!out.init.isEmpty() &&
+			     (out.init != uri || out.init_offset != off ||
+			      out.init_length != len)) {
+				if (out.error.isEmpty())
+					out.error = "the initialisation segment changes part way "
+					             "through, which is not one file";
+				continue;
+			}
+			out.init        = uri;
+			out.init_offset = off;
+			out.init_length = len;
+			continue;
+		}
+
 		// **An encrypted playlist is refused, not concatenated.**
 		// `#EXT-X-KEY:METHOD=AES-128,URI="..."` says every segment from here on
 		// is AES-encrypted, and this engine does not decrypt: it would fetch

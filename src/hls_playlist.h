@@ -31,6 +31,20 @@ struct hls_playlist {
 	double target_duration = 0.0;
 	QList<hls_variant> variants;
 	QList<hls_segment> segments;
+
+	// **The initialisation segment, from `#EXT-X-MAP`.** Empty for plain
+	// MPEG-TS HLS, which needs none; set for fMP4, which puts the `moov` box in
+	// a file of its own and is most modern HLS. The assembler fetches it first,
+	// exactly as it does for a DASH representation's `init` -- without it the
+	// concatenated fragments have no initialisation and the file is unplayable
+	// while the save reports success.
+	//
+	// The offsets carry an optional `BYTERANGE=`, because the tag may name a
+	// slice of a larger file the same way a segment can. Both -1 when it is a
+	// whole file.
+	QUrl   init;
+	qint64 init_offset = -1;
+	qint64 init_length = -1;
 	// **Why a parser that cannot fail needed somewhere to say so.** A
 	// `#EXT-X-BYTERANGE` whose numbers cannot be read used to come out as
 	// length 0 and offset 0, because `toLongLong()` answers 0 for a value it

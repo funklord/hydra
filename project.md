@@ -31116,3 +31116,57 @@ can make the segment list wrong, rather than absent? `#EXT-X-BYTERANGE` was
 already handled and already tested. `#EXT-X-KEY` was not mentioned anywhere in
 the file -- a grep for it in `hls_playlist.cpp` and `.h` returned nothing, which
 is the whole of how this was found.
+
+## fMP4 HLS was assembled without its initialisation segment
+
+The same question as the encryption find, asked once more of the same grammar:
+which tag can make the output wrong rather than absent? `#EXT-X-MAP` was the
+answer, and nothing in the parser or the assembler mentioned it.
+
+fMP4 HLS puts the `moov` box in a file of its own and names it there. **It is
+most modern HLS**, because one set of CMAF fragments serving both HLS and DASH
+is why packagers moved to it. Without the init segment the concatenated
+fragments have no initialisation at all: the file is unplayable, it is written
+out, and the save reports success -- followed by ffmpeg failing to rewrap it and
+complaining about a container, which is the same misleading symptom the
+encrypted case produced and points at the wrong thing just as hard.
+
+### Supported rather than refused, because the machinery was already there
+
+The two options today have been to implement what the engine can already do and
+to refuse what it cannot. This one is the first: `dash_representation` has
+carried an `init` since the DASH work and `assemble_dash` pushes it in front of
+the segments, so this is the same field and the same prepend for the other
+grammar. Refusing would have rejected the dominant modern packaging to avoid a
+twenty-line parse.
+
+    #EXT-X-MAP:URI="init.mp4"                  -> init, resolved against the
+                                                  playlist's own address
+    #EXT-X-MAP:URI="all.mp4",BYTERANGE="800@0" -> init plus a slice, which the
+                                                  segment fetch already knows
+                                                  how to ask for
+
+### Three claims that were reasoned about, then measured
+
+Writing the prepend raised three things I argued for in a comment and had not
+checked. All three are now checks:
+
+- **The init is not a media segment.** It goes in after `m_next_sequence` is
+  taken, because that mark counts media segments -- prepending first would
+  shift the live mark by one and make the first poll re-take a segment. The
+  live test would have shown `AAAABBBBBBBBCCCC`; it shows `INITAAAABBBBCCCC`.
+- **A poll does not write it again.** The prepend is in the first pass only, and
+  a poll replaces the segment list without re-adding it. Measured across two
+  reads: fetched once.
+- **A second, different MAP is refused.** The tag may reappear when the
+  initialisation changes, and a stream whose initialisation changes part way
+  through is not one file. Taking the first and ignoring the rest is the
+  silent-wrong-output shape this whole run of finds is about. The *same* tag
+  repeated is not a change, which playlists do routinely, so that is a separate
+  check.
+
+### Sabotaged, and the sabotage is the old behaviour
+
+Dropping the prepend: *"the assembly finishes (no error)"* stays green while the
+init is never fetched and the output has no initialisation. Success reported
+either way, which is the whole family this path has been full of.

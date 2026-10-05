@@ -175,6 +175,18 @@ void hls_assembler::fetch_manifest(const QUrl &url) {
 		// about to take. Both are only meaningful for HLS; see the header.
 		m_live_url      = url;
 		m_next_sequence = m_playlist.media_sequence + m_playlist.segments.size();
+		// **The initialisation segment goes in front**, which is what
+		// `assemble_dash` has always done for the other grammar. Inserted
+		// after `m_next_sequence` is taken, because that mark counts media
+		// segments and the init is not one of them -- adding it before would
+		// shift the live mark by one and make the first poll re-take a segment.
+		if (!m_playlist.init.isEmpty()) {
+			hls_segment init;
+			init.url         = m_playlist.init;
+			init.byte_offset = m_playlist.init_offset;
+			init.byte_length = m_playlist.init_length;
+			m_playlist.segments.prepend(init);
+		}
 		m_live_idle.start();
 		next_segment();
 	});
