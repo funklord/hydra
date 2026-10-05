@@ -427,6 +427,14 @@ qint64 local_proxy::captured_bytes(const QUrl &url) const {
 
 void local_proxy::accept_capture(QTcpSocket *client, const QString &token,
                                   const QByteArray &body) {
+	// **`operator[]` default-inserts, and that is safe here because `serve`
+	// has already refused an unknown token with a 404.** Said rather than left
+	// true-and-unwritten: this is a page-reachable endpoint, so a reader
+	// meeting a default-inserting lookup here has to go and check -- and an
+	// unstated precondition is indistinguishable from one nobody thought of.
+	// Without that guard a page could grow this hash by posting to invented
+	// tokens, and each new entry would report a write failure for a path that
+	// is empty.
 	entry &e = m_published[token];
 	if (!body.isEmpty()) {
 		QFile f(e.local_path);

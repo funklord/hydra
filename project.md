@@ -31275,3 +31275,51 @@ here so the next person does not have to infer it from the code.
 
 Both grammars have now been asked the same question and answered it the same
 way.
+
+## A capture has no ceiling, which is a decision rather than a defect
+
+Reading the capture endpoint for a different question -- whether a page can post
+to an invented token -- turned up one thing to state and one thing to decide.
+
+**What is fine, and is now written down.** `accept_capture` opens with
+`entry &e = m_published[token]`, and `QHash::operator[]` default-inserts. That
+is safe because `serve` refuses an unknown token with a 404 before dispatching,
+so the key always exists. The precondition was true and unwritten, which
+`evidence.md` says is indistinguishable from one nobody thought of -- and this
+is a page-reachable endpoint, so a reader meeting a default-inserting lookup has
+to go and check. Without the guard a page could grow that hash by posting to
+invented tokens and each new entry would report a write failure for an empty
+path. The comment now says where the guarantee comes from.
+
+**What is also fine: a full disk is reported.** The write accounting credits
+only bytes that reached the disk and says so when they do not -- *"the page is
+still sending; the bytes are being dropped"* -- which is the one thing that
+would matter most and is handled.
+
+### The decision: Capture Playing Video runs until somebody stops it
+
+There is no size or time limit. The bytes a page posts are appended to a file
+in the download directory for as long as the capture is on, and what bounds it
+is the person: the byte count is live on the menu item and in the status bar,
+and the poll says so every 500 ms.
+
+**For a recorder that is arguably the right contract** -- a limit nobody asked
+for truncates a programme somebody wanted. What it costs is a forgotten capture
+of a 24/7 stream filling a filesystem, which on this machine is `/` with 16 GB
+free if the download directory is left at its default.
+
+**The option, its cost, and whose decision it is**, which is the shape
+`working-practice.md` asks for when a record describes something that is not
+the writer's to settle:
+
+    leave it            a forgotten capture can fill a disk; the full-disk
+                        path already reports rather than failing silently
+    a ceiling           truncates a long programme somebody wanted, and the
+                        number is arbitrary
+    warn at a size      keeps the contract and names the moment -- "this
+                        capture is now 8 GB" -- which is the smallest change
+                        that addresses the forgetting rather than the feature
+
+Not acted on. It is the holder's: a recorder's contract is a product decision,
+and the failure it guards against is somebody's attention rather than a fault
+in the code.
