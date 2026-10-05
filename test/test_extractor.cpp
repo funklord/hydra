@@ -93,6 +93,77 @@ int main(int argc, char **argv) {
 		      "a plausible-looking address on a real host is still invented");
 	}
 
+	// **A local address is not an answer, however it got into the evidence.**
+	// The observed/followable gate accepts a url the page requested -- and a
+	// page can fetch `http://127.0.0.1:8080/x` itself: the browser refuses to
+	// let it read the answer and the interceptor still records the request, so
+	// the address is observed and a script may return it. The body would then
+	// go to the probe, the player and the assembler.
+	section("a local address is refused even when the page requested it");
+	{
+		QList<evidence_request> local_ev = sample();
+		int n = int(local_ev.size());
+		for (const char *u : { "http://127.0.0.1:8080/admin",
+			                      "http://192.168.1.10/status",
+			                      "http://localhost:9000/x" })
+			local_ev << evidence_request{ QUrl(QString::fromUtf8(u)), "other",
+			                               n++ };
+
+		for (const char *target : { "http://127.0.0.1:8080/admin",
+			                           "http://192.168.1.10/status",
+			                           "http://localhost:9000/x" }) {
+			const QString src = QStringLiteral(
+			  "extract = function () { return { url: '%1', kind: 'hls' }; };")
+			    .arg(QString::fromUtf8(target));
+			const extractor_verdict v =
+			  site_extractor::check(src, page, local_ev);
+			check(!v.usable && v.invented,
+			      QString("%1 is refused though it was requested")
+			          .arg(QString::fromUtf8(target)));
+			check(v.message.contains("on this machine"),
+			      QString("with a reason that says where it points (%1)")
+			          .arg(v.message));
+		}
+
+		// **The control**: an ordinary observed address still passes, so this
+		// is a rule about where and not a gate that refuses everything.
+		//
+		// Written the way a good extractor is -- matching a stable part of the
+		// address rather than naming it -- because the first draft hard-coded
+		// the token-bearing url and was refused by a different rule entirely:
+		// "the script has this visit's ids or tokens written into it". A
+		// control has to pass every gate but the one under test, or it is
+		// measuring the wrong refusal.
+		const QString ok_src = QStringLiteral(
+		  "extract = function (page, requests) {"
+		  "  for (var i = 0; i < requests.length; i++)"
+		  "    if (requests[i].url.indexOf('cf-master') !== -1)"
+		  "      return { url: requests[i].url, kind: 'hls' };"
+		  "  return null;"
+		  "};");
+		const extractor_verdict good =
+		  site_extractor::check(ok_src, page, local_ev);
+		check(good.usable,
+		      QString("while the page's real stream is unaffected (%1)")
+		          .arg(good.message));
+
+		// **And a page that is itself local keeps working**, which is the dev
+		// server case the allowlist makes the same exception for.
+		const QUrl dev_page("http://127.0.0.1:8080/watch");
+		QList<evidence_request> dev_ev;
+		dev_ev << evidence_request{ dev_page, "other", 0 };
+		dev_ev << evidence_request{ QUrl("http://127.0.0.1:8080/s/x.m3u8"),
+		                             "other", 1 };
+		const QString dev_src = QStringLiteral(
+		  "extract = function () { return { url: "
+		  "'http://127.0.0.1:8080/s/x.m3u8', kind: 'hls' }; };");
+		const extractor_verdict dev =
+		  site_extractor::check(dev_src, dev_page, dev_ev);
+		check(dev.usable,
+		      QString("a page on 127.0.0.1 may name its own stream (%1)")
+		          .arg(dev.message));
+	}
+
 	section("a segment is not a stream");
 	{
 		// A real model did exactly this: returned seg-00000.ts, which the page

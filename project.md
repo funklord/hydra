@@ -31375,3 +31375,53 @@ which is what a page can put in a manifest without controlling DNS.
 
 Sabotaged both ways: following anything observed fails five checks at once, and
 refusing local even for a local page fails the dev-server row alone.
+
+### The same hole by the other route, asked immediately this time
+
+The allowlist fix closed the **followable** side of `site_extractor::validate`'s
+gate. That gate accepts a result url which is either *followable* or
+**observed**, and the observed side does not go through `allows()` at all.
+
+**A page can fetch `http://127.0.0.1:8080/x` itself.** The browser refuses to
+let it read the answer; the interceptor records the request anyway. So the
+address is observed, and a generated script may return it as the stream -- after
+which the probe, the player and the assembler all fetch it.
+
+Weaker than the hole it mirrors, and worth closing in the same breath: the body
+goes to those three rather than back to the script, so it is not a read for the
+page. It is still this browser fetching the user's own services because a page
+asked, and the user accepting an extractor whose "stream" is
+`http://127.0.0.1:9200/_cat/indices`.
+
+**One rule in one place for both routes**, which is cheaper than two gates that
+have to agree -- `helper_allowlist::is_local` was already static and public for
+exactly this. The page's own host is the exception here too, so a dev server's
+stream stays nameable.
+
+    Rejected: that address is on this machine or its network (127.0.0.1),
+    which a page's stream is not.
+
+**And the control was wrong first, which is worth more than the fix.** The
+"an ordinary address still passes" check hard-coded the token-bearing url and
+was refused by a different rule entirely -- *"the script has this visit's ids or
+tokens written into it"*. A control has to pass every gate but the one under
+test or it measures the wrong refusal, so it is written the way a good extractor
+is: matching a stable part of the address rather than naming it.
+
+Sabotaged: six checks go red, three refusals and their three reasons.
+
+**And the new rule broke a legitimate test, which is the part worth keeping.**
+`test_extloop`'s probe-chain section runs a real `fake_cdn` on loopback -- a
+fixture has nowhere else to be -- while its page was `https://site.example/
+watch/9`. That is exactly the shape the rule refuses: a public page naming an
+address on this machine. Two checks went red and both were right to.
+
+The fixture is the thing that was wrong, not the rule. A loopback fixture
+standing in for a remote CDN has to serve the page as well, or it is modelling
+something the product refuses on purpose. The page is on the fixture now, with a
+comment saying why, so the next person does not "improve" it back to a
+remote-looking page and meet a refusal that reads as a bug.
+
+**A rule that breaks no test is a rule whose cases nobody had written.** This
+one broke the only test whose fixture had the shape it guards against, which is
+the cheapest possible evidence that the gate is live.

@@ -260,13 +260,24 @@ int main(int argc, char **argv) {
 		} else {
 			const QString base =
 			QString("http://127.0.0.1:%1/v4/db/abc/").arg(cdn.serverPort());
-			const QUrl cdn_page("https://site.example/watch/9");
+			// **The page is on the fixture too, and that is not cosmetic.**
+			// `site_extractor::validate` refuses a result address on this
+			// machine or its network unless the page is there as well -- a
+			// public page naming loopback is a page reaching into the user's
+			// services. A fixture on `127.0.0.1` standing in for a remote CDN
+			// therefore has to be a fixture serving the page as well, or the
+			// rule correctly refuses it. This section is about a probe chain,
+			// not about hosts, so the consistent fixture is the right answer
+			// rather than an exemption.
+			const QString host = QStringLiteral("127.0.0.1");
+			const QUrl cdn_page(QString("http://127.0.0.1:%1/watch/9")
+			                      .arg(cdn.serverPort()));
 
 			extractor_signals ev;
 			auto add = [&](const QString &u) {
 				request_context c;
 				c.url = QUrl(u);
-				c.site_host = "site.example";
+				c.site_host = host;
 				c.request_host = c.url.host();
 				c.kind = resource_kind::other;
 				ev.on_request(c, request_decision{});
@@ -287,7 +298,7 @@ int main(int argc, char **argv) {
 			            "      return { url: requests[i].url, kind: 'direct' };\n"
 			            "  return null;\n"
 			            "};";
-			extractor_dialog dlg(&ev, &store, &prov, "site.example", cdn_page);
+			extractor_dialog dlg(&ev, &store, &prov, host, cdn_page);
 			dlg.show();
 
 			QPushButton *send = button(&dlg, "Send");

@@ -397,6 +397,31 @@ extractor_verdict check(const QString &source, const QUrl &page,
 		return v;
 	}
 
+	// **And a local address is not an answer for a public page, however it got
+	// here.** The gate above accepts a result url that is either observed or
+	// followable, and `helper_allowlist::allows` now refuses a local address on
+	// the followable side -- but the *observed* side does not go through it. A
+	// page can fetch `http://127.0.0.1:8080/x` itself: the browser refuses to
+	// let the page read the answer, and the interceptor still records the
+	// request, so the address is "observed" and the script may return it.
+	//
+	// What that buys a page is weaker than the allowlist hole it mirrors -- the
+	// body goes to the probe, the player and the assembler rather than back to
+	// the script -- and it is still this browser fetching the user's own
+	// services because a page asked. One rule in one place for both routes,
+	// which is cheaper than two gates that have to agree.
+	//
+	// The page's own host is the exception, as it is in the allowlist: a dev
+	// server's stream is at its own address.
+	if (helper_allowlist::is_local(v.result.url) &&
+	     v.result.url.host().compare(page.host(), Qt::CaseInsensitive) != 0) {
+		v.invented = true;
+		v.message  = "Rejected: that address is on this machine or its network "
+		             "(" + v.result.url.host() + "), which a page's stream is "
+		             "not.";
+		return v;
+	}
+
 	// Observed is not the same as correct in the other direction too, and a real
 	// model showed this one as well: asked for the stream in a page it returned
 	// the page's own address, with kind 'direct'. The document is the most
