@@ -79,6 +79,20 @@ public:
 	bool allows(const QUrl &url) const;
 	int  size() const { return m_allowed.size(); }
 
+	// **The page's own host, so that a page which is itself local can still
+	// have its own addresses fetched.** Without it the rule below would refuse
+	// a dev server on `localhost` or a media box on the LAN -- pages whose
+	// whole content is at a private address.
+	//
+	// Unset means no local destination is followable at all, which is the safe
+	// default for a driver or a test that never says where the page was.
+	void set_page_host(const QString &host) { m_page_host = host.toLower(); }
+
+	// Whether this address is on the machine or its network: loopback, link
+	// local, or an RFC1918 / unique-local range. Static and public so the
+	// suite can ask the same question the gate asks.
+	static bool is_local(const QUrl &url);
+
 	// Grow the set from a document the app fetched, resolving relative
 	// references against the address it came from -- which is how a master
 	// playlist legitimately leads to its variants. Returns how many new
@@ -95,6 +109,7 @@ public:
 
 private:
 	QSet<QString> m_allowed;
+	QString       m_page_host;
 };
 
 // The object a script sees as `hydra`. Every call is checked against the

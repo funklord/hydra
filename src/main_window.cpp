@@ -6145,6 +6145,11 @@ void main_window::learn_this_site() {
 		// says what the browser says.
 		fetcher = std::make_unique<network_fetcher>(page_context(v));
 		allow   = std::make_unique<helper_allowlist>();
+		// **The page's own host, which decides whether a local address is
+		// followable.** A page on `localhost` or a LAN box legitimately has its
+		// content there; a public page reaching loopback through this tier
+		// would be probing the machine. See `helper_allowlist::allows`.
+		allow->set_page_host(host);
 		allow->observe(m_ex_signals->evidence_for(host));
 		helpers = std::make_unique<helper_host>(allow.get(), fetcher->as_function(),
 		                                         helper_budget{});

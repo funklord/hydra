@@ -31323,3 +31323,55 @@ the writer's to settle:
 Not acted on. It is the holder's: a recorder's contract is a product decision,
 and the failure it guards against is somebody's attention rather than a fault
 in the code.
+
+## The extractor sandbox would fetch loopback for a public page
+
+The highest-stakes find since the cookie leak, and in the one component built
+to be a sandbox.
+
+`helper_allowlist::allows` refused anything but http(s) and anything not in the
+observed set -- both right -- and said nothing about *where* an allowed address
+points. The set grows by `learn_from` scraping `https?://...` strings out of
+documents already fetched, so **a page can put `http://127.0.0.1:8080/admin` in
+its own manifest**, a generated script can ask for it, and the body comes back
+to the script as text.
+
+**The escalation is the reading, not the request.** The page can issue that
+request itself and cannot read the response -- same-origin and private-network
+rules stop it. This tier issues it and hands the body over. So a media helper
+becomes a way to probe whatever listens on the user's machine: a router admin
+page, a metadata service at `169.254.169.254`, a database on `127.0.0.1`, and
+this browser's own loopback proxy with its published streams.
+
+### The chain, and how much of it a page controls
+
+    extractor_fetch allowed for the site   the person, off by default
+    Learn This Site run                    the person, deliberately
+    the script asks for the address        the model, from the page's content
+    the address is in the allowlist        the page, via its own manifest
+
+Two of the four are the person's and two are the page's. The model writing the
+script reads page content, so the third is prompt injection with a short reach
+-- which is exactly the shape a sandbox exists to contain rather than to trust.
+
+### Allowed only where the page is itself local
+
+    public page  -> no loopback, no RFC1918, no link-local, no `localhost`
+    local page   -> its own host only, so a dev server or a LAN media box works
+    no page host -> nothing local, which is the safe default for a driver
+
+`set_page_host` is what makes the second row possible; without it the rule would
+refuse pages whose whole content is at a private address. The classifier asks
+`QHostAddress` for loopback, link-local and private-use, and treats the
+`localhost` names separately because they never reach a resolver.
+
+### What is not covered, written down rather than implied
+
+**A *name* that resolves to a private address passes.** Resolving it in the gate
+would be a lookup whose answer can change between the check and the fetch, and a
+gate resting on that is worse than one whose limits are stated. So
+`internal.example` pointing at `10.0.0.5` is not caught. The address forms are,
+which is what a page can put in a manifest without controlling DNS.
+
+Sabotaged both ways: following anything observed fails five checks at once, and
+refusing local even for a local page fails the dev-server row alone.

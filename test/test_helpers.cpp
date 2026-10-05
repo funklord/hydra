@@ -89,6 +89,70 @@ int main(int argc, char **argv) {
 		      "and only http(s) is followable at all");
 	}
 
+	// **A public page must not reach the machine through this tier.** The set
+	// grows from strings scraped out of fetched documents, so a page can put a
+	// loopback address in its own manifest and a generated script can then ask
+	// for it -- and the body comes back to the script as text. The page could
+	// issue that request itself and could not read the answer; this tier reads
+	// it, which is the escalation.
+	section("a local address is not followable for a public page");
+	{
+		helper_allowlist a;
+		a.set_page_host("cdn.example");
+		// Observed, so the only thing stopping it is the rule under test.
+		QList<evidence_request> ev = sample();
+		const QUrl loopback("http://127.0.0.1:8080/admin");
+		const QUrl lan("http://192.168.1.10/status");
+		const QUrl named("http://localhost:9000/x");
+		const QUrl linklocal("http://169.254.169.254/latest/meta-data/");
+		for (const QUrl &u : { loopback, lan, named, linklocal }) {
+			evidence_request r;
+			r.url = u;
+			ev << r;
+		}
+		a.observe(ev);
+
+		check(!a.allows(loopback),
+		      "a loopback address is refused even though it was observed");
+		check(!a.allows(lan), "and an RFC1918 one");
+		check(!a.allows(named), "and the name `localhost`");
+		check(!a.allows(linklocal),
+		      "and link-local, which is where a cloud metadata service sits");
+		// **The control**: the ordinary address is still allowed, so this is a
+		// rule about where rather than a gate that refuses everything.
+		check(a.allows(master),
+		      "while the page's own CDN is unaffected");
+
+		// **A page that is itself local keeps working**, which is a dev server
+		// or a media box on the LAN -- pages whose whole content is at a
+		// private address. Without this the rule would refuse them outright.
+		helper_allowlist dev;
+		dev.set_page_host("127.0.0.1");
+		dev.observe(ev);
+		check(dev.allows(loopback),
+		      "a page on 127.0.0.1 may fetch its own addresses");
+		check(!dev.allows(lan),
+		      "but not a different private host, which is not its content");
+
+		// Unset page host is the safe default: a driver or a test that never
+		// said where the page was gets no local fetches at all.
+		helper_allowlist nowhere;
+		nowhere.observe(ev);
+		check(!nowhere.allows(loopback),
+		      "and with no page host nothing local is followable");
+
+		// The classifier is asked directly too, since the gate's behaviour
+		// rests on it and a wrong answer there is invisible above.
+		check(helper_allowlist::is_local(QUrl("http://127.0.0.1/")) &&
+		        helper_allowlist::is_local(QUrl("http://[::1]/")) &&
+		        helper_allowlist::is_local(QUrl("http://10.0.0.1/")) &&
+		        helper_allowlist::is_local(QUrl("http://172.16.0.1/")),
+		      "loopback, IPv6 loopback, 10/8 and 172.16/12 are all local");
+		check(!helper_allowlist::is_local(QUrl("https://cdn.example/x")) &&
+		        !helper_allowlist::is_local(QUrl("http://8.8.8.8/")),
+		      "and an ordinary address is not");
+	}
+
 	section("it grows only from documents that were fetched");
 	{
 		helper_allowlist a;

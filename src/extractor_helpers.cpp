@@ -1,4 +1,6 @@
 #include "extractor_helpers.h"
+
+#include <QHostAddress>
 #include "stream_probe.h"
 
 #include <QRegularExpression>
@@ -12,6 +14,26 @@ void helper_allowlist::observe(const QList<evidence_request> &evidence) {
 		m_allowed.insert(normalise(r.url));
 }
 
+bool helper_allowlist::is_local(const QUrl &url) {
+	const QString host = url.host().toLower();
+	if (host.isEmpty())
+		return false;
+	// The name, which never reaches a resolver.
+	if (host == QLatin1String("localhost") ||
+	     host == QLatin1String("localhost.localdomain") ||
+	     host.endsWith(QLatin1String(".localhost")))
+		return true;
+	// And the literal address, where Qt already knows these ranges. A *name*
+	// that resolves to a private address is deliberately not caught: asking a
+	// resolver here would be a lookup whose answer can change between the
+	// check and the fetch, and a gate that depends on that is worse than one
+	// whose limits are written down. See the note in `allows`.
+	const QHostAddress addr(host);
+	if (addr.isNull())
+		return false;
+	return addr.isLoopback() || addr.isLinkLocal() || addr.isPrivateUse();
+}
+
 bool helper_allowlist::allows(const QUrl &url) const {
 	if (!url.isValid() || url.isEmpty())
 		return false;
@@ -20,6 +42,24 @@ bool helper_allowlist::allows(const QUrl &url) const {
 	const QString scheme = url.scheme().toLower();
 	if (scheme != "http" && scheme != "https")
 		return false;
+
+	// **A public page must not reach the machine through this tier.** The set
+	// grows from strings scraped out of fetched documents, so a page can put
+	// `http://127.0.0.1:8080/...` in its own manifest and a generated script
+	// can then ask for it -- and the answer would be handed back to the script
+	// as text. The page could issue that request itself and could *not* read
+	// the response; this tier reads it. That is the escalation, and it turns a
+	// media helper into a way to probe whatever listens on the user's machine,
+	// this browser's own loopback proxy included.
+	//
+	// Allowed only when the page is itself local, which is how a dev server or
+	// a media box on the LAN keeps working. **What is not covered, written
+	// down rather than implied:** a *name* that resolves to a private address
+	// passes this, because resolving it here would be a lookup whose answer can
+	// change between the check and the fetch.
+	if (is_local(url) && url.host().toLower() != m_page_host)
+		return false;
+
 	return m_allowed.contains(normalise(url));
 }
 
