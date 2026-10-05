@@ -1136,6 +1136,62 @@ int main(int argc, char **argv) {
 	// while nothing is missed. A playlist that drops segments we never saw --
 	// a slow CDN, a slow disk, a pause -- leaves the mark below the sequence
 	// numbers still in the window, so the next poll takes them again.
+	// **The consequence of noticing `#EXT-X-MEDIA`: the save says it is
+	// silent.** An HLS master may keep its audio in a separate rendition, which
+	// this engine does not fetch -- DASH's equivalent it does -- so the file is
+	// video only, and that was reported as a finished save with nothing said.
+	section("a stream whose audio is elsewhere says the file has no sound");
+	{
+		cdn.redirect_from.clear();
+		cdn.then.clear();
+		cdn.files["/q0.ts"] = QByteArray(k_seg_size, 'q');
+		cdn.files["/med.m3u8"] =
+		  QByteArray("#EXTM3U\n#EXT-X-TARGETDURATION:4\n"
+		              "#EXTINF:4.0,\n/q0.ts\n#EXT-X-ENDLIST\n");
+		cdn.files["/mast.m3u8"] =
+		  QByteArray("#EXTM3U\n"
+		              "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"aud\","
+		              "NAME=\"English\",DEFAULT=YES,URI=\"/a.m3u8\"\n"
+		              "#EXT-X-STREAM-INF:BANDWIDTH=900000,AUDIO=\"aud\"\n"
+		              "/med.m3u8\n");
+		// A plain master, as the control: same shape, no rendition.
+		cdn.files["/plain.m3u8"] =
+		  QByteArray("#EXTM3U\n"
+		              "#EXT-X-STREAM-INF:BANDWIDTH=900000\n/med.m3u8\n");
+
+		auto save_master = [&](const QString &path) {
+			media_item it;
+			it.kind  = media_kind::hls;
+			it.label = "master";
+			it.url   = QUrl(base + path);
+			auto *sa = new stream_assembly(&players, &downloads, &proxy, nullptr);
+			QStringList lines;
+			QObject::connect(sa, &stream_assembly::status,
+			                  [&lines](const QString &t) { lines << t; });
+			sa->save(it, stream_context{});
+			QElapsedTimer el;
+			el.start();
+			while (sa->running() && el.elapsed() < 15000)
+				spin(50);
+			spin(600);
+			delete sa;
+			return lines;
+		};
+
+		const QStringList quiet_said = save_master("/mast.m3u8");
+		const QStringList plain_said = save_master("/plain.m3u8");
+
+		check(quiet_said.filter("no sound").size() > 0,
+		      QString("the save says the file has no sound (%1)")
+		          .arg(quiet_said.join(" | ").left(200)));
+		// **The pair**: a caveat on every save says nothing about any of them.
+		check(plain_said.filter("no sound").size() == 0,
+		      QString("and a master without a rendition does not (%1)")
+		          .arg(plain_said.join(" | ").left(200)));
+		check(plain_said.filter("Saved").size() > 0,
+		      "while still reporting the file it wrote");
+	}
+
 	// **The consequence of reading `#EXT-X-MAP`: the init lands first.** Without
 	// it the fragments were concatenated with no `moov` box -- unplayable,
 	// written out, reported as a finished save. Asserted on the bytes, in

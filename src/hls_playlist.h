@@ -45,6 +45,18 @@ struct hls_playlist {
 	QUrl   init;
 	qint64 init_offset = -1;
 	qint64 init_length = -1;
+
+	// **A master playlist that keeps its audio in a separate rendition.**
+	// `#EXT-X-MEDIA:TYPE=AUDIO` with a `URI=` means the variant streams carry
+	// video only and the sound is a playlist of its own -- the HLS equivalent
+	// of a DASH manifest's separate audio, which this engine does fetch and
+	// mux. It does not fetch this one, so an assembly of such a stream is a
+	// silent video, and that was reported as a finished save with nothing said.
+	//
+	// **The `URI=` is the discriminator and not decoration.** A `TYPE=AUDIO`
+	// with no URI is the legal way to say the audio is muxed into the variants
+	// already, which needs no second fetch and must not raise this.
+	bool   separate_audio = false;
 	// **Why a parser that cannot fail needed somewhere to say so.** A
 	// `#EXT-X-BYTERANGE` whose numbers cannot be read used to come out as
 	// length 0 and offset 0, because `toLongLong()` answers 0 for a value it

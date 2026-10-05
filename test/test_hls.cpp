@@ -236,6 +236,49 @@ int main(int argc, char **argv) {
 		      "and is the slice it says");
 	}
 
+	// **An audio rendition with a URI means the variants are video only**, and
+	// nothing read `#EXT-X-MEDIA`. DASH's equivalent is fetched and muxed; this
+	// one is not, so the save is a silent video and said so nowhere.
+	section("a separate audio rendition is noticed, and a muxed one is not");
+	{
+		const QByteArray separate =
+		  "#EXTM3U\n"
+		  "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"aud\",NAME=\"English\","
+		  "DEFAULT=YES,URI=\"audio/en.m3u8\"\n"
+		  "#EXT-X-STREAM-INF:BANDWIDTH=900000,AUDIO=\"aud\"\n/v/900.m3u8\n";
+		const hls_playlist p = hls::parse(separate, QUrl("https://c.example/m.m3u8"));
+		check(p.is_master && p.error.isEmpty(),
+		      QString("the master parses (%1)").arg(p.error));
+		check(p.separate_audio, "an audio rendition with a URI is noticed");
+
+		// **The negative half, and it is the one that matters.** A `TYPE=AUDIO`
+		// with no `URI=` is the legal way to say the audio is already muxed
+		// into the variants: it needs no second fetch and must not raise this,
+		// or the caveat lands on streams with nothing wrong with them.
+		const QByteArray muxed =
+		  "#EXTM3U\n"
+		  "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"aud\",NAME=\"English\","
+		  "DEFAULT=YES\n"
+		  "#EXT-X-STREAM-INF:BANDWIDTH=900000,AUDIO=\"aud\"\n/v/900.m3u8\n";
+		const hls_playlist m = hls::parse(muxed, QUrl("https://c.example/m.m3u8"));
+		check(!m.separate_audio,
+		      "and one without a URI is not, because that audio is already in "
+		      "the variants");
+
+		const QByteArray subs =
+		  "#EXTM3U\n"
+		  "#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"sub\",NAME=\"English\","
+		  "URI=\"subs/en.m3u8\"\n"
+		  "#EXT-X-STREAM-INF:BANDWIDTH=900000\n/v/900.m3u8\n";
+		const hls_playlist t = hls::parse(subs, QUrl("https://c.example/m.m3u8"));
+		check(!t.separate_audio, "a subtitle rendition is not an audio one");
+
+		const QByteArray plain =
+		  "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=900000\n/v/900.m3u8\n";
+		const hls_playlist q = hls::parse(plain, QUrl("https://c.example/m.m3u8"));
+		check(!q.separate_audio, "and a plain master says nothing about it");
+	}
+
 	// **`#EXT-X-MAP` is the fMP4 initialisation segment**, and nothing read it:
 	// the fragments were concatenated with no `moov` box, written out, and the
 	// save reported as finished. DASH's equivalent has always been handled, so

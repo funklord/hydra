@@ -105,6 +105,18 @@ void stream_assembly::assemble(const media_item &item,
 		// with thirty seconds of a broadcast and a message implying otherwise
 		// -- the exact outcome the comment above this one warns about.
 		const bool followed = m_assembler && m_assembler->polled_live();
+		// **A silent video is worth saying out loud.** An HLS master playlist
+		// may keep its audio in a separate rendition, which this engine does
+		// not fetch -- DASH's equivalent it does, through the audio pass and
+		// the mux -- so the file is video only and the save used to report that
+		// as finished with nothing said. Said rather than refused: the video is
+		// worth having, and refusing would deny a save that is partly useful.
+		const QString quiet =
+		  (m_assembler && m_assembler->audio_is_separate())
+		    ? QStringLiteral(" This stream keeps its audio in a separate "
+		                      "playlist, which is not fetched, so the file has "
+		                      "no sound.")
+		    : QString();
 		const QString live_said =
 		  followed ? QStringLiteral("Live stream, so this is what the playlist "
 		                             "offered while it was being read.")
@@ -118,13 +130,14 @@ void stream_assembly::assemble(const media_item &item,
 			// replace the file underneath a running player to gain a container
 			// nobody is going to seek around afterwards.
 			emit status(
-			  live ? live_said + QStringLiteral(" Playback continues locally.")
-			            + (m_live_note.isEmpty()
-			                 ? QString()
-			                 : QStringLiteral(" It stopped because ")
-			                     + m_live_note + QStringLiteral("."))
-			       : QStringLiteral("Stream assembled; playback continues "
-			                         "locally."));
+			  (live ? live_said + QStringLiteral(" Playback continues locally.")
+			              + (m_live_note.isEmpty()
+			                   ? QString()
+			                   : QStringLiteral(" It stopped because ")
+			                       + m_live_note + QStringLiteral("."))
+			         : QStringLiteral("Stream assembled; playback continues "
+			                           "locally."))
+			  + quiet);
 			return;
 		}
 
@@ -140,7 +153,8 @@ void stream_assembly::assemble(const media_item &item,
 		  (live ? QStringLiteral(" ") + live_said : QString())
 		  + (m_live_note.isEmpty() ? QString()
 		                            : QStringLiteral(" It stopped because ")
-		                                + m_live_note + QStringLiteral("."));
+		                                + m_live_note + QStringLiteral("."))
+		  + quiet;
 		// **Two files or one, decided by what the assembler found.** A DASH
 		// manifest carrying its audio separately produced a second file, and
 		// neither half is the programme; `audio_path()` is non-empty exactly

@@ -82,6 +82,7 @@ void hls_assembler::start(const QUrl &manifest, const stream_context &ctx,
 	m_segments_all  = 0;
 	m_live_url      = QUrl();
 	m_next_sequence = 0;
+	m_separate_audio = false;
 
 	m_file = new QFile(m_path, this);
 	if (!m_file->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -152,6 +153,10 @@ void hls_assembler::fetch_manifest(const QUrl &url) {
 		}
 
 		if (m_playlist.is_master) {
+			// **Kept before following the variant**, which replaces
+			// `m_playlist` with the media playlist and takes the tag with it.
+			if (m_playlist.separate_audio)
+				m_separate_audio = true;
 			const hls_variant *v = hls::best_variant(m_playlist);
 			if (!v) {
 				emit failed("Master playlist listed no variants.");

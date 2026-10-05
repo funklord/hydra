@@ -31170,3 +31170,61 @@ checked. All three are now checks:
 Dropping the prepend: *"the assembly finishes (no error)"* stays green while the
 init is never fetched and the output has no initialisation. Success reported
 either way, which is the whole family this path has been full of.
+
+## An HLS stream whose audio lives elsewhere saved as a silent video
+
+The last of the four tags in this grammar that can make the output wrong rather
+than absent. `#EXT-X-MEDIA:TYPE=AUDIO` with a `URI=` means the variant streams
+carry video only and the sound is a playlist of its own. **DASH's equivalent
+this engine does fetch** -- `best_audio`, the second pass and the two-input mux
+all exist for it -- and HLS's it does not, so the save was a silent video
+reported as finished with nothing said.
+
+### Said rather than refused, and rather than implemented
+
+Three answers were available and the middle one is the honest size:
+
+    refuse            denies a save that is partly useful -- the video is
+                      worth having
+    implement         parse the rendition's URI, match it to the chosen
+                      variant's `AUDIO=` group, fetch that playlist and feed
+                      its segments to `m_audio_pending`, which the second pass
+                      and the mux already understand. A feature, and the
+                      header records its shape at the accessor.
+    say it            one flag, one sentence, and the person knows what they
+                      have
+
+`audio_is_separate()` mirrors `polled_live()` from earlier today: a question the
+caller needs in order to describe what it got, answered by the assembler
+because only it saw the master playlist. Remembered in a member rather than read
+off `m_playlist`, because following the variant replaces that with the media
+playlist and takes the tag with it.
+
+### The `URI=` is the discriminator, not decoration
+
+A `TYPE=AUDIO` with **no** URI is the legal way to say the audio is already
+muxed into the variants. It needs no second fetch and must not raise the
+caveat, or the sentence lands on streams with nothing wrong with them -- which
+is the failure mode of every warning that is always on. Four parser checks, and
+the negative ones are the point:
+
+    TYPE=AUDIO with URI         noticed
+    TYPE=AUDIO without URI      not noticed -- already muxed
+    TYPE=SUBTITLES with URI     not noticed -- not audio
+    a plain master              not noticed
+
+Sabotaged both ways: never noticing fails the positive check and the save's
+sentence; ignoring the URI test fails the muxed-audio check alone.
+
+### The four tags, now closed
+
+    #EXT-X-BYTERANGE   honoured, and a server that ignores the range refused
+    #EXT-X-KEY         refused by name -- encryption is not implemented
+    #EXT-X-MAP         read and prepended, as DASH's init always was
+    #EXT-X-MEDIA       noticed, and the save says the file has no sound
+
+Each was found by the same question rather than by a sweep: which tag in this
+grammar can make the segment list wrong, as opposed to absent. `#EXT-X-I-FRAME
+-STREAM-INF` was checked too and is already safe -- `startsWith("#EXT-X-STREAM
+-INF:")` does not match it, so a trick-play variant is never chosen as the best
+one, which would have saved a keyframe slideshow as the programme.

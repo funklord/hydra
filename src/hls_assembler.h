@@ -104,6 +104,22 @@ public:
 	// is what the manifest offered in one read.
 	bool    polled_live() const { return !m_live_url.isEmpty(); }
 
+	// **Whether the master playlist kept its audio somewhere this did not
+	// fetch.** `#EXT-X-MEDIA:TYPE=AUDIO` with a `URI=` means the variants are
+	// video only; DASH's equivalent is fetched and muxed by the audio pass, and
+	// HLS's is not. So an assembly of such a stream is a silent video, which
+	// was reported as a finished save with nothing said.
+	//
+	// Remembered on the master rather than read off `m_playlist`, because
+	// following the variant replaces that with the media playlist and the tag
+	// lives on the master.
+	//
+	// Implementing it is the feature this flags: parse the rendition's URI,
+	// match it to the chosen variant's `AUDIO=` group, fetch that playlist and
+	// feed its segments to `m_audio_pending`, which the second pass and the
+	// two-input mux already know what to do with.
+	bool    audio_is_separate() const { return m_separate_audio; }
+
 signals:
 	// Emitted as each segment lands, so a reader knows how much is playable.
 	void progress(qint64 bytes, int segments_done, int segments_total);
@@ -200,6 +216,9 @@ private:
 	// fetched is a number and not a set of addresses.
 	QUrl           m_live_url;
 	int            m_next_sequence = 0;
+	// Set when a master playlist declares an audio rendition with a URI; see
+	// `audio_is_separate`.
+	bool           m_separate_audio = false;
 	QElapsedTimer  m_live_idle;
 	QString m_path;
 	qint64  m_written  = 0;

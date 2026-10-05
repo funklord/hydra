@@ -59,6 +59,32 @@ hls_playlist parse(const QByteArray &text, const QUrl &base) {
 			out.is_live = false;   // a complete VOD list
 			continue;
 		}
+		// **An audio rendition the assembler does not fetch.** Recorded rather
+		// than refused: the video is worth having and the person can be told it
+		// is silent, where refusing would deny a save that is partly useful.
+		// A `TYPE=AUDIO` with no `URI=` says the audio is already muxed into
+		// the variants, which needs nothing and must not raise this.
+		if (line.startsWith("#EXT-X-MEDIA:")) {
+			const QString v = line.section(':', 1);
+			bool is_audio = false, has_uri = false;
+			for (const QString &attr : v.split(',')) {
+				const QString a = attr.trimmed();
+				if (a.compare("TYPE=AUDIO", Qt::CaseInsensitive) == 0)
+					is_audio = true;
+				else if (a.startsWith("URI=", Qt::CaseInsensitive)) {
+					QString raw = a.mid(4).trimmed();
+					if (raw.startsWith('"') && raw.endsWith('"') &&
+					     raw.size() >= 2)
+						raw = raw.mid(1, raw.size() - 2);
+					if (!raw.trimmed().isEmpty())
+						has_uri = true;
+				}
+			}
+			if (is_audio && has_uri)
+				out.separate_audio = true;
+			continue;
+		}
+
 		// **`#EXT-X-MAP` is the initialisation segment, and it was read by
 		// nothing.** fMP4 HLS -- which is most modern HLS, because it is what
 		// lets one set of segments serve HLS and DASH alike -- puts the `moov`
