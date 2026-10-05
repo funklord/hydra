@@ -31425,3 +31425,40 @@ remote-looking page and meet a refusal that reads as a bug.
 **A rule that breaks no test is a rule whose cases nobody had written.** This
 one broke the only test whose fixture had the shape it guards against, which is
 the cheapest possible evidence that the gate is live.
+
+### The rest of the loopback survey, and why it stops here
+
+Having asked the sibling question twice and been right twice, the rest of the
+routes into a fetch were enumerated rather than waited for:
+
+    network_fetcher   helper tier        gated by the allowlist
+    stream_probe      extractor's answer gated by validate
+    local_proxy       the chosen item    see below
+    hls_assembler     the chosen item    see below
+    player_launcher   the chosen item    see below
+
+The last three all take their address from **an item the person picked out of
+the media list**, and the list's sources are the detector (addresses the page
+really requested) and a learned extractor (now gated). So a loopback address can
+still reach the proxy, the assembler and the player -- when the page requested
+it, the detector recorded it, and the person chose that row.
+
+**That is not gated, deliberately.** The discriminator is who chose the address:
+
+    a model chose it, the person approved an extractor   gate it
+    the person chose it, with the address on screen      do not
+
+In the extractor case the person approves a *script*, and the address it returns
+is the model's -- which is where prompt injection reaches and why both routes
+there are closed. In the media list the person is looking at the address and
+pressing Watch on it. Refusing would break somebody's own media server on the
+LAN, which is a real thing to have, to prevent a fetch they asked for by name.
+
+**And the response goes somewhere different.** The helper tier hands the body to
+a generated script; the proxy and the assembler hand it to a player and a file
+the person opened. A fetch whose answer only a human sees is not an exfiltration
+primitive.
+
+Recorded because an empty result is only a measurement if it says what it looked
+for: five routes, two closed this session, three left open with the reason
+written down.
