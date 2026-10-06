@@ -14,9 +14,25 @@
 // minimum -- and a horizontal row's minimum is the sum of its children. The
 // downloads dialog would not go under 532 pixels wide whatever it was told.
 //
-// So the layout has to be one that can use a second line. At any width where
-// the items already fit, this lays out exactly as a `QHBoxLayout` would, so no
-// desktop window changes shape.
+// So the layout has to be one that can use a second line. At the width a
+// dialog sizes a row to -- `sizeHint()`, the unwrapped sum -- this lays out
+// exactly as a `QHBoxLayout` would, item for item and rect for rect, so no
+// desktop window changes shape or size.
+//
+// **Above that width the two part company**, which the sentence here used to
+// claim they did not. A `QHBoxLayout` spreads surplus space into children
+// that can grow, and a button can; this gives every item its `sizeHint` and
+// leaves the rest of the line empty. So a row with room to spare comes out
+// packed to the left here and stretched to fill there -- compared against a
+// real `QHBoxLayout` in `test_flow_layout`, which asserts the agreement at
+// the natural width and the divergence above it.
+//
+// It is reachable without anybody resizing a window, because these rows sit
+// under a paragraph of text: the dialog is as wide as the paragraph, and the
+// row gets the difference. Whether a row of two or three buttons *should*
+// stretch to fill a dialog is the copyright holder's call and not a defect
+// either way; what was wrong was a comment saying the question could not
+// arise.
 //
 // This is the shape of Qt's own flow-layout example, which is the canonical
 // answer to this and has been for twenty years; there is nothing to gain by

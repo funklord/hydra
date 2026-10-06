@@ -14,6 +14,7 @@
 
 #include <QApplication>
 #include <QPointer>
+#include <QHBoxLayout>
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -37,6 +38,96 @@ static QWidget *box(QWidget *parent, int w, int h) {
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QApplication app(argc, argv);
+
+	section("against a real QHBoxLayout, with the widgets the dialogs hold");
+	{
+		// **The header claims that at any width where the items already fit,
+		// this lays out exactly as a `QHBoxLayout` would.** The thing it is
+		// compared to ships with Qt, so that is checkable rather than merely
+		// stated -- and it turns out to hold at one width and not above it,
+		// which is why the header now says which.
+		//
+		// With `box()` the comparison would be checkable and empty:
+		// `setFixedSize` is exactly the property that makes any two layouts
+		// agree whatever either does with surplus space. The dialogs that use
+		// this hold buttons, whose policy is Minimum horizontally -- they can
+		// grow -- so buttons are what this asks about.
+		//
+		// **Relationships rather than pixel widths.** A button's sizeHint is
+		// the style's and the font's, so an assertion on 80 or 120 would be a
+		// pin on this machine's desktop; the suite already carries one of
+		// those and it is red on exactly this kind of claim. What is asserted
+		// is that the two agree, that one of them does not move, and that the
+		// other grows -- all true at any font size.
+		//
+		// **The third check is the first one's control.** Two empty rect
+		// lists compare equal, so a `rects()` that returned nothing would
+		// make the agreement checks pass for the worst possible reason. The
+		// one asserting the two layouts DIFFER above the natural width is
+		// what cannot pass that way.
+		auto fill = [](QWidget *host, QLayout *lay) {
+			for (const char *t : { "Open Folder", "Clear", "Retry" })
+				lay->addWidget(new QPushButton(QString::fromLatin1(t), host));
+		};
+		QWidget a, b;
+		auto *flow = new flow_layout(&a, 0, 10, 10);
+		auto *row  = new QHBoxLayout(&b);
+		row->setContentsMargins(0, 0, 0, 0);
+		row->setSpacing(10);
+		fill(&a, flow);
+		fill(&b, row);
+
+		auto rects = [](QLayout *lay) {
+			QList<QRect> out;
+			for (int i = 0; i < lay->count(); ++i)
+				out << lay->itemAt(i)->geometry();
+			return out;
+		};
+		// All four numbers, because the first version of this printed x and
+		// width only and reported two rect lists as equal-looking while the
+		// assertion disagreed: they differed in y, a QHBoxLayout centring its
+		// children in a row taller than they are.
+		auto shown = [](const QList<QRect> &rs) {
+			QString s;
+			for (const QRect &r : rs)
+				s += QString("%1,%2+%3x%4 ")
+				         .arg(r.x()).arg(r.y()).arg(r.width()).arg(r.height());
+			return s.trimmed();
+		};
+		// The height a dialog gives the row, which is the row's own -- a
+		// QVBoxLayout hands a child layout its sizeHint height and no more.
+		// Handing it a taller rect would measure vertical centring instead,
+		// which is a question nobody asked.
+		const int tall = flow->sizeHint().height();
+		auto lay_out = [&](int w) {
+			flow->setGeometry(QRect(0, 0, w, tall));
+			row->setGeometry(QRect(0, 0, w, tall));
+		};
+
+		// The natural width is what a dialog sizes a row to, and it is the
+		// width the claim is about.
+		const int natural = flow->sizeHint().width();
+		lay_out(natural);
+		const QList<QRect> flow_fit = rects(flow);
+		const QList<QRect> hbox_fit = rects(row);
+		check(flow_fit == hbox_fit,
+		      QString("at the width a dialog sizes the row to, the two agree "
+		               "item for item (%1)").arg(shown(flow_fit)));
+
+		// And above it they part company, which is reachable without anybody
+		// dragging a window: these rows sit under a paragraph of text, so the
+		// dialog is as wide as the paragraph and the row gets the surplus.
+		lay_out(natural + 120);
+		const QList<QRect> flow_wide = rects(flow);
+		const QList<QRect> hbox_wide = rects(row);
+		check(flow_wide == flow_fit,
+		      QString("120 pixels wider, this layout leaves its items where "
+		               "they were (%1)").arg(shown(flow_wide)));
+		check(hbox_wide != flow_wide &&
+		          hbox_wide.first().width() > flow_wide.first().width(),
+		      QString("where a QHBoxLayout spreads its children into the "
+		               "space (%1)").arg(shown(hbox_wide)));
+	}
 
 	section("the minimum is the widest item, not the sum");
 	{

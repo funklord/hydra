@@ -31929,3 +31929,64 @@ two cases from the many fixtures that were fine is nothing visible in them.**
 The only instrument that found it was a sabotage aimed at the specific line,
 and in both cases the sabotage was run because the code was security-relevant
 rather than because anything looked wrong.
+
+## "Exactly as a QHBoxLayout would" was true at one width
+
+`flow_layout.h` justified the switch away from a horizontal row by saying
+that *at any width where the items already fit, this lays out exactly as a
+`QHBoxLayout` would, so no desktop window changes shape*. The thing it is
+compared against ships with Qt, so that is a claim a test can settle rather
+than repeat -- the same shape as the LZ4 decoder against python's and the
+nonce increment against libsodium's, and the third equivalence claim in this
+tree to be checked rather than trusted.
+
+It holds at one width and not above it. Three buttons in a row of their own
+natural size:
+
+    natural width      flow 0,0+80x25  90,0+80x25  180,0+80x25
+                       hbox 0,0+80x25  90,0+80x25  180,0+80x25
+    120 wider          flow 0,0+80x25  90,0+80x25  180,0+80x25
+                       hbox 0,0+120x25 130,0+120x25 260,0+120x25
+
+A `QHBoxLayout` spreads surplus space into children that can grow, and a
+button's horizontal policy is Minimum, so it grows. `flow_layout::lay_out`
+calls `item->setGeometry(QRect(QPoint(x, y), hint))` -- every item gets its
+`sizeHint` and never more -- so the row stays packed to the left with the
+remainder empty.
+
+**And the surplus arrives without anybody resizing anything.** These rows sit
+under a paragraph of explanatory text in `consent_dialog` and
+`annoyed_dialog`: the dialog is as wide as the paragraph, the row is handed
+that width, and the difference is on screen at the default size. Whether two
+or three buttons *should* stretch to fill a dialog is the copyright holder's
+call and is not a defect either way. What was wrong is a comment saying the
+question could not arise.
+
+### Two fixtures that would have made the measurement say nothing
+
+Both were in the first draft and both had to be corrected before the numbers
+meant anything, which is the part worth keeping:
+
+- **`box()`, the suite's own helper, calls `setFixedSize`.** Fixed children
+  cannot stretch, so flow and `QHBoxLayout` agree whatever either does with
+  surplus space. A comparison built on it would have confirmed the claim by
+  construction. The dialogs hold buttons, so the test holds buttons.
+- **A row 40 pixels tall against 25-pixel buttons.** The first run reported
+  the two agreeing on x and width and the assertion disagreed, because a
+  `QHBoxLayout` centres children in a row taller than they are and this one
+  puts them at the top. That is a real difference and not the one being
+  asked about: a `QVBoxLayout` hands a child layout its `sizeHint` height and
+  no more, so the row in a dialog is the height of its buttons. Giving the
+  test a taller rect measured vertical centring instead.
+
+The second was found only because the display was narrower than the
+assertion -- x and width printed, y and height not -- so the output and the
+verdict disagreed and the output looked right. **A diagnostic that shows less
+than the assertion compares can make a correct failure unreadable**, which is
+the same fault as a check that compares less than it claims, pointed the
+other way. It prints all four numbers now.
+
+And the check asserting the two layouts *differ* above the natural width is
+the control for the two asserting they agree: empty rect lists compare equal,
+so a `rects()` returning nothing would pass both agreement checks for the
+worst possible reason, and only the divergence check cannot pass that way.
