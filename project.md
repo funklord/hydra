@@ -32190,6 +32190,19 @@ Three suites fail there and all three pass here:
     test_pick        1  column widths: "every column but the last grows"
     test_rotation    1  the menu-bar floor, 233 there against 228 here
 
+**Two, after the fix below.** Run `37464236851`, the first to carry it,
+fails on `test_pick` and `test_rotation` and no longer mentions
+`test_extractor` -- which is the only place that fix could be confirmed,
+since the defect was invisible on this machine by construction. What is left
+red is the two font-metric pins, and neither is a code fault.
+
+**Reading a CI result means not pushing while you wait.** The run before
+that one was cancelled at 5m10s by the next push, as were two earlier in the
+day: the workflow has a concurrency group, so a newer push on the same branch
+cancels the one in flight. Three of the day's "cancelled" rows are that
+rather than anything going wrong, and a session that pushes every ten minutes
+never sees a verdict.
+
 The third is the pin this document already describes as a measurement of the
 desktop's font, and 233-against-228 is that in one line.
 
