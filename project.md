@@ -31878,3 +31878,54 @@ before the call that filled `err`. The pair of checks immediately above it
 already split that into two statements, which is why they work. Swept across
 the suites afterwards: no other instance, and the one that looked like it
 does not quote `err` at all.
+
+## The nonce increment had no test, and a zero nonce cannot find a carry
+
+`keepass_protocol::increment_nonce` carries its own warning: *"getting the
+carry wrong produces a nonce reuse, which is the one failure this protocol
+cannot tolerate"*. It had no test. Every call in the suite was the reply
+matcher's, incrementing a nonce of twenty-four zero bytes -- so the carry,
+which is the whole of the function, had never run.
+
+Its header also says it behaves *"exactly as libsodium's sodium_increment
+does"*, and libsodium is linked here, so that is a claim a test can settle
+rather than repeat. Seven nonces now go through both: zero, a carry out of
+the first byte, a carry through two, a cascade of twenty-three, every byte
+set (which wraps to zero), `0xff` in the middle where nothing should carry,
+and an arbitrary one. They agree byte for byte, so the claim holds -- and the
+little-endian direction and the preserved length are asserted separately,
+because the first is the thing a reader is most likely to assume backwards.
+
+**The sabotage is the point.** Replacing `carry >>= 8` with `carry = 0`
+leaves `0xff` incrementing to `0x00` with nothing carried -- a nonce reuse,
+exactly the failure the comment names. Four of the seven go red. The zero
+nonce does not, and neither do the middle-`0xff`, arbitrary, direction or
+length checks:
+
+    a carry out of the first byte     00000000...  FAIL
+    a carry through two bytes         00ff0000...  FAIL
+    a carry through twenty-three      00ffff..01   FAIL
+    every byte set                    00ffff..ff   FAIL
+    a zero nonce                                   still green
+    0xff in the middle                             still green
+
+So the fixture the matcher section had been using all along is one of the
+ones that cannot see a broken carry.
+
+### Twice in one session, from fixtures chosen for variety
+
+This is the second time today a set of fixtures turned out to agree on a
+property nobody had named, and both were found the same way -- by breaking
+the code and finding nothing went red:
+
+    LZ4 offset read    four payloads, every match at offset 1 or 8, so the
+                       high byte of a two-byte offset was always zero
+    nonce increment    every call from a zero base, so no byte ever carried
+
+Neither set was careless; both were picked for variety along the axis their
+author had in mind -- payload shape in one case, reply matching in the other
+-- and the axis that mattered was a different one. **What distinguishes the
+two cases from the many fixtures that were fine is nothing visible in them.**
+The only instrument that found it was a sabotage aimed at the specific line,
+and in both cases the sabotage was run because the code was security-relevant
+rather than because anything looked wrong.

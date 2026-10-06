@@ -22,6 +22,10 @@
 #include <QStandardPaths>
 #include <cstdio>
 
+// The reference the nonce increment is compared against -- see the section
+// that uses it for why a hand-written one is checked rather than trusted.
+#include <sodium.h>
+
 static int g_pass = 0, g_fail = 0;
 static void check(bool ok, const QString &w) {
 	if (ok) { ++g_pass; std::printf("  ok    %s\n", qPrintable(w)); }
@@ -486,6 +490,69 @@ int main(int argc, char **argv) {
 		      "which Qt always answers, with or without XDG_RUNTIME_DIR");
 		check(sock.endsWith("/org.keepassxc.KeePassXC.BrowserServer"),
 		      "and carries the name KeePassXC publishes");
+	}
+
+	section("the nonce increment, against libsodium's own");
+	{
+		// **`increment_nonce` had no test at all**, and the matcher section
+		// above only ever increments a zero nonce -- so the carry, which is
+		// the whole of the function, was never exercised. Its own comment
+		// says why that matters: "getting the carry wrong produces a nonce
+		// reuse, which is the one failure this protocol cannot tolerate".
+		//
+		// The header also says it behaves "exactly as libsodium's
+		// sodium_increment does", and libsodium is linked here, so the claim
+		// is checkable rather than merely stated. That is the point of the
+		// comparison: a hand-written increment agreeing with itself proves
+		// nothing, and these fixtures were chosen so that a wrong carry
+		// cannot pass.
+		struct nonce_case {
+			QByteArray  n;
+			const char *what;
+		};
+		QByteArray all_ff(24, '\xff');
+		QByteArray low_ff(24, '\0');  low_ff[0] = '\xff';
+		QByteArray two_ff(24, '\0');  two_ff[0] = '\xff'; two_ff[1] = '\xff';
+		QByteArray mid_ff(24, '\0');  mid_ff[7] = '\xff';
+		QByteArray cascade(23, '\xff'); cascade.append('\x01');
+		QByteArray mixed;
+		quint32 seed = 0xc0ffee11;
+		for (int i = 0; i < 24; ++i) {
+			seed = seed * 1103515245u + 12345u;
+			mixed += char((seed >> 16) & 0xFF);
+		}
+		const QList<nonce_case> cases = {
+			{ QByteArray(24, '\0'), "a zero nonce" },
+			{ low_ff,  "a carry out of the first byte" },
+			{ two_ff,  "a carry through two bytes" },
+			{ cascade, "a carry through twenty-three bytes" },
+			{ all_ff,  "every byte set, which wraps to zero" },
+			{ mid_ff,  "0xff in the middle, where nothing should carry" },
+			{ mixed,   "an arbitrary nonce" },
+		};
+		for (const nonce_case &c : cases) {
+			QByteArray reference = c.n;
+			sodium_increment(reinterpret_cast<unsigned char *>(reference.data()),
+			                  size_t(reference.size()));
+			const QByteArray ours = keepass_protocol::increment_nonce(c.n);
+			check(ours == reference,
+			      QString("%1: %2, and libsodium says %3")
+			          .arg(c.what, QString::fromLatin1(ours.toHex()),
+			                QString::fromLatin1(reference.toHex())));
+		}
+
+		// Little-endian, stated separately because it is the thing a reader
+		// is most likely to assume the other way round: the FIRST byte is the
+		// one that moves.
+		QByteArray one(24, '\0');
+		const QByteArray stepped = keepass_protocol::increment_nonce(one);
+		check(stepped.at(0) == '\x01' && stepped.mid(1) == QByteArray(23, '\0'),
+		      "and it counts from the first byte, not the last");
+
+		// The size is preserved, since a nonce one byte short or long is not
+		// a nonce the other side can use.
+		check(keepass_protocol::increment_nonce(mixed).size() == mixed.size(),
+		      "a nonce keeps its length");
 	}
 
 	section("a reply is matched to the request that asked, not to the last one");
