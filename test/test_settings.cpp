@@ -749,6 +749,49 @@ int main(int argc, char **argv) {
 		      "and the update governs either spelling, which a twin would not");
 	}
 
+	section("the registrable domain, which is last-two-labels and says so");
+	{
+		// `etld_plus_one` is what the site panel's "This domain" scope is
+		// built from -- the pattern it writes is `"*." +` this -- and it had
+		// no test. Its header is honest about what it is: *best-effort
+		// registrable domain (last two labels; no public-suffix list)*. So
+		// these are measurements of a documented approximation, not claims
+		// that it is right, and the last two are where the approximation
+		// costs something.
+		auto reg = [](const char *h) {
+			return policy_engine::etld_plus_one(QString::fromLatin1(h));
+		};
+		check(reg("www.example.com") == "example.com",
+		      "a subdomain reduces to the domain");
+		check(reg("example.com") == "example.com",
+		      "a two-label host is already one");
+		check(reg("a.b.c.example.com") == "example.com",
+		      "and depth does not matter");
+		check(reg("localhost") == "localhost",
+		      "a single label is left alone rather than emptied");
+
+		// **A multi-label public suffix is where last-two-labels is wrong**,
+		// and the cost is a rule broader than the one asked for: "This
+		// domain" for a `.co.uk` site writes `*.co.uk`, which governs every
+		// `.co.uk` host. Pinned as today's behaviour rather than endorsed --
+		// a public-suffix list is what fixes it and that is a dependency
+		// somebody has to decide to take on.
+		//
+		// The panel does show the pattern in the menu item it is choosing
+		// ("This domain (*.co.uk)"), so the over-reach is visible at the
+		// moment of choosing rather than hidden.
+		check(reg("www.bbc.co.uk") == "co.uk",
+		      "a multi-label suffix reduces to the suffix, which is too broad");
+
+		// An address has no registrable domain, and last-two-labels answers
+		// anyway. `*.1.10` matches nothing real, so the scope that would
+		// write it is disabled for an address rather than offered -- see the
+		// site panel.
+		check(reg("192.168.1.10") == "1.10",
+		      "and an address answers with two of its octets, which is why "
+		      "the wildcard scope refuses an address");
+	}
+
 	section("which rule wins, which is the other half of the matcher");
 	{
 		// The matcher hands back a specificity and `effective_setting` keeps

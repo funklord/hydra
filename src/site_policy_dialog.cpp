@@ -7,6 +7,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QComboBox>
+#include <QHostAddress>
 #include <QStandardItemModel>
 #include <QLabel>
 #include <QFrame>
@@ -322,6 +323,17 @@ void site_policy_dialog::set_host(const QString &host) {
 	// scope falls back to the global defaults, which are still meaningful and
 	// still worth being able to edit from here.
 	const bool have_site = !host.isEmpty();
+	// **An address has no subdomains, so "This domain" has nothing to offer.**
+	// `etld_plus_one` is last-two-labels by its own account, and for
+	// `192.168.1.10` that is `1.10` -- so this scope would write `*.1.10`, a
+	// rule matching nothing real, stored and listed as though it governed the
+	// box the person was looking at. The exact-host scope above it is the one
+	// that works for an address, and it is left alone.
+	//
+	// Reachable rather than theoretical: a media server on the LAN reached by
+	// address is a case this browser supports on purpose, and the shield is
+	// where somebody would go to let it do something.
+	const bool have_domain = have_site && QHostAddress(host).isNull();
 	m_host_label->setText(have_site
 	                          ? host
 	                          : QStringLiteral("No page open \u2014 global defaults"));
@@ -331,12 +343,17 @@ void site_policy_dialog::set_host(const QString &host) {
 		// that per-site rules exist and simply have nothing to apply to.
 		if (auto *m = qobject_cast<QStandardItemModel *>(m_scope->model()))
 			if (QStandardItem *it = m->item(i))
-				it->setEnabled(have_site);
+				it->setEnabled(i == 0 ? have_site : have_domain);
 	}
 	if (!have_site)
 		m_scope->setCurrentIndex(2);
+	else if (!have_domain && m_scope->currentIndex() == 1)
+		// Not to the global default, which would silently widen what the next
+		// edit applies to: the host scope is the narrower of the two that
+		// still mean something here.
+		m_scope->setCurrentIndex(0);
 
-	m_scope->setItemText(1, have_site
+	m_scope->setItemText(1, have_domain
 	                            ? "This domain (*." +
 	                                  policy_engine::etld_plus_one(host) + ")"
 	                            : QStringLiteral("This domain"));

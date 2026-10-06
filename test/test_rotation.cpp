@@ -54,6 +54,11 @@
 #include "node.h"
 #include "tree_sort_proxy.h"
 #include "policy_engine.h"
+#include "site_policy_dialog.h"
+
+#include <QComboBox>
+#include <QTemporaryDir>
+#include <QStandardItemModel>
 #include "consent_blocker.h"
 #include "consent_dialog.h"
 #include "annoyance_log.h"
@@ -1201,9 +1206,8 @@ int main(int argc, char **argv) {
 		// always shown would pass every one of them and tell nobody
 		// anything. A window with a tree open and its debounces run out has
 		// nothing pending and nothing impossible.
-		const QString dir = QDir::temp().filePath("hydra-rotation-savehint");
-		QDir(dir).removeRecursively();
-		QDir().mkpath(dir);
+		QTemporaryDir scratch;   // see "a window will not save over a tree"
+		const QString dir = scratch.path();
 		const QString tree = dir + "/tree.txt";
 		{
 			QFile t(tree);
@@ -1928,9 +1932,8 @@ int main(int argc, char **argv) {
 	// because the ordering is the whole question and calling them in the order
 	// you want proves nothing about the order the window uses.
 	{
-		const QString dir = QDir::temp().filePath("hydra-rotation-drawer");
-		QDir(dir).removeRecursively();
-		QDir().mkpath(dir);
+		QTemporaryDir scratch;   // see "a window will not save over a tree"
+		const QString dir = scratch.path();
 		const QString tree = dir + "/tree.txt";
 		{
 			QFile f(tree);
@@ -2272,14 +2275,35 @@ int main(int argc, char **argv) {
 	if (geteuid() == 0) {
 		std::printf("  skip  running as root, which can read anything\n");
 	} else {
-		const QString dir = QDir::temp().filePath("hydra-rotation-unreadable");
-		QDir(dir).removeRecursively();
-		QDir().mkpath(dir);
+		// **Its own directory rather than a fixed name in the shared one.**
+		// Run straight out of `build-make` -- which is what debugging one
+		// suite looks like -- this section HUNG rather than failed:
+		// `/tmp/hydra-rotation-unreadable` was there from another user's run
+		// three weeks earlier, `removeRecursively` could not clear it, the
+		// fixture file could not be created, both statuses went unread, and
+		// the window below sat in its event loop until it was killed.
+		//
+		// The Makefile sets TMPDIR to a directory the runner owns for exactly
+		// this reason, so `make test` was never affected -- which is the
+		// shape `running-code.md` names: a guard in a recipe does not protect
+		// the person whose binary is already misbehaving, and that is the
+		// person who runs a driver by hand.
+		QTemporaryDir scratch;
+		const QString dir = scratch.path();
 		const QString path = dir + "/tree.txt";
 		{
 			QFile f(path);
-			f.open(QIODevice::WriteOnly | QIODevice::Text);
-			f.write("- [tab] something the user cares about | https://example.com/\n");
+			const bool wrote =
+			    f.open(QIODevice::WriteOnly | QIODevice::Text) &&
+			    f.write("- [tab] something the user cares about | "
+			             "https://example.com/\n") > 0;
+			// Read, because a fixture that was not written is not a fixture:
+			// every check below would then be measuring a file that is not
+			// there, and the first symptom was a hang rather than a red line.
+			check(wrote && scratch.isValid(),
+			      QString("the unreadable-tree fixture is there to make "
+			               "unreadable (%1)")
+			          .arg(wrote ? dir : f.errorString()));
 		}
 		const QByteArray before = [&] {
 			QFile f(path); f.open(QIODevice::ReadOnly); return f.readAll();
@@ -2426,9 +2450,8 @@ int main(int argc, char **argv) {
 		if (geteuid() == 0) {
 			std::printf("  skip  running as root, which can read anything\n");
 		} else {
-			const QString dir = QDir::temp().filePath("hydra-rotation-nowhere");
-			QDir(dir).removeRecursively();
-			QDir().mkpath(dir);
+			QTemporaryDir scratch;   // see "a window will not save over a tree"
+			const QString dir = scratch.path();
 			const QString path = dir + "/tree.txt";
 			{
 				QFile f(path);
@@ -2468,9 +2491,8 @@ int main(int argc, char **argv) {
 	// caller.
 	section("a store whose file will not parse is not written over");
 	{
-		const QString dir = QDir::temp().filePath("hydra-rotation-stores");
-		QDir(dir).removeRecursively();
-		QDir().mkpath(dir);
+		QTemporaryDir scratch;   // see "a window will not save over a tree"
+		const QString dir = scratch.path();
 		const QString tree = dir + "/tree.txt";
 		{
 			QFile f(tree);
@@ -2545,9 +2567,8 @@ int main(int argc, char **argv) {
 	// `keep_or_disown` and leave the file alone.
 	section("a policy file from a newer build is left alone, not truncated");
 	{
-		const QString dir = QDir::temp().filePath("hydra-rotation-newer");
-		QDir(dir).removeRecursively();
-		QDir().mkpath(dir);
+		QTemporaryDir scratch;   // see "a window will not save over a tree"
+		const QString dir = scratch.path();
 		const QString tree = dir + "/tree.txt";
 		{
 			QFile f(tree);
@@ -2616,7 +2637,11 @@ int main(int argc, char **argv) {
 	if (geteuid() == 0) {
 		std::printf("  skip  running as root\n");
 	} else {
-		const QString dir = QDir::temp().filePath("hydra-rotation-rules");
+		// The sibling names below become children of the scratch directory,
+		// so they go with it: `scratch.path() + "-bad"` would be a directory
+		// beside the one QTemporaryDir removes, and nothing would clear it.
+		QTemporaryDir scratch;
+		const QString dir = scratch.path();
 
 		// Built exactly as main_window::open_settings does.
 		auto forget_imported_via_dialog = [](main_window *w) {
@@ -2642,7 +2667,7 @@ int main(int argc, char **argv) {
 
 		// The case: a rules file that will not parse.
 		{
-			const QString d = dir + "-bad";
+			const QString d = dir + "/bad";
 			const QString tree = make_tree(d);
 			const QString rules = d + "/site-rules.ini";
 			const QByteArray junk = "this is not an ini file at all\n";
@@ -2678,7 +2703,7 @@ int main(int argc, char **argv) {
 		// out here: a hand-built INI that does not match what `save` emits
 		// would test the fixture rather than the loader.
 		{
-			const QString d = dir + "-half";
+			const QString d = dir + "/half";
 			QDir(d).removeRecursively();
 			QDir().mkpath(d);
 			const QString path = d + "/site-rules.ini";
@@ -2741,7 +2766,7 @@ int main(int argc, char **argv) {
 		// and the file deleted first, so its reappearance is proof the click
 		// reaches a writer at all.
 		{
-			const QString d = dir + "-good";
+			const QString d = dir + "/good";
 			const QString tree = make_tree(d);
 			const QString rules = d + "/site-rules.ini";
 			{
@@ -2766,8 +2791,6 @@ int main(int argc, char **argv) {
 			      "and it comes back, so the click really does reach a writer");
 		}
 
-		QDir(dir + "-bad").removeRecursively();
-		QDir(dir + "-good").removeRecursively();
 	}
 
 	// **A window hands its observers back.** `request_filter::add_observer` had
@@ -4422,9 +4445,8 @@ int main(int argc, char **argv) {
 	// kept, so that a tree lost to any of the faults above is recoverable
 	// rather than merely explained.
 	{
-		const QString dir = QDir::temp().filePath("hydra-rotation-backup");
-		QDir(dir).removeRecursively();
-		QDir().mkpath(dir);
+		QTemporaryDir scratch;   // see "a window will not save over a tree"
+		const QString dir = scratch.path();
 		const QString path = dir + "/tree.txt";
 		const QByteArray body =
 		  "- [tab] a page worth keeping | https://keep.example/\n";
@@ -4457,9 +4479,8 @@ int main(int argc, char **argv) {
 	// exactly the right number of files and delete precisely the ones worth
 	// keeping, passing any check that only counts. So the survivors are named.
 	{
-		const QString dir = QDir::temp().filePath("hydra-rotation-prune");
-		QDir(dir).removeRecursively();
-		QDir().mkpath(dir);
+		QTemporaryDir scratch;   // see "a window will not save over a tree"
+		const QString dir = scratch.path();
 		const QString path = dir + "/tree.txt";
 		{
 			QFile f(path);
@@ -4623,9 +4644,14 @@ int main(int argc, char **argv) {
 		// here reaches commit, by the means `test_settings` measured: a file-
 		// size limit, under which the open succeeds and the write reports
 		// every byte taken while none of them lands.
-		const QString zdir = QDir::tempPath() + "/hydra-zoom-ro";
-		QDir(zdir).removeRecursively();
-		QDir().mkpath(zdir);
+		// Its own directory, for the reason the unreadable-tree section
+		// above carries: a fixed name in the shared temp directory belongs
+		// to whoever made it first, and this one then cannot be cleared or
+		// written.
+		QTemporaryDir zscratch;
+		const QString zdir = zscratch.path();
+		check(zscratch.isValid(),
+		      "there is a scratch directory to make read-only");
 
 		main_window wz(&factory, &policy, &filter);
 		wz.resize(900, 600);
@@ -4726,9 +4752,9 @@ int main(int argc, char **argv) {
 		// XDG_DATA_HOME because the window builds its own path from
 		// AppDataLocation in the constructor, which is the code under test --
 		// assigning `m_zoom_path` afterwards would skip it.
-		const QString zhome = QDir::tempPath() + "/hydra-zoom-home";
-		QDir(zhome).removeRecursively();
-		QDir().mkpath(zhome);
+		QTemporaryDir hscratch;
+		const QString zhome = hscratch.path();
+		check(hscratch.isValid(), "and one to stand in for XDG_DATA_HOME");
 		const QByteArray xdg_was = qgetenv("XDG_DATA_HOME");
 		qputenv("XDG_DATA_HOME", zhome.toUtf8());
 		const QString adir =
@@ -4818,6 +4844,58 @@ int main(int argc, char **argv) {
 		else
 			qputenv("XDG_DATA_HOME", xdg_was);
 		QDir(zhome).removeRecursively();
+	}
+
+	section("the site panel does not offer subdomains of an address");
+	{
+		// `etld_plus_one` is last-two-labels by its own account, so "This
+		// domain" for `192.168.1.10` would write `*.1.10` -- a rule matching
+		// nothing real, stored and listed as though it governed the box in
+		// the address bar. An address has no subdomains, so that scope is
+		// greyed the way the no-page case already greys both, and the
+		// exact-host scope is left working.
+		policy_engine pe;
+		site_policy_dialog dlg(&pe);
+		QComboBox *scope = nullptr;
+		// Found by its contents rather than by being first: there is one
+		// combo per feature in here too, and construction order is not
+		// something a test should depend on.
+		for (QComboBox *c : dlg.findChildren<QComboBox *>())
+			if (c->count() == 3 && c->itemText(0) == "This host") {
+				scope = c;
+				break;
+			}
+		check(scope, "the scope selector is findable by its own entries");
+		if (scope) {
+			auto enabled = [&](int i) {
+				auto *m = qobject_cast<QStandardItemModel *>(scope->model());
+				return m && m->item(i) && m->item(i)->isEnabled();
+			};
+			dlg.set_host("www.example.com");
+			check(enabled(0) && enabled(1),
+			      "a name offers both of the per-site scopes");
+			check(scope->itemText(1).contains("*.example.com"),
+			      QString("and names the pattern it would write (%1)")
+			          .arg(scope->itemText(1)));
+
+			dlg.set_host("192.168.1.10");
+			check(enabled(0), "an address keeps the exact-host scope");
+			check(!enabled(1),
+			      "and loses the domain scope, which could not have matched");
+			check(scope->itemText(1) == "This domain",
+			      QString("with no pattern in the label, there being none to "
+			               "name (%1)").arg(scope->itemText(1)));
+
+			// A selection already sitting on it has to move, or the panel
+			// rests on a greyed entry and the next edit writes the pattern
+			// that entry names.
+			dlg.set_host("www.example.com");
+			scope->setCurrentIndex(1);
+			dlg.set_host("192.168.1.10");
+			check(scope->currentIndex() == 0,
+			      QString("and a selection on it falls back to the host rather "
+			               "than to global (%1)").arg(scope->currentIndex()));
+		}
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

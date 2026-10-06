@@ -31756,19 +31756,77 @@ there. Controlled by pointing it at `/proc`: one honest failure naming the
 directory and the reason, where before it was "the job completes" red with
 the cause three lines above and unexplained.
 
-**The rest of the shape, measured rather than guessed.** Sixteen fixed paths
-across ten suites take the same form -- `QDir::tempPath() + "/hydra-..."` --
-and every one collides between two concurrent runs:
+**The rest of the shape, measured -- and the first measurement was wrong by
+three times, in the direction that made the problem look smaller.** The query
+was `QDir::tempPath()`, and it found sixteen fixed paths across ten suites:
 
     test_settings   6   test_rotation  2   test_assembler 1   test_bundle   1
     test_extractor  1   test_instance  1   test_model     1   test_state    1
     test_tree       1
 
+There is a second spelling. `QDir::temp().filePath("...")` is the same thing
+said differently, and `test_rotation` has **nine** of those against two of
+the first kind -- which is why converting its two left the suite still
+hanging on the very next section.
+
+Counted a third time, against `HEAD` rather than the working tree so the
+number is not a measurement of my own edits:
+
+    git show HEAD:<file> | grep -c 'QDir::temp()'       34
+    git show HEAD:<file> | grep -c 'QDir::tempPath()'   17
+                                                        -- 51 in 20 suites
+
+`test_settings` and `test_rotation` carry eleven each. **Not every one is a
+hazard**: a couple name a path deliberately left absent -- `test_annoyance`
+asks a loader for `hydra-no-such-annoyance.ini` -- and those cannot be
+clobbered by a neighbour because nothing creates them. The fixture subset is
+what matters and it is most of the 51.
+
+That is `evidence.md`'s *re-derive the scope number, because nothing
+downstream will*, met from the inside three times over: sixteen, then
+forty-eight, then fifty-one. The count inherited the detector, and the
+detector inherited whichever spelling the first site happened to use. What
+found the second spelling was not a better query but **running the thing** --
+the suite stopped again, in a section the first count said nothing about.
+
 They are better off than `clip.mp4` was: each carries a `hydra-` prefix and a
 purpose, so a collision needs two runs of the same suite rather than any two
-programs. Not fixed here, because converting ten suites is a deliberate pass
-and not something to do while reading one of them -- recorded with the count
-so that pass has a starting list rather than a hunt.
+programs. Not fixed in that pass, because converting ten suites is a
+deliberate piece of work and not something to do while reading one of them --
+recorded with the count so that pass has a starting list rather than a hunt.
+
+**And the consequence turned out to be worse than a collision: it can hang.**
+Measured within the hour, running `test_rotation` directly. Its
+*"a window will not save over a tree it could not read"* section builds
+`/tmp/hydra-rotation-unreadable`, and that directory was there from another
+user's run three weeks earlier. `removeRecursively` could not clear it, the
+fixture file could not be created, both statuses went unread -- and instead
+of a red check the suite **stopped**, in `do_sys_poll`, with a `main_window`
+sitting in its event loop and no output for five minutes. Killed with
+`SIGTERM` it stayed alive; it took `SIGKILL`.
+
+So the class is not "a test fails confusingly" but "a test can stop", and a
+stopped suite in a tree where several sessions run is somebody else's wasted
+evening.
+
+**`test_rotation` is converted end to end** -- all eleven of its fixed paths,
+both spellings, are `QTemporaryDir`s now, and the unreadable-tree fixture's
+write is checked. It runs clean with no `TMPDIR` at all -- 468 passed, 1 failed, and
+that one is the font pin -- which is the property that was missing. The rules-file section needed one more thought
+than the rest: it derived sibling directories as `dir + "-bad"`, which beside
+a `QTemporaryDir` would be a directory nothing removes, so those are children
+now.
+
+**What to do about the other sixteen suites is worth deciding rather than
+sweeping.** Converting the forty remaining call sites one at a time
+is a lot of edits for a hazard the Makefile already covers for `make test`.
+The alternative is one shared helper -- a `test/scratch.h` whose function
+puts a per-process directory in `TMPDIR` when it is unset, called once from
+each suite's `main` -- which is nineteen one-line edits instead of
+forty careful ones, and makes every driver runnable directly rather
+than only the converted ones. It is also a convention for the test tree
+rather than a bug fix, so it is the copyright holder's call; recorded here
+with both costs so the question is answerable without re-measuring.
 
 ## The decompressor's refusals had never run, and its witness needed Firefox
 
@@ -32057,3 +32115,59 @@ default: an exact host beats the everything wildcard, an exact host beats a
 wildcard that also covers it while the wildcard keeps the siblings, and a
 longer wildcard beats a shorter one while the shorter keeps what the longer
 does not reach.
+
+## "This domain" offered subdomains of an IP address
+
+The site panel's scope selector writes `"*." + etld_plus_one(host)`, and
+`etld_plus_one` is last-two-labels by its own account. For `192.168.1.10`
+that is `1.10`, so the scope would write `*.1.10` -- a rule matching nothing
+real, stored and listed in the settings dialog as though it governed the box
+in the address bar. An address has no subdomains; the scope had nothing to
+offer and offered it anyway.
+
+Reachable rather than theoretical: a media server on the LAN reached by
+address is a case this browser supports on purpose -- the loopback survey
+above says so in as many words -- and the shield is where somebody would go
+to let it do something.
+
+So that entry is greyed for an address, the way the no-page case already
+greys both, the label drops the pattern it cannot name, and a selection
+already sitting on it falls back to **the exact host** rather than to the
+global default: the host scope still works for an address, and falling to
+global would silently widen what the next edit applies to.
+
+Reverting it fails three checks of the four that describe the behaviour, and
+the diagnostic prints the defect rather than describing it:
+
+    with no pattern in the label, there being none to name
+      (This domain (*.1.10))
+
+"an address keeps the exact-host scope" stays green throughout, which is
+right -- that half was never broken, and a sabotage that reddened it would
+mean the fix had taken something working with it.
+
+### The approximation's other cost is not ours to fix
+
+`etld_plus_one` had no test at all, which is worth more than the IP case: it
+decides what "This domain" means for every site. Six measurements pin it now,
+and two of them are the approximation rather than the answer:
+
+    www.example.com    -> example.com      a subdomain reduces to the domain
+    a.b.c.example.com  -> example.com      depth does not matter
+    example.com        -> example.com      already one
+    localhost          -> localhost        a single label is left, not emptied
+    www.bbc.co.uk      -> co.uk            too broad
+    192.168.1.10       -> 1.10             not a domain at all
+
+**`*.co.uk` governs every host under a public suffix**, which is broader than
+"this domain" asks for. What fixes it is a public-suffix list, and that is a
+dependency and a data file somebody has to decide to carry -- the holder's
+call, not a thing to adopt while reading the function. It is recorded here
+with its cost rather than left for the next reader to rediscover.
+
+The mitigation already present is worth naming because it decides how urgent
+this is: the menu item shows the pattern it would write -- *"This domain
+(\*.co.uk)"* -- so the over-reach is visible at the moment of choosing rather
+than hidden in a file. The pinned measurements are there so that a later
+public-suffix list changes two lines of test with their reasons attached,
+rather than looking like a regression.
