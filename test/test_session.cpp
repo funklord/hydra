@@ -26,6 +26,214 @@ static void check(bool ok, const QString &w) {
 static void section(const char *n) { std::printf("\n== %s ==\n", n); }
 static void note(const QString &w) { std::printf("  --    %s\n", qPrintable(w)); }
 
+// **Every refusal the decompressor has, provoked by name.**
+//
+// The section below compares this decoder against python's lz4 over a real
+// Firefox session file, which is the argument for having written one -- and
+// every byte it feeds in is well formed. So the bounds checks, which are the
+// whole safety argument for parsing a file another program wrote, had never
+// run: `evidence.md`'s *a check is untested until it has been seen to fail*,
+// aimed at twelve of them at once.
+//
+// It also needs nothing. The comparison skips on a machine with no Firefox
+// profile -- most of them -- and these cases are a few bytes each, built here
+// from the format rather than read off disk.
+static void test_decompressor_refusals() {
+	section("the decompressor's refusals, which had never run");
+
+	// token: high nibble is the literal length, low nibble the match length.
+	auto token = [](int lit, int match) {
+		return char((lit << 4) | match);
+	};
+	// Each case is the smallest input that reaches one check, so a failure
+	// names a single branch rather than a region.
+	struct bad_block {
+		const char *why;        // the error the decoder must give
+		QByteArray  in;
+		int         expected;
+		const char *what;       // what makes it bad, for the line printed
+	};
+
+	QByteArray lit_overflow(1, token(15, 0));
+	lit_overflow += QByteArray(4210753, '\xff');   // 15 + 255n > 1<<30
+	QByteArray match_overflow;
+	match_overflow += token(1, 15);
+	match_overflow += 'a';
+	match_overflow += QByteArray::fromHex("0100");  // offset 1, legal
+	match_overflow += QByteArray(4210753, '\xff');
+
+	const QList<bad_block> bad = {
+		{ "implausible decompressed size", QByteArray(1, token(0, 0)), -1,
+		  "a negative declared size" },
+		{ "implausible decompressed size", QByteArray(1, token(0, 0)),
+		  (1 << 30) + 1, "a declared size past the ceiling" },
+		{ "truncated literal length", QByteArray(1, token(15, 0)), 10,
+		  "a literal length extension that is not there" },
+		{ "implausible literal length", lit_overflow, 10,
+		  "a literal length that overflows past the ceiling" },
+		{ "literal run past end of input",
+		  QByteArray(1, token(5, 0)) + QByteArray("ab"), 10,
+		  "five literals promised and two supplied" },
+		{ "literal run past end of output",
+		  QByteArray(1, token(5, 0)) + QByteArray("abcde"), 3,
+		  "five literals into three bytes of output" },
+		{ "truncated match offset",
+		  QByteArray(1, token(1, 0)) + QByteArray("a") +
+		      QByteArray::fromHex("01"), 10,
+		  "one byte of a two-byte match offset" },
+		{ "zero match offset",
+		  QByteArray(1, token(1, 0)) + QByteArray("a") +
+		      QByteArray::fromHex("0000"), 10, "a match offset of zero" },
+		{ "match offset points before the output",
+		  QByteArray(1, token(1, 0)) + QByteArray("a") +
+		      QByteArray::fromHex("0500"), 10,
+		  "a match reaching back further than has been written" },
+		{ "truncated match length",
+		  QByteArray(1, token(1, 15)) + QByteArray("a") +
+		      QByteArray::fromHex("0100"), 10,
+		  "a match length extension that is not there" },
+		{ "implausible match length", match_overflow, 10,
+		  "a match length that overflows past the ceiling" },
+		{ "match run past end of output",
+		  QByteArray(1, token(1, 15)) + QByteArray("a") +
+		      QByteArray::fromHex("010000"), 10,
+		  "a nineteen-byte match into nine bytes of output" },
+		{ "decompressed size does not match the header",
+		  QByteArray(1, token(2, 0)) + QByteArray("ab"), 5,
+		  "a block that stops short of the declared size" },
+	};
+
+	for (const bad_block &b : bad) {
+		QString err;
+		const QByteArray out =
+		    session_import::lz4_block_builtin(b.in, b.expected, &err);
+		// Both halves, because either alone passes for the wrong reason: an
+		// empty return with no message is a refusal nobody can explain, and a
+		// message beside output is worse than no message at all.
+		check(out.isEmpty() && err == QLatin1String(b.why),
+		      QString("%1 is refused as \"%2\"%3")
+		          .arg(b.what, b.why,
+		                out.isEmpty() && err == QLatin1String(b.why)
+		                    ? QString()
+		                    : QString(" -- got %1 byte(s) and \"%2\"")
+		                          .arg(QString::number(out.size()), err)));
+	}
+
+	// And the other direction: a block that is fine must not be refused, or
+	// every check above would pass with a decoder that rejects everything.
+	// Literals only, which is what the format's last sequence always is.
+	QString err;
+	const QByteArray good =
+	    session_import::lz4_block_builtin(QByteArray(1, token(5, 0)) +
+	                                           QByteArray("hello"), 5, &err);
+	check(good == QByteArray("hello") && err.isEmpty(),
+	      QString("and a well-formed block still decodes (%1, \"%2\")")
+	          .arg(QString::fromLatin1(good), err));
+}
+
+// **The reference comparison, without needing somebody's Firefox profile.**
+//
+// The section after this one is the real argument for a hand-written
+// decompressor: decode a genuine session file both ways and compare the
+// bytes. It skips wherever there is no Firefox session to read, which is most
+// machines -- and it says so, which is honest and still leaves the decoder
+// unwitnessed exactly where nobody notices.
+//
+// python's lz4 binding compresses as well as it decompresses, so the witness
+// does not depend on the input coming from Firefox. These payloads are chosen
+// to force the parts of the format a single real file may or may not contain:
+// literals alone, a long run behind an offset of one, repeats at a wider
+// offset, and incompressible bytes that need a literal length extension.
+//
+// Both decoders are driven, so an agreement is three-way: python compressed
+// it, liblz4 or the built-in decoded it, and the other one of those agreed.
+static void test_decompressor_against_python(const QString &scratch) {
+	section("the decompressor against python's, on blocks python compressed");
+
+	struct payload {
+		const char *name;
+		QByteArray  data;
+		const char *what;
+	};
+	// Deterministic rather than random: a fixture that differs per run cannot
+	// be quoted in a bug report.
+	QByteArray noise;
+	quint32 seed = 0x5eed1234;
+	for (int i = 0; i < 500; ++i) {
+		seed = seed * 1103515245u + 12345u;
+		noise += char((seed >> 16) & 0xFF);
+	}
+	// **A match more than 255 bytes back, which the others cannot produce.**
+	// The offset is two bytes little-endian, and every payload above matches
+	// at an offset of one or eight -- so the high byte is zero in all of them
+	// and a decoder that read only the low byte would agree with python
+	// throughout. Measured: dropping `ip[1]` from the offset read left this
+	// whole section green until this payload existed. Half of a noise block
+	// twice over makes the second half one long match at an offset of 600.
+	QByteArray far_match = noise.left(300);
+	far_match += noise.left(300);
+	const QList<payload> payloads = {
+		{ "literals", QByteArray("hello, session"), "literals with no match" },
+		{ "run",      QByteArray(400, 'x'), "a 400-byte run, offset one" },
+		{ "repeat",   QByteArray("abcdefgh").repeated(60),
+		  "repeats at an eight-byte offset" },
+		{ "noise",    noise, "incompressible bytes, so literal extensions" },
+		{ "far",      far_match, "a match 300 bytes back, so a two-byte offset" },
+	};
+
+	for (const payload &p : payloads) {
+		QFile raw(scratch + "/" + p.name + ".raw");
+		if (!raw.open(QIODevice::WriteOnly) ||
+		     raw.write(p.data) != p.data.size()) {
+			check(false, QString("could not write the %1 payload").arg(p.name));
+			return;
+		}
+		raw.close();
+	}
+
+	QProcess py;
+	py.start("python3", { "-c",
+		"import sys,pathlib,lz4.block\n"
+		"d=pathlib.Path(sys.argv[1])\n"
+		"for p in sorted(d.glob('*.raw')):\n"
+		"    b=lz4.block.compress(p.read_bytes(),store_size=False)\n"
+		"    p.with_suffix('.lz4').write_bytes(b)\n",
+		scratch });
+	py.waitForFinished(30000);
+	if (py.exitStatus() != QProcess::NormalExit || py.exitCode() != 0) {
+		note("skipped: python3 lz4.block cannot compress here.");
+		note("stderr: " + QString::fromUtf8(py.readAllStandardError()).trimmed());
+		return;
+	}
+
+	for (const payload &p : payloads) {
+		QFile block(scratch + "/" + p.name + ".lz4");
+		if (!block.open(QIODevice::ReadOnly)) {
+			check(false, QString("python produced no block for %1").arg(p.name));
+			continue;
+		}
+		const QByteArray in = block.readAll();
+		// The sizes are printed because they say which part of the format was
+		// exercised: 400 bytes from 12 is a long match, 500 from 503 is a
+		// literal run with its length extension, and a block that came back
+		// the same size as its input would mean neither.
+		QString berr, derr;
+		const QByteArray built =
+		    session_import::lz4_block_builtin(in, int(p.data.size()), &berr);
+		const QByteArray either =
+		    session_import::lz4_block_decompress(in, int(p.data.size()), &derr);
+		check(built == p.data,
+		      QString("%1: the built-in decoder reproduces %2 byte(s) from %3%4")
+		          .arg(p.name).arg(p.data.size()).arg(in.size())
+		          .arg(berr.isEmpty() ? "" : " -- " + berr));
+		check(either == p.data,
+		      QString("%1: and so does the one the build actually uses (%2)%3")
+		          .arg(p.name,
+		                session_import::using_system_lz4() ? "liblz4" : "built-in")
+		          .arg(derr.isEmpty() ? "" : " -- " + derr));
+	}
+}
+
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication app(argc, argv);
@@ -51,6 +259,16 @@ int main(int argc, char **argv) {
 		check(session_import::lz4_block_decompress(QByteArray(), 1 << 30, &err)
 		          .isEmpty(),
 		      "and an implausible size is refused before anything is allocated");
+	}
+
+	test_decompressor_refusals();
+
+	{
+		QTemporaryDir scratch;
+		if (scratch.isValid())
+			test_decompressor_against_python(scratch.path());
+		else
+			note("skipped the python comparison: no scratch directory.");
 	}
 
 	section("the decompressor, against one nobody here wrote");
@@ -368,6 +586,23 @@ int main(int argc, char **argv) {
 		check(session_import::replay_snss(junk, &err).isEmpty(),
 		      "a file that is not SNSS is refused");
 		check(err.contains("signature"), QString("saying why (%1)").arg(err));
+
+		// Shorter than the header it would be read out of. The signature check
+		// below reads eight bytes, so this one has to refuse first or that
+		// read is off the end -- which makes it the one refusal here whose
+		// absence would be a fault rather than a message.
+		//
+		// Two statements rather than one, following the pair above: the
+		// arguments of a single `check(...)` are evaluated in whatever order
+		// the compiler likes, so building the message in the same call that
+		// fills `err` printed an empty one -- the message was formatted
+		// before the call that set it.
+		err.clear();
+		const bool short_refused =
+		    session_import::replay_snss(QByteArray("SNSS"), &err).isEmpty();
+		check(short_refused && err.contains("too short"),
+		      QString("and a file shorter than the header, before anything "
+		               "reads it (%1)").arg(err));
 
 		// The version is internal API with no stability promise, so an unknown
 		// one is refused *by number* rather than parsed hopefully.

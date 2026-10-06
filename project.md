@@ -31769,3 +31769,112 @@ purpose, so a collision needs two runs of the same suite rather than any two
 programs. Not fixed here, because converting ten suites is a deliberate pass
 and not something to do while reading one of them -- recorded with the count
 so that pass has a starting list rather than a hunt.
+
+## The decompressor's refusals had never run, and its witness needed Firefox
+
+Firefox's session file is a raw LZ4 block behind a `mozLz40\0` header, and
+this project decodes it itself. `lz4_block_builtin` carries the whole safety
+argument in one comment -- *every read is checked against `end` and every
+write against `oend` before it happens* -- because it parses a file another
+program wrote, and a corrupt one must come back as an error rather than as a
+walk off the end of a buffer.
+
+**Thirteen such refusals, and not one of them had ever been provoked.** The
+suite's decompressor section is well built: it decodes a real 1.5 MB session
+file both ways and compares the bytes against python's lz4, which is the
+argument for having written one. Every byte it feeds in is well formed. So
+the correctness half was witnessed and the refusals -- the half that matters
+when the input is a file from somewhere else -- were not: `evidence.md`'s *a
+check is untested until it has been seen to fail*, thirteen times over.
+
+They now are, each by the smallest input that reaches one branch and each
+asserted on the exact message. **Both halves of the assertion earn their
+keep, measured.** Deleting the `zero match offset` check leaves the block
+*still refused* -- it runs on and trips the final size check instead -- so a
+test asserting only "this is rejected" stays green with a bounds check
+removed. The failure line reads:
+
+    a match offset of zero is refused as "zero match offset"
+      -- got 0 byte(s) and "decompressed size does not match the header"
+
+The cases need nothing on the machine: a few bytes each, built from the
+format rather than read off disk. The two overflow ceilings cost a 4.2 MB
+input each, because 15 + 255n has to exceed 2^30 and that is how many
+extension bytes it takes.
+
+### The witness did not have to depend on somebody's Firefox profile
+
+The reference comparison skips wherever there is no Firefox session to read,
+which is most machines and is this one -- it printed *"the decompressor is
+then unverified against a reference, which is the one thing that makes a
+hand-written one trustworthy"*, and that was exactly true.
+
+python's lz4 binding compresses as well as it decompresses, so the witness
+never needed Firefox's input: it needed python's. Five payloads chosen to
+force different parts of the format are compressed by python and decoded by
+both of this project's paths, so an agreement is three-way. The printed sizes
+say which part each one exercised:
+
+    literals   14 bytes from 15    literals alone, no match
+    run       400 bytes from 12    one long match at offset 1
+    repeat    480 bytes from 19    matches at offset 8
+    noise     500 bytes from 503   incompressible, literal length extension
+    far       600 bytes from 313   a match 300 bytes back
+
+**The `far` payload exists because the first sabotage failed.** Dropping
+`ip[1]` from the two-byte offset read -- half of that field, in a decoder
+reading an untrusted file -- left the whole section green. Every other
+payload matches at an offset of one or eight, so the high byte is zero in all
+of them and a decoder reading only the low byte agrees with python
+throughout. With `far` in place the same sabotage fails exactly one check,
+and only the built-in one, liblz4 being unaffected.
+
+That is *a control has to be able to fail the way the thing it controls for
+fails*, and the lesson is narrower than "pick better fixtures": four payloads
+chosen for variety all happened to agree on one property nobody had named,
+and the only thing that surfaced it was breaking the code and finding nothing
+went red.
+
+### The other hand-written parser of a foreign file, swept and sound
+
+`replay_snss` reads Chromium's session log, which is the same kind of thing:
+a binary format written by another program, length-prefixed, on disk. Swept
+with the lens the decompressor had just earned, and nothing to fix -- which
+is worth a paragraph so the next person does not sweep it again.
+
+Its `payload_reader` checks every read against the end, sets a sticky failure
+flag rather than returning a value that reads as data, and re-checks the
+pointer after the four-byte padding advance. The `(2 * n + 3)` arithmetic
+cannot overflow because a record's length is a `quint16`, so `n` is at most
+about 32767 -- safe by a property of the format rather than by a check, which
+is worth knowing if that length ever widens. The record loop advances `pos`
+by at least two before any `break`, so a zero-length record ends it rather
+than spinning on it.
+
+And unlike the decompressor, its refusals were already covered: a bad
+signature and an unknown version are both provoked, the second asserted *by
+number* because the version is internal API with no stability promise, and a
+truncated tail is asserted to yield the tabs before it rather than nothing --
+the file is being written by a running browser, so a half-written last record
+is normal rather than corrupt.
+
+**This paragraph first said those two were unexercised, which was wrong, and
+the mistake is the more useful half.** The sweep grepped the replay section
+for malformed-input language; the header refusals live in a different section
+of the same file, several hundred lines away, because they are about reading
+the file at all rather than about replaying a log. *The scope of a search is
+chosen before you know who owns the answer* -- and a sweep of one section of
+one file reported an absence that the next section contradicted. The only
+refusal genuinely without a case was *"too short to have a header"*, and it
+has one now -- a four-byte file, which matters more than the others because
+the signature check reads eight bytes, so that refusal firing first is what
+keeps the read in bounds rather than merely producing a better message.
+
+**Its first version printed an empty reason**, which is worth one line
+because it is a diagnostic that could not report. `check(f(&err),
+msg.arg(err))` is a single statement, the order its two arguments are
+evaluated in is the compiler's business, and this one formatted the message
+before the call that filled `err`. The pair of checks immediately above it
+already split that into two statements, which is why they work. Swept across
+the suites afterwards: no other instance, and the one that looked like it
+does not quote `err` at all.
