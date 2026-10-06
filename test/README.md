@@ -154,7 +154,16 @@ that could answer that for itself would be the bug. For the rest:
 
 ```sh
 HYDRA_KEEPASS_INTERACTIVE=1 ./test/build-make/try_keepass   # then accept the dialog
+HYDRA_KEEPASS_WRITE=1 ./test/build-make/try_keepass         # also checks saving
 ```
+
+**The second one writes to the database**, which is why it is a separate
+variable rather than part of the first. It saves a password for
+`http://127.0.0.1:9932`, asks for it back, saves again naming the uuid that
+came with it, and checks the site still has *one* entry rather than two --
+the measurement that says whether an update is an update. It leaves that
+entry behind, so run it against a throwaway vault and delete the entry
+afterwards.
 
 **Start this only when you are at the machine.** It waits three minutes for the
 dialog and then reports the pairing as failed, which is honest but measures

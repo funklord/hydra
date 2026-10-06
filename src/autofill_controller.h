@@ -148,6 +148,16 @@ private:
 	// after the page has moved is answered with nothing rather than with a
 	// password meant for somewhere else.
 	QString m_waiting_origin;
+
+	// **What the vault already holds for this site, passwords stripped.** Its
+	// only job is to let a save update an existing entry instead of adding a
+	// second one beside it -- see `keepass_protocol::uuid_for_login` and the
+	// `uuid` field on `credential`. Unlike `m_waiting` these are not
+	// credentials: name, login and the vault's entry id, with the password
+	// deliberately not copied across, so sec 13.3's "held only for the fill
+	// that asked" is not weakened by keeping them until the page moves.
+	QList<credential> m_known;
+	QString m_known_origin;
 	// A credential a page offered, held until a person answers the prompt. Same
 	// discipline as `m_waiting`: cleared on navigation, on answer, and never
 	// written anywhere until confirmed.

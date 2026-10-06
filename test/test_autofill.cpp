@@ -32,8 +32,8 @@ static void section(const char *n) { std::printf("\n== %s ==\n", n); }
 // Two logins for one site, which is the case the picker exists for.
 static QList<credential> two_entries() {
 	QList<credential> two;
-	two << credential{ "Work", "alice", "pw-work" }
-	    << credential{ "Personal", "alice2", "pw-home" };
+	two << credential{ "Work", "alice", "pw-work", QString() }
+	    << credential{ "Personal", "alice2", "pw-home", QString() };
 	return two;
 }
 
@@ -212,7 +212,7 @@ int main(int argc, char **argv) {
 		a.set_page_origin("https://site.example");
 
 		QList<credential> one;
-		one << credential{ "Work", "alice", "pw-work" };
+		one << credential{ "Work", "alice", "pw-work", QString() };
 		a.offer_for_test(one);
 		check(asked.count() == 0, "one match asks nothing");
 		check(ready.count() == 1, "and fills straight away");
@@ -580,6 +580,83 @@ int main(int argc, char **argv) {
 		check(match_reply(mixed, "test-associate", n_a, &which)
 		          == reply_match::none_pending,
 		      "and an action nothing asked for matches nothing");
+	}
+
+	section("a save updates the entry it came from, rather than adding beside it");
+	{
+		// `set_login_request` has taken a uuid since it was written, documented
+		// as "empty means create", and nothing could ever fill it in:
+		// `parse_logins` dropped the uuid KeePassXC sends. So every save was an
+		// add. Change a stored password, accept the offer, and the vault holds
+		// two entries for the site differing only in the password -- and the
+		// next fill asks the person to choose between them with nothing on
+		// screen to say which is current.
+		QJsonObject entry;
+		entry.insert("name", "Work");
+		entry.insert("login", "alice");
+		entry.insert("password", "pw");
+		entry.insert("uuid", "abc123");
+		QJsonArray arr;
+		arr.append(entry);
+		QJsonObject reply;
+		reply.insert("entries", arr);
+		const QList<credential> parsed = keepass_protocol::parse_logins(reply);
+		check(parsed.size() == 1 && parsed.first().uuid == "abc123",
+		      "the uuid KeePassXC sends with an entry is kept");
+
+		// An entry with no uuid is still a usable credential -- the field is
+		// what makes an update possible, not what makes a fill possible.
+		QJsonObject bare;
+		bare.insert("login", "bob");
+		bare.insert("password", "pw");
+		QJsonArray arr2;
+		arr2.append(bare);
+		QJsonObject reply2;
+		reply2.insert("entries", arr2);
+		check(keepass_protocol::parse_logins(reply2).size() == 1,
+		      "and an entry without one still parses as a credential");
+
+		QList<credential> known;
+		known << credential{ "Work", "alice", QString(), "abc123" }
+		      << credential{ "Personal", "bob", QString(), "def456" };
+		check(keepass_protocol::uuid_for_login(known, "alice") == "abc123",
+		      "saving a login the vault already holds names that entry");
+		check(keepass_protocol::uuid_for_login(known, "carol").isEmpty(),
+		      "a login it does not hold adds a new one");
+		check(keepass_protocol::uuid_for_login(known, QString()).isEmpty(),
+		      "and an empty login names nothing rather than the first entry");
+
+		// Two entries under one login: nothing here can choose between them,
+		// and the mistakes are not comparable. A third entry is untidy and
+		// recoverable; overwriting the wrong one destroys a password that may
+		// be the one still in use.
+		QList<credential> twice;
+		twice << credential{ "Old", "alice", QString(), "abc123" }
+		      << credential{ "New", "alice", QString(), "def456" };
+		check(keepass_protocol::uuid_for_login(twice, "alice").isEmpty(),
+		      "two entries sharing a login add rather than overwrite one");
+
+		// A stored entry with no uuid cannot be updated, so it is skipped
+		// rather than counted as one of a clashing pair -- otherwise a
+		// uuid-less entry sharing the login would suppress a legitimate
+		// update and silently add instead.
+		//
+		// **Both orders, because only one of them discriminates.** With the
+		// uuid-less entry first, the running answer is still empty when the
+		// real one is reached and the code looks correct with the skip
+		// removed; it is the other order that goes wrong. A fixture that
+		// covered one order would have tested nothing -- measured, by
+		// deleting the skip and watching this section stay green.
+		QList<credential> none_first;
+		none_first << credential{ "No id", "alice", QString(), QString() }
+		           << credential{ "Work", "alice", QString(), "abc123" };
+		check(keepass_protocol::uuid_for_login(none_first, "alice") == "abc123",
+		      "an entry with no uuid does not hide the one that has one");
+		QList<credential> none_last;
+		none_last << credential{ "Work", "alice", QString(), "abc123" }
+		          << credential{ "No id", "alice", QString(), QString() };
+		check(keepass_protocol::uuid_for_login(none_last, "alice") == "abc123",
+		      "and it does not when it comes second either");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

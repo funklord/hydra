@@ -358,6 +358,91 @@ int main(int argc, char **argv) {
 		QObject::disconnect(c2);
 	}
 
+	// **The save path, which nothing had ever run against a real vault.**
+	// `save_login` takes a uuid documented as "empty means create, non-empty
+	// updates that entry", and until `credential` carried one nothing could
+	// ever fill it in -- so every save was an add, and changing a stored
+	// password left two entries for the site. This is the measurement that
+	// settles whether sending the uuid does what the protocol says.
+	//
+	// Opt-in on its own variable, because unlike everything above it WRITES
+	// to the database. It uses a url of its own rather than the fixture's, so
+	// it creates the entry it then updates and touches nothing that was
+	// already there -- but it does leave that entry behind, which is why the
+	// note says so rather than assuming anybody reads this comment.
+	section("saving, and whether a second save updates or adds");
+	if (!paired) {
+		note("skipped: no pairing, so a save could only fail.");
+	} else if (qEnvironmentVariableIntValue("HYDRA_KEEPASS_WRITE") != 1) {
+		note("skipped: this one writes to the database. Re-run with");
+		note("HYDRA_KEEPASS_WRITE=1 against a throwaway vault to check it.");
+	} else {
+		const QString url = "http://127.0.0.1:9932";
+		note("this writes one entry for " + url + " and leaves it behind.");
+
+		bool saved = false, save_ok = false;
+		QString save_msg;
+		const QMetaObject::Connection cs =
+		    QObject::connect(&bridge, &keepass_bridge::login_saved,
+		                     [&](int tag, bool ok, const QString &message) {
+			if (tag != 20 && tag != 21)
+				return;
+			saved   = true;
+			save_ok = ok;
+			save_msg = message;
+		});
+
+		QList<credential> after;
+		bool listed = false;
+		const QMetaObject::Connection cl =
+		    QObject::connect(&bridge, &keepass_bridge::logins,
+		                     [&](int tag, const QList<credential> &entries) {
+			if (tag != 30 && tag != 31)
+				return;
+			after  = entries;
+			listed = true;
+		});
+
+		bridge.save_login(url, "alice", "first-password", QString(), 20);
+		wait_until([&] { return saved; }, 20000);
+		check(saved && save_ok,
+		      QString("a new entry is accepted (%1)")
+		          .arg(saved ? save_msg : QStringLiteral("no reply in 20s")));
+
+		bridge.request_logins(url, 30);
+		wait_until([&] { return listed; }, 20000);
+		check(listed && after.size() == 1,
+		      QString("and comes back as exactly one entry (%1)")
+		          .arg(listed ? QString::number(after.size())
+		                       : QStringLiteral("no reply in 20s")));
+		const QString uuid = after.isEmpty() ? QString() : after.first().uuid;
+		check(!uuid.isEmpty(),
+		      "carrying a uuid, which is what makes an update possible");
+
+		if (!uuid.isEmpty()) {
+			saved = false; listed = false; after.clear();
+			bridge.save_login(url, "alice", "second-password", uuid, 21);
+			wait_until([&] { return saved; }, 20000);
+			check(saved && save_ok,
+			      QString("a save naming that uuid is accepted (%1)")
+			          .arg(saved ? save_msg : QStringLiteral("no reply in 20s")));
+
+			bridge.request_logins(url, 31);
+			wait_until([&] { return listed; }, 20000);
+			// The whole point. Two entries here is the defect: the vault would
+			// hold the old password and the new one with nothing to tell them
+			// apart, and the next fill would ask the person to choose.
+			check(listed && after.size() == 1,
+			      QString("and the site still has ONE entry, not two (%1)")
+			          .arg(listed ? QString::number(after.size())
+			                       : QStringLiteral("no reply in 20s")));
+			check(!after.isEmpty() && after.first().password == "second-password",
+			      "holding the password the second save sent");
+		}
+		QObject::disconnect(cs);
+		QObject::disconnect(cl);
+	}
+
 	bridge.disconnect_now();
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

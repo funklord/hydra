@@ -164,6 +164,20 @@ int error_code(const QJsonObject &reply) {
 	return reply.value("errorCode").toString().toInt();
 }
 
+QString uuid_for_login(const QList<credential> &known, const QString &login) {
+	if (login.isEmpty())
+		return QString();
+	QString found;
+	for (const credential &c : known) {
+		if (c.login != login || c.uuid.isEmpty())
+			continue;
+		if (!found.isEmpty())
+			return QString();   // two of them; see the header
+		found = c.uuid;
+	}
+	return found;
+}
+
 bool parse_associate(const QJsonObject &reply, QString *assoc_id) {
 	QString err;
 	if (is_error(reply, &err))
@@ -187,6 +201,7 @@ QList<credential> parse_logins(const QJsonObject &reply) {
 		c.name     = e.value("name").toString();
 		c.login    = e.value("login").toString();
 		c.password = e.value("password").toString();
+		c.uuid     = e.value("uuid").toString();
 		if (!c.login.isEmpty() || !c.password.isEmpty())
 			out.push_back(c);
 	}

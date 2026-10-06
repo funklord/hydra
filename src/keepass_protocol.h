@@ -11,6 +11,19 @@ struct credential {
 	QString name;
 	QString login;
 	QString password;
+	// **The vault's own id for this entry, and the only thing that can turn a
+	// save into an update.** `set_login_request` takes a uuid, documented as
+	// "empty means create", and until this field existed nothing could ever
+	// fill it in: `parse_logins` dropped the uuid KeePassXC sends, so every
+	// save was an add. Changing a stored password therefore left the vault
+	// with two entries for the site, identical but for the password, and the
+	// next fill asked the person to choose between them with nothing on
+	// screen to say which was current.
+	//
+	// Last in the struct, so that every existing brace-initialiser still
+	// means what it did and only gains a field. `-Wextra` asks for that field
+	// to be written out, which is why the three-field sites now name it.
+	QString uuid;
 };
 
 // The wire half of the KeePassXC-Browser protocol (architecture doc sec 13.1),
@@ -145,6 +158,16 @@ int error_code(const QJsonObject &reply);
 // Measured against a real KeePassXC, once a stored pairing made the request
 // reachable without a human.
 constexpr int no_logins_found = 15;
+
+// Which stored entry a save should UPDATE rather than add beside, by matching
+// the login being saved against what the vault already returned for this site.
+// Empty means add a new entry, which is also what an unrecognised login means.
+//
+// **Two stored entries sharing one login answer empty, deliberately.** There
+// is nothing to choose between them from here, and the two mistakes are not
+// comparable: adding a third entry is untidy and recoverable, while updating
+// the wrong one overwrites a password that may be the one still in use.
+QString uuid_for_login(const QList<credential> &known, const QString &login);
 
 bool parse_associate(const QJsonObject &reply, QString *assoc_id);
 QList<credential> parse_logins(const QJsonObject &reply);

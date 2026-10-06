@@ -31547,3 +31547,145 @@ Two edits, each landing on its own checks:
 The first is the defect restored and exactly one assertion sees it, which is
 the assertion that exists for it. The second shows the three checks that pin
 rule 1 are testing rule 1 and not rule 2 standing in for it.
+
+## A save could never be an update, so a password change made a duplicate
+
+`keepass_bridge::save_login` has taken a uuid for as long as it has existed,
+documented as *empty means create; non-empty updates that entry*. Nothing
+could ever fill it in. `credential` had three fields -- name, login, password
+-- and `parse_logins` read exactly those, dropping the `uuid` KeePassXC sends
+with every entry. Its one caller passed `QString()`, and could not have
+passed anything else.
+
+So every save was an add. Change a password on a site already in the vault,
+accept Hydra's offer to save it, and KeePassXC gains a second entry: same
+site, same username, different password, nothing to say which is current. The
+next fill then finds two and asks the person to choose between them -- and the
+picker's labels are login and entry name by design, both identical here, so
+the question is unanswerable from what is on screen. The vault gets worse at
+every password change, and the one field that prevents it was being thrown
+away one layer below.
+
+`evidence.md` has the shape as *an interface is only as wired as its
+least-used method*: the uuid parameter is correct, documented and
+unreachable. Reading `save_login` finds nothing, because `save_login` is not
+wrong.
+
+### What decides that a save is an update
+
+`keepass_protocol::uuid_for_login` matches the login being saved against what
+the vault returned for this site, and the controller keeps that answer from
+the last fill -- **with the passwords stripped**. A uuid is an opaque entry
+id, not a secret, so holding it until the page moves does not weaken sec
+13.3's "held only for the fill that asked"; `m_known` carries name, login and
+uuid, and the password is deliberately not copied across.
+
+**Two stored entries sharing one login answer empty**, which means add. There
+is nothing here to choose between them, and the two mistakes are not
+comparable: a third entry is untidy and recoverable, while updating the wrong
+one destroys a password that may be the one still in use. The same reasoning
+as the reply-matching refusal above, arrived at separately.
+
+### A fixture that covered the wrong order, caught by sabotage
+
+The lookup skips an entry with no uuid rather than counting it as one of a
+clashing pair. The first test of that was worthless and the sabotage said so:
+deleting the skip left the section green.
+
+The reason is order. With the uuid-less entry **first**, the running answer is
+still empty when the real one is reached, so the code behaves identically with
+the guard removed. It is the other order that goes wrong -- a uuid-less entry
+arriving after a good one makes `found` non-empty, reads as a clash, and
+suppresses a legitimate update. The fixture now covers both orders and the
+sabotage lands on the second.
+
+Worth keeping as an instance rather than a lesson about care: the fixture was
+about the right thing, asserted the right value, and could not fail. Nothing
+but breaking the code would have shown it.
+
+### The method, because this cannot be verified here
+
+Nothing in the tree had ever run a `set-login` against a real KeePassXC --
+`try_keepass` exercised the handshake, the association and `get-logins` only.
+So the save path, including this change, rests on the protocol's own
+description.
+
+`try_keepass` now has the measurement, behind `HYDRA_KEEPASS_WRITE=1`
+because unlike everything else in that driver it writes to the database. It
+saves a password for `http://127.0.0.1:9932` -- a url of its own, so it
+creates the entry it then updates and touches nothing that was already
+there -- asks for it back, saves again naming the uuid that came with it, and
+checks the site still has **one** entry holding the second password. Two
+entries there is the defect, reproduced.
+
+It is also a positive control for the fix: without the uuid reaching
+`save_login` the last check reads two, so a run that passes has proved the
+mechanism rather than the absence of a complaint. The entry is left behind
+and the run says so.
+
+### The same lens pointed at the other four brokers
+
+A reply matched to its caller by something that is not unique is a shape, so
+it was worth asking where else this tree brokers requests. Four more places
+do, and all four are clean -- recorded because an empty sweep is only a
+measurement if it says what it looked for:
+
+    extractor_dialog probe fan-out   each result carries its own captured url;
+                                     m_pending is a countdown, and the fan-out
+                                     is called once, from the constructor
+    ai_provider                      finished()/failed() carry no identity at
+                                     all, and do not need to: the three
+                                     dialogs that share one provider are
+                                     modal exec() dialogs, so only one
+                                     consumes at a time, and each cancels the
+                                     provider in its destructor
+    download_manager                 progressed(int id) and finished(int id);
+                                     every job has its own integer
+    autofill_controller              s_next_tag is static precisely so tags
+                                     are unique across per-view controllers
+
+The last one is the half that makes the bridge's defect worth stating
+carefully. The controller's own comment says tags are process-wide *because*
+every reply reaches every controller and a per-instance counter would collide
+-- so the controller had already reasoned the whole thing through, from its
+side, and relied on the bridge to carry the identity it was at pains to
+create. The bridge then keyed its map on the action name and threw it away.
+Neither half was careless and the property existed in neither.
+
+**The `ai_provider` case is clean by two mechanisms and worth knowing which.**
+Modality is what makes a shared provider safe; the destructor's `cancel()` is
+what stops a reply outliving the dialog that asked, which would otherwise
+land in the next dialog opened -- a proposal for a prompt nobody made, and in
+`extractor_dialog`'s case a script attributed to the wrong site. `cancel()`
+aborts, an abort yields `failed` rather than `finished`, and that fires
+synchronously inside the destructor body, where the handlers touch only
+widgets that are still alive. All three dialogs already did this.
+
+### Two mechanical sweeps for the same shape, and only one is worth a zero
+
+The uuid gap is a capability no caller could reach, so it is worth asking
+mechanically where else that holds. Two sweeps, and they are not equally
+trustworthy -- which is the part worth recording.
+
+**Fields nothing fills or reads: zero, and the zero is believable**, because
+the detector was controlled before it was. It walks every `struct` field in
+`src/*.h` and counts dereferences and assignments of that name across `src/`.
+Run against the tree it reports nothing; run against a copy carrying a
+planted `int never_used_control = 0;` in `hls_segment` it reports exactly
+that, which is what makes the empty result a measurement rather than a
+silence.
+
+**Parameters only ever handed a default value: not reportable.** The idea is
+right and the instrument is not. It matches call-site arguments by position
+with a regex, so any argument that is itself a call is invisible -- and
+`emit login_saved(tag, parse_set_login(inner), ...)` and
+`teardown(t, true, QString())` are exactly those, which is why the sweep
+"found" that both are only ever passed `false`. Worse, **it could not have
+found the defect that motivated it**: `save_login`'s own definition supplies
+`const QString &uuid` to the same position, so the value set is never
+uniform. Four of five candidates were a default argument or Qt's own API.
+
+So the honest result is one controlled zero and one sweep whose output says
+nothing either way. Recorded because the next person to have this idea should
+start from the field detector, which works, and should not read the parameter
+one's silence as evidence.

@@ -52,6 +52,11 @@ void autofill_controller::set_page_origin(const QString &origin) {
 	// when the user finally clicks, which is not the one they typed it into.
 	m_offered = credential{};
 	m_offered_origin.clear();
+	// And what the vault was known to hold, which was known about the page
+	// that has gone. Keeping it would offer to update an entry belonging to
+	// somewhere else the moment a login happens to share a username.
+	m_known.clear();
+	m_known_origin.clear();
 }
 
 QString autofill_controller::blocked_reason(const QString &origin) const {
@@ -110,7 +115,7 @@ void autofill_controller::offer_to_save(const QString &origin,
 	if (password.isEmpty())
 		return;   // nothing to store; not worth a prompt
 
-	m_offered        = credential{ QString(), login, password };
+	m_offered        = credential{ QString(), login, password, QString() };
 	m_offered_origin = m_origin;
 	emit save_offered(login, QUrl(m_origin).host());
 }
@@ -134,9 +139,15 @@ void autofill_controller::confirm_save(bool yes) {
 		emit save_finished(false, "Not connected to KeePassXC.");
 		return;
 	}
+	// An update where the vault already holds this login for this site, an add
+	// otherwise. `uuid_for_login` answers empty for anything it cannot place,
+	// which is the old behaviour -- so the only case that moves is the one
+	// that was quietly duplicating entries.
+	const QString uuid = m_known_origin == origin
+	                       ? keepass_protocol::uuid_for_login(m_known, offered.login)
+	                       : QString();
 	m_save_tag = s_next_tag++;
-	m_bridge->save_login(origin, offered.login, offered.password, QString(),
-	                      m_save_tag);
+	m_bridge->save_login(origin, offered.login, offered.password, uuid, m_save_tag);
 }
 
 void autofill_controller::request_generated_password(const QString &origin) {
@@ -176,6 +187,19 @@ void autofill_controller::on_logins(int tag, const QList<credential> &entries) {
 	m_waiting.clear();
 	m_waiting_origin.clear();
 	m_choice_went_stale = false;
+
+	// **What the vault holds for this site, so a later save can update rather
+	// than add.** Kept with the passwords stripped: a uuid is an opaque entry
+	// id and not a secret, and sec 13.3's rule is about credentials. Taken
+	// here rather than at the single-or-many split, because a site with one
+	// stored login is exactly the site whose password gets changed.
+	m_known.clear();
+	m_known_origin = m_origin;
+	for (const credential &c : entries) {
+		if (c.uuid.isEmpty())
+			continue;
+		m_known.push_back(credential{ c.name, c.login, QString(), c.uuid });
+	}
 
 	if (entries.isEmpty()) {
 		// Said rather than left silent: "nothing stored for this site" and

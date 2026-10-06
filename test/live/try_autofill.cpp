@@ -353,7 +353,7 @@ int main(int argc, char *argv[]) {
 
 		if (ca) {
 			const QString secret = "s3cr3t-should-stay-in-one-tab";
-			ca->offer_for_test({ credential{ "acct", "alice", secret } });
+			ca->offer_for_test({ credential{ "acct", "alice", secret, QString() } });
 			spin(900);
 			const QString a = pw(va), b = pw(vb);
 			note(QString("delivered on A: A field=%1").arg(a.isEmpty() ? "(empty)" : a));
