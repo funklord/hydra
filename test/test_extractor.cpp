@@ -12,6 +12,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QTemporaryDir>
+#include <QRegularExpression>
 #include <QFile>
 #include <QElapsedTimer>
 #include <cstdio>
@@ -581,6 +582,39 @@ int main(int argc, char **argv) {
 		check(!possessified.isEmpty(),
 		       QString("and so is one this engine optimises away but the "
 		                "page's does not (%1)").arg(possessified));
+
+		// **The half of that measurement this process can re-take.** The
+		// claim above is why the structural rule exists, and a claim without
+		// a method has a shelf life -- so the part that lives in PCRE2 is
+		// asserted here rather than only written down.
+		//
+		// **Asserting FAST is safe where asserting slow was not.** The old
+		// guard asserted that a pattern took *more* than 25 ms, which is a
+		// property of the CPU and the PCRE2 build and is what made CI
+		// disagree with this machine. Nothing makes an auto-possessified
+		// match slow, so the other direction holds anywhere, and the margin
+		// is 25 ms against a figure that measures 0.
+		{
+			const QString bait = QString('a').repeated(40) + QChar('!');
+			QRegularExpression re("^(a+)+b$",
+			                       QRegularExpression::CaseInsensitiveOption);
+			QElapsedTimer clock;
+			clock.start();
+			(void)re.match(bait);
+			const qint64 ms = clock.elapsed();
+			check(ms < site_rules::k_pattern_budget_ms,
+			      QString("and the timing probe alone could never have seen "
+			               "it: PCRE2 decides it in %1 ms against a %2 ms "
+			               "budget").arg(ms).arg(site_rules::k_pattern_budget_ms));
+		}
+		// The other half is V8's and needs another engine, so it stays a
+		// recorded measurement with its method rather than an assertion:
+		//
+		//     node -e 'const r=/^(a+)+b$/;for(const n of [20,24,28]){
+		//       const s="a".repeat(n)+"!";const t=Date.now();r.test(s);
+		//       console.log(n,Date.now()-t+"ms")}'
+		//
+		// which gave 73, 181 and 2802 ms on node 20.19.2 here.
 
 		check(refused("reject", "^(reject|decline|refuse)( all)?$").isEmpty(),
 		       "while an ordinary grouped pattern is not caught by that bound");

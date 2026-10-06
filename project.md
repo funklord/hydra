@@ -31817,13 +31817,16 @@ than the rest: it derived sibling directories as `dir + "-bad"`, which beside
 a `QTemporaryDir` would be a directory nothing removes, so those are children
 now.
 
-**What to do about the other sixteen suites is worth deciding rather than
-sweeping.** Converting the forty remaining call sites one at a time
-is a lot of edits for a hazard the Makefile already covers for `make test`.
+**What to do about the suites still on the list is worth deciding rather
+than sweeping.** Three are converted -- `test_seam`, `test_rotation` and
+`test_extractor`, each because it bit somebody running a driver by hand --
+and re-measuring the same way afterwards leaves **37 paths in 19 suites**.
+Converting those one at a time is a lot of edits for a hazard the Makefile
+already covers for `make test`.
 The alternative is one shared helper -- a `test/scratch.h` whose function
 puts a per-process directory in `TMPDIR` when it is unset, called once from
 each suite's `main` -- which is nineteen one-line edits instead of
-forty careful ones, and makes every driver runnable directly rather
+thirty-seven careful ones, and makes every driver runnable directly rather
 than only the converted ones. It is also a convention for the test tree
 rather than a bug fix, so it is the copyright holder's call; recorded here
 with both costs so the question is answerable without re-measuring.
@@ -32258,6 +32261,23 @@ nobody has thought of. Its own trigger now has no portable fixture, which is
 worth saying rather than leaving a test that looks like one: the obvious
 baits are refused structurally first, and the ones PCRE2 optimises away never
 reached it anyway.
+
+**And the half of the measurement this process can re-take is asserted rather
+than only written down**, because the table above is the whole argument for
+the structural rule and a fact without a method has a shelf life. The test
+times `^(a+)+b$` against the same bait and requires it to come in *under* the
+25 ms budget -- which is the point: the probe could never have refused it.
+
+**Asserting fast is safe where asserting slow was not**, and that asymmetry
+is the lesson rather than the fixture. The old check asserted a pattern took
+*more* than 25 ms, which is a property of the CPU and the PCRE2 build; that
+is what made CI disagree with this machine. Nothing makes an
+auto-possessified match slow, so the other direction holds anywhere, and the
+margin is 25 ms against a figure that measures zero.
+
+The V8 half needs another engine, so it stays a recorded measurement with its
+method beside it -- a `node -e` one-liner in the test's comment, which gave
+73, 181 and 2802 ms on node 20.19.2 here.
 
 ### The sabotage is the whole argument in two lines
 
