@@ -31689,3 +31689,41 @@ So the honest result is one controlled zero and one sweep whose output says
 nothing either way. Recorded because the next person to have this idea should
 start from the field detector, which works, and should not read the parameter
 one's silence as evidence.
+
+## The third copy of a claim that stopped being true
+
+`http_download_source::accepts` refused an HLS or DASH address with
+*"Streamed media (HLS/DASH) cannot be saved yet -- segment assembly is not
+implemented. Try \"Watch in player\"."* Both halves are wrong. Segment
+assembly is `stream_assembly` over `hls_assembler`, it handles both grammars,
+and the media list's **Download** button is how a person reaches it. Watching
+plays the stream; it does not save it. So a user who clicked a link to an
+`.m3u8` was told the browser cannot do a thing it does, and pointed away from
+the one affordance that would have worked.
+
+**It is the third copy of that sentence, and the first two were corrected.**
+`test_settings`'s player-warning section records it in as many words: *"the
+two messages that stood in this place said assembly was not implemented, and
+it is"*. That pass fixed the two it could see from where it stood -- both in
+`player_launcher`'s warnings -- and this one is in the download source, which
+nothing about a player warning would lead anybody to.
+
+`working-practice.md` has the rule: a claim usually lives in more than one
+place, and the correction has to go where it will next be looked for. The
+measurement that would have found the third copy is a grep for the claim
+rather than for the file: there is no way to know from `player_launcher` that
+`http_download_source` says the same thing.
+
+### And a test was keeping it alive
+
+`test_seam` asserted `err.contains("Watch in player")`, under a comment
+saying *the specific reason must survive, not be flattened to a generic one*
+-- which is a good check with the wrong anchor. It pinned the stale sentence,
+so correcting the message would have turned the suite red and the suite would
+have looked right. The anchor is `"Find Media"` and `"playlist"` now: the
+route a person can take, which is also what distinguishes this refusal from
+the generic one the next check covers.
+
+That is the second time this session an existing check turned out to assert a
+defect rather than a property. Both were rewritten rather than deleted,
+because the thing they were reaching for was right.

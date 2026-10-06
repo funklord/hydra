@@ -77,9 +77,17 @@ static void test_routing() {
 	check(!err.isEmpty(), "refusal carries a reason");
 
 	// The specific reason must survive, not be flattened to a generic one.
+	//
+	// **Anchored on "Find Media" rather than on the old wording.** This read
+	// `err.contains("Watch in player")`, which pinned a sentence claiming
+	// segment assembly was not implemented -- true when written and false
+	// since DASH was assembled, so the check was keeping a stale claim alive
+	// rather than keeping the specific reason alive. The anchor is now the
+	// route a person can actually take, which is also the part that
+	// distinguishes this refusal from the generic one below.
 	err.clear();
 	m.enqueue(QUrl("https://e.example/stream.m3u8"), QString(), &err);
-	check(err.contains("Watch in player"),
+	check(err.contains("Find Media") && err.contains("playlist"),
 	      "the http source's own HLS message reaches the caller");
 
 	err.clear();

@@ -44,9 +44,23 @@ bool http_download_source::accepts(const QUrl &url, QString *why_not) const {
 	if (kind == media_kind::hls || kind == media_kind::dash) {
 		// Fetching a manifest would save the playlist text, not the video.
 		// Refuse plainly rather than produce a file that looks like a failure.
+		//
+		// **And name the route that does work.** The message here said
+		// "segment assembly is not implemented" and pointed at playing the
+		// stream instead -- both wrong since the assembler learned DASH:
+		// `stream_assembly` fetches the segments and concatenates them, and
+		// the media list's Download button is how a person reaches it. This
+		// source still cannot do it, which is what the refusal is for, but a
+		// refusal that denies the program has the feature sends somebody away
+		// from the one thing that would have worked. Two other messages making
+		// the same claim were corrected when DASH was assembled (see
+		// `test_settings`'s player-warning section); this was the third copy
+		// and the pass missed it.
 		if (why_not)
-			*why_not = "Streamed media (HLS/DASH) cannot be saved yet — segment "
-			           "assembly is not implemented. Try \"Watch in player\".";
+			*why_not = "A playlist is not the video, so saving this address "
+			           "would store the playlist text. Try Tools ▸ Media ▸ "
+			           "Find Media on This Page and press Download beside the "
+			           "stream — that fetches the segments and assembles them.";
 		return false;
 	}
 	if (!saveable) {
