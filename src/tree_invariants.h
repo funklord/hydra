@@ -42,8 +42,18 @@ struct report {
 //   - depth is within `tree_limits::max_depth`
 //   - a child of a mirror is itself marked as that mirror, since a mirror is
 //     a subtree and half of one would be written to the tree file
-//   - folders alone have children; a tab with children is a shape the file
-//     format cannot express and would silently reorder on save
+//
+// **A tab with children is NOT a violation**, and this list said it was long
+// after the check had gone. Sub-tabs are the model's own feature (architecture
+// doc sec 5.5), the rule was removed deliberately, and the reason it gave --
+// that the tree file cannot express a tab with children -- was never true:
+// `write_node` recurses into any node's children and the reader nests by
+// indentation without consulting the type. See the note where the check used
+// to be, which is where that is argued out.
+//
+// It is corrected here rather than quietly deleted because this list is what
+// a reader consults to find out what the tree may look like, so a retired
+// rule left standing in it answers a design question the wrong way.
 //
 // `root` is the synthetic root, which is exempt from the id and parent rules
 // because nothing owns it.

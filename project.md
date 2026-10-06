@@ -32312,3 +32312,110 @@ failed. Its three paths are `QTemporaryDir`s now, so the suite is 181 passed
 with no `TMPDIR` at all. That is the third suite converted today, found the
 same way each time -- by running a driver the way somebody debugging one
 would.
+
+## Reopening a closed folder could give two tabs one id
+
+`remint_if_taken` walks a reopened subtree and renames any node whose id a
+live node has taken since it closed. It minted each name from `unused_id`,
+which consults `m_id_index` -- and the index does not hold the subtree,
+because `reopen_closed_at` does not insert or reindex until the walk has
+finished. So two nodes both needing a new id both got **the first free one**.
+
+Reproduced with no contrivance at all:
+
+    a folder holding t-2 and t-3, closed and remembered
+    two new tabs open, taking t-2 and t-3 back -- which is just
+      unused_id handing out the first free name
+    reopen the folder: both of its tabs come back as t-4
+
+What that costs is written on `unused_id` already: *"two nodes sharing an id
+would share a `state/<id>.blob`, so one tab's scroll position and form
+contents would be restored into the other"*. The shell keys live views, zoom,
+the loading set and the recently-used list by id as well, and `node_by_id`
+answers with whichever won the hash -- measured as two nodes out of five
+whose own id did not resolve to them.
+
+### The second collision runs the other way
+
+Reserving the names this walk replaces is not enough. A node whose id is
+still free keeps it, and a sibling renamed earlier in the walk can be handed
+that same name out of the live index, which does not hold the subtree either.
+A folder holding `t-2` and `t-7`, with `t-2` taken while it was closed, puts
+`unused_id`'s next answer squarely on the kept sibling.
+
+So the fix reserves **every** id in the subtree before replacing any of them,
+which is what makes the order of the walk stop mattering. Each half has its
+own failing check: dropping the pre-pass fails the kept-sibling case alone,
+and dropping the reservation entirely fails the first case and its
+`node_by_id` consequence too.
+
+### Why `clear_mirror` is immune, and why its answer was not copied
+
+`clear_mirror` does the same renaming three hundred lines away and inserts
+each minted id into `m_id_index` as it goes, before recursing. That is the
+comparison that makes this a defect rather than a decision -- the insert is
+load-bearing, and one of the two sites has it.
+
+It was not copied, because the two are not in the same situation: the nodes
+`clear_mirror` renames are already in the tree, so indexing them is simply
+true, while these are not grafted yet and an insert would leave the index
+pointing at a node outside the tree until the caller reindexed. A set of its
+own makes `remint_if_taken` right on its own rather than right because of
+what its one caller happens to do next.
+
+### And it must not emit `id_changed`, which is the half worth keeping
+
+The shell migrates per-id state on that signal -- zoom, the loading flag, the
+recently-used entry, and `state/<id>.blob` copied to the new name. Emitting
+it here would **restore the live tab's history and form contents into the
+reopened one**: `about_to_remove` already ran `forget_subtree` when the tab
+closed, so the reopened node's own blob is gone, and the only thing left
+under that name belongs to the tab that took the id. That is the same defect
+the collision caused, reached by a second route.
+
+`main_window`'s wiring comment said "an id changes in exactly one case",
+which is true of the signal and false of ids -- and that reading is exactly
+what leaves a second renaming site unexamined. It now names both cases and
+says why only one of them is announced.
+
+### Using the tree's own checker instead of a bespoke walk found a second defect
+
+The first version of the test above walked the tree counting repeated ids by
+hand. `tree_invariants` already checks that -- "ids are unique, and
+non-empty" is its first rule -- and `holds()` is called thirty-odd times in
+`test_model`, so the hand-rolled walk was a worse copy of something present.
+Replacing it with `holds()` immediately failed on a **different** rule:
+
+    't-5' is at position 1 under 'f-2' but records order 0
+
+`deep_copy` does not carry `order`. The field list is explicit and reasoned
+for everything else -- id, type, title, url, created, last_seen, tags,
+history, and `locked`/`renamed` under `keep_state` -- and `order` is simply
+absent, so every copied child took the default 0. No caller makes up for it:
+`reopen_closed_at` renumbers the list it grafts the subtree *into*, and
+`duplicate_node` renumbers the list it inserts the copy into, and neither
+touches the copy's own interior.
+
+So three gestures produced a subtree whose children all recorded order 0
+while sitting at 0, 1, 2: **reopen a closed folder, duplicate a folder, and
+drag a row out of a browser mirror** -- the last one being the path
+`deep_copy`'s own comment calls the one that matters most. What it costs is
+in the invariant's words: `order` "is what tree-order sorting compares on and
+what the reorganizer diffs, so a stored value that disagrees with the list is
+two answers to one question -- and the sort has no defined result for a tie".
+A reopened folder's children sorted arbitrarily, and a reorganisation diff
+read the ties as moves nobody made.
+
+One line fixes it, and the sabotage reaches all three: removing
+`c->order = src->order` fails both reopen sections and the duplicate one,
+with the explicit check printing `(0, 0, 0)`.
+
+**The transferable part is not about `order`.** The invariant that catches
+this was written, correct, and called constantly, and the defect survived
+because no test drove the tree into the state that violates it -- `holds()`
+after a reopen, and after a duplicate of a folder with children. A hand-rolled
+check in a new test is a chance to miss that: it asserts what its author was
+already thinking about, where the shared one asserts what somebody else
+thought about. **Where a project has an invariant checker, calling it is not
+the lazy option; it is the one that can tell you something you did not come
+looking for.**

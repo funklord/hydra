@@ -1512,6 +1512,175 @@ int main(int argc, char **argv) {
 		holds(m, "a locked node keeps its place, and a t");
 	}
 
+	section("reopening a subtree must not mint one id twice");
+	{
+		// **`remint_if_taken` walks a reopened subtree re-minting any id a
+		// live node already holds, and `unused_id` only ever consults
+		// `m_id_index`** -- which does not contain the ids minted earlier in
+		// the same walk, because the subtree is not inserted or reindexed
+		// until afterwards. So two nodes needing a new id both get the first
+		// free one.
+		//
+		// The model's own comment says what that costs: "two nodes sharing an
+		// id would share a `state/<id>.blob`, so one tab's scroll position
+		// and form contents would be restored into the other". The shell also
+		// keys live views, zoom and the recently-used list by id.
+		//
+		// `clear_mirror` does the same job three hundred lines away and
+		// inserts each minted id into the index before recursing, which is
+		// what makes the omission here a defect rather than a choice.
+		tab_tree_model m;
+		node *folder = m.add_folder(nullptr, "closed later");
+		node *a = m.add_tab(folder, "a", "https://a.example/");
+		node *b = m.add_tab(folder, "b", "https://b.example/");
+		const QString id_a = a->id, id_b = b->id;
+		check(id_a != id_b, QString("two tabs start with distinct ids (%1, %2)")
+		                        .arg(id_a, id_b));
+
+		check(m.remove_node(folder, true), "the folder closes, remembered");
+
+		// New tabs take the ids the closed ones gave up -- `unused_id` hands
+		// back the first free name, so this is the ordinary consequence of
+		// closing and opening, not a contrivance.
+		node *c = m.add_tab(nullptr, "c", "https://c.example/");
+		node *d = m.add_tab(nullptr, "d", "https://d.example/");
+		check(c->id == id_a && d->id == id_b,
+		      QString("and new tabs reuse them (%1, %2)").arg(c->id, d->id));
+
+		node *back = m.reopen_closed();
+		check(back != nullptr, "the folder comes back");
+		// **`tree_invariants` already names this**: "ids are unique, and
+		// non-empty" is its first rule, `holds()` is called thirty-odd times
+		// in this file, and three other sections reopen a closed subtree. What
+		// no test did was put the two together -- reopen after something else
+		// had taken the ids -- so the invariant was right and never reached
+		// the state that violates it. Leading with it here is what makes a
+		// future mutation inherit the check.
+		holds(m, "reopening a subtree must not mint one id twice");
+		if (back) {
+			QStringList ids;
+			std::function<void(node *)> walk = [&](node *n) {
+				if (!n->id.isEmpty())
+					ids << n->id;
+				for (node *k : n->children)
+					walk(k);
+			};
+			// The root is deliberately absent from `m_id_index` --
+			// `index_subtree` indexes children only -- so it is not a node
+			// `node_by_id` is meant to answer for. Walking from it counted
+			// `"root"` as a failure, which is the test being wrong rather
+			// than the model.
+			for (node *k : m.root()->children)
+				walk(k);
+			QStringList dupes;
+			for (const QString &i : ids)
+				if (ids.count(i) > 1 && !dupes.contains(i))
+					dupes << i;
+			check(dupes.isEmpty(),
+			      QString("and no id in the tree is held twice (%1 ids, "
+			               "repeated: %2)")
+			          .arg(ids.size())
+			          .arg(dupes.isEmpty() ? "none" : dupes.join(", ")));
+
+			// The consequence, said in the terms the shell cares about: every
+			// id has to resolve to the node that holds it. A duplicate makes
+			// `node_by_id` answer with whichever won the hash.
+			int wrong = 0;
+			std::function<void(node *)> check_lookup = [&](node *n) {
+				if (!n->id.isEmpty() && m.node_by_id(n->id) != n)
+					++wrong;
+				for (node *k : n->children)
+					check_lookup(k);
+			};
+			for (node *k : m.root()->children)
+				check_lookup(k);
+			check(wrong == 0,
+			      QString("and node_by_id answers with the node that holds it "
+			               "(%1 that do not)").arg(wrong));
+		}
+	}
+
+	section("and a minted id must not land on one the subtree kept");
+	{
+		// **The collision the other way round.** Reserving only the ids this
+		// walk replaces is not enough: a node whose own id is still free
+		// keeps it, and a sibling minted earlier can be handed that same
+		// name straight out of the live index, which does not hold the
+		// subtree either.
+		//
+		// Built to put `unused_id`'s next answer on a kept sibling: the
+		// folder holds `t-2`, which a new tab takes while it is closed, and
+		// `t-7`, which nothing takes -- so re-minting `t-2` asks for the
+		// first free name and that is `t-7`.
+		tab_tree_model m;
+		node *f = m.add_folder(nullptr, "two of them");
+		node *a = m.add_tab(f, "a", "https://a.example/");
+		for (int i = 0; i < 4; ++i)
+			m.add_tab(nullptr, QString("filler %1").arg(i),
+			           QString("https://%1.example/").arg(i));
+		node *g = m.add_tab(f, "g", "https://g.example/");
+		check(a->id == "t-2" && g->id == "t-7",
+		      QString("the folder holds the first and the last id (%1, %2)")
+		          .arg(a->id, g->id));
+
+		check(m.remove_node(f, true), "it closes, remembered");
+		node *fresh = m.add_tab(nullptr, "fresh", "https://fresh.example/");
+		check(fresh->id == "t-2",
+		      QString("a new tab takes the first of them back (%1)")
+		          .arg(fresh->id));
+
+		check(m.reopen_closed() != nullptr, "the folder comes back");
+		holds(m, "a minted id must not land on one the subtree kept");
+		QStringList ids;
+		std::function<void(node *)> walk = [&](node *n) {
+			if (!n->id.isEmpty())
+				ids << n->id;
+			for (node *k : n->children)
+				walk(k);
+		};
+		for (node *k : m.root()->children)
+			walk(k);
+		QStringList dupes;
+		for (const QString &i : ids)
+			if (ids.count(i) > 1 && !dupes.contains(i))
+				dupes << i;
+		check(dupes.isEmpty(),
+		      QString("and the re-minted id did not land on the kept one "
+		               "(%1 ids, repeated: %2)")
+		          .arg(ids.size())
+		          .arg(dupes.isEmpty() ? "none" : dupes.join(", ")));
+	}
+
+	section("a duplicated folder's children keep their order");
+	{
+		// The same loss by the gesture most likely to meet it. `deep_copy`
+		// did not carry `order`, and `duplicate_node` renumbers only the list
+		// it inserts the copy into -- never the copy's own interior -- so a
+		// duplicated folder's children all recorded 0 while sitting at 0, 1,
+		// 2. The invariant is what says that matters: tree-order sorting
+		// compares on `order`, and a tie has no defined result.
+		tab_tree_model m;
+		node *f = m.add_folder(nullptr, "three in here");
+		for (int i = 0; i < 3; ++i)
+			m.add_tab(f, QString("kid %1").arg(i),
+			           QString("https://k%1.example/").arg(i));
+		holds(m, "a folder with three children");
+
+		node *copy = m.duplicate_node(f);
+		check(copy != nullptr && copy->children.size() == 3,
+		      QString("the folder duplicates with its children (%1)")
+		          .arg(copy ? copy->children.size() : -1));
+		holds(m, "a duplicated folder's children keep their order");
+		if (copy && copy->children.size() == 3) {
+			QStringList got;
+			for (node *k : copy->children)
+				got << QString::number(k->order);
+			check(got == QStringList({ "0", "1", "2" }),
+			      QString("and record 0, 1, 2 rather than three zeroes (%1)")
+			          .arg(got.join(", ")));
+		}
+	}
+
 	QDir(dir).removeRecursively();
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

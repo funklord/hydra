@@ -1010,11 +1010,21 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// when it cannot resolve the victim it picked.
 	connect(m_model, &tab_tree_model::about_to_remove, this,
 	        &main_window::forget_subtree);
-	// An id changes in exactly one case -- a row dragged out of a mirror, whose
-	// id was minted in that mirror's namespace. Everything here that is keyed
-	// by id has to follow it, or a tab that was open a moment ago is a live
-	// view under a name nothing resolves: invisible, uncloseable, and holding
-	// a slot against the live-view cap.
+	// This signal fires in exactly one case -- a row dragged out of a mirror,
+	// whose id was minted in that mirror's namespace. Everything here that is
+	// keyed by id has to follow it, or a tab that was open a moment ago is a
+	// live view under a name nothing resolves: invisible, uncloseable, and
+	// holding a slot against the live-view cap.
+	//
+	// **An id changes in one further case, and that one must NOT be
+	// signalled.** `remint_if_taken` renames a reopened subtree's nodes when
+	// a live node has taken their ids -- see its own comment for what it was
+	// getting wrong. Rekeying there would be actively harmful: `about_to_remove`
+	// already ran `forget_subtree` when the tab closed, so the old id's blob,
+	// zoom and loading flag are gone, and the only thing that could be sitting
+	// under that name is the state of the LIVE tab which took it. Migrating it
+	// would restore one tab's history and form contents into another -- which
+	// is the defect the collision caused, reached by a second route.
 	connect(m_model, &tab_tree_model::id_changed, this,
 	         &main_window::rekey_node_state);
 	m_tree->setHeaderHidden(true);

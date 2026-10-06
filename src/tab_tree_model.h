@@ -4,6 +4,7 @@
 
 #include <QAbstractItemModel>
 #include <QHash>
+#include <QSet>
 #include <QList>
 #include <QString>
 
@@ -256,9 +257,14 @@ private:
 	// id would share a `state/<id>.blob`, so one tab's scroll position and form
 	// contents would be restored into the other.
 	QString unused_id(const QString &like) const;
+	// The same, for a caller that holds ids `m_id_index` does not -- a subtree
+	// being re-minted before it is grafted. See `remint_if_taken`.
+	QString unused_id(const QString &like, const QSet<QString> &also_taken) const;
 	// Re-mint any id in this subtree that a live node already holds, so a
 	// reopened tab never collides with one created since it was deleted.
 	void remint_if_taken(node *n);
+	void remint_if_taken(node *n, QSet<QString> *claimed);
+	static void collect_ids(const node *n, QSet<QString> *into);
 
 	// Deleted subtrees, newest last, owned here until grafted back by
 	// `reopen_closed` or evicted past the cap; the destructor frees the rest.

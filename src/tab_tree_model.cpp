@@ -382,12 +382,23 @@ bool tab_tree_model::is_ancestor_of(const node *maybe_ancestor, const node *n) c
 }
 
 QString tab_tree_model::unused_id(const QString &like) const {
+	return unused_id(like, QSet<QString>());
+}
+
+// `also_taken` is for a caller holding ids the index does not: a subtree being
+// re-minted before it is grafted, where the index cannot answer for the names
+// the walk has already handed out. Empty for everybody else.
+QString tab_tree_model::unused_id(const QString &like,
+                                   const QSet<QString> &also_taken) const {
 	// Keep the shape of the id it came from -- they are short and opaque, and a
 	// copy of `a1` reading `a1-2` stays readable in the outline file a person
 	// may well open in an editor.
+	//
+	// Terminates because both sets are finite: `n` is unbounded, so some
+	// `like-n` is in neither.
 	for (int n = 2; ; ++n) {
 		const QString candidate = QString("%1-%2").arg(like).arg(n);
-		if (!m_id_index.contains(candidate))
+		if (!m_id_index.contains(candidate) && !also_taken.contains(candidate))
 			return candidate;
 	}
 }
@@ -403,6 +414,24 @@ static node *deep_copy(const node *src, tab_tree_model *model,
 	c->created  = src->created;
 	c->last_seen = src->last_seen;
 	c->tags     = src->tags;
+	// **The row's place among its siblings, which nothing downstream rebuilds
+	// for a clone.** `order` was simply absent from this list, so every copied
+	// child carried the default 0 -- and the only renumbering any caller does
+	// is of the list the clone is inserted INTO, never of the clone's own
+	// interior. A reopened or duplicated folder therefore came back with all
+	// of its children recording order 0.
+	//
+	// `tree_invariants` names that: `order` "is what tree-order sorting
+	// compares on and what the reorganizer diffs, so a stored value that
+	// disagrees with the list is two answers to one question -- and the sort
+	// has no defined result for a tie". So a reopened folder's children sorted
+	// arbitrarily and a reorganisation diff read the ties as moves nobody
+	// made.
+	//
+	// Copied rather than recomputed because the source is well formed by that
+	// same invariant, and copying keeps this function what it is: one decision
+	// per field, with a reason.
+	c->order    = src->order;
 	// Copied, for the same reason `tags` is and the state blob is not: it
 	// describes the *address*, not a live view of it. This is also the one
 	// path that matters most -- dragging a tab out of the Firefox or Chromium
@@ -819,11 +848,54 @@ node *tab_tree_model::reopen_closed_at(int index) {
 	return sub;
 }
 
+// **Every id in the subtree is reserved before any of them is replaced**,
+// which is the difference between this and what it used to do. The old
+// version minted straight from `unused_id`, and `unused_id` consults only
+// `m_id_index` -- which does not hold the subtree, because the caller does
+// not insert or reindex until this has finished. Two nodes needing a new id
+// therefore both got the first free one.
+//
+// Measured: a folder holding `t-2` and `t-3`, closed; two new tabs take those
+// names back, which is the ordinary consequence of `unused_id` handing out the
+// first free one; reopen the folder and both of its tabs come back as `t-4`.
+// What that costs is on `unused_id`: they share `state/<id>.blob`, so one
+// tab's scroll position and form contents are restored into the other, and the
+// shell keys live views, zoom and the recently-used list by id as well.
+//
+// **A kept id is reserved too, not only a reminted one**, because the second
+// collision runs the other way: a node whose id is free keeps it, and a
+// sibling minted earlier in the walk can be handed that same name out of the
+// live index. Reserving the whole subtree up front is what makes the order of
+// the walk stop mattering.
+//
+// `clear_mirror` does the same job and keeps its index honest by inserting
+// each minted id as it goes. That works there because the nodes it renames are
+// already in the tree; these are not, so an insert here would leave
+// `m_id_index` pointing at an ungrafted node until the caller reindexed. A set
+// of its own makes this function right on its own rather than right because of
+// what happens next.
 void tab_tree_model::remint_if_taken(node *n) {
-	if (node_by_id(n->id))
-		n->id = unused_id(n->is_folder() ? "f" : "t");
+	QSet<QString> claimed;
+	collect_ids(n, &claimed);
+	remint_if_taken(n, &claimed);
+}
+
+void tab_tree_model::collect_ids(const node *n, QSet<QString> *into) {
+	if (!n->id.isEmpty())
+		into->insert(n->id);
+	for (const node *k : n->children)
+		collect_ids(k, into);
+}
+
+void tab_tree_model::remint_if_taken(node *n, QSet<QString> *claimed) {
+	if (node_by_id(n->id)) {
+		// The old name stays in `claimed`, reserving something nothing holds,
+		// which costs one skipped candidate and no correctness.
+		n->id = unused_id(n->is_folder() ? "f" : "t", *claimed);
+		claimed->insert(n->id);
+	}
 	for (node *k : n->children)
-		remint_if_taken(k);
+		remint_if_taken(k, claimed);
 }
 
 QList<node *> tab_tree_model::top_level_only(const QList<node *> &nodes) {
