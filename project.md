@@ -31462,3 +31462,88 @@ primitive.
 Recorded because an empty result is only a measurement if it says what it looked
 for: five routes, two closed this session, three left open with the reason
 written down.
+
+## A KeePassXC reply answered whoever asked most recently
+
+The bridge keyed its outstanding requests by action name --
+`QHash<QString, int> m_pending_tags`, one tag per `get-logins`, `set-login`
+and `generate-password`. Its header said in as many words that this did not
+make two concurrent requests of the *same* action safe, and left it there as
+a known limitation. It is not a limitation; it is credentials going to the
+wrong page, and nothing adversarial is needed to provoke it.
+
+Two tabs reaching a login form in the same second is the whole reproduction.
+Tab A asks, tab B asks and overwrites the slot, A's reply arrives, and the
+bridge emits `logins(tag_of_B, credentials_for_A)`. Each controller filters
+on its own tag, so A ignores the reply it asked for and **B accepts it** --
+B's form filled with the username and password for A's site, on a page that
+can read its own fields.
+
+### What identifies a reply, and what does not
+
+KeePassXC's replies carry no request id. Their only identifying fields are
+the cleartext `action` and the `nonce`, and the nonce is the one that
+discriminates: the bridge increments it per message, so no two in-flight
+requests share one. `keepass_protocol::match_reply` is that matching, as a
+pure function beside the other message shapes -- which is also what made it
+testable, the reply handler itself sitting behind a socket and a handshake
+where only `try_keepass` reaches it.
+
+Three rules, tried in order, and the order is the design:
+
+    1. increment_nonce(request) == reply    the protocol's own relationship
+    2. request == reply                     a server that echoes instead
+    3. exactly one candidate                whatever its nonce says
+
+**Rule 3 is why this is not a strict check, and that is deliberate.** The
+protocol specifies rule 1 and keepassxc-browser verifies it, but nothing
+here has met a real KeePassXC: a strict check that turned out to be wrong
+about the nonce would refuse *every* reply and take autofill with it, in the
+one path that cannot be tested without a vault. With one request in flight
+-- nearly every case -- rule 3 answers it however the nonce is spelled,
+including a reply carrying none. So the change cannot make the single-request
+case worse than it was, and the multi-request case is the only one whose
+behaviour moves.
+
+**Where the two nonce rules can disagree, rule 1 wins.** The nonces are
+consecutive, so `increment_nonce(nonce_of_A) == nonce_of_B` by construction:
+a reply carrying B's nonce is either the specified reply to A or an echo of
+B's own. Believing the specified relationship is the choice, and the test
+pins it as a choice rather than an accident.
+
+### Refusing beats guessing, and that is the one behaviour change
+
+With two or more of an action in flight and a nonce matching none of them,
+`match_reply` returns `ambiguous` and the bridge delivers nothing, saying so
+through `error()`. The old code delivered to whoever asked last. A reply
+handed to the wrong tag is a password typed into the wrong site; a fill that
+does not happen is a password typed by hand. Those are not comparable costs.
+
+The pending list is bounded at 16 and drops its oldest, because an entry is
+removed only by a reply arriving and a request whose reply never comes would
+otherwise sit there for the session.
+
+### The unverified half is now reported rather than assumed
+
+`keepass_bridge::last_reply_match()` says which of the three rules placed the
+last reply, and `try_keepass` prints it after the `get-logins` against the
+real vault. One request is in flight there, so rule 3 would have answered it
+regardless -- what the line reports is whether rule 1 fired on its own. A run
+against a real KeePassXC therefore settles the protocol question in one go,
+and says so loudly enough to be worth recording here if the answer is either
+of the other two.
+
+That is the shape worth keeping from this one: the bridge could not say
+whether the nonce relationship held, so the fix was written not to depend on
+the answer, and the live driver was given the job of getting it.
+
+### Sabotage
+
+Two edits, each landing on its own checks:
+
+    rule 3 replaced by "take the last candidate"   1 red: the refusal check
+    rule 1 deleted                                 3 red: the ordering checks
+
+The first is the defect restored and exactly one assertion sees it, which is
+the assertion that exists for it. The second shows the three checks that pin
+rule 1 are testing rule 1 and not rule 2 standing in for it.

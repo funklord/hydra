@@ -103,6 +103,40 @@ QJsonObject envelope(const QString &action, const QString &client_id,
 	return o;
 }
 
+reply_match match_reply(const QList<pending_request> &pending, const QString &action,
+                        const QByteArray &reply_nonce, int *index) {
+	QList<int> candidates;
+	for (int i = 0; i < pending.size(); ++i)
+		if (pending.at(i).action == action)
+			candidates.append(i);
+	if (candidates.isEmpty())
+		return reply_match::none_pending;
+
+	// Rule 1, then rule 2, then rule 3 -- and each rule is tried against
+	// every candidate before the next rule is tried at all. Interleaving them
+	// would let an echoed nonce on one candidate beat the specified
+	// relationship on another, and the specified one is the one to believe.
+	if (!reply_nonce.isEmpty()) {
+		for (int i : candidates) {
+			if (increment_nonce(pending.at(i).nonce) == reply_nonce) {
+				*index = i;
+				return reply_match::by_incremented_nonce;
+			}
+		}
+		for (int i : candidates) {
+			if (pending.at(i).nonce == reply_nonce) {
+				*index = i;
+				return reply_match::by_echoed_nonce;
+			}
+		}
+	}
+	if (candidates.size() == 1) {
+		*index = candidates.first();
+		return reply_match::by_being_alone;
+	}
+	return reply_match::ambiguous;
+}
+
 bool is_error(const QJsonObject &reply, QString *message) {
 	// Two shapes in the wild: an explicit error field, or success == "false".
 	if (reply.contains("error")) {

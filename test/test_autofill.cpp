@@ -488,6 +488,100 @@ int main(int argc, char **argv) {
 		      "and carries the name KeePassXC publishes");
 	}
 
+	section("a reply is matched to the request that asked, not to the last one");
+	{
+		// The defect this closes: the bridge keyed its pending tags by action,
+		// so two `get-logins` in flight -- two tabs reaching a login form in
+		// the same second -- left the second one's tag in the slot, and the
+		// first reply to arrive was delivered under it. The page that asked
+		// second got the credentials for the site that asked first.
+		//
+		// Nothing adversarial is needed and the socket is not involved, which
+		// is why the matching is a pure function here rather than something
+		// only `try_keepass` can reach.
+		using keepass_protocol::match_reply;
+		using keepass_protocol::pending_request;
+		using keepass_protocol::reply_match;
+
+		// Sequential nonces, as the bridge produces them: one counter,
+		// incremented per message.
+		QByteArray base(24, '\0');
+		const QByteArray n_a = keepass_protocol::increment_nonce(base);
+		const QByteArray n_b = keepass_protocol::increment_nonce(n_a);
+
+		QList<pending_request> pending;
+		pending << pending_request{ "get-logins", n_a, 11 }
+		        << pending_request{ "get-logins", n_b, 22 };
+
+		int which = -1;
+		check(match_reply(pending, "get-logins",
+		                   keepass_protocol::increment_nonce(n_a), &which)
+		          == reply_match::by_incremented_nonce &&
+		          which == 0 && pending.at(which).tag == 11,
+		      "the first asker's reply goes to the first asker");
+
+		which = -1;
+		check(match_reply(pending, "get-logins",
+		                   keepass_protocol::increment_nonce(n_b), &which)
+		          == reply_match::by_incremented_nonce &&
+		          which == 1 && pending.at(which).tag == 22,
+		      "and the second asker's to the second");
+
+		// `increment_nonce(n_a) == n_b`, because the nonces are consecutive.
+		// So a reply carrying n_b is ambiguous between "the specified reply to
+		// A" and "an echo of B's own nonce", and the specified relationship is
+		// the one believed. Pinned because it is a deliberate choice and the
+		// only case where the two rules can disagree.
+		which = -1;
+		check(keepass_protocol::increment_nonce(n_a) == n_b,
+		      "consecutive requests make the reply rules collide by construction");
+		check(match_reply(pending, "get-logins", n_b, &which)
+		          == reply_match::by_incremented_nonce &&
+		          pending.at(which).tag == 11,
+		      "and the incremented nonce is believed over an echoed one");
+
+		// A server that echoes rather than increments. Nothing here has met a
+		// real KeePassXC, so both are accepted; `try_keepass` reports which.
+		QList<pending_request> one;
+		one << pending_request{ "get-logins", n_a, 11 };
+		which = -1;
+		check(match_reply(one, "get-logins", n_a, &which)
+		          == reply_match::by_echoed_nonce && one.at(which).tag == 11,
+		      "an echoed nonce matches too, with only one in flight");
+
+		// The no-breakage property, and the reason a strict check was not
+		// written: one request in flight is answered whatever the nonce says,
+		// including a reply that carries none at all.
+		which = -1;
+		check(match_reply(one, "get-logins", QByteArray(), &which)
+		          == reply_match::by_being_alone && one.at(which).tag == 11,
+		      "and a reply with no nonce at all still answers a lone request");
+
+		// Two in flight and a nonce matching neither: deliver nothing. A reply
+		// handed to the wrong tag is a password in the wrong page, which is
+		// worse than a fill that does not happen.
+		which = -1;
+		QByteArray stranger(24, '\x7f');
+		check(match_reply(pending, "get-logins", stranger, &which)
+		          == reply_match::ambiguous && which == -1,
+		      "two in flight and an unplaceable nonce is refused, not guessed");
+
+		// What the old action-keyed map got right, and this must keep: a
+		// set-login reply does not consume a get-logins request.
+		QList<pending_request> mixed;
+		mixed << pending_request{ "get-logins", n_a, 11 }
+		      << pending_request{ "set-login", n_b, 22 };
+		which = -1;
+		check(match_reply(mixed, "set-login",
+		                   keepass_protocol::increment_nonce(n_b), &which)
+		          == reply_match::by_incremented_nonce && mixed.at(which).tag == 22,
+		      "a reply only ever matches a request of its own action");
+		which = -1;
+		check(match_reply(mixed, "test-associate", n_a, &which)
+		          == reply_match::none_pending,
+		      "and an action nothing asked for matches nothing");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

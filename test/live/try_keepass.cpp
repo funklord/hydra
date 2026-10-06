@@ -295,6 +295,38 @@ int main(int argc, char **argv) {
 			      QString("and a password, %1 characters, not shown here")
 			          .arg(got.first().password.size()));
 		}
+		// **How that reply was placed, which is the open question here.** The
+		// bridge matches a reply to the request it answers by nonce, and the
+		// protocol says a reply carries the request's nonce incremented --
+		// what keepassxc-browser verifies. Nothing offline can confirm a real
+		// KeePassXC does that, so `match_reply` also accepts an echoed nonce
+		// and, failing both, a lone outstanding request. One request was in
+		// flight here, so the last rule would have answered it regardless:
+		// this says which rule actually fired, and a run against a vault is
+		// what settles it.
+		if (arrived) {
+			switch (bridge.last_reply_match()) {
+			case keepass_protocol::reply_match::by_incremented_nonce:
+				note("reply matched by the incremented nonce -- the protocol's "
+				     "specified relationship holds.");
+				break;
+			case keepass_protocol::reply_match::by_echoed_nonce:
+				note("reply matched by an ECHOED nonce: this KeePassXC returns "
+				     "the request's nonce unchanged rather than incremented. "
+				     "Worth recording in project.md.");
+				break;
+			case keepass_protocol::reply_match::by_being_alone:
+				note("reply matched only by being the sole request in flight, "
+				     "so its nonce is neither the request's nor its "
+				     "increment. Worth recording in project.md.");
+				break;
+			case keepass_protocol::reply_match::none_pending:
+			case keepass_protocol::reply_match::ambiguous:
+				note("reply arrived without being matched to a request, which "
+				     "should not be reachable with one in flight.");
+				break;
+			}
+		}
 		QObject::disconnect(c1);
 
 		QList<credential> none;

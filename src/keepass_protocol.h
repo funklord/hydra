@@ -78,6 +78,62 @@ QJsonObject envelope(const QString &action, const QString &client_id,
 // error, so every parse checks for that first.
 bool is_error(const QJsonObject &reply, QString *message);
 
+// One request that has been sent and not yet answered.
+//
+// **A reply carries no request id.** Its only identifying fields are the
+// cleartext `action` and the `nonce`, so the action alone is what the bridge
+// used to match on -- and two requests of the same action in flight at once
+// then answered each other's callers. Two tabs reaching a login form in the
+// same second is all that takes: tab A asks, tab B asks, A's reply arrives
+// and is delivered under B's tag, and B's form is filled with A's site's
+// credentials. The nonce is what tells them apart, because the bridge
+// increments it per message and so no two in-flight requests share one.
+struct pending_request {
+	QString    action;
+	QByteArray nonce;   // the nonce this request was sealed with
+	int        tag = 0;
+};
+
+enum class reply_match {
+	none_pending,   // nothing of that action was outstanding
+	ambiguous,      // several were, and the nonce picks none of them
+	// Matched -- `*index` is the request this reply answers. Which of the
+	// three rules below placed it is reported rather than collapsed, because
+	// it is the one thing about this protocol's nonces that no test here can
+	// settle: `try_keepass` prints it, and a run against a real vault then
+	// says whether the specified relationship holds in practice.
+	by_incremented_nonce,
+	by_echoed_nonce,
+	by_being_alone,
+};
+
+inline bool matched(reply_match m) {
+	return m == reply_match::by_incremented_nonce ||
+	        m == reply_match::by_echoed_nonce || m == reply_match::by_being_alone;
+}
+
+// Which outstanding request a reply answers.
+//
+// Three rules, tried in order, and the order is the whole of the design:
+//
+//  1. `increment_nonce(request) == reply`, which is what the protocol
+//     specifies and what keepassxc-browser verifies.
+//  2. `request == reply`, in case a server echoes the nonce instead. Which of
+//     the two a real KeePassXC sends is not established here -- `try_keepass`
+//     reports it, see `keepass_bridge::last_reply_match`.
+//  3. Exactly one candidate, whatever its nonce says. This is the single
+//     request case, which is nearly every case, and it deliberately keeps
+//     working no matter how the nonce is spelled -- including not at all. A
+//     strict check that could refuse every reply is not worth having in a
+//     path that cannot be tested without a vault.
+//
+// `ambiguous` therefore only arises with two or more of one action in flight
+// and a nonce matching none of them, and the caller must deliver nothing: a
+// reply handed to the wrong tag is a password typed into the wrong site,
+// which is worse than a fill that does not happen.
+reply_match match_reply(const QList<pending_request> &pending, const QString &action,
+                        const QByteArray &reply_nonce, int *index);
+
 // The numeric code beside that message, 0 when there is none. Exposed because
 // one of them is not a failure at all -- see below.
 int error_code(const QJsonObject &reply);

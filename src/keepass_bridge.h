@@ -3,7 +3,7 @@
 #include "keepass_protocol.h"
 
 #include <QByteArray>
-#include <QHash>
+#include <QList>
 #include <QObject>
 #include <QString>
 
@@ -36,6 +36,13 @@ public:
 
 	bool connected() const;
 	bool associated() const { return !m_assoc_id.isEmpty(); }
+
+	// How the last encrypted reply was matched to the request it answered.
+	// Exposed for one reason: `match_reply`'s first rule is the protocol's
+	// specified nonce relationship and nothing here has met a real
+	// KeePassXC, so `try_keepass` reports which rule fired and whoever has a
+	// vault can settle it in one run.
+	keepass_protocol::reply_match last_reply_match() const { return m_last_match; }
 
 	// Connect and perform the change-public-keys handshake.
 	void start();
@@ -87,7 +94,12 @@ signals:
 private:
 	void on_readable();
 	void handle(const QJsonObject &reply);
-	bool send_encrypted(const QString &action, const QJsonObject &inner);
+	// `request_tag` non-zero records the request as outstanding, so its reply
+	// can be matched back to the caller that asked. Zero is for the messages
+	// whose replies go to nobody in particular -- associate and
+	// test-associate, which report through `associated_changed`.
+	bool send_encrypted(const QString &action, const QJsonObject &inner,
+	                     int request_tag = 0);
 	bool send_plain(const QJsonObject &msg);
 	QByteArray next_nonce();
 
@@ -97,16 +109,19 @@ private:
 	QString    m_client_id;
 	QString    m_assoc_id;
 	QString    m_id_key_b64;
-	// One pending tag per action rather than the single int this was before
-	// set-login and generate-password existed. A reply's own "action" field is
-	// the only thing that says which request it answers -- there is no
-	// request-id the server echoes back -- so get-logins, set-login and
-	// generate-password each need their own slot or they would stomp on each
-	// other whenever more than one is in flight (e.g. a save while a previous
-	// lookup's reply hasn't arrived yet). This does not make two *concurrent*
-	// requests of the *same* action safe -- that limitation already existed
-	// for get-logins alone, keyed on the action string instead of nothing.
-	QHash<QString, int> m_pending_tags;
+	// Every request sent and not yet answered, with the nonce it was sealed
+	// with. This was a tag per action, which stopped three *different*
+	// actions stomping on each other and left two of the *same* action
+	// answering each other's callers -- see `keepass_protocol::match_reply`
+	// for what that cost and how the nonce settles it.
+	//
+	// Bounded, because an entry is only removed by a reply arriving and a
+	// request whose reply never comes would otherwise sit here for the life
+	// of the session. The oldest goes first: a reply that old has either
+	// arrived or is not coming.
+	QList<keepass_protocol::pending_request> m_pending;
+	static constexpr int k_max_pending = 16;
+	keepass_protocol::reply_match m_last_match = keepass_protocol::reply_match::none_pending;
 	bool       m_handshaken  = false;
 	QByteArray m_buffer;
 };
