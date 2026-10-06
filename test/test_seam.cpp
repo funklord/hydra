@@ -396,11 +396,27 @@ static void test_resume_against_a_server_that_ignores_range(const QString &tmp) 
 	const QString url = QString("http://127.0.0.1:%1/clip.mp4").arg(server.serverPort());
 
 	// A file already on disk, as a half-finished download would leave.
+	//
+	// **Checked, because a fixture that was not written is not a fixture.**
+	// Both calls returned a status nobody read, so a directory this process
+	// could not write produced a zero-length file and the section then failed
+	// on "the job completes" -- which reads as the downloader being broken.
+	// A fixture that cannot be built is reported as that and nothing else is
+	// claimed.
 	QFile::remove(tmp + "/clip.mp4");
 	{
 		QFile f(tmp + "/clip.mp4");
-		f.open(QIODevice::WriteOnly);
-		f.write(QByteArray(12345, 'x'));
+		if (!f.open(QIODevice::WriteOnly)) {
+			check(false, QString("could not create the half-finished file in "
+			                      "%1 (%2), so nothing below was measured")
+			                 .arg(tmp, f.errorString()));
+			return;
+		}
+		if (f.write(QByteArray(12345, 'x')) != 12345) {
+			check(false, "could not write the half-finished file, so nothing "
+			              "below was measured");
+			return;
+		}
 	}
 
 	download_manager m;
@@ -493,7 +509,24 @@ int main(int argc, char **argv) {
 	test_reentrancy();
 	test_pause();
 
-	test_resume_against_a_server_that_ignores_range(QDir::tempPath());
+	// **Its own directory rather than the shared temp root.** This passed
+	// `QDir::tempPath()` and wrote `clip.mp4` straight into it -- no prefix,
+	// no uniqueness -- so two runs collide, and a run by a different user
+	// from the one who last left that file there cannot open it at all. The
+	// Makefile sets TMPDIR for exactly this reason, which protects
+	// `make test` and not the person running a driver directly, who is the
+	// person whose binary is already misbehaving.
+	//
+	// Measured: run straight from `build-make`, the section reported "the job
+	// completes" red with `QIODevice::write ... device not open` above it --
+	// a permission on a file from another user, wearing the costume of a
+	// broken downloader.
+	QTemporaryDir scratch;
+	if (scratch.isValid())
+		test_resume_against_a_server_that_ignores_range(scratch.path());
+	else
+		std::printf("  --    no scratch directory to run the resume case in; "
+		             "skipped\n");
 
 	if (argc > 2)
 		test_http_against_server(QString::fromLocal8Bit(argv[1]),

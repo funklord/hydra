@@ -31727,3 +31727,45 @@ the generic one the next check covers.
 That is the second time this session an existing check turned out to assert a
 defect rather than a property. Both were rewritten rather than deleted,
 because the thing they were reaching for was right.
+
+## A fixture in the shared /tmp, and the bound living in the recipe
+
+Running `./test/build-make/test_seam` directly -- no `make`, which is what
+debugging one suite looks like -- failed on *the job completes*, with
+`QIODevice::write (QFile, "/tmp/clip.mp4"): device not open` printed above
+it. Nothing was wrong with the downloader. The resume case was handed
+`QDir::tempPath()` and wrote `clip.mp4` straight into it, with no prefix and
+no uniqueness, and `/tmp/clip.mp4` on this machine is 40,000 bytes left there
+on 2026-09-18 by a different user. The fixture could not be created, both
+status returns went unread, and the section measured a file it did not write.
+
+**The Makefile already knew.** It sets `TMPDIR` to a directory the runner
+owns, and its comment says why -- *"seven suites name a fixed path in the
+shared one"* -- naming `$TMPDIR/clip.mp4` specifically. So `make test` has
+been correct throughout and the failure is only reachable by running a driver
+directly, which `running-code.md` names exactly: a guard in a recipe does not
+protect the person debugging, who is the person whose binary is already
+misbehaving.
+
+So the guard moved into the suite. The resume case gets a `QTemporaryDir` of
+its own -- unique per run, removed after, and right with or without `TMPDIR`
+-- and the fixture's two unread statuses are read, reporting *"could not
+create the half-finished file in %1 (%2), so nothing below was measured"* and
+returning rather than going on to assert things about a file that is not
+there. Controlled by pointing it at `/proc`: one honest failure naming the
+directory and the reason, where before it was "the job completes" red with
+the cause three lines above and unexplained.
+
+**The rest of the shape, measured rather than guessed.** Sixteen fixed paths
+across ten suites take the same form -- `QDir::tempPath() + "/hydra-..."` --
+and every one collides between two concurrent runs:
+
+    test_settings   6   test_rotation  2   test_assembler 1   test_bundle   1
+    test_extractor  1   test_instance  1   test_model     1   test_state    1
+    test_tree       1
+
+They are better off than `clip.mp4` was: each carries a `hydra-` prefix and a
+purpose, so a collision needs two runs of the same suite rather than any two
+programs. Not fixed here, because converting ten suites is a deliberate pass
+and not something to do while reading one of them -- recorded with the count
+so that pass has a starting list rather than a hunt.
