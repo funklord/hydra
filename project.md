@@ -31990,3 +31990,70 @@ And the check asserting the two layouts *differ* above the natural width is
 the control for the two asserting they agree: empty rect lists compare equal,
 so a `rects()` returning nothing would pass both agreement checks for the
 worst possible reason, and only the divergence check cannot pass that way.
+
+## Two spellings of one host were two hosts to the policy matcher
+
+`policy_engine::match_pattern` compared with `==` and `endsWith`. Both are
+case-sensitive and a hostname is not -- RFC 4343 -- so a pattern or a host
+carrying a capital matched nothing. The rule stored cleanly, listed in the
+settings dialog, and governed nothing: for a feature that defaults to allow,
+a block that does not block is the worse of the two ways to be wrong.
+
+`QUrl` is the second route, and it is measured rather than supposed:
+`QUrl("https://example.com./x").host()` is `"example.com."`. A trailing dot
+is the absolute form of a name and the same host to every resolver; it was a
+different one here, so a site rule did not apply to a page served that way.
+
+Both are folded in the matcher now rather than at the callers, because a
+matcher that needs everyone to remember stops being right the first time
+somebody takes a host from a header instead of from a URL. Storage is left
+alone -- the pattern is kept as it was given, so the dialog shows what the
+person wrote.
+
+**`find_rule` folds too, and its failure was worse than a miss.**
+`set_setting` uses it to decide whether to update a rule or add one, so two
+spellings became two rules both matching the host -- and `effective_setting`
+keeps the first of two with equal specificity, so the second governed nothing
+while sitting in the list looking as though it did.
+
+Reverting the fix fails seven checks and no others: the three case cases, the
+two trailing-dot cases and both halves of the twin pair. The lookalike
+controls stay green throughout, which is what says the fix did not trade a
+silent miss for a silent grant -- `*.example.com` still refuses
+`evilexample.com` and `example.com.evil.test`, because the dot before the
+domain was never about case.
+
+### The first version of the test passed before the fix
+
+It asked `is_allowed` about `ads`. **`ads` defaults to block**, so "ads are
+blocked here" was true whether or not any rule had matched, and every check
+went green against the unfixed matcher. Two of them even failed in the
+opposite direction, asserting that a lookalike was *allowed* when the default
+blocks everything.
+
+`effective_setting` is no better for this: it falls through to the global
+default when nothing matches, by design, so it cannot separate "no rule
+matched" from "a rule matched and said allow". And `match_pattern` is
+private.
+
+**The technique that answers it is a sentinel rule.** Every case carries
+`* -> allow` alongside the pattern under test at `block`. A pattern that
+matches answers with its own setting at a specificity above zero; one that
+does not leaves the `*` rule answering, and the default is never reached
+either way. `referer` is the feature throughout because it defaults to
+allow, so every answer differs from the default as well.
+
+That is worth keeping as a technique rather than as a lesson about care: a
+tri-state with a fall-through default cannot be interrogated directly, and a
+rule at specificity zero turns it into one that can.
+
+### And the other half of the matcher had no test at all
+
+The specificity it returns is the policy: it decides what a site may do when
+two rules could both answer, and nothing exercised it -- one wildcard appears
+in the cosmetic-rules section incidentally and that was all. Three
+relationships are pinned now, each arranged so both answers differ from the
+default: an exact host beats the everything wildcard, an exact host beats a
+wildcard that also covers it while the wildcard keeps the siblings, and a
+longer wildcard beats a shorter one while the shorter keeps what the longer
+does not reach.

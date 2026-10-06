@@ -666,6 +666,134 @@ int main(int argc, char **argv) {
 	// stated contract is already broken by it, with the reproduction ready for
 	// whoever settles it. When it is settled, the second half below becomes
 	// `ask` and this comment goes.
+	section("two spellings of one host were two hosts to the matcher");
+	{
+		// **The dangerous direction is a rule that silently matches nothing.**
+		// The matcher compared with `==` and `endsWith`, both case-sensitive,
+		// while a hostname is not -- RFC 4343 -- so a pattern or a host
+		// carrying a capital stored cleanly, listed in the settings dialog,
+		// and governed nothing. For a feature that defaults to allow, a block
+		// that does not block is the worse of the two ways to be wrong.
+		//
+		// **How a "did not match" is told apart from a default**, which is
+		// what the first version of this section got wrong: it asked
+		// `is_allowed` about `ads`, which defaults to block, so every check
+		// passed before the fix because "blocked here" was true whether or
+		// not a rule had matched. `effective_setting` cannot separate them
+		// either -- it falls through to the global default by design, and the
+		// matcher itself is private.
+		//
+		// So every case below carries a `*` rule as a sentinel. A pattern
+		// that matched answers with its own setting at a specificity above
+		// zero; one that did not leaves the `*` rule answering, and the
+		// default is never reached. `referer` is the feature throughout
+		// because it defaults to allow, so each answer differs from it.
+		using policy::feature;
+		using policy::setting;
+		auto matched = [](const QString &pattern, const QString &host) {
+			policy_engine pe;
+			pe.set_setting("*", feature::referer, setting::allow);
+			pe.set_setting(pattern, feature::referer, setting::block);
+			return pe.effective_setting(feature::referer, host) == setting::block;
+		};
+
+		check(matched("Example.COM", "example.com"),
+		      "a pattern written with capitals matches the lowercase host");
+		check(matched("example.com", "EXAMPLE.com"),
+		      "and a host arriving with capitals matches the lowercase pattern");
+		check(matched("*.Example.com", "WWW.example.COM"),
+		      "the wildcard folds on both sides too");
+
+		// Measured, not assumed: QUrl keeps a trailing dot, so the absolute
+		// form of a name was a different host here. Printed as well as
+		// asserted, because the assertions after it are only interesting if
+		// QUrl really hands a caller that spelling.
+		std::printf("  ..    QUrl(\"https://example.com./x\").host() is \"%s\"\n",
+		             qPrintable(QUrl("https://example.com./x").host()));
+		check(QUrl("https://example.com./x").host() == "example.com.",
+		      "QUrl hands on the trailing dot of an absolute name");
+		check(matched("example.com", "example.com."),
+		      "and the matcher reads it as the same host");
+		check(matched("*.example.com", "www.example.com."),
+		      "including under a wildcard");
+
+		// **Folding is not loosening.** The dot before the domain is what
+		// stops a lookalike, and that was never about case: these must still
+		// not match, or the fix would have traded a silent miss for a silent
+		// grant, which is the direction that matters.
+		check(!matched("*.example.com", "evilexample.com"),
+		      "a lookalike without the dot is still not the domain");
+		check(!matched("*.example.com", "example.com.evil.test"),
+		      "and neither is a name that merely contains it");
+		check(!matched("example.com", "www.example.com"),
+		      "an exact pattern is still exact");
+
+		// `find_rule` folds as well, and its failure was worse than a miss:
+		// `set_setting` uses it to decide whether to update a rule or add
+		// one, so two spellings became two rules both matching the host --
+		// and the second governed nothing, because equal specificity keeps
+		// the first of the two.
+		policy_engine pe;
+		pe.set_setting("Example.COM", feature::referer, setting::block);
+		pe.set_setting("example.com", feature::referer, setting::allow);
+		check(pe.setting_for("Example.COM", feature::referer) == setting::allow,
+		      "a second spelling updates the rule rather than adding a twin");
+		// Asked about the capitalised spelling on purpose. With a twin in the
+		// list the uppercase rule matches that host exactly and answers
+		// `block`, while the update that was meant to replace it does not
+		// match at all -- so this is the spelling that tells one rule from
+		// two. Asked about the lowercase host instead, both arrangements
+		// answer `allow` and the check proves nothing.
+		check(pe.effective_setting(feature::referer, "Example.COM") ==
+		          setting::allow,
+		      "and the update governs either spelling, which a twin would not");
+	}
+
+	section("which rule wins, which is the other half of the matcher");
+	{
+		// The matcher hands back a specificity and `effective_setting` keeps
+		// the highest, so the ordering IS the policy: it decides what a site
+		// may do when two rules could both answer. Nothing exercised it --
+		// one wildcard appears in the cosmetic section incidentally and that
+		// is all.
+		//
+		// `referer` again, and each pair is arranged so that both answers
+		// differ from the default: every `block` is an answer only a rule can
+		// have given, and every `allow` here is one a more specific rule had
+		// to win to produce.
+		using policy::feature;
+		using policy::setting;
+		policy_engine pe;
+		pe.set_setting("*", feature::referer, setting::block);
+		pe.set_setting("news.example", feature::referer, setting::allow);
+		check(pe.effective_setting(feature::referer, "news.example") ==
+		          setting::allow,
+		      "an exact host beats the everything wildcard");
+		check(pe.effective_setting(feature::referer, "other.example") ==
+		          setting::block,
+		      "which leaves it governing everywhere else, default or not");
+
+		policy_engine pe2;
+		pe2.set_setting("*.example.com", feature::referer, setting::block);
+		pe2.set_setting("www.example.com", feature::referer, setting::allow);
+		check(pe2.effective_setting(feature::referer, "shop.example.com") ==
+		          setting::block,
+		      "a wildcard governs a sibling, which the default would not");
+		check(pe2.effective_setting(feature::referer, "www.example.com") ==
+		          setting::allow,
+		      "and an exact rule takes its own host back off it");
+
+		policy_engine pe3;
+		pe3.set_setting("*.example.com", feature::referer, setting::block);
+		pe3.set_setting("*.ads.example.com", feature::referer, setting::allow);
+		check(pe3.effective_setting(feature::referer, "a.ads.example.com") ==
+		          setting::allow,
+		      "a longer wildcard beats a shorter one covering the same host");
+		check(pe3.effective_setting(feature::referer, "a.cdn.example.com") ==
+		          setting::block,
+		      "and the shorter one keeps what the longer does not reach");
+	}
+
 	section("the policy file this project ships");
 	{
 		// **Shipped defaults that nothing read.** `policy.ini` is the file a

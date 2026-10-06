@@ -141,36 +141,68 @@ QString policy_engine::etld_plus_one(const QString &host) {
 	return labels.mid(labels.size() - 2).join('.');
 }
 
+// **Two spellings of one host used to be two hosts here**, and the way that
+// failed is the dangerous one: a rule that stores cleanly, lists in the
+// settings dialog and governs nothing. For a feature that defaults to allow,
+// a block that does not block is the worse of the two ways to be wrong.
+//
+// A hostname is case-insensitive -- RFC 4343 -- and `==`/`endsWith` are not,
+// so a pattern or a host carrying a capital matched nothing. And `QUrl` keeps
+// a trailing dot: measured, `QUrl("https://example.com./x").host()` is
+// `"example.com."`, which is the same host as `example.com` to every resolver
+// and was a different one to this. Both are normalised here rather than at
+// the callers, because a matcher that needs everyone to remember is one that
+// stops being right the first time somebody gets a host from a header
+// instead of from a URL.
+//
+// Storage is left alone: the pattern is kept as it was given, so the dialog
+// shows what the person wrote.
+static QString fold_host(const QString &h) {
+	QString out = h.toLower();
+	if (out.endsWith('.'))
+		out.chop(1);
+	return out;
+}
+
 bool policy_engine::match_pattern(const QString &pattern, const QString &host, int &specificity) {
 	if (pattern == "*") {
 		specificity = 0;
 		return true;
 	}
+	const QString folded_host = fold_host(host);
 	if (pattern.startsWith("*.")) {
-		const QString dom = pattern.mid(2);
-		if (host == dom || host.endsWith("." + dom)) {
+		const QString dom = fold_host(pattern.mid(2));
+		if (folded_host == dom || folded_host.endsWith("." + dom)) {
 			specificity = dom.count('.') + 1;   // more labels = more specific
 			return true;
 		}
 		return false;
 	}
-	if (pattern == host) {
-		specificity = host.count('.') + 100;    // exact beats any wildcard
+	if (fold_host(pattern) == folded_host) {
+		specificity = folded_host.count('.') + 100;   // exact beats any wildcard
 		return true;
 	}
 	return false;
 }
 
+// Folded for the same reason `match_pattern` folds, and the cost of not
+// doing it is worse here than a rule that misses: `set_setting` uses this to
+// decide whether to update a rule or add one, so two spellings of a host
+// became two rules both matching it -- and `effective_setting` keeps the
+// first of two with equal specificity, so the second governed nothing while
+// sitting in the list looking as though it did.
 policy_engine::rule *policy_engine::find_rule(const QString &pattern) {
+	const QString want = fold_host(pattern);
 	for (rule &r : m_rules)
-		if (r.pattern == pattern)
+		if (fold_host(r.pattern) == want)
 			return &r;
 	return nullptr;
 }
 
 const policy_engine::rule *policy_engine::find_rule(const QString &pattern) const {
+	const QString want = fold_host(pattern);
 	for (const rule &r : m_rules)
-		if (r.pattern == pattern)
+		if (fold_host(r.pattern) == want)
 			return &r;
 	return nullptr;
 }
