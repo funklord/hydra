@@ -32171,3 +32171,111 @@ this is: the menu item shows the pattern it would write -- *"This domain
 than hidden in a file. The pinned measurements are there so that a later
 public-suffix list changes two lines of test with their reasons attached,
 rather than looking like a regression.
+
+## CI was red, and the reason was a guard measuring the wrong engine
+
+Nine commits went out today without anybody looking at CI. It is red, and it
+was red yesterday too -- `gh run list` shows `failure` on every push since
+2026-10-05. The repository is public and the workflow is active, so this is
+not the "zero steps, billing blocked" case `build-and-commit.md` describes:
+`gh run view` lists sixteen steps, fifteen of them green, and the failure is
+in *Run the offline suites* after eight and a half minutes of real work.
+
+Three suites fail there and all three pass here:
+
+    test_extractor   2  a ReDoS guard that does not fire
+    test_pick        1  column widths: "every column but the last grows"
+    test_rotation    1  the menu-bar floor, 233 there against 228 here
+
+The third is the pin this document already describes as a measurement of the
+desktop's font, and 233-against-228 is that in one line.
+
+**`test_pick`'s was not recorded anywhere, and what it is has not been
+established.** The observation is all there is: the check requires every
+column but the last to grow when the text in it lengthens, and in CI
+`Source` and `Size` did not. A column that is already as wide as its own
+header does not move when its content grows, so glyph widths plausibly
+decide it -- but that is a mechanism nobody has measured, and it is written
+here as a guess rather than a finding because the next person should test it
+rather than inherit it. What is known is that it passes here and fails
+there.
+
+Neither is a code fault and neither is this session's to settle.
+
+The first one is.
+
+### A timing bound measured PCRE2 while the pattern runs in V8
+
+`site_rules::why_unsafe` refuses a pattern that takes more than 25 ms to
+decide one label, by running it against forty `a`s and a `!` and timing it.
+The comment says why: the pattern is compiled into a `RegExp` **inside the
+page**, so an exponential one is a renderer that stops responding.
+
+But the timing is taken with `QRegularExpression`, which is PCRE2. The page's
+engine is Chromium's, which is V8's family. Measured here, 2026-10-06 --
+Qt 6.8.2 against PCRE2 10.46, and node 20.19.2 for the other side:
+
+    pattern      PCRE2, 40 a's   V8, 20 / 24 / 28 a's
+    ^(a+)+$          75 ms        94 /  220 / 3356 ms
+    ^(a|a)+$         87 ms       151 /  374 / 5537 ms
+    ^(a*)*$          39 ms       184 /  415 / 6071 ms
+    ^(a+)+b$          0 ms        73 /  181 / 2802 ms
+
+Two things fall out of that table, and the second is the serious one.
+
+**The PCRE2 times are flat in the input length.** 24, 32 and 40 characters
+all cost about the same, so what the probe measures is not backtracking: it
+is how long this CPU takes to exhaust PCRE2's own match limit. A faster
+runner, or a PCRE2 built with a lower limit, comes in under 25 ms and the
+same pattern is accepted. That is the CI failure exactly, and it is
+`evidence.md`'s *a gate's verdict can be a property of the toolchain, not the
+source*.
+
+**`^(a+)+b$` costs nothing in PCRE2 and is exponential in V8.** PCRE2
+auto-possessifies it, because `b` cannot be `a`; V8 does not, and it grows
+about fourfold per four characters -- 2.8 seconds at twenty-eight, so minutes
+on a label nobody would look at twice. The guard passed it on every machine,
+fast or slow. **A probe pointed at the wrong engine is not a loose bound, it
+is a different question**, and the one place it answered confidently was the
+one place it was wrong.
+
+### What replaced it, and why this shape
+
+A quantifier applied to a group is refused outright: `)*`, `)+` and `){`. It
+is deterministic, it does not care which engine or CPU is underneath, and it
+catches every row of the table above.
+
+**`)?` is allowed, and that is what makes the rule usable rather than a ban
+on parentheses.** An optional group tries at most two things at that
+position, so it cannot partition the input -- and every rule this project
+ships uses it: `( all)?`, `( cookies)?`, `( only)?`, `(strictly )?`,
+`(only |use )?`. The control is the built-ins themselves rather than a sample
+of them: all fourteen still pass their own safety check, asserted by walking
+`site_rules::defaults()`.
+
+The timing probe stays as a second layer, for a pattern slow for some reason
+nobody has thought of. Its own trigger now has no portable fixture, which is
+worth saying rather than leaving a test that looks like one: the obvious
+baits are refused structurally first, and the ones PCRE2 optimises away never
+reached it anyway.
+
+### The sabotage is the whole argument in two lines
+
+Removing the structural refusal:
+
+    and the reason says why (takes 64 ms to decide one label, ...)   FAIL
+    and so is one this engine optimises away but the page's does not ()   FAIL
+
+The first says the old guard still refuses `^(a+)+$` here -- by measurement,
+which is why it was green locally and red in CI. The second is the hole: an
+empty reason, meaning `^(a+)+b$` was not refused at all.
+
+### And one more fixed path in the shared /tmp
+
+Running `test_extractor` directly reported `FAIL saves` for an extractor
+store that was fine: `/tmp/hydra-extractors.json` belonged to another user's
+run from 2026-09-18, `QFile::remove` could not clear it, and `save()`
+failed. Its three paths are `QTemporaryDir`s now, so the suite is 181 passed
+with no `TMPDIR` at all. That is the third suite converted today, found the
+same way each time -- by running a driver the way somebody debugging one
+would.

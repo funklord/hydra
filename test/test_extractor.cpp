@@ -11,6 +11,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QTemporaryDir>
 #include <QFile>
 #include <QElapsedTimer>
 #include <cstdio>
@@ -560,10 +561,54 @@ int main(int argc, char **argv) {
 		const QString slow = refused("reject", "^(a+)+$");
 		check(!slow.isEmpty(),
 		       "a pattern that backtracks exponentially is refused");
-		check(slow.contains("ms") && slow.contains("stop the page"),
+		check(slow.contains("group") && slow.contains("stop it"),
 		       QString("and the reason says why (%1)").arg(slow));
+
+		// **The case the timing bound waved through, and why it was wrong to
+		// measure instead of read.** `^(a+)+b$` is the same hazard: PCRE2
+		// auto-possessifies it, so the probe measured 0 ms and the pattern
+		// passed, while the engine in the page -- measured in node 20's V8,
+		// which is the same family as the renderer's -- takes 73, 181 and
+		// 2802 ms on twenty, twenty-four and twenty-eight characters. That is
+		// about fourfold per four characters, so minutes on a label nobody
+		// would look at twice.
+		//
+		// It is also what made CI red where this machine was green: PCRE2's
+		// times are flat in the input length, so the probe was measuring how
+		// fast one CPU exhausts the engine's match limit, not how expensive
+		// the pattern is.
+		const QString possessified = refused("reject", "^(a+)+b$");
+		check(!possessified.isEmpty(),
+		       QString("and so is one this engine optimises away but the "
+		                "page's does not (%1)").arg(possessified));
+
 		check(refused("reject", "^(reject|decline|refuse)( all)?$").isEmpty(),
 		       "while an ordinary grouped pattern is not caught by that bound");
+		// The control for the rule's shape: `?` on a group is safe and every
+		// rule this project ships uses it, so a ban on quantified groups that
+		// also banned `)?` would refuse the built-ins. Checked against the
+		// built-ins themselves rather than against a sample of them.
+		{
+			int checked = 0;
+			QString first_bad;
+			// Bound to a name first: `defaults()` returns by value and
+			// `all()` hands back a reference into it, so iterating the
+			// expression walks a container that died at the semicolon.
+			// `-Wdangling-reference` said so and the run aborted inside
+			// QString -- read the warning.
+			const site_rules shipped = site_rules::defaults();
+			for (const site_rule &r : shipped.all()) {
+				const QString why = site_rules::why_unsafe(r);
+				if (!why.isEmpty() && first_bad.isEmpty())
+					first_bad = r.value + " -- " + why;
+				++checked;
+			}
+			check(checked > 0 && first_bad.isEmpty(),
+			      QString("every one of the %1 rules this project ships still "
+			               "passes its own safety check%2")
+			          .arg(checked)
+			          .arg(first_bad.isEmpty() ? "" : ": " + first_bad));
+		}
 		check(!refused("detector", "ad").isEmpty(),
 		      "a two-letter detector name is refused — it would accuse half the "
 		      "web, and the message tells someone to lower their protection");
@@ -1074,8 +1119,13 @@ int main(int argc, char **argv) {
 
 	section("the store");
 	{
-		const QString path = QDir::temp().filePath("hydra-extractors.json");
-		QFile::remove(path);
+		// Its own directory. A fixed name in the shared one belongs to
+		// whoever made it first: run straight out of `build-make`, with no
+		// TMPDIR, `QFile::remove` could not clear another user's
+		// `/tmp/hydra-extractors.json` from three weeks earlier and this
+		// section reported "saves" red for a store that was fine.
+		QTemporaryDir scratch;
+		const QString path = scratch.path() + "/extractors.json";
 		extractor_store s;
 		s.set_for("site.example", "extract = function(){ return null; };", "first try");
 		s.set_for("other.example", "extract = function(){ return null; };", "");
@@ -1139,9 +1189,8 @@ int main(int argc, char **argv) {
 		// parse, so an interrupted save costs every extractor rather than the
 		// tail of the set. The writer used to truncate first, discard the
 		// write's result and return true unconditionally.
-		const QString dir = QDir::tempPath() + "/hydra-extractors-atomic";
-		QDir(dir).removeRecursively();
-		QDir().mkpath(dir);
+		QTemporaryDir ascratch;
+		const QString dir = ascratch.path();
 		const QString path = dir + "/extractors.json";
 
 		extractor_store store;
@@ -1181,9 +1230,8 @@ int main(int argc, char **argv) {
 	// same object; only the return value could ever have told them apart.
 	section("a store that will not parse is not an empty store");
 	{
-		const QString dir = QDir::temp().filePath("hydra-extractor-garbage");
-		QDir(dir).removeRecursively();
-		QDir().mkpath(dir);
+		QTemporaryDir gscratch;
+		const QString dir = gscratch.path();
 
 		// Something in it first, so the refusal can be shown to leave the
 		// store alone as well as to report.

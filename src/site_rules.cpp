@@ -99,6 +99,52 @@ const char *k_decoys[] = {
 
 }  // namespace
 
+// **A quantifier applied to a group is what makes a pattern exponential**,
+// and it is the one structure a button-label rule never needs. Returns the
+// quantifier that was found, empty when there is none.
+//
+// `?` is deliberately allowed: an optional group tries at most two things at
+// that position, so it cannot partition the input, and every rule this
+// project ships uses it -- `( all)?`, `( cookies)?`, `(strictly )?`. What is
+// refused is `)*`, `)+` and `){`, which is `(a+)+`, `(a*)*`, `(a|a)+` and
+// `([a-z]+.)+` -- all of them exponential.
+//
+// Escapes and character classes are tracked, because `\)` is a literal
+// parenthesis and `[)+]` is a class containing two literals; reading either
+// as a group would refuse a rule that is fine.
+//
+// `){` is refused with the rest although a bounded repetition like `(ab){2}`
+// is not exponential by itself -- `(a+){2}` is, and telling them apart means
+// looking inside the group. The error falls in the direction that gets seen:
+// somebody is told their rule was refused and why, which is recoverable,
+// where the other direction is a page that stops responding. No rule here
+// has ever needed a counted group.
+static QString quantified_group(const QString &pattern) {
+	bool in_class = false;
+	for (int i = 0; i < pattern.size(); ++i) {
+		const QChar c = pattern.at(i);
+		if (c == '\\') {
+			++i;                       // whatever follows is a literal
+			continue;
+		}
+		if (in_class) {
+			if (c == ']')
+				in_class = false;
+			continue;
+		}
+		if (c == '[') {
+			in_class = true;
+			continue;
+		}
+		if (c != ')')
+			continue;
+		const QChar next = i + 1 < pattern.size() ? pattern.at(i + 1) : QChar();
+		if (next == '*' || next == '+' || next == '{')
+			return QString(next);
+	}
+	return QString();
+}
+
 QString site_rules::why_unsafe(const site_rule &r) {
 	static const QStringList kinds = { "container", "reject", "accept", "detector" };
 	if (!kinds.contains(r.kind))
@@ -141,9 +187,40 @@ QString site_rules::why_unsafe(const site_rule &r) {
 			return QString("would also press \"%1\"").arg(decoy);
 	}
 
+	// **A quantified group is refused outright, whatever it costs here.**
+	// Measured 2026-10-06, the same four patterns in both engines -- Qt's
+	// PCRE2 10.46, which is what the timing probe below asks, and node 20's
+	// V8, which is the engine family the pattern is actually compiled into
+	// inside the page:
+	//
+	//     pattern      PCRE2, 40 a's   V8, 20/24/28 a's
+	//     ^(a+)+$          75 ms        94 / 220 / 3356 ms
+	//     ^(a|a)+$         87 ms       151 / 374 / 5537 ms
+	//     ^(a*)*$          39 ms       184 / 415 / 6071 ms
+	//     ^(a+)+b$          0 ms        73 / 181 / 2802 ms
+	//
+	// The last row is the hole this closes. PCRE2 auto-possessifies it to
+	// nothing, so the probe below measured zero and the pattern passed --
+	// while in the page it grows about fourfold per four characters, which is
+	// minutes on a label nobody would think twice about. And the PCRE2 times
+	// are flat in the length, so what that probe measures is the cost of the
+	// engine exhausting its own match limit on this CPU, not the cost of
+	// backtracking: a different machine or PCRE2 build gives a different
+	// verdict on the same pattern, which is why CI refused `^(a+)+$` where
+	// this machine accepted it.
+	const QString repeated = quantified_group(v);
+	if (!repeated.isEmpty())
+		return QString("repeats a group with \"%1\", which backtracks "
+		                "exponentially in the page's own engine and would stop "
+		                "it").arg(repeated);
+
 	// **And it has to decide quickly**, because this pattern is compiled into
 	// a `RegExp` inside the page -- see `consent_blocker`'s script -- and run
 	// against every button label on it.
+	//
+	// Kept as a second layer after the structural refusal above, which catches
+	// every shape measured so far. A pattern slow for some other reason is
+	// what this is still here for.
 	//
 	// A pattern like `(a+)+$` is perfectly valid, matches neither the empty
 	// string nor any decoy, and takes exponential time on a label that nearly
