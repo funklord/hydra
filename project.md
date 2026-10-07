@@ -34469,6 +34469,50 @@ What found it was reading **which** checks went red rather than that some did.
 A sabotage that turns a suite red confirms only that something is watching;
 the list is where a case passing for a coincidence shows up.
 
+### The box itself had no caller, which is the half a gate cannot cover
+
+Both trust gates were sabotaged and both spoke, and neither of them touches
+the thing a person actually operates. `subscription::trusted` has exactly one
+writer in the program -- the checkbox in column 1 of the settings table -- and
+no suite called it. **An interface is only as wired as its least-used
+method**, and a column added to a table is the shape that looks finished
+because it compiles: the row appears, the box ticks, and nothing says the tick
+reached anything.
+
+`test_probe_ui` drives it now, through the item rather than through
+`set_subscriptions`, because a test that sets the flag itself asserts that the
+updater stores what it is handed and that was never the question. Tick, and
+the flag is on the subscription, `subscriptions_changed` has fired once, and
+the index on disk carries it. Then the half a wiring test usually leaves out:
+the same cached body read under the new flag yields **both** scriptlets where
+it yielded one, and untick puts it back to one with `needs_trust` at 1. The
+box is joined to the effect rather than to its own storage.
+
+**The control is that the two boxes are not one wire.** A handler that fell
+through from column 1 would set `enabled` from a box nobody touched -- which
+changes nothing and reports nothing, so it is invisible in exactly the way
+that matters. So unticking enabled is shown to leave trusted alone and
+unticking trusted to clear only that. 26 checks in that suite became 39.
+
+### The fmake guard fired twice, and was right twice
+
+Regenerating the link sets for the new suite ran into
+`tool/objsets.py`'s recorded-fmake check from both directions in one session.
+First `/usr/bin/fmake`, build `5af02348` -- the stale binary that cost a
+session a confusing failure before this guard existed. Then, with the path
+named explicitly, the recorded one *itself*: `/home/claude/src/fmake/fmake`
+has been rebuilt from `f843219d` to `c8908ca3`, which is the "fmake has
+legitimately moved on" case the guard's own message names.
+
+Worth recording because the guard is cheap and its value is entirely in the
+second case. A stale binary at a different path announces itself the moment
+anybody looks; **the same path carrying a different build does not**, and both
+print `fmake 1.0`. The answer is to name the path *and* accept the move
+deliberately, rather than to let either stand silently -- and then to prove
+the regenerated sets by the per-program multiset diff rather than by the tool
+having reported success, since the tool that moved is the thing under
+suspicion.
+
 ### What is left
 
 ~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was

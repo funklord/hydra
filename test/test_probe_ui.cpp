@@ -9,6 +9,8 @@
 // needs nothing but a build AND takes the reachable branch, which is the one
 // a person sees when their model is running.
 #include "settings_dialog.h"
+#include "filter_subscription.h"
+#include "subscription_updater.h"
 #include "ollama_stub.h"
 #include "filter_list.h"
 #include "download_manager.h"
@@ -252,6 +254,99 @@ int main(int argc, char **argv) {
 		check(dm.directory() == fresh,
 		       QString("and is adopted (%1)").arg(dm.directory()));
 		check(QFileInfo(fresh).isDir(), "and created");
+	}
+
+	section("the trusted box is wired, and is what turns the power on");
+	{
+		// **The one thing that can set `subscription::trusted`, and nothing
+		// exercised it.** Everything underneath has its own cases -- the read
+		// drops an untrusted list's trusted call and counts it, `source_for`
+		// refuses it again -- while the checkbox that decides the flag had no
+		// caller in any suite. An interface is only as wired as its
+		// least-used method, and a column added to a table is exactly the
+		// shape that looks done because it compiles.
+		//
+		// Driven through the item, not through `set_subscriptions`: a test
+		// that sets the flag itself would assert that the updater stores what
+		// it is handed, which was never the question.
+		const QString subs_dir = QDir(tmp).filePath("subs");
+		check(QDir().mkpath(subs_dir), "a scratch directory for the cache");
+		const QString index = QDir(subs_dir).filePath("subs.json");
+		const QString body =
+		  "player.test##+js(set-constant, cfg.ads, false)\n"
+		  "player.test##+js(trusted-set-cookie, consent, yes, 7)\n";
+		{
+			QFile f(QDir(subs_dir).filePath("list.txt"));
+			check(f.open(QIODevice::WriteOnly | QIODevice::Truncate),
+			       "with one cached body in it");
+			f.write(body.toUtf8());
+		}
+		subscription one;
+		one.name = "A list with one powerful rule";
+		one.url  = QUrl("https://list.test/l.txt");
+		one.file = "list.txt";
+		subscription_updater up(index, subs_dir);
+		check(up.set_subscriptions({ one }), "the index saves");
+
+		settings_dialog d(&players, &downloads, tor, &local_ai, &external_ai);
+		d.set_subscription_updater(&up);
+		auto *view = d.findChild<QTreeWidget *>("subscriptions");
+		check(view && view->topLevelItemCount() == 1,
+		       QString("the subscription row is on screen (%1)")
+		           .arg(view ? view->topLevelItemCount() : -1));
+		if (!view || view->topLevelItemCount() != 1) {
+			std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
+			return g_fail == 0 ? 0 : 1;
+		}
+		QTreeWidgetItem *row = view->topLevelItem(0);
+		check(row->checkState(1) == Qt::Unchecked,
+		       "and its trusted box is clear, which is the default");
+		check(!row->toolTip(1).isEmpty() &&
+		          row->toolTip(1).contains("cookie"),
+		       QString("with a tooltip saying what it allows (%1)")
+		           .arg(row->toolTip(1).left(40)));
+
+		QSignalSpy told(&d, &settings_dialog::subscriptions_changed);
+		row->setCheckState(1, Qt::Checked);
+		check(!up.subscriptions().isEmpty() &&
+		          up.subscriptions().first().trusted,
+		       "ticking it sets the flag on the subscription");
+		check(told.count() == 1,
+		       QString("and tells the shell to re-read the cached bodies "
+		                "(%1)").arg(told.count()));
+		check(!filter_subscription::load_index(index).isEmpty() &&
+		          filter_subscription::load_index(index).first().trusted,
+		       "and it survives in the index on disk");
+
+		// **The box joined up to the effect**, which is the half a wiring
+		// test usually leaves out: the flag is only worth setting if the read
+		// keeps the call it was blocking.
+		const subscription_read now =
+		  filter_subscription::read(body, 0,
+		                             up.subscriptions().first().trusted);
+		check(now.scriptlets == 2 && now.needs_trust == 0,
+		       QString("the cached body now yields both scriptlets (%1)")
+		           .arg(now.summary()));
+
+		// **The control, and it is the case that separates reading the column
+		// from writing whichever box was touched.** A handler that fell
+		// through would set `enabled` from an untouched box -- harmless and
+		// invisible -- and leave `trusted` alone, so the two boxes have to be
+		// shown not to be one wire.
+		row->setCheckState(0, Qt::Unchecked);
+		check(!up.subscriptions().first().enabled &&
+		          up.subscriptions().first().trusted,
+		       "unticking enabled leaves trusted alone");
+		row->setCheckState(1, Qt::Unchecked);
+		check(!up.subscriptions().first().trusted &&
+		          !up.subscriptions().first().enabled,
+		       "and unticking trusted clears only that");
+		const subscription_read back =
+		  filter_subscription::read(body, 0,
+		                             up.subscriptions().first().trusted);
+		check(back.scriptlets == 1 && back.needs_trust == 1,
+		       QString("so the trusted call is dropped again (%1)")
+		           .arg(back.summary()));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
