@@ -34269,3 +34269,62 @@ somebody how much of a list is working.
 Still absent for the reason recorded when the catalog was written: every
 `trusted-*` scriptlet, which belongs with whatever UI says which lists are
 trusted.
+
+## json-prune-xhr-response, and the listener order that makes it hard
+
+Fifteen in the catalog. This was the deliberate absence an entry ago, on the
+grounds that the obvious implementation prunes *sometimes* -- so the thing
+worth recording is what "properly" turned out to mean.
+
+**The obvious version waits for `load` and rewrites the body then.** Listeners
+fire in the order they were added, so a page that registered its own handler
+before calling `send` has already read the original by the time ours runs.
+That is not a race in the sense of timing; it is a fixed loss, every time, on
+any page that wires its handler first -- which is most of them.
+
+**So the reads are redirected before the request is sent.** `responseText` and
+`response` are defined on the *instance* at `send` time, shadowing the
+prototype's accessors, and the real ones are captured from the prototype
+first so the pruned value is computed from exactly what the engine would have
+returned. Whenever the page reads, from whichever listener, it reads through
+ours.
+
+The sabotage is the obvious version itself: swap the getters for a `load`
+handler that rewrites, and the test's handler -- registered first, as a page
+would -- sees `{"adPlacements":[1,2],"ok":2}`. Unpruned, and the suite says so
+in one line.
+
+### Four shapes, and only two of them can be pruned
+
+    responseType ''/'text'   the text is parsed, pruned, re-serialised
+    responseType 'json'      the engine has parsed it; the object is pruned
+    'arraybuffer', 'blob'    handed over untouched
+    readyState < 4           handed over untouched
+
+**Replacing what cannot be read would hand the page something it did not ask
+for**, which is worse than leaving ad data in a buffer nothing will look at.
+The arraybuffer case is asserted against the body's own length rather than a
+number counted by hand -- the first version of that line said 22 for a 20-byte
+body, which is an assertion failing on the test's arithmetic rather than on
+the code.
+
+### The state guard needed a fixture that could fail
+
+`readyState < 4` returns the real value, because a body that is still arriving
+is a fragment. Sabotaging that guard **passed** at first: the fixture was a
+truncated `{"adPlacements":[1]`, which does not parse, so it came back raw
+either way and the guard was never the reason.
+
+The case that discriminates is a body that is *valid JSON while still
+incomplete* -- a server can send a whole document with the connection still
+open. With the guard, a read at readyState 3 is untouched and the same read
+prunes once the state moves to 4; without it, the early read is already
+pruned. **A guard whose sabotage passes is a guard the fixture cannot see**,
+and the fix is a fixture, not a better assertion.
+
+### What is left
+
+Every `trusted-*` scriptlet, for the reason recorded when the catalog was
+written: the first of those belongs with whatever UI says which lists are
+trusted, and there is none. Nothing else in the families this project has met
+is missing now.

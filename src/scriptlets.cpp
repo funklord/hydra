@@ -143,6 +143,95 @@ C['json-prune-fetch-response'] = function (paths, needle, match) {
 	};
 };
 
+// json-prune-xhr-response: the same for XMLHttpRequest.
+//
+// **The reads are redirected before the request is sent**, and that is the
+// whole of what makes this reliable. The obvious implementation waits for
+// `load` and rewrites the body then -- and a page that registered its own
+// handler before calling `send` has already read the original by the time
+// ours runs, because listeners fire in the order they were added. So this
+// defines `responseText` and `response` on the instance at `send` time:
+// whenever the page reads, from whichever listener, it reads through these.
+//
+// The real accessors are captured from the prototype first, so the pruned
+// value is computed from exactly what the engine would have returned.
+C['json-prune-xhr-response'] = function (paths, needle, match) {
+	var XHR = window.XMLHttpRequest;
+	if (typeof XHR !== 'function' || !XHR.prototype) return;
+	var prune = pruner(paths, needle);
+	if (!prune) return;
+	var wanted = matcher(match);
+
+	var describe = function (name) {
+		try { return Object.getOwnPropertyDescriptor(XHR.prototype, name); }
+		catch (e) { return null; }
+	};
+	var text_of = describe('responseText');
+	var resp_of = describe('response');
+	if (!text_of || typeof text_of.get !== 'function') return;
+
+	var open = XHR.prototype.open;
+	var send = XHR.prototype.send;
+	if (typeof open !== 'function' || typeof send !== 'function') return;
+
+	XHR.prototype.open = function (method, url) {
+		try { this.__hydra_url = String(url == null ? '' : url); } catch (e) {}
+		return open.apply(this, arguments);
+	};
+
+	XHR.prototype.send = function () {
+		var xhr = this;
+		var url = '';
+		try { url = String(xhr.__hydra_url || ''); } catch (e) {}
+		if (!url || !wanted(url)) return send.apply(this, arguments);
+
+		// Cached on the raw body, so repeated reads neither re-parse nor
+		// disagree with each other -- a page that reads `responseText` twice
+		// must see the same thing both times.
+		var raw_seen = null, pruned = null;
+		var pruned_text = function () {
+			var raw;
+			try { raw = text_of.get.call(xhr); } catch (e) { return undefined; }
+			// **Before the body is complete there is nothing to parse.** A
+			// progressive read at readyState 3 is a fragment, and handing
+			// back a fragment with the properties still in it is correct:
+			// what the page gets is what it would have got.
+			if (xhr.readyState !== 4 || typeof raw !== 'string') return raw;
+			if (raw === raw_seen) return pruned;
+			raw_seen = raw;
+			try { pruned = JSON.stringify(prune(JSON.parse(raw))); }
+			catch (e) { pruned = raw; }        // not JSON: unchanged
+			return pruned;
+		};
+		try {
+			Object.defineProperty(xhr, 'responseText', {
+				get: pruned_text, configurable: true
+			});
+			Object.defineProperty(xhr, 'response', {
+				get: function () {
+					var kind = '';
+					try { kind = String(xhr.responseType || ''); } catch (e) {}
+					if (kind === '' || kind === 'text') return pruned_text();
+					var real;
+					try {
+						real = (resp_of && typeof resp_of.get === 'function')
+						        ? resp_of.get.call(xhr) : undefined;
+					} catch (e) { return undefined; }
+					// **Only the shapes this can read are touched.** For
+					// `json` the engine has already parsed it, so prune the
+					// object; an arraybuffer, a blob or a document is handed
+					// over as it is, because replacing what cannot be read
+					// would hand the page something it did not ask for.
+					if (kind !== 'json' || xhr.readyState !== 4) return real;
+					try { return prune(real); } catch (e) { return real; }
+				},
+				configurable: true
+			});
+		} catch (e) { /* a page that pinned them keeps them */ }
+		return send.apply(this, arguments);
+	};
+};
+
 // set-constant: pin a page global to a value it then cannot change.
 //
 // **Only the vocabulary below, and that is narrower than uBlock's on
@@ -488,6 +577,7 @@ const catalog_entry k_entries[] = {
 	// (names, selector, behaviour) -- the selector is the second argument,
 	// and a rule may leave it out, in which case the names become it.
 	{ "json-prune-fetch-response", 1 << 2, 0     },   // (props, needle, url)
+	{ "json-prune-xhr-response",  1 << 2, 0      },
 	{ "remove-attr",              0,      1 << 1 },
 	{ "remove-class",             0,      1 << 1 },
 };

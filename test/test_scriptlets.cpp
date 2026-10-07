@@ -136,6 +136,43 @@ window.fetch = function (u) {
 	};
 	return window.P(res);
 };
+// An XMLHttpRequest with the shape that matters: `responseText` and
+// `response` are accessors on the PROTOTYPE, because that is where the
+// scriptlet captures the real ones from, and a stub with plain data
+// properties would let a broken implementation pass.
+window.__sent = [];
+var X = function () {
+	this.readyState = 0;
+	this.responseType = '';
+	this.__l = [];
+	this.__raw = '';
+};
+Object.defineProperty(X.prototype, 'responseText', {
+	get: function () { return this.__raw; }, configurable: true
+});
+Object.defineProperty(X.prototype, 'response', {
+	get: function () {
+		if (this.responseType === 'json') {
+			try { return JSON.parse(this.__raw); } catch (e) { return null; }
+		}
+		if (this.responseType === 'arraybuffer')
+			return { bytes: String(this.__raw).length };
+		return this.__raw;
+	}, configurable: true
+});
+X.prototype.open = function (m, u) { this.__m = m; this.__u = u; };
+X.prototype.send = function () { window.__sent.push(String(this.__u)); };
+X.prototype.addEventListener = function (n, f) { this.__l.push([n, f]); };
+window.XMLHttpRequest = X;
+// Complete a request: set the body, the state, and fire the handlers in the
+// order they were added -- which is the ordering the whole case turns on.
+window.finish = function (x, raw, state) {
+	x.__raw = raw;
+	x.readyState = (state === undefined) ? 4 : state;
+	for (var i = 0; i < x.__l.length; i++)
+		if (x.__l[i][0] === 'load') x.__l[i][1]({ target: x });
+};
+
 // Read a response the way a player would, and report what it saw.
 window.ask = function (url) {
 	var seen = null;
@@ -182,7 +219,7 @@ int main(int argc, char **argv) {
 		// not guaranteed, so it would prune sometimes -- and a count claiming
 		// coverage it does not have is worse than an honest absence.
 		for (const char *no : { "trusted-set-cookie", "trusted-replace-fetch",
-		                         "aost", "json-prune-xhr-response",
+		                         "aost", "trusted-prune-inbound-object",
 		                         "eval", "" }) {
 			check(!scriptlets::vetted(QString::fromLatin1(no)),
 			       QString("\"%1\" is not in the catalog")
@@ -445,8 +482,8 @@ int main(int argc, char **argv) {
 		}
 		// The count lives here, once. It moves when the catalog does, which
 		// is the point: a name added without a test is an entry nothing ran.
-		check(scriptlets::names().size() == 14,
-		       QString("fourteen scriptlets in the catalog (%1)")
+		check(scriptlets::names().size() == 15,
+		       QString("fifteen scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 	}
 
@@ -803,6 +840,138 @@ int main(int argc, char **argv) {
 		                  "function(r){ m=String(r.__made); });return m;})()")
 		          == "true",
 		       "a real Response is built where the frame has one");
+	}
+
+	section("pruning an XHR, read from a handler registered before send");
+	{
+		// **The case the obvious implementation loses.** Waiting for `load`
+		// and rewriting the body then is too late for a page that added its
+		// own handler first: listeners fire in the order they were added, so
+		// it has already read the original. The getters go on the instance at
+		// `send` time instead, before the request can complete.
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_fetch_stubs));
+		check(run_one(&eng, "json-prune-xhr-response",
+		               { "adPlacements", "", "/player" }).isEmpty(),
+		       "json-prune-xhr-response evaluates");
+
+		eng.evaluate("window.__seen = null;"
+		              "window.x = new window.XMLHttpRequest();"
+		              // Registered FIRST, which is the hostile ordering.
+		              "window.x.addEventListener('load', function () {"
+		              "  window.__seen = window.x.responseText; });"
+		              "window.x.open('GET', 'https://x.test/player?v=1');"
+		              "window.x.send();"
+		              "window.finish(window.x,"
+		              "  '{\"adPlacements\":[1,2],\"ok\":2}');");
+		const QString seen = ask(&eng, "String(window.__seen)");
+		check(!seen.contains("adPlacements"),
+		       QString("the handler saw a pruned body (%1)").arg(seen));
+		check(seen.contains("\"ok\":2"),
+		       QString("with the rest of the document intact (%1)").arg(seen));
+		check(ask(&eng, "window.__sent.length") == "1",
+		       "the request still went out -- this prunes the answer");
+
+		// Read twice, the same answer both times.
+		check(ask(&eng, "String(window.x.responseText === "
+		                 "window.x.responseText)") == "true",
+		       "and reading it again gives the same body");
+
+		// A url the rule did not name is untouched.
+		eng.evaluate("window.y = new window.XMLHttpRequest();"
+		              "window.y.open('GET', 'https://x.test/other');"
+		              "window.y.send();"
+		              "window.finish(window.y, '{\"adPlacements\":[9]}');");
+		check(ask(&eng, "String(window.y.responseText)")
+		          .contains("adPlacements"),
+		       QString("a url the rule did not name keeps its body (%1)")
+		           .arg(ask(&eng, "String(window.y.responseText)")));
+
+		// A partial read, before the body is complete, is handed over as it
+		// is: a fragment is not JSON and pretending otherwise would hand the
+		// page something it would not have had.
+		eng.evaluate("window.p = new window.XMLHttpRequest();"
+		              "window.p.open('GET', 'https://x.test/player');"
+		              "window.p.send();"
+		              "window.finish(window.p, '{\"adPlacements\":[1]', 3);");
+		check(ask(&eng, "String(window.p.responseText)")
+		          .contains("adPlacements"),
+		       QString("a partial body is untouched (%1)")
+		           .arg(ask(&eng, "String(window.p.responseText)")));
+
+		// **And one that is valid JSON while still incomplete**, which is
+		// what actually tests the state guard: the truncated body above
+		// fails to parse, so it comes back raw either way and a sabotage of
+		// the guard passed against it. A server can send a whole document
+		// and the connection stay open, and what the page reads then is what
+		// it would have read without any of this.
+		eng.evaluate("window.w = new window.XMLHttpRequest();"
+		              "window.w.open('GET', 'https://x.test/player');"
+		              "window.w.send();"
+		              "window.finish(window.w,"
+		              "  '{\"adPlacements\":[1],\"ok\":2}', 3);");
+		check(ask(&eng, "String(window.w.responseText)")
+		          .contains("adPlacements"),
+		       QString("valid JSON before the body is done is untouched (%1)")
+		           .arg(ask(&eng, "String(window.w.responseText)")));
+		// And once it is done, the same instance prunes.
+		eng.evaluate("window.w.readyState = 4;");
+		check(!ask(&eng, "String(window.w.responseText)")
+		           .contains("adPlacements"),
+		       QString("and the same read prunes once it is (%1)")
+		           .arg(ask(&eng, "String(window.w.responseText)")));
+
+		// Not JSON at all: unchanged.
+		eng.evaluate("window.h = new window.XMLHttpRequest();"
+		              "window.h.open('GET', 'https://x.test/player');"
+		              "window.h.send();"
+		              "window.finish(window.h, '<html>no</html>');");
+		check(ask(&eng, "String(window.h.responseText)") == "<html>no</html>",
+		       QString("a body that is not JSON comes through whole (%1)")
+		           .arg(ask(&eng, "String(window.h.responseText)")));
+	}
+
+	section("an XHR's other response shapes, pruned or left alone");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&eng, "json-prune-xhr-response",
+		         { "adPlacements", "", "/player" });
+
+		// `responseType = 'json'` means the engine has already parsed it, so
+		// the object is pruned rather than the text.
+		eng.evaluate("window.j = new window.XMLHttpRequest();"
+		              "window.j.responseType = 'json';"
+		              "window.j.open('GET', 'https://x.test/player');"
+		              "window.j.send();"
+		              "window.finish(window.j,"
+		              "  '{\"adPlacements\":[1],\"ok\":2}');");
+		check(ask(&eng, "JSON.stringify(window.j.response)")
+		          .contains("ok") &&
+		          !ask(&eng, "JSON.stringify(window.j.response)")
+		               .contains("adPlacements"),
+		       QString("a json response is pruned as an object (%1)")
+		           .arg(ask(&eng, "JSON.stringify(window.j.response)")));
+
+		// **A shape this cannot read is handed over as it is.** Replacing an
+		// arraybuffer with text would give the page something it did not ask
+		// for, which is worse than leaving the ad data in it.
+		eng.evaluate("window.b = new window.XMLHttpRequest();"
+		              "window.b.responseType = 'arraybuffer';"
+		              "window.b.open('GET', 'https://x.test/player');"
+		              "window.b.send();"
+		              "window.finish(window.b, '{\"adPlacements\":[1]}');");
+		// Compared against the body's own length rather than a number counted
+		// by hand -- the first version of this line said 22 for a 20-byte
+		// body, which is an assertion failing on the test's arithmetic rather
+		// than on the code.
+		check(ask(&eng, "String(window.b.response.bytes === "
+		                 "window.b.__raw.length)") == "true",
+		       QString("an arraybuffer is untouched (%1 of %2 bytes)")
+		           .arg(ask(&eng, "String(window.b.response.bytes)"),
+		                 ask(&eng, "String(window.b.__raw.length)")));
 	}
 
 	section("the pattern checked is the one the scriptlet matches with");
