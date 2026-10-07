@@ -32849,3 +32849,81 @@ that stopped generating -- or a sequence that deleted its way to nothing --
 would report no violations just as loudly. A genuine early failure trips that
 control too, the loop stopping after four violations, so it is written as a
 consequence rather than a second finding.
+
+## A whole class of filter rules was silently inert
+
+`filter_list` buckets a substring or wildcard rule under one token: the
+longest run of letters and digits in the pattern. A URL is tokenised the same
+way, and only the buckets its own tokens name are tested. The header calls
+that what every real blocker does, and the shape is right -- the rule for
+*choosing* the token was not.
+
+**A run touching a `*`, or either end of a floating pattern, is not a token
+the index can look up**, because all three absorb letters and digits. So
+`*banner*.gif` was filed under `banner` while
+`other.example/a/banner9.gif` offers the tokens `https`, `other`, `example`,
+`banner9` -- and the bucket named `banner` is never consulted. The rule
+never fired. Not a slow match or a wrong match: a rule from somebody's list,
+loaded, listed, and doing nothing.
+
+`token_of` now requires a separator on each side, which is sound because a
+separator in the pattern has to be a separator in the URL too: `*/track/*`
+keeps `track` and stays indexed, while `*banner*.gif` and `promo*pixel*` go
+to `m_untokenised` -- the always-tested list that exists for exactly this and
+was simply never reached.
+
+### How it was found, which is the part worth copying
+
+The differential check beside that benchmark is well built: it keeps the
+naive scan as an oracle and requires the index to agree on every URL. It had
+been green for as long as it existed.
+
+**Every rule in its fixture was host-anchored or a plain substring whose
+token happened to be a whole run in the URL.** 20,000 of
+`||ads<N>.example^` and 5,000 of `/banner<N>/track`, against URLs built to
+match them -- two of the three buckets, and the `wildcard` one, the only kind
+with matching logic of its own, absent entirely. Six wildcard rules found the
+miss on the first run.
+
+Third time this session that a set of fixtures chosen for variety turned out
+to agree on a property nobody had named, after the LZ4 payloads that all
+matched at an offset under 256 and the nonces that all started from zero. The
+remedy each time was the same and it is not "pick better fixtures": ask what
+the set has in common that the code under test can distinguish.
+
+### What it costs, measured rather than argued
+
+The index's speed is the stated reason a real list can be loaded at all, so
+the price matters:
+
+    25,000 indexable rules            3.3 us per request   (3.4 before)
+    plus 2,000 unpinned rules       113.7 us per request
+    the naive scan, for scale     21,000 us per request
+
+So the fix is **free for a rule the index can still place**, and an unpinned
+one costs about 57 ns per request each, because the always-tested list is
+walked. 2,000 of them is 114 us -- noticeable, and still two hundred times
+better than the scan.
+
+**What would retire that cost, if a real list ever makes it matter**: index an
+unpinned rule under the first four characters of its longest run, and look up
+every four-character window of each URL token. That is complete, since a run
+of four or more that appears in the URL at all has its first four characters
+as one of those windows, and it is O(token length) lookups rather than
+O(length squared). Recorded as the next step rather than taken now: the
+correctness fix stands on its own and nothing here knows EasyList's
+distribution of unpinned rules, which is the number that decides whether the
+cost is worth paying down.
+
+### And a gap a differential check cannot see
+
+`||cdn*.site.example^` and `||x*.test^` fire for **neither** the index nor the
+scan. A host-anchored rule is filed under its literal host and looked up by
+exact host, so a `*` in one never matches -- and `matches()` does not expand
+it either, so the oracle agrees and the parity check stays green. Both wrong
+together is the one thing a differential test is blind to, which is worth
+remembering about the technique: it finds disagreements, not errors.
+
+Pinned with an assertion so the state is visible, and left alone: host rules
+are the large majority of any list, and making their bucket handle a wildcard
+changes the shape of the index rather than a rule about tokens.

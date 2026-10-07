@@ -619,6 +619,7 @@ int main(int argc, char **argv) {
 		           .arg(blocked));
 		check(blocked == 2, "and the two that should block, do");
 
+
 		QElapsedTimer t;
 		t.start();
 		for (const QString &u : urls)
@@ -636,6 +637,96 @@ int main(int argc, char **argv) {
 		std::printf("        %d rules: per request indexed %.1f us, "
 		             "scan %lld us\n", hosts + subs,
 		             double(fast_us) / urls.size(), (long long)slow_us);
+
+		// **Wildcards, which this fixture had none of.** Every rule above is
+		// host-anchored or a plain substring whose token happens to be a
+		// whole run in the URL, so two of the index's three buckets were
+		// compared and the `wildcard` one -- the only kind with matching
+		// logic of its own -- was absent. Putting six in found a real miss at
+		// once: `*banner*.gif` was filed under `banner` while
+		// `other.example/a/banner9.gif` offers the token `banner9`, so the
+		// rule never fired. See `token_of` for the rule that fixed it.
+		{
+			const QStringList wild = {
+				"ads*.example/banner*", "*/track/*", "||cdn*.site.example^",
+				"*banner*.gif", "promo*pixel*", "||x*.test^",
+			};
+			for (const QString &w : wild) {
+				filter_rule r;
+				if (filter_list::parse_rule(w, &r))
+					fl.add(r);
+			}
+			const QStringList probes = {
+				"https://ads9.example/banner/x.png",
+				"https://cdn7.site.example/a",
+				"https://other.example/track/me",
+				"https://other.example/promo/1/pixel/2",
+				"https://other.example/a/banner9.gif",
+				"https://xq.test/y",
+				"https://nothing.example/plain",
+				"https://ads.example/bannerless",
+			};
+			QStringList disagree;
+			for (const QString &u : probes)
+				if (fl.blocks(u, QString()) != naive(u))
+					disagree << QString("%1 (index says %2)")
+					                .arg(u).arg(fl.blocks(u, QString()));
+			check(disagree.isEmpty(),
+			      QString("the index agrees with the scan on wildcards too "
+			               "(%1)")
+			          .arg(disagree.isEmpty() ? QStringLiteral("all eight")
+			                                   : disagree.join(", ")));
+
+			// **Which of them fire, printed once and recorded, because
+			// parity alone does not say whether a rule works.** Both sides
+			// agreeing that nothing matched is parity too. Measured:
+			//
+			//   ads9.example/banner/x.png        blocked by ads*.example/banner*
+			//   other.example/track/me           blocked by */track/*
+			//   other.example/promo/1/pixel/2    blocked by promo*pixel*
+			//   other.example/a/banner9.gif      blocked by *banner*.gif
+			//   cdn7.site.example/a              NOT blocked, by either
+			//   xq.test/y                        NOT blocked, by either
+			//
+			// The last two are `||cdn*.site.example^` and `||x*.test^`: a
+			// host-anchored rule containing a `*` is filed under the literal
+			// host `cdn*.site.example` and looked up by exact host, so it
+			// never fires -- and `matches()` does not expand it either, so
+			// **the scan agrees and a differential check cannot see it.**
+			// Recorded rather than fixed: host rules are the large majority
+			// and making their bucket handle a wildcard is a change to the
+			// shape of the index, not a rule about tokens.
+			check(!fl.blocks("https://cdn7.site.example/a", QString()),
+			      "while a host rule with a star in it fires for neither, "
+			      "which is its own gap");
+		}
+
+		// **What the fix costs, since the index's speed is the reason a real
+		// list can be loaded at all.** A rule whose every run touches a `*`
+		// or an end cannot be indexed and goes to the always-tested list, so
+		// the price is linear in how many of those a list has. Measured here
+		// rather than argued, because nothing in this tree knows EasyList's
+		// distribution.
+		{
+			const int unpinned = 2000;
+			for (int i = 0; i < unpinned; ++i) {
+				filter_rule r;
+				if (filter_list::parse_rule(QString("*unpinned%1*").arg(i), &r))
+					fl.add(r);
+			}
+			QElapsedTimer u;
+			u.start();
+			for (const QString &url : urls)
+				fl.blocks(url, QString());
+			const double per = double(u.nsecsElapsed()) / 1000.0 / urls.size();
+			std::printf("        plus %d unpinned rules: %.1f us per request\n",
+			             unpinned, per);
+			// A ceiling rather than a target: the point is that it stays in
+			// microseconds, three orders off the scan, not that it is any
+			// particular number on this machine.
+			check(per < 500.0,
+			      QString("which stays in microseconds (%.1f us)").arg(per));
+		}
 
 		// **A ratio after all, and the premise this used to carry was
 		// backwards.** It said an absolute budget was the stable measure

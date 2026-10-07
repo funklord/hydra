@@ -238,17 +238,45 @@ void filter_list::add(const filter_rule &r) {
 // rule is filed under. Four characters is the floor: shorter than that and the
 // bucket holds most of the list, which is the linear scan again with a hash in
 // front of it.
+// **A run is only a usable token if the pattern pins both its ends.** This
+// took the longest run of letters and digits anywhere in the pattern, and a
+// run touching a `*` or the end of a floating pattern is not one the index
+// can look up: both absorb letters and digits, so what the pattern calls
+// `banner` can be `banner9` in the URL -- and a URL is tokenised into whole
+// runs, so the bucket named `banner` is never consulted.
+//
+// Measured: `*banner*.gif` was filed under `banner`, while
+// `other.example/a/banner9.gif` yields the tokens `https`, `other`,
+// `example`, `banner9`, so the rule never fired. The differential check
+// beside the benchmark in `test_bundle` found it the moment a wildcard was
+// put in the fixture -- every rule there had been host-anchored or a plain
+// substring whose token happened to be a whole run in the URL.
+//
+// A run with a separator on each side is safe, because a separator in the
+// pattern has to be a separator in the URL too: `*/track/*` keeps `track`.
+// A pattern that can offer nothing goes to `m_untokenised`, which is tested
+// for every request and is exactly what that list is for.
 QString filter_list::token_of(const QString &pattern) {
-	QString best, run;
-	for (const QChar c : pattern) {
-		if (c.isLetterOrNumber()) {
-			run.append(c.toLower());
-		} else {
-			if (run.size() > best.size()) best = run;
-			run.clear();
+	QString best;
+	const int n = pattern.size();
+	int i = 0;
+	while (i < n) {
+		if (!pattern.at(i).isLetterOrNumber()) {
+			++i;
+			continue;
 		}
+		int j = i;
+		while (j < n && pattern.at(j).isLetterOrNumber())
+			++j;
+		// `i > 0` and `j < n`: a run at either end of the pattern is unpinned,
+		// because a substring or wildcard rule floats -- anything may precede
+		// and follow it in the URL, including more letters and digits.
+		const bool pinned_left  = i > 0 && pattern.at(i - 1) != QLatin1Char('*');
+		const bool pinned_right = j < n && pattern.at(j) != QLatin1Char('*');
+		if (pinned_left && pinned_right && j - i > best.size())
+			best = pattern.mid(i, j - i).toLower();
+		i = j;
 	}
-	if (run.size() > best.size()) best = run;
 	return best.size() >= 4 ? best : QString();
 }
 
