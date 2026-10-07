@@ -681,6 +681,7 @@ int main(int argc, char **argv) {
 		check(m.closed_title(1) == "beta", "then beta");
 		check(m.closed_title(2) == "alpha", "then alpha");
 		node *back = m.reopen_closed_at(1);
+		holds(m, "after reopening by index rather than the newest");
 		check(back && back->title == "beta",
 		       "reopening index 1 brings back beta, not the newest");
 		check(m.closed_count() == 2, "and that one leaves the list");
@@ -1041,6 +1042,9 @@ int main(int argc, char **argv) {
 			tabs << n;
 		}
 		node *mirror = m.replace_mirror("firefox", "Firefox (3 tabs)", tabs);
+		// The header's other named case: "a mirror refresh replacing a folder
+		// while a view inside it is live".
+		holds(m, "after a mirror is first built");
 		check(mirror != nullptr, "a mirror folder appears");
 		check(m.root()->children.size() == real_top + 1, "beside the real tree");
 		check(m.root()->children.first() == mirror,
@@ -1071,6 +1075,7 @@ int main(int argc, char **argv) {
 		one->title = "Only one now"; one->url = "https://elsewhere.test/0";
 		again << one;
 		m.replace_mirror("firefox", "Firefox (1 tab)", again);
+		holds(m, "after a mirror is replaced with a shorter one");
 		check(m.root()->children.size() == real_top + 1,
 		      "a second import does not add a second folder");
 		check(m.root()->children.first()->children.size() == 1,
@@ -1456,6 +1461,11 @@ int main(int argc, char **argv) {
 		m.apply_reorganization(moves);
 		check(tab->parent == folder,
 		      "and the AI reorganizer cannot move it either");
+		// `tree_invariants.h` names "an AI reorganisation" as one of the
+		// operations it exists for, and no suite checked the tree after one:
+		// `test_diff` does not use the checker at all, and this was the only
+		// call to `apply_reorganization` anywhere in `test_model`.
+		holds(m, "after an AI reorganisation");
 
 		// **Where the pin is kept, which nothing asserted and which is load
 		// bearing.** `set_locked` writes `pin_url` into `n->url`, because the
@@ -1679,6 +1689,62 @@ int main(int argc, char **argv) {
 			      QString("and record 0, 1, 2 rather than three zeroes (%1)")
 			          .arg(got.join(", ")));
 		}
+	}
+
+	section("a reorganisation that is actually applied");
+	{
+		// **No test applied a successful plan.** `test_diff` covers the diff
+		// and does not use the invariant checker at all, and `test_model`'s
+		// one call to `apply_reorganization` proposes moving a *locked* node,
+		// which is refused -- so the path that restructures somebody's whole
+		// tree from an AI proposal had nothing asserting what it leaves
+		// behind. `tree_invariants.h` names this operation as a reason it
+		// exists.
+		tab_tree_model m;
+		node *a = m.add_tab(nullptr, "a", "https://a.example/");
+		node *b = m.add_tab(nullptr, "b", "https://b.example/");
+		node *c = m.add_tab(nullptr, "c", "https://c.example/");
+		holds(m, "three tabs at the root");
+
+		QList<tree_change> plan;
+		tree_change mk;
+		mk.kind          = change_kind::folder_new;
+		mk.node_id       = "f-new";
+		mk.new_title     = "Reading";
+		mk.new_parent_id = "root";
+		mk.new_order     = 0;
+		plan << mk;
+		tree_change first;
+		first.kind          = change_kind::reparented;
+		first.node_id       = a->id;
+		first.new_parent_id = "f-new";
+		first.new_order     = 0;
+		plan << first;
+		tree_change second;
+		second.kind          = change_kind::reparented;
+		second.node_id       = c->id;
+		second.new_parent_id = "f-new";
+		second.new_order     = 1;
+		plan << second;
+
+		const int applied = m.apply_reorganization(plan);
+		check(applied == 3,
+		      QString("the folder and both moves land (%1 of 3)").arg(applied));
+		holds(m, "after a reorganisation that moved two tabs into a folder");
+
+		node *folder = m.node_by_id("f-new");
+		check(folder && folder->children.size() == 2,
+		      QString("the invented folder holds the two named tabs (%1)")
+		          .arg(folder ? folder->children.size() : -1));
+		check(a->parent == folder && c->parent == folder,
+		      "which are the two the plan named");
+		check(b->parent == m.root(),
+		      "and the one it did not name stays where it was");
+		// The order the plan asked for, which is the half `apply`'s own
+		// comment says it got wrong once before for an invented folder.
+		if (folder && folder->children.size() == 2)
+			check(folder->children.at(0) == a && folder->children.at(1) == c,
+			      "in the order the plan proposed");
 	}
 
 	QDir(dir).removeRecursively();

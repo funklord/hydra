@@ -32410,6 +32410,19 @@ One line fixes it, and the sabotage reaches all three: removing
 `c->order = src->order` fails both reopen sections and the duplicate one,
 with the explicit check printing `(0, 0, 0)`.
 
+**And the omission class is closed rather than the one instance.** Comparing
+`node`'s members against what `deep_copy` assigns -- the field names from
+`struct node`, each looked for as `c-><field>` in the function -- leaves
+exactly one not copied: `mirror`, which is deliberate and said so already,
+because a row dragged out of a browser mirror must not come across still
+marked as part of it. So all twelve fields are now either copied or carry a
+reason not to be, which is the property the function was always written as
+though it had.
+
+The method, since a fact without one has a shelf life: parse the field names
+out of `struct node` and grep the body of `deep_copy` for an assignment to
+each. Twelve fields, one intentional absence.
+
 **The transferable part is not about `order`.** The invariant that catches
 this was written, correct, and called constantly, and the defect survived
 because no test drove the tree into the state that violates it -- `holds()`
@@ -32419,3 +32432,38 @@ already thinking about, where the shared one asserts what somebody else
 thought about. **Where a project has an invariant checker, calling it is not
 the lazy option; it is the one that can tell you something you did not come
 looking for.**
+
+### Which mutations had no invariant check, counted rather than guessed
+
+`tree_invariants.h` asks to be "called after every mutation in every suite".
+Checking that mechanically -- every public mutating method of
+`tab_tree_model`, against whether a `holds()` call appears within
+twenty-five lines of a call to it in `test_model` -- found three with none:
+
+    apply_reorganization   1 call,  0 covered
+    reopen_closed_at       1 call,  0 covered
+    replace_mirror         2 calls, 0 covered
+
+**The first two of those are the operations the header names as its own
+reason for existing** -- "an AI reorganisation" and "a mirror refresh
+replacing a folder while a view inside it is live". And `test_diff`, the
+suite about reorganisation, does not use the checker at all: the only
+`apply_reorganization` call anywhere proposes moving a *locked* node, which
+is refused, so **no test had ever applied a reorganisation that did
+anything**.
+
+All four now check, and a plan that creates a folder and moves two of three
+tabs into it is applied and asserted: the count, the invariant, the
+parentage, the tab the plan did not name, and the order the plan asked for --
+which `apply`'s own comment says it got wrong once before for an invented
+folder. Nothing was broken; the result is a controlled zero rather than a
+silence, because the same `holds()` calls go red under the `deep_copy`
+sabotage above.
+
+**The control for the new call site took two tries, which is the part worth
+keeping.** Removing `renumber(original)` from `tree_diff::apply` changed
+nothing -- the per-node loop two lines below it renumbers the same thing --
+so the first sabotage was green and proved nothing about the check. Removing
+the loop instead fails exactly the new assertion. A sabotage that does not
+fire is first evidence that the wrong line was cut, not that the check is
+dead.
