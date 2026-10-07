@@ -163,22 +163,65 @@ def main():
 	try:
 		with open(os.path.join(ROOT, TESTS, "objsets.mk"), encoding="utf-8") as f:
 			for line in f:
-				m = re.match(r"^#\s+(\S.*?)\s+\(build ([0-9a-f]+),", line)
+				m = re.match(r"^#\s+(\S.*?)\s+\(build ([0-9a-f]+), "
+				              r"mtime ([0-9: -]+)\)", line)
 				if m:
-					recorded = (m.group(1), m.group(2))
+					recorded = (m.group(1), m.group(2), m.group(3).strip())
 					break
 	except OSError:
 		pass          # no previous file, or one from before this was recorded
-	if recorded and recorded[1] != ident \
-	     and not os.environ.get("OBJSETS_ACCEPT_FMAKE"):
-		return ("this is not the fmake that produced the current link sets.\n"
-		         "  recorded:      %s  (build %s)\n"
-		         "  about to run:  %s  (build %s)\n"
-		         "Both print \"fmake 1.0\", so nothing else will notice.\n"
-		         "Name the one you mean with FMAKE=..., or take this one with\n"
-		         "OBJSETS_ACCEPT_FMAKE=1, which is the right answer when fmake\n"
-		         "has legitimately moved on."
-		         % (recorded[0], recorded[1], fmake, ident))
+	if recorded and recorded[1] != ident:
+		if not os.environ.get("OBJSETS_ACCEPT_FMAKE"):
+			return ("this is not the fmake that produced the current link "
+			         "sets.\n"
+			         "  recorded:      %s  (build %s)\n"
+			         "  about to run:  %s  (build %s)\n"
+			         "Both print \"fmake 1.0\", so nothing else will notice.\n"
+			         "Name the one you mean with FMAKE=..., or take this one "
+			         "with\nOBJSETS_ACCEPT_FMAKE=1, which is the right answer "
+			         "when fmake\nhas legitimately moved on."
+			         % (recorded[0], recorded[1], fmake, ident))
+
+		# **The override is set before the answer is known, and that is the
+		# hole the comparison above left.** It fires when nobody has waived
+		# it; a session that waives it in advance -- expecting fmake to have
+		# moved on, which is what the message tells it to expect -- gets no
+		# line at all saying which binary answered, and `FMAKE` unset still
+		# resolves `/usr/bin/fmake`. That substitution has now happened three
+		# times in this file's history: the first two were answered by
+		# recording the provenance and then by comparing the identity, and
+		# both were passed over, because each is something you have to
+		# already suspect.
+		#
+		# So going BACKWARDS refuses. The override's own message says it is
+		# for a tool that "has legitimately moved on", and taking an older
+		# build is outside what it offers rather than a case it covers.
+		# `mtime` is a poor identity -- a rebuild moves it -- but between two
+		# builds already known to differ it says which way you are going, and
+		# the packaged copy is always the old one.
+		older = bool(recorded[2]) and stamp < recorded[2]
+		if older and not os.environ.get("OBJSETS_ACCEPT_OLDER_FMAKE"):
+			return ("this fmake is OLDER than the one that produced the "
+			         "current link sets.\n"
+			         "  recorded:      %s  (build %s, mtime %s)\n"
+			         "  about to run:  %s  (build %s, mtime %s)\n"
+			         "OBJSETS_ACCEPT_FMAKE=1 is for a tool that has moved on, "
+			         "and this\nhas moved back -- most likely the packaged "
+			         "copy on PATH with FMAKE\nunset. Name the one you mean "
+			         "with FMAKE=..., or insist with\n"
+			         "OBJSETS_ACCEPT_OLDER_FMAKE=1."
+			         % (recorded[0], recorded[1], recorded[2],
+			             fmake, ident, stamp))
+		# Printed before the compile, which is the only time it is any use:
+		# the run it precedes takes minutes, and a line read afterwards is a
+		# line read too late. It survives the run being killed -- measured
+		# under `timeout`, with and without an explicit flush, and the flush
+		# made no difference, so there is none.
+		sys.stderr.write(
+		    "objsets: taking %s (build %s, mtime %s)\n"
+		    "         in place of %s (build %s, mtime %s)%s\n"
+		    % (fmake, ident, stamp, recorded[0], recorded[1], recorded[2],
+		        " -- OLDER, insisted on" if older else ""))
 
 	# **An Android build in the tree makes this fail, unhelpfully.** fmake
 	# compiles what it finds from the repository root, and

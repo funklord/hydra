@@ -33354,3 +33354,51 @@ rather than about this tree, and says to name the fmake when regenerating. One
 wasted run, and a measurement that would have been wrong in a way nothing
 downstream would have caught: it read as a current fmake limitation when it is
 a two-month-old binary's.
+
+## The waiver was set before the answer was known
+
+`tool/objsets.py` refuses to regenerate the link sets when the fmake it is
+about to run is not the one that produced them, because both print
+`fmake 1.0` and the difference between two copies was once 23 targets quietly
+missing. That guard is the second answer to the same substitution -- the first
+was recording the provenance in the generated file -- and its own comment says
+why each failed: *a line you have to already suspect is not a check.*
+
+**It happened a third time, to me, in the hole both of those leave.** The
+guard fires when nobody has waived it. I waived it in advance with
+`OBJSETS_ACCEPT_FMAKE=1`, because the message that guard prints says the
+waiver is the right answer when fmake has moved on and I expected it to have.
+With `FMAKE` unset, PATH gave `/usr/bin/fmake` -- the packaged `5af02348` from
+2026-08-04 -- which failed on the `QDBusVariant` stub in `theme.h`, exactly as
+`fmake.toml` records for that binary. Ten minutes, and a measurement that read
+as a current fmake limitation when it was a two-month-old binary's.
+
+So **going backwards refuses now.** The waiver's own words are for a tool that
+has "legitimately moved on"; an older build is outside what it offers rather
+than a case it covers, and `OBJSETS_ACCEPT_OLDER_FMAKE=1` is there for
+somebody who really means it. When a different-but-newer build is taken, the
+run says which one it took and which one it replaced, before the compile
+rather than after.
+
+`mtime` is a poor identity -- a rebuild moves it, which is why the identity
+comparison exists -- but between two builds already known to differ it says
+which way you are going, and the packaged copy is always the old one.
+
+### Two measurement errors of my own, in four minutes
+
+Worth recording because both are in `evidence.md` and I made them anyway.
+
+**I read an absence through `head`.** Checking that the new line printed, I
+ran the tool as `... 2>&1 | head -4` and saw only `Terminated`. The line was
+there the whole time; the pipeline was hiding it. Captured to a file instead,
+it reads exactly as intended. *Never reduce a check's output before you know
+it passed*, and a pipe is a reduction.
+
+**Then I wrote the wrong cause into the source.** Having seen nothing, I added
+`sys.stderr.flush()` with a comment stating the line had been measured missing
+because stderr is block-buffered to a pipe and the buffer went with the
+process. Tested afterwards by removing the flush and killing the run under
+`timeout`: the line survives either way. The flush was never load-bearing and
+the comment was a mechanism invented to fit an absence that was an artifact of
+how I looked. Both are gone; what the comment says now is what was measured,
+including that the flush made no difference.
