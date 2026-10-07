@@ -33283,3 +33283,74 @@ pre-repair behaviour: `node_by_id("t-2")` returns "Second". Dropping **only**
 the root seed fails exactly the two root checks and leaves the duplicate
 section green -- which is what says one rule is covering two faults rather
 than one fault twice.
+
+## The invariant checker was called from four test suites and nowhere in src/
+
+`tree_invariants::check` was written because a tree that quietly changed shape
+is the kind of thing somebody discovers much later and cannot explain -- its
+own first run caught the depth off-by-one in the loader, which this document
+records as the argument for having one. It is called from four suites. Grepped
+across `src/`: **no caller at all.**
+
+So the instrument built for exactly this question was not asking it at the one
+place the answer comes from outside the program. The duplicate ids above are
+the worked example: `unparsed` was 0, `flattened` was 0, and the checker
+reported both violations by name on the first try -- but only because a test
+asked it to.
+
+`load` runs it now, after the repairs, and keeps the count as
+`last_violations()` beside the other three.
+
+**Counted rather than refused**, which is the same trade the depth clamp and
+the partial read already make: refusing would lose every tab to report a
+structural complaint. And counted rather than only warned, because a warning
+here would have been a line nobody reads -- the suites install a message
+handler that counts warnings, but only one section resets and asserts it, so
+a warning raised anywhere else is captured and forgotten. The first version of
+this change claimed otherwise in a comment; the claim was wrong and the count
+is what replaced it.
+
+### What it can and cannot catch, stated rather than implied
+
+**Zero for every file this reader accepts.** With ids repaired, no file
+produces a violation: depth is clamped on read, order and parent are assigned
+by the loader, and a mirror mark is never written to a file. So this is a
+tripwire for a class nobody has anticipated, and it cannot be positively
+controlled through the public path -- there is no input that makes it fire.
+
+The control is therefore the repair removed: a copied block of lines then
+loads with `last_violations() == 2` and the new assertion fails naming the
+number. That is a control through the check under test rather than beside it,
+which is what the file's own rule asks for.
+
+### What a new edge costs in the test tree
+
+The call adds an edge from `tab_tree_model` to `tree_invariants`, and the test
+tree's link sets are closed over symbols -- so `test_rotation` stopped linking
+with an undefined reference to `report::summary()` until `objsets.mk` was
+regenerated. The suite list had not changed, which is the half the Makefile's
+own guard cannot see: it compares `OBJSETS_SOURCES` against the tree and a new
+*dependency* moves no source.
+
+Regenerated with the development fmake named explicitly, and the proof that
+this is one edge rather than a rewrite is mechanical -- both files parsed into
+a multiset of objects per program:
+
+    87 programs before and after, none added or dropped
+    5260 -> 5299 objects, +39
+    39 programs gained exactly tree_invariants.o and nothing else
+    0 programs differ in any other way
+
+The rest of that file's diff is line ordering. The recorded fmake identity
+moves from `a1d19ab9` to `f6bb5649` with `OBJSETS_ACCEPT_FMAKE=1`, which
+`tool/objsets.py` asks for deliberately so that taking a different build is a
+decision rather than a discovery.
+
+**And the trap in `fmake.toml` caught me before I read it.** Run without
+naming `FMAKE`, the generator resolves `/usr/bin/fmake` -- the packaged
+`5af02348` from 2026-08-04 -- which fails on the `QDBusVariant` stub in
+`theme.h`. That file already records the failure as a fact about that binary
+rather than about this tree, and says to name the fmake when regenerating. One
+wasted run, and a measurement that would have been wrong in a way nothing
+downstream would have caught: it read as a current fmake limitation when it is
+a two-month-old binary's.

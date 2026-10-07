@@ -2026,6 +2026,15 @@ int main(int argc, char **argv) {
 		check(found == 2,
 		      QString("both tabs answer to their own id now (%1)").arg(found));
 		holds(dm, "after loading a file that used two ids twice");
+		// **The checker itself, now wired into load.** It is the instrument
+		// that found this fault and it was called from four test suites and
+		// nowhere in src/. Zero here says the repair above left a tree it
+		// has nothing to say about; with the repair removed it reports two,
+		// which is this line's control and the reason it is an assertion
+		// rather than a log line.
+		check(dm.last_violations() == 0,
+		      QString("and the invariant checker, which load now runs, has "
+		               "nothing to report (%1)").arg(dm.last_violations()));
 	}
 
 	section("a file node claiming the id \"root\" is minted again too");

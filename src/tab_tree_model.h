@@ -73,6 +73,13 @@ public:
 	// brings its ids with it -- so this is a repair, counted, in the shape the
 	// two above established.
 	int last_reminted() const { return m_last_reminted; }
+	// Structural violations `tree_invariants::check` found in the tree the last
+	// `load` installed. **Zero for every file this reader accepts**, the
+	// repairs above having taken the one class a file could express -- so a
+	// non-zero count means a class nobody anticipated, which is what the
+	// checker was written for and what it was never pointed at: it is called
+	// from four test suites and, until this, from nowhere in `src/`.
+	int last_violations() const { return m_last_violations; }
 	bool save(const QString &path) const;
 
 	node *node_for_index(const QModelIndex &index) const;
@@ -299,4 +306,5 @@ private:
 	int m_last_flattened = 0;
 	int m_last_unparsed  = 0;
 	int m_last_reminted  = 0;
+	int m_last_violations = 0;
 };

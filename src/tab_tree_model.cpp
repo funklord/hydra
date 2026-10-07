@@ -1,4 +1,5 @@
 #include "tab_tree_model.h"
+#include "tree_invariants.h"
 #include "node.h"
 #include "tree_outline.h"
 #include "tree_diff.h"
@@ -146,6 +147,32 @@ bool tab_tree_model::load(const QString &path) {
 	m_last_reminted = remint_repeats(m_root);
 	if (m_last_reminted > 0)
 		reindex();
+	// **The one place untrusted input becomes the tree, and the checker was
+	// never pointed at it.** `tree_invariants::check` is called from four test
+	// suites and from nowhere in `src/` -- so the instrument written for
+	// exactly this question was not asking it where the answer comes from
+	// outside the program. The duplicate ids repaired above were reported by
+	// it on the first try, having been invisible to `unparsed` and
+	// `flattened`.
+	//
+	// Counted and warned rather than refused: refusing would lose every tab
+	// to report a structural complaint, which is the trade the depth clamp and
+	// the partial read both decline. The count is what a test can assert on --
+	// a warning alone would have been a line nobody reads, since the suites'
+	// message handler counts warnings only inside the one section that resets
+	// and checks it.
+	//
+	// **What it can still catch is a class nobody has anticipated**, and that
+	// is the honest description. With ids repaired above, no file this reader
+	// accepts produces a violation: depth is clamped, order and parent are
+	// assigned by the loader, and a mirror mark is never written to a file.
+	// The control is the repair removed -- then a copied block of lines loads
+	// with two violations and this says so.
+	const auto inv = tree_invariants::check(m_root);
+	m_last_violations = inv.problems.size();
+	if (!inv.ok)
+		qWarning("tree: %s loaded with %s", qPrintable(path),
+		          qPrintable(inv.summary()));
 	endResetModel();
 	return true;
 }
