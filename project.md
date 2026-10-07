@@ -33060,6 +33060,25 @@ The tags line in that section is a recorded limit rather than a guard -- it
 passes under sabotage, because tags genuinely survive. The lock is what
 discriminates, and the section says so.
 
+### The blank tab was already safe, and now says so
+
+A tab with no address at all is ordinary -- `tab_tree_view` and `main_window`
+each make one with an empty title and an empty url -- and the rename dialog
+then lets somebody call it "a | b", which is an unremarkable name for a note.
+That is the one case where the reader cannot tell a two-part title from a
+title and a url, since `rest_fields.size() >= 2` is all it has to go on.
+
+Measured: it survives, because the url field is written even when it is empty,
+so the line is `a | b |  | created=...` and the reader takes the empty field
+as the address. Nothing had pinned that, and skipping an empty field is
+exactly the sort of tidy-up that looks free -- sabotaged by doing so, the
+title comes back as "a" and the tab acquires the address "b", which is then
+something a click would try to open.
+
+An empty sweep worth the line it takes, because the lens is recorded with it:
+the hazard was the reader's size test, and the thing that answers it is a
+writer that never omits a field.
+
 ## One format, two writers, one set of escaping rules
 
 The payload the reorganise dialog hands a model is the same line format as the

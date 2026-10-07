@@ -1943,6 +1943,30 @@ int main(int argc, char **argv) {
 		if (d)
 			check(d->url == "https://shop.test/sale",
 			      QString("and its address recovered (%1)").arg(d->url));
+
+		// **And the tab that has no address at all**, which is a blank tab --
+		// `tab_tree_view` and `main_window` both make one with an empty title
+		// and an empty url, and the rename dialog then lets somebody call it
+		// "a | b", which is an ordinary thing to call a note. The url field is
+		// written even when it is empty, so the reader still finds the title's
+		// own bar in front of a field it can take as the address and the title
+		// survives whole. Nothing pinned that, and skipping an empty field
+		// looks like an obvious tidy-up.
+		tab_tree_model blank;
+		node *note = blank.add_tab(nullptr, "a | b", QString());
+		const QString note_id = note->id;
+		const QString npath = dir + "/bars-blank.txt";
+		check(blank.save(npath), "a tree holding a blank tab saves");
+		tab_tree_model nb;
+		check(nb.load(npath), "and loads");
+		node *nn = nb.node_by_id(note_id);
+		check(nn != nullptr, "with the blank tab in it");
+		if (nn) {
+			check(nn->title == "a | b",
+			      QString("its whole title intact (%1)").arg(nn->title));
+			check(nn->url.isEmpty(),
+			      QString("and no address invented for it (%1)").arg(nn->url));
+		}
 	}
 
 	QDir(dir).removeRecursively();
