@@ -34214,3 +34214,58 @@ does by wrapping `Response.prototype.json`, and every `trusted-*` scriptlet,
 for the reason recorded when the catalog was first written -- the first of
 those belongs with whatever UI says which lists are trusted, and there is
 none.
+
+## json-prune-fetch-response, and why it is not a wider json-prune
+
+Fourteen in the catalog. This one was recorded as absent on the grounds that
+it overlaps `json-prune`, which wraps `JSON.parse` and
+`Response.prototype.json`. The overlap is real and the two differences are
+what earn it a name of its own:
+
+- **It is scoped to a url.** `json-prune` prunes every JSON the page parses
+  that carries the needle; this prunes the answer to one request. On a page
+  that reads several documents sharing a property name, that is the
+  difference between removing an ad array and removing a field from
+  something unrelated.
+- **It replaces the body**, so a player that reads `.text()` and parses with
+  something of its own sees pruned bytes. Patching the parser covers that
+  case only when the player uses the page's `JSON.parse`, and a bundled
+  parser does not.
+
+**A body can only be read once, and that decides the shape.** Once `text()`
+has been called the original response is spent, so even the pass-through path
+has to hand back a new one -- returning `res` after reading it gives the page
+a response it cannot read. Sabotaged by doing exactly that, the non-JSON case
+fails: the body comes back unreadable rather than whole.
+
+Where the frame has a `Response` constructor it is used, with the original's
+status and headers carried over because the page's own checks read them --
+asserted, with 207 rather than 200 so a hard-coded success could not pass.
+Where it does not, the fallback answers the reads a caller makes; returning
+the original would hand over the bytes this exists to remove.
+
+### The pruning rule is now shared, and the pattern index is asserted
+
+Two scriptlets prune, so the path walking moved into one `pruner()` that both
+call -- the same move as `title_field` and the two pattern guards, for the
+same reason.
+
+The url pattern is this scriptlet's **third** argument, and the bitmask that
+says so is worth a test of its own. Moving it to the first fails twice: the
+url pattern stops being refused, and a property path starts being checked as
+a pattern. **A guard aimed at the wrong argument is both halves wrong**, and
+only a test that names a specific position can see it.
+
+### `json-prune-xhr-response` is the deliberate absence now
+
+The point at which an XHR's body can be replaced is a `load` listener, and
+its order against the page's own listeners is not guaranteed -- a page that
+registers `onload` before calling `send` reads the unpruned text first. uBlock
+handles that by defining the property eagerly on the instance; doing it half
+way would prune sometimes, and **a catalog count claiming coverage it does
+not have is worse than an honest absence**, because the count is what tells
+somebody how much of a list is working.
+
+Still absent for the reason recorded when the catalog was written: every
+`trusted-*` scriptlet, which belongs with whatever UI says which lists are
+trusted.

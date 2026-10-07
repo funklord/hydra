@@ -105,6 +105,48 @@ static void give_page(QJSEngine *eng, const char *host = "x.test") {
 	eng->evaluate(QString::fromLatin1(k_page_stubs));
 }
 
+// **A fetch worth pruning, which the simpler stub is not.** The one above
+// answers with a marker so a test can see whether a request went through;
+// this one answers with a body, carries a status, and refuses a second read --
+// because a Response body can only be read once, and that is the constraint
+// the scriptlet's shape follows from.
+//
+// The promise flattens, like a real one: the code under test returns the inner
+// promise from the outer `then`, so a stub that nested them would make the
+// test read a promise where the page reads a response.
+static const char *k_fetch_stubs = R"JS(
+window.P = function (v) {
+	if (v && typeof v.then === 'function') return v;
+	return { then: function (f) { return window.P(f(v)); } };
+};
+window.Promise = { resolve: function (v) { return window.P(v); } };
+window.__body = '{"adPlacements":[1,2],"streamingData":{"ok":1}}';
+window.__reads = 0;
+window.fetch = function (u) {
+	window.__fetched.push(String(u));
+	var res = {
+		ok: true, status: 207, statusText: 'Odd', url: String(u),
+		headers: { h: 1 }, __read: false, __original: true,
+		text: function () {
+			if (this.__read) throw new Error('body already read');
+			this.__read = true;
+			window.__reads++;
+			return window.P(window.__body);
+		}
+	};
+	return window.P(res);
+};
+// Read a response the way a player would, and report what it saw.
+window.ask = function (url) {
+	var seen = null;
+	window.fetch(url).then(function (res) {
+		if (!res || typeof res.text !== 'function') { seen = 'no text'; return; }
+		res.text().then(function (t) { seen = t; });
+	});
+	return seen;
+};
+)JS";
+
 // Run one call and hand back the engine's own answer to an expression.
 static QString ask(QJSEngine *eng, const char *expr) {
 	const QJSValue v = eng->evaluate(QString::fromLatin1(expr));
@@ -134,8 +176,13 @@ int main(int argc, char **argv) {
 		// **The whole security position in one line.** A rule names a
 		// scriptlet; it does not carry one. Anything this build has not
 		// implemented and reviewed does not run.
+		// **`json-prune-xhr-response` is the deliberate absence now**, and the
+		// reason is in project.md: the point at which an XHR's body can be
+		// replaced is a `load` listener whose order against the page's own is
+		// not guaranteed, so it would prune sometimes -- and a count claiming
+		// coverage it does not have is worse than an honest absence.
 		for (const char *no : { "trusted-set-cookie", "trusted-replace-fetch",
-		                         "aost", "json-prune-fetch-response",
+		                         "aost", "json-prune-xhr-response",
 		                         "eval", "" }) {
 			check(!scriptlets::vetted(QString::fromLatin1(no)),
 			       QString("\"%1\" is not in the catalog")
@@ -398,8 +445,8 @@ int main(int argc, char **argv) {
 		}
 		// The count lives here, once. It moves when the catalog does, which
 		// is the point: a name added without a test is an entry nothing ran.
-		check(scriptlets::names().size() == 13,
-		       QString("thirteen scriptlets in the catalog (%1)")
+		check(scriptlets::names().size() == 14,
+		       QString("fourteen scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 	}
 
@@ -681,6 +728,101 @@ int main(int argc, char **argv) {
 		       "while a specific one is kept");
 		check(scriptlets::parse_call("remove-attr, onclick", &c, &why),
 		       "as is leaving the selector out");
+	}
+
+	section("pruning a fetch's body, whichever way the page reads it");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_fetch_stubs));
+		check(run_one(&eng, "json-prune-fetch-response",
+		               { "adPlacements", "", "/player" }).isEmpty(),
+		       "json-prune-fetch-response evaluates");
+
+		// A matching url: the body the page reads has the property gone, and
+		// the rest of the document intact.
+		const QString got = ask(&eng, "window.ask('https://x.test/player?v=1')");
+		check(!got.contains("adPlacements"),
+		       QString("the named property is gone from the body (%1)")
+		           .arg(got));
+		check(got.contains("streamingData"),
+		       QString("and the rest of it is there (%1)").arg(got));
+		check(ask(&eng, "window.__fetched.length") == "1",
+		       "the request still went out -- this prunes the answer, not the "
+		       "asking");
+		check(ask(&eng, "window.__reads") == "1",
+		       QString("and the original body was read exactly once (%1)")
+		           .arg(ask(&eng, "window.__reads")));
+
+		// The status and headers come across, because the page checks them.
+		check(ask(&eng, "(function(){var s=null;"
+		                 "window.fetch('https://x.test/player2').then("
+		                 "function(r){ s=String(r.status); });return s;})()")
+		          == "207",
+		       "the status is carried over");
+
+		// A url the rule did not name is untouched, and the proof is that the
+		// original object comes back rather than a copy.
+		QJSEngine eng2;
+		give_page(&eng2);
+		eng2.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&eng2, "json-prune-fetch-response",
+		         { "adPlacements", "", "/player" });
+		check(ask(&eng2, "(function(){var o=null;"
+		                  "window.fetch('https://x.test/other').then("
+		                  "function(r){ o=String(r.__original); });return o;})()")
+		          == "true",
+		       "a url the rule did not name gets the original response");
+
+		// A body that is not JSON is handed back unchanged -- and still
+		// readable, which is the part that needs saying: the original was
+		// spent by then.
+		QJSEngine eng3;
+		give_page(&eng3);
+		eng3.evaluate(QString::fromLatin1(k_fetch_stubs));
+		eng3.evaluate("window.__body = '<html>not json</html>';");
+		run_one(&eng3, "json-prune-fetch-response",
+		         { "adPlacements", "", "/player" });
+		check(ask(&eng3, "window.ask('https://x.test/player')")
+		          == "<html>not json</html>",
+		       QString("a body that is not JSON comes through whole (%1)")
+		           .arg(ask(&eng3, "String(window.__body)")));
+
+		// With a Response constructor present it is used, which is the path a
+		// real page takes.
+		QJSEngine eng4;
+		give_page(&eng4);
+		eng4.evaluate(QString::fromLatin1(k_fetch_stubs));
+		eng4.evaluate("window.Response = function (text, init) {"
+		               " this.__made = true; this.status = init.status;"
+		               " this.text = function () { return window.P(text); }; };");
+		run_one(&eng4, "json-prune-fetch-response",
+		         { "adPlacements", "", "/player" });
+		check(ask(&eng4, "(function(){var m=null;"
+		                  "window.fetch('https://x.test/player').then("
+		                  "function(r){ m=String(r.__made); });return m;})()")
+		          == "true",
+		       "a real Response is built where the frame has one");
+	}
+
+	section("the pattern checked is the one the scriptlet matches with");
+	{
+		// **The bitmask has to index the right argument.** For this scriptlet
+		// the url pattern is the third, so a backtracking regex there is
+		// refused while the same text in the first two -- which are property
+		// paths, not patterns -- is not checked as one.
+		scriptlet_call c;
+		QString why;
+		check(!scriptlets::parse_call(
+		          "json-prune-fetch-response, ads, , /^(a+)+$/", &c, &why),
+		       QString("a backtracking url pattern is refused (%1)").arg(why));
+		check(scriptlets::parse_call(
+		          "json-prune-fetch-response, /^(a+)+$/, , /ads/", &c, &why),
+		       "while the same text as a property path is not checked as one");
+		check(scriptlets::parse_call(
+		          "json-prune-fetch-response, adPlacements, , /player/",
+		          &c, &why),
+		       QString("and an ordinary rule is kept (%1)").arg(why));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

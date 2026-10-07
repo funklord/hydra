@@ -33,10 +33,14 @@ var C = {};
 // No `*` in a path. uBlock supports a wildcard there; this does not, and a
 // rule using one simply finds nothing to remove rather than matching more than
 // it was asked to.
-C['json-prune'] = function (paths, needle) {
+// **The pruning rule, in one place.** Two scriptlets prune -- `json-prune`
+// by patching the parser, `json-prune-fetch-response` by replacing a body --
+// and the path walking is the same work. Returns null when the rule named
+// nothing to remove, so a caller can decline to patch anything at all.
+var pruner = function (paths, needle) {
 	var want = String(paths || '').split(/\s+/).filter(Boolean);
 	var must = String(needle || '').split(/\s+/).filter(Boolean);
-	if (!want.length) return;
+	if (!want.length) return null;
 	var reach = function (o, p, cut) {
 		var parts = String(p).split('.');
 		var last = parts.pop();
@@ -51,13 +55,18 @@ C['json-prune'] = function (paths, needle) {
 		if (cut) delete cur[last];
 		return true;
 	};
-	var prune = function (o) {
+	return function (o) {
 		if (o === null || typeof o !== 'object') return o;
 		for (var i = 0; i < must.length; i++)
 			if (!reach(o, must[i], false)) return o;
 		for (var j = 0; j < want.length; j++) reach(o, want[j], true);
 		return o;
 	};
+};
+
+C['json-prune'] = function (paths, needle) {
+	var prune = pruner(paths, needle);
+	if (!prune) return;
 	var real = JSON.parse;
 	JSON.parse = function () { return prune(real.apply(this, arguments)); };
 	// And the fetch path, which is how a modern player actually asks.
@@ -68,6 +77,70 @@ C['json-prune'] = function (paths, needle) {
 			return realJson.apply(this, arguments).then(prune);
 		};
 	}
+};
+
+// json-prune-fetch-response: prune the body of a matching fetch, whichever way
+// the page then reads it.
+//
+// **What this does that `json-prune` cannot**, which is the reason it has its
+// own name rather than being a wider version of that one. `json-prune`
+// patches the parser and `Response.prototype.json`, so it covers a page that
+// parses text or asks a response for JSON -- and it covers *every* such read
+// on the page, guarded only by the needle. This one is scoped to a url, and
+// it replaces the body itself, so a player that reads `.text()` and parses
+// with something of its own sees pruned bytes too.
+//
+// **A body can only be read once**, which decides the shape: once `text()`
+// has been called the original response is spent, so even the pass-through
+// path has to hand back a new one. Returning `res` after reading it would
+// give the page a response it cannot read.
+C['json-prune-fetch-response'] = function (paths, needle, match) {
+	if (typeof window.fetch !== 'function') return;
+	var prune = pruner(paths, needle);
+	if (!prune) return;
+	var wanted = matcher(match);
+	var real = window.fetch;
+	var like = function (res, text) {
+		// The original's status and headers, so the page's own checks still
+		// pass. Without a `Response` constructor -- which not every frame has
+		// -- hand back something that answers the reads a caller makes,
+		// because returning the original would be handing over the bytes this
+		// exists to remove.
+		try {
+			return new window.Response(text, {
+				status: res.status, statusText: res.statusText,
+				headers: res.headers
+			});
+		} catch (e) {}
+		return {
+			ok: res.ok, status: res.status, statusText: res.statusText,
+			url: res.url, headers: res.headers,
+			text: function () { return window.Promise.resolve(text); },
+			json: function () {
+				return window.Promise.resolve(JSON.parse(text));
+			},
+			clone: function () { return this; }
+		};
+	};
+	window.fetch = function (input) {
+		var url = '';
+		try {
+			url = (typeof input === 'string') ? input
+			      : (input && input.url) ? input.url : '';
+		} catch (e) {}
+		var answer = real.apply(this, arguments);
+		if (!url || !wanted(url)) return answer;
+		if (!answer || typeof answer.then !== 'function') return answer;
+		return answer.then(function (res) {
+			if (!res || typeof res.text !== 'function') return res;
+			return res.text().then(function (body) {
+				var out;
+				try { out = JSON.stringify(prune(JSON.parse(body))); }
+				catch (e) { return like(res, body); }   // not JSON, unchanged
+				return like(res, out);
+			});
+		});
+	};
 };
 
 // set-constant: pin a page global to a value it then cannot change.
@@ -414,6 +487,7 @@ const catalog_entry k_entries[] = {
 	{ "set-local-storage-item",   0,      0      },
 	// (names, selector, behaviour) -- the selector is the second argument,
 	// and a rule may leave it out, in which case the names become it.
+	{ "json-prune-fetch-response", 1 << 2, 0     },   // (props, needle, url)
 	{ "remove-attr",              0,      1 << 1 },
 	{ "remove-class",             0,      1 << 1 },
 };
