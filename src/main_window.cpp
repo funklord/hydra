@@ -27,6 +27,7 @@
 #include "claude_provider.h"
 #include "media_detector.h"
 #include "media_dialog.h"
+#include "sponsor_skip.h"
 #include "stream_assembly.h"
 #include "player_launcher.h"
 #include "download_manager.h"
@@ -3941,6 +3942,19 @@ void main_window::open_node(node *n, bool load_now) {
 		view->inject_script("hydra-mse-relay", mse_tap::relay_source());
 		view->inject_main_world_script("hydra-mse-hook", mse_tap::hook_source());
 		inject_scriptlets(view);
+		// **Sponsor segments: a bridge, a relay in this frame and a worker in
+		// every frame.** The worker needs the DOM of the frame the player is
+		// in -- an embedded player is a subframe -- and Qt installs the
+		// channel transport in the main frame alone, which is why there are
+		// two scripts rather than one. Nothing is fetched unless the shield
+		// allows it for this site, and it does not by default.
+		auto *sponsor = new sponsor_skip(m_policy, view);
+		sponsor->set_page_host(QUrl::fromUserInput(n->url).host());
+		view->set_script_bridge(sponsor, sponsor_skip::bridge_name());
+		view->inject_script("hydra-sponsor-relay",
+		                     sponsor_skip::relay_source());
+		view->inject_script("hydra-sponsor-frame",
+		                     sponsor_skip::frame_source(), true);
 
 #ifdef Q_OS_ANDROID
 		// **Android only, because only Android has something to hide here.** The
@@ -3969,13 +3983,18 @@ void main_window::open_node(node *n, bool load_now) {
 					save_tree_soon();
 		});
 		connect(view, &web_view_backend::url_changed, this,
-		         [this, view, cosmetic, consent, autofill](const QUrl &u) {
+		         [this, view, cosmetic, consent, autofill,
+		          sponsor](const QUrl &u) {
 			apply_policy(view, u.host());
 			// This view's own host, for this view's own bridges -- not the
 			// current view's, which is the fault described where the bridges
 			// are made.
 			cosmetic->set_page_host(u.host());
 			consent->set_page_host(u.host());
+			// The first-party host, which is what the sponsor feature's
+			// policy is read against -- not the frame's, which for an
+			// embedded player is the player's own site.
+			sponsor->set_page_host(u.host());
 			// This view's own autofill origin, and the current HTTPS-only
 			// setting, so a fill asked for after a same-tab navigation is
 			// gated for where the tab actually is now.

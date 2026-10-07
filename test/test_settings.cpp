@@ -1005,6 +1005,15 @@ int main(int argc, char **argv) {
 		const QStringList deliberately_absent = {
 			"autoDetectMedia", "clipboardRead", "desktopSite",
 			"pointerLock", "screenShare",
+			// **Sponsor skipping, and the reason is what the setting does.**
+			// Turning it on makes a request to a community database about
+			// each video, so it has to be turned on by the person whose
+			// machine makes that request -- not arrive in a shipped file, and
+			// not arrive by importing somebody else's. The compiled default
+			// already says block; a line here would add nothing except
+			// pinning it against a future change to that default, which is
+			// the open question this list's own comment points at.
+			"skipSponsorSegments",
 		};
 		QStringList unaccounted;
 		for (int i = 0; i < policy::feature_count(); ++i) {

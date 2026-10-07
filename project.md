@@ -33968,3 +33968,119 @@ record, and adding a capability to it is a design decision rather than a
 description of one. Recorded here so the question reaches whoever decides it
 -- the code, its catalog and its limits are described above, which is what
 such a step would be written from.
+
+## Sponsor segments, and a feature whose default is about somebody else's server
+
+Skipping the sponsored stretch inside a video needs times somebody submitted,
+which means asking a community database — the only thing in this program that
+reaches outside the machine on the *person's* behalf rather than the page's.
+So the shape of the feature is mostly the shape of that question.
+
+**The query does not carry the video.** The first four hex characters of the
+SHA-256 of the video id go out; every video whose hash begins with those four
+comes back, and the match is made here. The service learns a prefix shared by
+about one video in sixteen thousand and not which one is playing. That is why
+the feature is offerable at all.
+
+It also makes `parse` privacy-critical rather than merely correct: the answer
+contains other people's videos, and failing to filter by id would skip at
+times belonging to a different video — wrong, and wrong in a way that looks
+like bad data rather than like a bug here. The fixture's answer therefore
+carries three videos with ours in the middle, and two segments at 999 and 888
+seconds that only appear if the filter is gone.
+
+### Off by default, proved by a server that counts
+
+`policy::feature::sponsor_skip` defaults to block, so on an untouched install
+nothing is asked. **The gate is read before the url is built**, which is the
+difference between a feature that is off and one that is quiet: the second
+would still send the question.
+
+A test with no network cannot tell a request that was never made from one that
+failed, so the service base is overridable for the suite and the suite points
+it at a local server that counts. Blocked: the answer arrives **synchronously**
+and `files_served` is 0. Allowed for that site: one request, the segments come
+back, and a second video sharing the prefix is answered from the same fetch.
+Sabotaged by removing the gate, all four of those fail — the server is asked,
+and the answer stops being synchronous.
+
+The override cannot weaken anything, and that is worth stating where somebody
+will look for the hole: the policy check happens before the url exists, so an
+environment variable can change where a permitted request goes and never
+whether one is permitted.
+
+### The policy is read against the first-party host, not the frame's
+
+An embedded player is an iframe on the player's own site inside somebody
+else's page, and the switch belongs to the page a person is on. The media
+badge records the same distinction for the same reason — a frame-supplied
+hostname is not the site the setting is about. The frame supplies only *which
+video*, and is bounded at eight distinct ids per page, because a page with a
+dozen frames naming a dozen videos is not a page with a dozen players.
+
+### Two scripts, because Qt installs the channel in the main frame alone
+
+The worker runs in every frame, has the DOM and no channel, and posts its
+question up to the top; the relay runs in the main frame, has the channel, and
+posts the answer back **to the frame that asked** rather than broadcasting it —
+another frame's segments are not this one's. That is `mse_tap`'s relay pattern,
+and an embedded player being a subframe is the case the whole feature exists
+for, so the split is not optional.
+
+### The rule lives once, where it is applied
+
+Where to jump is in the worker, against the page's own `<video>`, on its own
+`timeupdate`. **The first version had a copy in C++ as well**, with tests and a
+sabotage — and no production caller, since the shell never sees a playback
+position. That is the shape this document calls a correct function and no
+working feature, so it is gone and the script's rule is tested by running it:
+QJSEngine, a stubbed page with one video, and assertions on `currentTime`.
+
+Two things that version got wrong and the sabotage found:
+
+- Its chaining was credited to a `while (moved)` loop. Sabotaging the loop
+  away changed no result -- the real mechanism is the position advancing
+  through a sorted walk, so a segment beginning where another ends is reached
+  later in the same pass, already past the first. The loop was defending
+  against out-of-order input that `parse` does not produce.
+- The lead-in is a quarter of a second, because a player reports the position
+  it has reached rather than the one it is about to. Without it the skip lands
+  inside the sponsor and is audible; a second would drag a seek landing just
+  before a segment into it.
+
+### What is not here
+
+Only the three categories that are an interruption rather than part of the
+programme: sponsor, self-promotion, interaction reminders. Intros, outros,
+previews, filler and off-topic music are deliberately absent — people disagree
+about those, and skipping something somebody wanted is worse than not skipping
+something they did not. The categories are named in the query as well, so the
+answer carries only what would be acted on; asking for everything and
+discarding most of it tells the service more about what is wanted than asking
+for what is wanted.
+
+### Three completeness lists, and the third one asked a better question
+
+Adding a `policy::feature` is checked in three places, and all three fired
+while landing this one. Two are compile-time -- `k_info` must have a row in
+enum order (a `static_assert`, because a missing row is an out-of-bounds read
+rather than a blank label), and both the settings page and the per-site dialog
+must either show the feature or excuse it in writing. The third is
+`test_settings`, and it is the one that needed a decision rather than a line:
+**every feature is either pinned in the shipped `[defaults]` file or listed as
+deliberately absent.**
+
+It belongs in the absent list, and the reason is what the setting does. Turning
+it on makes a request to a community database about each video, so it has to be
+turned on by the person whose machine makes that request -- not arrive in a
+shipped file, and not arrive by importing somebody else's policy. The compiled
+default already says block; a line in the file would add nothing except pinning
+it against a future change to that default, which is the open question that
+list's own comment points at.
+
+**That is what a completeness check is for.** None of the three could be
+satisfied by accident, and the third turned "did you remember the file" into
+"which side does this belong on", which is a question with an answer worth
+writing down. A feature added without them would have shipped with no row on
+either dialog and an unexamined position in the bundle -- silently, because no
+assertion can fail about a line nobody wrote.

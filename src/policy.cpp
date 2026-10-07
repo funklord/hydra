@@ -109,6 +109,12 @@ const info k_info[] = {
 		"saving. Turning it off empties the media badge here; it does not "
 		"stop the page playing anything.",
 		nullptr },
+	{ "skipSponsorSegments", "Skip sponsor segments",
+		"Skip the sponsored stretches inside a video, using times other people "
+		"have submitted to a community database. Off everywhere until you turn "
+		"it on, because it asks that database about each video — by a short "
+		"hash shared with thousands of others, so it is not told which one.",
+		nullptr },
 };
 
 // **The pairing that nothing was holding.** Every accessor below bounds its

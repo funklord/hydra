@@ -119,6 +119,11 @@ policy_engine::policy_engine(QObject *parent) : QObject(parent) {
 	// Allow: the media badge is a headline feature and a browser that noticed
 	// nothing until told to would be the wrong default entirely.
 	set_global_default(feature::media_detect,        setting::allow);
+	// Block, and this is the one default in this list that is about somebody
+	// else's server rather than about the page. Turning it on is a decision to
+	// ask a community database about each video; the shield is where that
+	// decision belongs, and silence is the only honest value until it is made.
+	set_global_default(feature::sponsor_skip,        setting::block);
 	// Block means "answer it and get it out of the way", which is what almost
 	// everyone wants from a consent banner and is the whole point of the option.
 	set_global_default(feature::cookie_notices,      setting::block);

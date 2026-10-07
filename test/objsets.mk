@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build 38663f81, mtime 2026-10-07 15:51)
+#     /home/claude/src/fmake/fmake  (build f843219d, mtime 2026-10-07 17:01)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -61,6 +61,7 @@ OBJSETS_SOURCES = \
 	test/test_settings.cpp \
 	test/test_shutdown.cpp \
 	test/test_signals.cpp \
+	test/test_sponsor.cpp \
 	test/test_state.cpp \
 	test/test_streamtype.cpp \
 	test/test_subscription.cpp \
@@ -468,6 +469,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/state_store.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/app/capture_source.o \
@@ -508,6 +510,8 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_test_scriptlets = \
@@ -579,6 +583,14 @@ OBJS_test_shutdown = \
 OBJS_test_signals = \
 	$(BUILD_DIR)/app/filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o
+
+OBJS_test_sponsor = \
+	$(BUILD_DIR)/app/sponsor_skip.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
+	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/app/policy.o
 
 OBJS_test_state = \
 	$(BUILD_DIR)/app/state_store.o \
@@ -673,6 +685,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -779,6 +792,8 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_annoyed = \
@@ -811,6 +826,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
@@ -916,6 +932,8 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_autofill = \
@@ -980,6 +998,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -1053,6 +1072,8 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_cancel = \
@@ -1089,6 +1110,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -1190,6 +1212,8 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_capture = \
@@ -1226,6 +1250,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -1327,6 +1352,8 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_chrome = \
@@ -1386,6 +1413,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -1464,6 +1492,8 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_confirm = \
@@ -1495,6 +1525,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -1601,6 +1632,8 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_consent = \
@@ -1640,6 +1673,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -1738,6 +1772,8 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_cookies = \
@@ -1769,6 +1805,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -1875,6 +1912,8 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_delete = \
@@ -1911,6 +1950,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -2012,6 +2052,8 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_downloads = \
@@ -2048,6 +2090,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -2149,6 +2192,8 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_evolve_confirm = \
@@ -2182,6 +2227,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -2286,6 +2332,8 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_extract = \
@@ -2331,6 +2379,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -2423,7 +2472,9 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
-	$(BUILD_DIR)/moc/moc_filter_dialog.o
+	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o
 
 OBJS_try_files = \
 	$(BUILD_DIR)/app/main_window.o \
@@ -2454,6 +2505,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -2560,6 +2612,8 @@ OBJS_try_files = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_filters = \
@@ -2593,6 +2647,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -2697,6 +2752,8 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_flicker = \
@@ -2749,6 +2806,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -2834,6 +2892,8 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_forget = \
@@ -2892,6 +2952,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -2971,6 +3032,8 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_frame =
@@ -3004,6 +3067,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -3110,6 +3174,8 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_import = \
@@ -3150,6 +3216,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -3247,6 +3314,8 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_keepass = \
@@ -3315,6 +3384,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -3391,6 +3461,8 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_look = \
@@ -3464,6 +3536,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
@@ -3528,6 +3601,8 @@ OBJS_try_look = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_media = \
@@ -3564,6 +3639,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -3665,6 +3741,8 @@ OBJS_try_media = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_menus = \
@@ -3707,6 +3785,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -3802,6 +3881,8 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_mse =
@@ -3861,6 +3942,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -3941,6 +4023,8 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_notify = \
@@ -3974,6 +4058,7 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -4080,6 +4165,8 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_pagetools = \
@@ -4137,6 +4224,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -4217,6 +4305,8 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_permissions = \
@@ -4249,6 +4339,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
@@ -4354,6 +4445,8 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_phone = \
@@ -4440,6 +4533,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_view.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
@@ -4491,7 +4585,9 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/hls_playlist.o \
 	$(BUILD_DIR)/app/dash_manifest.o \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
-	$(BUILD_DIR)/app/box_crypto.o
+	$(BUILD_DIR)/app/box_crypto.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o
 
 OBJS_try_rename = \
 	$(BUILD_DIR)/app/main_window.o \
@@ -4531,6 +4627,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -4628,6 +4725,8 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_send_gate = \
@@ -4672,6 +4771,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -4775,6 +4875,8 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_settings_ui = \
@@ -4858,6 +4960,7 @@ OBJS_try_share = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -4943,6 +5046,8 @@ OBJS_try_share = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_subframe = \
@@ -4976,6 +5081,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -5080,6 +5186,8 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_tabswitch = \
@@ -5137,6 +5245,7 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -5217,6 +5326,8 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_tap = \
@@ -5255,6 +5366,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -5354,6 +5466,8 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_taprow = \
@@ -5392,6 +5506,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -5491,6 +5606,8 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_watch = \
@@ -5527,6 +5644,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -5628,6 +5746,8 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_try_ytdlp = \
@@ -5664,6 +5784,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_address_input.o \
 	$(BUILD_DIR)/moc/moc_media_dialog.o \
 	$(BUILD_DIR)/app/media_dialog.o \
+	$(BUILD_DIR)/app/sponsor_skip.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/filter_dialog.o \
 	$(BUILD_DIR)/app/screen_picker.o \
@@ -5765,5 +5886,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/app/box_crypto.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
+	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 

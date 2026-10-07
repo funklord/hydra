@@ -72,6 +72,7 @@ constexpr shield_row k_shield_layout[] = {
 	{ policy::feature::images,              "Content" },
 	{ policy::feature::autoplay,            "Content" },
 	{ policy::feature::media_detect,        "Content" },
+	{ policy::feature::sponsor_skip,        "Content" },
 	// With Content rather than with the capabilities: it changes what the site
 	// is told about the browser, which decides what it serves.
 	{ policy::feature::desktop_site,        "Content" },

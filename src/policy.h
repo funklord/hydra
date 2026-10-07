@@ -89,6 +89,22 @@ enum class feature : int {
 	// noticing media is most of what the badge is for; a site turned off stops
 	// being watched rather than being watched silently.
 	media_detect,
+	// **Skipping sponsor segments, and it defaults to block because it asks
+	// somebody else.** The segment times come from a community database, so
+	// turning this on is a decision to make a request to a third party for
+	// each video -- which is the one thing in this list that reaches outside
+	// the machine on the page's behalf rather than the page's.
+	//
+	// The query is built not to carry the video: the first four hex characters
+	// of the SHA-256 of the id go out, and every video sharing that prefix
+	// comes back, with the match made here. So the service learns a prefix
+	// shared by thousands of videos and not which one is playing. That is why
+	// the feature is offerable at all; it is not why it is off by default.
+	//
+	// Off by default because a browser that silently started talking to a
+	// service nobody mentioned would be doing the thing this shield exists to
+	// prevent, however good the privacy arithmetic is.
+	sponsor_skip,
 	count
 };
 
