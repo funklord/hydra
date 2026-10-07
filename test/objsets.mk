@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build fc0e89fc, mtime 2026-10-07 14:44)
+#     /home/claude/src/fmake/fmake  (build 38663f81, mtime 2026-10-07 15:51)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -53,6 +53,7 @@ OBJSETS_SOURCES = \
 	test/test_probe_ui.cpp \
 	test/test_replay.cpp \
 	test/test_rotation.cpp \
+	test/test_scriptlets.cpp \
 	test/test_scripts.cpp \
 	test/test_seam.cpp \
 	test/test_send_gate.cpp \
@@ -369,6 +370,7 @@ OBJS_test_probe_ui = \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o
 
 OBJS_test_replay = \
@@ -448,6 +450,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
@@ -507,6 +510,9 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/moc/moc_network_fetcher.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
+OBJS_test_scriptlets = \
+	$(BUILD_DIR)/app/scriptlets.o
+
 OBJS_test_scripts =
 
 OBJS_test_seam = \
@@ -563,6 +569,7 @@ OBJS_test_settings = \
 	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/theme.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o
 
 OBJS_test_shutdown = \
@@ -590,7 +597,8 @@ OBJS_test_subscription = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/filter_subscription.o \
 	$(BUILD_DIR)/moc/moc_subscription_updater.o \
-	$(BUILD_DIR)/app/subscription_updater.o
+	$(BUILD_DIR)/app/subscription_updater.o \
+	$(BUILD_DIR)/app/scriptlets.o
 
 OBJS_test_theme = \
 	$(BUILD_DIR)/app/tab_tree_model.o \
@@ -653,6 +661,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -790,6 +799,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -956,6 +966,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1066,6 +1077,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -1202,6 +1214,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -1361,6 +1374,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1469,6 +1483,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -1614,6 +1629,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -1741,6 +1757,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -1883,6 +1900,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -2018,6 +2036,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -2151,6 +2170,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -2300,6 +2320,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -2421,6 +2442,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -2559,6 +2581,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -2712,6 +2735,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -2854,6 +2878,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -2967,6 +2992,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -3112,6 +3138,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -3271,6 +3298,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
@@ -3420,6 +3448,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
@@ -3523,6 +3552,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -3665,6 +3695,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -3816,6 +3847,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -3930,6 +3962,7 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -4090,6 +4123,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -4203,6 +4237,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -4391,6 +4426,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
@@ -4483,6 +4519,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -4623,6 +4660,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -4767,6 +4805,7 @@ OBJS_try_settings_ui = \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o
 
 OBJS_try_share = \
@@ -4805,6 +4844,7 @@ OBJS_try_share = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -4924,6 +4964,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -5083,6 +5124,7 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -5201,6 +5243,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -5337,6 +5380,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -5471,6 +5515,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
@@ -5607,6 +5652,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \

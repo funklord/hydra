@@ -1,6 +1,7 @@
 #pragma once
 
 #include "filter_list.h"
+#include "scriptlets.h"
 
 #include <QDateTime>
 #include <QList>
@@ -46,8 +47,15 @@ struct subscription_read {
 	int accepted    = 0;   // rules this build can actually enforce
 	int unsupported = 0;   // syntax this build does not implement
 	int unsafe      = 0;   // cosmetic selectors refused outright
+	// **Counted apart from `accepted`, because a scriptlet is not a rule.**
+	// One is matched against a request or a selector; the other is a patch
+	// applied to the page's own globals from a closed catalog. Summing them
+	// would hide the number that says how much of a list is reaching the one
+	// place a network rule cannot -- an ad served from the content's host.
+	int scriptlets  = 0;
 	QString refusal;       // non-empty: the body was not a usable filter list
 	QList<filter_rule> rules;
+	QList<scriptlet_call> calls;
 
 	bool ok() const { return refusal.isEmpty(); }
 	// One line for the settings list and the log, naming all three numbers.
@@ -89,10 +97,11 @@ enum class line_kind {
 	comment,       // blank, `!` or `[Adblock...]`
 	network,       // a rule this build enforces
 	cosmetic,      // a scoped element-hiding rule with a usable selector
+	scriptlet,     // `##+js(name, ...)` naming a scriptlet in the catalog
 	unsupported,   // real syntax this build does not implement
 	unsafe,        // a cosmetic selector refused by why_selector_unsafe
 };
 line_kind classify(const QString &line, filter_rule *out = nullptr,
-                    QString *why = nullptr);
+                    QString *why = nullptr, scriptlet_call *call = nullptr);
 
 }  // namespace filter_subscription

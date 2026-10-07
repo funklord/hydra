@@ -46,6 +46,7 @@ static QString kind_name(line_kind k) {
 		case line_kind::comment:     return QStringLiteral("comment");
 		case line_kind::network:     return QStringLiteral("network");
 		case line_kind::cosmetic:    return QStringLiteral("cosmetic");
+		case line_kind::scriptlet:   return QStringLiteral("scriptlet");
 		case line_kind::unsupported: return QStringLiteral("unsupported");
 		case line_kind::unsafe:      return QStringLiteral("unsafe");
 	}
@@ -73,15 +74,15 @@ int main(int argc, char **argv) {
 			   "a wildcard rule" },
 			{ "example.com##.ad-banner", line_kind::cosmetic,
 			   "a scoped element-hiding rule" },
-			// The five this build does not implement, each for its own reason.
+			// A scriptlet naming the catalog is its own kind; the section
+			// below is about those. These are the ones this build reads and
+			// does not implement, each for its own reason.
 			{ "@@||ads.example.com^", line_kind::unsupported,
 			   "an exception rule" },
 			{ "||ads.example.com^$third-party", line_kind::unsupported,
 			   "a rule carrying options" },
 			{ "/^https?:\\/\\/ads\\./", line_kind::unsupported,
 			   "a regular-expression rule" },
-			{ "youtube.com##+js(json-prune, adPlacements)",
-			   line_kind::unsupported, "a scriptlet" },
 			{ "example.com##^script:has-text(ads)", line_kind::unsupported,
 			   "an HTML filter" },
 			{ "example.com#?#div:has(> .ad)", line_kind::unsupported,
@@ -106,6 +107,74 @@ int main(int argc, char **argv) {
 			                 why.isEmpty() ? QString()
 			                               : QString(" -- ") + why.left(60)));
 		}
+	}
+
+	section("a scriptlet rule naming the catalog is kept, and counted apart");
+	{
+		// **The kind that reaches an ad served from the content's own host.**
+		// Counted apart from rules because it is not matched against
+		// anything: it is a patch applied to the page's globals from a closed
+		// catalog, and summing the two would put code behind a number that
+		// says "rules".
+		// **The kind is taken first and the message built after.** C++ does
+		// not order a call's arguments, so `check(classify(...) == k,
+		// QString(...).arg(why))` may build the message from the PREVIOUS
+		// call's `why` -- measured here, where an unscoped scriptlet reported
+		// "names a scriptlet this build does not implement", which was the
+		// reason from two lines earlier. The assertion was right and its
+		// evidence was not, which is the half nobody checks.
+		QString why;
+		scriptlet_call call;
+		line_kind got = filter_subscription::classify(
+		  "youtube.com##+js(json-prune, adPlacements playerAds)", nullptr,
+		  &why, &call);
+		check(got == line_kind::scriptlet,
+		       QString("a call to an implemented scriptlet is a scriptlet "
+		                "(%1)").arg(kind_name(got)));
+		check(call.scope == "youtube.com" && call.name == "json-prune" &&
+		          call.args.size() == 1 &&
+		          call.args.first() == "adPlacements playerAds",
+		       QString("carrying its site, name and argument (%1 / %2 / %3)")
+		           .arg(call.scope, call.name, call.args.join("|")));
+
+		// Not in the catalog: unsupported, with the reason, rather than
+		// stored as something that will never run.
+		why.clear();
+		got = filter_subscription::classify(
+		  "youtube.com##+js(trusted-set-cookie, a, b)", nullptr, &why);
+		check(got == line_kind::unsupported,
+		       QString("one this build does not implement is not (%1: %2)")
+		           .arg(kind_name(got), why));
+		// **Unscoped is refused**, because a patch to every page's globals is
+		// not something a subscribed list gets to ask for.
+		why.clear();
+		got = filter_subscription::classify("##+js(json-prune, x)", nullptr,
+		                                     &why);
+		check(got == line_kind::unsupported && why.contains("unscoped"),
+		       QString("and an unscoped one is refused for being unscoped "
+		                "(%1: %2)").arg(kind_name(got), why));
+
+		const subscription_read rep = filter_subscription::read(
+		  "! Title: Annoyances\n"
+		  "youtube.com##+js(json-prune, adPlacements)\n"
+		  "player.test##+js(set-constant, cfg.ads, false)\n"
+		  "other.test##+js(aost, x)\n");
+		// **A list of nothing but scriptlets is usable.** An annoyance list
+		// can be exactly that, and refusing it for having no network rule
+		// would refuse the half of the ecosystem this build has just learned
+		// to read.
+		check(rep.ok(), QString("a list of only scriptlets is usable (%1)")
+		                     .arg(rep.refusal));
+		check(rep.scriptlets == 2 && rep.calls.size() == 2,
+		       QString("two of the three are in the catalog (%1)")
+		           .arg(rep.scriptlets));
+		check(rep.unsupported == 1,
+		       QString("and the third is counted unread (%1)")
+		           .arg(rep.unsupported));
+		check(rep.accepted == 0,
+		       QString("with no rules claimed (%1)").arg(rep.accepted));
+		check(rep.summary().contains("2 scriptlet(s)"),
+		       QString("the summary says so (%1)").arg(rep.summary()));
 	}
 
 	section("a body that is not a filter list is refused whole");
@@ -187,14 +256,18 @@ int main(int argc, char **argv) {
 		check(rep.ok(), QString("the list is usable (%1)").arg(rep.summary()));
 		check(rep.accepted == 4,
 		       QString("four rules this build enforces (%1)").arg(rep.accepted));
-		check(rep.unsupported == 3,
-		       QString("three lines it cannot (%1)").arg(rep.unsupported));
+		check(rep.unsupported == 2,
+		       QString("two lines it cannot (%1)").arg(rep.unsupported));
+		check(rep.scriptlets == 1,
+		       QString("and one scriptlet, which is neither (%1)")
+		           .arg(rep.scriptlets));
 		check(rep.lines == 7,
 		       QString("seven candidate lines, the header and comment not "
 		                "counted as a gap (%1)").arg(rep.lines));
 		check(rep.summary().contains("4 rule(s) in use") &&
-		          rep.summary().contains("3 line(s)"),
-		       QString("and the summary names both numbers (%1)")
+		          rep.summary().contains("1 scriptlet(s)") &&
+		          rep.summary().contains("2 line(s)"),
+		       QString("and the summary names all three numbers (%1)")
 		           .arg(rep.summary()));
 
 		// **The rules have to be ones the engine enforces, not text it

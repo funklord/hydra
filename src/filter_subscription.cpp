@@ -12,6 +12,8 @@ QString subscription_read::summary() const {
 	if (!ok())
 		return refusal;
 	QString s = QString("%1 rule(s) in use").arg(accepted);
+	if (scriptlets > 0)
+		s += QString(", %1 scriptlet(s)").arg(scriptlets);
 	if (unsupported > 0)
 		s += QString(", %1 line(s) this build cannot enforce").arg(unsupported);
 	if (unsafe > 0)
@@ -21,7 +23,8 @@ QString subscription_read::summary() const {
 
 namespace filter_subscription {
 
-line_kind classify(const QString &line, filter_rule *out, QString *why) {
+line_kind classify(const QString &line, filter_rule *out, QString *why,
+                    scriptlet_call *call) {
 	const auto reason = [why](const char *text) {
 		if (why)
 			*why = QString::fromLatin1(text);
@@ -49,17 +52,39 @@ line_kind classify(const QString &line, filter_rule *out, QString *why) {
 	const int hash = t.indexOf("##");
 	if (hash >= 0) {
 		const QString selector = t.mid(hash + 2).trimmed();
-		// **A scriptlet is the thing this build most conspicuously lacks**, and
-		// it is the only way anybody blocks a YouTube ad in the page -- the ads
-		// come from the same hosts as the video, so no network rule can see
-		// them. Counted separately for that reason: the number says how much of
-		// a list is waiting on scriptlet support rather than on anything else.
-		//
-		// `##^` is an HTML filter, which removes nodes as the parser sees them.
-		// Different feature, same answer here.
-		if (selector.startsWith(QLatin1String("+js(")) ||
-		    selector.startsWith(QLatin1Char('^'))) {
-			reason("a scriptlet or HTML filter, which this build does not run");
+		// **A scriptlet, which is the only kind that can reach an ad served
+		// from the content's own host.** The catalog is closed: a vetted name
+		// becomes a call, and anything else is unsupported with the reason
+		// `scriptlets::parse_call` gave -- so a list can ask for a patch from
+		// a fixed set and cannot supply a new one.
+		if (selector.startsWith(QLatin1String("+js("))) {
+			const int close = selector.lastIndexOf(QLatin1Char(')'));
+			const QString inside = close > 4 ? selector.mid(4, close - 4)
+			                                  : QString();
+			scriptlet_call parsed;
+			QString said;
+			if (!scriptlets::parse_call(inside, &parsed, &said)) {
+				if (why)
+					*why = said;
+				return line_kind::unsupported;
+			}
+			// The scope is the site it applies on, as it is for a cosmetic
+			// rule -- and an unscoped scriptlet is refused for the same
+			// reason: a patch to every page's globals is not something a
+			// subscribed list gets to ask for.
+			parsed.scope = t.left(hash);
+			if (parsed.scope.isEmpty()) {
+				reason("an unscoped scriptlet, which would patch every page");
+				return line_kind::unsupported;
+			}
+			if (call)
+				*call = parsed;
+			return line_kind::scriptlet;
+		}
+		// `##^` is an HTML filter, which removes nodes as the parser sees
+		// them. Different feature, and not implemented.
+		if (selector.startsWith(QLatin1Char('^'))) {
+			reason("an HTML filter, which this build does not run");
 			return line_kind::unsupported;
 		}
 		// Unscoped, which `cosmetic_filters::selectors_for` declines to apply
@@ -156,7 +181,8 @@ subscription_read read(const QString &text, int previous_rules) {
 	const QStringList lines = text.split(QLatin1Char('\n'));
 	for (const QString &line : lines) {
 		filter_rule r;
-		switch (classify(line, &r)) {
+		scriptlet_call call;
+		switch (classify(line, &r, nullptr, &call)) {
 			case line_kind::comment:
 				continue;   // not a candidate line; headers are not a gap
 			case line_kind::network:
@@ -164,6 +190,11 @@ subscription_read read(const QString &text, int previous_rules) {
 				++rep.lines;
 				++rep.accepted;
 				rep.rules.push_back(r);
+				break;
+			case line_kind::scriptlet:
+				++rep.lines;
+				++rep.scriptlets;
+				rep.calls.push_back(call);
 				break;
 			case line_kind::unsupported:
 				++rep.lines;
@@ -176,7 +207,11 @@ subscription_read read(const QString &text, int previous_rules) {
 		}
 	}
 
-	if (rep.accepted == 0) {
+	// **A list of nothing but scriptlets is a usable list.** An annoyance
+	// list can be exactly that, and refusing it for having no network rule
+	// would refuse the half of the ecosystem this build has just learned to
+	// read.
+	if (rep.accepted == 0 && rep.scriptlets == 0) {
 		rep.refusal = QString("no rule this build can enforce, out of %1 "
 		                       "candidate line(s).").arg(rep.lines);
 		return rep;

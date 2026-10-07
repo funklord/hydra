@@ -3042,6 +3042,12 @@ bool main_window::load_tree(const QString &path) {
 		// having stopped.
 		if (promoted > 0) {
 			const int rules = load_subscriptions();
+			// **The scriptlet set moved with it**, so every live view is given
+			// the new one. It takes effect at each view's next navigation,
+			// which is what injecting at document creation means -- the page
+			// in front of somebody keeps the patches it was created with.
+			for (web_view_backend *v : m_views_by_id)
+				inject_scriptlets(v);
 			if (m_status)
 				m_status->showMessage(
 				  QString("%1 subscription(s) updated — %2 rule(s) in force.")
@@ -3934,6 +3940,7 @@ void main_window::open_node(node *n, bool load_now) {
 		view->set_script_bridge(m_mse, mse_tap::bridge_name());
 		view->inject_script("hydra-mse-relay", mse_tap::relay_source());
 		view->inject_main_world_script("hydra-mse-hook", mse_tap::hook_source());
+		inject_scriptlets(view);
 
 #ifdef Q_OS_ANDROID
 		// **Android only, because only Android has something to hide here.** The
@@ -5628,6 +5635,7 @@ int main_window::load_subscriptions() {
 	// half-filled list -- adding rule by rule would leave a window in which
 	// the page being loaded is matched against some of them.
 	QList<filter_rule> all;
+	m_scriptlets.clear();
 	int taken = 0;
 	for (const subscription &sub : m_sub_updater->subscriptions()) {
 		if (!sub.enabled || sub.file.isEmpty())
@@ -5658,6 +5666,12 @@ int main_window::load_subscriptions() {
 			r.note = sub.name;
 			all.push_back(r);
 		}
+		// **Scriptlets are kept apart from the rules**, because they are not
+		// matched against anything -- they are patches applied to a page's own
+		// globals from a closed catalog, and conflating the two would put code
+		// behind a number that says "rules".
+		for (const scriptlet_call &c : rep.calls)
+			m_scriptlets.push_back(c);
 		taken += rep.accepted;
 	}
 	// **The counts stay the fetcher's.** Writing them back from here would
@@ -5666,6 +5680,34 @@ int main_window::load_subscriptions() {
 	// what a reader needs when a build starts reading more of a list.
 	m_subscribed->replace(all);
 	return taken;
+}
+
+void main_window::inject_scriptlets(web_view_backend *view) {
+	if (!view)
+		return;
+	static const QString name = QStringLiteral("hydra-scriptlets");
+	QList<scriptlet_call> allowed;
+	for (const scriptlet_call &c : m_scriptlets) {
+		// **The shield's escape hatch, applied per scope.** `request_filter`
+		// skips the whole imported list for a site whose `ads` setting is
+		// allow, on the stated grounds that a half-working escape leaves the
+		// page failing for a reason the person was told they had turned off.
+		// A scriptlet names the site it patches, so the same question has an
+		// exact answer here rather than needing the page to ask it.
+		if (m_policy && m_policy->is_allowed(policy::feature::ads, c.scope))
+			continue;
+		allowed.push_back(c);
+	}
+	const QString src = scriptlets::source_for(allowed);
+	// Removed rather than replaced with a script that does nothing: an
+	// injector that leaves an empty patch behind is one more thing running in
+	// every page for no reason, and `remove_script` is what the collection
+	// needs to forget the previous one.
+	if (src.isEmpty()) {
+		view->remove_script(name);
+		return;
+	}
+	view->inject_main_world_script(name, src);
 }
 
 void main_window::forget_node_state(const QString &id) {
@@ -6604,6 +6646,8 @@ void main_window::open_settings() {
 	dlg.set_subscription_updater(m_sub_updater);
 	connect(&dlg, &settings_dialog::subscriptions_changed, this, [this] {
 		load_subscriptions();
+		for (web_view_backend *v : m_views_by_id)
+			inject_scriptlets(v);
 	});
 	// Cleared and written here rather than in the dialog: the dialog holds the
 	// log only to decide whether to offer the control, and this is where the

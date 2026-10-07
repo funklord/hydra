@@ -33707,11 +33707,50 @@ nothing to do with filters, with
     settings_dialog.cpp:1839: undefined reference to
         filter_subscription::mint_cache_name(QString const&, QString const&)
 
-The cause is `.fmake/cache.json`: fmake kept `settings_dialog.o`'s old symbol
-table, so the closure for a program that depends on it never learned the new
-edge. Measured rather than guessed -- **two warm runs missed it and one cold
-run found it, with no source change in between.** Removing the cache and
-regenerating added exactly the three objects to exactly those three programs.
+**What is established is that a warm `.fmake/cache.json` changed the link
+sets, and which cached thing did it is not known.** Two warm runs missed the
+three programs and one cold run found them, with no source change in between
+-- removing the cache and regenerating added exactly the three objects to
+exactly those three programs.
+
+The first version of this entry said fmake had kept `settings_dialog.o`'s old
+symbol table. That is where the evidence points and it is not established, and
+the correction came from fmake: that tree stores no per-program link sets at
+all -- `cache.json` holds a per-source scan and a per-object symbol table, and
+the closure is recomputed every run -- so the candidates are a symbol table
+served although the object changed, or the widening step not reaching the new
+objects from those three roots. Their own C fixture of the same shape does
+**not** reproduce it either way, which argues slightly against the first
+rather than for it.
+
+**Naming a specific wrong cause costs the next reader the wrong look**, which
+is why this says what was measured and stops.
+
+**And the discriminating run came back negative, so the occurrence here is
+unexplained rather than attributed.** In an unpacked `git archive HEAD` of
+this tree with its own cache -- warmed on the pre-feature `settings_dialog.cpp`,
+then restored to the committed one -- `fmake -v --explain test_probe_ui`
+printed `[1/1] CXX src/settings_dialog.cpp` and a widening trace naming the
+right root and symbol:
+
+    src/filter_subscription.cpp <- ...mint_cache_nameERK7QStringS2_
+        (src/settings_dialog.cpp)
+
+So that pass recompiled the changed file, saw its new undefined symbols and
+reached the new objects, and a second eject had all three in the program's
+set. fmake's own C fixture of the same shape does not reproduce it either.
+
+What remains different between the copy and this tree, in the order worth
+suspecting: an unpacked archive carries `.gitmodules` and no contents, so
+fmake refused until `--no-submodules` was passed -- a different code path, not
+a different amount; the real cache had a day of passes behind it rather than
+one, including one where `settings_dialog.h` changed while the `.cpp` did not;
+and the real tree had its build directories present.
+
+**The original `cache.json` was deleted by the experiment that found the
+fault**, so it cannot be read now -- which is the lesson to carry: the cache
+was the artifact, and clearing it was both the fix and the destruction of the
+evidence. Copy such a thing aside before clearing it.
 
 **Signalled to fmake rather than worked around here**, per
 `harmonization.md`: this tree holds the reproduction and fmake holds the
@@ -33721,10 +33760,211 @@ rather than silently -- but it fails in a program the change never touched,
 which is the expensive part. It cost two regenerations here before the cache
 was suspected.
 
-The invariant to assert after any regeneration is the one this document keeps
+### The proof was run against the wrong pair, and the arithmetic caught it
+
+The invariant to assert after a regeneration is the one this document keeps
 arriving at: parse both files into a multiset of objects per program and
-require every difference to be a named new object. Done here, the result is
-46 programs unchanged, 39 gaining the updater and its moc, 3 gaining those
-and `filter_subscription.o`, and 0 differing in any other way -- 87 objects,
-which is 39x2 + 3x3. A stale cache shows up in that table as a program that
-did not gain what it should have, which is exactly how this was found.
+require every difference to be a named new object. **It was run here against
+the wrong two files.** The comparison was `git show HEAD:test/objsets.mk` --
+HEAD being the commit *before* this work -- against the post-deletion file,
+which measures the feature and not the staleness. It reported 46 programs
+unchanged, 39 gaining the updater and its moc, 3 gaining those and
+`filter_subscription.o`: and 39 of those 42 changes are the feature, which the
+stale runs had already picked up.
+
+fmake caught it by arithmetic alone, without seeing either file: a program
+that already had the new objects in the stale run cannot gain two when the
+cache is deleted, so either the 39 were short as well or the comparison was
+not stale-against-fixed. It was the second.
+
+**Stale against fixed, which is the comparison that answers the question:**
+
+    programs: 88 -> 88
+    objects:  5417 -> 5426
+    programs that differ: 3
+      test_probe_ui    + filter_subscription.o, subscription_updater.o,
+                         moc_subscription_updater.o
+      test_settings    + the same three
+      try_settings_ui  + the same three
+
+Three programs, each missing the same three objects, and the nine-object
+difference is 3 x 3 -- per-program references, not distinct objects. Nothing
+else moved. So the 39 reaching the code through `main_window.o` were never
+short, and "links `settings_dialog.o` without `main_window.o`" is exactly the
+affected population. Only `test_probe_ui` failed the build because `make test`
+stops at the first link error; the other two would have been next.
+
+**The commit message of `9eb6404` carries the wrong comparison** and cannot be
+rewritten, which is why the correction is here: this file is where somebody
+goes to find out what happened, and the log is where they find out when. The
+lesson is one this document already states and this is the instance that cost
+something: *check the artifact, not a fresh measurement of where it came
+from* -- and when the artifact is a diff, check that it is a diff between the
+two states the claim is about.
+
+## Scriptlets: the only rule kind that reaches an ad on the content's own host
+
+A network rule cannot touch an ad served from the same hosts as the video and
+stitched into the same stream, and a CSS rule cannot skip one. What the
+ecosystem actually uses there is a small JavaScript patch applied to the
+page's own globals before its scripts run -- pruning an ad array out of a
+player's configuration, pinning a flag the player reads. That is a scriptlet,
+and nothing else in this program could do it.
+
+**The catalog is ours and it is closed.** A rule names a scriptlet; it does
+not carry one. Only a name in `src/scriptlets.cpp` runs, each implementation
+is written and reviewable there, and a rule naming anything else is dropped
+and counted. So a subscribed list -- tens of thousands of lines nobody here
+reviewed one at a time -- can ask for a patch from a fixed set and cannot
+supply a new one. uBlock Origin's names are used deliberately so that a rule
+written for the ecosystem resolves; the code behind each name is this
+project's.
+
+Two to begin with, both implemented from scratch:
+
+- **`json-prune`**, which is the one that reaches a video ad. A player asks
+  its backend for a configuration document and reads an array of ad
+  placements out of it; remove the array before the player sees it and there
+  is nothing to play. It wraps `JSON.parse` and `Response.prototype.json`,
+  and takes an optional needle -- a list of paths that must all be present --
+  because without one a rule aimed at a single response prunes anything
+  sharing a property name, which is how a scriptlet breaks the page it was
+  meant to fix.
+- **`set-constant`**, which pins a flag the page then cannot write back.
+
+**No `trusted-*` scriptlets**, and the absence is deliberate rather than
+pending: uBlock keeps a second class that only an explicitly trusted list may
+call, and the first of those belongs with whatever UI says which lists are
+trusted. There is no such UI here.
+
+### Arguments are data, and that is where the one real mistake would have been
+
+Arguments arrive from a filter list, so interpolating one into the script text
+would make a list rule a way to run code: `##+js(set-constant, x, 1); evil()`.
+The calls are emitted as a JSON array and read back with `JSON.parse`, so an
+argument is a string at every point and the worst a hostile one can do is name
+a property that does not exist.
+
+**Which characters the crossing needs escaped was measured, not assumed.** Qt's
+JSON writer escapes `"`, `\` and the control characters and leaves a single
+quote and U+2028/U+2029 raw -- so the load-bearing cases are the quote, which
+would close the literal, and the two Unicode line separators, which are line
+terminators in JS however they arrived. The backslash rule is not redundant
+either: it keeps JSON's own `\n` intact across the crossing.
+
+### The sabotage passed for the wrong reason until one payload changed
+
+Seven hostile arguments go through a real `QJSEngine`, and the canary is
+`window.PWNED`. With the escaping removed, the first five **still did not
+run** -- they land inside the runner's own `try` after a `JSON.parse` that
+throws on the broken string, so the injection is neutralised by an accident
+rather than by the escaper. Only the U+2028 one failed, and it failed as a
+syntax error.
+
+The payload that discriminates is a concatenation evaluated while the
+argument to `JSON.parse` is still being built -- `x'+(window.PWNED=1)+'y` --
+so it runs first or not at all. With the escaper it stays data; without it the
+canary is set and the case fails. **A sabotage that is neutralised downstream
+tests the downstream**, which is this file's own rule met in the one place it
+would have cost most.
+
+### Where it is injected, and why not on navigation
+
+At view creation, through `inject_main_world_script`, which is MainWorld on
+every frame. A scriptlet has to be in place before the page's own scripts run,
+and a navigation is noticed after the document it should have patched already
+exists. So one script carries every call with the site its rule named, and
+each frame decides whether it is one of them -- which is also what makes it
+right inside an iframe, where an embedded player has its own hostname and that
+is the one the rule was written about. The host test is exact-or-subdomain, the
+same one `cosmetic_filters` applies to a scoped selector, and a host merely
+ending in the scope's letters is asserted not to match.
+
+The shield's escape hatch is applied per scope in C++ rather than asked of the
+page: a scriptlet names the site it patches, so a site whose `ads` setting is
+allow has its calls dropped before the script is built. The set is re-injected
+into live views when a fetch promotes a list or the settings change, and takes
+effect at each view's next navigation -- the page in front of somebody keeps
+the patches it was created with.
+
+**Counted apart from rules**, because a scriptlet is not matched against
+anything. A list of nothing but scriptlets is a usable list: an annoyance list
+can be exactly that, and refusing it for having no network rule would refuse
+the half of the ecosystem this build has just learned to read.
+
+### A test whose evidence could lie
+
+`check(classify(...) == kind, QString(...).arg(why))` built its message from
+the **previous** call's `why`, because C++ does not order a call's arguments.
+Measured here: an unscoped scriptlet reported "names a scriptlet this build
+does not implement", which was the reason from two lines earlier. The
+assertion was right and its evidence was not. The kind is taken into a local
+first now, and the unscoped case asserts the reason as well as the verdict.
+
+### What to do if a regeneration under-links again
+
+Three habits, the first two asked for by fmake and the third theirs to explain.
+
+**Copy `.fmake/cache.json` aside before clearing it.** Clearing it was both
+the fix and the destruction of the only artifact nobody has: six fixtures in
+fmake failed to reproduce the fault, and the failing cache would have answered
+in one read what none of them could.
+
+**Run `fmake -v --explain <program>` on an affected one, first.** It names the
+root and the symbol per object -- `src/filter_subscription.cpp <- ...
+mint_cache_name... (src/settings_dialog.cpp)` -- which is the artifact. The
+per-program multiset diff this document keeps recommending can only say what
+moved; `--explain` says why, and it is worth running alongside every
+regeneration rather than only after a surprise.
+
+**`pgrep -x fmake` cannot find a running fmake**, and the reason is structural
+rather than bad luck: fmake is a Python script, so `comm` is `python3` and
+`-x` matches `comm` exactly. It answered "none" twice here while a full
+regeneration was compiling. `pgrep -f '/fmake\b'` finds it, with the usual
+self-match caveat; reading `/proc/<pid>/cmdline` for the pids from `pgrep -x
+python3` avoids that. **An instrument that can only ever answer no is worse
+than one that errors**, which is this document's own rule about probes, met in
+a one-line check nobody would think to verify.
+
+### And the comparison itself was dated, which fmake caught
+
+The stale-against-fixed numbers above -- 5417 to 5426, three programs -- were
+correct when run and stopped being reproducible as soon as `objsets.mk` was
+regenerated for later work. **A generated file in a working tree is not an
+artifact**: it keeps moving, so a diff against it dates from whenever it was
+last written rather than from the event. The frozen copy under the session's
+scratch is the trustworthy half, and the mistake was freezing one side and
+not the other.
+
+What settled the population in the end was not a re-run but fmake deriving it
+from the frozen copy two ways: 41 programs link `settings_dialog.o`, 38 of
+those also link `main_window.o`, and the three that do not are exactly the
+three that were short. They also found the mechanism, which no diff of mine
+could have: `main_window.cpp` references the new symbols itself, five times
+with four more in its header, so those 38 had the objects demanded by
+`main_window.o`'s own undefined symbols. "Reaches it through `main_window.o`"
+is therefore the reason rather than a correlation.
+
+### The architecture doc has no section for scriptlets, and the gate said so
+
+`src/scriptlets.h` cited `sec 12.6` and the doc gate refused it: *"cites sec
+12.6 and doc/architecture.md has no such section"*. It was an invented number
+-- section 12 is the filter-evolution loop and has five numbered steps, which
+end at accepting a rule into the user's own list. Subscribing to an upstream
+list is step 5's own sentence, so those citations resolve; a scriptlet is
+neither a step nor a rule but a patch, and nothing in the document describes
+one.
+
+**Caught by a gate rather than by a reader, which is the point of having it.**
+A plausible section number is exactly the kind of identifier `evidence.md`
+says not to complete from a prefix: every run agrees with an invented one,
+because the loop is closed and the document is not in it. Here the loop was
+open, and one line of output closed the question.
+
+The citations now name `sec 12`, which exists and is the right section. **The
+document gaining a step for scriptlets is the copyright holder's**, not
+something to write while landing the code: the architecture doc is the design
+record, and adding a capability to it is a design decision rather than a
+description of one. Recorded here so the question reaches whoever decides it
+-- the code, its catalog and its limits are described above, which is what
+such a step would be written from.

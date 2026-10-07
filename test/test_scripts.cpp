@@ -184,11 +184,26 @@ int main(int argc, char **argv) {
 		// would refuse. Every blob is an immediately-invoked function, so
 		// none is in that shape -- asserted rather than assumed, because it
 		// is the one hole the parse check has.
-		int iife = 0;
-		for (const blob &b : found)
+		// **One blob is deliberately not a script**, and naming it is better
+		// than loosening the rule for all of them: `scriptlets.cpp`'s catalog
+		// defines the functions its wrapper calls and is concatenated inside
+		// an IIFE by `scriptlets::source_for`, which never injects it alone.
+		// `test_scriptlets` asserts the composed form opens with `(function`
+		// and closes with `})();`, so the property this case is about is
+		// still checked -- one layer along, where the composition is.
+		int iife = 0, fragments = 0;
+		for (const blob &b : found) {
+			if (b.file == QStringLiteral("scriptlets.cpp")) {
+				++fragments;
+				continue;
+			}
 			if (b.body.trimmed().startsWith(QStringLiteral("(function")))
 				++iife;
-		check(iife == found.size(),
+		}
+		check(fragments == 1,
+		       QString("exactly one blob is a fragment rather than a script "
+		                "(%1)").arg(fragments));
+		check(iife == found.size() - fragments,
 		      QString("all %1 open with (function, so the wrapper changes "
 		               "nothing about how they parse (%2)")
 		        .arg(found.size()).arg(iife));

@@ -365,6 +365,15 @@ private:
 	// that reads more -- and a body that was fine when fetched and is nonsense
 	// on disk now is refused here rather than enforced.
 	int load_subscriptions();
+	// Put the scriptlet patches into a view, or take them out again.
+	//
+	// **At view creation rather than on navigation**, because a scriptlet has
+	// to be in place before the page's own scripts run and a navigation is
+	// noticed after the document it should have patched exists. One script
+	// carries every call, each with the site its rule named, and the frame
+	// decides whether it is one of them -- which is also what makes it right
+	// in an iframe, where an embedded player has its own hostname.
+	void inject_scriptlets(web_view_backend *view);
 	// **The view half of forgetting an id**, shared so the two places that do
 	// it cannot drift: `forget_subtree`, which has a node, and the live cap's
 	// last resort, which by definition does not. Removing the widget from the
@@ -743,6 +752,9 @@ public:
 	// fetcher cannot disagree about what somebody subscribed to. This window
 	// reads it from there and never keeps a copy.
 	subscription_updater *m_sub_updater = nullptr;
+	// The scriptlet calls the subscribed lists asked for, accumulated by
+	// `load_subscriptions` and filtered per site when a view is given them.
+	QList<scriptlet_call> m_scriptlets;
 	QTimer              *m_subs_timer   = nullptr;
 	QAction            *m_kiosk_action  = nullptr;
 	QAction            *m_undo_action   = nullptr;
