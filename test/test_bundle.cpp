@@ -18,6 +18,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QSettings>
+#include <QTemporaryDir>
+#include <QTextStream>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -141,6 +143,85 @@ int main(int argc, char **argv) {
 		          policy::setting::block,
 		      "and so does an exception made after it");
 		check(fl.contains("||ads.example^"), "while the backup's rules arrive");
+	}
+
+	section("a hand-edited preference with a comma is not emptied");
+	{
+		// **The `[sites]` group has read both spellings for a while; the
+		// `[preferences]` group did not.** A comma in an INI value means
+		// "list" to QSettings. It quotes what the bundle writes, so an export
+		// and import round-trips -- and a person editing the file by hand
+		// will not quote, so `value()` hands back a `QStringList`. Stored as
+		// one, `toString()` on more than one element is **empty**: the
+		// preference is lost rather than mistyped.
+		//
+		// `torrent/listen_interfaces` is why this is concrete. libtorrent's
+		// format for it is comma-separated, so a hand-edited bundle carrying
+		// one empties the setting it was meant to carry.
+		QTemporaryDir scratch;
+		check(scratch.isValid(), "there is a scratch directory");
+		const QString hand = scratch.path() + "/by-hand.ini";
+		{
+			QFile f(hand);
+			check(f.open(QIODevice::WriteOnly | QIODevice::Text),
+			      "a bundle is written by hand");
+			QTextStream out(&f);
+			out << "[hydra]\nformat=1\nkind=settings\n\n"
+			     << "[preferences]\n"
+			     // Unquoted on purpose: this is what a person types.
+			     << "torrent/listen_interfaces=0.0.0.0:6881,[::]:6881\n"
+			     << "downloads/directory=/home/someone/Films, TV\n";
+		}
+
+		policy_engine pe;
+		filter_list fl;
+		const settings_bundle::summary s =
+		  settings_bundle::read(hand, &pe, &fl);
+		check(s.ok(), QString("it reads (%1)").arg(s.error));
+
+		QSettings app(QSettings::IniFormat, QSettings::UserScope,
+		               "hydra", "hydra");
+		check(app.value("torrent/listen_interfaces").toString() ==
+		          "0.0.0.0:6881,[::]:6881",
+		      QString("and the comma-separated interfaces come back whole "
+		               "(%1)")
+		          .arg(app.value("torrent/listen_interfaces").toString()));
+		// **And the limit, which the rejoin cannot lift.** QSettings trims
+		// whitespace around the separator when it parses a list, so
+		// `Films, TV` arrives as `["...Films", "TV"]` and the space is gone
+		// before anything here sees it. Rejoining gives `Films,TV` -- the
+		// structure back, not the bytes.
+		//
+		// Still better than what it replaced: as a stored list, `toString()`
+		// on two elements is empty, so the preference was lost outright. A
+		// path that is wrong by one space is at least visible. What a person
+		// editing a bundle by hand should do is quote a value containing a
+		// comma, which is what the file's own writer does.
+		check(app.value("downloads/directory").toString() ==
+		          "/home/someone/Films,TV",
+		      QString("while a comma followed by a space cannot be put back, "
+		               "the space being gone before this is reached (%1)")
+		          .arg(app.value("downloads/directory").toString()));
+
+		// The quoted spelling, which is what an export writes and what the
+		// advice above amounts to: that one is exact.
+		const QString quoted = scratch.path() + "/quoted.ini";
+		{
+			QFile f(quoted);
+			check(f.open(QIODevice::WriteOnly | QIODevice::Text),
+			      "a bundle written with the value quoted");
+			QTextStream out(&f);
+			out << "[hydra]\nformat=1\nkind=settings\n\n"
+			     << "[preferences]\n"
+			     << "downloads/directory=\"/home/someone/Films, TV\"\n";
+		}
+		policy_engine pe2;
+		filter_list fl2;
+		check(settings_bundle::read(quoted, &pe2, &fl2).ok(), "reads");
+		check(app.value("downloads/directory").toString() ==
+		          "/home/someone/Films, TV",
+		      QString("comes back exactly, space and all (%1)")
+		          .arg(app.value("downloads/directory").toString()));
 	}
 
 	section("what it refuses");

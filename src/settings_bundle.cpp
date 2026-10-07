@@ -233,7 +233,31 @@ summary read(const QString &path, policy_engine *policy_out, filter_list *filter
 	QSettings app = app_settings();
 	f.beginGroup(k_group_prefs);
 	for (const QString &key : f.allKeys()) {
-		app.setValue(key, f.value(key));
+		// **The same rejoin the `[sites]` group does, and for the same
+		// reason.** A comma in an INI value means "list" to QSettings. It
+		// quotes what this file writes, so an export and import round-trips
+		// -- but a person editing the bundle by hand will not quote, and then
+		// `value()` hands back a `QStringList` where a string was stored. The
+		// app keeps it as a list, and `toString()` on a list of more than one
+		// element is **empty**, so the preference is not mistyped but lost.
+		//
+		// `torrent/listen_interfaces` is the one that makes this concrete
+		// rather than theoretical: libtorrent's format for it is
+		// comma-separated, `0.0.0.0:6881,[::]:6881`, so a hand-edited bundle
+		// empties it. `player/custom_command` and `downloads/directory` are
+		// the same hazard whenever a command or a folder name has a comma in
+		// it.
+		//
+		// Joining is right for every key here because none of them is a
+		// list: the whole surface is scalars -- the player and its command,
+		// the download directory, four torrent values, four AI values, the
+		// kiosk block, the search template, two booleans and two integers.
+		// If a list-valued preference is ever added, this is where it has to
+		// be reconsidered.
+		const QVariant raw = f.value(key);
+		app.setValue(key, raw.typeId() == QMetaType::QStringList
+		                       ? QVariant(raw.toStringList().join(','))
+		                       : raw);
 		++out.preferences;
 	}
 	f.endGroup();

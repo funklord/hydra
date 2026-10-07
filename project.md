@@ -32688,3 +32688,53 @@ becomes an INI key, `*` is the one character that needs escaping in one, and
 `settings_bundle`'s own header records writing it as `%2A` for exactly that
 reason -- so an exact host round-tripping says nothing about `*.ads.example`
 doing so.
+
+## A hand-edited preference with a comma was emptied, not mistyped
+
+The settings bundle's `[sites]` group has read both spellings of a value for
+a while, and its comment says why: *"A comma in an INI value means 'list' to
+QSettings. It quotes what this writes, so our own files round-trip -- but a
+person editing the file by hand will not quote anything, and the whole reason
+for choosing a readable format is that they will edit it."*
+
+The `[preferences]` group, twenty lines below, did `app.setValue(key,
+f.value(key))` and inherited none of that. A hand-edited value containing a
+comma comes out of `value()` as a `QStringList`, is stored as one, and
+`toString()` on a list of more than one element is **empty** -- so the
+preference is lost outright rather than mistyped. Measured, by removing the
+fix: both test values come back `()`.
+
+**`torrent/listen_interfaces` is what makes it concrete rather than
+theoretical.** libtorrent's format for that setting *is* comma-separated --
+`0.0.0.0:6881,[::]:6881` -- so a hand-edited bundle carrying one emptied the
+very setting it was meant to carry. `player/custom_command` and
+`downloads/directory` are the same hazard whenever a command or a folder name
+has a comma in it.
+
+The fix is the two lines the sites group already had. **It is safe for every
+key here because none of them is a list**: the surface is the player and its
+command, the download directory, four torrent values, four AI values, the
+kiosk block, the search template, two booleans and two integers. A
+list-valued preference added later is where this has to be reconsidered, and
+the code says so at the point it would matter.
+
+### The half the rejoin cannot put back, stated rather than discovered later
+
+QSettings trims whitespace around the separator when it parses a list, so a
+folder named `Films, TV` arrives as `["...Films", "TV"]` and the space is
+gone before anything here sees it. Rejoining gives `Films,TV`: the structure
+back, not the bytes.
+
+That is still better than what it replaced -- a path wrong by one space is
+visible, where a preference silently reverting to its default is not -- but
+it is a limit and the test asserts it as one rather than asserting something
+false. Three cases, all pinned:
+
+    0.0.0.0:6881,[::]:6881        exact
+    /home/someone/Films, TV       comes back Films,TV
+    "/home/someone/Films, TV"     exact, and this is what an export writes
+
+So the advice for anybody editing a bundle by hand is the last line: quote a
+value with a comma in it, which is what the file's own writer does. The
+quoted case passes with the fix reverted too, which is the control saying the
+change leaves the ordinary path alone.
