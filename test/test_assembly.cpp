@@ -1192,6 +1192,159 @@ int main(int argc, char **argv) {
 		      "while still reporting the file it wrote");
 	}
 
+	section("a DASH save with separate audio combines rather than rewraps");
+	{
+		// **The assembler's two files are proven; the decision that uses them
+		// was not.** `hls_assembler::audio_path()` is non-empty exactly when a
+		// manifest carried its audio separately -- asserted above, bytes and
+		// all -- and `stream_assembly` then has to call `start_mux` rather
+		// than `start`. Nothing asserted which one it called, so swapping the
+		// branches, or losing the else, would leave a DASH save with separate
+		// audio producing a rewrapped **silent** video: the exact failure
+		// `dash::best_audio` exists to make visible, arriving after the part
+		// that was tested.
+		//
+		// The status line is what discriminates, and it is independent of
+		// ffmpeg: it is emitted before the remux is constructed, so this says
+		// which route was taken on a machine with no ffmpeg at all.
+		//
+		// project.md said this was "a deliberate interface change and is not
+		// made here", `media_remux::arguments` taking one input too few. It
+		// takes two now and `start_mux` exists -- the claim had outlived its
+		// subject, and the entry is corrected with this.
+		cdn.redirect_from.clear();
+		cdn.then.clear();
+		cdn.files["/mv1.m4s"] = QByteArray("VEE1");
+		cdn.files["/mv2.m4s"] = QByteArray("VEE2");
+		cdn.files["/ma1.m4s"] = QByteArray("AITCH");
+		cdn.files["/twostream.mpd"] =
+		  QByteArray("<?xml version=\"1.0\"?>\n"
+		              "<MPD mediaPresentationDuration=\"PT4S\"><Period>\n"
+		              "  <AdaptationSet mimeType=\"video/mp4\">\n"
+		              "    <Representation id=\"v\" bandwidth=\"1\">\n"
+		              "      <SegmentList><SegmentURL media=\"/mv1.m4s\"/>"
+		              "<SegmentURL media=\"/mv2.m4s\"/></SegmentList>\n"
+		              "    </Representation></AdaptationSet>\n"
+		              "  <AdaptationSet mimeType=\"audio/mp4\">\n"
+		              "    <Representation id=\"a\" bandwidth=\"1\">\n"
+		              "      <SegmentList><SegmentURL media=\"/ma1.m4s\"/>"
+		              "</SegmentList>\n"
+		              "    </Representation></AdaptationSet>\n"
+		              "</Period></MPD>\n");
+		// The control: the same shape with one stream, which must take the
+		// other branch. A line printed on every save discriminates nothing.
+		cdn.files["/onestream.mpd"] =
+		  QByteArray("<?xml version=\"1.0\"?>\n"
+		              "<MPD mediaPresentationDuration=\"PT4S\"><Period>\n"
+		              "  <AdaptationSet mimeType=\"video/mp4\">\n"
+		              "    <Representation id=\"v\" bandwidth=\"1\">\n"
+		              "      <SegmentList><SegmentURL media=\"/mv1.m4s\"/>"
+		              "<SegmentURL media=\"/mv2.m4s\"/></SegmentList>\n"
+		              "    </Representation></AdaptationSet>\n"
+		              "</Period></MPD>\n");
+
+		auto save_mpd = [&](const QString &path) {
+			media_item it;
+			it.kind  = media_kind::dash;
+			it.label = "mpd";
+			it.url   = QUrl(base + path);
+			auto *sa = new stream_assembly(&players, &downloads, &proxy, nullptr);
+			QStringList lines;
+			QObject::connect(sa, &stream_assembly::status,
+			                  [&lines](const QString &t) { lines << t; });
+			sa->save(it, stream_context{});
+			QElapsedTimer el;
+			el.start();
+			while (sa->running() && el.elapsed() < 15000)
+				spin(50);
+			// Wait for the REMUX to answer, not just for the assembly to
+			// stop: its message is the only thing that says which of the two
+			// calls was made, and "spin a bit" would be a race deciding how
+			// much of this section means anything. Every outcome names ffmpeg
+			// -- ran and failed, or not installed -- so that is the signal,
+			// and the fixture's four-byte segments guarantee it is not the
+			// success case, which names neither route.
+			for (int i = 0; i < 60 && lines.filter("ffmpeg").isEmpty(); ++i)
+				spin(50);
+			delete sa;
+			return lines;
+		};
+
+		const QStringList two_said = save_mpd("/twostream.mpd");
+		const QStringList one_said = save_mpd("/onestream.mpd");
+		// **The deciding line, not the whole transcript.** Joined and cut to
+		// 200 characters, the progress lines filled the quota and the cut
+		// landed one character before the words these checks turn on -- so
+		// every message below read as though nothing had been found while the
+		// assertions were passing on text the reader could not see. A report
+		// that cannot show what decided it is the half of a check nobody can
+		// audit.
+		const auto deciding = [](const QStringList &said) {
+			// The FIRST saved line: that is the one carrying the branch,
+			// and the second is ffmpeg's answer, which on fixture bytes that
+			// are not media is a paragraph of its complaint.
+			const QStringList hit = said.filter("Saved");
+			return hit.isEmpty() ? QStringLiteral("(nothing saved)")
+			                      : hit.first().simplified();
+		};
+
+		// **What `media_remux` says, which is the only evidence of which call
+		// was made.** The first version of this section asserted
+		// `stream_assembly`'s own status -- "combining video and audio..."
+		// against "rewrapping..." -- and that status is a SECOND read of
+		// `audio.isEmpty()`, decided a line above the call. Sabotaged by
+		// replacing the whole branch with `remux->start(out)`, the suite
+		// stayed **green**: the message still announced a mux that no longer
+		// happened. Each route's own wording is what separates them, in every
+		// outcome but success, and success cannot occur on segments that are
+		// four bytes of ASCII.
+		const auto muxed = [](const QStringList &said) {
+			return said.filter("could not combine").size()
+			     + said.filter("could not be combined").size();
+		};
+		const auto rewrapped = [](const QStringList &said) {
+			return said.filter("could not rewrap").size()
+			     + said.filter("so the stream was kept as-is").size();
+		};
+		const auto answer = [](const QStringList &said) {
+			// The reason, not the path in front of it: a scratch path is
+			// seventy characters of nothing and the verb is what decides
+			// this, so cutting from the left hid exactly the word the check
+			// turns on -- twice in writing this section.
+			const QStringList hit = said.filter("ffmpeg");
+			if (hit.isEmpty())
+				return QStringLiteral("(ffmpeg never answered)");
+			const QString line = hit.last().simplified();
+			const int dash = line.indexOf(QString::fromUtf8(" \xe2\x80\x94 "));
+			return (dash < 0 ? line : line.mid(dash + 3)).left(80);
+		};
+
+		check(muxed(two_said) > 0,
+		       QString("two streams are handed to the mux (%1)")
+		           .arg(answer(two_said)));
+		check(rewrapped(two_said) == 0,
+		       QString("and not to the rewrap (%1)").arg(answer(two_said)));
+		// The pair, the other way round: a route taken for every save would
+		// discriminate nothing.
+		check(rewrapped(one_said) > 0,
+		       QString("one stream goes to the rewrap (%1)")
+		           .arg(answer(one_said)));
+		check(muxed(one_said) == 0,
+		       QString("and not to the mux (%1)").arg(answer(one_said)));
+
+		// The status line is worth pinning too -- it is what the person reads
+		// -- but as the message it is, not as evidence of the call.
+		check(two_said.filter("combining video and audio").size() > 0,
+		       QString("the two-stream save says it is combining (%1)")
+		           .arg(deciding(two_said)));
+		check(one_said.filter("rewrapping").size() > 0,
+		       QString("and the one-stream save says it is rewrapping (%1)")
+		           .arg(deciding(one_said)));
+		check(two_said.filter("Saved").size() > 0 &&
+		          one_said.filter("Saved").size() > 0,
+		       "and both report the file they wrote");
+	}
+
 	// **The consequence of reading `#EXT-X-MAP`: the init lands first.** Without
 	// it the fragments were concatenated with no `moov` box -- unplayable,
 	// written out, reported as a finished save. Asserted on the bytes, in

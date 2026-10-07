@@ -29252,11 +29252,27 @@ perfectly and is silent -- the failure `dash::best_audio` exists to make
 visible -- so a manifest with a separate audio stream is refused, naming the
 audio as the part that is missing.
 
-Combining them means two assembled files and a mux, which is one input more
+~~Combining them means two assembled files and a mux, which is one input more
 than `media_remux::arguments` takes. That is a deliberate interface change and
-is **not** made here. So what works today is a muxed or video-only MPD, and
-what is refused is named; both are more than "DASH assembly is not
-implemented" and neither is a silent file.
+is **not** made here.~~ **Superseded: the interface change was made.**
+`media_remux::start_mux(video, audio)` and the two-input `arguments` exist,
+`hls_assembler` writes the audio to a path the caller names, and
+`stream_assembly`'s completion handler calls `start_mux` when `audio_path()`
+is non-empty. A DASH **Save** with separate audio is assembled and combined.
+
+What remains refused is **Watch**, and deliberately: a mux needs both streams
+complete, while watching hands the player a file that is still growing from
+the first segment. Save therefore passes somewhere to put a separately-carried
+audio stream and Watch does not. Whether Watch should instead wait for both
+and play afterwards is the holder's, and recorded as such.
+
+**This entry sent a reader to do work that was already done, which is what
+makes it worth keeping struck through rather than deleted.** It was read
+2026-10-07 as a live gap, and the thing that corrected it in a minute was
+grepping the source for the quantity the claim named -- `arguments` and its
+inputs -- before reading the claim's neighbours. The sentence had outlived its
+subject, and nothing in the ordinary course of work brings such a sentence
+together with the code that falsified it.
 
 ### What the sabotages separate, including one that does not
 
@@ -33402,3 +33418,55 @@ process. Tested afterwards by removing the flush and killing the run under
 the comment was a mechanism invented to fit an absence that was an artifact of
 how I looked. Both are gone; what the comment says now is what was measured,
 including that the flush made no difference.
+
+## The mux was implemented and nothing asserted which call was made
+
+`stream_assembly`'s completion handler chooses between a rewrap and a mux on
+one condition:
+
+    emit status(audio.isEmpty() ? "Saved %1; rewrapping..."
+                                 : "Saved %1; combining video and audio...");
+    ...
+    if (audio.isEmpty()) remux->start(out);
+    else                 remux->start_mux(out, audio);
+
+The assembler half was well covered -- an MPD with separate audio assembles
+into two files and the test reads both for their bytes. The **call** was not,
+so swapping the branches or losing the `else` would have left a DASH save with
+separate audio producing a rewrapped **silent** video: the failure
+`dash::best_audio` exists to make visible, arriving one layer after the part
+that was tested.
+
+### My first test pinned the message, and the sabotage said so
+
+It asserted the status line -- *"combining video and audio…"* against
+*"rewrapping…"* -- which reads like the right thing and is **a second read of
+`audio.isEmpty()`, taken a line above the call.** Replacing the whole branch
+with `remux->start(out)` left the section green: the message still announced a
+mux that no longer happened.
+
+What separates them is `media_remux`'s own wording, which carries the route's
+verb in every outcome but success -- *"ffmpeg could not combine this stream"*
+against *"could not rewrap"*, and with no ffmpeg installed, *"the video and
+audio could not be combined"* against *"the stream was kept as-is"*. Success
+names neither route, and cannot happen here: the fixture's segments are four
+bytes of ASCII, so ffmpeg always refuses them, which makes the discriminating
+wording deterministic rather than lucky.
+
+With that, the same sabotage fails twice and prints the reason: *two streams
+are handed to the mux (ffmpeg could not rewrap this stream...)*. The status
+lines are still asserted, as the message a person reads rather than as
+evidence of the call, and the section says which is which.
+
+### And the report hid the deciding word twice
+
+Both times by cutting from the left. `said.join(" | ").left(200)` spent its
+budget on progress lines and cut one character before "combining"; then the
+remux answer did the same, a seventy-character scratch path in front of the
+verb. Every message read as though nothing had been found while the
+assertions were passing on text no reader could see.
+
+It now shows the first saved line for the status checks, and for the call
+checks the part of the remux answer after the dash -- the reason, where the
+verb is. **A check whose report cannot show what decided it is a check nobody
+can audit**, and that is worth as much as the assertion being right.
