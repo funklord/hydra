@@ -1842,6 +1842,109 @@ int main(int argc, char **argv) {
 		holds(m, "after reopening a tab whose folder had been deleted");
 	}
 
+	section("a title ending in a bar does not eat the address beside it");
+	{
+		// **The outline is one line per node, fields separated by " | " and read
+		// from the right**, which is what keeps "Article Title | Site Name"
+		// whole. A title that ENDS with a bar defeats it from the other end: the
+		// writer puts " | " after the title, so "sale |" offers the splitter a
+		// separator one character early and the url comes back as
+		// "| https://..." -- an address that no longer loads, in the file that is
+		// the only record of it. Nothing reports it: `unparsed` counts lines that
+		// did not become nodes, and this one did.
+		//
+		// A title is page-supplied, so any site can write one, and the rename
+		// dialog puts it a keystroke away.
+		struct one { const char *title; const char *url; const char *kept; };
+		const QList<one> cases = {
+			// Interior and leading bars are untouched -- both round-trip today,
+			// and they are the control that the fix strips no more than it must.
+			{ "Home | Example Ltd", "https://a.test/x", "Home | Example Ltd" },
+			{ "a | b | c",          "https://b.test/y", "a | b | c"          },
+			{ "| leading",          "https://c.test/z", "| leading"          },
+			// A bar in the url survives: the url is the last field before the
+			// metadata and cannot carry a space, so nothing splits inside it.
+			{ "plain", "https://d.test/q?a=1|2", "plain" },
+			// The two that mattered. "sale|" with no space happens to survive --
+			// the splitter needs that space -- but the rule rests on where " | "
+			// begins rather than on anything a reader could remember, so both
+			// lose the trailing bar and both keep their address.
+			{ "sale |", "https://e.test/1", "sale" },
+			{ "sale|",  "https://e.test/2", "sale" },
+		};
+		tab_tree_model m;
+		QStringList ids;
+		for (const one &c : cases)
+			ids << m.add_tab(nullptr, QString::fromUtf8(c.title),
+			                  QString::fromUtf8(c.url))->id;
+		// A folder has no url field to absorb the stray bar, so the casualty is
+		// the next field along: measured, the lock comes back off and the folder
+		// is called "archive | | locked=1". The tags survive, sitting past the
+		// field the reader stops at -- so the tags line below is the limit this
+		// records rather than the guard, and the lock is what discriminates.
+		// (No dates: a folder line carries none, which is why none is checked.)
+		node *f = m.add_folder(nullptr, "archive |");
+		f->tags = QStringList{"work"};
+		f->locked = true;
+		const QString folder_id = f->id;
+
+		const QString path = dir + "/bars.txt";
+		check(m.save(path), "the tree saves");
+		tab_tree_model back;
+		check(back.load(path), "and loads again");
+		check(back.last_unparsed() == 0,
+		      QString("with every line parsed (%1 lost)")
+		          .arg(back.last_unparsed()));
+
+		for (int i = 0; i < cases.size(); ++i) {
+			node *n = back.node_by_id(ids.at(i));
+			check(n != nullptr, QString("tab %1 comes back").arg(i));
+			if (!n)
+				continue;
+			// The address first: losing it is the fault, and losing the bar off
+			// the end of a title is the price.
+			check(n->url == QString::fromUtf8(cases.at(i).url),
+			      QString("\"%1\" keeps its address (%2)")
+			          .arg(QString::fromUtf8(cases.at(i).title), n->url));
+			check(n->title == QString::fromUtf8(cases.at(i).kept),
+			      QString("and reads back as \"%1\" (%2)")
+			          .arg(QString::fromUtf8(cases.at(i).kept), n->title));
+		}
+
+		node *fb = back.node_by_id(folder_id);
+		check(fb != nullptr, "the folder comes back");
+		if (fb) {
+			check(fb->title == "archive",
+			      QString("without its trailing bar (%1)").arg(fb->title));
+			check(fb->tags == QStringList{"work"},
+			      QString("keeping its tags, which survived either way (%1)")
+			          .arg(fb->tags.join(',')));
+			check(fb->locked, "and the lock that sat behind them");
+		}
+		holds(back, "after reloading titles that carry the field separator");
+
+		// **And the file somebody already has.** The fix above stops the damage
+		// being written; it does nothing for a tree saved before it, where the
+		// address is sitting on disk with a bar welded to its front. The reader
+		// takes it off, which it can do without guessing: a bar is not a scheme
+		// character and an encoded one is %7C, so no url starts with one.
+		const QString damaged = dir + "/bars-damaged.txt";
+		{
+			QFile f(damaged);
+			check(f.open(QIODevice::WriteOnly | QIODevice::Truncate),
+			      "a tree written the way the old writer wrote it");
+			f.write("- [d1] unopened | half price | | https://shop.test/sale | "
+			         "created=2026-01-01T00:00:00 | seen=2026-01-01T00:00:00\n");
+		}
+		tab_tree_model old;
+		check(old.load(damaged), "loads");
+		node *d = old.node_by_id("d1");
+		check(d != nullptr, "with the tab in it");
+		if (d)
+			check(d->url == "https://shop.test/sale",
+			      QString("and its address recovered (%1)").arg(d->url));
+	}
+
 	QDir(dir).removeRecursively();
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

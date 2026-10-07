@@ -161,8 +161,18 @@ node *load(const QString &path, int *flattened, int *unparsed) {
 		// A page's url is the last field before the metadata -- but only when
 		// there is something in front of it to be the title, so a node written
 		// with a title and no url does not lose the title instead.
-		if (!n->is_folder() && rest_fields.size() >= 2)
+		if (!n->is_folder() && rest_fields.size() >= 2) {
 			n->url = rest_fields.takeLast();
+			// **Recovering a file this format has already damaged.** A title
+			// ending in " |" used to split one character early and leave the
+			// address here as "| https://...", which loads nothing -- see
+			// `title_field`, which stops it being written again. No url begins
+			// with a bar (it is not a scheme character, and an encoded one is
+			// %7C), so a leading bar here is that collision and nothing else,
+			// and taking it off restores the address exactly.
+			while (n->url.startsWith(QLatin1Char('|')))
+				n->url = n->url.mid(1).trimmed();
+		}
 		n->title = rest_fields.join(" | ");
 		if (!n->created.isValid())   n->created   = QDateTime::currentDateTime();
 		if (!n->last_seen.isValid()) n->last_seen = n->created;
@@ -229,6 +239,40 @@ static QString tags_field(node *n) {
 	                        : " | tags=" + clean.join(QLatin1Char(','));
 }
 
+// The title as one field. A bar *inside* it is fine and deliberate --
+// "Article Title | Site Name" is the commonest shape a page title takes, and
+// reading the fields from the right is what keeps it whole. A bar at the END
+// is not.
+//
+// The writer puts " | " after the title, so a title finishing with " |" hands
+// the splitter a separator one character early: "sale |" written in front of a
+// url splits as ["sale", "| https://..."], and the url comes back with a bar
+// welded to its front. That address no longer loads, and the file is the only
+// record of where the tab was -- the same loss the right-anchored read was
+// written to stop, arriving from the other end of the field.
+//
+// What is lost is the field the stray bar attaches to, because the reader
+// walks the keys in from the right and stops at the first one it cannot
+// read -- so everything from the title up to that stopper becomes the title,
+// and only what sits past it survives. For a tab the stopper is the url. For
+// a folder it is the lock, which comes back off and leaves a folder named
+// "archive | | locked=1" sitting in the tree.
+//
+// A title ending "sale|" with no space before the bar happens to survive,
+// because the splitter needs that space. That is a property of where " | "
+// begins rather than a rule anybody could hold in their head, so every
+// trailing bar goes. A LEADING one is left alone: the type field in front of
+// it supplies the separator, and it round-trips.
+//
+// A title is page-supplied, so this is reachable from any site, and the rename
+// dialog puts it within reach of a keystroke.
+static QString title_field(const node *n) {
+	QString t = n->title;
+	while (!t.isEmpty() && (t.back() == QLatin1Char('|') || t.back().isSpace()))
+		t.chop(1);
+	return t;
+}
+
 static void write_node(QTextStream &out, node *n, int depth) {
 	// A mirror is a view of another browser's session, not part of this tree.
 	// Writing it would resurrect a stale copy of somebody else's tabs on the
@@ -239,7 +283,7 @@ static void write_node(QTextStream &out, node *n, int depth) {
 		return;
 	const QString indent(depth * 2, ' ');
 	if (n->is_folder()) {
-		out << indent << "- [" << n->id << "] folder | " << n->title;
+		out << indent << "- [" << n->id << "] folder | " << title_field(n);
 		// A folder can be locked too. The url half of a lock means nothing to
 		// one, but the half that pins it beside its siblings means exactly what
 		// it means for a tab, and a folder that would not stay where it was put
@@ -249,7 +293,7 @@ static void write_node(QTextStream &out, node *n, int depth) {
 		out << tags_field(n) << "\n";
 	} else {
 		out << indent << "- [" << n->id << "] " << type_to_string(n->type)
-		     << " | " << n->title
+		     << " | " << title_field(n)
 		     << " | " << n->url
 		     << " | created=" << n->created.toString(Qt::ISODate)
 		     << " | seen="    << n->last_seen.toString(Qt::ISODate);

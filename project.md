@@ -32979,3 +32979,83 @@ moved twice ended up in two children lists and `delete prop` freed it twice.
 Worth recording only because the instinct on a segfault in a reorganiser is
 to suspect the reorganiser: it was the test, and the fix was to read
 `tab->parent` instead of assuming it.
+
+## A title ending in a bar ate the address beside it
+
+The outline file is one line per node with the fields separated by `" | "`,
+and it is **read from the right** precisely so that a title can contain one:
+"Article Title | Site Name" is the commonest shape a page title takes, and an
+earlier left-to-right read shifted every field after it and lost the url.
+That note has been in `tree_outline.cpp` for a long time. The same fault was
+still reachable from the other end of the field.
+
+A title ending in `" |"` offers the splitter a separator one character early.
+The writer emits `title + " | " + url`, so "half price |" is written as
+
+    - [d1] unopened | half price | | https://shop.test/sale | created=...
+
+and `split(" | ")` matches the title's own trailing `" |"` plus the
+separator's leading space. The fields come back as
+
+    ["unopened", "half price", "| https://shop.test/sale", "created=..."]
+
+so the address is `| https://shop.test/sale`, which loads nothing -- in the
+file that is the only record of where that tab was. `last_unparsed()` is 0,
+because the line did become a node.
+
+**What is lost is whichever field the stray bar attaches to**, because the
+reader walks the trailing keys in from the right and stops at the first one it
+cannot read: everything from the title up to that stopper becomes the title,
+and only what sits past it survives. For a tab the stopper is the url. For a
+folder, which has no url field, it is the lock -- measured, a locked folder
+called "archive |" comes back unlocked and named "archive | | locked=1", while
+its tags, sitting past the stopper, are fine.
+
+**A title is page-supplied**, so any site can write one, and the rename dialog
+puts it a keystroke away. "Checkout |" is what a site template with an empty
+suffix produces.
+
+### Normalised on the way out, not repaired on the way in
+
+`title_field()` now chops trailing bars and whitespace off the title as it is
+written, which is the same remedy `tags_field()` has always applied to a tag
+and for the same reason: the line format has no escape. Interior and leading
+bars are untouched -- both round-trip, and they are the control that the fix
+strips no more than it must.
+
+The price is a cosmetic one and it is the right way round: a title that ended
+in a bar reads back without it. Nothing else changes.
+
+**"half price|" with no space before the bar happens to survive**, because the
+splitter needs that space. It loses its bar anyway. A format whose rule is "a
+title may end in a bar only when no space precedes it" is one nobody can hold
+in their head, and the distinction is a property of where `" | "` begins
+rather than anything anybody chose.
+
+### The file somebody already has
+
+The write-side fix stops new damage and does nothing for a tree saved before
+it, where the dead address is already on disk. The reader takes a leading bar
+off the url field, which it can do without guessing: a bar is not a scheme
+character and an encoded one is `%7C`, so no url begins with one and a leading
+bar there is this collision and nothing else. The address is restored exactly.
+
+That recovery is one-sided on purpose. The tab case is data loss and is
+unambiguous; the folder case is a flag and a visible title, and unpicking it
+would mean re-walking fields the reader has already given up on.
+
+### Sabotage, four rounds on one format rule
+
+Four rounds, each failing through the assertion that names it rather than
+through something earlier:
+
+- `title_field` returning the title unchanged: the tab's address comes back
+  as `| https://e.test/1` and the folder as `archive | | locked=1`.
+- the folder write site alone: only the two folder lines fail.
+- the tab write site alone: only the two tab lines fail.
+- the read-side recovery removed: *"and its address recovered
+  (| https://shop.test/sale)"*.
+
+The tags line in that section is a recorded limit rather than a guard -- it
+passes under sabotage, because tags genuinely survive. The lock is what
+discriminates, and the section says so.
