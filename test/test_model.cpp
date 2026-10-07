@@ -1747,6 +1747,57 @@ int main(int argc, char **argv) {
 			      "in the order the plan proposed");
 	}
 
+	section("an imported history does not survive the tree file");
+	{
+		// **Measured, and it is a limit rather than a behaviour anybody
+		// chose.** `project.md` says the mirror crossing is "the one moment
+		// it can be kept", because a mirror is replaced wholesale on every
+		// refresh -- and `deep_copy` does keep it. What nothing said is that
+		// the tree file does not carry it, so the history survives the drag
+		// and is gone at the next save and load, which is every restart.
+		//
+		// Confirmed by comparing `node`'s fields against `tree_outline.cpp`:
+		// eleven of the twelve are mentioned there and `history` is not
+		// mentioned at all. `state/<id>.history` is a different thing -- the
+		// serialised WebEngine history of a live view -- so there is nowhere
+		// else it is being written either.
+		//
+		// **This check pins the loss, it does not bless it.** Closing it is a
+		// change to the on-disk format, which is the source of truth for
+		// structure, human-editable, and read by other sessions -- so it is
+		// the copyright holder's call and not a thing to do while reading.
+		// Pinned so that whoever makes that decision flips a check that
+		// states the old behaviour in words, rather than discovering this
+		// measurement again from scratch.
+		tab_tree_model m;
+		node *t = m.add_tab(nullptr, "carried", "https://p.test/3");
+		t->history.entries << history_entry{ "https://p.test/1", "First" }
+		                    << history_entry{ "https://p.test/2", "Second" }
+		                    << history_entry{ "https://p.test/3", "Third" };
+		t->history.index = 2;
+		check(t->history.back_count() == 2,
+		      "a tab carries three entries and stands on the last");
+
+		const QString path = dir + "/history-roundtrip.txt";
+		check(m.save(path), "the tree saves");
+		tab_tree_model m2;
+		check(m2.load(path), "and loads again");
+		node *back = m2.node_by_id(t->id);
+		check(back != nullptr, "with the tab still in it");
+		if (back) {
+			check(back->title == "carried" && back->url == "https://p.test/3",
+			      "keeping its title and address");
+			// The limit itself. If this starts failing because the format
+			// learned to carry a history, that is the fix landing and this
+			// section is what should say so.
+			check(back->history.entries.isEmpty() && back->history.index == -1,
+			      QString("but not its imported history, which the file does "
+			               "not carry (%1 entries, index %2)")
+			          .arg(back->history.entries.size())
+			          .arg(back->history.index));
+		}
+	}
+
 	QDir(dir).removeRecursively();
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

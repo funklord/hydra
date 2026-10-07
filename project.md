@@ -1070,6 +1070,36 @@ does not: it describes the *address*, not a live view of it. `test_model`
 drives that path directly, because a history that does not survive it is one
 that was never anything but a dialog.
 
+**And it does not survive the tree file, which this paragraph did not say and
+should have.** Measured 2026-10-07: a tab carrying three imported entries,
+saved and loaded, comes back with its title and address and **zero** entries.
+Found by comparing `node`'s twelve fields against `tree_outline.cpp` --
+eleven are mentioned there and `history` is not mentioned at all -- and
+`state/<id>.history` is a different artifact, the serialised WebEngine
+history of a live view, so there is nowhere else it is being written either.
+
+So the crossing works and the next restart undoes it. By this section's own
+standard that is still "nothing but a dialog"; it just takes a restart to
+find out. `test_model` pins the loss now, in those words, so that closing it
+flips a check rather than requiring somebody to re-derive this.
+
+**Whose call it is, and what each answer costs -- stated carefully, because
+overstating the cost of a fix is the same error as understating it.** The
+outline format already has the shape for it: pipe-separated fields with
+`key=value` extras, `locked=1`, `created=`, `seen=`, `named=1`, and a reader
+that treats an absent key as the default. So carrying a history there is a
+new *field*, not a new format, and an older build reading a newer file
+ignores it by construction.
+
+What makes it the holder's call anyway is what that file is for. It is
+human-editable on purpose, and a history runs to hundreds of entries per tab
+-- one of them on one line would make the file people open in an editor
+unreadable, and the alternative shapes (a continuation line, a sidecar) are
+design choices about the document rather than about this bug. Writing it
+beside the state blob instead avoids the document question and needs a new
+on-disk artifact and extension, since `.history` is taken by the serialised
+WebEngine history. Neither is a thing to adopt while reading the function.
+
 #### What was found on the way
 
 - **The position cannot be located by matching the url.** The first version
