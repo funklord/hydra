@@ -32570,3 +32570,85 @@ check that goes red for a cause other than the one it names is not noise to
 work around -- it was reporting something larger than the thing being tested,
 and three cheap probes were the difference between recording a leak and
 recording that a tab shows another tree's page.
+
+## A reopened tab followed a parent id minted for somebody else
+
+A remembered close stores `{clone, parent_id, index}`, and `reopen_closed_at`
+grafts the subtree under `node_by_id(parent_id)`, falling back to the root
+when that answers nothing. Nothing ever dropped the reference: `m_closed` is
+appended to, capped and taken from, and no path validates or prunes an entry
+when the node it names is deleted.
+
+So the fallback was defeated by a recycled name. `unused_id` hands out the
+first free one, so deleting a folder frees its id for the next folder
+created, and the entry still naming it reopened its tab **inside a folder it
+had never been in**. Measured, every step an ordinary gesture:
+
+    a folder "original home" (f-2) with one tab in it
+    close the tab        -- remembered, parent_id = f-2
+    delete the folder    -- f-2 is free again
+    make any new folder  -- it is minted f-2
+    press Reopen         -- the tab arrives in the new folder
+
+The fix drops the reference when its referent goes: `forget_closed_parents`
+clears any `parent_id` naming a node in the subtree being deleted, so the
+reopen reaches the root fallback the code already had. The whole subtree,
+because deleting a folder deletes what is in it and any of those could be a
+recorded parent; twenty-five entries at most, so the walk costs nothing.
+
+Reverting it fails exactly the two checks that describe the defect, and they
+print the symptom rather than a number: *"not inside the one that inherited
+the id (somewhere else entirely)"* and *"the unrelated folder stays empty
+(1)"*.
+
+## One root cause, three instances in one day
+
+Worth stating once rather than three times, because the shape is what
+transfers: **something keyed by an id whose uniqueness does not span the
+lifetime of the reference.** An id here is "the first free name", which makes
+every id a name that comes back.
+
+    remint_if_taken     two nodes in one tree    both minted the same free name
+    the view map        two trees in one window  t-2 in tree B found tree A's view
+    m_closed.parent_id  one id across two edits  a deleted folder's name reused
+
+Each was found by a different route -- reading a function, a test failing for
+the wrong reason, and asking where else this shape could be -- and each cost
+the user something different: shared state blobs, a tab showing another
+tree's page, and a tab filed in a stranger's folder.
+
+**The two that are fixed are fixed locally; the one that is not is the one
+that needs an answer rather than an edit.** Dropping a stale reference and
+reserving ids during a walk are both "make this code not depend on a name
+being unique for longer than it is". Keying the view map and the state store
+per tree is the same thing one level up, and it cannot be done without
+deciding what a window switching trees owes the tree it is leaving.
+
+### The fourth place it could be, and what keeps it out today
+
+`tree_change` carries `node_id` and `new_parent_id`: a plan computed from one
+snapshot of the tree and applied to the tree as it is later. `tree_diff::apply`
+skips a change whose `node_id` no longer resolves -- but a *reused* id
+resolves, to somebody else, so a plan accepted after an id had been recycled
+would reparent the wrong tab.
+
+**What keeps it out is modality, not a check.** `reorganize_dialog` runs
+through `exec()` and the plan is applied from `on_accept` alone, so the tree
+cannot be edited between the proposal and the apply -- the person reviewing
+it is the only person who could, and they are inside the modal loop. Nothing
+in `apply` says this, which is why it is written here: **whoever makes that
+dialog non-modal, or stores a plan to apply later, inherits this.** The cheap
+guard at that point is to record each node's title beside its id in the plan
+and refuse a change whose title no longer matches, which is the same
+corroboration the closed-entry fix declined to need because dropping the
+reference was available there.
+
+**What would retire the whole class is monotonic ids** -- a counter that
+never hands back a name -- and it is worth writing down as the thing nobody
+should reach for casually. `unused_id`'s comment explains why the current
+scheme exists: ids are short and readable in a file people open in an editor,
+and a copy of `a1` reading `a1-2` is legible. A counter that only goes up
+would have to live in the tree file to survive a reload, which is the same
+document question the imported-history entry raises, and it would make the
+ids longer for ever after. Three local fixes against one format change is a
+trade only the holder can price.

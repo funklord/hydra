@@ -1798,6 +1798,50 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	section("a reopened tab does not follow a parent id minted for somebody else");
+	{
+		// **A closed entry records the id of the folder its tab was in, and an
+		// id is only that node's while that node exists.** `unused_id` hands
+		// out the first free name, so deleting a folder frees its id for the
+		// next folder created -- and the entry still naming it then reopened
+		// its tab inside a folder it had never been in.
+		//
+		// Every step is an ordinary gesture: close a tab, delete the folder it
+		// was in, make a different folder, press Reopen. Measured before the
+		// fix, the tab arrived in "somewhere else entirely".
+		//
+		// Third instance today of one root cause -- something keyed by an id
+		// whose uniqueness does not span the lifetime of the reference. The
+		// other two were two nodes in one tree (`remint_if_taken`) and two
+		// trees in one window (the view map).
+		tab_tree_model m;
+		node *home = m.add_folder(nullptr, "original home");
+		node *t = m.add_tab(home, "filed here", "https://t.example/");
+		const QString home_id = home->id;
+		check(home_id == "f-2" && t->id == "t-2",
+		      QString("a folder and a tab in it (%1, %2)").arg(home_id, t->id));
+
+		check(m.remove_node(t, true), "the tab is closed, remembered");
+		check(m.remove_node(home, false), "and then its folder is deleted");
+
+		node *elsewhere = m.add_folder(nullptr, "somewhere else entirely");
+		check(elsewhere->id == home_id,
+		      QString("so the next folder is handed that id (%1)")
+		          .arg(elsewhere->id));
+
+		node *back = m.reopen_closed();
+		check(back != nullptr, "the tab comes back");
+		check(back && back->parent == m.root(),
+		      QString("at the root, its own folder being gone -- not inside "
+		               "the one that inherited the id (%1)")
+		          .arg(back && back->parent ? back->parent->title
+		                                     : QStringLiteral("(none)")));
+		check(elsewhere->children.isEmpty(),
+		      QString("which is to say the unrelated folder stays empty (%1)")
+		          .arg(elsewhere->children.size()));
+		holds(m, "after reopening a tab whose folder had been deleted");
+	}
+
 	QDir(dir).removeRecursively();
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

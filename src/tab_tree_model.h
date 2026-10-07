@@ -265,6 +265,11 @@ private:
 	void remint_if_taken(node *n);
 	void remint_if_taken(node *n, QSet<QString> *claimed);
 	static void collect_ids(const node *n, QSet<QString> *into);
+	// A closed entry remembers the id of the folder its tab was in, and that
+	// id stops being that folder's the moment the folder is deleted. Dropping
+	// the reference is what lets `reopen_closed_at`'s fallback to the root be
+	// reached rather than defeated by a recycled name.
+	void forget_closed_parents(const node *gone);
 
 	// Deleted subtrees, newest last, owned here until grafted back by
 	// `reopen_closed` or evicted past the cap; the destructor frees the rest.

@@ -786,6 +786,23 @@ bool tab_tree_model::remove_node(node *n, bool remember) {
 	}
 
 	emit about_to_remove(n);
+	// **A remembered tab records the id of the folder it was in, and an id is
+	// only that node's while that node exists.** `unused_id` hands out the
+	// first free name, so deleting a folder frees its id for the next one --
+	// and a closed entry still naming it then reopens its tab into a folder
+	// it was never in. Measured: a tab closed out of `f-2`, that folder
+	// deleted, any new folder created (and minted `f-2`), and the reopen
+	// filed the tab inside the new one.
+	//
+	// So the reference is dropped when its referent goes. `reopen_closed_at`
+	// already answers a missing parent with the root, which is the honest
+	// place for a tab whose folder no longer exists -- this is what lets that
+	// fallback be reached instead of being defeated by a recycled name.
+	//
+	// The whole subtree, because deleting a folder deletes what is in it and
+	// any of those could be somebody's recorded parent. Twenty-five entries
+	// at most, so the walk costs nothing worth measuring.
+	forget_closed_parents(n);
 	// **A removal, not a reset.** `beginResetModel` invalidates every index the
 	// view holds, and a QTreeView rebuilding from nothing has no expansion
 	// state left to restore -- so deleting one sub-tab folded its parent, and
@@ -874,6 +891,17 @@ node *tab_tree_model::reopen_closed_at(int index) {
 // `m_id_index` pointing at an ungrafted node until the caller reindexed. A set
 // of its own makes this function right on its own rather than right because of
 // what happens next.
+// Clear any remembered parent id that names a node in this subtree, so a
+// reopen falls back to the root rather than following a name that has since
+// been minted for something else. See the call site for the measurement.
+void tab_tree_model::forget_closed_parents(const node *gone) {
+	QSet<QString> ids;
+	collect_ids(gone, &ids);
+	for (closed_entry &c : m_closed)
+		if (ids.contains(c.parent_id))
+			c.parent_id.clear();
+}
+
 void tab_tree_model::remint_if_taken(node *n) {
 	QSet<QString> claimed;
 	collect_ids(n, &claimed);
