@@ -387,6 +387,85 @@ int main(int argc, char **argv) {
 		                                     : rep.rules.first().text));
 	}
 
+	section("a fresh install subscribes to something, once");
+	{
+		// **The gap this closes: a new install enforced nothing.** There was
+		// no default and Add asked for an address somebody had to already
+		// know, so the whole filter pipeline sat idle on a fresh profile.
+		const QList<subscription> seeds =
+		  filter_subscription::default_subscriptions();
+		check(seeds.size() >= 2,
+		       QString("there are defaults (%1)").arg(seeds.size()));
+		bool all_ok = !seeds.isEmpty();
+		for (const subscription &s : seeds) {
+			if (s.name.isEmpty() || !s.url.isValid() ||
+			    s.url.scheme() != QLatin1String("https") || !s.enabled ||
+			    s.trusted)
+				all_ok = false;
+		}
+		// **Not trusted, asserted.** Trust is a statement about a publisher
+		// and only the person can make it; shipping a URL pre-trusted would
+		// make it on their behalf, which is the one thing the per-list box
+		// exists to prevent.
+		check(all_ok,
+		       "each is named, https, enabled and NOT trusted");
+
+		QTemporaryDir dir;
+		check(dir.isValid(), "a scratch profile");
+		const QString index = QDir(dir.path()).filePath("subs.json");
+
+		// First run: no index file at all.
+		{
+			subscription_updater up(index, dir.path());
+			check(up.subscriptions().size() == seeds.size(),
+			       QString("a first run is seeded (%1)")
+			           .arg(up.subscriptions().size()));
+			check(QFile::exists(index),
+			       "and the index is written, so this happens once");
+			bool filed = !up.subscriptions().isEmpty();
+			for (const subscription &s : up.subscriptions())
+				if (s.file.isEmpty() || s.file.contains('/'))
+					filed = false;
+			check(filed, "each with a cache name of its own, and not a path");
+		}
+
+		// **The case that matters more than the seeding: an index that
+		// exists is never overwritten.** `load_index` answers with an empty
+		// list for three different situations -- no file, a file with no
+		// entries, and a file it REFUSED as malformed -- and it refuses
+		// rather than repairs precisely so a damaged index does not lose
+		// subscriptions. Seeding on an empty answer would undo that.
+		{
+			const QString empty = QDir(dir.path()).filePath("empty.json");
+			QFile f(empty);
+			check(f.open(QIODevice::WriteOnly | QIODevice::Truncate),
+			       "an index holding no subscriptions is written");
+			f.write("[]\n");
+			f.close();
+			subscription_updater up(empty, dir.path());
+			check(up.subscriptions().isEmpty(),
+			       QString("somebody who removed every subscription keeps "
+			                "none (%1)").arg(up.subscriptions().size()));
+		}
+		{
+			const QString broken = QDir(dir.path()).filePath("broken.json");
+			QFile f(broken);
+			check(f.open(QIODevice::WriteOnly | QIODevice::Truncate),
+			       "and a malformed index is written");
+			f.write("{ not json at all");
+			f.close();
+			subscription_updater up(broken, dir.path());
+			check(up.subscriptions().isEmpty(),
+			       "a malformed index is not replaced by the defaults either");
+			// The file is left exactly as it was, which is what makes the
+			// refusal recoverable by hand.
+			QFile again(broken);
+			check(again.open(QIODevice::ReadOnly) &&
+			          again.readAll() == QByteArray("{ not json at all"),
+			       "and is left on disk untouched");
+		}
+	}
+
 	section("the index round-trips, and a cache name is never a path");
 	{
 		QTemporaryDir dir;

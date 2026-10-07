@@ -108,6 +108,28 @@ bool save_index(const QString &path, const QList<subscription> &subs);
 // A filename for a new subscription's cached body, free in `dir`.
 QString mint_cache_name(const QString &dir, const QString &name);
 
+// **What a fresh install subscribes to, and why these two.** Until this
+// existed a new install enforced nothing at all: there was no default, and
+// Add asked for an address somebody had to already know.
+//
+// Two rather than one, because they do different jobs and the measurement
+// says so. Read through `read()` on 2026-10-08:
+//
+//     EasyList            80142 candidate lines -> 58400 rules,     0 scriptlets
+//     uBlock filters.txt   6124 candidate lines ->  1802 rules,  1680 scriptlets
+//
+// **EasyList carries no scriptlets at all** -- not one `##+js(` line in
+// 80418 -- so on its own it cannot touch an ad served from the content's own
+// host, which is the YouTube case. uBlock's list is where those rules live.
+// Neither covers the other, so shipping one would have left a gap nobody
+// could see from the settings page.
+//
+// Enabled, because a default that is off is the same as no default: the
+// thing being fixed is that a fresh install blocked nothing. Not trusted --
+// trust is a statement about a publisher that only the person can make, and
+// shipping a URL pre-trusted would make it on their behalf.
+QList<subscription> default_subscriptions();
+
 // Which of the four buckets a single line falls in. Exposed for the tests,
 // because the classification is the part with the judgements in it.
 enum class line_kind {

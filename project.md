@@ -34635,6 +34635,196 @@ instrument that could not see the file's format. What caught it was printing
 the count it had parsed, which is the only reason that run was not read as a
 pass.
 
+## A default subscription, and the first real list ever read through this
+
+Instructed by the copyright holder 2026-10-08: ship a default subscription.
+Doing it meant answering the question this project had been carrying
+unmeasured -- **what does this build actually take from a real list** -- and
+the answer changed what shipped.
+
+### The measurement, which decided the rest
+
+Both candidates fetched and read through `filter_subscription::read` on
+2026-10-08:
+
+    list                                    candidate   rules   scriptlets
+    EasyList (80418 lines)                      80142   58400            0
+    uBlock filters.txt (10898 lines)             6124    1802         1680
+
+**EasyList carries no scriptlets whatever** -- not one `##+js(` line in 80418
+-- so on its own it cannot touch an ad served from the content's own host,
+which is precisely the YouTube case. uBlock's list is where those live, and
+it carries a fifth of EasyList's network rules. Neither covers the other, so
+**both ship**: one default would have left a hole invisible from the settings
+page.
+
+Enabled, because a default that is off is the same as no default; the thing
+being fixed is that a fresh install enforced nothing. **Not trusted**, and
+asserted so: trust is a statement about a publisher that only the person can
+make, and shipping a URL pre-trusted would make it on their behalf.
+
+Method, so the number can be re-taken: a scratch program over
+`src/filter_subscription.cpp`, `filter_list.cpp`, `scriptlets.cpp` and
+`site_rules.cpp`, calling `read()` on the fetched body and printing the
+report. It is not in the tree. **A make target for it is worth having** --
+this is exactly the figure that rots as the catalog grows -- and that is the
+holder's to want.
+
+### 302 rules were lost to one missing alias
+
+Of uBlock's 2453 scriptlet rules this build accepted 1680 and refused 773
+across 27 names. The largest single refusal was **`set`, at 302 rules** --
+uBlock's own alias for `set-constant`, which this catalog implements. It was
+missing for the reason the whole section exists: nothing here had ever read a
+real list, so the aliases were the ones somebody had met.
+
+Five were missing in all, and every one was **read out of uBlock's source
+rather than recalled** -- `set-constant.js` declares `set.js`, and the rest
+the same way:
+
+    set                    -> set-constant                     302 rules
+    trusted-rpfr           -> trusted-replace-fetch-response     2
+    trusted-set            -> trusted-set-constant               0
+    setTimeout-defuser     -> prevent-setTimeout                 0
+    setInterval-defuser    -> prevent-setInterval                0
+
+Re-measured after adding them: **scriptlets 1680 -> 1983**, unsupported
+2542 -> 2239. The three worth nothing today cost nothing to carry and are
+uBlock's real spellings.
+
+**And the trust gate got its first witness on a real list.** The same body
+read untrusted now reports *"2 needing trust this list has not been given"*
+-- the two `trusted-rpfr` rules, which are uBlock's current YouTube ad
+removal. That is a better witness than the synthetic fixture, because
+nobody wrote the list to exercise this.
+
+### Every one of nineteen names agrees with uBlock on trust
+
+Worth more than the aliases. uBlock declares `requiresTrust: true` per
+scriptlet, and comparing its 99 scriptlets against this catalog's 19: **all
+agree**, including the four trusted ones. Eighteen match by name; `no-fetch-if`
+is uBlock's alias for `prevent-fetch`, so this tree's canonical name is their
+alias -- a naming difference, not a disagreement.
+
+That is **corroboration from a source that has never seen this table**, which
+is the only kind worth counting. A security-relevant classification agreeing
+with the project the syntax came from is the strongest evidence available
+here, and it was free.
+
+### What the refusals say about the next piece of work
+
+The 25 names still refused, largest first: `aeld` 200, `nano-sib` 51,
+`nano-stb` 31, `rmnt` 27, `noeval` 23, `no-xhr-if` 22, `aost` 22,
+`popads-dummy` 18, `nobab` 15, `rpnt` 11, `trusted-replace-xhr-response` 7.
+**`aeld` -- addEventListener-defuser -- is the one to do next**, and
+`trusted-replace-xhr-response` is the one uBlock's YouTube rules use most
+directly alongside `trusted-rpfr`.
+
+### Three instrument errors in one investigation, all caught the same way
+
+Worth recording together because they are one habit, not three mistakes.
+
+- A regex over uBlock's `scriptlets.js` matched **nothing**, and the
+  comparison printed a clean table of absences. uBlock had split each
+  scriptlet into its own module, and the aggregate file registers through a
+  second form the pattern did not know.
+- The repaired version parsed 70 scriptlets and reported
+  `abort-on-property-read`, `nowebrtc` and `remove-class` as **"NOT IN uBO AT
+  ALL"** -- three of uBlock's oldest. Still the parser: those live in the
+  aggregate file, under `builtinScriptlets.push`.
+- A third pass extracted **11 of this tree's 15 aliases**, because the
+  table's alignment spacing defeated the pattern -- so three aliases this
+  tree already had were reported as missing.
+
+Each was caught by printing the count the instrument had parsed and asking
+whether it was plausible, and the fix that holds is a **positive control
+inside the extraction**: it now asserts four names that must be present
+before any absence is believed. **An absence produced by my own parser reads
+exactly like a fact about somebody else's project**, and two of these were a
+sentence away from being written down as one.
+
+## aeld and the XHR replacer, the two largest refusals
+
+Asked for by the copyright holder 2026-10-08, straight off the refusal list
+the coverage measurement produced. Both signatures were **read out of
+uBlock's source** rather than recalled: `prevent-addEventListener` is the
+canonical name with `addEventListener-defuser` and `aeld` as aliases, taking
+`(type, pattern)`; `trusted-replace-xhr-response` carries
+`requiresTrust: true`, has no aliases, and takes
+`(pattern, replacement, propsToMatch)` -- the same shape as the fetch one,
+so its patterns are at 0 and 2.
+
+Measured against `filters.txt` after:
+
+    scriptlets accepted     1983 -> 2190      (+207)
+    cannot enforce          2239 -> 2032
+    refused names             25 -> 23
+
++200 is `aeld` and +7 is the XHR replacer, exactly the counts the refusal
+list predicted. **2190 of 2453 scriptlet rules, from 1680 this morning.**
+
+### The plumbing is shared, and json-prune's behaviour did not move
+
+`filter_xhr(wanted, on_text, on_parsed)` came out of
+`json-prune-xhr-response`, which is now a thin caller, and the search-and-
+replace semantics came out of `trusted-replace-fetch-response` as
+`rewriter(search, replacement)`. Four scriptlets, two helpers.
+
+**`on_parsed` is a separate argument rather than derived from `on_text`**, and
+that was the one design decision worth making carefully. For
+`responseType === 'json'` the spec makes `responseText` throw, so there is no
+text to transform -- only the object the engine built. Deriving one from the
+other would have made the pruner serialise and re-parse on a path where it
+currently prunes the object directly, changing tested behaviour (key order,
+number formatting) for no gain.
+
+**What the replacer cannot do there is stated rather than worked around.** Its
+`on_parsed` has to `JSON.stringify` the object, run the search over that, and
+parse it back -- the same values, not the same bytes. A pattern depending on
+the server's spacing will not match for a `json` responseType and will
+everywhere else. Asserted as a limit, because a reader needs to know which
+of their patterns is safe.
+
+### The defuser refuses one thing uBlock accepts
+
+`matcher('')` matches anything, so `##+js(aeld)` means every type and every
+handler -- a page with no listeners at all. uBlock takes it and relies on its
+list authors; this build refuses it in `parse_call`, naming what it would
+have done. Same reasoning as the container-selector refusal: a rule that
+cannot plausibly have meant what it says goes back.
+
+### A fixture that could not reach the thing it asserted
+
+The first version of the defuser's test passed a real function as the
+handler and asserted it was refused. It failed, and the code was right.
+
+**QJSEngine returns `function() { [native code] }` for every function** --
+measured, with `String(f).indexOf('adsbygoogle')` on a function whose body
+contains it answering `NO SOURCE`. uBlock matches the handler against
+`String(handler)`, so in this engine the handler matcher is unreachable
+through a function and `want_handler` is false for every one of them.
+
+The chain of wrong instruments before that is worth keeping, because each
+looked conclusive:
+
+- `patched? false`, from `String(fn).indexOf('want_type') >= 0` -- the same
+  missing-source limit, used as the probe for whether the patch had landed.
+- The dispatcher's `try { f.apply(...) } catch (e) {}` swallowed nothing,
+  because nothing threw -- and "no error" was read as "the guard returned
+  early" when the function had in fact run to completion.
+- A canary at the top of the scriptlet is what settled it: the function ran,
+  saw `EventTarget`, raised nothing, and the listener was still added.
+
+A handler given as a **string** carries its text in every engine, so that is
+the fixture the section uses now, and the function case is recorded as
+something no test here can show. **Had the first assertion's polarity been
+reversed -- asserting the listener was kept -- it would have passed for ever
+on a matcher it never reached.**
+
+Sabotage: `&&` to `||` fails three assertions, including "leaves the others
+alone", because with an empty handler pattern matching anything an `||`
+turns `aeld, load` into a rule that refuses every listener on the page.
+
 ### What is left
 
 ~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was

@@ -173,12 +173,18 @@ C['json-prune-fetch-response'] = function (paths, needle, match) {
 //
 // The real accessors are captured from the prototype first, so the pruned
 // value is computed from exactly what the engine would have returned.
-C['json-prune-xhr-response'] = function (paths, needle, match) {
+// **Wrapping XMLHttpRequest so a matching response passes through a
+// transform**, shared by the two scriptlets that rewrite one.
+//
+// `on_text` rewrites the body as text. `on_parsed` is given the object the
+// engine has already built, for `responseType === 'json'`, where
+// `responseText` is not readable at all -- the spec makes it throw. The two
+// are separate rather than one derived from the other so that a caller which
+// can transform an object directly is not made to serialise it and parse it
+// back.
+var filter_xhr = function (wanted, on_text, on_parsed) {
 	var XHR = window.XMLHttpRequest;
 	if (typeof XHR !== 'function' || !XHR.prototype) return;
-	var prune = pruner(paths, needle);
-	if (!prune) return;
-	var wanted = matcher(match);
 
 	var describe = function (name) {
 		try { return Object.getOwnPropertyDescriptor(XHR.prototype, name); }
@@ -206,48 +212,80 @@ C['json-prune-xhr-response'] = function (paths, needle, match) {
 		// Cached on the raw body, so repeated reads neither re-parse nor
 		// disagree with each other -- a page that reads `responseText` twice
 		// must see the same thing both times.
-		var raw_seen = null, pruned = null;
-		var pruned_text = function () {
+		var raw_seen = null, done = null;
+		var new_text = function () {
 			var raw;
 			try { raw = text_of.get.call(xhr); } catch (e) { return undefined; }
-			// **Before the body is complete there is nothing to parse.** A
+			// **Before the body is complete there is nothing to transform.** A
 			// progressive read at readyState 3 is a fragment, and handing
-			// back a fragment with the properties still in it is correct:
-			// what the page gets is what it would have got.
+			// back a fragment unchanged is correct: what the page gets is
+			// what it would have got.
 			if (xhr.readyState !== 4 || typeof raw !== 'string') return raw;
-			if (raw === raw_seen) return pruned;
+			if (raw === raw_seen) return done;
 			raw_seen = raw;
-			try { pruned = JSON.stringify(prune(JSON.parse(raw))); }
-			catch (e) { pruned = raw; }        // not JSON: unchanged
-			return pruned;
+			try { done = on_text(raw); } catch (e) { done = raw; }
+			if (typeof done !== 'string') done = raw;
+			return done;
 		};
 		try {
 			Object.defineProperty(xhr, 'responseText', {
-				get: pruned_text, configurable: true
+				get: new_text, configurable: true
 			});
 			Object.defineProperty(xhr, 'response', {
 				get: function () {
 					var kind = '';
 					try { kind = String(xhr.responseType || ''); } catch (e) {}
-					if (kind === '' || kind === 'text') return pruned_text();
+					if (kind === '' || kind === 'text') return new_text();
 					var real;
 					try {
 						real = (resp_of && typeof resp_of.get === 'function')
 						        ? resp_of.get.call(xhr) : undefined;
 					} catch (e) { return undefined; }
 					// **Only the shapes this can read are touched.** For
-					// `json` the engine has already parsed it, so prune the
-					// object; an arraybuffer, a blob or a document is handed
-					// over as it is, because replacing what cannot be read
-					// would hand the page something it did not ask for.
+					// `json` the engine has already parsed it; an
+					// arraybuffer, a blob or a document is handed over as it
+					// is, because replacing what cannot be read would hand
+					// the page something it did not ask for.
 					if (kind !== 'json' || xhr.readyState !== 4) return real;
-					try { return prune(real); } catch (e) { return real; }
+					try { return on_parsed(real); } catch (e) { return real; }
 				},
 				configurable: true
 			});
 		} catch (e) { /* a page that pinned them keeps them */ }
 		return send.apply(this, arguments);
 	};
+};
+
+C['json-prune-xhr-response'] = function (paths, needle, match) {
+	var prune = pruner(paths, needle);
+	if (!prune) return;
+	filter_xhr(matcher(match), function (raw) {
+		// Not JSON is not an error: the body comes through unchanged.
+		return JSON.stringify(prune(JSON.parse(raw)));
+	}, function (real) {
+		// Already parsed, so prune the object rather than serialising it and
+		// reading it back.
+		return prune(real);
+	});
+};
+
+// trusted-replace-xhr-response: the same rewrite as the fetch one, on the
+// other transport. uBlock's YouTube rules use both.
+//
+// **The `json` responseType is the one case where this cannot see the bytes.**
+// `responseText` throws for that type, so what the search runs against is the
+// object re-serialised by `JSON.stringify` -- the same values, not the same
+// text. A pattern that depends on the server's spacing or key order will not
+// match there, and will on every other responseType. Stated rather than
+// worked around: the alternative is a second transport read, and a rule whose
+// pattern needs the original bytes can say so by matching a url that is not
+// fetched as `json`.
+C['trusted-replace-xhr-response'] = function (search, replacement, match) {
+	var rewrite = rewriter(search, replacement);
+	filter_xhr(matcher(match), rewrite, function (real) {
+		try { return JSON.parse(rewrite(JSON.stringify(real))); }
+		catch (e) { return real; }
+	});
 };
 
 // set-constant: pin a page global to a value it then cannot change.
@@ -621,8 +659,8 @@ C['trusted-set-cookie'] = function (name, value, days, path) {
 	try { document.cookie = bits; } catch (e) {}
 };
 
-// trusted-replace-fetch-response: rewrite text in a matching body. The search
-// may be a substring or `/re/`.
+// **The search-and-replace one list asks for, shared by the two scriptlets
+// that rewrite a body.** The search may be a substring or `/re/`.
 //
 // **The replacement means what `String.replace` means, and only on the regex
 // path.** A list writing `/(a)(b)/` and `$2$1` means the groups, which is what
@@ -632,10 +670,10 @@ C['trusted-set-cookie'] = function (name, value, days, path) {
 // every occurrence rather than the first and leaves a `$` in the replacement
 // as the character it is. The asymmetry is the search's, not a choice: there
 // is nothing for `$1` to mean without a pattern.
-C['trusted-replace-fetch-response'] = function (search, replacement, match) {
+var rewriter = function (search, replacement) {
 	var s = String(search == null ? '' : search);
 	var rep = String(replacement == null ? '' : replacement);
-	filter_fetch(matcher(match), function (body) {
+	return function (body) {
 		if (s === '' || s === '*') return rep;
 		if (s.length > 2 && s.charAt(0) === '/') {
 			var end = s.lastIndexOf('/');
@@ -649,7 +687,48 @@ C['trusted-replace-fetch-response'] = function (search, replacement, match) {
 		// Split and join rather than `replace`, which would take only the
 		// first and would read `$&` in the replacement as a back-reference.
 		return String(body).split(s).join(rep);
-	});
+	};
+};
+
+C['trusted-replace-fetch-response'] = function (search, replacement, match) {
+	filter_fetch(matcher(match), rewriter(search, replacement));
+};
+
+// prevent-addEventListener: refuse a listener whose type AND handler both
+// match. uBlock's rule is `matchesBoth`, not either, and that is what keeps a
+// rule aimed at one handler from taking every listener of that type with it.
+//
+// **Patched on `EventTarget.prototype` rather than on window and document**,
+// because a listener added to an element has to be reachable too and there is
+// one place all three go through.
+//
+// The handler is matched against its source text, which is what a list means
+// by the second argument: `aeld, load, adsbygoogle` names the function that
+// mentions it.
+C['prevent-addEventListener'] = function (type, pattern) {
+	var ET = window.EventTarget;
+	if (!ET || !ET.prototype ||
+	    typeof ET.prototype.addEventListener !== 'function')
+		return;
+	var want_type = matcher(type);
+	var want_handler = matcher(pattern);
+	var real = ET.prototype.addEventListener;
+	ET.prototype.addEventListener = function (t, h) {
+		var ts = '', hs = '';
+		try { ts = String(t == null ? '' : t); } catch (e) {}
+		try {
+			hs = (h == null) ? '' : String(
+			  typeof h === 'function' ? h
+			  : (h && typeof h.handleEvent === 'function' ? h.handleEvent : h));
+		} catch (e) {}
+		// Both, per uBlock. A page that cannot be read back -- a native
+		// function, a bound one -- stringifies to something short rather
+		// than throwing, so the handler test simply does not match and the
+		// listener is kept, which is the safe direction.
+		if (want_type(ts) && want_handler(hs))
+			return;
+		return real.apply(this, arguments);
+	};
 };
 
 C['set-local-storage-item'] = function (key, value) {
@@ -691,6 +770,8 @@ const catalog_entry k_entries[] = {
 	{ "no-fetch-if",                     1 << 0, 0,      false },
 	{ "nowebrtc",                        0,      0,      false },
 	{ "prevent-window-open",             1 << 0, 0,      false },
+	// Both arguments are patterns: the event type and the handler's source.
+	{ "prevent-addEventListener", (1 << 0) | (1 << 1), 0,      false },
 	{ "set-local-storage-item",          0,      0,      false },
 	{ "json-prune-fetch-response",       1 << 2, 0,      false },
 	{ "json-prune-xhr-response",         1 << 2, 0,      false },
@@ -705,6 +786,8 @@ const catalog_entry k_entries[] = {
 	{ "trusted-set-cookie",              0,      0,      true  },
 	// Two patterns: what to look for, and which url to look in.
 	{ "trusted-replace-fetch-response",
+	                          (1 << 0) | (1 << 2), 0,      true  },
+	{ "trusted-replace-xhr-response",
 	                          (1 << 0) | (1 << 2), 0,      true  },
 };
 
@@ -722,12 +805,24 @@ const catalog_alias k_aliases[] = {
 	{ "acis",                        "abort-current-script"    },
 	{ "nostif",                      "prevent-setTimeout"      },
 	{ "no-setTimeout-if",            "prevent-setTimeout"      },
+	{ "setTimeout-defuser",          "prevent-setTimeout"      },
 	{ "nosiif",                      "prevent-setInterval"     },
 	{ "no-setInterval-if",           "prevent-setInterval"     },
+	{ "setInterval-defuser",         "prevent-setInterval"     },
+	// **`set` is worth 302 rules of the 2453 in uBlock's own list**, which is
+	// more than any other missing name and was missing because nobody had
+	// read a real list through this. Measured 2026-10-08 against
+	// `filters.txt`; the alias comes from uBlock's `set-constant.js`, which
+	// declares `set.js`, rather than from anybody's memory of it.
+	{ "set",                         "set-constant"            },
+	{ "trusted-set",                 "trusted-set-constant"    },
+	{ "trusted-rpfr",                "trusted-replace-fetch-response" },
 	{ "prevent-fetch",               "no-fetch-if"             },
 	{ "window.open-defuser",         "prevent-window-open"     },
 	{ "nowoif",                      "prevent-window-open"     },
 	{ "no-window-open-if",           "prevent-window-open"     },
+	{ "aeld",                        "prevent-addEventListener" },
+	{ "addEventListener-defuser",    "prevent-addEventListener" },
 	{ "ra",                          "remove-attr"             },
 	{ "rc",                          "remove-class"            },
 };
@@ -892,6 +987,22 @@ bool parse_call(const QString &inside, scriptlet_call *out, QString *why) {
 		if (why)
 			*why = QString("its selector %1").arg(broad);
 		return false;
+	}
+
+	// **One per-name refusal, and it is this catalog's rather than
+	// uBlock's.** `prevent-addEventListener` with both arguments empty means
+	// "every type, every handler", because an empty pattern matches anything
+	// -- so `##+js(aeld)` would take every listener on the page and leave
+	// something indistinguishable from a blank document. uBlock accepts it
+	// and relies on its list authors; this build refuses it, for the same
+	// reason a container selector is refused: a rule that cannot plausibly
+	// have meant what it says is a rule to send back.
+	if (name == QLatin1String("prevent-addEventListener")) {
+		const bool no_type = parts.isEmpty() || parts.at(0).isEmpty();
+		const bool no_handler = parts.size() < 2 || parts.at(1).isEmpty();
+		if (no_type && no_handler)
+			return fail("would refuse every listener on the page, naming "
+			             "neither an event type nor a handler");
 	}
 
 	if (out) {

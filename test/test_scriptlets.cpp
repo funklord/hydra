@@ -54,6 +54,16 @@ window.localStorage = {
 	removeItem: function (k) { delete window.__store[k]; }
 };
 window.RTCPeerConnection = function () { this.real = true; };
+// An EventTarget with a prototype, because that is where the defuser
+// patches: a listener added to an element has to be reachable too, and
+// stubbing `window.addEventListener` alone would make a test pass for a
+// scriptlet that only covered the window.
+window.__listened = [];
+window.EventTarget = function () {};
+window.EventTarget.prototype.addEventListener = function (t, h) {
+	window.__listened.push(String(t));
+};
+window.__elem = Object.create(window.EventTarget.prototype);
 window.Promise = { resolve: function (v) { return { then: function (f) {
 	f(v); return this; } }; } };
 // `document.cookie` as an accessor that records, because a write is the whole
@@ -492,10 +502,34 @@ int main(int argc, char **argv) {
 			                 QString::fromLatin1(p.canonical),
 			                 ok ? c.name : why));
 		}
+		// **The five aliases read out of uBlock's own source**, not recalled:
+		// `set-constant.js` declares `set.js`, and the rest were taken the
+		// same way on 2026-10-08. `set` alone is 302 of the 2453 scriptlet
+		// rules in uBlock's `filters.txt`, and it was missing because
+		// nothing here had ever read a real list.
+		const QList<pair> from_ublock = {
+			{ "set",                 "set-constant"                   },
+			{ "trusted-set",         "trusted-set-constant"           },
+			{ "trusted-rpfr",        "trusted-replace-fetch-response" },
+			{ "setTimeout-defuser",  "prevent-setTimeout"             },
+			{ "setInterval-defuser", "prevent-setInterval"            },
+		};
+		for (const pair &p : from_ublock) {
+			scriptlet_call c;
+			QString why;
+			const bool ok = scriptlets::parse_call(
+			  QString::fromLatin1(p.asked) + ", cfg.x, false", &c, &why);
+			check(ok && c.name == QString::fromLatin1(p.canonical),
+			       QString("%1 is %2 (%3)")
+			           .arg(QString::fromLatin1(p.asked),
+			                 QString::fromLatin1(p.canonical),
+			                 ok ? c.name : why));
+		}
+
 		// The count lives here, once. It moves when the catalog does, which
 		// is the point: a name added without a test is an entry nothing ran.
-		check(scriptlets::names().size() == 19,
-		       QString("nineteen scriptlets in the catalog (%1)")
+		check(scriptlets::names().size() == 21,
+		       QString("twenty-one scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 		// The trusted four, named here rather than counted: the question a
 		// reader has is which scriptlets can act on a page's behalf, and a
@@ -1272,6 +1306,149 @@ int main(int argc, char **argv) {
 		          &c, &why),
 		       QString("the replacement is not checked as a pattern (%1)")
 		           .arg(why));
+	}
+
+	section("the listener defuser needs BOTH the type and the handler");
+	{
+		// **uBlock's rule is `matchesBoth`, and that is the whole case.** A
+		// rule aimed at one ad handler must not take every listener of that
+		// type with it.
+		//
+		// **The handler is matched against `String(handler)`, which this
+		// engine cannot give for a function.** QJSEngine answers
+		// `function() { [native code] }` for every function, source and all
+		// -- measured, not assumed -- so a fixture passing a real function
+		// cannot reach the handler matcher at all. The first version of this
+		// section did exactly that and failed; had its polarity been
+		// reversed it would have passed for ever, for the wrong reason.
+		//
+		// A handler given as a string carries its text in every engine, so
+		// that is the fixture that reaches the hazard. In a browser the
+		// function case works too, and nothing here can show it.
+		QJSEngine eng;
+		give_page(&eng);
+		check(run_one(&eng, "prevent-addEventListener",
+		               { "load", "adsbygoogle" }).isEmpty(),
+		       "the defuser installs");
+		const char *add =
+		  "(function (t, h) { window.__elem.addEventListener(t, h); "
+		  "return window.__listened.join('/'); })";
+		check(ask(&eng, (QString::fromLatin1(add) +
+		          "('load', 'adsbygoogle.push({})')").toUtf8().constData())
+		          .isEmpty(),
+		       "a matching type AND handler is refused");
+		// **The two discriminating cases.** An `||` in place of the `&&`
+		// passes every other assertion in this section and fails these.
+		check(ask(&eng, (QString::fromLatin1(add) +
+		          "('load', 'startThePlayer()')").toUtf8().constData())
+		          == "load",
+		       "the same type with another handler is kept");
+		check(ask(&eng, (QString::fromLatin1(add) +
+		          "('click', 'adsbygoogle.push({})')").toUtf8().constData())
+		          == "load/click",
+		       "and the same handler on another type is kept");
+
+		// An empty handler pattern matches anything, so a type alone takes
+		// every listener of that type -- which is what a rule naming one
+		// means, and is why naming neither is refused in the next section.
+		QJSEngine only_type;
+		give_page(&only_type);
+		run_one(&only_type, "prevent-addEventListener", { "load" });
+		check(ask(&only_type, (QString::fromLatin1(add) +
+		          "('load', function () {})").toUtf8().constData()).isEmpty(),
+		       "a type alone refuses that type, whatever the handler is");
+		check(ask(&only_type, (QString::fromLatin1(add) +
+		          "('click', function () {})").toUtf8().constData())
+		          == "click",
+		       "and leaves the others alone");
+	}
+
+	section("a defuser naming neither a type nor a handler is refused");
+	{
+		// **This catalog's refusal rather than uBlock's.** An empty pattern
+		// matches anything, so `##+js(aeld)` means every type and every
+		// handler -- a page with no listeners at all, which no rule can have
+		// meant. uBlock accepts it and relies on its authors; this refuses
+		// it, as a container selector is refused.
+		scriptlet_call c;
+		QString why;
+		check(!scriptlets::parse_call("aeld", &c, &why),
+		       QString("naming nothing is refused (%1)").arg(why));
+		check(why.contains("every listener"),
+		       QString("saying what it would have done (%1)").arg(why));
+		check(!scriptlets::parse_call("aeld, , ", &c, &why),
+		       QString("and so are two empty arguments (%1)").arg(why));
+		check(scriptlets::parse_call("aeld, load", &c, &why) &&
+		          c.name == "prevent-addEventListener",
+		       "a type alone is enough, and resolves through the alias");
+		check(scriptlets::parse_call("addEventListener-defuser, , ads", &c,
+		                              &why),
+		       "so is a handler alone, under the long alias");
+	}
+
+	section("trusted-replace-xhr-response rewrites the other transport");
+	{
+		// uBlock's YouTube rules use this one and the fetch one together, so
+		// the pair shares `rewriter` and `filter_xhr` rather than carrying
+		// two copies of the search semantics.
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_fetch_stubs));
+		check(run_one(&eng, "trusted-replace-xhr-response",
+		               { "\"adPlacements\"", "\"no_ads\"", "/player/" },
+		               true).isEmpty(), "the rewrite installs");
+		check(ask(&eng, "(function () { var x = new window.XMLHttpRequest(); "
+		                 "x.open('GET', 'https://x.test/player/get'); x.send(); "
+		                 "window.finish(x, '{\"adPlacements\":[1]}'); "
+		                 "return x.responseText; })()")
+		          .contains("\"no_ads\""),
+		       "a matching url is rewritten");
+		check(!ask(&eng, "(function () { var x = new window.XMLHttpRequest(); "
+		                  "x.open('GET', 'https://x.test/other/get'); x.send(); "
+		                  "window.finish(x, '{\"adPlacements\":[1]}'); "
+		                  "return x.responseText; })()")
+		           .contains("no_ads"),
+		       "another url is not");
+		// The shared readyState guard: a progressive read is a fragment.
+		check(ask(&eng, "(function () { var x = new window.XMLHttpRequest(); "
+		                 "x.open('GET', 'https://x.test/player/early'); "
+		                 "x.send(); "
+		                 "window.finish(x, '{\"adPlacements\":[1]}', 3); "
+		                 "return x.responseText; })()")
+		          .contains("adPlacements"),
+		       "and a read before the body is complete is untouched");
+
+		// **The `json` responseType cannot see the bytes**, so the rewrite
+		// runs on the re-serialised object. Asserted because it is a real
+		// limit, not because it is desirable.
+		QJSEngine js;
+		give_page(&js);
+		js.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&js, "trusted-replace-xhr-response",
+		         { "\"adPlacements\"", "\"no_ads\"", "/player/" }, true);
+		check(ask(&js, "(function () { var x = new window.XMLHttpRequest(); "
+		                "x.responseType = 'json'; "
+		                "x.open('GET', 'https://x.test/player/get'); x.send(); "
+		                "window.finish(x, '{\"adPlacements\":[1]}'); "
+		                "return typeof x.response.no_ads; })()") == "object",
+		       QString("a json response is rewritten through its values (%1)")
+		           .arg(ask(&js, "JSON.stringify(window.b)")));
+
+		// **And the trust gate, on the transport that carries the YouTube
+		// rules.** Same call, flag clear: nothing happens.
+		QJSEngine untrusted;
+		give_page(&untrusted);
+		untrusted.evaluate(QString::fromLatin1(k_fetch_stubs));
+		check(run_one(&untrusted, "trusted-replace-xhr-response",
+		               { "\"adPlacements\"", "\"no_ads\"", "/player/" },
+		               false).isEmpty(),
+		       "an untrusted list's call leaves a script that evaluates");
+		check(ask(&untrusted,
+		           "(function () { var x = new window.XMLHttpRequest(); "
+		           "x.open('GET', 'https://x.test/player/get'); x.send(); "
+		           "window.finish(x, '{\"adPlacements\":[1]}'); "
+		           "return x.responseText; })()").contains("adPlacements"),
+		       "and the body reaches the page as it was");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

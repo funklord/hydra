@@ -259,6 +259,29 @@ subscription_read read(const QString &text, int previous_rules,
 	return rep;
 }
 
+QList<subscription> default_subscriptions() {
+	struct seed { const char *name; const char *url; };
+	// Fetched and read through this parser before being written here, which
+	// is the same rule a README's build line follows: a URL shipped without
+	// having been tried is a false claim in the place somebody trusts most.
+	static const seed seeds[] = {
+		{ "EasyList",       "https://easylist.to/easylist/easylist.txt" },
+		{ "uBlock filters",
+		   "https://ublockorigin.github.io/uAssets/filters/filters.txt" },
+	};
+	QList<subscription> out;
+	for (const seed &s : seeds) {
+		subscription sub;
+		sub.name    = QString::fromLatin1(s.name);
+		sub.url     = QUrl(QString::fromLatin1(s.url));
+		sub.enabled = true;
+		sub.trusted = false;
+		sub.note    = QStringLiteral("not fetched yet");
+		out.push_back(sub);
+	}
+	return out;
+}
+
 QList<subscription> load_index(const QString &path) {
 	QList<subscription> out;
 	QFile f(path);

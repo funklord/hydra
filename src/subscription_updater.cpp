@@ -1,5 +1,7 @@
 #include "subscription_updater.h"
 
+#include <QFile>
+
 #include <QDateTime>
 #include <QDir>
 #include <QNetworkAccessManager>
@@ -11,6 +13,24 @@ subscription_updater::subscription_updater(const QString &index_path,
                                             const QString &dir,
                                             QObject *parent)
   : QObject(parent), m_index(index_path), m_dir(dir) {
+	// **Seeded only when there is no index file**, and the distinction from
+	// an empty one is the whole of the care here. `load_index` answers with
+	// an empty list for three different situations: no file, a file holding
+	// no entries, and a file it refused as malformed -- and it refuses rather
+	// than repairs precisely so that a damaged index does not lose
+	// subscriptions. Seeding on an empty answer would undo that: a malformed
+	// index would be silently replaced by the defaults, and somebody who had
+	// removed every subscription would find them back on the next launch.
+	//
+	// Asking the filesystem instead keeps all three cases apart. The index is
+	// written straight away, so this runs once and a later removal sticks.
+	if (!QFile::exists(m_index)) {
+		m_subs = filter_subscription::default_subscriptions();
+		for (subscription &s : m_subs)
+			s.file = filter_subscription::mint_cache_name(m_dir, s.name);
+		filter_subscription::save_index(m_index, m_subs);
+		return;
+	}
 	m_subs = filter_subscription::load_index(m_index);
 }
 
