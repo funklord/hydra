@@ -1,9 +1,10 @@
 #include "scriptlets.h"
 
+#include "site_rules.h"
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSet>
 
 namespace {
 
@@ -109,14 +110,284 @@ C['set-constant'] = function (path, raw) {
 		});
 	} catch (e) { /* already non-configurable: the page wins, and says so */ }
 };
+
+// --- shared helpers for the rest of the catalog ---------------------------
+
+// A needle: a plain substring, or `/re/flags`. An empty needle or `*` matches
+// everything, which is what a rule with no argument means.
+//
+// A bad regex matches nothing rather than throwing: a filter list is not a
+// place to learn that a pattern was mistyped, and a scriptlet that throws on
+// load takes the rest of the catalog's calls with it.
+var matcher = function (raw) {
+	var s = String(raw == null ? '' : raw);
+	if (s === '' || s === '*') return function () { return true; };
+	if (s.length > 2 && s.charAt(0) === '/') {
+		var end = s.lastIndexOf('/');
+		if (end > 0) {
+			try {
+				var re = new RegExp(s.slice(1, end), s.slice(end + 1));
+				return function (t) { return re.test(String(t)); };
+			} catch (e) { return function () { return false; }; }
+		}
+	}
+	return function (t) { return String(t).indexOf(s) >= 0; };
+};
+
+// The object a dotted path names and the last key in it, building the path as
+// it goes. Null when the path runs into something that cannot hold a property.
+var owner_of = function (path) {
+	var parts = String(path || '').split('.');
+	var last = parts.pop();
+	if (!last) return null;
+	var o = window;
+	for (var i = 0; i < parts.length; i++) {
+		if (o[parts[i]] === undefined || o[parts[i]] === null) o[parts[i]] = {};
+		o = o[parts[i]];
+		if (typeof o !== 'object' && typeof o !== 'function') return null;
+	}
+	return { o: o, k: last };
+};
+
+// A value from the vocabulary `set-constant` uses, or undefined for anything
+// else. One copy, because two scriptlets take a value and a second list of
+// words is a second thing to be wrong.
+var vocabulary = function (raw, allow_remove) {
+	var w = String(raw);
+	if (allow_remove && w === '$remove$') return { remove: true };
+	if (w === 'true') return { v: true };
+	if (w === 'false') return { v: false };
+	if (w === 'null') return { v: null };
+	if (w === 'undefined') return { v: undefined };
+	if (w === 'noopFunc') return { v: function () {} };
+	if (w === 'trueFunc') return { v: function () { return true; } };
+	if (w === 'falseFunc') return { v: function () { return false; } };
+	if (w === '' || w === 'emptyStr') return { v: '' };
+	if (/^-?[0-9]+(\.[0-9]+)?$/.test(w)) return { v: Number(w) };
+	return null;
+};
+
+// abort-on-property-read: reading it throws, which stops the script doing the
+// reading and nothing else. The usual answer to a page that checks whether an
+// ad object exists before deciding to complain.
+C['abort-on-property-read'] = function (path) {
+	var at = owner_of(path);
+	if (!at) return;
+	var stop = function () { throw new ReferenceError('hydra: ' + path); };
+	try {
+		Object.defineProperty(at.o, at.k, {
+			get: stop, set: function () {}, configurable: false
+		});
+	} catch (e) {}
+};
+
+// abort-on-property-write: reading is fine, writing throws. For a page that
+// installs its own detector onto a global.
+C['abort-on-property-write'] = function (path) {
+	var at = owner_of(path);
+	if (!at) return;
+	var held;
+	try {
+		Object.defineProperty(at.o, at.k, {
+			get: function () { return held; },
+			set: function () { throw new ReferenceError('hydra: ' + path); },
+			configurable: false
+		});
+	} catch (e) {}
+};
+
+// abort-current-script: reading the property throws, but only from a script
+// whose own text matches the needle. Narrower than aborting every reader,
+// which is the point -- the page's own code reads the same globals.
+C['abort-current-script'] = function (path, needle) {
+	var at = owner_of(path);
+	if (!at) return;
+	var hit = matcher(needle);
+	var held = at.o[at.k];
+	try {
+		Object.defineProperty(at.o, at.k, {
+			get: function () {
+				var el = null;
+				try { el = document.currentScript; } catch (e) {}
+				var text = (el && el.textContent) ? el.textContent : '';
+				if (text && hit(text))
+					throw new ReferenceError('hydra: ' + path);
+				return held;
+			},
+			set: function (v) { held = v; },
+			configurable: false
+		});
+	} catch (e) {}
+};
+
+// prevent-setTimeout / prevent-setInterval: drop a timer whose callback's own
+// source matches, optionally only at one delay. The timer still returns an id,
+// because a page that stores it and clears it later must not break.
+var prevent_timer = function (which) {
+	return function (needle, delay) {
+		var real = window[which];
+		if (typeof real !== 'function') return;
+		var hit = matcher(needle);
+		var want = (delay === undefined || delay === null ||
+		             String(delay) === '') ? null : Number(delay);
+		var fake = 0;
+		window[which] = function (fn, ms) {
+			var source = '';
+			try { source = String(fn); } catch (e) {}
+			var delay_matches = (want === null) || (Number(ms) === want);
+			if (source && hit(source) && delay_matches)
+				return ++fake;
+			return real.apply(this, arguments);
+		};
+	};
+};
+C['prevent-setTimeout']  = prevent_timer('setTimeout');
+C['prevent-setInterval'] = prevent_timer('setInterval');
+
+// no-fetch-if: a matching request is answered empty rather than sent. Matched
+// on the url, which is the common form; uBlock also takes key:value pairs on
+// the request, and a rule using those finds nothing to match here.
+C['no-fetch-if'] = function (needle) {
+	if (typeof window.fetch !== 'function') return;
+	var hit = matcher(needle);
+	var real = window.fetch;
+	window.fetch = function (input) {
+		var url = '';
+		try {
+			url = (typeof input === 'string') ? input
+			      : (input && input.url) ? input.url : '';
+		} catch (e) {}
+		if (url && hit(url)) {
+			var empty = null;
+			try { empty = new window.Response('', { status: 200 }); }
+			catch (e) { empty = { ok: true, status: 200,
+			                       text: function () { return ''; },
+			                       json: function () { return null; } }; }
+			try { return window.Promise.resolve(empty); } catch (e) {}
+		}
+		return real.apply(this, arguments);
+	};
+};
+
+// nowebrtc: a peer connection is not something an ad needs, and it is a
+// route to an address this browser is otherwise careful about.
+C['nowebrtc'] = function () {
+	var stub = function () {
+		return {
+			createOffer: function () {}, setLocalDescription: function () {},
+			setRemoteDescription: function () {}, addIceCandidate: function () {},
+			close: function () {}, addEventListener: function () {},
+			createDataChannel: function () { return { close: function () {} }; }
+		};
+	};
+	for (var i = 0; i < 3; i++) {
+		var n = ['RTCPeerConnection', 'webkitRTCPeerConnection',
+		          'mozRTCPeerConnection'][i];
+		if (typeof window[n] === 'undefined') continue;
+		try { window[n] = stub; } catch (e) {}
+	}
+};
+
+// prevent-window-open: a matching popup is refused and the caller is handed a
+// stub, because code that opens a window usually touches what comes back.
+C['prevent-window-open'] = function (needle) {
+	if (typeof window.open !== 'function') return;
+	var hit = matcher(needle);
+	var real = window.open;
+	window.open = function (url) {
+		if (hit(String(url == null ? '' : url))) {
+			return {
+				closed: false, close: function () { this.closed = true; },
+				focus: function () {}, blur: function () {},
+				document: { write: function () {}, close: function () {} }
+			};
+		}
+		return real.apply(this, arguments);
+	};
+};
+
+// set-local-storage-item: a flag a page reads back from storage. The same
+// vocabulary as set-constant, plus `$remove$` to delete one.
+C['set-local-storage-item'] = function (key, value) {
+	if (!key) return;
+	var chosen = vocabulary(value, true);
+	if (!chosen) return;
+	try {
+		if (chosen.remove) window.localStorage.removeItem(String(key));
+		else window.localStorage.setItem(String(key), String(chosen.v));
+	} catch (e) { /* storage refused, which a page can also see */ }
+};
 )JS";
 
-const QSet<QString> &catalog_names() {
-	static const QSet<QString> names = {
-		QStringLiteral("json-prune"),
-		QStringLiteral("set-constant"),
-	};
-	return names;
+// **The catalog, with the names rules actually use.** A list rule calls a
+// scriptlet by whichever spelling its author knew -- `aopr` and
+// `abort-on-property-read` are the same request, and `acis` was the name
+// before `acs` -- so refusing an alias would refuse the rule rather than the
+// capability. The aliases are uBlock's own; the code behind every one of them
+// is this project's.
+//
+// `patterns` is a bitmask of argument positions that are matched against
+// something rather than named: those are checked before the call is kept,
+// because a `/re/` from a filter list ends up in a `RegExp` in the page.
+struct catalog_entry {
+	const char *name;
+	int         patterns;
+};
+
+const catalog_entry k_entries[] = {
+	{ "json-prune",               0      },
+	{ "set-constant",             0      },
+	{ "abort-on-property-read",   0      },
+	{ "abort-on-property-write",  0      },
+	{ "abort-current-script",     1 << 1 },   // (path, needle)
+	{ "prevent-setTimeout",       1 << 0 },   // (needle, delay)
+	{ "prevent-setInterval",      1 << 0 },
+	{ "no-fetch-if",              1 << 0 },
+	{ "nowebrtc",                 0      },
+	{ "prevent-window-open",      1 << 0 },
+	{ "set-local-storage-item",   0      },
+};
+
+struct catalog_alias {
+	const char *from;
+	const char *to;
+};
+
+const catalog_alias k_aliases[] = {
+	{ "aopr",                        "abort-on-property-read"  },
+	{ "aopw",                        "abort-on-property-write" },
+	{ "acs",                         "abort-current-script"    },
+	{ "abort-current-inline-script", "abort-current-script"    },
+	{ "acis",                        "abort-current-script"    },
+	{ "nostif",                      "prevent-setTimeout"      },
+	{ "no-setTimeout-if",            "prevent-setTimeout"      },
+	{ "nosiif",                      "prevent-setInterval"     },
+	{ "no-setInterval-if",           "prevent-setInterval"     },
+	{ "prevent-fetch",               "no-fetch-if"             },
+	{ "window.open-defuser",         "prevent-window-open"     },
+	{ "nowoif",                      "prevent-window-open"     },
+	{ "no-window-open-if",           "prevent-window-open"     },
+};
+
+// The canonical name a rule is asking for, or empty when nothing is.
+QString canonical_name(const QString &asked) {
+	for (const catalog_entry &e : k_entries) {
+		if (asked == QLatin1String(e.name))
+			return asked;
+	}
+	for (const catalog_alias &a : k_aliases) {
+		if (asked == QLatin1String(a.from))
+			return QString::fromLatin1(a.to);
+	}
+	return QString();
+}
+
+int pattern_args(const QString &canonical) {
+	for (const catalog_entry &e : k_entries) {
+		if (canonical == QLatin1String(e.name))
+			return e.patterns;
+	}
+	return 0;
 }
 
 // **A JS string literal, escaped here rather than hoped for.** The calls are
@@ -153,11 +424,13 @@ QString js_string(const QString &text) {
 namespace scriptlets {
 
 bool vetted(const QString &name) {
-	return catalog_names().contains(name);
+	return !canonical_name(name).isEmpty();
 }
 
 QStringList names() {
-	QStringList out(catalog_names().cbegin(), catalog_names().cend());
+	QStringList out;
+	for (const catalog_entry &e : k_entries)
+		out << QString::fromLatin1(e.name);
 	out.sort();
 	return out;
 }
@@ -188,9 +461,37 @@ bool parse_call(const QString &inside, scriptlet_call *out, QString *why) {
 	parts << cur.trimmed();
 	if (parts.isEmpty() || parts.first().isEmpty())
 		return fail("names no scriptlet");
-	const QString name = parts.takeFirst();
-	if (!vetted(name))
+	const QString asked = parts.takeFirst();
+	const QString name = canonical_name(asked);
+	if (name.isEmpty())
 		return fail("names a scriptlet this build does not implement");
+
+	// **A pattern argument is checked before the call is kept.** A `/re/` from
+	// a filter list is compiled into a `RegExp` in the page, which is exactly
+	// the position `site_rules` is in with a consent rule -- so it gets that
+	// refusal rather than a second one written here. The measurement behind it
+	// is in `site_rules.cpp`: PCRE2 auto-possessifies the worst shape to
+	// nothing, so a timing probe sees zero while the page's own engine takes
+	// minutes.
+	const int patterned = pattern_args(name);
+	for (int i = 0; i < parts.size(); ++i) {
+		if (!(patterned & (1 << i)))
+			continue;
+		const QString arg = parts.at(i);
+		if (arg.size() < 3 || !arg.startsWith(QLatin1Char('/')))
+			continue;                      // a plain substring, not a regex
+		const int end = arg.lastIndexOf(QLatin1Char('/'));
+		if (end <= 0)
+			continue;
+		const QString inner = arg.mid(1, end - 1);
+		const QString refused = site_rules::why_pattern_backtracks(inner);
+		if (refused.isEmpty())
+			continue;
+		if (why)
+			*why = QString("its pattern %1").arg(refused);
+		return false;
+	}
+
 	if (out) {
 		out->name = name;
 		out->args = parts;
@@ -208,7 +509,18 @@ QString source_for(const QList<scriptlet_call> &calls) {
 		if (!vetted(c.name))
 			continue;
 		QJsonObject o;
-		o.insert(QStringLiteral("n"), c.name);
+		// **The canonical name, not the one it was given.** `parse_call`
+		// resolves an alias, so a call that came through it already carries
+		// one -- but this function writes the script, and the runner looks the
+		// name up in the catalog object. A call built any other way with an
+		// alias in it would be emitted, looked up, not found, and silently do
+		// nothing.
+		//
+		// Measured: a test that built calls by hand with `aopw`, `acs`,
+		// `nostif` and `window.open-defuser` had four scriptlets quietly not
+		// run, which is the worst shape of failure here -- the script
+		// evaluates, the page is unchanged, and nothing says why.
+		o.insert(QStringLiteral("n"), canonical_name(c.name));
 		// **The scope travels with the call and is matched in the page, not
 		// here.** A scriptlet has to be in place before the page's own
 		// scripts run, so it is injected when the view is made rather than

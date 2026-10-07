@@ -205,8 +205,14 @@ int main(int argc, char **argv) {
 		// And a list of nothing but syntax this build cannot read, which is
 		// the same outcome by a different route -- and the refusal says how
 		// many lines it looked at rather than claiming the file was empty.
+		// The scriptlet here names one the catalog does not implement, which
+		// is what makes this body unusable. `nowebrtc` stood here until the
+		// catalog grew to eleven and implemented it -- at which point this
+		// case correctly stopped holding, which is the test noticing a
+		// capability arrive rather than a regression.
 		const subscription_read unread = filter_subscription::read(
-		  "@@||a.example^\n@@||b.example^\nexample.com##+js(nowebrtc)\n");
+		  "@@||a.example^\n@@||b.example^\n"
+		  "example.com##+js(trusted-set-cookie, a, b)\n");
 		check(!unread.ok() && unread.refusal.contains("3 candidate"),
 		       QString("three lines, none enforceable (%1)")
 		           .arg(unread.refusal));

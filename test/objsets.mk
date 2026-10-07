@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build f843219d, mtime 2026-10-07 17:01)
+#     /home/claude/src/fmake/fmake  (build f843219d, mtime 2026-10-07 17:31)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -515,7 +515,8 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
 OBJS_test_scriptlets = \
-	$(BUILD_DIR)/app/scriptlets.o
+	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/site_rules.o
 
 OBJS_test_scripts =
 
@@ -610,7 +611,8 @@ OBJS_test_subscription = \
 	$(BUILD_DIR)/app/filter_subscription.o \
 	$(BUILD_DIR)/moc/moc_subscription_updater.o \
 	$(BUILD_DIR)/app/subscription_updater.o \
-	$(BUILD_DIR)/app/scriptlets.o
+	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/site_rules.o
 
 OBJS_test_theme = \
 	$(BUILD_DIR)/app/tab_tree_model.o \

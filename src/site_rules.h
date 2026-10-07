@@ -125,6 +125,19 @@ public:
 
 	static QString why_unsafe(const site_rule &r);
 
+	// **The structural half of `why_unsafe`, for anything else that compiles a
+	// pattern into the page.** Empty means no quantified group was found;
+	// otherwise the construct, for a message.
+	//
+	// Exported because there are two callers now. `scriptlets` accepts a
+	// `/re/` needle from a filter list, and a list rule's regex ends up in a
+	// `RegExp` in the page exactly as a consent rule's does -- so it wants
+	// this refusal and not a second one written beside it. The measurements
+	// behind it are at the definition, and the one that matters here is the
+	// last row: PCRE2 auto-possessifies `^(a+)+b$` to nothing, so a timing
+	// probe sees zero while V8 takes minutes.
+	static QString why_pattern_backtracks(const QString &pattern);
+
 	// Kept for the exchange document, which is a different thing from storage:
 	// `judge_import` reads what somebody else sent, and that is reviewed before
 	// it is added rather than loaded.

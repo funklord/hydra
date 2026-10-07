@@ -23,6 +23,42 @@ static void section(const char *n) { std::printf("\n== %s ==\n", n); }
 
 // An engine with just enough page in it for a scriptlet to patch: the catalog
 // reaches for `window`, which a page has and a bare engine does not.
+//
+// **The fuller half is for the rest of the catalog**, which wraps things a
+// page provides -- timers, fetch, window.open, storage, a peer connection.
+// Each stub records what it was asked, so a test can tell "dropped" from
+// "passed through" rather than only observing that nothing exploded.
+static const char *k_page_stubs = R"JS(
+window.__ran = [];
+window.__fetched = [];
+window.__opened = [];
+window.__store = {};
+window.setTimeout = function (fn, ms) {
+	window.__ran.push(['t', String(ms)]);
+	return 1;
+};
+window.setInterval = function (fn, ms) {
+	window.__ran.push(['i', String(ms)]);
+	return 2;
+};
+window.fetch = function (u) {
+	window.__fetched.push(String(u));
+	return { real: true };
+};
+window.open = function (u) {
+	window.__opened.push(String(u));
+	return { real: true };
+};
+window.localStorage = {
+	setItem: function (k, v) { window.__store[k] = String(v); },
+	removeItem: function (k) { delete window.__store[k]; }
+};
+window.RTCPeerConnection = function () { this.real = true; };
+window.Promise = { resolve: function (v) { return { then: function (f) {
+	f(v); return this; } }; } };
+document.currentScript = null;
+)JS";
+
 static void give_window(QJSEngine *eng, const char *host = "x.test") {
 	eng->globalObject().setProperty("window", eng->newObject());
 	// **A hostname, because the generated script matches the scope in the
@@ -33,6 +69,29 @@ static void give_window(QJSEngine *eng, const char *host = "x.test") {
 	QJSValue loc = eng->newObject();
 	loc.setProperty("hostname", QString::fromLatin1(host));
 	eng->globalObject().setProperty("location", loc);
+	eng->globalObject().setProperty("document", eng->newObject());
+}
+
+// The same, plus the page facilities the rest of the catalog wraps.
+static void give_page(QJSEngine *eng, const char *host = "x.test") {
+	give_window(eng, host);
+	eng->evaluate(QString::fromLatin1(k_page_stubs));
+}
+
+// Run one call and hand back the engine's own answer to an expression.
+static QString ask(QJSEngine *eng, const char *expr) {
+	const QJSValue v = eng->evaluate(QString::fromLatin1(expr));
+	return v.isError() ? QStringLiteral("!") + v.toString() : v.toString();
+}
+
+static QString run_one(QJSEngine *eng, const char *name,
+                        const QStringList &args) {
+	scriptlet_call c;
+	c.scope = "x.test";
+	c.name  = QString::fromLatin1(name);
+	c.args  = args;
+	const QJSValue r = eng->evaluate(scriptlets::source_for({ c }));
+	return r.isError() ? r.toString() : QString();
 }
 
 int main(int argc, char **argv) {
@@ -48,8 +107,8 @@ int main(int argc, char **argv) {
 		// **The whole security position in one line.** A rule names a
 		// scriptlet; it does not carry one. Anything this build has not
 		// implemented and reviewed does not run.
-		for (const char *no : { "trusted-set-cookie", "aost", "nowebrtc",
-		                         "abort-on-property-read", "eval", "" }) {
+		for (const char *no : { "trusted-set-cookie", "trusted-replace-fetch",
+		                         "aost", "remove-attr", "eval", "" }) {
 			check(!scriptlets::vetted(QString::fromLatin1(no)),
 			       QString("\"%1\" is not in the catalog")
 			           .arg(QString::fromLatin1(no)));
@@ -278,6 +337,216 @@ int main(int argc, char **argv) {
 		          lookalike.evaluate("typeof window.cfg").toString() ==
 		              "undefined",
 		       "and nothing on a host that merely ends with those letters");
+	}
+
+	section("the names rules actually use, and the canonical one kept");
+	{
+		// A rule calls a scriptlet by whichever spelling its author knew, so
+		// refusing an alias would refuse the rule rather than the capability.
+		struct pair { const char *asked; const char *canonical; };
+		const QList<pair> aliases = {
+			{ "aopr",  "abort-on-property-read"  },
+			{ "aopw",  "abort-on-property-write" },
+			{ "acs",   "abort-current-script"    },
+			{ "acis",  "abort-current-script"    },
+			{ "abort-current-inline-script", "abort-current-script" },
+			{ "nostif", "prevent-setTimeout"     },
+			{ "no-setTimeout-if", "prevent-setTimeout" },
+			{ "nosiif", "prevent-setInterval"    },
+			{ "prevent-fetch", "no-fetch-if"     },
+			{ "window.open-defuser", "prevent-window-open" },
+			{ "nowoif", "prevent-window-open"    },
+		};
+		for (const pair &p : aliases) {
+			scriptlet_call c;
+			QString why;
+			const bool ok = scriptlets::parse_call(
+			  QString::fromLatin1(p.asked) + ", x", &c, &why);
+			check(ok && c.name == QString::fromLatin1(p.canonical),
+			       QString("%1 is %2 (%3)")
+			           .arg(QString::fromLatin1(p.asked),
+			                 QString::fromLatin1(p.canonical),
+			                 ok ? c.name : why));
+		}
+		check(scriptlets::names().size() == 11,
+		       QString("eleven scriptlets in the catalog (%1)")
+		           .arg(scriptlets::names().size()));
+	}
+
+	section("a pattern argument that backtracks is refused, by the shared rule");
+	{
+		// **The same refusal `site_rules` applies to a consent rule**, because
+		// the position is the same: a `/re/` from a filter list is compiled
+		// into a `RegExp` in the page. Reusing it rather than writing a second
+		// one is the point; the measurement behind it is in site_rules.cpp.
+		scriptlet_call c;
+		QString why;
+		check(!scriptlets::parse_call("nostif, /^(a+)+$/", &c, &why),
+		       QString("a quantified group is refused (%1)").arg(why));
+		check(why.contains("pattern"),
+		       QString("and said to be the pattern's fault (%1)").arg(why));
+		check(scriptlets::parse_call("nostif, /ads?\\.js/", &c, &why),
+		       QString("while an ordinary pattern is kept (%1)").arg(why));
+		check(scriptlets::parse_call("nostif, adsbygoogle", &c, &why),
+		       "as is a plain substring");
+		// The check is aimed at the argument that is a pattern, not at every
+		// argument: `set-constant`'s value is a word, not something matched.
+		check(scriptlets::parse_call("set-constant, a.b, /^(a+)+$/", &c, &why),
+		       "and an argument that is not a pattern is not checked as one");
+	}
+
+	section("aborting on a property, read and written");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		check(run_one(&eng, "abort-on-property-read", { "ads.enabled" })
+		          .isEmpty(), "aopr evaluates");
+		check(ask(&eng, "(function(){try{var x=window.ads.enabled;return 'read';}"
+		                 "catch(e){return 'threw';}})()") == "threw",
+		       "reading it throws");
+		check(ask(&eng, "typeof window.ads") == "object",
+		       "and the path to it was built");
+
+		QJSEngine eng2;
+		give_page(&eng2);
+		check(run_one(&eng2, "aopw", { "detector.installed" }).isEmpty(),
+		       "aopw evaluates, by its alias");
+		check(ask(&eng2, "(function(){try{var x=window.detector.installed;"
+		                  "return 'read';}catch(e){return 'threw:'+e;}})()")
+		          == "read",
+		       QString("reading is allowed (%1 / typeof detector=%2)")
+		           .arg(ask(&eng2, "(function(){try{var x="
+		                            "window.detector.installed;return 'read';}"
+		                            "catch(e){return 'threw:'+e;}})()"),
+		                 ask(&eng2, "typeof window.detector")));
+		check(ask(&eng2, "(function(){try{window.detector.installed=1;"
+		                  "return 'wrote';}catch(e){return 'threw';}})()")
+		          == "threw",
+		       "and writing throws");
+	}
+
+	section("aborting only the script that matches");
+	{
+		// **Narrower than aborting every reader**, which is the point: the
+		// page's own code reads the same globals.
+		QJSEngine eng;
+		give_page(&eng);
+		check(run_one(&eng, "acs", { "cfg.token", "adsbygoogle" }).isEmpty(),
+		       "acs evaluates");
+		eng.evaluate("window.cfg = window.cfg || {}; ");
+		eng.evaluate("document.currentScript = "
+		              "{ textContent: 'var x = adsbygoogle.push(1);' };");
+		check(ask(&eng, "(function(){try{var x=window.cfg.token;return 'read';}"
+		                 "catch(e){return 'threw';}})()") == "threw",
+		       QString("a script whose text matches is stopped (%1, cfg=%2)")
+		           .arg(ask(&eng, "(function(){try{var x=window.cfg.token;"
+		                           "return 'read';}catch(e){return 'threw:'+e;}"
+		                           "})()"),
+		                 ask(&eng, "typeof window.cfg")));
+		eng.evaluate("document.currentScript = "
+		              "{ textContent: 'var y = player.start();' };");
+		check(ask(&eng, "(function(){try{var x=window.cfg.token;return 'read';}"
+		                 "catch(e){return 'threw';}})()") == "read",
+		       "and one that does not is left alone");
+		eng.evaluate("document.currentScript = null;");
+		check(ask(&eng, "(function(){try{var x=window.cfg.token;return 'read';}"
+		                 "catch(e){return 'threw';}})()") == "read",
+		       "as is a read from no script at all");
+	}
+
+	section("dropping a timer by what its callback says");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		check(run_one(&eng, "nostif", { "showAd" }).isEmpty(),
+		       "nostif evaluates");
+		// **Named functions, because this engine does not hand over a body.**
+		// `String(fn)` is `function showAd() { [native code] }` here, where a
+		// browser gives the source -- so the needle is matched against the
+		// name in this test and against the whole source in a page. The
+		// matcher is the same either way; what differs is how much text it is
+		// shown, which is the engine's doing and not the scriptlet's.
+		eng.evaluate("window.setTimeout(function showAd(){ 1; }, 500);");
+		eng.evaluate("window.setTimeout(function playVideo(){ 1; }, 500);");
+		check(ask(&eng, "window.__ran.length") == "1",
+		       QString("the matching callback never reached the real timer "
+		                "(%1)").arg(ask(&eng, "window.__ran.length")));
+		check(ask(&eng, "String(window.__ran[0][1])") == "500",
+		       "and the other one did");
+
+		// With a delay named, only that delay is dropped.
+		QJSEngine eng2;
+		give_page(&eng2);
+		check(run_one(&eng2, "prevent-setInterval", { "beacon", "1000" })
+		          .isEmpty(), "prevent-setInterval with a delay evaluates");
+		eng2.evaluate("window.setInterval(function beacon(){ 1; }, 1000);");
+		eng2.evaluate("window.setInterval(function beacon(){ 1; }, 250);");
+		check(ask(&eng2, "window.__ran.length") == "1",
+		       QString("only the one at that delay is dropped (%1)")
+		           .arg(ask(&eng2, "window.__ran.length")));
+	}
+
+	section("answering a fetch instead of sending it");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		check(run_one(&eng, "no-fetch-if", { "/ads/" }).isEmpty(),
+		       "no-fetch-if evaluates");
+		eng.evaluate("window.__r = null;"
+		              "window.fetch('https://x.test/ads/beacon')"
+		              ".then(function(v){ window.__r = v; });");
+		check(ask(&eng, "window.__fetched.length") == "0",
+		       QString("the matching request was not sent (%1)")
+		           .arg(ask(&eng, "window.__fetched.length")));
+		check(ask(&eng, "String(window.__r && window.__r.real)") != "true",
+		       "and what came back is not the real answer");
+		eng.evaluate("window.fetch('https://x.test/player.json');");
+		check(ask(&eng, "window.__fetched.length") == "1",
+		       "while anything else goes through");
+	}
+
+	section("the remaining three, each in one line of evidence");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		check(run_one(&eng, "nowebrtc", {}).isEmpty(), "nowebrtc evaluates");
+		check(ask(&eng, "String(new window.RTCPeerConnection().real)")
+		          != "true",
+		       "a peer connection is a stub");
+
+		QJSEngine eng2;
+		give_page(&eng2);
+		check(run_one(&eng2, "window.open-defuser", { "popunder" }).isEmpty(),
+		       "prevent-window-open evaluates, by its alias");
+		eng2.evaluate("window.__a = window.open('https://x.test/popunder/1');");
+		check(ask(&eng2, "window.__opened.length") == "0" &&
+		          ask(&eng2, "String(window.__a.closed)") == "false",
+		       QString("a matching popup is refused and a stub handed back "
+		                "(opened=%1 a=%2)")
+		           .arg(ask(&eng2, "window.__opened.length"),
+		                 ask(&eng2, "String(window.__a && window.__a.closed)")));
+		eng2.evaluate("window.open('https://x.test/help');");
+		check(ask(&eng2, "window.__opened.length") == "1",
+		       "and anything else opens");
+
+		QJSEngine eng3;
+		give_page(&eng3);
+		check(run_one(&eng3, "set-local-storage-item", { "adsOff", "true" })
+		          .isEmpty(), "set-local-storage-item evaluates");
+		check(ask(&eng3, "String(window.__store.adsOff)") == "true",
+		       "the flag is stored");
+		check(run_one(&eng3, "set-local-storage-item",
+		               { "adsOff", "$remove$" }).isEmpty(), "and $remove$ runs");
+		check(ask(&eng3, "String(typeof window.__store.adsOff)") == "undefined",
+		       "taking it out again");
+		// **Only the vocabulary**, which is the same limit `set-constant` has
+		// and for the same reason: an arbitrary string would be content of a
+		// list's choosing arriving in a page's storage.
+		check(run_one(&eng3, "set-local-storage-item",
+		               { "note", "anything at all" }).isEmpty(),
+		       "a value outside the vocabulary still evaluates");
+		check(ask(&eng3, "String(typeof window.__store.note)") == "undefined",
+		       "and stores nothing");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

@@ -145,6 +145,10 @@ static QString quantified_group(const QString &pattern) {
 	return QString();
 }
 
+QString site_rules::why_pattern_backtracks(const QString &pattern) {
+	return quantified_group(pattern);
+}
+
 QString site_rules::why_unsafe(const site_rule &r) {
 	static const QStringList kinds = { "container", "reject", "accept", "detector" };
 	if (!kinds.contains(r.kind))
@@ -208,7 +212,7 @@ QString site_rules::why_unsafe(const site_rule &r) {
 	// backtracking: a different machine or PCRE2 build gives a different
 	// verdict on the same pattern, which is why CI refused `^(a+)+$` where
 	// this machine accepted it.
-	const QString repeated = quantified_group(v);
+	const QString repeated = why_pattern_backtracks(v);
 	if (!repeated.isEmpty())
 		return QString("repeats a group with \"%1\", which backtracks "
 		                "exponentially in the page's own engine and would stop "

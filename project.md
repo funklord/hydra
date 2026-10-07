@@ -34084,3 +34084,83 @@ satisfied by accident, and the third turned "did you remember the file" into
 writing down. A feature added without them would have shipped with no row on
 either dialog and an unexamined position in the bundle -- silently, because no
 assertion can fail about a line nobody wrote.
+
+## The rest of the scriptlet catalog, and a bug in how a call is named
+
+Nine more, taking the catalog from two to eleven, chosen for what real lists
+call most and for being implementable with data-only arguments:
+
+    abort-on-property-read      aopr
+    abort-on-property-write     aopw
+    abort-current-script        acs, abort-current-inline-script, acis
+    prevent-setTimeout          no-setTimeout-if, nostif
+    prevent-setInterval         no-setInterval-if, nosiif
+    no-fetch-if                 prevent-fetch
+    nowebrtc
+    prevent-window-open         window.open-defuser, nowoif, no-window-open-if
+    set-local-storage-item
+
+**The aliases are not decoration.** A rule calls a scriptlet by whichever
+spelling its author knew -- `aopr` and the long form are one request, and
+`acis` was the name before `acs` -- so refusing an alias refuses the rule
+rather than the capability. The names are uBlock's; the code behind every one
+is this project's.
+
+### The bug the tests found: a name that was never resolved
+
+`source_for` emitted `c.name` as given. `parse_call` canonicalises, so
+anything arriving from a filter list was fine -- and a call built any other
+way with an alias in it was emitted, looked up in the catalog object, not
+found, and **silently did nothing**. The script evaluated, the page was
+unchanged, and nothing said why.
+
+Found by writing the tests with aliases, which is how a caller would: five
+checks failed at once and the first diagnosis was wrong twice (`owner_of`
+suspected, then the page stubs) before the generated script was dumped and
+read. It emits the canonical name now, and the reason is the one this
+document keeps arriving at -- *the catalog being closed has to be true at the
+point of use*, and so does the catalog being **reachable**.
+
+**What made it findable was building the fixture the way a caller would**
+rather than the way the code expects. A test that had used canonical names
+throughout would have passed against the bug, and the bug would have waited
+for the first person to write `##+js(aopr, ...)` by hand.
+
+### Pattern arguments share the consent rules' refusal
+
+Six of the eleven take a needle, which may be `/re/`. A list rule's regex is
+compiled into a `RegExp` in the page -- exactly the position `site_rules` is
+in with a consent rule -- so `why_pattern_backtracks` is now exported from
+there and `parse_call` applies it to the arguments that are patterns. One
+implementation, two callers, and the measurement behind it stays where it was
+made: PCRE2 auto-possessifies the worst shape to nothing, so a timing probe
+sees zero while the page's own engine takes minutes.
+
+Which arguments are patterns is a bitmask per catalog entry rather than a
+guess, so `set-constant`'s *value* is not checked as one -- it is a word from
+a vocabulary, not something matched.
+
+### What the engine could and could not show
+
+Each of the nine is run in `QJSEngine` against a stubbed page whose timers,
+`fetch`, `window.open`, storage and peer connection record what they were
+asked -- so a test can tell *dropped* from *passed through* rather than
+observing that nothing exploded.
+
+**One limit, measured and worth stating.** `String(fn)` in QJSEngine is
+`function showAd() { [native code] }`: the body is not available, where a
+browser hands over the source. So the timer scriptlets' needle is matched
+against the function's *name* in these tests and against the whole source in
+a page. The matcher is the same either way; what differs is how much text it
+is shown, which is the engine's doing rather than the scriptlet's. Measured
+with a probe rather than inferred from a failure.
+
+### Still absent, and named rather than implied
+
+`remove-attr`, `remove-class` and the `json-prune-fetch-response` family are
+not here. The first two are DOM-mutation scriptlets needing an observer and a
+selector engine, which is its own piece of work rather than a line in this
+one; the third overlaps what `json-prune` already does by wrapping
+`Response.prototype.json`. And no `trusted-*` scriptlet, for the reason
+recorded with the first two: the first of those belongs with whatever UI says
+which lists are trusted, and there is none.
