@@ -444,6 +444,62 @@ int main(int argc, char **argv) {
 
 		check(session_import::firefox_profile(tmp.path() + "/nope").isEmpty(),
 		      "a root with no profiles.ini yields nothing rather than a guess");
+
+		// **A comma in the path Firefox wrote makes the profile invisible**,
+		// and this is the one file here that another program writes -- so
+		// unlike our own INIs, nothing guarantees it is quoted. QSettings
+		// reads an unquoted comma as a list, `toString()` on two elements is
+		// empty, and the importer then reports no Firefox session at all.
+		// Both reads are affected: `Path` in a `[Profile]` section and
+		// `Default` in an `[Install]` one, which is also a path.
+		//
+		// **What is not established is whether Firefox ever writes one.** A
+		// profile directory is `<salt>.<name>` with a user-chosen name, and
+		// whether the name is sanitised before it becomes a directory was not
+		// measurable here. A person editing `profiles.ini` or moving a
+		// profile reaches it either way.
+		//
+		// **And the rejoin that fixed the settings bundle would not fix
+		// this.** QSettings trims whitespace around the separator, so
+		// `abc.Work, Home` is already `["abc.Work", "Home"]`; rejoining gives
+		// `abc.Work,Home`, a path that does not exist, which trades "no
+		// profile" for "a session file that is gone". Doing it properly means
+		// reading those two keys out of the file's text rather than through
+		// QSettings -- which also means duplicating the section-precedence
+		// logic above. That is a decision about how much of another program's
+		// format to parse by hand, so it is recorded rather than taken.
+		//
+		// Pinned as measured behaviour, not as behaviour anybody chose: if
+		// this starts failing because those keys are read directly, that is
+		// the fix landing and this is what should say so.
+		QTemporaryDir comma_path;
+		QFile ini3(comma_path.path() + "/profiles.ini");
+		ini3.open(QIODevice::WriteOnly);
+		ini3.write("[Profile0]\nName=work\nPath=abc.Work, Home\nDefault=1\n");
+		ini3.close();
+		check(session_import::firefox_profile(comma_path.path()).isEmpty(),
+		      "a comma in Path hides the profile, QSettings having read it "
+		      "as a list");
+
+		QTemporaryDir comma_install;
+		QFile ini4(comma_install.path() + "/profiles.ini");
+		ini4.open(QIODevice::WriteOnly);
+		ini4.write("[Profile0]\nName=w\nPath=abc.Work, Home\n\n"
+		            "[Install1]\nDefault=abc.Work, Home\nLocked=1\n");
+		ini4.close();
+		check(session_import::firefox_profile(comma_install.path()).isEmpty(),
+		      "and so does one in an install section's Default, which is a "
+		      "path too");
+
+		// The control: the same fixtures without the comma are found, so the
+		// two checks above are about the comma and not about the fixture.
+		QTemporaryDir plain;
+		QFile ini5(plain.path() + "/profiles.ini");
+		ini5.open(QIODevice::WriteOnly);
+		ini5.write("[Profile0]\nName=work\nPath=abc.Work\nDefault=1\n");
+		ini5.close();
+		check(session_import::firefox_profile(plain.path()).endsWith("abc.Work"),
+		      "while the same thing without one is found");
 	}
 
 	section("a file change is not a tab change");

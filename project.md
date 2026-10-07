@@ -32738,3 +32738,48 @@ So the advice for anybody editing a bundle by hand is the last line: quote a
 value with a comma in it, which is what the file's own writer does. The
 quoted case passes with the fix reverted too, which is the control saying the
 change leaves the ordinary path alone.
+
+### The same hazard in a file another program writes
+
+Swept the rest of it rather than inferring. Seven files in `src/` use
+`QSettings`; two guard the "an unquoted comma is a list" case and five do
+not:
+
+    guarded      policy_engine, settings_bundle (both groups, as of now)
+    not guarded  annoyance_log, site_rules, settings_dialog, main_window,
+                 session_import
+
+**Four of those five read a file this program wrote**, so QSettings quoted it
+and the exposure is a hand edit -- the same class as the bundle's
+preferences, with the same two-line answer available whenever somebody
+decides it is worth taking.
+
+**`session_import` is the one that reads somebody else's.** Firefox's
+`profiles.ini` is not ours to quote, and two of the values read from it are
+paths: `Path` in a `[Profile]` section and `Default` in an `[Install]` one.
+Measured, both:
+
+    Path=abc.Work, Home                 firefox_profile() -> ""
+    [Install] Default=abc.Work, Home    firefox_profile() -> ""
+    Path=abc.Work                       found (the control)
+
+So a comma makes the profile invisible and the importer reports no Firefox
+session at all -- the silent-absence direction.
+
+**Two things are deliberately not claimed.** Whether Firefox ever writes such
+a path was not measurable here: a profile directory is `<salt>.<name>` with a
+user-chosen name, and whether the name is sanitised first is Firefox's
+business. A person editing that file or moving a profile reaches it either
+way, which is why it is pinned rather than dismissed.
+
+And **the rejoin that fixed the bundle would not fix this one.** QSettings
+trims whitespace around the separator, so `abc.Work, Home` is already two
+elements before anything here sees it; rejoining gives `abc.Work,Home`, a
+path that does not exist -- trading "no profile" for "a session file that is
+gone". Doing it properly means reading those two keys out of the file's text,
+which also means duplicating the section-precedence logic that decides which
+entry wins. That is a decision about how much of another program's format to
+parse by hand, so the measurement is recorded and the decision is not taken.
+
+The three checks come with their own control -- the same fixture without the
+comma is found -- so they are about the comma and not about the fixture.
