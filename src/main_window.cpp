@@ -5171,6 +5171,17 @@ void main_window::enforce_live_cap(const QString &keep_id) {
 		// memory rather than anything pointing here. Drop the entry and carry
 		// on; `forget_subtree` should have removed it already, so reaching this
 		// is a belt-and-braces path rather than the expected one.
+		//
+		// **And drop the view, not only the entry.** This forgot the id and
+		// left the widget in the stack, alive and possibly showing -- which is
+		// half of the exact state `about_to_remove` exists to prevent: a view
+		// "in the stack showing a page for a tab that no longer existed",
+		// minus the map entry that was the only way left to reach it. The belt
+		// was there and the braces were not. `forget_view` is the same
+		// disposal `forget_subtree` does, shared rather than copied, because
+		// two sites doing one job with one of them incomplete is how today's
+		// id-collision defect went unnoticed too.
+		forget_view(victim);
 		m_lru.removeAll(victim);
 		m_views_by_id.remove(victim);
 	}
@@ -5567,19 +5578,27 @@ void main_window::rekey_node_state(const QString &was, const QString &now) {
 	}
 }
 
+// The view half of forgetting an id, so that the two callers cannot drift:
+// one has a node and one has only an id. Does nothing for an id with no live
+// view, which is the ordinary case.
+void main_window::forget_view(const QString &id) {
+	web_view_backend *view = m_views_by_id.value(id, nullptr);
+	if (!view)
+		return;
+	if (view == current_view())
+		m_stack->setCurrentIndex(0);   // back to the placeholder
+	QWidget *w = view->widget();
+	m_stack->removeWidget(w);
+	w->deleteLater();
+}
+
 void main_window::forget_subtree(node *n) {
 	if (!n)
 		return;
 	for (node *c : n->children)
 		forget_subtree(c);
 
-	if (web_view_backend *view = m_views_by_id.value(n->id, nullptr)) {
-		if (view == current_view())
-			m_stack->setCurrentIndex(0);   // back to the placeholder
-		QWidget *w = view->widget();
-		m_stack->removeWidget(w);
-		w->deleteLater();
-	}
+	forget_view(n->id);
 	forget_node_state(n->id);
 	update_status();
 	page_changed();

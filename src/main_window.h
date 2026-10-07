@@ -353,6 +353,12 @@ private:
 	// of one file with both callers in view, rather than in two handlers that
 	// do not mention each other.
 	void forget_node_state(const QString &id);
+	// **The view half of forgetting an id**, shared so the two places that do
+	// it cannot drift: `forget_subtree`, which has a node, and the live cap's
+	// last resort, which by definition does not. Removing the widget from the
+	// stack is the part that was missing from the second one -- see
+	// `enforce_live_cap`.
+	void forget_view(const QString &id);
 	void rekey_node_state(const QString &was, const QString &now);
 
 	// Show where a hovered link would go, or clear it when the pointer leaves.

@@ -57,6 +57,8 @@
 #include "site_policy_dialog.h"
 
 #include <QComboBox>
+#include <QPointer>
+#include <QStackedWidget>
 #include <QTemporaryDir>
 #include <QStandardItemModel>
 #include "consent_blocker.h"
@@ -3851,6 +3853,7 @@ int main(int argc, char **argv) {
 		node *first = w10.m_model->add_tab(nullptr, "first", "http://a.example/");
 		check(first != nullptr, "a tab to zoom");
 		if (!first || !zoom_in) {
+
 			std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 			return g_fail == 0 ? 0 : 1;
 		}
@@ -4897,6 +4900,79 @@ int main(int argc, char **argv) {
 			               "than to global (%1)").arg(scope->currentIndex()));
 		}
 	}
+
+	section("a new tree's first tab adopts the old tree's live view");
+	{
+		// **Measured, and it is worse than the leak it was being written
+		// for.** `tab_tree_model::load` does `delete m_root` and emits nothing
+		// per node, so replacing a window's tree leaves every live view in
+		// `m_views_by_id` under an id the model no longer knows. The shell
+		// keys views, the stack, zoom, the loading set and `state/<id>.blob`
+		// by id -- and **an id is unique within a tree, not across trees**,
+		// because `unused_id` hands out the first free name. The first tab of
+		// any tree is `t-2`.
+		//
+		// So the new tree's first tab does not get a stale view *alongside*
+		// its own: `open_node` finds a view already filed under `t-2` and
+		// uses it. The tab shows the previous tree's page, with that page's
+		// history and zoom, and writes to its state blob.
+		//
+		// Same root cause as the id collision fixed in `remint_if_taken`:
+		// something keyed by id where the id is not unique over the keys'
+		// lifetime. There it was two nodes in one tree; here it is two trees
+		// in one window.
+		QTemporaryDir scratch;
+		check(scratch.isValid(), "there is a scratch directory for two trees");
+		main_window w(&factory, &policy, &filter);
+		w.resize(900, 600);
+		w.show();
+		spin(100);
+		check(w.load_tree(scratch.path() + "/first.txt"),
+		      "a window opens on one tree");
+
+		node *first = w.m_model->add_tab(nullptr, "from the first tree",
+		                                  "http://one.example/");
+		emit w.m_tree->activated(
+		  w.m_proxy->mapFromSource(w.m_model->index_for_node(first)));
+		spin(200);
+		web_view_backend *view = w.m_views_by_id.value(first->id, nullptr);
+		check(view != nullptr, "and its first tab has a live view");
+		const QString id_before = first->id;
+
+		check(w.load_tree(scratch.path() + "/second.txt"),
+		      "then the window is pointed at another tree");
+		check(w.m_views_by_id.contains(id_before) &&
+		          w.m_model->node_by_id(id_before) == nullptr,
+		      "which leaves that view filed under an id the model has lost");
+
+		node *fresh = w.m_model->add_tab(nullptr, "from the second tree",
+		                                  "http://two.example/");
+		check(fresh->id == id_before,
+		      QString("and the new tree's first tab is handed the same id "
+		               "(%1 == %2)").arg(fresh->id, id_before));
+
+		emit w.m_tree->activated(
+		  w.m_proxy->mapFromSource(w.m_model->index_for_node(fresh)));
+		spin(250);
+
+		// The defect, as an identity rather than a symptom: the same object.
+		check(w.m_views_by_id.value(fresh->id, nullptr) == view,
+		      "so opening it adopts the previous tree's view rather than "
+		      "making one");
+		if (auto *fv = static_cast<fake_view *>(
+		        w.m_views_by_id.value(fresh->id, nullptr)))
+			check(fv->url().toString().startsWith("http://one.example"),
+			      QString("and it is still showing the other tree's page "
+			               "(%1)").arg(fv->url().toString()));
+
+		// **Pinned as measured behaviour, not as behaviour anybody chose.**
+		// Fixing it means keying views -- and the state blobs beside them --
+		// per tree rather than per id, which is a decision about what a
+		// window switching trees should do with the first tree's saved state;
+		// `project.md` has the question. If this starts failing because that
+		// landed, this section is what should say so.
+	}
+
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

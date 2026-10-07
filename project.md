@@ -32497,3 +32497,76 @@ so the first sabotage was green and proved nothing about the check. Removing
 the loop instead fails exactly the new assertion. A sabotage that does not
 fire is first evidence that the wrong line was cut, not that the check is
 dead.
+
+## A new tree's first tab adopts the old tree's live view
+
+`tab_tree_model::load` does `delete m_root` between `beginResetModel` and
+`endResetModel`, and emits nothing per node. Every other way a node leaves
+the tree goes through `about_to_remove`, which the shell connects to
+`forget_subtree` -- the signal that releases the live view, its widget in the
+stack, the zoom, the dirty-blob set, the loading set and `state/<id>.blob`.
+Replace a window's tree and all of that is left filed under ids the model no
+longer knows.
+
+**What that costs is not a leak**, which is the first thing it looks like and
+is what the test below was originally written against. An id is unique
+*within* a tree and not across
+trees, because `unused_id` hands out the first free name -- so the first tab
+of every tree is `t-2`. Measured, with the map's keys printed:
+
+    probe after: views=1 lru=1 keys=[t-2] lru=[t-2] orphan=t-2 fresh=t-2
+
+`open_node` finds a view already filed under `t-2` and uses it. **So the new
+tree's first tab does not get a stale view alongside its own -- it gets the
+stale view as its own**, showing the previous tree's page, with that page's
+history and zoom, writing to its state blob.
+
+Same root cause as the collision fixed in `remint_if_taken` the same day:
+something keyed by id where the id is not unique over the lifetime of the
+keys. There it was two nodes in one tree; here it is two trees in one window.
+
+**Latent, and the trigger is named.** `load_tree` is called twice in
+`main.cpp` and nowhere else, at startup, before any tab exists. What makes it
+worth recording is that `load` is a public method of the model with nothing on
+it to say this, so whatever reloads a tree next -- an "open another tree"
+action, a reload after an external edit, a sync -- gets this on the first try.
+
+### Why closing it is a decision rather than an edit
+
+Announcing the old nodes before deleting them would do the right thing for
+the views and the wrong thing for the blobs: `forget_node_state` ends in
+`m_state->remove(id)`, so it would delete the saved state of the tree being
+closed. And since ids collide across trees, tree A's `t-2` blob and tree B's
+`t-2` blob are different tabs with one file name between them -- so "keep
+them" is not available either without keying the store per tree.
+
+Whether a window switching trees should destroy the first tree's scroll
+positions, keep them, or key them per tree is unanswered, and the collision
+is the question underneath it. `test_rotation` pins the adoption as measured
+behaviour so that whoever answers it flips an assertion that says what the
+old behaviour was.
+
+### What was found on the way, and what it cost
+
+Three probes, because the test kept failing for a reason that was not the one
+it named. It was written to drive `enforce_live_cap`'s last resort -- "a
+victim the tree no longer knows", which dropped the id and **left the widget
+in the stack**, half of the state `about_to_remove` exists to prevent. The
+assertions failed, and the first two probes said why: `views=1` after
+activating a tab in the new tree, so the window was never over its cap and
+the last resort was never reached. The third printed the keys and settled it:
+both ids were `t-2`.
+
+So the section tests the adoption now, which is what is actually reachable,
+and **the cap's path remains undriven**. The disposal is still shared --
+`forget_view(id)`, called by `forget_subtree`, which every tab close
+exercises, and by the cap, which nothing here does -- so the function is
+covered through one caller and its second call site is not. That is said
+rather than implied, because an untested call site described as fixed is the
+thing this file keeps finding.
+
+**And the lesson is the one about a test failing for the wrong reason.** A
+check that goes red for a cause other than the one it names is not noise to
+work around -- it was reporting something larger than the thing being tested,
+and three cheap probes were the difference between recording a leak and
+recording that a tab shows another tree's page.
