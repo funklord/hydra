@@ -32652,3 +32652,39 @@ would have to live in the tree file to survive a reload, which is the same
 document question the imported-history entry raises, and it would make the
 ids longer for ever after. Three local fixes against one format change is a
 trade only the holder can price.
+
+## The policy line was pinned and the policy file was not
+
+`policy.ini` is where a person's per-site security decisions live, and
+nothing walked the features through it. Two sections already touch the file
+-- the shipped one's coverage, and one interaction between the notifications
+floor and a presenter -- and a third pins the *line* encoding:
+`settings_to_line` through `settings_from_line` for every feature. None of
+them saved a policy and loaded it back.
+
+So every feature is now set twice, on an exact host and on a wildcard,
+written, loaded into a fresh engine and compared -- and the global defaults
+the same way. All twenty survive both patterns, and the wildcard still
+governs a host under it.
+
+**Which half of that was already covered, measured rather than assumed.**
+Dropping a feature from `settings_to_line` fails the new section *and* the
+existing line check. Dropping one from the written defaults fails **only**
+the new section:
+
+    sabotage                              what goes red
+    skip a feature in settings_to_line    the line check and both new
+                                          per-site checks, naming `referer`
+    skip a feature in the written         the new defaults check alone,
+    defaults                              naming `referer`
+
+So the encoding was pinned and the file was not: the group structure,
+QSettings' handling of a `*` in a key, and the defaults half, which no check
+reached at all. A feature renamed tomorrow would have failed the line check
+and sailed through the file.
+
+The wildcard is in there for a reason that is not symmetry. The pattern
+becomes an INI key, `*` is the one character that needs escaping in one, and
+`settings_bundle`'s own header records writing it as `%2A` for exactly that
+reason -- so an exact host round-tripping says nothing about `*.ads.example`
+doing so.

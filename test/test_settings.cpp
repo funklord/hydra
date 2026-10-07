@@ -25,6 +25,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QTemporaryDir>
 #include <QEventLoop>
 #include <QFile>
 #include <QSet>
@@ -835,6 +836,100 @@ int main(int argc, char **argv) {
 		check(pe3.effective_setting(feature::referer, "a.cdn.example.com") ==
 		          setting::block,
 		      "and the shorter one keeps what the longer does not reach");
+	}
+
+	section("every feature's per-site setting survives the policy file");
+	{
+		// **The file is the user's security configuration, and nothing
+		// asserted that all of it comes back.** The sections above check the
+		// shipped file's coverage and one interaction between a floor and a
+		// presenter; neither walks the features. A feature whose name does
+		// not round-trip is a rule somebody set that is silently not there at
+		// the next launch -- and the direction that costs is a `block` coming
+		// back as the default.
+		//
+		// Both pattern shapes, because a wildcard contains a `*` and the file
+		// is an INI, where a `*` in a key is the one character that needs
+		// escaping. An exact host would never show that.
+		//
+		// **What this adds over what was already here, measured by
+		// sabotage.** Dropping a feature from `settings_to_line` fails this
+		// section *and* the existing "every feature survives the line a
+		// policy file is written as", which covers the encoding on its own.
+		// Dropping one from the written defaults fails only this section. So
+		// the line was pinned and the *file* was not: the group structure,
+		// QSettings' handling of a `*` in a key, and the defaults half, which
+		// no check reached at all.
+		QTemporaryDir scratch;
+		check(scratch.isValid(), "there is a scratch directory");
+		const QString path = scratch.path() + "/policy.ini";
+		const QString exact = "news.example";
+		const QString wild  = "*.ads.example";
+
+		{
+			policy_engine e;
+			for (int i = 0; i < policy::feature_count(); ++i) {
+				const auto f = policy::feature(i);
+				e.set_setting(exact, f, policy::setting::block);
+				e.set_setting(wild,  f, policy::setting::allow);
+			}
+			check(e.save(path), "a policy with every feature set twice saves");
+		}
+
+		policy_engine back;
+		check(back.load(path), "and loads again");
+
+		QStringList lost_exact, lost_wild;
+		for (int i = 0; i < policy::feature_count(); ++i) {
+			const auto f = policy::feature(i);
+			const QString name =
+			  QString::fromLatin1(policy::feature_name(f));
+			if (back.setting_for(exact, f) != policy::setting::block)
+				lost_exact << name;
+			if (back.setting_for(wild, f) != policy::setting::allow)
+				lost_wild << name;
+		}
+		check(lost_exact.isEmpty(),
+		      QString("every one of the %1 features comes back blocked for an "
+		               "exact host (%2)")
+		          .arg(policy::feature_count())
+		          .arg(lost_exact.isEmpty() ? QStringLiteral("none lost")
+		                                     : lost_exact.join(", ")));
+		check(lost_wild.isEmpty(),
+		      QString("and allowed for a wildcard, whose `*` has to survive "
+		               "being an INI key (%1)")
+		          .arg(lost_wild.isEmpty() ? QStringLiteral("none lost")
+		                                    : lost_wild.join(", ")));
+
+		// The pattern itself, not only its settings: a wildcard that came
+		// back as the literal `%2A.ads.example` would answer `setting_for`
+		// correctly for that spelling and govern nothing.
+		// Written the plain way round: the wildcard was saved as `allow`, so
+		// a host under it must come back allowed, where a lost rule would
+		// leave `ads` at its default of block.
+		check(back.is_allowed(policy::feature::ads, "a.ads.example"),
+		      "and the wildcard still governs a host under it");
+
+		// Global defaults, which are the other half of the file.
+		{
+			policy_engine e;
+			for (int i = 0; i < policy::feature_count(); ++i)
+				e.set_global_default(policy::feature(i),
+				                      policy::setting::block);
+			check(e.save(path), "a policy with every default blocked saves");
+			policy_engine g;
+			check(g.load(path), "and loads");
+			QStringList lost;
+			for (int i = 0; i < policy::feature_count(); ++i)
+				if (g.global_default(policy::feature(i)) !=
+				     policy::setting::block)
+					lost << QString::fromLatin1(
+					  policy::feature_name(policy::feature(i)));
+			check(lost.isEmpty(),
+			      QString("and every global default comes back blocked (%1)")
+			          .arg(lost.isEmpty() ? QStringLiteral("none lost")
+			                               : lost.join(", ")));
+		}
 	}
 
 	section("the policy file this project ships");
