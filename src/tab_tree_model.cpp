@@ -138,6 +138,14 @@ bool tab_tree_model::load(const QString &path) {
 	m_root = fresh;
 	m_path = path;
 	reindex();
+	// Indexed first, so `unused_id` is answering about this tree rather than
+	// the one just deleted, and again afterwards because a reminted id is not
+	// the one the index holds. Twice is nothing here -- load is not a hot path
+	// -- and doing it in the other order silently reserves names from a tree
+	// that no longer exists.
+	m_last_reminted = remint_repeats(m_root);
+	if (m_last_reminted > 0)
+		reindex();
 	endResetModel();
 	return true;
 }
@@ -924,6 +932,46 @@ void tab_tree_model::remint_if_taken(node *n, QSet<QString> *claimed) {
 	}
 	for (node *k : n->children)
 		remint_if_taken(k, claimed);
+}
+
+// **One rule covers two faults, because the synthetic root is called "root".**
+// Seeding the walk with its name means a file node that claims that id is a
+// repeat like any other, and `tree_diff` uses the same string as the sentinel
+// for "the top level" -- so a node holding it could answer for the tree.
+//
+// What a repeat costs is in the header: the shell keys live views, zoom, the
+// recently-used list and `state/<id>.blob` by id. Measured on a file with a
+// copied block -- two nodes carrying `t-2` -- `node_by_id("t-2")` returned the
+// second, so the first tab was unreachable by id while both shared one state
+// sidecar, and `tree_invariants::check` reported it as two violations that
+// nothing on the load path was asking for.
+//
+// The first occurrence keeps its id, which is what makes this repair rather
+// than a shuffle: whichever node the file described first keeps whatever state
+// was saved under that name.
+int tab_tree_model::remint_repeats(node *root) {
+	if (!root)
+		return 0;
+	QSet<QString> taken;
+	collect_ids(root, &taken);
+	QSet<QString> seen;
+	seen.insert(root->id);
+	int count = 0;
+	remint_repeats(root, &taken, &seen, &count);
+	return count;
+}
+
+void tab_tree_model::remint_repeats(node *n, QSet<QString> *taken,
+                                     QSet<QString> *seen, int *count) {
+	for (node *k : n->children) {
+		if (k->id.isEmpty() || seen->contains(k->id)) {
+			k->id = unused_id(k->is_folder() ? "f" : "t", *taken);
+			taken->insert(k->id);
+			++*count;
+		}
+		seen->insert(k->id);
+		remint_repeats(k, taken, seen, count);
+	}
 }
 
 QList<node *> tab_tree_model::top_level_only(const QList<node *> &nodes) {

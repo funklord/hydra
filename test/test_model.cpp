@@ -1969,6 +1969,98 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	section("a file that uses one id twice is repaired on load, and says so");
+	{
+		// **An id in the outline is a key, not a label.** The shell keys live
+		// views, zoom, the recently-used list and `state/<id>.blob` by it, so
+		// two nodes carrying one id share a tab's scroll position and form
+		// contents -- and `node_by_id` can only answer for one of them. The
+		// file is meant to be readable in an editor, and a copied block of
+		// lines brings its ids with it.
+		//
+		// Measured before the repair: the file loaded with unparsed=0 and
+		// flattened=0, two nodes carried `t-2`, `node_by_id("t-2")` returned
+		// the second so the first was unreachable, and
+		// `tree_invariants::check` reported two violations that nothing on the
+		// load path was asking for.
+		const QString path2 = dir + "/dup-ids.txt";
+		{
+			QFile f(path2);
+			check(f.open(QIODevice::WriteOnly | QIODevice::Truncate),
+			      "a file with a block copied in it");
+			f.write("- [f-2] folder | Work\n"
+			         "  - [t-2] unopened | First | https://one.test/ | "
+			         "created=2026-01-01T00:00:00 | seen=2026-01-01T00:00:00\n"
+			         "- [f-2] folder | Work copy\n"
+			         "  - [t-2] unopened | Second | https://two.test/ | "
+			         "created=2026-01-01T00:00:00 | seen=2026-01-01T00:00:00\n");
+		}
+		tab_tree_model dm;
+		check(dm.load(path2), "loads");
+		check(dm.last_reminted() == 2,
+		      QString("reporting both ids it had to mint again (%1)")
+		          .arg(dm.last_reminted()));
+		check(dm.last_unparsed() == 0 && dm.last_flattened() == 0,
+		      "with nothing lost and nothing moved");
+		check(dm.root()->children.size() == 2,
+		      QString("both folders are there (%1)")
+		          .arg(dm.root()->children.size()));
+
+		// The first occurrence keeps its id: that is what makes this a repair
+		// rather than a shuffle, since whatever was saved under the name
+		// belongs to whichever node the file described first.
+		node *first = dm.node_by_id("t-2");
+		check(first && first->title == "First",
+		      QString("and t-2 still names the first of them (%1)")
+		          .arg(first ? first->title : QStringLiteral("(none)")));
+		node *f2 = dm.node_by_id("f-2");
+		check(f2 && f2->title == "Work",
+		      QString("as f-2 names the first folder (%1)")
+		          .arg(f2 ? f2->title : QStringLiteral("(none)")));
+		// And the second of each pair is reachable under its new name.
+		int found = 0;
+		for (node *f : dm.root()->children)
+			for (node *t : f->children)
+				if (dm.node_by_id(t->id) == t)
+					++found;
+		check(found == 2,
+		      QString("both tabs answer to their own id now (%1)").arg(found));
+		holds(dm, "after loading a file that used two ids twice");
+	}
+
+	section("a file node claiming the id \"root\" is minted again too");
+	{
+		// One rule covers it, because the synthetic root is called "root" and
+		// the walk starts with that name taken. It matters beyond uniqueness:
+		// `tree_diff` uses the same string as its sentinel for "the top
+		// level", so a node holding it could answer for the tree -- measured
+		// in test_diff, where a tab moved to the top level arrived inside the
+		// impostor instead.
+		const QString path2 = dir + "/root-id.txt";
+		{
+			QFile f(path2);
+			check(f.open(QIODevice::WriteOnly | QIODevice::Truncate),
+			      "a file whose first line claims to be the tree");
+			f.write("- [root] folder | Hand edited\n"
+			         "  - [t-9] unopened | Inside | https://in.test/ | "
+			         "created=2026-01-01T00:00:00 | seen=2026-01-01T00:00:00\n");
+		}
+		tab_tree_model rm;
+		check(rm.load(path2), "loads");
+		check(rm.last_reminted() == 1,
+		      QString("reporting the one id it replaced (%1)")
+		          .arg(rm.last_reminted()));
+		check(rm.root()->children.size() == 1, "the folder is still there");
+		node *impostor = rm.root()->children.value(0);
+		check(impostor && impostor->id != "root",
+		      QString("under a new id (%1)")
+		          .arg(impostor ? impostor->id : QStringLiteral("(none)")));
+		check(impostor && impostor->title == "Hand edited" &&
+		          impostor->children.size() == 1,
+		      "keeping its title and the tab inside it");
+		holds(rm, "after loading a file with a node called root");
+	}
+
 	QDir(dir).removeRecursively();
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

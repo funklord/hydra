@@ -3082,6 +3082,22 @@ bool main_window::load_tree(const QString &path) {
 		qWarning("tree: %d line(s) of %s did not parse%s", lost,
 		          qPrintable(path),
 		          saved_copy ? "; the original is kept alongside" : "");
+	} else if (const int again = m_model->last_reminted(); again > 0) {
+		// **Before the flattening branch, because this one is about identity
+		// rather than shape.** A tab moved up is still the tab it was; a tab
+		// whose id was minted again has lost whatever was filed under the old
+		// name -- its state sidecar, its zoom, its place in the recently-used
+		// list -- to the node that kept it. Saying so is the only way anybody
+		// could connect a tab opening at the top of a page it had been part
+		// way down to a file they edited by hand.
+		if (m_status)
+			m_status->showMessage(
+			    QString("%1 tab(s) in %2 shared an id with another and have "
+			             "been given new ones. The first of each pair keeps "
+			             "what was saved under it.")
+			        .arg(again).arg(QFileInfo(path).fileName()), 0);
+		qWarning("tree: %d id(s) in %s were used more than once and have been "
+		          "minted again", again, qPrintable(path));
 	} else if (const int flat = m_model->last_flattened(); flat > 0) {
 		// The accessor for this existed from the beginning and **nothing ever
 		// called it** -- the header said the count was there "so the caller

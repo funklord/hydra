@@ -33212,3 +33212,74 @@ that is not an id at all.
 **An id namespace with a reserved word in it, and no check that real ids
 avoid it.** Worth carrying as its own lens: this tree also keys live views and
 state blobs by node id, and `snapshot` writes "root" into undo records.
+
+## A copied block of lines gave two tabs one id, and nothing was asking
+
+The outline file is meant to be read and edited in an editor -- `unused_id`
+says so in as many words, keeping ids short "so a copy of `a1` reading `a1-2`
+stays readable in the outline file a person may well open". The natural way to
+reorganise in an editor is to copy a block of lines, and a copied block brings
+its ids with it.
+
+**An id here is a key, not a label.** The shell keys live views, zoom, the
+recently-used list and `state/<id>.blob` by it. `tab_tree_model.h` has said
+what that costs since `unused_id` was written: *two nodes sharing an id would
+share a `state/<id>.blob`, so one tab's scroll position and form contents
+would be restored into the other.*
+
+Measured on a file with one folder and its tab copied once:
+
+    load=1  unparsed=0  flattened=0
+    node_by_id("t-2") -> "Second"
+    nodes actually carrying t-2: 2
+    tree_invariants::check -> ok=0, 2 violation(s):
+        id 'f-2' is used more than once; id 't-2' is used more than once
+
+So the first tab was unreachable by id while both shared one state sidecar,
+and the file loaded reporting nothing. **The project's own invariant checker
+detects exactly this, and nothing on the load path was asking it.** That is
+the whole finding: not a missing check, an unrun one.
+
+### Repaired on load, counted, and said out loud
+
+`tab_tree_model::load` now walks the fresh tree and mints a new id for any
+repeat, keeping the first occurrence -- which is what makes it a repair rather
+than a shuffle, since whatever was saved under the name belongs to whichever
+node the file described first. The count is `last_reminted()`, in the shape
+`last_flattened()` and `last_unparsed()` already established, and
+`main_window` reports it.
+
+It is reported **before** the flattening branch, because the two are different
+kinds of loss: a tab moved up is still the tab it was, while a tab whose id
+was minted again has lost its state sidecar, its zoom and its place in the
+recently-used list to the node that kept the name. Saying so is the only way
+anybody connects a tab opening at the top of a page it had been part way down
+to a file they edited by hand.
+
+Indexed before the walk and again after it: `unused_id` consults
+`m_id_index`, so walking first would have it answering about the tree that
+was just deleted, and a reminted id is not the one the index holds. Twice is
+free on a path that runs once per load.
+
+### One rule, two faults, because the root is called "root"
+
+Seeding the walk with the synthetic root's own name makes a file node claiming
+`[root]` a repeat like any other. That is the entry point the sentinel fix
+earlier today could not reach -- `check_and_repair` sees only the model's
+nodes, and `- [root] folder | Hand edited` loads from a hand-edited file
+without complaint. It is reminted to `f-2` now and the tree holds.
+
+**`remint_if_taken` could not do this job**, which is worth knowing before
+reaching for it: it asks `node_by_id`, and on load every node is in the index,
+so the first occurrence would rename itself. Same words, different question --
+"is this id held by a live node" against "has this id appeared already in this
+walk".
+
+### Sabotage, and which half each guard holds
+
+Dropping the call fails seven checks across the two sections, among them the
+invariant checker reporting the two violations by name, and shows the
+pre-repair behaviour: `node_by_id("t-2")` returns "Second". Dropping **only**
+the root seed fails exactly the two root checks and leaves the duplicate
+section green -- which is what says one rule is covering two faults rather
+than one fault twice.

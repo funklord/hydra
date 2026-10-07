@@ -64,6 +64,15 @@ public:
 	// for as long as it existed, which is why this one is wired at the same
 	// time rather than added beside it.
 	int last_unparsed() const { return m_last_unparsed; }
+	// How many ids the last `load` had to mint again because the file used one
+	// more than once. **An id in this file is a key, not a label**: the shell
+	// keys live views, zoom, the recently-used list and `state/<id>.blob` by
+	// it, so two nodes carrying one id share a tab's scroll position and form
+	// contents, and `node_by_id` can only answer for one of them. The outline
+	// is meant to be readable in an editor, and a block of lines copied there
+	// brings its ids with it -- so this is a repair, counted, in the shape the
+	// two above established.
+	int last_reminted() const { return m_last_reminted; }
 	bool save(const QString &path) const;
 
 	node *node_for_index(const QModelIndex &index) const;
@@ -264,6 +273,13 @@ private:
 	// reopened tab never collides with one created since it was deleted.
 	void remint_if_taken(node *n);
 	void remint_if_taken(node *n, QSet<QString> *claimed);
+	// Re-mint any id a tree uses twice, keeping the first occurrence. Used on
+	// load, where `remint_if_taken` cannot help: it asks `node_by_id`, and on
+	// load every node is in the index, so the first occurrence would rename
+	// itself. Returns how many were minted again.
+	int  remint_repeats(node *root);
+	void remint_repeats(node *n, QSet<QString> *taken, QSet<QString> *seen,
+	                     int *count);
 	static void collect_ids(const node *n, QSet<QString> *into);
 	// A closed entry remembers the id of the folder its tab was in, and that
 	// id stops being that folder's the moment the folder is deleted. Dropping
@@ -282,4 +298,5 @@ private:
 	QHash<QString, node *> m_id_index;
 	int m_last_flattened = 0;
 	int m_last_unparsed  = 0;
+	int m_last_reminted  = 0;
 };
