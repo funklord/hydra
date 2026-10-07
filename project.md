@@ -33059,3 +33059,62 @@ through something earlier:
 The tags line in that section is a recorded limit rather than a guard -- it
 passes under sabotage, because tags genuinely survive. The lock is what
 discriminates, and the section says so.
+
+## One format, two writers, one set of escaping rules
+
+The payload the reorganise dialog hands a model is the same line format as the
+tree file -- `tree_serializer` says so, and shares `type_to_string` with
+`tree_outline` so that "folder" is spelled once. It did not share the escaping
+rules, because until today only one of the two writers had any.
+
+`to_payload` joined the tags raw. A tag is typed by hand and the tag dialog
+splits on commas, so a comma cannot reach the field and **a bar can** -- which
+`tree_outline` has guarded since tags were added and this writer never did.
+A tab tagged `a | b` was written as
+
+    - [b1] unopened | half price | https://shop.test/sale | tags=a | b,plain
+
+and `parse_proposal`, which reads from the right and takes `tags=` keys off
+the end first, stops at `b,plain` -- so the url is `b,plain`, the title is
+"half price | https://shop.test/sale | tags=a", and the tags are gone. The
+trailing-bar title fault above was here too, by the same route.
+
+**Where that url goes is bounded, and worth stating rather than assuming.**
+There is no url change kind: `apply` reparents, reorders, renames and invents
+folders, all by id, so a proposal's url never reaches the live tree. What it
+reaches is `duplicate_url`, computed over the proposal -- so two tabs that
+really do share an address stop looking like a merge candidate -- and the diff
+the person is shown.
+
+`title_field` and `tags_field` are now declared in `tree_outline.h` beside the
+type vocabulary, for the same stated reason, and `to_payload` calls them.
+`tags_field` returns the whole field, `" | tags=..."` or nothing, so the key is
+spelled once as well.
+
+**The history says what kind of divergence this is, and it is not neglect.**
+Dated from the log: the serializer learned to write tags on 2026-07-30
+(`1bade55`), raw. The left-to-right url loss was fixed on 2026-08-03
+(`99036e8`) in **both** writers -- the diffstat names both files. Tags reached
+the tree file on 2026-09-05 (`3ead274`) *with* the bar guard, and the writer
+that had been emitting them raw for five weeks was not revisited.
+
+So a shared *defect* does get fixed in both copies, because whoever fixes a
+defect is thinking about the defect. A new *rule* lands in one, because
+whoever adds a rule is thinking about the file in front of them. Copies
+converge under repair and diverge under extension, which is why sharing the
+function matters more than remembering the sibling.
+
+**The lens, for the fourth time today**: two sites doing one job where only one
+carries the guard. The others were `remint_if_taken` and `collect_ids`, the
+two renaming sites behind `id_changed`, and `forget_subtree` against
+`enforce_live_cap`. This one was found by grepping for the line my own fix had
+just changed -- `n->url = rest_fields.takeLast()` -- which turned up two
+readers where I had been thinking about one.
+
+### Sabotage, and what each call is worth
+
+Reverting the title call: the address comes back `| https://shop.test/sale`.
+Reverting the tags call: the address comes back `b,plain`, the title swallows
+the url and the tag key, and the tags are empty. The title check does not fail
+in the first round -- the split eats the bar either way, so the title reads
+"half price" with or without the rule, and the url is what discriminates.

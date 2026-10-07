@@ -223,11 +223,11 @@ node *load(const QString &path, int *flattened, int *unparsed) {
 // split the line and the loader would take part of it as the url -- which is
 // the same fault that once ate a real address when a title held " | ". The
 // dialog already splits on commas, so a comma cannot reach here; a bar can.
-static QString tags_field(node *n) {
-	if (n->tags.isEmpty())
+QString tags_field(const QStringList &tags) {
+	if (tags.isEmpty())
 		return QString();
 	QStringList clean;
-	for (QString t : n->tags) {
+	for (QString t : tags) {
 		// `simplified` rather than `remove` then `trimmed`: taking the bar out
 		// of "a | b" leaves "a  b" with the gap it used to separate, and a tag
 		// carrying a double space is a different tag from the one beside it.
@@ -266,8 +266,8 @@ static QString tags_field(node *n) {
 //
 // A title is page-supplied, so this is reachable from any site, and the rename
 // dialog puts it within reach of a keystroke.
-static QString title_field(const node *n) {
-	QString t = n->title;
+QString title_field(const QString &title) {
+	QString t = title;
 	while (!t.isEmpty() && (t.back() == QLatin1Char('|') || t.back().isSpace()))
 		t.chop(1);
 	return t;
@@ -283,17 +283,17 @@ static void write_node(QTextStream &out, node *n, int depth) {
 		return;
 	const QString indent(depth * 2, ' ');
 	if (n->is_folder()) {
-		out << indent << "- [" << n->id << "] folder | " << title_field(n);
+		out << indent << "- [" << n->id << "] folder | " << title_field(n->title);
 		// A folder can be locked too. The url half of a lock means nothing to
 		// one, but the half that pins it beside its siblings means exactly what
 		// it means for a tab, and a folder that would not stay where it was put
 		// is the same complaint.
 		if (n->locked)
 			out << " | locked=1";
-		out << tags_field(n) << "\n";
+		out << tags_field(n->tags) << "\n";
 	} else {
 		out << indent << "- [" << n->id << "] " << type_to_string(n->type)
-		     << " | " << title_field(n)
+		     << " | " << title_field(n->title)
 		     << " | " << n->url
 		     << " | created=" << n->created.toString(Qt::ISODate)
 		     << " | seen="    << n->last_seen.toString(Qt::ISODate);
@@ -304,7 +304,7 @@ static void write_node(QTextStream &out, node *n, int depth) {
 			out << " | named=1";
 		if (n->locked)
 			out << " | locked=1";
-		out << tags_field(n) << "\n";
+		out << tags_field(n->tags) << "\n";
 	}
 	for (node *c : n->children)
 		write_node(out, c, depth + 1);

@@ -8,12 +8,16 @@ namespace {
 
 void write_node(QString &out, node *n, int depth) {
 	const QString indent(depth * 2, ' ');
+	// **The same escaping rules as the file**, called rather than repeated:
+	// this writer had none, so a tag holding a bar shifted every field after
+	// it and `parse_proposal` read the tag's own tail as the url -- in the
+	// payload a model is asked to reorganise, where a wrong url reaches the
+	// duplicate-url advice and the diff the person is shown.
 	out += indent + "- [" + n->id + "] " + tree_outline::type_to_string(n->type)
-	     + " | " + n->title;
+	     + " | " + tree_outline::title_field(n->title);
 	if (!n->is_folder())
 		out += " | " + n->url;
-	if (!n->tags.isEmpty())
-		out += " | tags=" + n->tags.join(',');
+	out += tree_outline::tags_field(n->tags);
 	out += "\n";
 	for (node *c : n->children)
 		write_node(out, c, depth + 1);

@@ -293,6 +293,54 @@ int main(int argc, char **argv) {
 		delete back;
 	}
 
+	section("a bar in a tag or at the end of a title does not take the url");
+	{
+		// **The payload is the same line format as the tree file, written by a
+		// second writer that had none of its escaping rules.** There is no
+		// escape character, so " | " anywhere in a free-form field is read as
+		// a separator: a tag holding one shifted every field after it, and
+		// `parse_proposal` -- which reads from the right and strips `tags=`
+		// first -- then took the tag's own tail as the url. The tree file has
+		// guarded tags since they were added; this writer joined them raw.
+		//
+		// A tag is typed by hand (the dialog splits on commas, so a comma
+		// cannot reach here, and a bar can), and a title is page-supplied.
+		// What the wrong url reaches is the duplicate-url advice and the diff
+		// the person is asked to accept.
+		node root;
+		root.id = "root";
+		root.type = node_type::folder;
+		auto *p = new node;
+		p->id = "b1";
+		p->type = node_type::unopened_tab;
+		p->title = "half price |";
+		p->url = "https://shop.test/sale";
+		p->tags = QStringList{"a | b", "plain"};
+		p->parent = &root;
+		root.children.push_back(p);
+
+		const QString payload = tree_serializer::to_payload(&root);
+		node *back = tree_serializer::parse_proposal(payload);
+		check(back != nullptr, "the payload reads back");
+		node *q = child(back, 0);
+		check(q != nullptr, "with the tab in it");
+		if (q) {
+			// The address first: it is the field that gets taken.
+			check(q->url == "https://shop.test/sale",
+			      QString("keeping its address (%1)").arg(q->url));
+			check(q->title == "half price",
+			      QString("and its title, less the trailing bar (%1)")
+			          .arg(q->title));
+			// The bar inside the tag becomes a space, which is what the file
+			// has always done -- `simplified`, so "a | b" is "a b" and not
+			// "a  b", a double space being a different tag from its neighbour.
+			check(q->tags == QStringList({"a b", "plain"}),
+			      QString("and both tags, the bar inside one spaced (%1)")
+			          .arg(q->tags.join(',')));
+		}
+		delete back;
+	}
+
 	section("the payload carries what may leave the machine and nothing else");
 
 	// **The rule was written and unchecked.** `tree_serializer.h` says sec 9.3

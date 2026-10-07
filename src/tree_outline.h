@@ -45,4 +45,16 @@ bool  save(const QString &path, node *root);
 QString   type_to_string(node_type t);
 node_type type_from_string(const QString &s);
 
+// **The format's escaping rules, exposed for the same reason as the
+// vocabulary above.** The line has no escape character, so each free-form
+// field is normalised until it cannot be read as a separator -- and
+// tree_serializer writes the same lines, so a second writer normalising
+// differently would be two sets of rules for one format. Each definition
+// carries the loss it prevents.
+//
+// `tags_field` returns the whole field, " | tags=..." or nothing, so the key
+// is spelled in one place as well.
+QString title_field(const QString &title);
+QString tags_field(const QStringList &tags);
+
 }  // namespace tree_outline
