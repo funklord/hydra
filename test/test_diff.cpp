@@ -303,6 +303,68 @@ int main(int argc, char **argv) {
 		delete orig;
 	}
 
+	section("a node the model calls [root] fails the whole proposal");
+	{
+		// **"root" is the name of the tree, not an id.** `compute` and
+		// `snapshot` write it as the parent of anything at the top level, so a
+		// node carrying it collides with the tree itself. Measured before the
+		// check: `apply` created the folder, its id overwrote the real root in
+		// apply's own lookup, and every change naming "root" as its parent
+		// landed inside the folder -- a proposal with four things at the top
+		// level came out as one folder holding all of them.
+		node *orig = build_original();
+		node *prop = root_of();
+		add(prop, mk("root", true, "Everything"));
+		node *w = add(prop, mk("f1", true, "Work"));
+		add(w, mk("a1", false, "One", "https://x.example/1"));
+		add(w, mk("a2", false, "Two", "https://x.example/2"));
+		node *play = add(prop, mk("f2", true, "Play"));
+		add(play, mk("a3", false, "Three", "https://x.example/3"));
+
+		const QString before = shape(orig);
+		proposal_report rep = tree_diff::check_and_repair(orig, prop);
+		check(!rep.usable, "the proposal is refused");
+		check(rep.message.contains("root"),
+		      QString("saying which id did it (%1)").arg(rep.message));
+		check(shape(orig) == before,
+		      QString("and the tree is untouched (%1)").arg(shape(orig)));
+		delete orig;
+		delete prop;
+	}
+
+	section("an original node carrying that id cannot answer for the tree");
+	{
+		// The gate above covers a node the MODEL invents. It cannot cover one
+		// that is already in the tree -- the outline file is meant to be
+		// readable in an editor, so a hand-edited `- [root] folder | ...` is
+		// reachable, and from `apply`'s side an original node and an invented
+		// one shadow the lookup identically.
+		//
+		// So the precedence is settled in apply as well: the sentinel is
+		// resolved before the map, which is what `restore` has always done.
+		// A tab moved to the top level has to arrive at the top level even
+		// with a node named "root" sitting in the tree.
+		node *orig = root_of();
+		add(orig, mk("root", true, "Hand edited"));
+		node *w = add(orig, mk("f1", true, "Work"));
+		add(w, mk("a1", false, "One", "https://x.example/1"));
+
+		QList<tree_change> ch;
+		tree_change move;
+		move.kind          = change_kind::reparented;
+		move.node_id       = "a1";
+		move.new_parent_id = "root";   // meaning the top level
+		move.new_order     = 2;
+		ch << move;
+
+		check(tree_diff::apply(orig, ch) == 1, "the move applies");
+		node *a1 = find(orig, "a1");
+		check(a1 && a1->parent == orig,
+		      QString("to the top level, not into the node named root (%1)")
+		          .arg(shape(orig)));
+		delete orig;
+	}
+
 	section("the tree is untouched until a proposal is applied");
 	{
 		// **Two places promise this and nothing checked it.** The menu entry

@@ -33137,3 +33137,78 @@ Reverting the tags call: the address comes back `b,plain`, the title swallows
 the url and the tag key, and the tags are empty. The title check does not fail
 in the first round -- the split eats the bar either way, so the title reads
 "half price" with or without the rule, and the url is what discriminates.
+
+## A node the model called [root] swallowed everything at the top level
+
+`tree_diff` uses the string `"root"` as a sentinel: `compute` and `snapshot`
+both write it as the parent of anything at the top level, because the
+synthetic root has no id a caller should have to know. Nothing stopped a node
+from carrying that string as its own id, and two of the three places that
+resolve it disagreed about precedence.
+
+`apply` seeded its lookup with the sentinel and then filled the same map from
+the tree:
+
+    by_id.insert("root", original);
+    for (node *n : all_nodes(original)) by_id.insert(n->id, n);
+
+so any node whose id is "root" overwrites the entry. `folder_new` runs first
+-- deliberately, so a move into a new folder has somewhere to land -- and it
+inserts the id the model supplied. Measured on a proposal with four things at
+the top level, one of them a folder the model called `[root]`:
+
+    proposal   root[Everything, f1[a1,a2], f2, a3]
+    changes    folder_new root->root@0, reorder f1->root@1,
+               reorder f2->root@2, reparent a3->root@3
+    result     root[root[f1[a1,a2],f2,a3]]
+
+Every change named "root" as its parent and every one of them landed inside
+the invented folder. No tab is lost, and `check_and_repair` reported the
+proposal usable with one new folder, so the person saw a diff listing moves to
+the top level and got a single folder holding everything they had accepted.
+That is the one promise the reorganiser makes -- the tree ends up as the
+picture somebody accepted -- failing silently.
+
+`restore` had it right all along: `(e.parent_id == "root") ? root :
+by_id.value(...)` checks the sentinel **before** the map, so it cannot be
+shadowed. Same job, two implementations, one guard -- the fifth instance of
+that today, and this time both halves were in one file eighty lines apart.
+
+### Two fixes, because the gate cannot cover both entry points
+
+- **`check_and_repair` refuses a proposal that names a node "root"**, the way
+  it refuses an invented leaf id and for the same stated reason: a repair
+  would have to choose an id, and a proposal naming things it was never given
+  is not one to guess on behalf of.
+- **`apply` resolves the sentinel before the map**, matching `restore`. The
+  gate only sees the model's nodes; an ORIGINAL node carrying the id is
+  reachable too, because the outline file is meant to be readable in an
+  editor. Measured, rather than assumed: a file whose first line is
+  `- [root] folder | Hand edited` loads with `unparsed=0`, the tree takes the
+  shape the file describes, and `node_by_id("root")` afterwards returns **the
+  file's node and not the real root**. With that shape in the tree and the
+  precedence reverted, a tab moved to the top level arrived inside the
+  impostor: `root[root[a1],f1]`.
+
+  Minting is not affected -- the next folder after that load is `f-2`, since
+  `unused_id` only ever proposes `like-N` and "root" is not of that form.
+
+Sabotaged separately: dropping the gate check makes the proposal usable
+again, and reverting the precedence puts the tab back inside the impostor.
+Neither sabotage disturbs the other section, which is what says the two
+fixes are not one fix written twice.
+
+### How it was found, which is the transferable part
+
+By reading what `parse_proposal` promises. Its comment says the model's output
+is taken loosely because "the invariant check downstream is what actually
+guards correctness", so the question was what that check actually covers. The
+header says leaves: *every original leaf id appears exactly once*, folders
+being the model's to invent, rename and drop. The code is stronger than the
+header -- it dedups folders too, and rejects a leaf that turned into a folder
+-- so the gap was not where the header's wording suggested. It was in a value
+that is not an id at all.
+
+**An id namespace with a reserved word in it, and no check that real ids
+avoid it.** Worth carrying as its own lens: this tree also keys live views and
+state blobs by node id, and `snapshot` writes "root" into undo records.

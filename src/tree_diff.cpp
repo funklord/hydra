@@ -57,6 +57,29 @@ proposal_report check_and_repair(node *original, node *proposal) {
 		return rep;
 	}
 
+	// **"root" names the tree, and is not an id a node may carry.** `compute`
+	// and `snapshot` both write it as the parent of anything at the top level,
+	// so a node holding it collides with the tree itself rather than with
+	// another node -- and nothing downstream can tell the two apart.
+	//
+	// Measured before this check existed, on a proposal with four things at
+	// the top level and one of them a folder the model called [root]: `apply`
+	// created the folder, its id overwrote the real root in `apply`'s own
+	// lookup, and every later change naming "root" as its parent landed
+	// inside the folder. The shape came out root[root[f1[a1,a2],f2,a3]] --
+	// one folder holding everything the person had accepted as top level.
+	//
+	// Rejected rather than repaired, for the reason an invented leaf is: a
+	// repair would have to choose an id, and a proposal naming things it was
+	// never given is not one to guess on behalf of.
+	for (node *n : all_nodes(proposal)) {
+		if (n->id != "root")
+			continue;
+		rep.message = "Rejected: the proposal gives a node the id \"root\", "
+		               "which is the name of the tree itself.";
+		return rep;
+	}
+
 	QHash<QString, node *> original_by_id;
 	for (node *n : all_nodes(original))
 		original_by_id.insert(n->id, n);
@@ -249,9 +272,21 @@ int apply(node *original, const QList<tree_change> &changes) {
 		return 0;
 
 	QHash<QString, node *> by_id;
-	by_id.insert("root", original);
 	for (node *n : all_nodes(original))
 		by_id.insert(n->id, n);
+
+	// **The sentinel is resolved before the map, which is what `restore` has
+	// always done and this did not.** "root" is not an id; it is what
+	// `compute` and `snapshot` write when they mean the top level. Seeding
+	// the map with it instead left it shadowable by any node carrying that
+	// id -- see `check_and_repair`, which now refuses a proposal that does,
+	// and the measurement there. The gate cannot cover an ORIGINAL node
+	// holding the id, which a hand-edited tree file can produce, so the
+	// precedence is settled here as well as refused there.
+	const auto parent_for = [&](const QString &id) {
+		return id == QStringLiteral("root") ? original
+		                                     : by_id.value(id, original);
+	};
 
 	int applied = 0;
 
@@ -259,7 +294,7 @@ int apply(node *original, const QList<tree_change> &changes) {
 	for (const tree_change &c : changes) {
 		if (!c.accepted || c.kind != change_kind::folder_new)
 			continue;
-		node *parent = by_id.value(c.new_parent_id, original);
+		node *parent = parent_for(c.new_parent_id);
 		node *f   = new node;
 		f->id     = c.node_id;
 		f->type   = node_type::folder;
@@ -298,7 +333,7 @@ int apply(node *original, const QList<tree_change> &changes) {
 				// an instruction not to ask.
 				if (n->locked)
 					break;
-				node *parent = by_id.value(c.new_parent_id, original);
+				node *parent = parent_for(c.new_parent_id);
 				if (!parent || parent == n)
 					break;
 				// Refuse to move a node inside its own subtree.
