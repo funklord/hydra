@@ -5,6 +5,8 @@
 #include "kiosk_controller.h"
 #include "theme.h"
 
+#include "subscription_updater.h"
+
 #include <QDialog>
 #include <QSet>
 #include <QList>
@@ -88,10 +90,20 @@ public:
 	void accept() override;
 	void reject() override;
 
+	// **Handed in rather than taken as a fourteenth constructor argument.**
+	// The dialog is built from a list of collaborators already; one more
+	// positional pointer is one more call site to get wrong, and the
+	// subscriptions are optional -- a window with none behaves as before.
+	void set_subscription_updater(subscription_updater *up);
+
 protected:
 	void resizeEvent(QResizeEvent *event) override;
 
 signals:
+	// The set changed here: added, removed, or enabled. The window owns the
+	// live list, so it is the one that has to re-read the cached bodies.
+	void subscriptions_changed();
+
 	// **Emitted when the button was actually pressed and a clear went out.**
 	// The shell keeps caches of its own that no backend knows about -- the
 	// per-session permission answers most of all -- and the clear goes
@@ -136,6 +148,8 @@ private:
 	void build_kiosk_page(QWidget *page);
 	void build_tabs_page(QWidget *page);
 	void build_filter_page(QWidget *page);
+	void rebuild_subscriptions();
+	void write_subscriptions(const QList<subscription> &subs);
 	void rebuild_filter_list();
 	// The per-site exceptions list on the privacy page: what the shield has been
 	// used to say, gathered in one place so it can be reviewed and undone
@@ -170,6 +184,15 @@ private:
 	filter_list             *m_filters  = nullptr;
 	QString                  m_filters_path;
 	QTreeWidget             *m_filter_view   = nullptr;
+	QTreeWidget             *m_subs_view     = nullptr;
+	QLabel                  *m_subs_note     = nullptr;
+	QPushButton             *m_subs_remove   = nullptr;
+	// Not owned. The updater holds the subscription list so that this dialog
+	// and the fetcher cannot disagree about what somebody subscribed to.
+	subscription_updater    *m_sub_updater   = nullptr;
+	// Set while the view is being filled, so writing a checkbox back does not
+	// fire on the rows this is putting there.
+	bool                     m_filling_subs  = false;
 	QPushButton             *m_filter_remove = nullptr;
 	QLabel                  *m_filter_note   = nullptr;
 	consent_blocker         *m_consent       = nullptr;

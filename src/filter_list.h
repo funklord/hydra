@@ -49,6 +49,21 @@ public:
 	bool contains(const QString &text) const;
 	void add(const filter_rule &r);
 
+	// **Replace the whole set under one write lock.** For the subscribed list,
+	// which is rebuilt from the cached bodies whenever a fetch promotes one --
+	// and `request_filter` reads it from the interceptor thread while that
+	// happens. Clearing and then adding thousands of rules would take the
+	// lock thousands of times, and between any two of them a request would
+	// see a half-filled list: not a crash, since every read holds the lock,
+	// but a window in which the page somebody is loading is matched against
+	// some of the rules. One lock has no such window.
+	//
+	// Swapping the whole `filter_list` object instead would be worse: the
+	// pointer is read by another thread, and deleting the old one is how a
+	// reader is handed freed memory. The lock is the mechanism that already
+	// exists for this.
+	void replace(const QList<filter_rule> &rules);
+
 	// Take one back out, by its exact text. Accepting a rule was reversible only
 	// by hand-editing `filters-ai.txt` until now, which is a poor answer for a
 	// list built by accepting AI proposals one at a time -- the whole design

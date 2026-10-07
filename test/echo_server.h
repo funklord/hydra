@@ -37,6 +37,19 @@ public:
 	QByteArray redirect_to = "/stream";
 	int        redirects_served = 0;
 
+	// **An opt-in fixed body, for a consumer that fetches a document rather
+	// than asking what it sent.** Empty by default, so every existing user
+	// answers exactly as before -- the same shape as `redirect_from` above,
+	// and for the same reason: a second fixture class would be a second copy
+	// of the socket handling, which this file's own note argues against.
+	//
+	// `file_status` applies to a matched path only, so a test can ask what a
+	// consumer does with a 404 that still carries a body -- which is the
+	// shape a moved list server actually answers with.
+	QHash<QByteArray, QByteArray> files;
+	int        file_status = 200;
+	int        files_served = 0;
+
 	// The base url, once listening. Empty when it could not.
 	QString start() {
 		if (!listen(QHostAddress::LocalHost, 0))
@@ -72,6 +85,28 @@ protected:
 					s->write("HTTP/1.1 302 Found\r\nLocation: " + redirect_to +
 					          "\r\nContent-Length: 0\r\n"
 					          "Connection: close\r\n\r\n");
+					s->flush();
+					s->disconnectFromHost();
+					return;
+				}
+			}
+
+			if (!files.isEmpty()) {
+				const int sp = head.indexOf(' ');
+				QByteArray target =
+				  head.mid(sp + 1, head.indexOf(' ', sp + 1) - sp - 1);
+				const int q = target.indexOf('?');
+				if (q >= 0)
+					target = target.left(q);
+				const auto it = files.constFind(target);
+				if (it != files.constEnd()) {
+					++files_served;
+					const QByteArray &out = it.value();
+					s->write("HTTP/1.1 " + QByteArray::number(file_status) +
+					          " \r\nContent-Type: " + content_type +
+					          "\r\nContent-Length: " +
+					          QByteArray::number(out.size()) +
+					          "\r\nConnection: close\r\n\r\n" + out);
 					s->flush();
 					s->disconnectFromHost();
 					return;

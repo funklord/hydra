@@ -26,6 +26,8 @@
 #include <QResizeEvent>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QLocale>
+#include <QInputDialog>
 #include <QTreeWidget>
 #include <QPushButton>
 #include "filter_list.h"
@@ -1667,6 +1669,49 @@ void settings_dialog::rebuild_exceptions() {
 		      .arg(m_dropped_patterns.size()));
 }
 
+void settings_dialog::set_subscription_updater(subscription_updater *up) {
+	m_sub_updater = up;
+	if (up)
+		connect(up, &subscription_updater::updated, this,
+		         [this](int, int) { rebuild_subscriptions(); });
+	rebuild_subscriptions();
+}
+
+void settings_dialog::write_subscriptions(const QList<subscription> &subs) {
+	if (!m_sub_updater)
+		return;
+	if (!m_sub_updater->set_subscriptions(subs))
+		m_subs_note->setText("The subscription list could not be saved, so "
+		                      "this holds for the session only.");
+	rebuild_subscriptions();
+	emit subscriptions_changed();
+}
+
+void settings_dialog::rebuild_subscriptions() {
+	if (!m_subs_view)
+		return;
+	m_filling_subs = true;
+	m_subs_view->clear();
+	if (m_sub_updater) {
+		for (const subscription &s : m_sub_updater->subscriptions()) {
+			auto *row = new QTreeWidgetItem(m_subs_view);
+			row->setText(0, s.name.isEmpty() ? s.url.host() : s.name);
+			row->setToolTip(0, s.url.toString());
+			row->setFlags(row->flags() | Qt::ItemIsUserCheckable);
+			row->setCheckState(0, s.enabled ? Qt::Checked : Qt::Unchecked);
+			row->setText(1, s.fetched.isValid()
+			                  ? QLocale().toString(s.fetched,
+			                                        QLocale::ShortFormat)
+			                  : QStringLiteral("never"));
+			row->setText(2, s.note);
+		}
+	}
+	m_subs_view->resizeColumnToContents(0);
+	m_subs_view->resizeColumnToContents(1);
+	m_filling_subs = false;
+	m_subs_remove->setEnabled(false);
+}
+
 void settings_dialog::build_filter_page(QWidget *page) {
 	auto *v = new QVBoxLayout(page);
 	auto *intro = new QLabel(
@@ -1697,6 +1742,140 @@ void settings_dialog::build_filter_page(QWidget *page) {
 	m_filter_note->setObjectName("filter_note");
 	m_filter_note->setWordWrap(true);
 	v->addWidget(m_filter_note);
+
+	// --- Subscribed lists (architecture doc sec 12.5) -------------------
+	v->addWidget(section_heading("Subscribed lists", page));
+	auto *subs_intro = new QLabel(
+	  "Upstream filter lists, kept apart from the rules above so that an "
+	  "update never touches what you accepted here. A fetch that does not "
+	  "come back as a filter list is refused and the copy in hand stays in "
+	  "force. What this build takes from a list is counted beside it: "
+	  "exceptions, rules carrying options and scriptlets are read and not "
+	  "enforced, so the number is what is working rather than what the file "
+	  "holds.", page);
+	subs_intro->setWordWrap(true);
+	v->addWidget(subs_intro);
+
+	m_subs_view = new QTreeWidget(page);
+	m_subs_view->setObjectName("subscriptions");
+	m_subs_view->setColumnCount(3);
+	m_subs_view->setHeaderLabels({ "List", "Last fetch",
+	                                "What this build took" });
+	m_subs_view->setRootIsDecorated(false);
+	v->addWidget(m_subs_view, 1);
+
+	auto *srow = new QHBoxLayout;
+	auto *subs_add = new QPushButton("&Add...", page);
+	subs_add->setObjectName("subs_add");
+	srow->addWidget(subs_add);
+	m_subs_remove = new QPushButton("Re&move", page);
+	m_subs_remove->setObjectName("subs_remove");
+	m_subs_remove->setEnabled(false);
+	srow->addWidget(m_subs_remove);
+	auto *subs_update = new QPushButton("&Update now", page);
+	subs_update->setObjectName("subs_update");
+	srow->addWidget(subs_update);
+	srow->addStretch(1);
+	v->addLayout(srow);
+
+	m_subs_note = new QLabel(page);
+	m_subs_note->setObjectName("subs_note");
+	m_subs_note->setWordWrap(true);
+	v->addWidget(m_subs_note);
+
+	connect(m_subs_view, &QTreeWidget::itemSelectionChanged, this, [this] {
+		m_subs_remove->setEnabled(
+		  m_sub_updater && !m_subs_view->selectedItems().isEmpty());
+	});
+
+	// **The checkbox is the enable, written straight back.** A setting that
+	// takes effect only when some other button is pressed is a setting people
+	// believe they have changed.
+	connect(m_subs_view, &QTreeWidget::itemChanged, this,
+	         [this](QTreeWidgetItem *item, int column) {
+		if (m_filling_subs || !m_sub_updater || column != 0)
+			return;
+		const int row = m_subs_view->indexOfTopLevelItem(item);
+		QList<subscription> subs = m_sub_updater->subscriptions();
+		if (row < 0 || row >= subs.size())
+			return;
+		subs[row].enabled = item->checkState(0) == Qt::Checked;
+		write_subscriptions(subs);
+		// Newly enabled with nothing cached has nothing to enforce until it
+		// has been fetched, so it is fetched rather than left looking on.
+		if (subs.at(row).enabled && subs.at(row).fetched.isNull())
+			m_sub_updater->update(true);
+	});
+
+	connect(subs_add, &QPushButton::clicked, this, [this] {
+		if (!m_sub_updater)
+			return;
+		bool ok = false;
+		const QString typed =
+		  QInputDialog::getText(this, "Add a subscribed list",
+		                         "Address of the filter list:",
+		                         QLineEdit::Normal, QString(), &ok).trimmed();
+		if (!ok || typed.isEmpty())
+			return;
+		const QUrl url(typed);
+		if (!url.isValid() || (url.scheme() != QLatin1String("https") &&
+		                        url.scheme() != QLatin1String("http"))) {
+			m_subs_note->setText("That is not an http or https address.");
+			return;
+		}
+		QList<subscription> subs = m_sub_updater->subscriptions();
+		for (const subscription &s : subs) {
+			if (s.url != url)
+				continue;
+			m_subs_note->setText("That list is already subscribed.");
+			return;
+		}
+		subscription s;
+		// **A name from the address rather than a second prompt.** The file's
+		// own name where it has one, the host where it does not -- both are
+		// what somebody would have typed, and neither is worth a dialog.
+		s.name = url.fileName().isEmpty() ? url.host() : url.fileName();
+		s.url  = url;
+		s.file = filter_subscription::mint_cache_name(m_sub_updater->dir(),
+		                                               s.name);
+		subs.push_back(s);
+		write_subscriptions(subs);
+		// Fetched at once: somebody who has just typed a url should find out
+		// now whether it was the right one, not in a day.
+		if (m_sub_updater->update(true) > 0)
+			m_subs_note->setText(QString("Added %1, and fetching it now.")
+			                          .arg(s.name));
+	});
+
+	connect(m_subs_remove, &QPushButton::clicked, this, [this] {
+		if (!m_sub_updater || m_subs_view->selectedItems().isEmpty())
+			return;
+		const int row =
+		  m_subs_view->indexOfTopLevelItem(m_subs_view->selectedItems().first());
+		QList<subscription> subs = m_sub_updater->subscriptions();
+		if (row < 0 || row >= subs.size())
+			return;
+		const subscription gone = subs.takeAt(row);
+		// **The cached body goes with it, by the name the index gave it.** A
+		// body nothing references is debris, and this is a file this program
+		// wrote into a directory it made -- named, not matched.
+		if (!gone.file.isEmpty())
+			QFile::remove(QDir(m_sub_updater->dir()).filePath(gone.file));
+		write_subscriptions(subs);
+		m_subs_note->setText(QString("Removed %1. The rules it contributed are "
+		                              "gone with it; yours are untouched.")
+		                          .arg(gone.name));
+	});
+
+	connect(subs_update, &QPushButton::clicked, this, [this] {
+		if (!m_sub_updater)
+			return;
+		const int due = m_sub_updater->update(true);
+		m_subs_note->setText(due > 0
+		  ? QString("Fetching %1 list(s)...").arg(due)
+		  : QString("Nothing to fetch: no list here is enabled with an "
+		             "address."));
+	});
 
 	connect(m_filter_view, &QTreeWidget::itemSelectionChanged, this, [this] {
 		m_filter_remove->setEnabled(!m_filter_view->selectedItems().isEmpty());

@@ -3022,12 +3022,65 @@ bool main_window::load_tree(const QString &path) {
 	// a list that did not block the first page.
 	m_subs_index = dir + "/filters-subscribed.json";
 	m_subs_dir   = dir + "/filters-subscribed";
+	// **Re-pointed at the new tree's directory, like every other path here.**
+	// A fetch in flight is abandoned with its reply, which loses that fetch
+	// and nothing else: a body is written with `QSaveFile` and the index at
+	// the end of a pass, so there is no half-written state to inherit.
+	delete m_sub_updater;
+	m_sub_updater = new subscription_updater(m_subs_index, m_subs_dir, this);
+	connect(m_sub_updater, &subscription_updater::note, this,
+	         [this](const QString &text) {
+		if (m_status)
+			m_status->showMessage(text, 8000);
+	});
+	connect(m_sub_updater, &subscription_updater::updated, this,
+	         [this](int promoted, int refused) {
+		// **Rebuilt only when something was promoted.** A pass in which every
+		// fetch was refused changed no cached body, so re-reading them would
+		// be work with a guaranteed result -- and the message has to say that
+		// the copies in hand stay in force, or a refusal reads as blocking
+		// having stopped.
+		if (promoted > 0) {
+			const int rules = load_subscriptions();
+			if (m_status)
+				m_status->showMessage(
+				  QString("%1 subscription(s) updated — %2 rule(s) in force.")
+				      .arg(promoted).arg(rules), 8000);
+		} else if (refused > 0 && m_status) {
+			m_status->showMessage(
+			  QString("%1 subscription(s) could not be updated; the copies "
+			           "in hand stay in force.").arg(refused), 8000);
+		}
+	});
+
 	const int subscribed_rules = load_subscriptions();
 	if (m_filter)
 		m_filter->set_subscription_list(m_subscribed);
 	if (qEnvironmentVariableIsSet("HYDRA_FILTER_DEBUG"))
 		qWarning("subscriptions: %lld list(s), %d rule(s) in force",
-		          static_cast<long long>(m_subs.size()), subscribed_rules);
+		          static_cast<long long>(
+		            m_sub_updater->subscriptions().size()),
+		          subscribed_rules);
+
+	// **Not on startup, and not on a short interval.** A list changes over a
+	// day and the cached copy is in force meanwhile, so the first check waits
+	// until the window has finished opening -- fetching while the first page
+	// is loading spends the network somebody is waiting on -- and after that
+	// it is every six hours, which only matters to a session left running.
+	// `update()` decides what is actually due; this only asks.
+	if (!m_subs_timer) {
+		m_subs_timer = new QTimer(this);
+		m_subs_timer->setInterval(6 * 60 * 60 * 1000);
+		connect(m_subs_timer, &QTimer::timeout, this, [this] {
+			if (m_sub_updater)
+				m_sub_updater->update();
+		});
+	}
+	m_subs_timer->start();
+	QTimer::singleShot(60000, this, [this] {
+		if (m_sub_updater)
+			m_sub_updater->update();
+	});
 
 	// Consent-banner rules, beside the rest and in the same spirit: data, not
 	// code. The built-in set is always present; the file adds to it. This is
@@ -5568,9 +5621,15 @@ QString main_window::address_of(const node *n) const {
 }
 
 int main_window::load_subscriptions() {
-	m_subs = filter_subscription::load_index(m_subs_index);
+	if (!m_sub_updater || !m_subscribed)
+		return 0;
+	// **Accumulated and then installed in one call.** `filter_list::replace`
+	// takes the write lock once, so the interceptor thread never sees a
+	// half-filled list -- adding rule by rule would leave a window in which
+	// the page being loaded is matched against some of them.
+	QList<filter_rule> all;
 	int taken = 0;
-	for (subscription &sub : m_subs) {
+	for (const subscription &sub : m_sub_updater->subscriptions()) {
 		if (!sub.enabled || sub.file.isEmpty())
 			continue;
 		QFile body(QDir(m_subs_dir).filePath(sub.file));
@@ -5579,7 +5638,6 @@ int main_window::load_subscriptions() {
 			// loud rather than treated as an empty list, because those are
 			// different facts: one is a subscription that has never fetched
 			// and the other is one whose cache has gone.
-			sub.note = QStringLiteral("the cached copy could not be read");
 			qWarning("subscriptions: %s names %s, which could not be read",
 			          qPrintable(sub.name), qPrintable(sub.file));
 			continue;
@@ -5587,7 +5645,6 @@ int main_window::load_subscriptions() {
 		const subscription_read rep = filter_subscription::read(
 		  QString::fromUtf8(body.readAll()));
 		if (!rep.ok()) {
-			sub.note = rep.refusal;
 			qWarning("subscriptions: %s refused: %s", qPrintable(sub.name),
 			          qPrintable(rep.refusal));
 			continue;
@@ -5599,12 +5656,15 @@ int main_window::load_subscriptions() {
 			// question a person asks of a rule they did not write. Nothing
 			// else can answer it once the rules are in one list.
 			r.note = sub.name;
-			m_subscribed->add(r);
+			all.push_back(r);
 		}
-		sub.rules = rep.accepted;
-		sub.note  = rep.summary();
 		taken += rep.accepted;
 	}
+	// **The counts stay the fetcher's.** Writing them back from here would
+	// make the index say what this build read on this launch rather than what
+	// the last fetch produced, and the difference between those two is exactly
+	// what a reader needs when a build starts reading more of a list.
+	m_subscribed->replace(all);
 	return taken;
 }
 
@@ -6537,6 +6597,14 @@ void main_window::open_settings() {
 	                     m_annoyances);
 	connect(&dlg, &settings_dialog::browsing_data_cleared, this,
 	         &main_window::forget_shell_caches);
+	// **The dialog edits the subscription list; the live rules are this
+	// window's.** Adding, removing or disabling one changes what should be in
+	// force immediately, and re-reading the cached bodies is the only thing
+	// that can do it -- the dialog has no filter list and no interceptor.
+	dlg.set_subscription_updater(m_sub_updater);
+	connect(&dlg, &settings_dialog::subscriptions_changed, this, [this] {
+		load_subscriptions();
+	});
 	// Cleared and written here rather than in the dialog: the dialog holds the
 	// log only to decide whether to offer the control, and this is where the
 	// file's path lives. Doing the two halves in two places is how a store

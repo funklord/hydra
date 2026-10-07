@@ -226,6 +226,25 @@ bool filter_list::contains_locked(const QString &text) const {
 	return false;
 }
 
+void filter_list::replace(const QList<filter_rule> &rules) {
+	QWriteLocker locker(&m_lock);
+	m_rules.clear();
+	m_compiled.clear();
+	m_by_host.clear();
+	m_by_token.clear();
+	m_untokenised.clear();
+	for (const filter_rule &r : rules) {
+		// `contains_locked` rather than trusting the caller: two subscriptions
+		// overlap by design -- an annoyance list and a base list share rules --
+		// and a duplicate in the index is a duplicate in every bucket it is
+		// filed under.
+		if (contains_locked(r.text))
+			continue;
+		m_rules.push_back(r);
+		index_one(m_rules.size() - 1);
+	}
+}
+
 void filter_list::add(const filter_rule &r) {
 	QWriteLocker locker(&m_lock);
 	if (!contains_locked(r.text)) {

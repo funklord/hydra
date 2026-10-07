@@ -33619,3 +33619,112 @@ Sabotage: renaming the button's object name gives *"no such button"* in both
 states, and dropping the `emit` gives *"fired=0 accepted=1"* -- so the test
 separates a button that is there from one that is wired, which is the
 distinction this tree keeps paying for elsewhere.
+
+## Fetching the subscribed lists, and what a refusal has to leave alone
+
+`subscription_updater` is the other half of sec 12.5: one request at a time,
+the gate in front of every write, and a refusal that changes nothing.
+
+**The failure it is built against is a 200 with the wrong body in it.** A
+network error is easy and loud; what is dangerous is a login page, an error
+page or a half-migrated mirror answered with a success code, because promoting
+one replaces a working list with one that blocks nothing. Sabotaged by
+ignoring the gate's verdict, the measurement is exactly that: the cached body
+becomes the HTML page, the rule count drops from three to **zero**, and five
+assertions go red at once. That is ad blocking turning itself off, and from
+outside it looks like an upstream that got quieter.
+
+So the order is fixed: fetch, gate, then write. The body is written with
+`QSaveFile` and the index at the end of a pass, so there is no half-written
+state to inherit -- which is also what makes abandoning a fetch in flight
+safe when the window is re-pointed at another tree.
+
+### Bounded from both ends, because one bound cannot do it
+
+    setTransferTimeout(30s)    a server that accepts and then says nothing
+    downloadProgress > 32 MB   a body that keeps coming
+    maxRedirects = 5           a redirect loop
+    NoLessSafeRedirectPolicy   https downgraded to http on the way
+
+The size check needs bytes to arrive before it can fire, so it cannot stop a
+silent server; the timeout cannot stop a server that sends for ever. Each
+covers the other's blind spot, which is the reason both are there.
+
+### Qt calls a 404 an error, and its words for one are no use
+
+The first version of the status message lost to this: a 404 arrives as
+`QNetworkReply::ContentNotFoundError`, so the error branch answered first and
+the note read *"Error transferring http://127.0.0.1:34467/good.txt"* -- which
+tells a person nothing they did not know. A list answering 404 has **moved**,
+and that is the one thing worth reading, so the status is preferred wherever
+the reply carries one and Qt's text is the fallback for a connection that
+never got that far.
+
+Found by a test that asked for the status and got the transfer message, which
+is the useful kind of failure: the behaviour was already right and the message
+was not.
+
+### Not on startup, and not on a short interval
+
+The first check waits a minute after the window opens -- fetching while the
+first page loads spends the network somebody is waiting on -- and after that
+it is every six hours, which only matters to a session left running. Anything
+fetched within the last day is not due, so a browser opened and closed all day
+fetches once. `Update now` in the settings forces a pass, and adding a
+subscription fetches it at once: somebody who has just typed a url should find
+out now whether it was the right one rather than in a day.
+
+### What is not covered, said rather than implied
+
+The settings glue -- the list, Add, Remove, the enable checkbox -- is
+untested. `settings_dialog` takes a dozen collaborators to construct and no
+suite builds one, so reaching that code means a fixture larger than the code
+it would check. The logic under it is covered: the gate, the promote and
+refuse paths, the index round trip, the cache naming and what each refusal
+leaves alone, over 69 checks with four sabotages. The glue's own risks are the
+row-to-subscription index mapping and the checkbox writing back during a
+rebuild, which is why the rebuild sets a flag the handler reads rather than
+relying on the order of signals.
+
+**The shared fixture grew a `files` map rather than a second server.**
+`echo_server` answers with the request's own headers, which is no use to a
+consumer that fetches a document, and its own note says a second copy of a
+behaviour is a second thing to be wrong. `files` is empty by default, so the
+two suites already using it answer exactly as before -- the same shape as
+`redirect_from`, added earlier for the same reason -- and `file_status` lets a
+test ask what happens to a 404 that still carries a body, which is what a
+moved list server actually sends.
+
+### A stale fmake cache under-linked three programs, and the link error was elsewhere
+
+Adding the subscription UI to `settings_dialog` gave that object two new
+undefined symbols. Two regenerations of `objsets.mk` did not notice: the 39
+programs that reach the code through `main_window` got the new objects, and
+the three that reach it through `settings_dialog` **without** `main_window`
+did not -- so `make test` stopped on `test_probe_ui`, a suite that has
+nothing to do with filters, with
+
+    settings_dialog.cpp:1839: undefined reference to
+        filter_subscription::mint_cache_name(QString const&, QString const&)
+
+The cause is `.fmake/cache.json`: fmake kept `settings_dialog.o`'s old symbol
+table, so the closure for a program that depends on it never learned the new
+edge. Measured rather than guessed -- **two warm runs missed it and one cold
+run found it, with no source change in between.** Removing the cache and
+regenerating added exactly the three objects to exactly those three programs.
+
+**Signalled to fmake rather than worked around here**, per
+`harmonization.md`: this tree holds the reproduction and fmake holds the
+reasons. What makes it worth their time is the shape of the failure, not its
+size: it under-links rather than over-links, so it fails at the link step
+rather than silently -- but it fails in a program the change never touched,
+which is the expensive part. It cost two regenerations here before the cache
+was suspected.
+
+The invariant to assert after any regeneration is the one this document keeps
+arriving at: parse both files into a multiset of objects per program and
+require every difference to be a named new object. Done here, the result is
+46 programs unchanged, 39 gaining the updater and its moc, 3 gaining those
+and `filter_subscription.o`, and 0 differing in any other way -- 87 objects,
+which is 39x2 + 3x3. A stale cache shows up in that table as a program that
+did not gain what it should have, which is exactly how this was found.

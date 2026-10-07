@@ -12,11 +12,15 @@
 // turn ad blocking off without saying so.
 #include "filter_subscription.h"
 #include "filter_list.h"
+#include "subscription_updater.h"
+#include "echo_server.h"
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QFile>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -25,6 +29,15 @@ static void check(bool ok, const QString &w) {
 	else    { ++g_fail; std::printf("  FAIL  %s\n", qPrintable(w)); }
 }
 static void section(const char *n) { std::printf("\n== %s ==\n", n); }
+
+// A real event loop against a timer. `processEvents` returns as soon as the
+// queue is empty, which on a fetch that has not answered yet is immediately --
+// the fixture fault another suite paid for and recorded.
+static void spin(int ms) {
+	QEventLoop loop;
+	QTimer::singleShot(ms, &loop, &QEventLoop::quit);
+	loop.exec();
+}
 
 using filter_subscription::line_kind;
 
@@ -307,6 +320,118 @@ int main(int argc, char **argv) {
 		       QString("a taken name steps aside (%1)")
 		           .arg(filter_subscription::mint_cache_name(dir.path(),
 		                                                      "EasyList")));
+	}
+
+	section("a fetch is promoted only when the body is a list");
+	{
+		// **The case this whole class is built for.** A list server that
+		// answers 200 with a login page, an error page or a half-migrated
+		// mirror would otherwise overwrite a working list with one that
+		// blocks nothing -- ad blocking off, silently, looking exactly like
+		// an upstream that got quieter. So the interesting assertion is not
+		// that a good body is taken; it is that a bad one changes nothing.
+		echo_server srv;
+		srv.content_type = "text/plain";
+		const QString base = srv.start();
+		check(!base.isEmpty(), "a local list server is listening");
+		const QByteArray good =
+		  "[Adblock Plus 2.0]\n! Title: Good\n"
+		  "||ads.example.com^\n||track.example.net^\nexample.com##.ad-slot\n";
+		srv.files["/good.txt"] = good;
+		srv.files["/page.txt"] =
+		  "<!DOCTYPE html>\n<html><body>Sign in</body></html>\n";
+
+		QTemporaryDir scratch;
+		check(scratch.isValid(), "a scratch directory");
+		const QString index = QDir(scratch.path()).filePath("subs.json");
+		const QString cache = QDir(scratch.path()).filePath("bodies");
+
+		subscription_updater up(index, cache);
+		subscription one;
+		one.name = "Good";
+		one.url  = QUrl(base + "/good.txt");
+		one.file = "good.txt";
+		check(up.set_subscriptions({ one }), "the subscription is recorded");
+
+		int promoted = -1, refused = -1;
+		QObject::connect(&up, &subscription_updater::updated,
+		                  [&promoted, &refused](int p, int r) {
+			promoted = p;
+			refused  = r;
+		});
+
+		check(up.update(true) == 1, "one subscription is due when forced");
+		for (int i = 0; i < 200 && promoted < 0; ++i)
+			spin(25);
+		check(promoted == 1 && refused == 0,
+		       QString("it is promoted (promoted=%1 refused=%2)")
+		           .arg(promoted).arg(refused));
+		const QString body_path = QDir(cache).filePath("good.txt");
+		check(QFile::exists(body_path),
+		       "the body is cached under the name the index gave it");
+		const auto slurp = [](const QString &p) {
+			QFile f(p);
+			f.open(QIODevice::ReadOnly);
+			return f.readAll();
+		};
+		check(slurp(body_path) == good,
+		       "exactly as fetched, not as parsed");
+		check(up.subscriptions().size() == 1 &&
+		          up.subscriptions().first().rules == 3,
+		       QString("three rules counted (%1)")
+		           .arg(up.subscriptions().isEmpty()
+		                  ? -1 : up.subscriptions().first().rules));
+		check(!up.subscriptions().first().fetched.isNull(),
+		       "and the time of the fetch recorded");
+
+		// **Now the same subscription answered with a web page.** Nothing
+		// about the working copy may move: not the body, not the count, not
+		// the fetch time.
+		const QDateTime was = up.subscriptions().first().fetched;
+		QList<subscription> subs = up.subscriptions();
+		subs[0].url = QUrl(base + "/page.txt");
+		up.set_subscriptions(subs);
+		promoted = refused = -1;
+		check(up.update(true) == 1, "it is fetched again");
+		for (int i = 0; i < 200 && promoted < 0; ++i)
+			spin(25);
+		check(promoted == 0 && refused == 1,
+		       QString("and refused (promoted=%1 refused=%2)")
+		           .arg(promoted).arg(refused));
+		check(slurp(body_path) == good,
+		       "the cached body is the one that worked");
+		check(up.subscriptions().first().rules == 3,
+		       QString("the count did not move (%1)")
+		           .arg(up.subscriptions().first().rules));
+		check(up.subscriptions().first().fetched == was,
+		       "nor the time of the last good fetch");
+		check(up.subscriptions().first().note.contains("web page"),
+		       QString("and the note says why (%1)")
+		           .arg(up.subscriptions().first().note.left(60)));
+
+		// A 404 that still carries a body, which is what a moved list server
+		// answers with. Qt calls that a successful reply.
+		srv.file_status = 404;
+		subs = up.subscriptions();
+		subs[0].url = QUrl(base + "/good.txt");
+		up.set_subscriptions(subs);
+		promoted = refused = -1;
+		up.update(true);
+		for (int i = 0; i < 200 && promoted < 0; ++i)
+			spin(25);
+		check(promoted == 0 && refused == 1,
+		       QString("a 404 with a body is refused (promoted=%1 refused=%2)")
+		           .arg(promoted).arg(refused));
+		check(up.subscriptions().first().note.contains("404"),
+		       QString("naming the status (%1)")
+		           .arg(up.subscriptions().first().note.left(50)));
+		check(slurp(body_path) == good, "and the good copy is still there");
+
+		// Nothing is due when the last good fetch is recent and it is not
+		// forced -- which is what stops a browser re-fetching every launch.
+		srv.file_status = 200;
+		check(up.update(false) == 0,
+		       "nothing is due an hour after a fetch");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

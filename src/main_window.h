@@ -5,6 +5,7 @@
 #include "site_rules.h"
 #include "session_mirror.h"   // for the mirror and imported_tab
 #include "filter_subscription.h"   // for the subscribed lists' index
+#include "subscription_updater.h"
 
 #include <QWidget>
 #include <QHash>
@@ -738,7 +739,11 @@ public:
 	QString             m_filters_path;
 	QString             m_subs_index;      // filters-subscribed.json
 	QString             m_subs_dir;        // filters-subscribed/, the bodies
-	QList<subscription> m_subs;
+	// **The updater owns the subscription list**, so the settings UI and the
+	// fetcher cannot disagree about what somebody subscribed to. This window
+	// reads it from there and never keeps a copy.
+	subscription_updater *m_sub_updater = nullptr;
+	QTimer              *m_subs_timer   = nullptr;
 	QAction            *m_kiosk_action  = nullptr;
 	QAction            *m_undo_action   = nullptr;
 	QAction            *m_reopen_action = nullptr;
