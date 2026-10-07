@@ -34164,3 +34164,53 @@ one; the third overlaps what `json-prune` already does by wrapping
 `Response.prototype.json`. And no `trusted-*` scriptlet, for the reason
 recorded with the first two: the first of those belongs with whatever UI says
 which lists are trusted, and there is none.
+
+## remove-attr and remove-class, and two hazards they bring with them
+
+Thirteen in the catalog now. These two were recorded as absent last time
+because they are the first that reach for the DOM rather than for a global,
+and that brings two things the others did not.
+
+**A selector arrives from a filter list.** `remove-attr, href, *` takes the
+address off every link on the page. `site_rules` already refuses exactly that
+for a container rule -- `*`, `body`, `html`, `div`, "matches the whole page" --
+so `why_selector_too_broad` is exported from there and the four names live in
+one place. Two callers, one list, and the cost differs only in what acts on the
+match: pressing every button there, stripping every element here.
+
+That is the second guard shared out of `site_rules` in a day; the first was
+`why_pattern_backtracks`. Both went the same way: the refusal already existed,
+written for a case with the same shape, and the alternative was a second copy
+that would drift.
+
+**An observer could run for the life of the page.** A `MutationObserver` that
+queries the document on every mutation is a cost paid on every page the rule
+matches, and most rules want the elements gone as the page builds rather than
+policed for ever. So it stops after sixty-four passes or ten seconds, whichever
+comes first, and `stay` in the third argument is uBlock's way of asking for the
+other thing. Both halves are asserted: seventy mutations with the default
+disconnect it, seventy with `stay` do not, and each pass is shown to sweep --
+or the observer would be a timer that does nothing.
+
+### With no selector, the names are the selector
+
+`remove-attr, href` means the elements carrying `href`, which is `[href]`;
+`remove-class, promo sponsored` means `.promo,.sponsored`. That is uBlock's
+default and the only sensible one, because a rule that named no elements would
+otherwise have to mean all of them -- which is the case the refusal above
+exists to stop. Sabotaging the derivation makes the selector `onclick`, which
+matches nothing, and two checks say so.
+
+A selector the engine refuses is a mistyped rule rather than an emergency: the
+sweep finds nothing and the page carries on. Asserted with a fixture whose
+`querySelectorAll` throws.
+
+### What the catalog now covers, and what it does not
+
+Thirteen scriptlets, and the count is asserted in one place so that a name
+added without a test is an entry nothing ran. Still absent: the
+`json-prune-fetch-response` family, which overlaps what `json-prune` already
+does by wrapping `Response.prototype.json`, and every `trusted-*` scriptlet,
+for the reason recorded when the catalog was first written -- the first of
+those belongs with whatever UI says which lists are trusted, and there is
+none.

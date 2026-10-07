@@ -57,6 +57,33 @@ window.RTCPeerConnection = function () { this.real = true; };
 window.Promise = { resolve: function (v) { return { then: function (f) {
 	f(v); return this; } }; } };
 document.currentScript = null;
+document.documentElement = { tag: 'html' };
+document.addEventListener = function (n, f) { window.__domReady = f; };
+// A page with three elements in it, and a record of what was asked for.
+window.__sel = null;
+window.__gone = [];
+var mkel = function (name) {
+	return {
+		name: name,
+		removeAttribute: function (a) { window.__gone.push(name + ':attr:' + a); },
+		classList: {
+			remove: function (c) { window.__gone.push(name + ':class:' + c); }
+		}
+	};
+};
+window.__nodes = [mkel('one'), mkel('two')];
+document.querySelectorAll = function (sel) {
+	window.__sel = String(sel);
+	if (String(sel).indexOf('!broken') >= 0) throw new Error('bad selector');
+	return window.__nodes;
+};
+window.__observers = [];
+window.MutationObserver = function (cb) {
+	this.cb = cb;
+	this.live = true;
+	this.observe = function () { window.__observers.push(this); };
+	this.disconnect = function () { this.live = false; };
+};
 )JS";
 
 static void give_window(QJSEngine *eng, const char *host = "x.test") {
@@ -108,7 +135,8 @@ int main(int argc, char **argv) {
 		// scriptlet; it does not carry one. Anything this build has not
 		// implemented and reviewed does not run.
 		for (const char *no : { "trusted-set-cookie", "trusted-replace-fetch",
-		                         "aost", "remove-attr", "eval", "" }) {
+		                         "aost", "json-prune-fetch-response",
+		                         "eval", "" }) {
 			check(!scriptlets::vetted(QString::fromLatin1(no)),
 			       QString("\"%1\" is not in the catalog")
 			           .arg(QString::fromLatin1(no)));
@@ -368,8 +396,10 @@ int main(int argc, char **argv) {
 			                 QString::fromLatin1(p.canonical),
 			                 ok ? c.name : why));
 		}
-		check(scriptlets::names().size() == 11,
-		       QString("eleven scriptlets in the catalog (%1)")
+		// The count lives here, once. It moves when the catalog does, which
+		// is the point: a name added without a test is an entry nothing ran.
+		check(scriptlets::names().size() == 13,
+		       QString("thirteen scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 	}
 
@@ -547,6 +577,110 @@ int main(int argc, char **argv) {
 		       "a value outside the vocabulary still evaluates");
 		check(ask(&eng3, "String(typeof window.__store.note)") == "undefined",
 		       "and stores nothing");
+	}
+
+	section("taking an attribute or a class off what a selector names");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		check(run_one(&eng, "remove-attr", { "onclick" }).isEmpty(),
+		       "remove-attr evaluates");
+		// **With no selector, the names are the selector.** A rule that named
+		// no elements would otherwise have to mean all of them.
+		check(ask(&eng, "window.__sel") == "[onclick]",
+		       QString("the selector defaults to the attribute (%1)")
+		           .arg(ask(&eng, "window.__sel")));
+		check(ask(&eng, "window.__gone.join(',')") ==
+		          "one:attr:onclick,two:attr:onclick",
+		       QString("and it comes off every element found (%1)")
+		           .arg(ask(&eng, "window.__gone.join(',')")));
+
+		QJSEngine eng2;
+		give_page(&eng2);
+		check(run_one(&eng2, "rc", { "promo sponsored" }).isEmpty(),
+		       "remove-class evaluates, by its alias");
+		check(ask(&eng2, "window.__sel") == ".promo,.sponsored",
+		       QString("two classes make two selectors (%1)")
+		           .arg(ask(&eng2, "window.__sel")));
+		check(ask(&eng2, "window.__gone.join(',')").contains("one:class:promo") &&
+		          ask(&eng2, "window.__gone.join(',')")
+		              .contains("two:class:sponsored"),
+		       QString("and both come off both elements (%1)")
+		           .arg(ask(&eng2, "window.__gone.join(',')")));
+
+		// A selector given explicitly is used as given.
+		QJSEngine eng3;
+		give_page(&eng3);
+		check(run_one(&eng3, "remove-attr",
+		               { "href", "a.promo-link" }).isEmpty(),
+		       "a selector may be given");
+		check(ask(&eng3, "window.__sel") == "a.promo-link",
+		       QString("and is used verbatim (%1)")
+		           .arg(ask(&eng3, "window.__sel")));
+
+		// A mistyped selector is a mistyped rule, not an emergency.
+		QJSEngine eng4;
+		give_page(&eng4);
+		check(run_one(&eng4, "remove-attr", { "href", "!broken" }).isEmpty(),
+		       "a selector the engine refuses does not break the script");
+		check(ask(&eng4, "window.__gone.length") == "0",
+		       QString("and removes nothing (%1)")
+		           .arg(ask(&eng4, "window.__gone.length")));
+	}
+
+	section("the observer stops, unless the rule asked it to stay");
+	{
+		// **An observer that queries the document on every mutation for the
+		// life of the page is a cost paid on every page the rule matches**,
+		// and most rules want the elements gone as the page builds rather
+		// than policed for ever.
+		QJSEngine eng;
+		give_page(&eng);
+		run_one(&eng, "remove-attr", { "onclick" });
+		check(ask(&eng, "window.__observers.length") == "1",
+		       QString("it observes (%1)")
+		           .arg(ask(&eng, "window.__observers.length")));
+		eng.evaluate("for (var i = 0; i < 70; i++) window.__observers[0].cb();");
+		check(ask(&eng, "String(window.__observers[0].live)") == "false",
+		       QString("and gives up after its budget (%1)")
+		           .arg(ask(&eng, "String(window.__observers[0].live)")));
+
+		QJSEngine eng2;
+		give_page(&eng2);
+		run_one(&eng2, "remove-attr", { "onclick", "", "stay" });
+		eng2.evaluate("for (var i = 0; i < 70; i++) "
+		               "window.__observers[0].cb();");
+		check(ask(&eng2, "String(window.__observers[0].live)") == "true",
+		       QString("while `stay` keeps it (%1)")
+		           .arg(ask(&eng2, "String(window.__observers[0].live)")));
+		// It also sweeps again on each mutation, which is the point of
+		// observing at all.
+		check(ask(&eng2, "window.__gone.length").toInt() > 2,
+		       QString("and each pass sweeps (%1)")
+		           .arg(ask(&eng2, "window.__gone.length")));
+	}
+
+	section("a selector that names the whole page is refused");
+	{
+		// **The refusal a container rule gets, for the same reason.**
+		// `remove-attr, href, *` would take the address off every link.
+		for (const char *broad : { "*", "body", "html", "div" }) {
+			scriptlet_call c;
+			QString why;
+			const bool kept = scriptlets::parse_call(
+			  QString("remove-attr, href, ") + QString::fromLatin1(broad),
+			  &c, &why);
+			check(!kept && why.contains("selector"),
+			       QString("\"%1\" is refused (%2)")
+			           .arg(QString::fromLatin1(broad),
+			                 kept ? QStringLiteral("kept") : why));
+		}
+		scriptlet_call c;
+		QString why;
+		check(scriptlets::parse_call("remove-attr, href, a.promo", &c, &why),
+		       "while a specific one is kept");
+		check(scriptlets::parse_call("remove-attr, onclick", &c, &why),
+		       "as is leaving the selector out");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

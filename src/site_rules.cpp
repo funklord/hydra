@@ -149,6 +149,13 @@ QString site_rules::why_pattern_backtracks(const QString &pattern) {
 	return quantified_group(pattern);
 }
 
+QString site_rules::why_selector_too_broad(const QString &selector) {
+	const QString v = selector.trimmed();
+	if (v == "*" || v == "body" || v == "html" || v == "div")
+		return QStringLiteral("matches the whole page");
+	return QString();
+}
+
 QString site_rules::why_unsafe(const site_rule &r) {
 	static const QStringList kinds = { "container", "reject", "accept", "detector" };
 	if (!kinds.contains(r.kind))
@@ -174,8 +181,10 @@ QString site_rules::why_unsafe(const site_rule &r) {
 	if (r.kind == "container") {
 		// A selector, not a regex. `*` or `body` would hand every page's first
 		// button to the clicker.
-		if (v == "*" || v == "body" || v == "html" || v == "div")
-			return QStringLiteral("matches the whole page");
+		// The same four names, in the one place they are written down.
+		const QString broad = why_selector_too_broad(v);
+		if (!broad.isEmpty())
+			return broad;
 		return QString();
 	}
 

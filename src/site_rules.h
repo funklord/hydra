@@ -138,6 +138,14 @@ public:
 	// probe sees zero while V8 takes minutes.
 	static QString why_pattern_backtracks(const QString &pattern);
 
+	// **A selector that names the whole page**, refused for the reason the
+	// container branch of `why_unsafe` refuses it: `*` or `body` hands every
+	// element on the page to whatever acts on the match. Two callers now --
+	// a container rule here, and `scriptlets`' `remove-attr`, where the same
+	// selector would strip an attribute from every element instead of
+	// pressing one button. Empty means it is specific enough to act on.
+	static QString why_selector_too_broad(const QString &selector);
+
 	// Kept for the exchange document, which is a different thing from storage:
 	// `judge_import` reads what somebody else sent, and that is reviewed before
 	// it is added rather than loaded.

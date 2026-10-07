@@ -308,6 +308,71 @@ C['prevent-window-open'] = function (needle) {
 
 // set-local-storage-item: a flag a page reads back from storage. The same
 // vocabulary as set-constant, plus `$remove$` to delete one.
+// remove-attr / remove-class: take an attribute or a class off the elements a
+// selector names. The two differ in one line, so they are one function.
+//
+// **With no selector given, the names are the selector.** `remove-attr, href`
+// means the elements carrying `href`, which is `[href]`; `remove-class, ad`
+// means `.ad`. That is uBlock's default and it is also the only sensible one:
+// a rule that named no elements would have to mean all of them.
+//
+// **The observer is bounded unless the rule asks to stay.** A
+// MutationObserver that queries the document on every mutation for the life
+// of the page is a cost paid on every page the rule matches, and most rules
+// want the elements gone as the page builds rather than policed for ever.
+// Sixty-four passes or ten seconds, whichever comes first; `stay` in the
+// third argument is uBlock's way of asking for the other thing.
+var remove_dom = function (kind) {
+	return function (names, selector, behaviour) {
+		var list = String(names || '').split(/\s+/).filter(Boolean);
+		if (!list.length) return;
+		var sel = String(selector || '').replace(/^\s+|\s+$/g, '');
+		if (!sel) {
+			var parts = [];
+			for (var i = 0; i < list.length; i++)
+				parts.push(kind === 'attr' ? '[' + list[i] + ']'
+				                            : '.' + list[i]);
+			sel = parts.join(',');
+		}
+		var stay = String(behaviour || '').indexOf('stay') >= 0;
+		var sweep = function () {
+			var found;
+			// An invalid selector is a mistyped rule, not an emergency: it
+			// finds nothing and the page carries on.
+			try { found = document.querySelectorAll(sel); }
+			catch (e) { return; }
+			for (var i = 0; i < found.length; i++) {
+				for (var j = 0; j < list.length; j++) {
+					try {
+						if (kind === 'attr') found[i].removeAttribute(list[j]);
+						else if (found[i].classList)
+							found[i].classList.remove(list[j]);
+					} catch (e) {}
+				}
+			}
+		};
+		sweep();
+		try {
+			document.addEventListener('DOMContentLoaded', sweep, true);
+		} catch (e) {}
+		if (!window.MutationObserver || !document.documentElement) return;
+		var passes = 0;
+		var obs = new window.MutationObserver(function () {
+			if (!stay && ++passes > 64) { obs.disconnect(); return; }
+			sweep();
+		});
+		try {
+			obs.observe(document.documentElement, {
+				childList: true, subtree: true, attributes: kind === 'attr'
+			});
+		} catch (e) { return; }
+		if (!stay && typeof window.setTimeout === 'function')
+			window.setTimeout(function () { obs.disconnect(); }, 10000);
+	};
+};
+C['remove-attr']  = remove_dom('attr');
+C['remove-class'] = remove_dom('class');
+
 C['set-local-storage-item'] = function (key, value) {
 	if (!key) return;
 	var chosen = vocabulary(value, true);
@@ -331,21 +396,26 @@ C['set-local-storage-item'] = function (key, value) {
 // because a `/re/` from a filter list ends up in a `RegExp` in the page.
 struct catalog_entry {
 	const char *name;
-	int         patterns;
+	int         patterns;    // argument positions matched against something
+	int         selectors;   // argument positions that are CSS selectors
 };
 
 const catalog_entry k_entries[] = {
-	{ "json-prune",               0      },
-	{ "set-constant",             0      },
-	{ "abort-on-property-read",   0      },
-	{ "abort-on-property-write",  0      },
-	{ "abort-current-script",     1 << 1 },   // (path, needle)
-	{ "prevent-setTimeout",       1 << 0 },   // (needle, delay)
-	{ "prevent-setInterval",      1 << 0 },
-	{ "no-fetch-if",              1 << 0 },
-	{ "nowebrtc",                 0      },
-	{ "prevent-window-open",      1 << 0 },
-	{ "set-local-storage-item",   0      },
+	{ "json-prune",               0,      0      },
+	{ "set-constant",             0,      0      },
+	{ "abort-on-property-read",   0,      0      },
+	{ "abort-on-property-write",  0,      0      },
+	{ "abort-current-script",     1 << 1, 0      },   // (path, needle)
+	{ "prevent-setTimeout",       1 << 0, 0      },   // (needle, delay)
+	{ "prevent-setInterval",      1 << 0, 0      },
+	{ "no-fetch-if",              1 << 0, 0      },
+	{ "nowebrtc",                 0,      0      },
+	{ "prevent-window-open",      1 << 0, 0      },
+	{ "set-local-storage-item",   0,      0      },
+	// (names, selector, behaviour) -- the selector is the second argument,
+	// and a rule may leave it out, in which case the names become it.
+	{ "remove-attr",              0,      1 << 1 },
+	{ "remove-class",             0,      1 << 1 },
 };
 
 struct catalog_alias {
@@ -367,6 +437,8 @@ const catalog_alias k_aliases[] = {
 	{ "window.open-defuser",         "prevent-window-open"     },
 	{ "nowoif",                      "prevent-window-open"     },
 	{ "no-window-open-if",           "prevent-window-open"     },
+	{ "ra",                          "remove-attr"             },
+	{ "rc",                          "remove-class"            },
 };
 
 // The canonical name a rule is asking for, or empty when nothing is.
@@ -386,6 +458,14 @@ int pattern_args(const QString &canonical) {
 	for (const catalog_entry &e : k_entries) {
 		if (canonical == QLatin1String(e.name))
 			return e.patterns;
+	}
+	return 0;
+}
+
+int selector_args(const QString &canonical) {
+	for (const catalog_entry &e : k_entries) {
+		if (canonical == QLatin1String(e.name))
+			return e.selectors;
 	}
 	return 0;
 }
@@ -489,6 +569,24 @@ bool parse_call(const QString &inside, scriptlet_call *out, QString *why) {
 			continue;
 		if (why)
 			*why = QString("its pattern %1").arg(refused);
+		return false;
+	}
+
+	// **And a selector argument gets the refusal a container rule gets.**
+	// `remove-attr, href, *` would take the address off every link on the
+	// page; `site_rules` refuses the same four names for the same reason,
+	// where the cost is pressing every button rather than stripping every
+	// element. One list, in the one place it is written down.
+	const int selected = selector_args(name);
+	for (int i = 0; i < parts.size(); ++i) {
+		if (!(selected & (1 << i)) || parts.at(i).isEmpty())
+			continue;
+		const QString broad =
+		  site_rules::why_selector_too_broad(parts.at(i));
+		if (broad.isEmpty())
+			continue;
+		if (why)
+			*why = QString("its selector %1").arg(broad);
 		return false;
 	}
 
