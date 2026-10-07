@@ -32783,3 +32783,69 @@ parse by hand, so the measurement is recorded and the decision is not taken.
 
 The three checks come with their own control -- the same fixture without the
 comma is found -- so they are about the comma and not about the fixture.
+
+## A random sequence of mutations finds two of the three, in 214 operations
+
+Each of the tab tree's operations has its own tests. All three defects fixed
+on 2026-10-07 were about state carried *between* them -- an id reserved
+during one walk, a view keyed across a tree swap, a parent id recorded across
+arbitrary edits -- and none of those is visible from inside any single
+operation's own case. So `test_tree_scale` now runs them together in orders
+nobody wrote by hand and asks `tree_invariants` after every one: 1500
+mutations from a printed seed, six kinds, add and remove balancing so the
+sequence stays a mixture.
+
+It finds two of the three, and the operation numbers say how hard it had to
+look:
+
+    reservation removed from remint_if_taken   op 214, kind "reopen":
+                                               id 'f-7' is used more than once
+    order removed from deep_copy               op 25, kind "duplicate":
+                                               'f-3-2' is at position 1 but
+                                               records the wrong order
+
+A few hundred random mutations would have caught both. That is the argument
+for the test existing, and it is also a small indictment of how long they
+sat there.
+
+**The third is invisible to it, and that is not a gap in the generator.** A
+tab grafted into the wrong folder -- the recycled `parent_id` -- produces a
+**perfectly well formed tree**: unique ids, parents agreeing with children,
+no cycles, orders matching positions. No invariant can see it, because
+nothing about the shape is wrong; only the *intent* was. That is exactly why
+it needed a hand-built case naming the sequence, and it is the general line
+between the two kinds of test: an invariant catches a tree that cannot be
+right, and only a case can catch a tree that is right and not what anybody
+asked for.
+
+### And one latent thing noticed on the way, recorded rather than fixed
+
+`shutdown_signals` is constructed per `main_window`, and its constructor
+refuses a second instance -- the pipe is a file-scope global -- warning
+*"one is already installed; this one is inert"* and leaving `armed()` false.
+That warning appears in test output, because the suites build many windows.
+
+**It is harmless today and the reason is worth writing down**: there is
+exactly one `main_window` in the program. `main.cpp` constructs one on the
+stack, `grep` finds no `new main_window` anywhere in `src/`, and
+`open_new_window` makes a *tab* -- it ends in `m_model->add_tab` and returns
+a node. A window request from the engine becomes a row in the tree, which is
+this browser's whole shape.
+
+So the trap is for whoever adds a real second window, which the notes
+elsewhere contemplate for multi-window state: the second window's handler is
+inert, its `received()` never fires, and a signalled exit -- a logout, a
+shutdown, a Ctrl-C -- saves the first window's tabs and loses the second's,
+since `closeEvent` is the only other thing that writes the view state and
+the blobs. The fix at that point is one handler for the process, owned by
+the application and connected to by every window, rather than one per
+window.
+
+**Two things the stress needed before it could be believed.** A fixed seed,
+printed, so a failure replays rather than being a story about a run nobody
+has. And a control: every kind of mutation must have run at least twenty
+times and the tree must have more than ten nodes left, because a generator
+that stopped generating -- or a sequence that deleted its way to nothing --
+would report no violations just as loudly. A genuine early failure trips that
+control too, the loop stopping after four violations, so it is written as a
+consequence rather than a second finding.

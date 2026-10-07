@@ -27,6 +27,7 @@
 #include <QFile>
 #include <QTextStream>
 #include <sys/resource.h>
+#include <functional>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -230,6 +231,100 @@ int main(int argc, char **argv) {
 		note(QString("%1 duplicates in %2 ms").arg(copies).arg(ms));
 		check(ms < (extreme ? 60000 : 5000),
 		      QString("and it stays usable (%1 ms)").arg(ms));
+	}
+
+	section("a long random sequence of mutations keeps the tree well formed");
+	{
+		// **What this is for, and what it is not.** Each of these operations
+		// has its own tests; three defects fixed on 2026-10-07 were all about
+		// state carried *between* them -- an id reserved during one walk, a
+		// view keyed across a tree swap, a parent id recorded across
+		// arbitrary edits -- and none of those is visible from inside any
+		// single operation's own case. So this runs them together in orders
+		// nobody wrote by hand and asks `tree_invariants` after every one.
+		//
+		// It does not replace the hand-built cases: those name a defect and
+		// prove it with a sabotage. This covers the interactions.
+		//
+		// Deterministic, and the seed is printed, so a failure replays
+		// exactly rather than being a story about a run nobody has.
+		const quint32 start_seed = 0xc0ffee77;
+		quint32 seed = start_seed;
+		auto next = [&seed](int n) {
+			seed = seed * 1103515245u + 12345u;
+			return int((seed >> 16) % quint32(n));
+		};
+		tab_tree_model m;
+		QStringList trouble;
+		int by_kind[6] = { 0, 0, 0, 0, 0, 0 };
+		int deepest = 0, nodes = 0;
+		std::function<void(node *, int, QList<node *> *, int *)> walk =
+		  [&](node *n, int depth, QList<node *> *out, int *max_seen) {
+			if (depth > *max_seen)
+				*max_seen = depth;
+			for (node *k : n->children) {
+				out->append(k);
+				walk(k, depth + 1, out, max_seen);
+			}
+		};
+		const int total = 1500;
+		for (int i = 0; i < total && trouble.size() < 4; ++i) {
+			QList<node *> live;
+			deepest = 0;
+			walk(m.root(), 0, &live, &deepest);
+			nodes = int(live.size());
+			node *pick = live.isEmpty() ? nullptr : live.at(next(live.size()));
+			// Adds are held back once the tree is large, so the sequence stays
+			// a mixture rather than drifting into one shape.
+			const int op = nodes > 250 ? 2 + next(4) : next(6);
+			switch (op) {
+				case 0:
+					m.add_tab(pick, QString("t%1").arg(i), "https://x.test/");
+					break;
+				case 1: m.add_folder(pick, QString("f%1").arg(i)); break;
+				case 2: if (pick) m.remove_node(pick, /*remember=*/true); break;
+				case 3: if (pick) m.remove_node(pick, /*remember=*/false); break;
+				case 4: m.reopen_closed(); break;
+				case 5: if (pick) m.duplicate_node(pick); break;
+			}
+			++by_kind[op];
+			const auto r = tree_invariants::check(m.root());
+			if (!r.ok)
+				trouble << QString("op %1 (kind %2): %3")
+				             .arg(i).arg(op).arg(r.problems.join("; ").left(120));
+		}
+		check(trouble.isEmpty(),
+		      QString("%1 mutations from seed 0x%2 leave the tree well formed "
+		               "throughout (%3)")
+		          .arg(total).arg(start_seed, 0, 16)
+		          .arg(trouble.isEmpty() ? QStringLiteral("no violations")
+		                                  : trouble.join(" | ")));
+
+		// **The control, because a generator that stopped generating would
+		// pass the check above in silence.** Every kind has to have run, and
+		// the tree has to have ended up with something in it -- a sequence
+		// that deleted its way to nothing would also report no violations.
+		//
+		// A genuine early failure trips this too, since the loop stops after
+		// four violations and the counts never get the chance to grow: read
+		// the first red line, and this one as its consequence rather than as
+		// a second finding.
+		QStringList missing;
+		static const char *kinds[6] = { "add tab", "add folder",
+		                                 "close (remembered)", "delete",
+		                                 "reopen", "duplicate" };
+		for (int k = 0; k < 6; ++k)
+			if (by_kind[k] < 20)
+				missing << QString("%1 (%2)").arg(kinds[k]).arg(by_kind[k]);
+		check(missing.isEmpty(),
+		      QString("and every kind of mutation ran at least twenty times "
+		               "(%1)")
+		          .arg(missing.isEmpty() ? QStringLiteral("all six did")
+		                                  : missing.join(", ")));
+		check(nodes > 10,
+		      QString("with a tree left over rather than one deleted to "
+		               "nothing (%1 nodes, deepest %2)")
+		          .arg(nodes).arg(deepest));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
