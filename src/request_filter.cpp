@@ -100,11 +100,19 @@ request_decision request_filter::decide(const request_context &ctx) const {
 	// to any font URL it matches by substring, and a blocked webfont shows a
 	// page's icons as their ligature text. A font from a known ad host is still
 	// blocked above by is_ad_host, which is a domain decision this does not skip.
-	if (m_list && ctx.kind != resource_kind::font &&
-	    !m_engine->is_allowed(feature::ads, ctx.site_host) &&
-	    m_list->blocks(ctx.url.toString(), ctx.site_host)) {
-		d.block = true;
-		return d;
+	// **Both lists, under one gate.** The user's own and the subscribed one
+	// answer to the same per-site switch and the same font exemption, so the
+	// conditions are tested once and the url is stringified once rather than
+	// per list -- this runs on every request, and `blocks()` already takes a
+	// read lock of its own on each list it is asked.
+	if (ctx.kind != resource_kind::font && (m_list || m_subscribed) &&
+	    !m_engine->is_allowed(feature::ads, ctx.site_host)) {
+		const QString url = ctx.url.toString();
+		if ((m_list && m_list->blocks(url, ctx.site_host)) ||
+		    (m_subscribed && m_subscribed->blocks(url, ctx.site_host))) {
+			d.block = true;
+			return d;
+		}
 	}
 
 	// Per-origin scripts: block scripts served from a host whose JS is blocked.

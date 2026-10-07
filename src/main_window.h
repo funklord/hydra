@@ -4,6 +4,7 @@
 #include "site_extractor.h"
 #include "site_rules.h"
 #include "session_mirror.h"   // for the mirror and imported_tab
+#include "filter_subscription.h"   // for the subscribed lists' index
 
 #include <QWidget>
 #include <QHash>
@@ -353,6 +354,16 @@ private:
 	// of one file with both callers in view, rather than in two handlers that
 	// do not mention each other.
 	void forget_node_state(const QString &id);
+	// Read every enabled subscription's cached body through
+	// `filter_subscription::read` and fill `m_subscribed` with what this build
+	// can enforce. Returns how many rules were taken, in all.
+	//
+	// **The gate runs on load and not only on fetch**, which is what makes it
+	// the only way into that list. The bodies are kept as fetched, so a cache
+	// written when this build read fewer kinds of rule is read again by one
+	// that reads more -- and a body that was fine when fetched and is nonsense
+	// on disk now is refused here rather than enforced.
+	int load_subscriptions();
 	// **The view half of forgetting an id**, shared so the two places that do
 	// it cannot drift: `forget_subtree`, which has a node, and the live cap's
 	// last resort, which by definition does not. Removing the widget from the
@@ -687,6 +698,10 @@ public:
 	QStringList         m_unconfirmed_rules;
 	QString             m_unconfirmed_host;
 	filter_list        *m_filters       = nullptr;
+	// **A second list, not a merge.** `request_filter::set_subscription_list`
+	// says why the instances are kept apart; this is the one an upstream fetch
+	// replaces, and the user's own is the one it must never touch.
+	filter_list        *m_subscribed    = nullptr;
 	// Kept so the accepted rules can be handed to it once the list is loaded,
 	// which happens after construction.
 	request_filter     *m_filter        = nullptr;
@@ -721,6 +736,9 @@ public:
 	session_mirror     *m_fx_mirror     = nullptr;
 	session_mirror     *m_cr_mirror     = nullptr;
 	QString             m_filters_path;
+	QString             m_subs_index;      // filters-subscribed.json
+	QString             m_subs_dir;        // filters-subscribed/, the bodies
+	QList<subscription> m_subs;
 	QAction            *m_kiosk_action  = nullptr;
 	QAction            *m_undo_action   = nullptr;
 	QAction            *m_reopen_action = nullptr;

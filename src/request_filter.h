@@ -89,6 +89,22 @@ public:
 	// Optional: a filter with no list behaves exactly as before.
 	void set_filter_list(const filter_list *list) { m_list = list; }
 
+	// **The subscribed list, which is a second instance and not a merge.**
+	// `filter_list`'s header asked for this before anything could subscribe:
+	// the user's own rules are kept apart "so a scheduled upstream update
+	// never clobbers custom rules". Two instances is what makes that true by
+	// construction -- an update replaces one object and cannot reach the
+	// other, and "forget this subscription" is a pointer going null rather
+	// than a search through a merged set for rules nobody can attribute.
+	//
+	// Consulted on the same terms as the list above: skipped for a site whose
+	// `ads` setting is allow, and skipped for fonts, because a rule whose
+	// options this engine does not read applies to any URL it matches by
+	// substring. Both of those are more load-bearing here, not less: a
+	// subscription is tens of thousands of rules nobody in this program
+	// reviewed one at a time.
+	void set_subscription_list(const filter_list *list) { m_subscribed = list; }
+
 	request_decision decide(const request_context &ctx) const;
 
 	// Cookie decisions are the same shape: policy plus the first-party host.
@@ -121,6 +137,7 @@ public:
 private:
 	policy_engine     *m_engine;
 	const filter_list *m_list = nullptr;
+	const filter_list *m_subscribed = nullptr;
 	QSet<QString>  m_ad_hosts;
 	QList<request_observer *> m_observers;
 };

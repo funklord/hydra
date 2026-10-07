@@ -1,0 +1,291 @@
+#include "filter_subscription.h"
+
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSaveFile>
+
+QString subscription_read::summary() const {
+	if (!ok())
+		return refusal;
+	QString s = QString("%1 rule(s) in use").arg(accepted);
+	if (unsupported > 0)
+		s += QString(", %1 line(s) this build cannot enforce").arg(unsupported);
+	if (unsafe > 0)
+		s += QString(", %1 refused as unsafe").arg(unsafe);
+	return s;
+}
+
+namespace filter_subscription {
+
+line_kind classify(const QString &line, filter_rule *out, QString *why) {
+	const auto reason = [why](const char *text) {
+		if (why)
+			*why = QString::fromLatin1(text);
+	};
+	const QString t = line.trimmed();
+	if (t.isEmpty() || t.startsWith('!') || t.startsWith('['))
+		return line_kind::comment;
+
+	// **uBO's separators are different features, not spellings of one**, so
+	// each is named rather than lumped into "not a rule". A person looking at
+	// a subscription that contributed a tenth of its lines is owed which tenth.
+	//
+	//   #?#  procedural cosmetic -- `:has()`, `:upward()`, which are not CSS
+	//   #@#  a cosmetic exception, and there is nothing here to except from
+	//   #$#  a style or scriptlet injection
+	//   #%#  JS injection
+	for (const char *marker : { "#?#", "#@#", "#$#", "#%#" }) {
+		if (!t.contains(QLatin1String(marker)))
+			continue;
+		reason("a procedural, exception or injecting cosmetic rule, which this "
+		        "build does not implement");
+		return line_kind::unsupported;
+	}
+
+	const int hash = t.indexOf("##");
+	if (hash >= 0) {
+		const QString selector = t.mid(hash + 2).trimmed();
+		// **A scriptlet is the thing this build most conspicuously lacks**, and
+		// it is the only way anybody blocks a YouTube ad in the page -- the ads
+		// come from the same hosts as the video, so no network rule can see
+		// them. Counted separately for that reason: the number says how much of
+		// a list is waiting on scriptlet support rather than on anything else.
+		//
+		// `##^` is an HTML filter, which removes nodes as the parser sees them.
+		// Different feature, same answer here.
+		if (selector.startsWith(QLatin1String("+js(")) ||
+		    selector.startsWith(QLatin1Char('^'))) {
+			reason("a scriptlet or HTML filter, which this build does not run");
+			return line_kind::unsupported;
+		}
+		// Unscoped, which `cosmetic_filters::selectors_for` declines to apply
+		// anywhere -- "a rule with no scope is not applied anywhere", because
+		// accepting one unbounded is what the review exists to stop. Storing it
+		// would be a rule in the list and nothing on the page.
+		if (hash == 0) {
+			reason("a generic cosmetic rule, which is applied on no site");
+			return line_kind::unsupported;
+		}
+		const QString unsafe_why = filter_list::why_selector_unsafe(selector);
+		if (!unsafe_why.isEmpty()) {
+			if (why)
+				*why = unsafe_why;
+			return line_kind::unsafe;
+		}
+		if (out && !filter_list::parse_rule(t, out)) {
+			reason("not parseable as a rule");
+			return line_kind::unsupported;
+		}
+		return line_kind::cosmetic;
+	}
+
+	// **An exception rule has nothing to except.** `@@||host^` tells a blocker
+	// not to block something, and this engine has no unblock path: `blocks()`
+	// answers yes or no from the index and never consults a second set. Stored
+	// as written, `@@||ads.example^` becomes a substring pattern that matches
+	// no URL ever -- a rule in the list, in the count, doing nothing. The
+	// honest answer is to say the list has them and that they are not read.
+	if (t.startsWith(QLatin1String("@@"))) {
+		reason("an exception rule, and this engine has no unblock path");
+		return line_kind::unsupported;
+	}
+	// A regular-expression rule, `/pattern/`. `filter_list::matches` would take
+	// it as a literal substring including the slashes.
+	if (t.size() > 2 && t.startsWith(QLatin1Char('/')) &&
+	    t.endsWith(QLatin1Char('/'))) {
+		reason("a regular-expression rule, which this engine does not compile");
+		return line_kind::unsupported;
+	}
+	// **Options make a rule NARROWER, and ignoring them makes it wider.**
+	// `||cdn.example^$script` asks for scripts from that host; enforced with
+	// the options dropped it takes the stylesheet and the images too, and
+	// `request_filter` already carries a font exemption written for exactly
+	// this -- "this engine does not read a rule's resource-type option, so a
+	// rule written for a tracker or a script applies to any font URL it
+	// matches".
+	//
+	// On a list the user accepted one rule at a time that was a tolerable
+	// trade. On a subscription of tens of thousands it is a page-breaking one,
+	// and in the direction that is hardest to diagnose: the page half-loads
+	// and the filter that did it was never written to apply there. So a rule
+	// carrying options is not enforced, and is counted so the gap is visible
+	// rather than inferred. Reading the options is the single change that
+	// would unlock most of a real list, and it is its own piece of work.
+	//
+	// The test is `$` anywhere in the pattern, which is an approximation: a
+	// literal `$` in a URL pattern would be misread as an option separator.
+	// It is the right way round -- such a rule is skipped rather than
+	// enforced too broadly -- and the alternative is a parser for the option
+	// grammar, which is the work this defers.
+	if (t.contains(QLatin1Char('$'))) {
+		reason("carries options, which this engine does not read");
+		return line_kind::unsupported;
+	}
+	if (out && !filter_list::parse_rule(t, out)) {
+		reason("not parseable as a rule");
+		return line_kind::unsupported;
+	}
+	return line_kind::network;
+}
+
+subscription_read read(const QString &text, int previous_rules) {
+	subscription_read rep;
+
+	// **The failure this gate is written against is a 200 with the wrong body
+	// in it**, not a malformed rule. A captive portal's login page, a CDN
+	// error page, a repository that moved and now answers with HTML: each
+	// parses as nothing, and promoting it would replace a working list with an
+	// empty one. Ad blocking would then be off, silently, looking exactly like
+	// an upstream that had got quieter.
+	const QString trimmed = text.trimmed();
+	if (trimmed.isEmpty()) {
+		rep.refusal = QStringLiteral("the body is empty.");
+		return rep;
+	}
+	if (trimmed.startsWith(QLatin1Char('<'))) {
+		rep.refusal = QStringLiteral(
+		  "the body begins with '<', so this is a web page rather than a "
+		  "filter list -- a login page or an error page answered with 200.");
+		return rep;
+	}
+
+	const QStringList lines = text.split(QLatin1Char('\n'));
+	for (const QString &line : lines) {
+		filter_rule r;
+		switch (classify(line, &r)) {
+			case line_kind::comment:
+				continue;   // not a candidate line; headers are not a gap
+			case line_kind::network:
+			case line_kind::cosmetic:
+				++rep.lines;
+				++rep.accepted;
+				rep.rules.push_back(r);
+				break;
+			case line_kind::unsupported:
+				++rep.lines;
+				++rep.unsupported;
+				break;
+			case line_kind::unsafe:
+				++rep.lines;
+				++rep.unsafe;
+				break;
+		}
+	}
+
+	if (rep.accepted == 0) {
+		rep.refusal = QString("no rule this build can enforce, out of %1 "
+		                       "candidate line(s).").arg(rep.lines);
+		return rep;
+	}
+
+	// **The shrink guard, and it is a judgement rather than a measurement.** A
+	// body that is truncated mid-download, or served from a half-migrated
+	// mirror, parses cleanly and is simply short -- so rule count is the only
+	// signal that the fetch was not the list. A quarter is the threshold
+	// because a real list does not lose three quarters of itself between two
+	// fetches, and a bad fetch usually loses nearly all of it; nothing finer
+	// is defensible without data this does not have. It refuses rather than
+	// warns, because the cached copy that stays is a working one.
+	if (previous_rules > 0 && rep.accepted * 4 < previous_rules) {
+		rep.refusal = QString("%1 rule(s) where the copy in hand has %2. A "
+		                       "list does not usually lose three quarters of "
+		                       "itself, so the fetch is the likelier fault; "
+		                       "the copy in hand is kept.")
+		                  .arg(rep.accepted).arg(previous_rules);
+		return rep;
+	}
+	return rep;
+}
+
+QList<subscription> load_index(const QString &path) {
+	QList<subscription> out;
+	QFile f(path);
+	if (!f.open(QIODevice::ReadOnly))
+		return out;   // no subscriptions yet is the ordinary first run
+	QJsonParseError err{};
+	const QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
+	if (err.error != QJsonParseError::NoError || !doc.isArray()) {
+		// **Refused rather than repaired, and loudly.** A half-read index
+		// would silently drop subscriptions, and the next save would write the
+		// shortened list back over the file -- the tree loader's own fault, in
+		// a smaller file. The cached bodies are still on disk either way.
+		qWarning("subscriptions: %s is not a list (%s); leaving it alone",
+		          qPrintable(path), qPrintable(err.errorString()));
+		return out;
+	}
+	for (const QJsonValue &v : doc.array()) {
+		const QJsonObject o = v.toObject();
+		subscription s;
+		s.name    = o.value("name").toString();
+		s.url     = QUrl(o.value("url").toString());
+		s.enabled = o.value("enabled").toBool(true);
+		s.file    = o.value("file").toString();
+		s.rules   = o.value("rules").toInt();
+		s.note    = o.value("note").toString();
+		const QString when = o.value("fetched").toString();
+		if (!when.isEmpty())
+			s.fetched = QDateTime::fromString(when, Qt::ISODate);
+		// A subscription with no url cannot be fetched and a subscription with
+		// no file has nothing cached; either is a line somebody edited by
+		// hand, and dropping it silently is how an index loses an entry
+		// nobody meant to remove. Kept, and the fetcher reports it.
+		if (!s.name.isEmpty() || !s.url.isEmpty())
+			out.push_back(s);
+	}
+	return out;
+}
+
+bool save_index(const QString &path, const QList<subscription> &subs) {
+	QJsonArray arr;
+	for (const subscription &s : subs) {
+		QJsonObject o;
+		o.insert("name", s.name);
+		o.insert("url", s.url.toString());
+		o.insert("enabled", s.enabled);
+		o.insert("file", s.file);
+		o.insert("rules", s.rules);
+		o.insert("note", s.note);
+		if (s.fetched.isValid())
+			o.insert("fetched", s.fetched.toString(Qt::ISODate));
+		arr.append(o);
+	}
+	// Atomic and able to fail, for the reason `filter_list::save` is: this is
+	// the record of what the person subscribed to, and a half-written index is
+	// a list that loads with some of them missing.
+	QSaveFile f(path);
+	if (!f.open(QIODevice::WriteOnly))
+		return false;
+	f.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
+	return f.commit();
+}
+
+QString mint_cache_name(const QString &dir, const QString &name) {
+	// A readable stem, so somebody looking in the directory can tell which
+	// file is which, and a digit on the end when that stem is taken. The name
+	// is not trusted as a path: everything but letters, digits, dash and
+	// underscore goes, which also takes `/` and `..` with it.
+	QString stem;
+	for (const QChar c : name) {
+		if (c.isLetterOrNumber())
+			stem += c.toLower();
+		else if (c == QLatin1Char('-') || c == QLatin1Char('_'))
+			stem += c;
+		else if (!stem.isEmpty() && !stem.endsWith(QLatin1Char('-')))
+			stem += QLatin1Char('-');
+	}
+	while (stem.endsWith(QLatin1Char('-')))
+		stem.chop(1);
+	if (stem.isEmpty())
+		stem = QStringLiteral("list");
+	stem = stem.left(40);
+	QString candidate = stem + QStringLiteral(".txt");
+	for (int n = 2; QFileInfo::exists(QDir(dir).filePath(candidate)); ++n)
+		candidate = QString("%1-%2.txt").arg(stem).arg(n);
+	return candidate;
+}
+
+}  // namespace filter_subscription

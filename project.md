@@ -33470,3 +33470,110 @@ It now shows the first saved line for the status checks, and for the call
 checks the part of the remux answer after the dash -- the reason, where the
 verb is. **A check whose report cannot show what decided it is a check nobody
 can audit**, and that is worth as much as the assertion being right.
+
+## Subscribing to an upstream list, and the gate in front of it
+
+`filter_list`'s header asked for this shape long before anything could
+subscribe: the user's own rules are "kept deliberately apart from any imported
+EasyList so a scheduled upstream update never clobbers custom rules", and the
+token index exists because "on a subscription list ... every request would
+parse the URL tens of thousands of times". So the groundwork was laid; what
+was missing was the reading, the gate and the second list.
+
+**Two `filter_list` instances, not a merge.** `request_filter` holds a second
+pointer and consults both under one condition -- the same per-site `ads`
+switch, the same font exemption, the url stringified once. Two objects is what
+makes "an update never clobbers custom rules" true by construction: a fetch
+replaces one object and cannot reach the other, and forgetting a subscription
+is a pointer going null rather than a search through a merged set for rules
+nobody can attribute. Each rule carries the subscription's name in its `note`,
+which is the field the AI's own list uses for why a rule was proposed -- the
+same question a person asks of a rule they did not write.
+
+### What of a real list this build can enforce, counted rather than summed
+
+`parse_rule` accepts every non-blank, non-comment line, so a real EasyList
+would have loaded with its exceptions, options, scriptlets and procedural
+cosmetics all stored as rules -- each one in the list, in the count, and doing
+nothing or something other than what it says. `filter_subscription::classify`
+sorts a line into one of five buckets and names the reason:
+
+    network       a rule this build enforces
+    cosmetic      a scoped element-hiding rule with a usable selector
+    unsupported   real syntax this build does not implement
+    unsafe        a selector refused by why_selector_unsafe
+    comment       blank, `!`, or a `[Adblock Plus 2.0]` header
+
+The counts are reported separately because "4 rules in use" and "3 lines this
+build cannot enforce" are different facts, and a person deciding whether a
+subscription is worth having needs the second. A single total would read as
+coverage this does not have.
+
+**The option decision is the one with a cost.** `||cdn.example^$script` asks
+for scripts from that host; enforced with its options dropped it takes the
+stylesheet and the images too -- `request_filter` already carries a font
+exemption written for exactly that. On a list somebody accepted one rule at a
+time that was a tolerable trade; on tens of thousands it is a page-breaking
+one, in the direction hardest to diagnose. So an option-carrying rule is not
+enforced, and is counted so the gap is visible rather than inferred. **Reading
+the options is the single change that would unlock most of a real list**, and
+it is its own piece of work.
+
+Exception rules (`@@`) are the same shape of honesty: this engine has no
+unblock path, so stored as written they become substring patterns that match
+nothing. Scriptlets (`##+js(...)`) are counted on their own, because they are
+the only way anybody blocks a YouTube ad in the page -- the ads come from the
+same hosts as the video, so no network rule can see them, and that number says
+how much of a list is waiting on scriptlet support rather than on anything
+else.
+
+### The gate is against a 200 with the wrong body in it
+
+Not a malformed rule -- a captive portal's login page, a CDN error page, a
+repository that moved and now serves HTML. Each parses as nothing, and
+promoting it would replace a working list with an empty one: ad blocking off,
+silently, looking exactly like an upstream that had got quieter. So a body is
+refused whole when it is empty, when it begins with `<`, or when no line in it
+is a rule this build can enforce -- and the refusal says how many candidate
+lines it read, so "nothing in it" and "nothing I can use" are distinguishable.
+
+**The shrink guard is a judgement and says so.** A truncated or half-migrated
+body parses cleanly and is simply short, so the rule count is the only signal
+that the fetch was not the list. Less than a quarter of what the cached copy
+holds is refused, because a real list does not lose three quarters of itself
+between two fetches and a bad fetch usually loses nearly all of it. Nothing
+finer is defensible without data this does not have, and the test asserts the
+boundary -- eight accepted, nine refused -- rather than somewhere safely
+inside it, since a threshold nobody checked at the edge is a number somebody
+will quietly change.
+
+### The cache keeps the body as fetched, and the gate runs on load
+
+Caching the accepted rules instead would be smaller and would put the gate on
+the fetch path only. Then a build that later learns to read a rule's options
+could not use what is already on disk without re-fetching every list, and
+nothing could recount what a list offered against what was taken from it.
+Re-reading each body through `read()` at startup costs a parse and keeps both
+-- and it makes the gate the only way into that list, so a body that was fine
+when fetched and is nonsense on disk now is refused rather than enforced.
+
+The index is JSON beside the bodies, and it stores each subscription's cache
+**filename** rather than deriving one. Deriving from the name would move the
+cache whenever somebody renamed a subscription; deriving from the url needs a
+collision rule for two lists on one host. `mint_cache_name` is used once, when
+a subscription is added, and it sanitises to letters, digits, dash and
+underscore -- which takes `/` and `..` with it, so a subscription called
+`../../etc/passwd` gets `etc-passwd.txt`.
+
+### Sabotage, on each gate in turn
+
+Four, each failing through the assertion that names it: the HTML gate removed
+(the login page is accepted), the shrink guard removed (two rules replace
+nine), the option check removed (five rules where four are enforceable, and
+the rule that should block nothing starts blocking), and the selector check
+removed (the one that closes its own CSS rule is kept as cosmetic).
+
+The index has its own: a disabled subscription has to read back disabled,
+because `toBool()` defaults to false and `toBool(true)` to true, and the
+default that is right for an absent key is the one that would quietly start a
+subscription somebody had turned off.

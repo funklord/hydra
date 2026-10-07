@@ -563,6 +563,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	});
 
 	m_filters   = new filter_list;
+	m_subscribed = new filter_list;
 	// The cosmetic half of sec 12 is created per view, in `open_node`: see
 	// the note there for why one shared bridge answered for the wrong site.
 
@@ -2755,6 +2756,7 @@ main_window::~main_window() {
 	}
 	delete m_players;
 	delete m_filters;
+	delete m_subscribed;
 	// Not a QObject, so it has no parent to take it. Kept as a raw pointer to
 	// match the two above rather than being the one member with a different
 	// lifetime idiom.
@@ -3002,6 +3004,20 @@ bool main_window::load_tree(const QString &path) {
 	// before the first request of this one.
 	if (m_filter)
 		m_filter->set_filter_list(m_filters);
+
+	// **The subscribed lists, read through the gate and handed over the same
+	// way.** Loaded after the user's own so that a first run with no
+	// subscriptions behaves exactly as before, and before the first request
+	// for the reason above: a list in force from the second request onwards is
+	// a list that did not block the first page.
+	m_subs_index = dir + "/filters-subscribed.json";
+	m_subs_dir   = dir + "/filters-subscribed";
+	const int subscribed_rules = load_subscriptions();
+	if (m_filter)
+		m_filter->set_subscription_list(m_subscribed);
+	if (qEnvironmentVariableIsSet("HYDRA_FILTER_DEBUG"))
+		qWarning("subscriptions: %lld list(s), %d rule(s) in force",
+		          static_cast<long long>(m_subs.size()), subscribed_rules);
 
 	// Consent-banner rules, beside the rest and in the same spirit: data, not
 	// code. The built-in set is always present; the file adds to it. This is
@@ -5539,6 +5555,47 @@ QString main_window::address_of(const node *n) const {
 			return live;
 	}
 	return n->url;
+}
+
+int main_window::load_subscriptions() {
+	m_subs = filter_subscription::load_index(m_subs_index);
+	int taken = 0;
+	for (subscription &sub : m_subs) {
+		if (!sub.enabled || sub.file.isEmpty())
+			continue;
+		QFile body(QDir(m_subs_dir).filePath(sub.file));
+		if (!body.open(QIODevice::ReadOnly | QIODevice::Text)) {
+			// The index says there is a cached body and there is not. Said out
+			// loud rather than treated as an empty list, because those are
+			// different facts: one is a subscription that has never fetched
+			// and the other is one whose cache has gone.
+			sub.note = QStringLiteral("the cached copy could not be read");
+			qWarning("subscriptions: %s names %s, which could not be read",
+			          qPrintable(sub.name), qPrintable(sub.file));
+			continue;
+		}
+		const subscription_read rep = filter_subscription::read(
+		  QString::fromUtf8(body.readAll()));
+		if (!rep.ok()) {
+			sub.note = rep.refusal;
+			qWarning("subscriptions: %s refused: %s", qPrintable(sub.name),
+			          qPrintable(rep.refusal));
+			continue;
+		}
+		for (filter_rule r : rep.rules) {
+			// **Which subscription a rule came from, carried on the rule.**
+			// `note` holds why a rule was proposed for the AI's own list; for
+			// one of these it holds where it came from, which is the same
+			// question a person asks of a rule they did not write. Nothing
+			// else can answer it once the rules are in one list.
+			r.note = sub.name;
+			m_subscribed->add(r);
+		}
+		sub.rules = rep.accepted;
+		sub.note  = rep.summary();
+		taken += rep.accepted;
+	}
+	return taken;
 }
 
 void main_window::forget_node_state(const QString &id) {
