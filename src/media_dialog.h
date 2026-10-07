@@ -38,6 +38,18 @@ signals:
 	// shell owns that.
 	void capture_requested();
 
+	// **Ask yt-dlp, from here rather than from a menu three levels deep.**
+	// Detection watches request shapes, so a page whose player asks for
+	// nothing this recognises leaves this list empty or shows only a "Playing"
+	// row -- and the one thing that finds a URL then is yt-dlp, which reads
+	// the page's own scripts. It was reachable only from Tools > Media > Find
+	// Media on This Page, which is where somebody lands *after* the badge has
+	// already brought them here and shown them nothing they can use.
+	//
+	// The shell owns it for the same reason it owns the capture: this dialog
+	// has no resolver and no status bar to report into once it has closed.
+	void ytdlp_requested();
+
 private:
 	void repopulate();
 	void watch(const media_item &item);

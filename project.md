@@ -33577,3 +33577,45 @@ The index has its own: a disabled subscription has to read back disabled,
 because `toBool()` defaults to false and `toBool(true)` to true, and the
 default that is right for an absent key is the one that would quietly start a
 subscription somebody had turned off.
+
+## The route that works on YouTube was behind a menu the badge did not mention
+
+The media badge appears when detection finds something or the sec 11.6 tap sees
+the page playing, and clicking it opens the media list. On a site whose player
+is built in its own scripts -- which is the ordinary case, not the odd one --
+detection finds no manifest, so what the badge opens is a dialog with a
+"Playing" row and nothing to fetch.
+
+The one thing that finds a URL then is yt-dlp, which reads the page's scripts
+rather than watching for requests. It was reachable only from **Tools ▸ Media
+▸ Find Media on This Page…**, which is three levels deep and is where somebody
+goes *after* the badge has already brought them to the dialog and shown them
+nothing they can use. The badge's own tooltip named that menu path, which is
+the long way round described in the place where a button would do.
+
+So the dialog has an **Ask yt-dlp** button, in every state rather than only
+the empty one, and the badge's tooltip names it instead of the menu. The shell
+owns the resolver, so the dialog emits and closes; `find_media_with_ytdlp`
+then adds what it found and reopens the dialog, which it already did.
+
+**Offered, never automatic, and that is the design rather than an omission.**
+Nothing is routed away from the page's own player: an embedded YouTube player
+on a third-party site is sometimes the thing somebody needs working, and a
+browser that quietly replaced it with its own would break the service it was
+embedded in. The yt-dlp path is the better answer for YouTube's own ads --
+they come from the same hosts as the video, so no network rule can see them --
+but it is the person's choice each time, one click from the badge.
+
+### Asserted in two states, because one would pass
+
+The button is built unconditionally today, so a single state would prove
+nothing about the case that matters. Both are checked -- a list detection
+filled, and a host nothing knows -- which is what fails if somebody later
+makes it conditional on the list being empty. That is the plausible wrong
+turn: a list detection filled can still be missing the stream somebody wants,
+which is the whole reason it is not an error path.
+
+Sabotage: renaming the button's object name gives *"no such button"* in both
+states, and dropping the `emit` gives *"fired=0 accepted=1"* -- so the test
+separates a button that is there from one that is wired, which is the
+distinction this tree keeps paying for elsewhere.

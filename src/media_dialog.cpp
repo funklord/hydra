@@ -154,6 +154,23 @@ media_dialog::media_dialog(media_detector *detector, player_launcher *players,
 		         [this](const QString &text) { m_status->setText(text); });
 
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
+	// Offered in every state, not only the empty one. A list that detection
+	// filled can still be missing the stream somebody wants -- a page that
+	// requested one manifest for a trailer and plays the feature through its
+	// own scripts is the ordinary case -- so this is not an error path.
+	QPushButton *ask = buttons->addButton("&Ask yt-dlp",
+	                                       QDialogButtonBox::ActionRole);
+	ask->setObjectName("media_ask_ytdlp");
+	ask->setToolTip("Ask yt-dlp what this page is playing. It reads the "
+	                 "page's own scripts, so it finds streams the browser "
+	                 "never saw requested.");
+	connect(ask, &QPushButton::clicked, this, [this] {
+		// Closed first, like the capture: the shell runs the resolver and
+		// reopens this with whatever it found, and a dialog waiting on a
+		// subprocess is a dialog that looks hung.
+		emit ytdlp_requested();
+		accept();
+	});
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 	outer->addWidget(buttons);
 }
@@ -257,13 +274,16 @@ void media_dialog::repopulate() {
 		// empty, which is how it read before these rows existed.
 		m_status->setText("This page is playing video, but no stream URL could "
 		                  "be found — the address is hidden, or the bytes never "
-		                  "travel as one. Capture records it as it plays.");
+		                  "travel as one. Ask yt-dlp reads the page's scripts; "
+		                  "Capture records it as it plays.");
 	} else {
 		// Said once, in the space it is about. The status line stays empty
 		// here rather than repeating it two inches lower.
 		m_empty->set_text("Nothing detected yet.\n\nMany sites only request "
 		                   "the manifest when their player starts, so try "
-		                   "pressing play first.");
+		                   "pressing play first — or ask yt-dlp, which reads "
+		                   "the page's own scripts instead of watching for "
+		                   "requests.");
 		m_status->clear();
 	}
 }

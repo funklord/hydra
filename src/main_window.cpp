@@ -2225,10 +2225,13 @@ void main_window::refresh_media_affordance(const QString &site_host) {
 			mime = s.mime;
 	}
 	m_media_action->setText("Media (playing)");
+	// **Names the button, not the menu path.** Clicking this badge is how
+	// somebody gets here, and what they find is a dialog with an Ask yt-dlp
+	// button in it -- so sending them back out to Tools > Media > Find Media
+	// on This Page described the long way round to a thing one click away.
 	m_media_action->setToolTip(
 	  QString("This page is playing video (%1 buffered, %2), but no stream "
-	           "URL was detected — try Tools ▸ Media ▸ Find Media on This "
-	           "Page.")
+	           "URL was detected — open this and press Ask yt-dlp.")
 	      .arg(QLocale().formattedDataSize(buffered), mime));
 }
 
@@ -2254,6 +2257,13 @@ void main_window::open_media() {
 	const stream_context ctx = page_context(v);
 	media_dialog dlg(m_media, m_players, m_downloads, m_local_proxy, m_mse,
 	                  m_assembly, this);
+	// **The resolver is the shell's, so the dialog asks and this answers.**
+	// Queued past the dialog's own `exec()` for the reason the capture is:
+	// `find_media_with_ytdlp` reopens this dialog when it finds something, and
+	// opening it from inside its own exec() nests two of them.
+	connect(&dlg, &media_dialog::ytdlp_requested, this, [this] {
+		QTimer::singleShot(0, this, [this] { find_media_with_ytdlp(); });
+	});
 	connect(&dlg, &media_dialog::capture_requested, this, [this] {
 		// Queued: the dialog is closing itself, and starting a capture reloads
 		// the page -- not something to do from inside its own exec().

@@ -256,6 +256,49 @@ int main(int argc, char **argv) {
 	stream_assembly assembly(&players, &downloads, &proxy, nullptr);
 	QSignalSpy said(&assembly, &stream_assembly::status);
 
+	section("the dialog offers yt-dlp whatever detection found");
+	{
+		// **Detection watches request shapes, so the states where it finds
+		// nothing are the ordinary ones on a site whose player is built in
+		// its own scripts** -- and those are exactly the states where asking
+		// yt-dlp is the only thing that works. The offer was reachable only
+		// from Tools > Media > Find Media on This Page, which is where
+		// somebody goes *after* the badge has brought them here and shown
+		// them nothing they can use.
+		//
+		// Asserted in two states rather than one. The button is built
+		// unconditionally today, so one would pass; two is what fails if
+		// somebody later makes it conditional on the list being empty, which
+		// is the plausible wrong turn -- a list detection filled can still be
+		// missing the stream somebody wants.
+		const auto offer = [&](media_detector *det, const QString &host) {
+			media_dialog dlg(det, &players, &downloads, &proxy, &tap,
+			                  &assembly, nullptr);
+			dlg.set_site(host, "n1", stream_context{});
+			QPushButton *ask =
+			  dlg.findChild<QPushButton *>("media_ask_ytdlp");
+			if (!ask)
+				return QStringLiteral("no such button");
+			int fired = 0;
+			QObject::connect(&dlg, &media_dialog::ytdlp_requested,
+			                  [&fired] { ++fired; });
+			ask->click();
+			// Fired AND closed: the shell owns the resolver and reopens this
+			// with what it found, so a dialog that stays up would end with
+			// two of itself.
+			return QString("fired=%1 accepted=%2").arg(fired)
+			           .arg(dlg.result() == QDialog::Accepted ? 1 : 0);
+		};
+
+		check(offer(&detector, "example.invalid") == "fired=1 accepted=1",
+		       QString("with rows in the list (%1)")
+		           .arg(offer(&detector, "example.invalid")));
+		media_detector empty;
+		check(offer(&empty, "nothing.invalid") == "fired=1 accepted=1",
+		       QString("and with nothing detected at all (%1)")
+		           .arg(offer(&empty, "nothing.invalid")));
+	}
+
 	section("an assembly outlives the dialog that started it");
 
 	QString out;
