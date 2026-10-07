@@ -5670,7 +5670,7 @@ int main_window::load_subscriptions() {
 			continue;
 		}
 		const subscription_read rep = filter_subscription::read(
-		  QString::fromUtf8(body.readAll()));
+		  QString::fromUtf8(body.readAll()), 0, sub.trusted);
 		if (!rep.ok()) {
 			qWarning("subscriptions: %s refused: %s", qPrintable(sub.name),
 			          qPrintable(rep.refusal));

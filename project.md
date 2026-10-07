@@ -34161,9 +34161,11 @@ with a probe rather than inferred from a failure.
 not here. The first two are DOM-mutation scriptlets needing an observer and a
 selector engine, which is its own piece of work rather than a line in this
 one; the third overlaps what `json-prune` already does by wrapping
-`Response.prototype.json`. And no `trusted-*` scriptlet, for the reason
+`Response.prototype.json`. ~~And no `trusted-*` scriptlet, for the reason
 recorded with the first two: the first of those belongs with whatever UI says
-which lists are trusted, and there is none.
+which lists are trusted, and there is none.~~ **Superseded: the UI exists and
+four of them are implemented** -- see *The trusted class, and the box that
+turns it on*, below.
 
 ## remove-attr and remove-class, and two hazards they bring with them
 
@@ -34322,9 +34324,156 @@ prunes once the state moves to 4; without it, the early read is already
 pruned. **A guard whose sabotage passes is a guard the fixture cannot see**,
 and the fix is a fixture, not a better assertion.
 
+## The trusted class, and the box that turns it on
+
+Nineteen in the catalog now. The four added here are not more of the same
+thing: every scriptlet before them *keeps* the page from doing something --
+stops a timer, refuses a property, prunes a response. These *act on the
+page's behalf* with a value the rule chooses.
+
+    trusted-set-constant             any value, not just the vocabulary's
+    trusted-set-local-storage-item   any string
+    trusted-set-cookie               writes one
+    trusted-replace-fetch-response   replaces text in a body
+
+**So the gate is per subscription and not per build.** A subscribed list is
+tens of thousands of lines nobody here read one at a time, and trusting a
+*publisher* is a thing a person can decide where trusting a *line* is not.
+`subscription` gained `trusted`, the settings page gained a Trusted column
+beside the enable box, and `filter_subscription::read` takes the flag.
+
+**The absent-key default is the inverse of `enabled`'s, deliberately.**
+`load_index` reads `enabled` with `toBool(true)` because a subscription
+somebody added is on; it reads `trusted` with `toBool(false)` because an index
+written by an older build has no such key at all, and defaulting it the other
+way would turn the power on retroactively, for every list already subscribed
+to, as an upgrade side effect. Both defaults are asserted in the round-trip
+case, next to each other, because the pair is what makes either one readable.
+
+### The gate is in two places, and each one covers what the other cannot
+
+`read` drops a trusted call from an untrusted list and **counts** it;
+`source_for` refuses the same call again where the script is written. Neither
+alone is enough:
+
+- `read` alone leaves the power available to any other caller that builds a
+  call -- and `inject_scriptlets` is a second caller already.
+- `source_for` alone drops it silently. The count is what lets the settings
+  line say *3 needing trust this list has not been given*, and a list whose
+  useful half is in its trusted rules is indistinguishable from one that has
+  none without it.
+
+That is why the flag is carried **on the call** rather than looked up when the
+script is written: by then the list it came from is out of reach, and false is
+the only safe default so it is the default.
+
+**Asked of the catalog entry, not of the spelling.** `requires_trust` reads
+the table rather than testing for a `trusted-` prefix. A name cannot acquire
+the power by looking like one of those -- and the half that would actually
+hurt, an ordinary scriptlet cannot lose its ability to run by being renamed.
+
+### A cookie value would otherwise write attributes nobody asked for
+
+`trusted-set-cookie, ok, yes; domain=.evil.test; max-age=99999999` is one
+argument as far as a filter list is concerned and three directives as far as
+`document.cookie` is concerned. Both halves go through
+`encodeURIComponent`, so the separator cannot survive in either, and the
+assertion is on what was written: no `domain=`, no `max-age`, and the text
+kept intact as one value (`yes%3B%20domain...`).
+
+**The path is the one part that cannot be encoded and still mean what it
+says**, so it is checked instead -- `^/[A-Za-z0-9._~\-/]*$` or the whole
+site. `/x; domain=.evil.test` becomes `path=/`, which is wider than the rule
+asked for and narrower than what it was trying to do.
+
+### One fetch filter, two callers
+
+`trusted-replace-fetch-response` wanted exactly the machinery
+`json-prune-fetch-response` already had: wrap `fetch`, match the url, read the
+body once, hand back a new response carrying the original's status and
+headers. Copying it would have been a second place for the
+read-the-body-once constraint to be got wrong, so it came out as
+`filter_fetch(wanted, transform)` and the pruner is now a three-line caller
+of it.
+
+Two things the rewrite half needed on its own. The search may be a substring
+or `/re/`, and a regex without `g` gets it -- a list writing `/[0-9]+/` means
+all of them. And a substring search is applied with **split and join** rather
+than `String.replace`, which would otherwise take only the first match.
+
+**What a `$` in the replacement means therefore differs by search, and the
+test asserted the wrong thing first.** The comment and the case both claimed
+a literal replacement on both paths; the regex path goes through
+`String.replace` and reads `$&` as the match, so `[$&]` came back as `[ok]`
+and the case failed. The code was right and its description was not: a list
+writing `/(a)(b)/` with `$2$1` means the groups, which is what the rules in
+this family are written against, and a substring search has nothing for `$1`
+to name. So both are asserted now, named as the search's property rather than
+a choice -- and neither can introduce text the rule and the body did not
+already hold, which is why this was a documentation fault and not a
+security one.
+
+**Both of this scriptlet's pattern positions are declared**, 0 and 2, so
+`why_pattern_backtracks` refuses a catastrophic regex in the search as well as
+in the url. The replacement is position 1 and is deliberately not checked:
+it is text, and refusing text for looking like a regex would refuse a rule
+that meant what it said.
+
+### The one refused on its merits
+
+`trusted-click-element` is not here and is not deferred. `consent_blocker`
+already clicks a banner's buttons, from rules written in this tree and
+reviewed in this tree, and a scriptlet that clicks whatever a selector names
+would be a second path to the same action with less guarding it. The test
+suite's "not in the catalog" list names it, so the refusal is asserted rather
+than only written down.
+
+### What the suite asserts, and the sabotage
+
+The central case is one body read twice -- untrusted and trusted -- so that
+what the flag changes is visible as a difference rather than as two separate
+readings. Everything but the trusted call reads identically, which is the
+property worth having: **ticking the box cannot alter what a network rule
+does.**
+
+**Sabotage: removing the `requires_trust` test from `source_for`** turns red
+the pair of checks that run the same rule under both flags -- the untrusted
+engine writes a cookie it should not have, `consent=yes; expires=...;
+path=/`. Removing the test in `read` instead turns red six checks: the count,
+the summary line, and the refusal of a list whose only content needs trust.
+Each half fails through its own check, which is what says the two are not one
+guard written twice.
+
+### The sabotage found a case passing for the wrong reason
+
+Six red, and **one of the six was not mine and should not have been able to
+move.** `a body that is not a filter list is refused whole` carries a
+three-line body whose point is a scriptlet the catalog does not implement, and
+its stand-in was `trusted-set-cookie` -- a name that had just entered the
+catalog.
+
+It had gone on passing, because an untrusted read drops a trusted call and the
+body is unusable either way. **The assertion was green, its comment described
+a mechanism that was no longer the one acting, and nothing in the ordinary run
+could tell the two apart.** The same case had already been moved once for the
+same reason, off `nowebrtc` when the catalog grew to eleven -- that time the
+test went red and announced itself.
+
+It names `trusted-click-element` now, which is refused on its merits and will
+not be implemented. The proof that the repair is a repair is the sabotage run
+again: the case stays **green** with the trust gate disabled, so it is
+answering about an unimplemented name rather than about the gate, and the
+gate's own sabotage now turns five checks red instead of six.
+
+What found it was reading **which** checks went red rather than that some did.
+A sabotage that turns a suite red confirms only that something is watching;
+the list is where a case passing for a coincidence shows up.
+
 ### What is left
 
-Every `trusted-*` scriptlet, for the reason recorded when the catalog was
+~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was
 written: the first of those belongs with whatever UI says which lists are
-trusted, and there is none. Nothing else in the families this project has met
-is missing now.
+trusted, and there is none.~~ **Closed by *The trusted class, and the box
+that turns it on***, which built the box the absence was waiting on. `trusted-click-element` is the one refused on
+its merits rather than deferred. Nothing else in the families this project has
+met is missing.

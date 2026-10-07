@@ -47,6 +47,12 @@ struct scriptlet_call {
 	QString     scope;   // the site it applies on; never empty
 	QString     name;    // a catalog name, already vetted
 	QStringList args;
+	// **Whether the list this came from is one the person marked trusted.**
+	// Carried on the call rather than asked later, because by the time a
+	// script is written the list it came from is out of reach -- and the
+	// scriptlets that need it are the ones where getting it wrong matters
+	// most. False is the only safe default, so it is the default.
+	bool        trusted = false;
 };
 
 namespace scriptlets {
@@ -54,6 +60,21 @@ namespace scriptlets {
 // Is this a name this build implements? The catalog is closed, so this is the
 // whole of what a rule may ask for.
 bool vetted(const QString &name);
+
+// **Does this scriptlet need the list that asked for it to be trusted?**
+//
+// uBlock keeps a second class of scriptlet whose powers are not "stop the page
+// doing something" but "do something on the page's behalf": write a cookie,
+// replace a response body with content of the rule's choosing, set a global to
+// an arbitrary string. A rule in that class is not a filter, it is a small
+// program, and a subscribed list is tens of thousands of lines nobody here
+// reviewed one at a time.
+//
+// So these run only for a list the person marked trusted, and `source_for`
+// refuses them otherwise. The name carries the warning -- every one of them
+// begins `trusted-` -- but the check is not on the prefix: it is on the
+// catalog entry, so a name cannot acquire the power by being spelled like one.
+bool requires_trust(const QString &name);
 
 // Every implemented name, for the settings line and the tests. Sorted.
 QStringList names();

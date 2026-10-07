@@ -14,6 +14,9 @@ QString subscription_read::summary() const {
 	QString s = QString("%1 rule(s) in use").arg(accepted);
 	if (scriptlets > 0)
 		s += QString(", %1 scriptlet(s)").arg(scriptlets);
+	if (needs_trust > 0)
+		s += QString(", %1 needing trust this list has not been given")
+		         .arg(needs_trust);
 	if (unsupported > 0)
 		s += QString(", %1 line(s) this build cannot enforce").arg(unsupported);
 	if (unsafe > 0)
@@ -157,7 +160,8 @@ line_kind classify(const QString &line, filter_rule *out, QString *why,
 	return line_kind::network;
 }
 
-subscription_read read(const QString &text, int previous_rules) {
+subscription_read read(const QString &text, int previous_rules,
+                        bool trusted) {
 	subscription_read rep;
 
 	// **The failure this gate is written against is a 200 with the wrong body
@@ -193,6 +197,21 @@ subscription_read read(const QString &text, int previous_rules) {
 				break;
 			case line_kind::scriptlet:
 				++rep.lines;
+				// **The trust gate, and the first of the two places it is
+				// applied.** `scriptlets::source_for` refuses the same call
+				// again where the script is written, so one built any other
+				// way cannot carry the power either -- but dropping it here
+				// is what makes the count sayable, and a call that never
+				// enters the set cannot be injected by a later caller that
+				// forgot to ask.
+				if (scriptlets::requires_trust(call.name) && !trusted) {
+					++rep.needs_trust;
+					break;
+				}
+				// Carried on the call rather than looked up later: by the
+				// time a script is written, which list a call came from is
+				// out of reach.
+				call.trusted = trusted;
 				++rep.scriptlets;
 				rep.calls.push_back(call);
 				break;
@@ -211,6 +230,10 @@ subscription_read read(const QString &text, int previous_rules) {
 	// list can be exactly that, and refusing it for having no network rule
 	// would refuse the half of the ecosystem this build has just learned to
 	// read.
+	// A list of nothing but trusted scriptlets, untrusted, has nothing in it
+	// this build will run -- and `needs_trust` is deliberately not counted
+	// towards usability here, because saying "no rule this build can enforce"
+	// while the summary names the dropped ones is the honest pair.
 	if (rep.accepted == 0 && rep.scriptlets == 0) {
 		rep.refusal = QString("no rule this build can enforce, out of %1 "
 		                       "candidate line(s).").arg(rep.lines);
@@ -258,6 +281,12 @@ QList<subscription> load_index(const QString &path) {
 		s.name    = o.value("name").toString();
 		s.url     = QUrl(o.value("url").toString());
 		s.enabled = o.value("enabled").toBool(true);
+		// **False when the key is absent, which is the inverse of `enabled`
+		// just above and not a slip.** An index written by an older build has
+		// no `trusted` key at all, and defaulting it the other way would turn
+		// the power on for every list somebody had already subscribed to,
+		// retroactively, as an upgrade side effect.
+		s.trusted = o.value("trusted").toBool(false);
 		s.file    = o.value("file").toString();
 		s.rules   = o.value("rules").toInt();
 		s.note    = o.value("note").toString();
@@ -281,6 +310,7 @@ bool save_index(const QString &path, const QList<subscription> &subs) {
 		o.insert("name", s.name);
 		o.insert("url", s.url.toString());
 		o.insert("enabled", s.enabled);
+		o.insert("trusted", s.trusted);
 		o.insert("file", s.file);
 		o.insert("rules", s.rules);
 		o.insert("note", s.note);

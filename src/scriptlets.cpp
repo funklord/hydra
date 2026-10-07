@@ -94,18 +94,18 @@ C['json-prune'] = function (paths, needle) {
 // has been called the original response is spent, so even the pass-through
 // path has to hand back a new one. Returning `res` after reading it would
 // give the page a response it cannot read.
-C['json-prune-fetch-response'] = function (paths, needle, match) {
+// **Wrapping fetch so a matching body passes through a transform**, shared by
+// the two scriptlets that rewrite one. A body can only be read once, which
+// decides the shape: once `text()` has been called the original response is
+// spent, so even the unchanged path hands back a new one. Returning `res`
+// after reading it gives the page a response it cannot read.
+var filter_fetch = function (wanted, transform) {
 	if (typeof window.fetch !== 'function') return;
-	var prune = pruner(paths, needle);
-	if (!prune) return;
-	var wanted = matcher(match);
 	var real = window.fetch;
 	var like = function (res, text) {
 		// The original's status and headers, so the page's own checks still
 		// pass. Without a `Response` constructor -- which not every frame has
-		// -- hand back something that answers the reads a caller makes,
-		// because returning the original would be handing over the bytes this
-		// exists to remove.
+		// -- hand back something that answers the reads a caller makes.
 		try {
 			return new window.Response(text, {
 				status: res.status, statusText: res.statusText,
@@ -135,12 +135,30 @@ C['json-prune-fetch-response'] = function (paths, needle, match) {
 			if (!res || typeof res.text !== 'function') return res;
 			return res.text().then(function (body) {
 				var out;
-				try { out = JSON.stringify(prune(JSON.parse(body))); }
-				catch (e) { return like(res, body); }   // not JSON, unchanged
-				return like(res, out);
+				try { out = transform(body); } catch (e) { out = body; }
+				return like(res, typeof out === 'string' ? out : body);
 			});
 		});
 	};
+};
+
+// json-prune-fetch-response: prune the body of a matching fetch, whichever way
+// the page then reads it.
+//
+// **What this does that `json-prune` cannot**, which is the reason it has its
+// own name rather than being a wider version of that one. `json-prune`
+// patches the parser and `Response.prototype.json`, so it covers a page that
+// parses text or asks a response for JSON -- and it covers *every* such read
+// on the page, guarded only by the needle. This one is scoped to a url, and
+// it replaces the body itself, so a player that reads `.text()` and parses
+// with something of its own sees pruned bytes too.
+C['json-prune-fetch-response'] = function (paths, needle, match) {
+	var prune = pruner(paths, needle);
+	if (!prune) return;
+	filter_fetch(matcher(match), function (body) {
+		// Not JSON is not an error: the body comes through unchanged.
+		return JSON.stringify(prune(JSON.parse(body)));
+	});
 };
 
 // json-prune-xhr-response: the same for XMLHttpRequest.
@@ -535,6 +553,105 @@ var remove_dom = function (kind) {
 C['remove-attr']  = remove_dom('attr');
 C['remove-class'] = remove_dom('class');
 
+// --- the trusted class -----------------------------------------------------
+//
+// **These run only for a list the person marked trusted**, which is enforced
+// in `read` and again in `source_for`. What they have in common is that their
+// power is not "stop the page doing something" but "do something on the
+// page's behalf", with a value the rule chooses: a cookie, an arbitrary
+// global, a replaced response body. A rule in that class is a small program.
+
+// trusted-set-constant: set-constant without the vocabulary. A string, or
+// JSON where the value looks like it.
+C['trusted-set-constant'] = function (path, value) {
+	if (!path) return;
+	var chosen = vocabulary(value, false);
+	var v;
+	if (chosen) {
+		v = chosen.v;
+	} else {
+		var raw = String(value == null ? '' : value);
+		v = raw;
+		if (raw.charAt(0) === '{' || raw.charAt(0) === '[') {
+			try { v = JSON.parse(raw); } catch (e) { v = raw; }
+		}
+	}
+	var at = owner_of(path);
+	if (!at) return;
+	try {
+		Object.defineProperty(at.o, at.k, {
+			get: function () { return v; },
+			set: function () {},
+			configurable: false
+		});
+	} catch (e) {}
+};
+
+// trusted-set-local-storage-item: the same without the vocabulary.
+C['trusted-set-local-storage-item'] = function (key, value) {
+	if (!key) return;
+	var raw = String(value == null ? '' : value);
+	try {
+		if (raw === '$remove$') window.localStorage.removeItem(String(key));
+		else window.localStorage.setItem(String(key), raw);
+	} catch (e) {}
+};
+
+// trusted-set-cookie: write one, for a site whose own banner will not take an
+// answer any other way.
+//
+// **Both halves are encoded**, and that is not tidiness: a value carrying `;`
+// would otherwise add attributes of its own -- a path, a domain, a longer
+// expiry than the rule asked for -- which is a filter list writing a cookie
+// it did not say it was writing.
+C['trusted-set-cookie'] = function (name, value, days, path) {
+	if (!name) return;
+	var bits = encodeURIComponent(String(name)) + '=' +
+	            encodeURIComponent(String(value == null ? '' : value));
+	var n = Number(days);
+	if (isFinite(n) && n > 0) {
+		var until = new Date();
+		until.setTime(until.getTime() + n * 86400000);
+		try { bits += '; expires=' + until.toUTCString(); } catch (e) {}
+	}
+	var where = String(path == null ? '' : path);
+	// A path is the one part that cannot be percent-encoded and still mean
+	// what it says, so it is checked instead: a path is a path.
+	bits += '; path=' + (/^\/[A-Za-z0-9._~\-\/]*$/.test(where) ? where : '/');
+	try { document.cookie = bits; } catch (e) {}
+};
+
+// trusted-replace-fetch-response: rewrite text in a matching body. The search
+// may be a substring or `/re/`.
+//
+// **The replacement means what `String.replace` means, and only on the regex
+// path.** A list writing `/(a)(b)/` and `$2$1` means the groups, which is what
+// the rules in this family are written against -- so a regex search keeps
+// those semantics rather than inventing quieter ones. A substring search has
+// no groups to reference and is applied with split and join, which both takes
+// every occurrence rather than the first and leaves a `$` in the replacement
+// as the character it is. The asymmetry is the search's, not a choice: there
+// is nothing for `$1` to mean without a pattern.
+C['trusted-replace-fetch-response'] = function (search, replacement, match) {
+	var s = String(search == null ? '' : search);
+	var rep = String(replacement == null ? '' : replacement);
+	filter_fetch(matcher(match), function (body) {
+		if (s === '' || s === '*') return rep;
+		if (s.length > 2 && s.charAt(0) === '/') {
+			var end = s.lastIndexOf('/');
+			if (end > 0) {
+				var flags = s.slice(end + 1);
+				if (flags.indexOf('g') < 0) flags += 'g';
+				var re = new RegExp(s.slice(1, end), flags);
+				return String(body).replace(re, rep);
+			}
+		}
+		// Split and join rather than `replace`, which would take only the
+		// first and would read `$&` in the replacement as a back-reference.
+		return String(body).split(s).join(rep);
+	});
+};
+
 C['set-local-storage-item'] = function (key, value) {
 	if (!key) return;
 	var chosen = vocabulary(value, true);
@@ -560,27 +677,37 @@ struct catalog_entry {
 	const char *name;
 	int         patterns;    // argument positions matched against something
 	int         selectors;   // argument positions that are CSS selectors
+	bool        trusted;     // only for a list the person marked trusted
 };
 
 const catalog_entry k_entries[] = {
-	{ "json-prune",               0,      0      },
-	{ "set-constant",             0,      0      },
-	{ "abort-on-property-read",   0,      0      },
-	{ "abort-on-property-write",  0,      0      },
-	{ "abort-current-script",     1 << 1, 0      },   // (path, needle)
-	{ "prevent-setTimeout",       1 << 0, 0      },   // (needle, delay)
-	{ "prevent-setInterval",      1 << 0, 0      },
-	{ "no-fetch-if",              1 << 0, 0      },
-	{ "nowebrtc",                 0,      0      },
-	{ "prevent-window-open",      1 << 0, 0      },
-	{ "set-local-storage-item",   0,      0      },
-	// (names, selector, behaviour) -- the selector is the second argument,
-	// and a rule may leave it out, in which case the names become it.
-	{ "json-prune-fetch-response", 1 << 2, 0     },   // (props, needle, url)
-	{ "json-prune-xhr-response",  1 << 2, 0      },
-	{ "remove-attr",              0,      1 << 1 },
-	{ "remove-class",             0,      1 << 1 },
+	{ "json-prune",                      0,      0,      false },
+	{ "set-constant",                    0,      0,      false },
+	{ "abort-on-property-read",          0,      0,      false },
+	{ "abort-on-property-write",         0,      0,      false },
+	{ "abort-current-script",            1 << 1, 0,      false },
+	{ "prevent-setTimeout",              1 << 0, 0,      false },
+	{ "prevent-setInterval",             1 << 0, 0,      false },
+	{ "no-fetch-if",                     1 << 0, 0,      false },
+	{ "nowebrtc",                        0,      0,      false },
+	{ "prevent-window-open",             1 << 0, 0,      false },
+	{ "set-local-storage-item",          0,      0,      false },
+	{ "json-prune-fetch-response",       1 << 2, 0,      false },
+	{ "json-prune-xhr-response",         1 << 2, 0,      false },
+	// (names, selector, behaviour): the selector is the second argument, and
+	// a rule may leave it out, in which case the names become it.
+	{ "remove-attr",                     0,      1 << 1, false },
+	{ "remove-class",                    0,      1 << 1, false },
+	// **The trusted class: not filters but small programs**, and only for a
+	// list somebody marked trusted. See `requires_trust` for the argument.
+	{ "trusted-set-constant",            0,      0,      true  },
+	{ "trusted-set-local-storage-item",  0,      0,      true  },
+	{ "trusted-set-cookie",              0,      0,      true  },
+	// Two patterns: what to look for, and which url to look in.
+	{ "trusted-replace-fetch-response",
+	                          (1 << 0) | (1 << 2), 0,      true  },
 };
+
 
 struct catalog_alias {
 	const char *from;
@@ -626,6 +753,14 @@ int pattern_args(const QString &canonical) {
 	return 0;
 }
 
+bool entry_needs_trust(const QString &canonical) {
+	for (const catalog_entry &e : k_entries) {
+		if (canonical == QLatin1String(e.name))
+			return e.trusted;
+	}
+	return false;
+}
+
 int selector_args(const QString &canonical) {
 	for (const catalog_entry &e : k_entries) {
 		if (canonical == QLatin1String(e.name))
@@ -669,6 +804,11 @@ namespace scriptlets {
 
 bool vetted(const QString &name) {
 	return !canonical_name(name).isEmpty();
+}
+
+bool requires_trust(const QString &name) {
+	const QString canonical = canonical_name(name);
+	return !canonical.isEmpty() && entry_needs_trust(canonical);
 }
 
 QStringList names() {
@@ -769,6 +909,13 @@ QString source_for(const QList<scriptlet_call> &calls) {
 		// built a call some other way must not be the reason an unvetted name
 		// runs. The catalog being closed has to be true at the point of use.
 		if (!vetted(c.name))
+			continue;
+		// **The second half of the same rule.** `read` drops these when the
+		// list is not trusted and counts them; this refuses them again where
+		// the script is written, so a call built any other way cannot carry
+		// the power either. The catalog being closed and the trusted class
+		// being gated both have to hold here, not only upstream.
+		if (requires_trust(c.name) && !c.trusted)
 			continue;
 		QJsonObject o;
 		// **The canonical name, not the one it was given.** `parse_call`

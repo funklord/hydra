@@ -141,7 +141,7 @@ int main(int argc, char **argv) {
 		// stored as something that will never run.
 		why.clear();
 		got = filter_subscription::classify(
-		  "youtube.com##+js(trusted-set-cookie, a, b)", nullptr, &why);
+		  "youtube.com##+js(trusted-click-element, .accept)", nullptr, &why);
 		check(got == line_kind::unsupported,
 		       QString("one this build does not implement is not (%1: %2)")
 		           .arg(kind_name(got), why));
@@ -177,6 +177,69 @@ int main(int argc, char **argv) {
 		       QString("the summary says so (%1)").arg(rep.summary()));
 	}
 
+	section("a trusted scriptlet is kept only from a list marked trusted");
+	{
+		// **The whole of what the trust flag changes**, in one body read
+		// twice. Everything but the trusted call reads the same either way,
+		// which is the property worth asserting: ticking the box cannot
+		// alter what a network rule does.
+		const QString body =
+		  "! Title: A list with one powerful rule\n"
+		  "||ads.example^\n"
+		  "player.test##+js(set-constant, cfg.ads, false)\n"
+		  "player.test##+js(trusted-set-cookie, consent, yes, 7)\n";
+
+		const subscription_read plain = filter_subscription::read(body);
+		check(plain.ok(), QString("an untrusted read is usable (%1)")
+		                       .arg(plain.refusal));
+		check(plain.scriptlets == 1 && plain.calls.size() == 1 &&
+		          plain.calls.first().name == "set-constant",
+		       QString("only the ordinary scriptlet is kept (%1)")
+		           .arg(plain.calls.isEmpty() ? QString("none")
+		                                       : plain.calls.first().name));
+		// **Counted rather than silently dropped.** A list whose useful half
+		// is in its trusted rules and a list that has none look identical
+		// from a silent drop, and the first is the only one where ticking
+		// the box would change anything.
+		check(plain.needs_trust == 1,
+		       QString("and the trusted one is counted (%1)")
+		           .arg(plain.needs_trust));
+		check(plain.summary().contains("needing trust"),
+		       QString("the summary says so (%1)").arg(plain.summary()));
+		check(plain.accepted == 1,
+		       QString("the network rule is unaffected (%1)")
+		           .arg(plain.accepted));
+
+		const subscription_read ok = filter_subscription::read(body, 0, true);
+		check(ok.scriptlets == 2 && ok.needs_trust == 0,
+		       QString("a trusted read keeps both (%1)").arg(ok.summary()));
+		check(ok.accepted == plain.accepted && ok.unsupported ==
+		          plain.unsupported && ok.unsafe == plain.unsafe,
+		       "and nothing else about the read changes");
+		// The flag travels on the call, because by the time a script is
+		// written the list it came from is out of reach.
+		bool carried = !ok.calls.isEmpty();
+		for (const scriptlet_call &c : ok.calls)
+			if (!c.trusted)
+				carried = false;
+		check(carried, "each kept call carries the trust it was read under");
+
+		// A list whose only content is a trusted rule, untrusted, has
+		// nothing this build will run -- refused, with the count still said.
+		const subscription_read only = filter_subscription::read(
+		  "player.test##+js(trusted-set-cookie, a, b)\n");
+		check(!only.ok(),
+		       QString("a list of only trusted rules is refused untrusted "
+		                "(%1)").arg(only.summary()));
+		check(only.needs_trust == 1,
+		       QString("with the one that needed trust counted (%1)")
+		           .arg(only.needs_trust));
+		check(filter_subscription::read(
+		          "player.test##+js(trusted-set-cookie, a, b)\n", 0, true)
+		          .ok(),
+		       "and the same list is usable once the list is trusted");
+	}
+
 	section("a body that is not a filter list is refused whole");
 	{
 		// **Each of these parses as nothing and would promote an empty list
@@ -210,9 +273,18 @@ int main(int argc, char **argv) {
 		// catalog grew to eleven and implemented it -- at which point this
 		// case correctly stopped holding, which is the test noticing a
 		// capability arrive rather than a regression.
+		//
+		// **It happened a second time and was nearly missed, because the
+		// case went on passing.** `trusted-set-cookie` replaced `nowebrtc`
+		// here and then entered the catalog itself -- and this stayed green,
+		// because an untrusted read drops a trusted call and the body is
+		// unusable either way. Passing for the trust gate while its comment
+		// claims an unimplemented name is the shape this tree calls right by
+		// coincidence, and what found it was sabotaging the gate and reading
+		// WHICH checks went red rather than that some did.
 		const subscription_read unread = filter_subscription::read(
 		  "@@||a.example^\n@@||b.example^\n"
-		  "example.com##+js(trusted-set-cookie, a, b)\n");
+		  "example.com##+js(trusted-click-element, .accept)\n");
 		check(!unread.ok() && unread.refusal.contains("3 candidate"),
 		       QString("three lines, none enforceable (%1)")
 		           .arg(unread.refusal));
@@ -337,6 +409,7 @@ int main(int argc, char **argv) {
 		b.url     = QUrl("https://other.test/list.txt");
 		b.file    = "off-for-now.txt";
 		b.enabled = false;
+		a.trusted = true;
 
 		check(filter_subscription::save_index(index, { a, b }),
 		       "the index saves");
@@ -359,6 +432,14 @@ int main(int argc, char **argv) {
 			// that avoids that is the wrong one for an absent key.
 			check(!back.at(1).enabled,
 			       "and the disabled one still disabled");
+			// **Trust round-trips, and its absent-key default is the
+			// opposite one.** `enabled` defaults true because a
+			// subscription somebody added is on; `trusted` defaults false
+			// because an index written before this build existed has no
+			// such key, and reading it as true would turn the power on
+			// retroactively for every list already subscribed to.
+			check(back.at(0).trusted && !back.at(1).trusted,
+			       "the trusted one trusted and the other not");
 		}
 
 		// A file that is not a list at all: refused, and the entries that were

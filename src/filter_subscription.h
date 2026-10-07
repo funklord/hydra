@@ -28,6 +28,13 @@ struct subscription {
 	QDateTime fetched;         // when a fetch was last promoted
 	int       rules   = 0;     // how many this build kept from it
 	QString   note;            // the last outcome, for the settings line
+	// **Whether the trusted scriptlets in this list may run.** Off unless
+	// somebody says otherwise, per subscription rather than per build: a
+	// trusted scriptlet writes a cookie or replaces a response body on the
+	// page's behalf, and a subscribed list is tens of thousands of lines
+	// nobody here read one at a time. Trusting the publisher is a thing a
+	// person can decide; trusting a line is not.
+	bool      trusted = false;
 	// **The cached body's filename, minted when the subscription is added and
 	// then never derived again.** Deriving it from the name would move the
 	// cache every time somebody renamed a subscription, and deriving it from
@@ -53,6 +60,12 @@ struct subscription_read {
 	// would hide the number that says how much of a list is reaching the one
 	// place a network rule cannot -- an ad served from the content's host.
 	int scriptlets  = 0;
+	// **Scriptlets dropped for want of trust, counted rather than ignored.**
+	// A list whose useful half is in its trusted rules and a list that
+	// genuinely has none look identical from a silent drop, and the second
+	// is the only one where turning trust on would change anything. The
+	// number is what the settings line needs in order to say so.
+	int needs_trust = 0;
 	QString refusal;       // non-empty: the body was not a usable filter list
 	QList<filter_rule> rules;
 	QList<scriptlet_call> calls;
@@ -74,7 +87,11 @@ namespace filter_subscription {
 // repository that moved and now serves HTML. Those parse as nothing and would
 // otherwise promote an empty list over a working one, which turns ad blocking
 // off silently and looks exactly like an upstream that got quieter.
-subscription_read read(const QString &text, int previous_rules = 0);
+// `trusted` is the subscription's own flag. It decides only whether the
+// trusted class of scriptlets is kept: everything else reads the same either
+// way, so turning it on never changes what a network rule does.
+subscription_read read(const QString &text, int previous_rules = 0,
+                        bool trusted = false);
 
 // The subscription list itself, as JSON beside the cached bodies.
 //

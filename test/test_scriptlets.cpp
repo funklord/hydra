@@ -56,6 +56,15 @@ window.localStorage = {
 window.RTCPeerConnection = function () { this.real = true; };
 window.Promise = { resolve: function (v) { return { then: function (f) {
 	f(v); return this; } }; } };
+// `document.cookie` as an accessor that records, because a write is the whole
+// observable effect of one scriptlet here and a plain property would swallow
+// the second write and every attribute.
+window.__cookies = [];
+Object.defineProperty(document, 'cookie', {
+	set: function (v) { window.__cookies.push(String(v)); },
+	get: function () { return window.__cookies.join('; '); },
+	configurable: true
+});
 document.currentScript = null;
 document.documentElement = { tag: 'html' };
 document.addEventListener = function (n, f) { window.__domReady = f; };
@@ -191,11 +200,12 @@ static QString ask(QJSEngine *eng, const char *expr) {
 }
 
 static QString run_one(QJSEngine *eng, const char *name,
-                        const QStringList &args) {
+                        const QStringList &args, bool trusted = false) {
 	scriptlet_call c;
-	c.scope = "x.test";
-	c.name  = QString::fromLatin1(name);
-	c.args  = args;
+	c.scope   = "x.test";
+	c.name    = QString::fromLatin1(name);
+	c.args    = args;
+	c.trusted = trusted;
 	const QJSValue r = eng->evaluate(scriptlets::source_for({ c }));
 	return r.isError() ? r.toString() : QString();
 }
@@ -213,12 +223,14 @@ int main(int argc, char **argv) {
 		// **The whole security position in one line.** A rule names a
 		// scriptlet; it does not carry one. Anything this build has not
 		// implemented and reviewed does not run.
-		// **`json-prune-xhr-response` is the deliberate absence now**, and the
-		// reason is in project.md: the point at which an XHR's body can be
-		// replaced is a `load` listener whose order against the page's own is
-		// not guaranteed, so it would prune sometimes -- and a count claiming
-		// coverage it does not have is worse than an honest absence.
-		for (const char *no : { "trusted-set-cookie", "trusted-replace-fetch",
+		// **`trusted-click-element` is the deliberate absence now**, and the
+		// reason is in project.md: `consent_blocker` already clicks a banner's
+		// buttons from rules written here and reviewed here, so a scriptlet
+		// that clicks whatever a selector names would be a second and less
+		// guarded path to the same action. The trusted names that ARE in the
+		// catalog were absent for want of anything saying which lists are
+		// trusted, which the settings page now does.
+		for (const char *no : { "trusted-click-element", "trusted-prune-fetch",
 		                         "aost", "trusted-prune-inbound-object",
 		                         "eval", "" }) {
 			check(!scriptlets::vetted(QString::fromLatin1(no)),
@@ -233,7 +245,7 @@ int main(int argc, char **argv) {
 		check(c.name == "json-prune" && c.args == QStringList{ "adPlacements" },
 		       QString("with its argument (%1 / %2)")
 		           .arg(c.name, c.args.join("|")));
-		check(!scriptlets::parse_call("trusted-set-cookie, a, b", &c, &why),
+		check(!scriptlets::parse_call("trusted-click-element, a, b", &c, &why),
 		       QString("one to an unimplemented scriptlet does not (%1)")
 		           .arg(why));
 		check(!scriptlets::parse_call("", &c, &why),
@@ -482,9 +494,29 @@ int main(int argc, char **argv) {
 		}
 		// The count lives here, once. It moves when the catalog does, which
 		// is the point: a name added without a test is an entry nothing ran.
-		check(scriptlets::names().size() == 15,
-		       QString("fifteen scriptlets in the catalog (%1)")
+		check(scriptlets::names().size() == 19,
+		       QString("nineteen scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
+		// The trusted four, named here rather than counted: the question a
+		// reader has is which scriptlets can act on a page's behalf, and a
+		// number does not answer it.
+		for (const char *t : { "trusted-set-constant",
+		                        "trusted-set-local-storage-item",
+		                        "trusted-set-cookie",
+		                        "trusted-replace-fetch-response" }) {
+			const QString name = QString::fromLatin1(t);
+			check(scriptlets::vetted(name) && scriptlets::requires_trust(name),
+			       QString("%1 is in the catalog and needs trust").arg(name));
+		}
+		// **Asked of the catalog entry rather than of the spelling.** A name
+		// cannot acquire the power by looking like one of those, and -- the
+		// half that would actually hurt -- an ordinary scriptlet cannot lose
+		// its ability to run by being renamed.
+		for (const char *u : { "json-prune", "set-constant", "remove-attr",
+		                        "json-prune-fetch-response" }) {
+			check(!scriptlets::requires_trust(QString::fromLatin1(u)),
+			       QString("%1 does not").arg(QString::fromLatin1(u)));
+		}
 	}
 
 	section("a pattern argument that backtracks is refused, by the shared rule");
@@ -992,6 +1024,254 @@ int main(int argc, char **argv) {
 		          "json-prune-fetch-response, adPlacements, , /player/",
 		          &c, &why),
 		       QString("and an ordinary rule is kept (%1)").arg(why));
+	}
+
+	section("a trusted scriptlet runs only for a list marked trusted");
+	{
+		// **The case this class exists to make.** The same rule, the same
+		// generated script, the only difference being the flag the
+		// subscription carried -- so a list nobody vouched for cannot write a
+		// cookie however it spells its rules.
+		QJSEngine untrusted;
+		give_page(&untrusted);
+		check(run_one(&untrusted, "trusted-set-cookie",
+		               { "consent", "yes", "7" }, false).isEmpty(),
+		       "an untrusted list's call leaves a script that evaluates");
+		check(ask(&untrusted, "String(window.__cookies.length)") == "0",
+		       QString("and writes no cookie (%1)")
+		           .arg(ask(&untrusted, "window.__cookies.join('/')")));
+
+		QJSEngine trusted;
+		give_page(&trusted);
+		check(run_one(&trusted, "trusted-set-cookie",
+		               { "consent", "yes", "7" }, true).isEmpty(),
+		       "a trusted list's call runs");
+		check(ask(&trusted, "String(window.__cookies.length)") == "1",
+		       QString("and writes one cookie (%1)")
+		           .arg(ask(&trusted, "window.__cookies.join('/')")));
+		check(ask(&trusted, "window.__cookies[0]").startsWith("consent=yes;"),
+		       QString("with the pair the rule named (%1)")
+		           .arg(ask(&trusted, "window.__cookies[0]")));
+		check(ask(&trusted, "window.__cookies[0]").contains("expires="),
+		       "and an expiry, because the rule gave a number of days");
+		check(ask(&trusted, "window.__cookies[0]").endsWith("path=/"),
+		       "and a path, because a cookie without one is the page's path");
+
+		// **The gate is in two places and this is the second.** `read` drops
+		// such a call from an untrusted list, so a call reaching here with
+		// the flag clear is one some other caller built -- and it still does
+		// nothing. Sabotage: deleting the `requires_trust` test in
+		// `source_for` turns the first pair of checks above red.
+		scriptlet_call c;
+		c.scope   = "x.test";
+		c.name    = "trusted-set-cookie";
+		c.args    = { "a", "b" };
+		c.trusted = false;
+		check(scriptlets::source_for({ c }).isEmpty(),
+		       "a trusted call with the flag clear generates no script at all");
+		c.trusted = true;
+		check(!scriptlets::source_for({ c }).isEmpty(),
+		       "and the same call with it set does");
+	}
+
+	section("a cookie's halves are encoded, so a value cannot add attributes");
+	{
+		// **The injection this class would otherwise offer.** A value
+		// carrying `;` would add a domain, a path or a longer expiry than the
+		// rule asked for, which is a filter list writing a cookie it did not
+		// say it was writing. Both halves go through `encodeURIComponent`, so
+		// the separator cannot survive in either.
+		QJSEngine eng;
+		give_page(&eng);
+		check(run_one(&eng, "trusted-set-cookie",
+		               { "ok", "yes; domain=.evil.test; max-age=99999999" },
+		               true).isEmpty(),
+		       "a value carrying attributes runs");
+		const QString written = ask(&eng, "window.__cookies[0]");
+		// **Asserted on the separator, not on the words.**
+		// `encodeURIComponent` leaves `-` and `=` alone, so "max-age" and
+		// "domain=" survive inside the value as text -- harmlessly, because
+		// what makes a directive a directive is the `;` that introduces it,
+		// and that is `%3B`. The first version of these two lines hunted for
+		// the words and failed on a cookie that was correct.
+		check(!written.contains("; domain="),
+		       QString("and adds no domain directive (%1)").arg(written));
+		check(!written.contains("; max-age"),
+		       QString("nor a max-age one (%1)").arg(written));
+		check(written.count(QStringLiteral("; ")) == 1,
+		       QString("exactly one directive, the one it wrote (%1)")
+		           .arg(written));
+		check(written.contains("yes%3B%20domain"),
+		       QString("the text is kept, as one value (%1)").arg(written));
+		// A path cannot be percent-encoded and still mean what it says, so it
+		// is checked instead and anything else falls back to the whole site.
+		QJSEngine p;
+		give_page(&p);
+		check(run_one(&p, "trusted-set-cookie",
+		               { "ok", "yes", "1", "/x; domain=.evil.test" },
+		               true).isEmpty(), "a path carrying attributes runs");
+		check(!ask(&p, "window.__cookies[0]").contains("evil") &&
+		          ask(&p, "window.__cookies[0]").endsWith("path=/"),
+		       QString("and is refused as a path (%1)")
+		           .arg(ask(&p, "window.__cookies[0]")));
+	}
+
+	section("the trusted setters take a value the vocabulary has no word for");
+	{
+		// **What separates these from their untrusted namesakes**, and the
+		// whole of why they are a second class: `set-constant` can say false
+		// or a number, and this can say anything at all.
+		QJSEngine eng;
+		give_page(&eng);
+		check(run_one(&eng, "trusted-set-constant",
+		               { "cfg.token", "a-string-no-word-covers" },
+		               true).isEmpty(), "a bare string is set");
+		check(ask(&eng, "window.cfg.token") == "a-string-no-word-covers",
+		       QString("and reads back as itself (%1)")
+		           .arg(ask(&eng, "window.cfg.token")));
+
+		QJSEngine j;
+		give_page(&j);
+		check(run_one(&j, "trusted-set-constant",
+		               { "cfg.obj", "{\"ok\":1}" }, true).isEmpty(),
+		       "a JSON value is set");
+		check(ask(&j, "String(window.cfg.obj.ok)") == "1",
+		       QString("and is parsed (%1)")
+		           .arg(ask(&j, "String(window.cfg.obj.ok)")));
+
+		// The shared vocabulary is still consulted first, so a rule saying
+		// `false` gets the boolean rather than the five-character string.
+		QJSEngine v;
+		give_page(&v);
+		check(run_one(&v, "trusted-set-constant", { "cfg.off", "false" },
+		               true).isEmpty(), "a word the vocabulary covers is set");
+		check(ask(&v, "typeof window.cfg.off") == "boolean",
+		       QString("as the type the word names (%1)")
+		           .arg(ask(&v, "typeof window.cfg.off")));
+
+		// Storage, and the contrast: the untrusted one refuses a value it has
+		// no word for rather than writing the text.
+		QJSEngine st;
+		give_page(&st);
+		check(run_one(&st, "set-local-storage-item", { "k", "some-opaque-id" })
+		          .isEmpty(), "the untrusted storage scriptlet runs");
+		check(ask(&st, "typeof window.__store.k") == "undefined",
+		       QString("and writes nothing (%1)")
+		           .arg(ask(&st, "String(window.__store.k)")));
+		check(run_one(&st, "trusted-set-local-storage-item",
+		               { "k", "some-opaque-id" }, true).isEmpty(),
+		       "the trusted one runs");
+		check(ask(&st, "window.__store.k") == "some-opaque-id",
+		       QString("and writes it (%1)")
+		           .arg(ask(&st, "String(window.__store.k)")));
+		check(run_one(&st, "trusted-set-local-storage-item",
+		               { "k", "$remove$" }, true).isEmpty(),
+		       "and $remove$ still removes");
+		check(ask(&st, "typeof window.__store.k") == "undefined",
+		       QString("the item (%1)")
+		           .arg(ask(&st, "String(window.__store.k)")));
+	}
+
+	section("trusted-replace-fetch-response rewrites a matching body only");
+	{
+		// Same machinery as the pruner -- one `filter_fetch`, two callers --
+		// so what is new here is the rewrite and the url scoping.
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_fetch_stubs));
+		check(run_one(&eng, "trusted-replace-fetch-response",
+		               { "\"ok\":1", "\"ok\":0", "/player/" },
+		               true).isEmpty(), "the rewrite installs");
+		check(ask(&eng, "window.ask('https://x.test/player/get')")
+		          .contains("\"ok\":0"),
+		       QString("a matching body is rewritten (%1)")
+		           .arg(ask(&eng, "window.ask('https://x.test/player/get')")));
+		check(!ask(&eng, "window.ask('https://x.test/other/get')")
+		           .contains("\"ok\":0"),
+		       QString("one on another url is not (%1)")
+		           .arg(ask(&eng, "window.ask('https://x.test/other/get')")));
+
+		// The status survives, because a page checks it.
+		QJSEngine keep;
+		give_page(&keep);
+		keep.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&keep, "trusted-replace-fetch-response",
+		         { "ok", "fine", "/player/" }, true);
+		check(ask(&keep, "(function () { var st = 0; "
+		                  "window.fetch('https://x.test/player/a')"
+		                  ".then(function (r) { st = r.status; }); "
+		                  "return String(st); })()") == "207",
+		       "the rewritten response keeps the original's status");
+
+		// A regex search, and the replacement is literal: `$&` in it is text
+		// rather than a back-reference, which a list cannot have meant.
+		QJSEngine re;
+		give_page(&re);
+		re.evaluate(QString::fromLatin1(k_fetch_stubs));
+		check(run_one(&re, "trusted-replace-fetch-response",
+		               { "/[0-9]+/", "9", "/player/" }, true).isEmpty(),
+		       "a regex search installs");
+		check(ask(&re, "window.ask('https://x.test/player/get')")
+		          .contains("[9,9]"),
+		       QString("and replaces every match (%1)")
+		           .arg(ask(&re, "window.ask('https://x.test/player/get')")));
+
+		// **The two searches differ in what a `$` means, and the difference
+		// belongs to the search rather than to a choice.** A regex gets
+		// `String.replace`'s semantics, because `/(a)(b)/` with `$2$1` is
+		// what the rules in this family are written against; a substring has
+		// no groups for `$1` to name, so split and join leave it as text.
+		// This was asserted the wrong way round first -- the comment claimed
+		// a literal replacement on both paths and the regex path disagreed,
+		// which is the code being right and its description being wrong.
+		QJSEngine grp;
+		give_page(&grp);
+		grp.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&grp, "trusted-replace-fetch-response",
+		         { "/ok/", "[$&]", "/player/" }, true);
+		check(ask(&grp, "window.ask('https://x.test/player/get')")
+		          .contains("\"[ok]\":1"),
+		       QString("a regex replacement reads its groups (%1)")
+		           .arg(ask(&grp, "window.ask('https://x.test/player/get')")));
+
+		QJSEngine lit;
+		give_page(&lit);
+		lit.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&lit, "trusted-replace-fetch-response",
+		         { "ok", "[$&]", "/player/" }, true);
+		check(ask(&lit, "window.ask('https://x.test/player/get')")
+		          .contains("[$&]"),
+		       QString("a substring replacement is literal text (%1)")
+		           .arg(ask(&lit, "window.ask('https://x.test/player/get')")));
+	}
+
+	section("both of this scriptlet's pattern arguments are checked");
+	{
+		// **Two patterns on one rule**: what to look for and which url to
+		// look in, at positions 0 and 2. The bitmask names both, so a
+		// backtracking regex in either is refused -- and the first position
+		// is the one a reader would expect to be a plain string.
+		scriptlet_call c;
+		QString why;
+		check(!scriptlets::parse_call(
+		          "trusted-replace-fetch-response, /^(a+)+$/, x, /ads/",
+		          &c, &why),
+		       QString("a backtracking search is refused (%1)").arg(why));
+		check(!scriptlets::parse_call(
+		          "trusted-replace-fetch-response, x, y, /^(a+)+$/",
+		          &c, &why),
+		       QString("so is a backtracking url (%1)").arg(why));
+		check(scriptlets::parse_call(
+		          "trusted-replace-fetch-response, ads, , /player/", &c, &why),
+		       QString("and an ordinary rule is kept (%1)").arg(why));
+		// The replacement is not a pattern and is not checked as one: it is
+		// text, and refusing text for looking like a regex would refuse a
+		// rule that meant exactly what it said.
+		check(scriptlets::parse_call(
+		          "trusted-replace-fetch-response, a, /^(b+)+$/, /player/",
+		          &c, &why),
+		       QString("the replacement is not checked as a pattern (%1)")
+		           .arg(why));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

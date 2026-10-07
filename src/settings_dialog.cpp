@@ -1700,15 +1700,28 @@ void settings_dialog::rebuild_subscriptions() {
 			row->setToolTip(0, s.url.toString());
 			row->setFlags(row->flags() | Qt::ItemIsUserCheckable);
 			row->setCheckState(0, s.enabled ? Qt::Checked : Qt::Unchecked);
-			row->setText(1, s.fetched.isValid()
+			// **The trust box, off unless somebody ticked it.** Its own
+			// tooltip rather than only the column's, because this is the one
+			// box on the page that lets a subscribed file act on a page's
+			// behalf, and a person meeting it on a row should not have to go
+			// looking for what it means.
+			row->setCheckState(1, s.trusted ? Qt::Checked : Qt::Unchecked);
+			row->setToolTip(1,
+			  "Let this list's trusted scriptlets run. Those can write a "
+			  "cookie, set a value the page reads, or replace what a request "
+			  "answers -- things done on the page's behalf rather than kept "
+			  "from it. Tick it for a publisher you trust; the rest of the "
+			  "list works either way.");
+			row->setText(2, s.fetched.isValid()
 			                  ? QLocale().toString(s.fetched,
 			                                        QLocale::ShortFormat)
 			                  : QStringLiteral("never"));
-			row->setText(2, s.note);
+			row->setText(3, s.note);
 		}
 	}
 	m_subs_view->resizeColumnToContents(0);
 	m_subs_view->resizeColumnToContents(1);
+	m_subs_view->resizeColumnToContents(2);
 	m_filling_subs = false;
 	m_subs_remove->setEnabled(false);
 }
@@ -1753,14 +1766,17 @@ void settings_dialog::build_filter_page(QWidget *page) {
 	  "force. What this build takes from a list is counted beside it: "
 	  "exceptions, rules carrying options and scriptlets are read and not "
 	  "enforced, so the number is what is working rather than what the file "
-	  "holds.", page);
+	  "holds. A few scriptlets act on a page's behalf rather than keeping "
+	  "something from it, and those run only for a list you have ticked as "
+	  "trusted; they are counted beside the rest when they are left out.",
+	  page);
 	subs_intro->setWordWrap(true);
 	v->addWidget(subs_intro);
 
 	m_subs_view = new QTreeWidget(page);
 	m_subs_view->setObjectName("subscriptions");
-	m_subs_view->setColumnCount(3);
-	m_subs_view->setHeaderLabels({ "List", "Last fetch",
+	m_subs_view->setColumnCount(4);
+	m_subs_view->setHeaderLabels({ "List", "Trusted", "Last fetch",
 	                                "What this build took" });
 	m_subs_view->setRootIsDecorated(false);
 	v->addWidget(m_subs_view, 1);
@@ -1789,17 +1805,29 @@ void settings_dialog::build_filter_page(QWidget *page) {
 		  m_sub_updater && !m_subs_view->selectedItems().isEmpty());
 	});
 
-	// **The checkbox is the enable, written straight back.** A setting that
-	// takes effect only when some other button is pressed is a setting people
+	// **Both checkboxes are written straight back.** A setting that takes
+	// effect only when some other button is pressed is a setting people
 	// believe they have changed.
 	connect(m_subs_view, &QTreeWidget::itemChanged, this,
 	         [this](QTreeWidgetItem *item, int column) {
-		if (m_filling_subs || !m_sub_updater || column != 0)
+		if (m_filling_subs || !m_sub_updater || (column != 0 && column != 1))
 			return;
 		const int row = m_subs_view->indexOfTopLevelItem(item);
 		QList<subscription> subs = m_sub_updater->subscriptions();
 		if (row < 0 || row >= subs.size())
 			return;
+		if (column == 1) {
+			// **Trusting a list changes what this build keeps from a body it
+			// already has**, so the cached copy is re-read rather than
+			// waiting for the next fetch: the scriptlets that were dropped
+			// are in the file on disk, and a person who has just ticked the
+			// box is owed the effect now. `subscriptions_changed` is what
+			// `write_subscriptions` emits, and the shell re-reads every
+			// cached list on it.
+			subs[row].trusted = item->checkState(1) == Qt::Checked;
+			write_subscriptions(subs);
+			return;
+		}
 		subs[row].enabled = item->checkState(0) == Qt::Checked;
 		write_subscriptions(subs);
 		// Newly enabled with nothing cached has nothing to enforce until it

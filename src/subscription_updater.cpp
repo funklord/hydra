@@ -124,7 +124,7 @@ void subscription_updater::finish(QNetworkReply *reply, int which) {
 		refuse(QString("the server answered %1").arg(status));
 	} else {
 		const subscription_read rep = filter_subscription::read(
-		  QString::fromUtf8(body), s.rules);
+		  QString::fromUtf8(body), s.rules, s.trusted);
 		if (!rep.ok()) {
 			refuse(rep.refusal);
 		} else if (!QDir().mkpath(m_dir)) {
