@@ -561,6 +561,95 @@ int main(int argc, char **argv) {
 		       "and if it is in the file anyway, nothing ships it to the page");
 	}
 
+	section("a scriptlet in the person's own list is a third kind of rule");
+	{
+		// **`##` is all a scriptlet rule and a cosmetic rule share.** Before
+		// `filter_rule::scriptlet` existed, `parse_rule` saw the separator and
+		// called this cosmetic with a selector of `+js(...)` -- which the CSS
+		// parser refuses, so the rule sat in the list looking accepted and did
+		// nothing whatever. Silently inert is the failure this section is
+		// written against, and it is worse than a refusal because nothing
+		// says so.
+		filter_rule r;
+		check(filter_list::parse_rule(
+		         "youtube.com##+js(json-prune, adPlacements playerAds)", &r),
+		       "a scriptlet rule parses");
+		check(r.scriptlet && !r.cosmetic,
+		       QString("as a scriptlet and not as a cosmetic rule (%1/%2)")
+		           .arg(r.scriptlet).arg(r.cosmetic));
+		check(r.scope == "youtube.com",
+		       QString("scoped to the site it names (%1)").arg(r.scope));
+		const dry_run ok = filter_list::evaluate(r, {}, "youtube.com");
+		check(!ok.rejected,
+		       QString("the review accepts it (%1)").arg(ok.reason));
+		// **An empty dry run is the honest answer here, not a finding.** A
+		// scriptlet matches no URL and hides no element, so there is nothing
+		// to simulate -- and `would_block` being empty must not be read as
+		// "this rule does nothing".
+		check(ok.would_block.isEmpty() && !ok.cosmetic_checked,
+		       "with nothing to simulate, because it matches no request");
+
+		// Delivery-time, both halves, because a rule can reach the file
+		// without passing the review.
+		filter_list fl;
+		fl.add(r);
+		check(cosmetic_filters::selectors_for(&fl, "youtube.com").isEmpty(),
+		       "nothing ships it to the page as a selector");
+		// **The fixture is the rule's own text as a URL, which is contrived
+		// on purpose: it is the only input that separates the two
+		// implementations.** Without the flag this line became a substring
+		// network rule whose needle was the whole of it, so a URL containing
+		// that text matched. A realistic URL could not tell the two apart --
+		// the needle has spaces and parentheses in it and would never fire --
+		// which would make a plausible-looking assertion pass either way.
+		check(!fl.blocks("https://x.test/youtube.com##+js(json-prune, "
+		                  "adPlacements playerAds)", "x.test"),
+		       "and it is not in the network index as a substring needle");
+		check(!fl.blocks("https://youtube.com/watch?v=aaaaaaaaaaa",
+		                  "youtube.com"),
+		       "nor does it block the page it patches");
+
+		// The three refusals, each with its own reason.
+		filter_rule bare;
+		check(filter_list::parse_rule("##+js(json-prune, x)", &bare),
+		       "an unscoped scriptlet parses");
+		const dry_run no_scope = filter_list::evaluate(bare, {}, "x.test");
+		check(no_scope.rejected && no_scope.reason.contains("every page"),
+		       QString("and is refused for patching every page (%1)")
+		           .arg(no_scope.reason));
+
+		filter_rule unknown;
+		check(filter_list::parse_rule("x.test##+js(eval-this, window.X=1)",
+		                               &unknown),
+		       "a scriptlet outside the catalog parses");
+		const dry_run not_ours = filter_list::evaluate(unknown, {}, "x.test");
+		check(not_ours.rejected,
+		       QString("and is refused (%1)").arg(not_ours.reason));
+
+		// **The judgement, asserted so it is not quietly widened.** Trust is
+		// a statement about a publisher and the settings page asks it per
+		// subscription. This list has no publisher: it holds what a person
+		// typed and what they accepted from the model, and once written
+		// nothing in the file tells the two apart.
+		filter_rule powerful;
+		check(filter_list::parse_rule(
+		         "x.test##+js(trusted-set-cookie, consent, yes)", &powerful),
+		       "a trusted scriptlet parses here too");
+		const dry_run refused = filter_list::evaluate(powerful, {}, "x.test");
+		check(refused.rejected,
+		       QString("and is refused in this list (%1)").arg(refused.reason));
+		check(refused.reason.contains("trusted"),
+		       QString("saying where it would have to come from (%1)")
+		           .arg(refused.reason));
+
+		// The shared pattern refusal reaches here as well, by the same call.
+		filter_rule slow;
+		check(filter_list::parse_rule("x.test##+js(nostif, /^(a+)+$/)", &slow),
+		       "a backtracking argument parses");
+		check(filter_list::evaluate(slow, {}, "x.test").rejected,
+		       "and is refused by the rule site_rules already had");
+	}
+
 	section("a real list has to be answerable per request");
 	{
 		// `blocks()` was a linear scan calling `matches()` on every rule, and

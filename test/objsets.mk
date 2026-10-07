@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build f843219d, mtime 2026-10-07 17:31)
+#     /home/claude/src/fmake/fmake  (build c8908ca3, mtime 2026-10-08 00:12)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -188,7 +188,8 @@ OBJS_test_bundle = \
 	$(BUILD_DIR)/app/settings_bundle.o \
 	$(BUILD_DIR)/app/cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
-	$(BUILD_DIR)/app/policy.o
+	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/scriptlets.o
 
 OBJS_test_credstore = \
 	$(BUILD_DIR)/app/credential_store.o
@@ -354,24 +355,24 @@ OBJS_test_probe_ui = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/app/settings_dialog.o \
 	$(BUILD_DIR)/app/download_manager.o \
+	$(BUILD_DIR)/app/filter_subscription.o \
+	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
+	$(BUILD_DIR)/moc/moc_subscription_updater.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/policy_engine.o \
 	$(BUILD_DIR)/app/settings_bundle.o \
-	$(BUILD_DIR)/app/filter_subscription.o \
-	$(BUILD_DIR)/moc/moc_subscription_updater.o \
-	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/theme.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o
 
 OBJS_test_replay = \
@@ -432,6 +433,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
@@ -451,7 +453,6 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
@@ -673,10 +674,10 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -814,10 +815,10 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -1098,10 +1099,10 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/download_manager.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -1238,10 +1239,10 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/download_manager.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -1513,10 +1514,10 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -1658,13 +1659,13 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -1793,10 +1794,10 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -1939,10 +1940,10 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -2078,10 +2079,10 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -2215,10 +2216,10 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -2368,10 +2369,10 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/local_proxy.o \
@@ -2493,10 +2494,10 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -2635,10 +2636,10 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -3055,10 +3056,10 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -3203,11 +3204,11 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
-	$(BUILD_DIR)/app/scriptlets.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -3627,10 +3628,10 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -3770,13 +3771,13 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
-	$(BUILD_DIR)/app/scriptlets.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -4046,10 +4047,10 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -4327,10 +4328,10 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -4613,12 +4614,12 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
-	$(BUILD_DIR)/app/scriptlets.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -4739,7 +4740,9 @@ OBJS_try_send_gate = \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/moc/moc_filter_dialog.o
+	$(BUILD_DIR)/moc/moc_filter_dialog.o \
+	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/site_rules.o
 
 OBJS_try_settings = \
 	$(BUILD_DIR)/app/main_window.o \
@@ -4759,10 +4762,10 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -5069,10 +5072,10 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -5354,10 +5357,10 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -5494,10 +5497,10 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -5632,10 +5635,10 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
@@ -5772,10 +5775,10 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/address_input.o \
-	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/address_input.o \
+	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
 	$(BUILD_DIR)/app/cert_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \

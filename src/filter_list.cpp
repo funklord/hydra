@@ -1,5 +1,7 @@
 #include "filter_list.h"
 
+#include "scriptlets.h"
+
 #include <QReadLocker>
 #include <QWriteLocker>
 
@@ -26,7 +28,16 @@ bool filter_list::parse_rule(const QString &line, filter_rule *out) {
 	filter_rule r;
 	r.text = t;
 	const int hash = t.indexOf("##");
-	if (hash >= 0) {
+	if (hash >= 0 &&
+	    t.mid(hash + 2).startsWith(QLatin1String("+js("))) {
+		// **Checked before the cosmetic branch, because `##` is all the two
+		// share.** The catalog, the argument rules and the scope requirement
+		// are applied by `evaluate()` through `scriptlets::parse_call`, which
+		// is the same classifier a subscribed list goes through -- a second
+		// parser for this syntax is how the two would come to disagree.
+		r.scriptlet = true;
+		r.scope     = t.left(hash);
+	} else if (hash >= 0) {
 		r.cosmetic = true;
 		r.scope    = t.left(hash);
 	} else {
@@ -142,6 +153,51 @@ dry_run filter_list::evaluate(const filter_rule &r, const QStringList &observed,
 	dry_run out;
 
 	// --- Static breadth check: reject dangerously broad rules (sec 12.4).
+	if (r.scriptlet) {
+		// **The same three refusals a subscribed list meets**, by the same
+		// call, because a rule typed here and a rule fetched from a list are
+		// the same text with the same powers.
+		if (r.scope.isEmpty()) {
+			out.rejected = true;
+			out.reason   = "A scriptlet with no domain would patch every page.";
+			return out;
+		}
+		const int at = r.text.indexOf("##");
+		QString inside = r.text.mid(at + 2).trimmed();
+		if (!inside.endsWith(QLatin1Char(')'))) {
+			out.rejected = true;
+			out.reason   = "Not a scriptlet call: it does not close its "
+			                "parenthesis.";
+			return out;
+		}
+		inside = inside.mid(4, inside.size() - 5);
+		scriptlet_call call;
+		QString why;
+		if (!scriptlets::parse_call(inside, &call, &why)) {
+			out.rejected = true;
+			out.reason   = QString("Not a scriptlet this build runs: %1.")
+			                   .arg(why);
+			return out;
+		}
+		// **The trusted class is refused in this list, and that is a
+		// judgement rather than a limitation of the parser.** Trust is a
+		// statement about a publisher -- the settings page asks it per
+		// subscription. This list has no publisher: it holds what a person
+		// typed AND what they accepted from the model, and nothing in the
+		// file distinguishes the two once it is written. So the powers that
+		// act on a page's behalf stay with lists somebody vouched for.
+		if (scriptlets::requires_trust(call.name)) {
+			out.rejected = true;
+			out.reason   = QString("\"%1\" acts on the page's behalf, so it "
+			                        "runs only from a subscribed list marked "
+			                        "trusted.").arg(call.name);
+			return out;
+		}
+		// Nothing to simulate: a scriptlet matches no URL and hides no
+		// element, so an empty `would_block` here is the honest answer rather
+		// than a dry run that found nothing.
+		return out;
+	}
 	if (r.cosmetic) {
 		const QString selector = r.text.mid(r.text.indexOf("##") + 2).trimmed();
 		if (r.scope.isEmpty()) {
@@ -321,9 +377,16 @@ QStringList filter_list::tokens_in(const QString &url) {
 void filter_list::index_one(int i) {
 	const filter_rule &r = m_rules[i];
 	compiled c;
-	if (r.cosmetic) {
+	if (r.cosmetic || r.scriptlet) {
 		// Present so the two lists stay index-parallel; never consulted by
-		// `blocks()`, which skips cosmetic rules.
+		// `blocks()`, which reaches a rule only through the host, substring
+		// and wildcard tables and neither kind is entered in them.
+		//
+		// **A scriptlet rule has to be excluded here explicitly.** With
+		// `cosmetic` false it fell through to the substring branch and became
+		// a network needle holding the whole line, spaces and parentheses
+		// included -- unmatchable rather than dangerous, but a rule in the
+		// index pretending to be something it is not.
 		m_compiled.push_back(c);
 		return;
 	}

@@ -34513,6 +34513,128 @@ the regenerated sets by the per-program multiset diff rather than by the tool
 having reported success, since the tool that moved is the thing under
 suspicion.
 
+## A scriptlet in the person's own list, which was silently inert
+
+Asked whether this is a YouTube ad blocker now, and the honest answer was
+**the mechanism yes, the rules no**. Three measurements, because the question
+deserves numbers rather than a feeling:
+
+- **No default subscription ships.** Nothing in `src/` names easylist,
+  uBlock, fanboy or any other list, and Add is a bare `QInputDialog` asking
+  "Address of the filter list:". A fresh install carries no upstream rules at
+  all.
+- **The person's own list could not hold a scriptlet.** `m_scriptlets` was
+  filled in exactly one place, the subscription loop, and `filter_list.cpp`
+  had no notion of `+js` anywhere. So somebody who knew the rule their site
+  needed had to stand up a subscription to hold one line.
+- **The evolution loop cannot propose the kind YouTube needs.**
+  `filter_signals` collects request URLs -- third-party shapes, ad-serving
+  shapes, high-frequency beacons -- and a proposal is validated by simulating
+  against observed URLs. A YouTube video ad makes no distinguishable
+  third-party request: it arrives inside the player's own JSON from the
+  content host. The word `scriptlet` appears nowhere in the proposal path.
+
+The second is the one that was cheap to close, and it was not merely missing.
+
+### It parsed as a cosmetic rule, and that is worse than refusing it
+
+`parse_rule` saw `##` and called anything carrying it cosmetic. So
+`youtube.com##+js(json-prune, adPlacements)` became a cosmetic rule whose
+**selector** was `+js(json-prune, adPlacements)` -- which no CSS parser
+accepts. It passed the breadth check, since it is not `*`, `body`, `html` or
+`div`; it passed the unsafe-selector check, since it closes no rule; it went
+into the file; and then the page refused it. **Accepted, stored, and
+completely inert, with nothing anywhere saying so.**
+
+The earlier fix to `cosmetic_filters` is what kept that from being worse
+rather than merely useless. One `insertRule` per selector means the engine
+refuses this one and applies the rest; the comma-joined form it replaced
+would have had a single invalid selector invalidate the whole rule and
+silently disable cosmetic filtering for that whole site.
+
+`filter_rule` has a `scriptlet` flag now, checked before the cosmetic branch
+because `##` is all the two kinds share. Three places had to learn it:
+
+- `parse_rule`, which sets it when `##` is followed by `+js(`.
+- `index_one`, **explicitly**, because with `cosmetic` false a scriptlet rule
+  fell through to the substring branch and became a network needle holding
+  the whole line, spaces and parentheses included. Unmatchable rather than
+  dangerous, and still a rule in the index pretending to be another kind.
+- `evaluate`, which applies the same three refusals a subscribed list meets,
+  by the same call -- `scriptlets::parse_call`, so there is one classifier
+  for this syntax rather than two that drift.
+
+### The trusted class is refused in this list, as a judgement
+
+Trust is a statement about a **publisher**, which is why the settings page
+asks it per subscription. This list has no publisher: it holds what a person
+typed *and* what they accepted from the model, and once the file is written
+nothing distinguishes the two. So the powers that act on a page's behalf stay
+with lists somebody vouched for. It is asserted rather than merely
+implemented, so that widening it later is a decision somebody takes rather
+than a line that drifts -- and widening it is the holder's, not mine.
+
+### What the sabotage showed, which was worse than the entry above said
+
+Removing the `+js(` branch from `parse_rule` turns **7** checks red, and the
+messages say more than the write-up did:
+
+    as a scriptlet and not as a cosmetic rule (0/1)
+    nothing ships it to the page as a selector
+    and is refused for patching every page (Cosmetic rule with no domain
+                                             would apply to every site.)
+    and is refused ()
+    and is refused in this list ()
+    saying where it would have to come from ()
+    and is refused by the rule site_rules already had
+
+**Two corrections to my own account.** "Inert" was right about the outcome and
+wrong about the mechanism: `selectors_for` really did hand `+js(json-prune,
+adPlacements playerAds)` to the page as a CSS selector, and what made it
+harmless was the browser refusing it -- not anything here declining to ship
+it. And it was not only inert. The three refusals this now carries were
+**absent**: a scriptlet naming something outside the catalog, one in the
+trusted class, and one with a catastrophic regex argument were each *accepted*
+into the list as cosmetic rules. Accepted, written to the file, shipped to the
+page, and dropped by the CSS parser.
+
+The unscoped case is the subtle one, and it is why the assertion names its
+words. It *was* refused before -- as a cosmetic rule, saying "Cosmetic rule
+with no domain would apply to every site". Right answer, wrong reason, and a
+message that would send somebody looking for a selector problem. Asserting on
+"every page" rather than on `rejected` alone is what separates the two.
+
+### The fixture had to be contrived to discriminate
+
+Proving the index no longer holds the rule needs a URL containing the rule's
+own text, which no real request looks like. That is deliberate: it is the
+only input that separates the two implementations. A realistic URL cannot
+tell them apart, because a needle with spaces and parentheses in it never
+fires -- so the plausible-looking assertion would have passed against both
+the broken code and the fixed code, which is the shape this tree calls a test
+that documents a fix rather than defending it.
+
+### And it moved the link sets, which the previous regeneration did not
+
+`filter_list.o` now calls `scriptlets::parse_call`, so every binary linking
+the list needs that object -- a real membership change, where the
+regeneration an hour earlier changed only ordering.
+
+**That earlier one is worth keeping as a worked example of the proof.** The
+raw diff showed four objects apparently added and the same four removed, in
+`OBJS_test_probe_ui`. Parsed per program as multisets: 94 variables, 5684
+objects both sides, **zero** changed membership. The objects had moved
+position, because that suite gained `#include`s that made fmake discover them
+directly rather than transitively -- so it was this tree's change and not a
+defect in a newly-rebuilt fmake, which is what it looked like until one
+command said which program had moved.
+
+The parser is the part to copy. Its first version matched nothing and
+reported "0 of 0 programs changed" -- a clean bill of health from an
+instrument that could not see the file's format. What caught it was printing
+the count it had parsed, which is the only reason that run was not read as a
+pass.
+
 ### What is left
 
 ~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was

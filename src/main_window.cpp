@@ -5693,6 +5693,38 @@ int main_window::load_subscriptions() {
 			m_scriptlets.push_back(c);
 		taken += rep.accepted;
 	}
+	// **The person's own list carries scriptlets too, and did not before.**
+	// `m_scriptlets` was filled from subscriptions alone, so somebody who
+	// knew the rule their site needed could not add it: the only route was to
+	// stand up a subscription to hold one line. A scriptlet is also the one
+	// rule kind that reaches an ad served from the content's own host, which
+	// is the case the network half cannot touch at all.
+	//
+	// The trusted class is refused on the way in rather than here --
+	// `filter_list::evaluate` rejects it at accept time, and `requires_trust`
+	// is asked again below so a line that reached the file by any other route
+	// is refused as well. Same shape as the cosmetic rules, which are checked
+	// at accept time and again where they are applied, so that neither check
+	// has to be the only one.
+	if (m_filters) {
+		for (const filter_rule &r : m_filters->rules()) {
+			if (!r.scriptlet || r.scope.isEmpty())
+				continue;
+			const int at = r.text.indexOf(QStringLiteral("##"));
+			QString inside = r.text.mid(at + 2).trimmed();
+			if (!inside.startsWith(QStringLiteral("+js(")) ||
+			    !inside.endsWith(QLatin1Char(')')))
+				continue;
+			inside = inside.mid(4, inside.size() - 5);
+			scriptlet_call call;
+			if (!scriptlets::parse_call(inside, &call, nullptr))
+				continue;
+			if (scriptlets::requires_trust(call.name))
+				continue;
+			call.scope = r.scope;
+			m_scriptlets.push_back(call);
+		}
+	}
 	// **The counts stay the fetcher's.** Writing them back from here would
 	// make the index say what this build read on this launch rather than what
 	// the last fetch produced, and the difference between those two is exactly

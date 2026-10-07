@@ -12,6 +12,14 @@
 struct filter_rule {
 	QString text;        // "||ads.example.com^" or "example.com##.ad-banner"
 	bool    cosmetic = false;
+	// **A scriptlet rule is a third kind, not a cosmetic one with an odd
+	// selector.** `site.example##+js(name, arg)` shares the `##` separator and
+	// nothing else: there is no selector, nothing is hidden, and no URL is
+	// matched. It was read as cosmetic before this flag existed, which gave
+	// the page a stylesheet rule whose selector was `+js(...)` -- refused by
+	// the CSS parser, so the rule sat in the list looking accepted and did
+	// nothing at all.
+	bool    scriptlet = false;
 	QString scope;       // domain for a site-specific rule, empty = generic
 	QString note;        // why it was proposed, if it came from the AI
 };
