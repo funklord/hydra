@@ -32927,3 +32927,55 @@ remembering about the technique: it finds disagreements, not errors.
 Pinned with an assertion so the state is visible, and left alone: host rules
 are the large majority of any list, and making their bucket handle a wildcard
 changes the shape of the index rather than a rule about tokens.
+
+## Applying a computed diff reproduces the proposal, and the control had to count the right thing
+
+The reorganiser's promise is that the tree ends up as the picture somebody
+accepted: `check_and_repair`, then `compute` turning the difference into
+atomic changes, then `apply`. If a difference is not expressible as one of
+the five change kinds, the tree ends up as something else -- quietly, because
+every change that *was* expressible did happen. Nothing had ever applied a
+successful reorganisation until `test_model` gained one earlier today, so
+nothing had ever compared the result against the proposal.
+
+It holds. Forty rounds from a printed seed, each building a tree, perturbing
+a copy into a proposal, running the documented order and comparing shapes:
+every one ends in the proposal's shape, over 31 reparents, 75 reorders, 21
+invented folders and 13 renames.
+
+### The first version of that test could not see a missing change kind
+
+Disabling the `reordered` branch in `compute` left the section **green**,
+while failing two of the hand-built checks above it. Two reasons, and both
+are about the generator rather than the property:
+
+- **A perturbation that changes nothing still counted.** It moved an
+  arbitrary tab to the front of its folder, which with three tabs is a no-op
+  a third of the time, and the control counted the attempt.
+- **A reorder beside a reparent is masked**, because `apply` inserts a
+  reparented node at the position its change names -- so the position comes
+  out right for the wrong reason.
+
+Fixed in two ways. Every fourth round is now one *pure* perturbation of a
+chosen kind, cycling through the four, and the reorder moves the **last**
+child to the front so the position really changes. And the control counts
+what `compute` emitted rather than what the generator tried: each of the four
+applicable kinds must appear at least once across the rounds.
+
+With both, the same sabotage fails three ways -- the property at round 1, the
+perturbation count as a consequence of the loop stopping, and a control that
+names the kind: *"never computed: reordered"*.
+
+**The rule this is the third instance of**: a control has to count what the
+code under test did, not what the fixture meant to do. The LZ4 payloads, the
+nonce fixtures and this all failed the same way, and only sabotage found any
+of them.
+
+### And a segfault that was mine
+
+The first run of this section crashed. The perturbation detached a tab from
+the folder it was *born* in rather than the one it currently had, so a tab
+moved twice ended up in two children lists and `delete prop` freed it twice.
+Worth recording only because the instinct on a segfault in a reorganiser is
+to suspect the reorganiser: it was the test, and the fix was to read
+`tab->parent` instead of assuming it.

@@ -18,6 +18,7 @@
 
 #include <QCoreApplication>
 #include <algorithm>
+#include <functional>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -890,6 +891,178 @@ int main(int argc, char **argv) {
 		      QString("and the tree is exactly as it was (%1)").arg(shape(orig)));
 		delete orig;
 		delete prop;
+	}
+
+	section("applying a computed diff reproduces the proposal it came from");
+	{
+		// **The feature's whole promise, never asked before today.** A person
+		// is shown a proposal and accepts it; `compute` turns the difference
+		// into atomic changes and `apply` performs them. If a difference is
+		// not expressible as one of the five kinds, the tree ends up as
+		// something other than the picture that was accepted -- quietly,
+		// because every change that *was* expressible did happen.
+		//
+		// Nothing had ever applied a successful reorganisation until
+		// `test_model` gained one earlier today, so no test had ever compared
+		// the result against the proposal.
+		//
+		// Deterministic, and the seed is in the message, so a failure replays.
+		// Each round builds a tree, perturbs a copy, runs the documented order
+		// -- `check_and_repair`, then `compute`, then `apply` -- and compares
+		// shapes. The proposal is read for its shape *after* repair, because
+		// repair is what the pipeline guarantees `compute` is given.
+		const quint32 first_seed = 0x51ced1ff;
+		quint32 seed = first_seed;
+		auto next = [&seed](int n) {
+			seed = seed * 1103515245u + 12345u;
+			return int((seed >> 16) % quint32(n));
+		};
+		// Two identical trees: one to reorganise, one to perturb into the
+		// proposal. Ids are shared, which is what makes them the same tree.
+		auto build = [](int folders, int per) {
+			node *r = root_of();
+			for (int f = 0; f < folders; ++f) {
+				node *fo = add(r, mk(QString("f-%1").arg(f), true,
+				                      QString("folder %1").arg(f)));
+				for (int t = 0; t < per; ++t)
+					add(fo, mk(QString("t-%1-%2").arg(f).arg(t), false,
+					            QString("tab %1.%2").arg(f).arg(t)));
+			}
+			return r;
+		};
+		QStringList trouble;
+		int rounds = 0, perturbations = 0;
+		int emitted[5] = { 0, 0, 0, 0, 0 };
+		for (int round = 0; round < 40 && trouble.isEmpty(); ++round) {
+			node *orig = build(3, 3);
+			node *prop = build(3, 3);
+			++rounds;
+
+			// **Every fourth round is one pure perturbation of a chosen
+			// kind**, cycling through the four, and the rest are one to three
+			// random ones. Without that the generator never reliably produced
+			// a *lone* reorder: moving a tab to the front of its folder is no
+			// change at all when it is already there, and a reorder beside a
+			// reparent is masked, because `apply` inserts a reparented node at
+			// the position the change names. Measured -- disabling the
+			// `reordered` branch in `compute` left this section green while
+			// failing two of the hand-built checks above it, which is how the
+			// hole was found.
+			//
+			// Folders are never moved into their own subtree; a cycle is a
+			// different test, two sections below this one.
+			const bool forced = (round % 4) == 0;
+			const int how_many = forced ? 1 : 1 + next(3);
+			for (int k = 0; k < how_many; ++k) {
+				const int kind = forced ? (round / 4) % 4 : next(4);
+				const int f = next(3), t = next(3), g = next(3);
+				node *from = find(prop, QString("f-%1").arg(f));
+				node *to   = find(prop, QString("f-%1").arg(g));
+				node *tab  = find(prop, QString("t-%1-%2").arg(f).arg(t));
+				if (!from || !to || !tab)
+					continue;
+				// **Detached from the parent it actually has**, not from the
+				// folder it was born in. A later perturbation in the same
+				// round may already have moved it, and removing it from the
+				// wrong list left it in two -- which `delete prop` then
+				// freed twice. The first run of this section segfaulted, and
+				// it was this, not the code under test.
+				node *holder = tab->parent;
+				switch (kind) {
+					case 0:   // reparent a tab into another folder
+						if (to != holder) {
+							holder->children.removeOne(tab);
+							add(to, tab);
+							++perturbations;
+						}
+						break;
+					case 1:   // reorder within its own folder
+						// The LAST child to the front, so the position really
+						// changes -- moving an arbitrary one to index 0 is a
+						// no-op a third of the time with three tabs, and it
+						// still counted as a perturbation.
+						if (holder->children.size() > 1) {
+							node *last = holder->children.last();
+							holder->children.removeOne(last);
+							holder->children.insert(0, last);
+							last->parent = holder;
+							++perturbations;
+						}
+						break;
+					case 2:   // rename a folder
+						to->title = QString("renamed %1").arg(round);
+						++perturbations;
+						break;
+					case 3: {  // a folder the model invented, with a tab in it
+						if (find(prop, QString("f-new-%1").arg(round)))
+							break;   // one invented folder per round
+						node *made = add(prop, mk(QString("f-new-%1").arg(round),
+						                           true, "invented"));
+						holder->children.removeOne(tab);
+						add(made, tab);
+						++perturbations;
+						break;
+					}
+				}
+			}
+			// Orders have to agree with positions before `compute` reads
+			// them, the same way every model mutation leaves them.
+			std::function<void(node *)> renum = [&](node *n) {
+				for (int i = 0; i < n->children.size(); ++i) {
+					n->children[i]->order = i;
+					renum(n->children[i]);
+				}
+			};
+			renum(prop);
+			renum(orig);
+
+			tree_diff::check_and_repair(orig, prop);
+			const QString want  = shape(prop);
+			const QString start = shape(orig);
+			const QList<tree_change> changes = tree_diff::compute(orig, prop);
+			for (const tree_change &c : changes)
+				++emitted[int(c.kind)];
+			tree_diff::apply(orig, changes);
+			const QString got = shape(orig);
+			if (got != want)
+				trouble << QString("round %1: from %2 the proposal was %3 and "
+				                    "applying %4 change(s) gave %5")
+				             .arg(round).arg(start, want)
+				             .arg(changes.size()).arg(got);
+			delete orig;
+			delete prop;
+		}
+		check(trouble.isEmpty(),
+		      QString("%1 rounds from seed 0x%2 end in the proposal's shape "
+		               "(%3)")
+		          .arg(rounds).arg(first_seed, 0, 16)
+		          .arg(trouble.isEmpty() ? QStringLiteral("every one")
+		                                  : trouble.first()));
+		// **The control counts what `compute` DID, not what the generator
+		// tried.** A proposal that happens to perturb nothing compares two
+		// identical trees and passes in silence, and so does one whose
+		// perturbation `compute` has no change kind for -- which is the case
+		// that matters, since the property is about exactly that.
+		check(perturbations >= 40,
+		      QString("and the proposals really differed from the trees "
+		               "(%1 perturbations over %2 rounds)")
+		          .arg(perturbations).arg(rounds));
+		QStringList unexercised;
+		static const char *kind_names[5] = { "reparented", "reordered",
+		                                      "folder_new", "folder_renamed",
+		                                      "duplicate_url" };
+		for (int k = 0; k < 4; ++k)   // duplicate_url is advisory, not applied
+			if (emitted[k] == 0)
+				unexercised << kind_names[k];
+		check(unexercised.isEmpty(),
+		      QString("and each kind of change was computed at least once "
+		               "(%1)")
+		          .arg(unexercised.isEmpty()
+		                   ? QString("reparented %1, reordered %2, new %3, "
+		                              "renamed %4")
+		                         .arg(emitted[0]).arg(emitted[1])
+		                         .arg(emitted[2]).arg(emitted[3])
+		                   : "never computed: " + unexercised.join(", ")));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
