@@ -810,11 +810,38 @@ int main(int argc, char **argv) {
 			const double per = double(u.nsecsElapsed()) / 1000.0 / urls.size();
 			std::printf("        plus %d unpinned rules: %.1f us per request\n",
 			             unpinned, per);
-			// A ceiling rather than a target: the point is that it stays in
-			// microseconds, three orders off the scan, not that it is any
-			// particular number on this machine.
-			check(per < 500.0,
-			      QString("which stays in microseconds (%.1f us)").arg(per));
+			// **A ratio here too, and this check was the half left behind.**
+			// The entry below -- *A ratio after all* -- measured that an
+			// absolute budget is the load-sensitive one: on one machine
+			// minutes apart the scan barely moved while the indexed figure
+			// moved ninety-fold. The main check was converted to a ratio on
+			// the strength of that and this one was not, so it went on
+			// asserting `per < 500.0` -- a number the same entry records
+			// being exceeded, at `indexed 578.3 us` under load.
+			//
+			// It duly failed for the machine rather than the code: 599.8 us
+			// at a load average of 169, and 236.0 us on a re-run minutes
+			// later. Measured 2026-10-08, in a tree where several sessions
+			// build at once.
+			//
+			// So it is a ratio against the scan measured in the same run, on
+			// the same machine, under the same load -- which is what makes
+			// it load-invariant where a constant cannot be. Fifty times is
+			// the floor: measured at 341x idle and 134x loaded, so there is
+			// margin either way, and the property being claimed is that the
+			// index is still dramatically faster even when most rules cannot
+			// be indexed at all.
+			const double scan_per = double(slow_us);
+			const double times = scan_per / qMax(0.001, per);
+			// **And the message carries its number now.** It read
+			// `QString("... (%.1f us)").arg(per)` -- a printf specifier where
+			// `QString::arg` wants `%1` -- so the failure printed a literal
+			// `%.1f` and no value. The one moment the figure matters is the
+			// moment it failed, and that is exactly when it was missing.
+			check(per * 50.0 < scan_per,
+			      QString("which stays far off the scan (%1 us per request, "
+			               "%2x faster than scanning)")
+			          .arg(per, 0, 'f', 1).arg(times, 0, 'f', 0));
 		}
 
 		// **A ratio after all, and the premise this used to carry was

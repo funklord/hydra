@@ -35591,6 +35591,60 @@ directly has to say so rather than rely on what happens to arrive; and the
 outline format, the scope check and the proxy's filtering are all already
 written down somewhere in the tree.
 
+## The ratio lesson was learned, written down, and applied to one of two checks
+
+`test_bundle` failed a timing assertion during an ordinary verification run:
+**599.8 us per request against a ceiling of 500**, at a load average of 169.
+A re-run minutes later measured **236.0 us** and passed. Nothing in that
+suite touches the code that had changed.
+
+**The argument against that ceiling was already in the same file**, a few
+lines below the check that used it:
+
+    loaded   indexed 578.3 us   scan 258172 us
+    idle     indexed   6.3 us   scan 250990 us
+
+and the conclusion written out: *"The scan barely moved and the indexed
+figure moved ninety-fold... So the absolute is the load-sensitive half, and
+it failed this suite for the machine rather than for the code -- in a tree
+where more than one session builds at once, which is not a rare condition."*
+
+**The main check was converted to a ratio on the strength of that. The
+unpinned one was not.** It went on asserting `per < 500.0` -- a figure the
+same entry records being exceeded at 578.3. So the finding was correct, the
+remedy was correct, and it reached one of the two places it applied to.
+
+That is *The proof does not cover what the tool refused* in a new costume:
+the hard part was done and the second site was left carrying the version the
+hard part had just disproved.
+
+### A ratio against the scan measured in the same run
+
+`per * 50 < slow_us`, where `slow_us` is the naive scan timed in the same
+loop on the same machine under the same load -- which is what makes it
+load-invariant where a constant cannot be. Fifty is the floor, measured at
+**341x idle and 134x loaded**, so there is margin either way.
+
+The property being claimed is that the index is still dramatically faster
+than scanning even when most rules cannot be indexed at all, and a ratio
+says that where a microsecond budget only says it on an idle machine.
+
+### The failure could not show its own number
+
+    check(per < 500.0,
+          QString("which stays in microseconds (%.1f us)").arg(per));
+
+`%.1f` is a printf specifier and `QString::arg` wants `%1`, so the failure
+printed a literal `%.1f` and no value. **The one moment the figure matters is
+the moment the check fails, and that is exactly when it was missing** -- the
+measured 599.8 had to be dug out of the saved failure log, from a `printf`
+two lines above.
+
+It carries both numbers now, and the sabotage shows them: *980.8 us per
+request, 73x faster than scanning*. That run is the fix earning its keep in
+the same afternoon -- 980.8 us is twice the old ceiling, on code that is
+unchanged and still two orders off the scan.
+
 ### What is left
 
 ~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was
