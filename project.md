@@ -12064,11 +12064,16 @@ so its absence at the first check is not a coincidence of timing.
 
 A crash now keeps the tree to within a second and a half and the view state to
 within two and a half. What it still loses is the live tabs' navigation
-history, since a blob is only written when a view is suspended. That is
+history, since a blob is only written when a view is suspended. ~~That is
 deliberately not built: serialising every live WebEngine view on a timer is
 real work against a loss only a crash produces, and it wants a measurement of
 what that costs on a window full of tabs before anybody commits to it. It
-stays on the list as the one remaining piece.
+stays on the list as the one remaining piece.~~
+
+**The measurement has been taken and it dissolves the question** -- see *What
+a checkpoint of every live tab actually costs*, below. It is about six
+milliseconds for a window of eight. What is left is the decision, which is
+smaller than the sentence above made it sound.
 
 ## The Android launcher icon was small, outlined and on a white plate
 
@@ -35317,6 +35322,62 @@ relationship this browser's tree exists to show -- so the search would have
 missed it and reported the tab as never made. It searches recursively now and
 asserts the parent explicitly, which also pins the sub-tab behaviour that was
 previously only implied.
+
+## What a checkpoint of every live tab actually costs
+
+`project.md` carried this as the one remaining crash-recovery piece, blocked
+on a number: *"serialising every live WebEngine view on a timer is real work
+against a loss only a crash produces, and it wants a measurement of what that
+costs on a window full of tabs before anybody commits to it."*
+
+Nobody had taken it. `test/live/try_blob_cost.cpp` takes it.
+
+    tabs   save_state (median / worst / all)   blob bytes   write     total
+       8        33 us /  102 us /   331 us         14368   5421 us   5752 us
+      24        64 us /  184 us /  1820 us         43296  12654 us  14474 us
+
+**About six milliseconds and fourteen kilobytes for a window of eight**, and
+fifteen milliseconds for twenty-four. Linear, at roughly 1.8 KB a tab. Against
+any interval a checkpoint would plausibly use -- thirty seconds, a minute --
+that is five hundredths of one percent of a core.
+
+**So the feared cost is not "real work", and the question dissolves rather
+than being informed.** That is the shape `working-practice.md` describes: a
+decision held open on what it might cost is waiting on a measurement nobody
+has taken, and the measurement is usually cheaper than the deliberation. This
+one took an afternoon's driver and answers a question that had stood for
+however long the entry has.
+
+**The write dominates, which is the useful detail**: 94% of the cost at eight
+tabs and 87% at twenty-four is `state_store::save`, not Qt's serialisation. A
+real checkpoint would be cheaper still, because `flush_blobs` already carries
+a dirty set -- it would write the tabs that navigated since the last pass
+rather than all of them, and the entry beside it already argues that case
+("rewriting twenty unchanged blobs because one tab followed a link is work
+with nothing to show for it").
+
+**What is left is a decision and not an unknown**, and it is the holder's: a
+periodic write of session blobs for tabs nobody suspended is a change in what
+the program does at rest, even though the blobs themselves are the same kind
+already written on suspend.
+
+### Why it had to be a live driver
+
+`save_state()` is Qt WebEngine's own serialisation, and the suite's fake
+backend returns an empty `QByteArray`. **A measurement built against the
+wrong backend would have printed a confident zero** -- which is why the driver
+carries a control asserting the blobs are non-empty before any number below
+it is believed, and why it reports `14368 bytes in all` rather than only
+timings.
+
+Each tab visits both of the fixture's pages, so every view has real
+back/forward history. A blob for a single entry is not the blob a checkpoint
+would be writing, and the per-tab figure is the thing being generalised.
+
+Three things it does because the workspace rules say to: it runs offscreen,
+it is clamped to 32 tabs because each live tab is a renderer process, and it
+closes the window itself rather than leaving forty renderers to process
+teardown. Checked afterwards -- no orphans.
 
 ### What is left
 
