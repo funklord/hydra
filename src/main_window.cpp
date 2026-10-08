@@ -600,6 +600,25 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		if (web_view_backend *v = current_view())
 			refresh_media_affordance(v->url().host());
 	});
+	// **And the scriptlets, off the same signal and for a worse failure.**
+	// The other two halves of the ads switch are consulted per request and per
+	// page, so a site moved to allow stops being filtered at once. A scriptlet
+	// is injected at DocumentCreation out of a collection `inject_scriptlets`
+	// fixed when the view was made, and nothing re-read it -- so the switch
+	// worked on a tab opened afterwards and not on the one the person was
+	// looking at, which is the shape of fault nobody reports because the fix is
+	// "open it again".
+	//
+	// `changed()` rather than `on_policy_changed` for the reason above: the ads
+	// setting is reachable from the shield, from the settings dialog and from a
+	// rules file loaded off disk, and this is the one place none of those can
+	// miss. `try_scriptlets` asserts both halves -- a tab that had the patch
+	// loses it, and a tab made while the switch is off never gets it -- because
+	// only the first of those is about this connection.
+	connect(m_policy, &policy_engine::changed, this, [this] {
+		for (web_view_backend *v : m_views_by_id)
+			inject_scriptlets(v);
+	});
 	// The security spine is wired up before we get here: the factory owns the
 	// profile with the interceptor and cookie filter already installed on it
 	// (architecture doc sec 6/sec 7.3), and the policy engine is shared with them.

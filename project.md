@@ -35769,3 +35769,94 @@ true and the assertion goes red, which is the property this tree asks of
 every guard. Recorded rather than done, because it is a change to the
 detector hydra owns and the driver in front of me is the work that was
 asked for.
+
+## The scriptlet pipeline is proven end to end, and it found a gap on the way
+
+`test_scriptlets` runs the generated source in QJSEngine against stubbed
+pages, 290 checks of it, and the trust classification was verified against
+uBlock's own `requiresTrust` for all 41 names. None of that had ever put a
+scriptlet into a real engine through the real subscription path, which is
+this tree's own *a correct function is not a working feature*: the catalog
+was proven and the pipeline was not.
+
+`test/live/try_scriptlets.cpp` drives it -- an index on disk, a cached body
+with a rule in it, the shell's own `load_subscriptions`, the real
+`inject_scriptlets`, Qt WebEngine -- and asks the page what it got.
+
+**No DNS and no YouTube**, which is `try_filters`' trick for the network
+half and the reason this is deterministic. A scriptlet is scoped by
+hostname and `127.0.0.1` is a hostname like any other, so a rule naming it
+is injected into a page served from it. The page reports by fetching a url
+the local server records, which needs no javascript seam in the shell --
+there deliberately is none, pages being spoken to through injected scripts
+and bridges rather than evaluated into.
+
+**It reports both halves, and the second is what separates a prune from a
+wrecked response.** The player endpoint returns `adPlacements` beside
+`streamingData`, and the page says whether the ad slots went *and* whether
+the body it needs survived. A scriptlet that replaced the response, or
+threw inside it, would also report the ads gone.
+
+    == a subscribed scriptlet reaches a real page ==
+      ok  the page reported back (/report?ads=gone&kept=yes)
+      ok  and the ad slots were pruned out of its player response
+      ok  while the part the page needs survived
+
+**The YouTube half is reported, not asserted.** `HYDRA_UBO_LIST=<filters.txt>`
+has it read the real list, count the youtube scriptlet rules, say how many
+this build runs and how many need the list trusted, and name the refusals.
+Asserting against YouTube's current internals would test somebody else's
+product on somebody else's schedule, and a red suite would be news about
+uBlock rather than about us.
+
+### The gap: a gate read in one place and re-read nowhere
+
+**The ads switch had three halves and only two of them answered.** Writing
+the gate assertion found it, which is the only reason it was found at all:
+
+- the known ad hosts and both filter lists are consulted **per request**;
+- the cosmetic selectors are applied **per page**;
+- the scriptlets were filtered by the `ads` setting **once, at injection**,
+  and `inject_scriptlets` ran at view creation, on `load_tree`, and on the
+  settings dialog's `subscriptions_changed` -- never on a policy change.
+
+So turning the shield off for a site stopped the first two immediately and
+left every tab that already existed being patched. **It worked on a tab you
+opened afterwards and not on the one you were looking at**, which is why
+nobody would ever report it: the fix looks like "open it again".
+
+Fixed with a second `policy_engine::changed` connection beside the one the
+media badge already uses, and for the reason its comment gives -- that
+signal is emitted by every mutation the engine has, which is the one place
+none of the three routes to the ads setting can miss, where
+`on_policy_changed` reaches the shield's dialog only.
+
+### What the sabotages establish, including one limit
+
+Both were confirmed to have landed before being believed, since a sabotage
+that did not apply and a check that cannot fail read identically.
+
+    delete the policy_engine::changed connection
+      FAIL  and it stopped pruning without being recreated (ads=gone)
+      ok    and it was never given the scriptlet (ads=present)
+
+    drop a subscribed list's scriptlets in load_subscriptions
+      FAIL  and the ad slots were pruned out of its player response
+
+**The pair is the point.** Deleting the new connection reddens the
+existing-tab check and leaves the fresh-tab one green, because only the
+first is about that wiring -- a single assertion could not have told the
+two mechanisms apart. And the second sabotage shows section 1 genuinely
+observes the subscription path rather than something nearer to hand.
+
+**The limit, which the second sabotage exposed rather than the first.**
+With a subscribed list's scriptlets dropped entirely, *"it stopped pruning
+without being recreated"* still passes -- "no longer pruning" is trivially
+true of a page that was never patched. That check means something only
+while the first section passes, so the two live in one driver and the
+comment beside the assertion says so. A gate whose limits are unwritten
+gets quoted for guarantees it never made.
+
+**What is still not covered**, stated so nothing claims it: this says
+nothing about whether uBlock's YouTube rules work on youtube.com. It proves
+the machinery those rules would travel through, which is the half we own.
