@@ -407,15 +407,26 @@ int main(int argc, char **argv) {
 		for (const subscription &s : seeds) {
 			if (s.name.isEmpty() || !s.url.isValid() ||
 			    s.url.scheme() != QLatin1String("https") || !s.enabled ||
-			    s.trusted)
+			    !s.trusted)
 				all_ok = false;
 		}
-		// **Not trusted, asserted.** Trust is a statement about a publisher
-		// and only the person can make it; shipping a URL pre-trusted would
-		// make it on their behalf, which is the one thing the per-list box
-		// exists to prevent.
+		// **Trusted, asserted** -- and this assertion was the opposite way
+		// round a few hours earlier, deliberately, so that reversing it
+		// would have to be a decision somebody took rather than a line that
+		// drifted. It was reversed on the copyright holder's instruction:
+		// naming a list in `default_subscriptions` IS the statement about
+		// its publisher, so withholding trust afterwards only kept 22 of
+		// uBlock's rules from the person for a judgement already made.
 		check(all_ok,
-		       "each is named, https, enabled and NOT trusted");
+		       "each is named, https, enabled and trusted");
+		// **The half that did NOT move**, and it matters more now: what this
+		// file names is trusted, and nothing else is. A subscription somebody
+		// adds, or one read back from an index written before the key
+		// existed, is untrusted -- so an upgrade cannot retroactively trust
+		// a list nobody here chose.
+		subscription typed_in;
+		check(!typed_in.trusted,
+		       "while a subscription made any other way starts untrusted");
 
 		QTemporaryDir dir;
 		check(dir.isValid(), "a scratch profile");

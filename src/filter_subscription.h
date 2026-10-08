@@ -125,9 +125,26 @@ QString mint_cache_name(const QString &dir, const QString &name);
 // could see from the settings page.
 //
 // Enabled, because a default that is off is the same as no default: the
-// thing being fixed is that a fresh install blocked nothing. Not trusted --
-// trust is a statement about a publisher that only the person can make, and
-// shipping a URL pre-trusted would make it on their behalf.
+// thing being fixed is that a fresh install blocked nothing.
+//
+// **And trusted, on the copyright holder's instruction of 2026-10-08.** This
+// reverses what was written here a few hours earlier, and the reasoning for
+// the reversal is worth more than the reasoning it replaces.
+//
+// The objection was that trust is a statement about a publisher only the
+// person can make. That is right about a list somebody pastes into the Add
+// box, whose publisher nobody here has looked at -- and it is the wrong
+// frame for these two, because **shipping a URL in this file IS the
+// statement.** The holder chose the publisher when the list was named here;
+// leaving the box clear afterwards does not return the decision to the
+// person, it just withholds 22 of uBlock's rules from them, among them its
+// current YouTube ad removal, for a judgement that had already been made.
+//
+// **So the asymmetry moves to where it belongs**, and `load_index` keeps the
+// other half: a subscription read back without a `trusted` key is still
+// false. A list this file names is trusted because it was chosen here; a
+// list that arrives any other way is not, and an index written by an older
+// build is not retroactively trusted by an upgrade.
 QList<subscription> default_subscriptions();
 
 // Which of the four buckets a single line falls in. Exposed for the tests,

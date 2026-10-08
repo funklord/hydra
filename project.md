@@ -34659,9 +34659,11 @@ it carries a fifth of EasyList's network rules. Neither covers the other, so
 page.
 
 Enabled, because a default that is off is the same as no default; the thing
-being fixed is that a fresh install enforced nothing. **Not trusted**, and
+being fixed is that a fresh install enforced nothing. ~~**Not trusted**, and
 asserted so: trust is a statement about a publisher that only the person can
-make, and shipping a URL pre-trusted would make it on their behalf.
+make, and shipping a URL pre-trusted would make it on their behalf.~~
+**Reversed by the copyright holder the same day -- see *The defaults are
+trusted, and why that is not the same claim*, below.**
 
 Method, so the number can be re-taken: a scratch program over
 `src/filter_subscription.cpp`, `filter_list.cpp`, `scriptlets.cpp` and
@@ -34930,6 +34932,48 @@ assertion failed rather than passed:
 **Each would have passed for ever had its polarity been reversed.** What
 caught all three was asserting the positive -- that the thing happens -- so
 that a fixture which cannot reach the code fails instead of agreeing.
+
+## The defaults are trusted, and why that is not the same claim
+
+Instructed by the copyright holder 2026-10-08, reversing what this document
+said a few hours earlier. **The reasoning for the reversal is worth more than
+the reasoning it replaces**, so the old sentence is struck through above
+rather than quietly edited.
+
+What was written: trust is a statement about a publisher that only the person
+can make, so shipping a URL pre-trusted would make it on their behalf.
+
+**That is right about a list somebody pastes into the Add box, and it is the
+wrong frame for these two.** Naming a list in `default_subscriptions` **is**
+the statement about its publisher -- the choice was made here, in this file,
+when the URL was written. Leaving the box clear afterwards did not return the
+decision to anybody; it withheld **22 of uBlock's rules** from them, uBlock's
+current YouTube ad removal among them, for a judgement that had already been
+taken.
+
+    uBlock filters.txt, untrusted    2421 of 2453 scriptlet rules
+    the same list, trusted           2443
+
+**The asymmetry does not go away, it moves to where it belongs.**
+`load_index` still reads an absent `trusted` key as false, and that half is
+now carrying more weight than before: what this file names is trusted, and
+nothing else is. A list somebody adds by pasting a URL starts untrusted, and
+an index written by an older build is not retroactively trusted by an
+upgrade. Both are asserted next to the new default, in the same case, so the
+pair reads as one decision rather than two defaults that happen to differ.
+
+**Nothing needed migrating, which was checked rather than assumed.** The
+caveat about to be written here -- that an existing profile keeps whatever its
+index says, so the instruction would only reach new ones -- does not apply:
+`filters-subscribed.json` exists nowhere on this machine, because the
+defaults themselves are an hour old. Every profile gets the trusted pair on
+its next launch.
+
+**The test assertion was reversed, not deleted**, and it was written the
+other way round deliberately so that this would have to be somebody's
+decision rather than a line that drifted. That is the mechanism working: the
+suite went red, the red line named the judgement, and changing it took an
+instruction.
 
 ### What is left
 

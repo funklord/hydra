@@ -275,7 +275,9 @@ QList<subscription> default_subscriptions() {
 		sub.name    = QString::fromLatin1(s.name);
 		sub.url     = QUrl(QString::fromLatin1(s.url));
 		sub.enabled = true;
-		sub.trusted = false;
+		// Trusted because this file names it; see the header for why that is
+		// not the same claim as trusting whatever somebody pastes into Add.
+		sub.trusted = true;
 		sub.note    = QStringLiteral("not fetched yet");
 		out.push_back(sub);
 	}
