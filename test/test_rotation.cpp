@@ -5723,6 +5723,50 @@ int main(int argc, char **argv) {
 		           .arg(tv ? tv->url().toString() : QStringLiteral("none")));
 	}
 
+	section("New Tab Here reveals its row and leaves other folders shut");
+	{
+		// **Reported twice from use**: "when adding a new tab it expands the
+		// folders". The tree's context menu called `expandAll()` after
+		// inserting, so one new row unfolded everything somebody had closed.
+		//
+		// **This is the first test to reach that code at all**, which is why
+		// the earlier sweep missed it. Both bodies sat after `menu.exec()` in
+		// `show_menu` -- a modal call -- so a reader could see the
+		// `expandAll()` and nothing could execute it. They are
+		// `add_tab_here` and `add_folder_here` now, for that reason.
+		main_window m(&factory, &policy, &filter);
+		m.show();
+		spin(200);
+		node *fa = m.m_model->add_folder(nullptr, "Folder A");
+		node *fb = m.m_model->add_folder(nullptr, "Folder B");
+		node *in_a = m.m_model->add_tab(fa, "in A", "https://a.example/");
+		m.m_model->add_tab(fb, "in B", "https://b.example/");
+
+		auto open_in_view = [&](node *n) {
+			const QModelIndex idx =
+			  m.m_proxy->mapFromSource(m.m_model->index_for_node(n));
+			return idx.isValid() && m.m_tree->isExpanded(idx);
+		};
+
+		// The window expands everything at construction, which is right for
+		// somebody who has arranged nothing -- so the folded state this is
+		// about has to be set up deliberately.
+		m.m_tree->collapseAll();
+		check(!open_in_view(fa) && !open_in_view(fb),
+		       "both folders start closed");
+
+		node *made = m.m_tree->add_tab_here(in_a);
+		check(made != nullptr, "New Tab Here adds a tab beside the clicked row");
+
+		// **The control.** Without it, "B stayed shut" passes for a function
+		// that expands nothing at all -- including one that fails to reveal
+		// the row it just made, which is the other way to get this wrong.
+		check(open_in_view(fa),
+		       "the folder it went into is opened, so the new row is visible");
+		check(!open_in_view(fb),
+		       "and a folder the gesture had nothing to do with is still shut");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

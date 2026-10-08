@@ -36503,3 +36503,69 @@ fixture and a synthetic player response, so what is proven is that a
 subscribed list's scriptlet reaches a real page and prunes it. Whether
 uBlock's youtube rules, running in this build, actually remove what
 YouTube serves today has never been measured here.
+
+## The ninth and tenth expandAll were in the file the sweep did not read
+
+Reported again by the copyright holder 2026-10-08, after the stale-package
+entry above put the right binary in front of them: ad blocking works now,
+"but a new tab still expands the tree".
+
+**The sweep that produced *Eight operations unfolded the whole tree* ran
+`grep -n 'expandAll' src/main_window.cpp`.** One file. It found eight
+sites, divided them correctly, fixed four, and the division of those eight
+was then treated as the whole answer. Two more sit in
+`src/tab_tree_view.cpp` -- the tree's own context menu, **New Tab Here**
+and **New Folder Here** -- and were never in the sample.
+
+The report had named a gesture and the search was scoped to a file. "New
+Tab Here" in the tree's context menu is the most literal reading of
+"making a new tab" there is, and it was in the one file not looked at.
+This is `evidence.md`'s *the scope of a search is chosen before you know
+who owns the answer*, with the count inheriting a detector that was one
+file wide.
+
+### Two reasons it survived, and the second is worse
+
+**The code was unreachable by any test.** Both bodies sat after
+`menu.exec()` in `show_menu`, which is modal -- so a reader could see the
+`expandAll()` and nothing could execute it. That is why extraction is part
+of the fix rather than tidying afterwards: they are
+`tab_tree_view::add_tab_here` and `add_folder_here` now, public for the
+same reason `main_window::m_tree` is, and they reveal with `show_node`
+instead of expanding.
+
+**And a test already named this exact hazard while covering another
+path.** `test_rotation` has carried *making a tab leaves the folded folder
+folded* since the first fix -- green throughout, because it exercises
+`main_window::new_tab()`. The context menu reaches the model directly and
+never goes near it. The project's own rule, instantiated on the project:
+naming the hazard in a test's title is not coverage of it, and the
+question is which branch the fixture reaches.
+
+So the new section sits beside the old one and asserts the gesture rather
+than the function:
+
+    both folders start closed                                        ok
+    New Tab Here adds a tab beside the clicked row                   ok
+    the folder it went into is opened, so the new row is visible      ok
+    and a folder the gesture had nothing to do with is still shut     ok
+
+Sabotaged by putting `expandAll()` back: the last check reddens and the
+other three stay green -- including the reveal, because `expandAll` opens
+that folder too. **The control is the third line**, without which "B
+stayed shut" would pass for a function that expands nothing at all,
+including one that fails to show the row it just made.
+
+### What this run of three reports has in common
+
+Three in a row, and none of them was a wrong fix:
+
+    the fixes were real      and lived in a binary nothing launches
+    the gesture was right    and the search covered one file of two
+    the test was right       and named a hazard on the safe path
+
+Each time the code was correct and the thing connecting it to the person
+was not -- the artifact they run, the scope of the search, the branch the
+fixture reaches. **A fix is a claim about what somebody will experience,
+and every one of those three is a way for that claim to be false while
+every green check stays green.**

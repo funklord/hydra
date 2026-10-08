@@ -359,6 +359,43 @@ void tab_tree_view::show_node(node *n) {
 	scrollTo(idx, QAbstractItemView::EnsureVisible);
 }
 
+// **Reveal the new row; never expand the tree.**
+//
+// Both of these called `expandAll()` after inserting, which unfolded every
+// folder somebody had closed in order to show one new row. Reported twice by
+// the copyright holder as "a new tab still expands the tree", and the answer
+// was already written down one function away: `new_tab()`'s comment says
+// `show_node` reveals a row through its ancestors, "so expanding the whole
+// tree only unfolded what somebody had folded". The context menu was the path
+// that never got the fix, because a sweep for `expandAll` found these two and
+// read them as the gesture needing the tree open -- they do not, they need one
+// row visible.
+//
+// Where the new row goes is a deliberate choice kept from the menu: into the
+// folder that was clicked, or beside a tab -- which is what a file manager
+// does, and saves a drag immediately afterwards.
+node *tab_tree_view::add_tab_here(node *at) {
+	tab_tree_model *m = source_model();
+	if (!m)
+		return nullptr;
+	node *parent = !at ? nullptr : (at->is_folder() ? at : at->parent);
+	node *t = m->add_tab(parent, QString(), QString());
+	if (t)
+		show_node(t);
+	return t;
+}
+
+node *tab_tree_view::add_folder_here(node *at) {
+	tab_tree_model *m = source_model();
+	if (!m)
+		return nullptr;
+	node *parent = !at ? nullptr : (at->is_folder() ? at : at->parent);
+	node *f = m->add_folder(parent, QString());
+	if (f)
+		show_node(f);
+	return f;
+}
+
 // The view's index for a node, through the proxy when there is one.
 QModelIndex tab_tree_view::view_index(node *n) const {
 	tab_tree_model *src = source_model();
@@ -540,21 +577,13 @@ void tab_tree_view::show_menu(const QPoint &pos) {
 	else if (chosen == out_a)       m->move_out(n);
 	else if (chosen == lock_a)      emit lock_requested(n);
 	else if (chosen == folder_a) {
-		// Into the folder that was clicked, or beside a tab -- which is what a
-		// file manager does, and saves a drag immediately afterwards.
-		node *parent = !n ? nullptr : (n->is_folder() ? n : n->parent);
-		if (node *f = m->add_folder(parent, QString())) {
-			expandAll();
+		if (node *f = add_folder_here(n))
 			edit_properties(f);
-		}
 	} else if (chosen == tab_a) {
-		node *parent = !n ? nullptr : (n->is_folder() ? n : n->parent);
-		if (node *t = m->add_tab(parent, QString(), QString())) {
-			expandAll();
+		if (node *t = add_tab_here(n))
 			// Opened straight away rather than left as a row to find: a new tab
 			// you then have to go and click is not what the gesture meant.
 			emit open_requested(t);
-		}
 	} else if (chosen == props_a)   edit_properties(n);
 	else if (chosen == del_a) {
 		// Deleting a folder takes what is in it, so the count goes in the

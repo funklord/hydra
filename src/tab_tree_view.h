@@ -62,6 +62,16 @@ public:
 	// opened by any route but a click filed the next one under the wrong parent.
 	void show_node(node *n);
 
+	// Add beside what was right-clicked -- into a folder, or next to a tab --
+	// and reveal only the new row.
+	//
+	// **Public because the menu that held this code is a modal `exec()`**, so
+	// the behaviour was unreachable by any test: the two bodies sat after
+	// `menu.exec()` in `show_menu` and nothing could call them. Returns the
+	// node so a caller can rename or open it, as the menu does.
+	node *add_tab_here(node *at);
+	node *add_folder_here(node *at);
+
 	// **Scroll to the tab you are on.**
 	//
 	// The tree keeps whatever scroll position it was left at, which is right
