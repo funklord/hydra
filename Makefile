@@ -332,6 +332,33 @@ all:
 	@cd $(BUILD_DIR) && $(QMAKE) $(CURDIR)/hydra.pro CONFIG+="$(QMAKE_CONFIG)"
 	@$(MAKE) --no-print-directory -C $(BUILD_DIR) -j$(JOBS)
 
+# **What this build takes from a real filter list.** The coverage figure in
+# project.md -- what fraction of uBlock's scriptlet rules this catalog
+# enforces -- moves whenever the catalog grows or an upstream list is
+# re-published, so it has a target rather than a sentence somebody has to
+# trust. It began as a scratch program, which is a fact whose method cannot
+# be re-run.
+#
+# Fetches nothing: a build does not go to the network. With no LIST it prints
+# the urls this build subscribes to by default, so a person knows what to
+# download.
+#
+# `$(filter %.cpp,$^)` because the headers are prerequisites and `$^` would
+# otherwise hand them to the compiler -- see build-and-commit.md, which was
+# written after exactly that.
+COVERAGE_BIN  = $(BUILD_DIR)/list-coverage
+COVERAGE_SRCS = tool/list_coverage.cpp src/filter_subscription.cpp \
+                 src/filter_list.cpp src/scriptlets.cpp src/site_rules.cpp
+
+$(COVERAGE_BIN): $(COVERAGE_SRCS) $(wildcard src/*.h)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) -Os -g -std=gnu++17 -Wall -Wextra -Isrc \
+	        $(shell pkg-config --cflags Qt6Core) \
+	        -o $@ $(filter %.cpp,$^) $(shell pkg-config --libs Qt6Core)
+
+coverage: $(COVERAGE_BIN)
+	@$(COVERAGE_BIN) $(LIST)
+
 # The shared Android vocabulary and everything it needs. Included AFTER
 # `all`, because `include` is where make first sees a target and pulling it
 # in above would make android-check the default goal.

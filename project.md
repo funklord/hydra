@@ -34665,12 +34665,13 @@ make, and shipping a URL pre-trusted would make it on their behalf.~~
 **Reversed by the copyright holder the same day -- see *The defaults are
 trusted, and why that is not the same claim*, below.**
 
-Method, so the number can be re-taken: a scratch program over
+Method, so the number can be re-taken: ~~a scratch program over
 `src/filter_subscription.cpp`, `filter_list.cpp`, `scriptlets.cpp` and
 `site_rules.cpp`, calling `read()` on the fetched body and printing the
 report. It is not in the tree. **A make target for it is worth having** --
 this is exactly the figure that rots as the catalog grows -- and that is the
-holder's to want.
+holder's to want.~~ **Done: `make coverage LIST=...`**, see *The number has a
+target now* below.
 
 ### 302 rules were lost to one missing alias
 
@@ -34974,6 +34975,43 @@ other way round deliberately so that this would have to be somebody's
 decision rather than a line that drifted. That is the mechanism working: the
 suite went red, the red line named the judgement, and changing it took an
 instruction.
+
+## The number has a target now
+
+    make coverage LIST=~/Downloads/filters.txt
+
+`tool/list_coverage.cpp`, built by the top-level Makefile. It is the scratch
+program the coverage figures came from, which `evidence.md` names as the bad
+case directly: **a fact recorded without its method has a shelf life**, and
+that figure moves whenever the catalog grows or an upstream list is
+re-published.
+
+Three properties it needs and has.
+
+**It reads through `filter_subscription::read`**, the parser the shell uses,
+rather than a second implementation. A measuring tool with its own parser is
+the regenerate-and-diff failure: it would agree with itself and be wrong
+together.
+
+**It fetches nothing.** A build does not go to the network. With no `LIST` it
+exits 2 and prints the urls this build subscribes to by default, so a person
+knows what to download without reading the source.
+
+**It reads each list twice, trusted and not**, and says both -- `2443 of 2453
+asked for (2421 without trust)`. One number would hide how much of a list is
+waiting on a tick, which is the thing the settings line exists to say.
+
+### And it printed a vacuous pass on its first run
+
+Pointed at EasyList, the first version said **"every scriptlet this list
+names is implemented"**. EasyList names **zero**. The sentence is true and
+reads as coverage, which is this project's own failure mode appearing in the
+tool built to measure coverage -- and it would have been quoted that way.
+
+It distinguishes the two facts now: a list naming none says so. The general
+form is the one `evidence.md` opens with, arriving from the other side: a
+report over an empty population reads exactly like a report over a healthy
+one, and the only fix is for the report to name its denominator.
 
 ### What is left
 
