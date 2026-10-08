@@ -36255,12 +36255,32 @@ option available, because `test-env` adds to the environment rather than
 replacing it -- a tree cannot unset an inherited variable through it.
 
 **What is verified and what is not.** The fixture proves fmake's handling,
-including the empty value. This tree's own file is valid TOML with its other
-four keys unchanged, and the run that produced the measurement above reached
-RCC and MOC, so it parsed. A full `fmake test` over these 46 suites was not
-run: it builds the tree and the machine was carrying another account's
-selftest at the time. `fmake --explain` is not the cheap parse check it
-sounds like either -- it builds.
+including the empty value. A full `fmake test` over these 46 suites was not
+run: it builds the tree, and the machine was carrying another account's
+selftest at the time.
+
+**And the cheap check is `fmake -n`**, which the first version of this entry
+said did not exist -- it claimed `--explain` was the nearest thing and
+"builds", which is true and was the wrong conclusion. Corrected by fmake's
+own session on 2026-10-08, and measured here rather than taken on report:
+
+    fmake -n            rc=0, objects on disk 852 before and 852 after
+    with a bogus key    rc=1, "[project]: unknown key 'nosuchkey'
+                        (expected one of: ... test-env ...)"
+
+So it validates eagerly, compiles nothing, and **its accepted-key list
+names `test-env`**, which confirms the spelling from the tool rather than
+from its README. The control is the second row: without it, rc=0 means only
+that nothing complained, which is indistinguishable from never having
+looked. The first attempt at that control appended a second `[project]`
+table and failed on duplicate-table parsing instead -- a control that fires
+for the wrong reason, which proves the file is read and not that keys are
+checked.
+
+`--explain` compiling is by design and the reason is usable: a link set is
+a symbol closure over objects, so nothing can report one without compiling
+them. It is the dual of a dry run, which compiles nothing and therefore
+cannot close the set at all.
 
 **Signalled rather than fixed, and the entry is named**: fmake's
 `wants_a_display(env)` tests `QT_QPA_PLATFORM`, `DISPLAY` and
