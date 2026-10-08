@@ -4534,26 +4534,60 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 		});
 
 
+		// The row's own address, loaded. Named because two paths below need
+		// it: the ordinary open, and a restore that did not work.
+		//
+		// A row whose url is not a page is one of the magnet tabs described
+		// in `open_new_window`. Loading it would hand the url straight back
+		// to the scheme handler and start the download again, so such a row
+		// opens blank -- the tabs already saved to disk under the old
+		// behaviour are the reason this is checked here as well as at the
+		// door.
+		const auto load_the_url = [this, n, view] {
+			const QUrl target = n->url.isEmpty() ? QUrl()
+			                                      : QUrl::fromUserInput(n->url);
+			view->load(target.isEmpty() || !renders_as_page(target)
+			               ? QUrl(QStringLiteral("about:blank"))
+			               : target);
+		};
+
 		if (!load_now) {
 			// Left empty on purpose: the caller is adopting an engine window
 			// request, which navigates the page itself.
 		} else if (n->type == node_type::suspended_tab && m_state &&
 		            m_state->has_state(n->id)) {
 			// Restore the session blob this node was suspended into.
-			view->restore_state(m_state->load(n->id));
+			//
+			// **The answer is read, which it was not.** `restore_state` is
+			// declared `bool` precisely so a caller can know, and this
+			// discarded it -- so a blob the engine refused left the view
+			// blank, the row's url never loaded, and the blob deleted a line
+			// later so nothing could try again. The tab was simply empty, and
+			// nothing anywhere said why.
+			//
+			// **The reachable case is a Qt upgrade.** WebEngine's
+			// serialisation is versioned: a blob written by one version is
+			// not promised to the next. So the failure is not an exotic
+			// corruption but the ordinary consequence of updating Qt, and it
+			// would have blanked *every* suspended tab at once while
+			// discarding each one's address.
+			const bool restored = view->restore_state(m_state->load(n->id));
+			// Removed either way: a blob this build cannot read is of no use
+			// to it, and keeping it would mean trying and failing again on
+			// every open.
 			m_state->remove(n->id);
+			if (!restored) {
+				// Said once per tab, in the log rather than the status bar:
+				// after an engine update this is every suspended tab, and a
+				// message per tab would bury whatever else was being said.
+				qWarning("state: %s could not be restored; loading %s instead",
+				          qPrintable(n->id),
+				          n->url.isEmpty() ? "a blank page"
+				                           : qPrintable(n->url));
+				load_the_url();
+			}
 		} else {
-			// A row whose url is not a page is one of the magnet tabs
-			// described in `open_new_window`. Loading it would hand the url
-			// straight back to the scheme handler and start the download
-			// again, so such a row opens blank -- the tabs already saved to
-			// disk under the old behaviour are the reason this is checked
-			// here as well as at the door.
-			const QUrl target = n->url.isEmpty() ? QUrl()
-			                                      : QUrl::fromUserInput(n->url);
-			view->load(target.isEmpty() || !renders_as_page(target)
-			               ? QUrl(QStringLiteral("about:blank"))
-			               : target);
+			load_the_url();
 		}
 	}
 	return view;

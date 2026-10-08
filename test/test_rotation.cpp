@@ -70,6 +70,7 @@
 #include "extractor_signals.h"
 #include "media_detector.h"
 #include "mse_tap.h"
+#include "state_store.h"
 #include "request_filter.h"
 #include "web_view_backend.h"
 #include "web_view_factory.h"
@@ -245,8 +246,18 @@ public:
 	void set_script_bridge(QObject *o, const QString &n) override {
 		bridges.insert(n, o);
 	}
-	QByteArray save_state() const override { return {}; }
-	bool restore_state(const QByteArray &) override { return false; }
+	// **Both halves controllable, and both defaulting to what they used to
+	// return.** A backend that cannot restore answers false, which is what
+	// this fake has always said -- and until the caller read that answer,
+	// nothing could tell a refused blob from a restored one.
+	QByteArray m_state_blob;
+	QByteArray save_state() const override { return m_state_blob; }
+	bool       m_restore_ok = false;
+	QByteArray restored_with;
+	bool restore_state(const QByteArray &b) override {
+		restored_with = b;
+		return m_restore_ok;
+	}
 	// Recorded, for the reason the others are: the base find_text discards its
 	// arguments, so nothing could see whether the bar's Match case flag reaches
 	// the backend.
@@ -282,9 +293,15 @@ public:
 // build the whole window without an engine behind it.
 class fake_factory : public web_view_factory {
 public:
+	// **Armed on the factory, not the view.** `open_node` builds the view and
+	// offers it the blob in one call, so a test cannot reach the view in
+	// between -- the answer has to be decided before it exists.
+	bool restore_ok = false;
 	web_view_backend *create_view(QWidget *parent) override {
 		++made;
-		return new fake_view(parent);
+		auto *v = new fake_view(parent);
+		v->m_restore_ok = restore_ok;
+		return v;
 	}
 	void set_external_url_handler(external_url_handler) override {}
 	// **Kept rather than discarded, so a test can drive a download.** The
@@ -5619,6 +5636,91 @@ int main(int argc, char **argv) {
 		check(p.m_status->currentMessage().startsWith("Saved manual.pdf"),
 		       QString("a success still reads as before (%1)")
 		           .arg(p.m_status->currentMessage()));
+	}
+
+	section("a blob the engine refuses falls back to the row's address");
+	{
+		// **`restore_state` is declared `bool` and the caller discarded it.**
+		// So a blob the engine would not take left the view blank, the row's
+		// url never loaded, and the blob deleted a line later -- the tab was
+		// simply empty and nothing said why.
+		//
+		// **The reachable case is a Qt upgrade**, not an exotic corruption:
+		// WebEngine's serialisation is versioned, so a blob written by one
+		// version is not promised to the next. That would have blanked every
+		// suspended tab at once, each one discarding its own address.
+		QTemporaryDir dir;
+		check(dir.isValid(), "a scratch profile");
+		const QString tree = QDir(dir.path()).filePath("tree.txt");
+		{
+			// **A real row, in the outline's own format.** A file with only a
+			// comment in it is not a tree this reads, and `load_tree`
+			// refusing it is correct -- the first version of this fixture
+			// wrote one and the window then had no state store, which is a
+			// test failing on its own setup rather than on the code. The
+			// format is `shell_fixture`'s, which is where it was read from.
+			QFile f(tree);
+			check(f.open(QIODevice::WriteOnly | QIODevice::Truncate),
+			       "a tree file to give the window a state store");
+			f.write("- [seed] unopened | Seed | https://seed.example/\n");
+		}
+
+		main_window p(&factory, &policy, &filter);
+		if (p.layout()) p.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+		p.setMinimumSize(0, 0);
+		p.resize(360, 800);
+		check(p.load_tree(tree), "a window with somewhere to keep blobs");
+		p.show();
+		spin(120);
+
+		auto open = [&](node *n) {
+			const QModelIndex idx =
+			  p.m_proxy->mapFromSource(p.m_model->index_for_node(n));
+			emit p.m_tree->activated(idx);
+			spin(150);
+		};
+
+		// A suspended tab with a blob on disk that the backend will refuse.
+		node *refused = p.m_model->add_tab(nullptr, "refused",
+		                                    "https://kept.example/page");
+		refused->type = node_type::suspended_tab;
+		check(p.m_state && p.m_state->save(refused->id, QByteArray("not-a-blob")),
+		       "with a blob saved for it");
+		check(p.m_state->has_state(refused->id), "which the store reports");
+
+		open(refused);
+		fake_view *v = live_view(p, refused);
+		check(v, "opening it builds a view");
+		check(v && v->restored_with == QByteArray("not-a-blob"),
+		       "the blob is offered to the backend");
+		// **The assertion the bug was about.**
+		check(v && v->url().toString() == "https://kept.example/page",
+		       QString("and when it is refused, the row's address is loaded "
+		                "instead (%1)")
+		           .arg(v ? v->url().toString() : QStringLiteral("none")));
+		check(!p.m_state->has_state(refused->id),
+		       "the unusable blob is not left behind");
+
+		// **The control.** A backend that CAN restore must not also load the
+		// url -- that would fetch the page a restored history was supposed to
+		// avoid, and every assertion above would still pass.
+		node *taken = p.m_model->add_tab(nullptr, "taken",
+		                                  "https://other.example/page");
+		taken->type = node_type::suspended_tab;
+		check(p.m_state->save(taken->id, QByteArray("good-blob")),
+		       "a second tab with a blob");
+		// The next view the factory hands out is the one this tab gets, so
+		// the answer has to be armed before it is built -- which is why this
+		// is a factory-wide switch rather than a view's.
+		factory.restore_ok = true;
+		open(taken);
+		fake_view *tv = live_view(p, taken);
+		factory.restore_ok = false;
+		check(tv && tv->restored_with == QByteArray("good-blob"),
+		       "is offered its own blob");
+		check(tv && tv->url().isEmpty(),
+		       QString("and a restore that worked loads nothing (%1)")
+		           .arg(tv ? tv->url().toString() : QStringLiteral("none")));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

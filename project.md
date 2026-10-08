@@ -12070,10 +12070,16 @@ real work against a loss only a crash produces, and it wants a measurement of
 what that costs on a window full of tabs before anybody commits to it. It
 stays on the list as the one remaining piece.~~
 
-**The measurement has been taken and it dissolves the question** -- see *What
-a checkpoint of every live tab actually costs*, below. It is about six
+~~**The measurement has been taken and it dissolves the question** -- see
+*What a checkpoint of every live tab actually costs*, below. It is about six
 milliseconds for a window of eight. What is left is the decision, which is
-smaller than the sentence above made it sound.
+smaller than the sentence above made it sound.~~
+
+**Wrong too, and by me, hours later: the checkpoint was built on
+2026-09-01.** `c671543`, *"checkpoint a tab's history, so a crash stops
+taking its past"* -- the day after the sentence above was written. There was
+no decision left to take. See *The claim was false the day after it was
+written*, below.
 
 ## The Android launcher icon was small, outlined and on a white plate
 
@@ -35356,10 +35362,13 @@ rather than all of them, and the entry beside it already argues that case
 ("rewriting twenty unchanged blobs because one tab followed a link is work
 with nothing to show for it").
 
-**What is left is a decision and not an unknown**, and it is the holder's: a
+~~**What is left is a decision and not an unknown**, and it is the holder's: a
 periodic write of session blobs for tabs nobody suspended is a change in what
 the program does at rest, even though the blobs themselves are the same kind
-already written on suspend.
+already written on suspend.~~ **No: it was already built.** What the numbers
+above actually measure is the cost of a feature that has been shipping for
+five weeks -- still worth having, since nobody had priced the five-second
+interval either, but it is not the cost of a decision.
 
 ### Why it had to be a live driver
 
@@ -35480,6 +35489,107 @@ shell's download reporting at all -- and the half most worth asserting is
 what it says when a transfer FAILS, which no offline run produces on its own.
 It offers a door, `note_download`, the same shape it already uses for window
 requests.
+
+## The claim was false the day after it was written, and I believed it
+
+    2026-08-31  bf64f5f  the claim: "it wants a measurement ... before
+                         anybody commits to it"
+    2026-09-01  c671543  feature: checkpoint a tab's history, so a crash
+                         stops taking its past
+    2026-10-08           read the claim, believed it, measured the cost of
+                         a feature five weeks old
+
+The checkpoint is `save_blobs_soon` on every `load_finished` for every view, a
+five-second single-shot timer, and `flush_blobs` writing only the tabs that
+have navigated since it last ran. A crash loses five seconds of a tab's
+history, not all of it.
+
+**This is `evidence.md`'s *claim that outlived its subject* in its sharpest
+form** -- *"a gap claim that outlives its gap is not inert: it sends the next
+reader at work already done"*, and *"the one kind of sentence whose falsifier
+is a commit nobody connects to it"*. One day of staleness, five weeks of
+standing, and an afternoon spent on it.
+
+**And the remedy was in the same file, unapplied**: *"when a record says a
+value is untested or a case unreached, grep the source for the quantity the
+claim names before reading the claim's neighbours. It is the cheaper first
+pass and it discriminates."* I read the claim, read its neighbours, and built
+a tool.
+
+**Worse than not knowing: I had already looked.** Earlier the same session,
+sweeping for blanket operations, I read `flush_blobs`, saw the dirty set and
+wrote it off as "the precise version, done well". Both halves were in front of
+me an hour apart and I did not put them together. A grep would have answered
+it; so would believing what I had already read.
+
+### What was actually missing, and it was not the feature
+
+**It had no test.** Nothing in the suite referenced `flush_blobs`,
+`save_blobs_soon` or `m_blobs_dirty` -- shipped five weeks earlier with no
+case anywhere. That is the gap the entry should have recorded.
+
+**And `restore_state`'s answer was discarded**, which is the entry below. A
+measurement nobody needed turned up a real defect, which is the only reason
+the afternoon was not wasted -- and it was found by reading, not measuring.
+
+## A refused blob blanked the tab and threw its address away
+
+`restore_state` is declared `virtual bool` precisely so a caller can know
+whether the engine took the blob. `open_node` discarded it:
+
+    view->restore_state(m_state->load(n->id));
+    m_state->remove(n->id);
+
+So a blob the engine refused left the view blank, the row's url never loaded,
+and the blob deleted a line later -- nothing to retry and nothing saying why.
+**The tab was simply empty.**
+
+**The reachable case is a Qt upgrade, not corruption.** WebEngine's
+serialisation is versioned: a blob written by one version is not promised to
+the next. So this is the ordinary consequence of updating Qt, and it would
+have blanked *every* suspended tab at once, each discarding its own address.
+
+The answer is read now, with a fallback to the row's url and a `qWarning`.
+The warning goes to the log rather than the status bar deliberately: after an
+engine update this is every suspended tab, and a message per tab would bury
+whatever else was being said. The blob is removed either way -- one this build
+cannot read is of no use to it, and keeping it would mean failing again on
+every open.
+
+### The control is the half that would have been missed
+
+A backend that *can* restore must **not** also load the url: that would fetch
+the page a restored history was supposed to avoid, and every other assertion
+in the section passes either way.
+
+**Arming it had to happen on the factory, not the view.** `open_node` builds
+the view and offers it the blob in one call, so a test cannot reach the view
+in between -- the answer has to exist before the view does. A general property
+of this seam: anything a view must answer *during its own construction* can
+only be set up through the factory.
+
+`fake_view::restore_state` had always returned false, which is honest -- that
+backend genuinely cannot restore -- but it meant nothing could tell a refused
+blob from a restored one, so neither path had been exercised. Both halves are
+settable now and default to what they returned before.
+
+Sabotage: discarding the answer again turns *"and when it is refused, the
+row's address is loaded instead"* red, with an empty url in the message --
+which is the blank tab the bug produced.
+
+### Four fixtures wrong today, one cause
+
+A missing `node.h`, a missing `state_store.h`, a hostname outside the
+dispatcher's scope, a search whose match sat in the filtered-away folder, and
+a tree file with no rows in it that `load_tree` rightly refused.
+
+**Every one was written from what I assumed the format or the API was, rather
+than from what the tree already does** -- and every one was caught by an
+assertion failing rather than passing. The suite and the drivers inherit a
+great deal transitively through `main_window.h`, so a file naming a type
+directly has to say so rather than rely on what happens to arrive; and the
+outline format, the scope check and the proxy's filtering are all already
+written down somewhere in the tree.
 
 ### What is left
 
