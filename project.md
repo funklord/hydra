@@ -36428,3 +36428,78 @@ swap was untouched, so the load on this machine is CPU and not memory, and
 a stopped daemon only makes the next build cold. Worth knowing it is there
 and whose it is -- `ps -o user=,pid=,etime=,rss= -C java` separates it from
 the other account's, which was ten hours old and 3.1 GB.
+
+## Every fix was real and none of them was reachable
+
+Reported by the copyright holder 2026-10-08: "When adding a new tab it
+expands the folders, and youtube shows ads... Nothing is fixed."
+
+**They were right, and the cause is that nothing they run was ever
+tested.** `/usr/bin/hydra` comes from the `hydra` package and is dated
+2026-08-05. The work of the last weeks lives in `build/hydra`, which
+nothing launches. Both symptoms are exactly what an August binary does:
+it has no scriptlet catalog at all, so there is no ad blocking to fail,
+and none of the fold-preserving tree code.
+
+**The failure is not in any of the fixes, it is in what was treated as
+the artifact.** Every one was built, tested, sabotaged, committed and
+reported against a binary in a build directory. The same session checked
+which APK was on the handset and compared its signing certificate before
+installing -- and never once asked which desktop binary was live. The
+place the question was asked carefully was the place it mattered least.
+
+So: **a fix is not delivered until the thing the person runs contains
+it**, and for this project that is a package, not `build/`.
+
+### And the first instrument used to prove it could not have worked
+
+The first diagnosis compared `nm -C` output between the installed binary
+and the built one, found every symbol absent from the installed one, and
+called it decisive. It was not: **a `.deb` build strips the binary and
+moves its symbols into `-dbgsym`**, so `nm` reports *no symbols* whatever
+the code contains. Measured on a package built from these very sources
+minutes earlier -- all five symbols absent from an artifact that
+demonstrably has them.
+
+    nm -C /usr/bin/hydra        nm: /usr/bin/hydra: no symbols
+    file -b /usr/bin/hydra      ... stripped
+
+What answers it is string literals, which survive stripping:
+
+                                    Aug 5 pkg   new pkg   build/
+    json-prune                          0          16        16
+    "could not be restored"             0           1         1
+    trusted-replace-xhr-response        0           3         3
+
+The conclusion held and the evidence did not, which is the worse way round
+-- a right answer reached by an instrument that cannot see the question
+is indistinguishable from a lucky guess, and it would have been quoted as
+proof.
+
+**A second instrument error inside the same check, and it reads as an
+absence.** `hydra-scriptlets` scores 0 in all three binaries including the
+one that certainly injects it, because it is a `QStringLiteral` and those
+are stored as **UTF-16** -- which `strings` cannot see. That is
+`evidence.md`'s own AXML case in a different costume: a text probe over a
+binary encoding reports zero occurrences of something certainly present.
+Pick literals that are plain `char` arrays, and treat a zero from
+`strings` as "not found by this instrument" rather than "absent".
+
+### What is now true, and what is still not verified
+
+`build/deb/hydra_0.1_amd64.deb` carries the work, verified by the literal
+counts above rather than by the build exiting 0. Installing it needs root
+and so is the holder's.
+
+**The package version cannot confirm an install**, exactly as the Android
+`versionCode` could not: `VERSION` is 0.1 and the installed package is
+0.1, so after replacing it nothing in `dpkg -l` changes. Compare a string
+literal, or the file date.
+
+**And "youtube shows ads" is still not answered.** The stale binary
+explains the total absence of blocking, and that is all it explains. The
+live driver for the scriptlet pipeline deliberately used a loopback
+fixture and a synthetic player response, so what is proven is that a
+subscribed list's scriptlet reaches a real page and prunes it. Whether
+uBlock's youtube rules, running in this build, actually remove what
+YouTube serves today has never been measured here.
