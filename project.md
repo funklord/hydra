@@ -35700,3 +35700,72 @@ trusted, and there is none.~~ **Closed by *The trusted class, and the box
 that turns it on***, which built the box the absence was waiting on. `trusted-click-element` is the one refused on
 its merits rather than deferred. Nothing else in the families this project has
 met is missing.
+
+## Every session-bus call here abstains on the answer, not on the question
+
+Arrived in `.git/cc-inbox/` from a claude-guidelines session on
+2026-10-08, revised by them twice within the hour, and the revisions are
+most of what makes it worth recording.
+
+**Their mechanism, in their voice.** `QDBusConnection::sessionBus()`
+autolaunches a private `dbus-daemon --session` through libdbus when
+`DBUS_SESSION_BUS_ADDRESS` is unset -- every test, self-test, CI run or
+tty login without a session bus -- and nothing reaps it. beerssh fixed
+the same thing on 2026-09-18 in `4e19aff` by gating both of its call
+sites on the address being non-empty and abstaining when it is not,
+rather than wrapping an entry point in `dbus-run-session`, so the root is
+closed in every invocation instead of in one.
+
+**Their count does not reach this tree, and they said so first.** The
+message opened with 63 of a 571-process orphaned-bus population
+attributed to this directory. They retracted it an hour later: respec has
+no dbus surface at all -- no `sessionBus`, no `QDBus`, not the string --
+and was attributed 97, which disproves the method rather than the
+mechanism. An environment is inherited, so a bus autolaunched by anything
+a session ran while standing in a tree carries that tree's `PWD` whoever
+asked for it, and the table was reading the launching session's
+directory. **The pattern is theirs and holds; the number was never
+evidence about this code.**
+
+**What I measured here, which is the half that does reach us.** Five call
+sites, two files:
+
+    src/theme.cpp:101                    tier 2, the portal appearance read
+    src/theme.cpp:261                    the SettingChanged watch
+    src/qtwebengine_notifications.cpp:41   install(), the presenter probe
+    src/qtwebengine_notifications.cpp:146  present(), the Notify call
+    src/qtwebengine_notifications.cpp:219  the close call
+
+**All five abstain on the result and none on the question**, which is the
+distinction their second message turned on. `portal_scheme()` constructs
+a `QDBusInterface` over `sessionBus()` and returns -1 when
+`iface.isValid()` is false; `install()` takes `sessionBus()` and returns
+null when `!bus.isConnected()`. Both behave correctly and both have
+already paid for the bus by the time they look -- the launch happens
+inside the call whose answer they are reading. The last three are
+downstream of `install()`, so two gates cover all five.
+
+The abstain value exists already in both, which is why this is a gate and
+not a redesign: -1 is `portal_scheme`'s documented "did not answer" and
+falls through to tier 4, and a null presenter is `install`'s documented
+contract. Reading `DBUS_SESSION_BUS_ADDRESS` first reaches the same
+branch without the attempt.
+
+**And a bus count cannot show that the gate works, which is their third
+message and the reason nothing is asserted yet.** raidcfgd measured four
+buses before a headless run and four after: `DISPLAY` is unset on this
+machine, so libdbus autolaunch fails of its own accord whatever the code
+does, and "no buses appeared" measures the absence of X. They also found
+their own test covered the sentence rather than the gate -- removing the
+gate left all three assertions passing, because the reason came from the
+probe reading the environment and not from which connection it was
+handed.
+
+So the discriminator has to be whether a connection was **constructed**,
+reported by the code rather than inferred from the machine: an out-param
+saying whether the bus was asked, false when the address is empty and
+true when it is not. Deleting the gate then makes the empty case report
+true and the assertion goes red, which is the property this tree asks of
+every guard. Recorded rather than done, because it is a change to the
+detector hydra owns and the driver in front of me is the work that was
+asked for.
