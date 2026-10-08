@@ -287,7 +287,17 @@ public:
 		return new fake_view(parent);
 	}
 	void set_external_url_handler(external_url_handler) override {}
-	void set_download_handler(download_note) override {}
+	// **Kept rather than discarded, so a test can drive a download.** The
+	// base took the handler and dropped it, which meant nothing in the suite
+	// could reach the shell's reporting -- and the thing worth asserting
+	// there is what it says when a transfer FAILS, which no offline run
+	// produces on its own.
+	download_note note;
+	void set_download_handler(download_note fn) override { note = fn; }
+	void note_download(const QUrl &u, const QString &path, bool finished,
+	                    bool ok, const QString &why) {
+		if (note) note(u, path, finished, ok, why);
+	}
 	void clear_browsing_data(const browsing_data &, clear_note done) override {
 		if (done) done(clear_report{});
 	}
@@ -5557,6 +5567,58 @@ int main(int argc, char **argv) {
 
 		settings_store::set_preload_background_tabs(was_on);
 		qunsetenv("HYDRA_MAX_LIVE_VIEWS");
+	}
+
+	section("a failed download says why, when the engine said why");
+	{
+		// **The next step of the argument this feature already made.** The
+		// handler exists because "an unaccepted download is cancelled by Qt
+		// without a word, so every one of these used to look like a click
+		// that did nothing" -- and reporting failure without the reason
+		// leaves somebody with nothing to act on. A full disk, a directory
+		// that refuses the write and a timeout want three different
+		// responses, and Qt reports which it was in
+		// `interruptReasonString()`, which nothing was reading.
+		main_window p(&factory, &policy, &filter);
+		if (p.layout()) p.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+		p.setMinimumSize(0, 0);
+		p.resize(360, 800);
+		p.show();
+		spin(150);
+
+		const QUrl from("https://files.example/manual.pdf");
+		const QString to = "/tmp/hydra-test/manual.pdf";
+
+		factory.note_download(from, to, /*finished=*/false, /*ok=*/false, {});
+		check(p.m_status->currentMessage().contains("Downloading manual.pdf"),
+		       QString("a transfer that starts is announced (%1)")
+		           .arg(p.m_status->currentMessage()));
+
+		factory.note_download(from, to, /*finished=*/true, /*ok=*/false,
+		                       "Insufficient space on the target drive");
+		const QString failed = p.m_status->currentMessage();
+		check(failed.contains("manual.pdf") && failed.contains("failed"),
+		       QString("a failure names the file (%1)").arg(failed));
+		check(failed.contains("Insufficient space"),
+		       QString("and says why, which is the part that was missing (%1)")
+		           .arg(failed));
+
+		// **A backend that cannot say why must not produce a dangling
+		// colon.** Empty is how a backend says it cannot, so the sentence
+		// keeps its old shape rather than growing punctuation with nothing
+		// after it.
+		factory.note_download(from, to, /*finished=*/true, /*ok=*/false, {});
+		const QString bare = p.m_status->currentMessage();
+		check(bare.contains("failed") && !bare.contains("failed:"),
+		       QString("with no reason, the sentence is unchanged (%1)")
+		           .arg(bare));
+
+		// And the success path is untouched, which an over-eager change to
+		// the message would break without any failure case noticing.
+		factory.note_download(from, to, /*finished=*/true, /*ok=*/true, {});
+		check(p.m_status->currentMessage().startsWith("Saved manual.pdf"),
+		       QString("a success still reads as before (%1)")
+		           .arg(p.m_status->currentMessage()));
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

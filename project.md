@@ -35443,6 +35443,44 @@ files -- `try_navigate` from the signature change, and a missing
 their tree* is the only reason a sibling project did not get a second wrong
 report in one day.
 
+## A failed download now says why, which the engine had been saying all along
+
+Found with the lens the day's reports shared: **information the platform
+reports that nothing reads.** The same sweep found the background-tab
+destination; this is the download path's version of it.
+
+`Download of x failed` was the whole of what somebody got. Qt carries the
+reason as `interruptReasonString()` and nothing read it -- and a full disk, a
+directory that refuses the write, a network timeout and a transfer the engine
+blocked want four different responses from the person.
+
+**It is the next step of the argument this feature already made.** Its own
+comment says it exists because *"an unaccepted download is cancelled by Qt
+without a word, so every one of these used to look like a click that did
+nothing."* Reporting a failure without its reason leaves the same person with
+nothing to act on, one step further along the same road.
+
+### Three decisions worth stating
+
+**The engine's sentence, not one composed here.** Qt turns the interrupt
+reason into text and keeps it in step with its own enum. A `switch` in this
+tree would be a second table to maintain and would go quiet on a reason Qt
+adds later -- the vendoring failure in miniature. Read only on failure, since
+it reads "No error" otherwise and that is not a thing to show anybody.
+
+**An empty reason keeps the old sentence.** Empty is how a backend says it
+cannot say, and `android_view`'s factory discards the handler entirely, so the
+message must not grow a dangling colon. Asserted -- along with the success
+path, which an over-eager change to the wording would break without any
+failure case noticing.
+
+**The fake factory keeps the handler now.** It had been taking
+`download_note` and dropping it, so nothing in the suite could reach the
+shell's download reporting at all -- and the half most worth asserting is
+what it says when a transfer FAILS, which no offline run produces on its own.
+It offers a door, `note_download`, the same shape it already uses for window
+requests.
+
 ### What is left
 
 ~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was

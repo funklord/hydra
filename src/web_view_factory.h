@@ -95,9 +95,18 @@ public:
 	// told to proceed. Called once when the transfer starts and again when it
 	// ends, with `ok` saying which -- a download that fails silently is the
 	// shape this whole feature existed to fix.
+	//
+	// **`why` is the next step of that same argument.** Saying a download
+	// failed and not why leaves the person with nothing to do about it, and
+	// the reasons are not interchangeable: a full disk, a directory that
+	// refuses the write, a network that timed out and a transfer the engine
+	// blocked want four different responses. Qt reports it as
+	// `interruptReasonString()` and nothing was reading it. Empty when `ok`,
+	// and empty when a backend cannot say -- which is how a backend says it
+	// cannot, rather than being made to invent a sentence.
 	using download_note =
 	  std::function<void(const QUrl &url, const QString &path, bool finished,
-	                      bool ok)>;
+	                      bool ok, const QString &why)>;
 	virtual void set_download_handler(download_note fn) = 0;
 
 	// --- Forgetting ---------------------------------------------------------

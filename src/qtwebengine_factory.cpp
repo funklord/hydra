@@ -177,15 +177,25 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 
 		const QUrl url = d->url();
 		if (m_download_note)
-			m_download_note(url, path, /*finished=*/false, /*ok=*/false);
+			m_download_note(url, path, /*finished=*/false, /*ok=*/false,
+			                 QString());
 		// Reported when it ends as well, either way: this feature exists
 		// because a download that fails without saying so looks exactly like
 		// one that was never started.
 		QObject::connect(d, &QWebEngineDownloadRequest::isFinishedChanged, d,
 		                  [this, d, url, path] {
+			const bool ok =
+			  d->state() == QWebEngineDownloadRequest::DownloadCompleted;
+			// **The engine's own sentence, not one composed here.** Qt turns
+			// the interrupt reason into text and keeps it in step with its
+			// own enum; a switch written here would be a second table to
+			// maintain and would go quiet on a reason added later. Read only
+			// on failure, since it reads "No error" otherwise and that is
+			// not a thing to show anybody.
 			if (m_download_note)
-				m_download_note(url, path, /*finished=*/true,
-				                 d->state() == QWebEngineDownloadRequest::DownloadCompleted);
+				m_download_note(url, path, /*finished=*/true, ok,
+				                 ok ? QString()
+				                    : d->interruptReasonString());
 		});
 		d->accept();
 	});

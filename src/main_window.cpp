@@ -510,17 +510,31 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		// cancelled by Qt without a word, so every one of these used to look
 		// like a click that did nothing.
 		factory->set_download_handler([this](const QUrl &url, const QString &path,
-		                                      bool finished, bool ok) {
+		                                      bool finished, bool ok,
+		                                      const QString &why) {
 			const QString name = QFileInfo(path).fileName();
 			if (!finished) {
 				m_status->showMessage(QString("Downloading %1…").arg(name), 6000);
 				return;
 			}
+			if (ok) {
+				m_status->showMessage(QString("Saved %1 to %2")
+				                          .arg(name,
+				                                QFileInfo(path).absolutePath()),
+				                       12000);
+				return;
+			}
+			// **The reason, where there is one.** "Download of x failed" told
+			// somebody that something went wrong and nothing they could act
+			// on; a full disk, a refused directory and a timeout want
+			// different answers from them. The sentence stays the same shape
+			// when a backend cannot say why, rather than growing an empty
+			// colon.
+			const QString what = name.isEmpty() ? url.toString() : name;
 			m_status->showMessage(
-			  ok ? QString("Saved %1 to %2")
-			           .arg(name, QFileInfo(path).absolutePath())
-			     : QString("Download of %1 failed").arg(
-			           name.isEmpty() ? url.toString() : name), 12000);
+			  why.isEmpty() ? QString("Download of %1 failed").arg(what)
+			                : QString("Download of %1 failed: %2")
+			                      .arg(what, why), 12000);
 		});
 
 		factory->set_external_url_handler(
