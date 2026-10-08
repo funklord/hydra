@@ -36349,3 +36349,82 @@ about a backend's capability -- a desktop backend that implemented the
 setter would still have nothing to ask for. Substituting a capability check
 there is the inverse of *a name is not a capability*, and reading the
 comment is what caught it.
+
+## Installed on the handset, and the signing key is an account-shaped trap
+
+Asked for by the copyright holder 2026-10-08. Done -- but the obstacle in
+the way is worth more than the install, because it recurs every time this
+tree is built for Android from a different account than last time.
+
+**The install.** `RFCRB0EAP8H`, an SM-F926B on Android 15, `arm64-v8a`.
+Preflight clean: api 26 against a declared 28, JDK 17, kit
+`Qt/6.12.0/android_arm64_v8a`, NDK 27.2.12479018 -- which is r27c, the one
+the kit's `qdevice.pri` names, so the fragment's NDK comparison passed.
+Build 1m18s against a warm `build-android-arm64-v8a`.
+
+    before   versionCode=100  lastUpdateTime=2026-09-18 18:55:13
+    after    versionCode=100  lastUpdateTime=2026-10-08 21:07:09
+             signatures=[8280efd1] either side, so nothing was uninstalled
+
+**`versionCode` cannot tell you an install landed**, which is the first
+thing to know: it is 100 on both sides, because nothing bumps it between
+builds of the same `VERSION`. `lastUpdateTime` is the observable, and the
+machine clock read 21:07:39 when that was read -- thirty seconds, so it is
+this install and not an older one.
+
+### Two debug keystores, and the phone trusts the other one
+
+`adb install -r` would have been refused, and the reason is not in any
+build file:
+
+    /home/claude/.android/debug.keystore   9B:68:89:FA:...  Aug 31 2026
+    /home/funk/.android/debug.keystore     D6:2E:B2:68:...  Mar 12 2023
+
+    the apk installed on 2026-09-18, and the one in the build dir, owned
+    by funk, signed  d62eb268...2fbfb5  -- funk's, exactly
+
+    this build, run as claude, signed  9b6889fa...3d19 -- mine
+
+Gradle signs a debug build with `$HOME/.android/debug.keystore`, so **which
+account runs `make android` decides whether the result can be installed over
+what is already on the phone.** Nothing warns: the build succeeds, the APK
+is valid, and only `adb install` refuses it, with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` and no mention of a keystore.
+
+**The recovery preserves the app's data, and the alternative does not.**
+Re-sign the finished APK with the key the phone already trusts:
+
+    apksigner sign --ks /home/funk/.android/debug.keystore \
+      --ks-pass pass:android --out <out>.apk <built>.apk
+
+Verified before use by rehearsing the round trip on a copy of the old APK --
+sign with one key, re-sign with the other, read the digest back each time --
+rather than discovering it after a build. The re-signed file is left beside
+the build's own artifact as `hydra-$(VERSION)-arm64-v8a-phonekey.apk`, so
+`$(ANDROID_ARTIFACT)` is still literally what the build signed.
+
+**Note that `make android-install` will fail from this account** for the
+same reason, since it installs `$(ANDROID_ARTIFACT)`. Left as it is rather
+than taught about keystores: which key a build should use is a question
+about whose phone and whose machine, and so the holder's.
+
+**What was deliberately not done: uninstall.** It would have made any
+key work and would have taken hydra's tabs, settings and history off a
+daily phone. A refused install costs nothing and is recoverable; an
+uninstall is not, so the destructive route is not one to take on the
+strength of "install it" without saying so first.
+
+**One operational note.** apksigner 37 emits v3 only for a minSdk-28
+package even when asked for v2, so the re-signed APK verifies under v3
+alone where the installed one recorded `apkSigningVersion=2`. The phone is
+API 35 and reads v3 natively, and what the update check compares is the
+signer identity, which is why it was accepted -- the device now records
+`version:4`, an incremental-install artifact, with the same
+`signatures=[8280efd1]`.
+
+**And the build leaves a gradle daemon**, 1.3 GB resident, orphaned to
+init. Left running rather than stopped: 148 GB of 188 was available and
+swap was untouched, so the load on this machine is CPU and not memory, and
+a stopped daemon only makes the next build cold. Worth knowing it is there
+and whose it is -- `ps -o user=,pid=,etime=,rss= -C java` separates it from
+the other account's, which was ten hours old and 3.1 GB.
