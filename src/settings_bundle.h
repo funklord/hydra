@@ -34,6 +34,26 @@ class filter_list;
 //     deliberately adds nothing on its own). Carrying them in a one-click
 //     restore would route around that review, which is the one thing in this
 //     file that is a security property rather than a convenience.
+//   * Subscribed filter lists -- which lists, whether each is enabled, and
+//     **whether each is trusted**. The last one is why, and it is the same
+//     security property as the line above rather than a second one: trusting
+//     a list lets its `trusted-*` scriptlets write cookies and replace
+//     response bodies on the page's behalf, and the person grants that per
+//     publisher by ticking a box. A restore that carried the flag would
+//     grant it for them, which is the one thing that box exists to prevent.
+//
+//     The *preference* that says whether background tabs preload is carried,
+//     because it is an ordinary dialog setting in `[preferences]`; the
+//     subscription index is not, because it is a separate JSON file this
+//     function is never handed. The omission is therefore by construction --
+//     `write` and `read` take a policy engine and a filter list and nothing
+//     else -- and `test_bundle` asserts it so that changing it has to change
+//     this list too.
+//
+//     Whether the urls alone should be carried, with trust dropped on
+//     restore, is a reasonable middle and is the holder's: it would spare
+//     somebody re-typing two addresses on a new machine without granting
+//     anything.
 namespace settings_bundle {
 
 // What a write or read did. `error` empty means it worked.

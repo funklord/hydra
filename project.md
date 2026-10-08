@@ -35645,6 +35645,53 @@ request, 73x faster than scanning*. That run is the fix earning its keep in
 the same afternoon -- 980.8 us is twice the old ceiling, on code that is
 unchanged and still two orders off the scan.
 
+## The bundle promised to say what it omits, and had stopped saying it
+
+`settings_bundle.h` opens its exclusion list with the reason for having one:
+*"a backup that quietly omits things is worse than one that says what it
+is."* It named three -- the tab tree, the Claude key, learned site rules --
+and subscriptions arrived after it was written and were never added. So the
+file promised a completeness it no longer had.
+
+**The omission itself is right**, and the reason is already two lines above
+it. Learned site rules are excluded because carrying them "would route
+around that review", which the header calls *the one thing in this file that
+is a security property rather than a convenience*. A restored `trusted: true`
+is the same shape: trusting a list lets its `trusted-*` scriptlets write
+cookies and replace response bodies on the page's behalf, and the person
+grants that per publisher by ticking a box. A one-click restore carrying the
+flag would grant it for them.
+
+**The distinction the entry has to make** is that the *preference* saying
+whether background tabs preload IS carried -- it is an ordinary dialog key in
+`[preferences]`, and that section copies `allKeys()` -- while the
+subscription index is not, because it is a separate JSON file `write` and
+`read` are never handed. The omission is by construction rather than by
+anybody remembering.
+
+### Asserted, because an omission nobody checks is only a claim
+
+The list had already gone stale once, silently, and nothing could have caught
+it. So `test_bundle` writes an index naming a trusted list, writes a bundle
+beside it, and asserts the bundle carries the filter rule (so the file is not
+merely empty) and carries neither the subscription address nor the word
+trusted -- then that a restore leaves the index byte-identical, since a read
+that merged into it would be as bad as a write that copied it out.
+
+Sabotage: two `setValue` lines in `write` turn both assertions red.
+
+**The fixture writes the index literally rather than through
+`filter_subscription::save_index`.** Calling the real writer linked the whole
+subscription machinery into this suite -- an actual link failure, and a
+link-set regeneration for a fixture -- when what is asserted is what the
+*bundle* contains. The index only has to be a file with a url and the word
+trusted in it. A suite that linked the subscription code to prove the bundle
+ignores it would also be an odd thing to read.
+
+**What is left is the holder's**, and it is a reasonable middle: carrying the
+urls while dropping trust on restore would spare somebody re-typing two
+addresses on a new machine without granting anything.
+
 ### What is left
 
 ~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was

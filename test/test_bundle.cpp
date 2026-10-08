@@ -995,6 +995,97 @@ int main(int argc, char **argv) {
 		QDir(dir).removeRecursively();
 	}
 
+	section("a backup does not carry which lists you trust");
+	{
+		// **The omission list in `settings_bundle.h` had gone stale**, and
+		// that header's own principle is why this matters: *"a backup that
+		// quietly omits things is worse than one that says what it is."*
+		// Subscriptions arrived after the list was written and were never
+		// added to it, so the file promised completeness it no longer had.
+		//
+		// The omission itself is right, and for the reason the learned-site-
+		// rules line already gives: trusting a list lets its `trusted-*`
+		// scriptlets write cookies and replace response bodies on the page's
+		// behalf, and the person grants that per publisher by ticking a box.
+		// A restore that carried the flag would grant it for them.
+		//
+		// **Asserted so the list cannot go stale again.** An omission nobody
+		// checks is a claim; one that cannot change without a test going red
+		// is a guarantee -- and this one is cheap to guarantee, because
+		// `write` and `read` are handed a policy engine and a filter list
+		// and nothing else.
+		QTemporaryDir dir;
+		check(dir.isValid(), "a scratch directory");
+		const QString bundle = QDir(dir.path()).filePath("settings.ini");
+		const QString index  = QDir(dir.path()).filePath("subs.json");
+
+		// **The index is written literally rather than through
+		// `filter_subscription::save_index`**, deliberately. Calling the real
+		// writer would pull the whole subscription machinery into this
+		// suite's link set for a fixture, and what is being asserted is what
+		// the BUNDLE contains -- the index only has to be a file on disk with
+		// a url and the word trusted in it. Keeping the dependency out is
+		// also the honest shape: a suite that linked the subscription code to
+		// prove the bundle ignores it would be odd.
+		{
+			QFile w(index);
+			check(w.open(QIODevice::WriteOnly | QIODevice::Truncate),
+			       "an index naming a trusted list");
+			w.write("[\n    {\n"
+			         "        \"name\": \"uBlock filters\",\n"
+			         "        \"url\": "
+			         "\"https://ublockorigin.example/filters.txt\",\n"
+			         "        \"enabled\": true,\n"
+			         "        \"trusted\": true,\n"
+			         "        \"file\": \"ublock.txt\"\n"
+			         "    }\n]\n");
+		}
+		const QByteArray index_before = [&] {
+			QFile f(index);
+			return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+		}();
+		check(index_before.contains("ublockorigin.example") &&
+		          index_before.contains("\"trusted\": true"),
+		       "which really does record the trust on disk");
+
+		policy_engine p;
+		filter_list   fl;
+		filter_rule   r;
+		r.text = "||ads.example^";
+		r.note = "so the bundle has something to carry";
+		fl.add(r);
+		const settings_bundle::summary wrote =
+		  settings_bundle::write(bundle, &p, &fl);
+		check(wrote.ok(), QString("the bundle writes (%1)").arg(wrote.error));
+
+		QFile f(bundle);
+		check(f.open(QIODevice::ReadOnly), "and can be read back");
+		const QByteArray text = f.readAll();
+		f.close();
+		check(text.contains("ads.example"),
+		       "it carries the filter rule, so this is not an empty file");
+		// **The assertions the declaration stands on.**
+		check(!text.contains("ublockorigin.example"),
+		       "and carries no subscription address");
+		check(!text.contains("trusted"),
+		       "nor anything about which lists are trusted");
+
+		// And a restore leaves the index exactly as it was -- the other half,
+		// since a read that merged into it would be as bad as a write that
+		// copied it out.
+		policy_engine fresh;
+		filter_list   fl2;
+		const settings_bundle::summary got =
+		  settings_bundle::read(bundle, &fresh, &fl2);
+		check(got.ok(), QString("the bundle reads back (%1)").arg(got.error));
+		const QByteArray index_after = [&] {
+			QFile g(index);
+			return g.open(QIODevice::ReadOnly) ? g.readAll() : QByteArray();
+		}();
+		check(index_after == index_before,
+		       "and the subscription index is untouched by the restore");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }
