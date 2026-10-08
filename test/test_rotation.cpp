@@ -51,6 +51,8 @@
 #include "kiosk_controller.h"
 #include "tab_tree_view.h"
 #include "tab_tree_model.h"
+#include "download_manager.h"
+#include "fake_download_source.h"
 #include "node.h"
 #include "tree_sort_proxy.h"
 #include "policy_engine.h"
@@ -5765,6 +5767,65 @@ int main(int argc, char **argv) {
 		       "the folder it went into is opened, so the new row is visible");
 		check(!open_in_view(fb),
 		       "and a folder the gesture had nothing to do with is still shut");
+	}
+
+	section("a finished download outlives the window that downloaded it");
+	{
+		// **Nobody has ever tested this half.** `test_settings` proves
+		// `download_manager`'s save against its own load, and the shell's
+		// wiring -- read the file at construction, then hand the path over so
+		// the manager writes by itself -- has no test at all. The symptom
+		// reported from use is that history does not survive a restart, and
+		// it survives every test of the codec, so this is where to look.
+		//
+		// XDG_DATA_HOME for the reason the zoom section above gives: the
+		// window builds the path from AppDataLocation in its constructor, so
+		// assigning anything afterwards would skip the code under test.
+		QTemporaryDir dhome;
+		check(dhome.isValid(), "a scratch XDG_DATA_HOME for the history");
+		const QByteArray xdg_was = qgetenv("XDG_DATA_HOME");
+		qputenv("XDG_DATA_HOME", dhome.path().toUtf8());
+		const QString adir =
+		  QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+		QDir().mkpath(adir);
+		const QString hpath = QDir(adir).filePath("download-history.json");
+		QFile::remove(hpath);
+
+		{
+			main_window w1(&factory, &policy, &filter);
+			spin(120);
+			auto *fs = new fake_download_source;
+			w1.m_downloads->add_source(fs);
+			QString err;
+			const int id =
+			  w1.m_downloads->enqueue(QUrl("http://x/e2e.bin"), "n", &err);
+			check(id > 0, QString("a job is queued in the real window (%1)")
+			                   .arg(err.isEmpty() ? QStringLiteral("ok") : err));
+			fs->finish(id, true);
+			spin(120);
+			check(w1.m_downloads->jobs().size() == 1 &&
+			         w1.m_downloads->jobs().first().terminal(),
+			       "and it finishes");
+			check(QFile::exists(hpath),
+			       QString("the window's own manager wrote %1")
+			           .arg(QFileInfo(hpath).fileName()));
+		}
+		{
+			main_window w2(&factory, &policy, &filter);
+			spin(120);
+			check(w2.m_downloads->jobs().size() == 1,
+			       QString("and the next window starts with it (%1 row(s))")
+			           .arg(w2.m_downloads->jobs().size()));
+			check(w2.m_downloads->jobs().size() == 1 &&
+			         w2.m_downloads->jobs().first().url ==
+			             QUrl("http://x/e2e.bin"),
+			       "with the url it had");
+		}
+
+		if (xdg_was.isEmpty())
+			qunsetenv("XDG_DATA_HOME");
+		else
+			qputenv("XDG_DATA_HOME", xdg_was);
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

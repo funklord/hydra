@@ -36642,3 +36642,84 @@ current build or on the August one. The gap above is real either way and
 is fixed, but if history still goes missing on a build that contains
 both, the cause is something else and this entry should not be read as
 having closed it.
+
+## Page downloads never reach the manager, so there is no history to keep
+
+The copyright holder confirmed the loss happens on every version, and
+then settled it in one command:
+
+    ls -l ~/.local/share/Hydra/download-history.json
+    No such file or directory
+
+**The file has never been written.** Not damaged, not disowned, not
+overwritten -- absent. And the directory above it exists, because
+`single_instance` mkpaths `AppDataLocation` at startup, so this is not a
+missing-directory failure either.
+
+**The cause: an ordinary page download never becomes a `download_job`.**
+`qtwebengine_factory` connects `QWebEngineProfile::downloadRequested`,
+accepts the request itself, and calls `m_download_note(url, path,
+finished, ok, why)`. The shell's handler for that -- `main_window:512` --
+shows "Downloading x...", then "Saved x to y", and returns. It creates no
+job, and nothing else does: `enqueue` has two callers, the media dialog
+and one main_window path, and `adopt` has one, screen capture.
+
+The downloads dialog's only population is `m_downloads->jobs()` -- lines
+387, 507 and 516, nothing else. So a page download appears in the status
+bar for twelve seconds and nowhere else, ever. There is no history
+because there was never a row.
+
+### The document already decided this, and the code implements half of it
+
+Architecture sec 11.2, unambiguously: *"Downloads flow into one manager fed
+by two sources -- page-initiated downloads via
+`QWebEngineProfile::downloadRequested` / `QWebEngineDownloadRequest`, and
+detector-initiated media saves"*. The second source is wired. The first
+is not.
+
+And the same section's status note says the window is *"the one list
+sec 11.2 asks for: every source in the same table"* -- which is true of
+every source the manager has, and the point is that the engine is not one
+of them. **A claim about a window that is accurate about the manager
+behind it and wrong about the person's experience.**
+
+So this is not a design question to put to anybody: `adopt` exists for
+exactly this case and says so -- *"the transport is running, so
+finished() must be able to retire it"* -- and has one caller, which is
+capture. `evidence.md`'s *an interface is only as wired as its least-used
+method*, for the third time in this tree.
+
+### What the fix needs, which is more than a line
+
+`adopt` takes a `download_source *`, and there is no source representing
+a transfer the engine is running. So the work is:
+
+- a source standing for an engine-run download: `accepts()` false so the
+  manager never routes a new job to it, `start()` unreachable, `cancel()`
+  aborting the `QWebEngineDownloadRequest`;
+- the `download_note` seam widened, since a job wants progress and an id
+  and the note carries neither -- and that seam is `web_view_factory.h`,
+  which `android_view` implements too;
+- the handler at `main_window:512` adopting on the first note and letting
+  `on_finished` retire the job, instead of writing a status line.
+
+Recorded rather than done in the same breath as the diagnosis, because it
+crosses the backend seam and Android implements the same interface.
+
+### Two measurements that were right and answered the wrong question
+
+Worth keeping because both looked like progress.
+
+**The end-to-end test passes.** `test_rotation` now drives a download
+through a real `main_window`, destroys it, builds another and finds the
+row -- the wiring `test_settings` never covered. It is a good test and it
+proved the mechanism works, which is exactly why it could not find this:
+it uses `fake_download_source`, and the fault is that the real path never
+reaches a source at all. *A stand-in reproduces the half of a tool you
+have seen.*
+
+**And the fifth-transition fix is real and was not this.** A source
+refusing to start did not persist, and that is fixed; it would have lost
+rows for the sources that do reach the manager. It is not why the file is
+absent, and reporting it as the answer would have been a fix offered for
+a symptom it does not cause.

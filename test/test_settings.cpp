@@ -10,6 +10,7 @@
 #include "cosmetic_filters.h"
 #include "policy_engine.h"
 #include "download_manager.h"
+#include "fake_download_source.h"
 #include "downloads_dialog.h"
 #include "zoom_store.h"
 #include <QJsonObject>
@@ -46,29 +47,6 @@ static void spin(int ms) {
 	QEventLoop l; QTimer::singleShot(ms, &l, &QEventLoop::quit); l.exec();
 }
 
-// A download source that accepts anything and finishes only when told, so a job
-// reaches a terminal state without a server. It adds no signals of its own -- it
-// emits download_source's inherited finished() -- so it needs no moc.
-class fake_download_source : public download_source {
-public:
-	QString id() const override { return "fake"; }
-	QString display_name() const override { return "Fake"; }
-	source_capabilities capabilities() const override { return {}; }
-	bool accepts(const QUrl &, QString *) const override { return true; }
-	// Defaults to succeeding, so every existing case is unaffected. A source
-	// refusing to start is the fifth way a job reaches a terminal state, and
-	// the only one that happens inside `pump`'s sweep.
-	bool refuse_start = false;
-	bool start(const download_request &, QString *error) override {
-		if (!refuse_start)
-			return true;
-		if (error)
-			*error = QStringLiteral("the fake refused to start");
-		return false;
-	}
-	void cancel(int) override {}
-	void finish(int job_id, bool ok) { emit finished(job_id, ok, QString()); }
-};
 
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
