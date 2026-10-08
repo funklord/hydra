@@ -35379,6 +35379,70 @@ it is clamped to 32 tabs because each live tab is a renderer process, and it
 closes the window itself rather than leaving forty renderers to process
 teardown. Checked afterwards -- no orphans.
 
+## The guard for this was already written and wired to nothing
+
+`39c06e5` changed `web_view_backend::new_window_requested` and
+`open_new_window`'s signature. `src/` built clean, all 44 suites passed, and
+it was pushed having broken `test/live/try_navigate.cpp`, which calls
+`open_new_window` three times.
+
+**The live drivers are outside `make test`.** Only `make drivers` or a
+link-set regeneration compiles them, so nothing in that verification touched
+them. What caught it was an objsets regeneration run for an unrelated reason,
+because fmake's eject compiles the whole tree -- a side benefit of that guard
+worth knowing about, since it is the only thing in the loop that builds
+everything.
+
+**And `test/Makefile` has had a `live-objs` target for exactly this**, whose
+own comment says what for:
+
+    a change that breaks a driver's *compilation* has been reaching the
+    tree unnoticed. It did repeatedly in one session: the drivers were
+    fixed by hand each time, after the fact. This is the half that is
+    cheap and catches most of it.
+
+It was a dependency of nothing -- not `test`, not `all`, not `style`.
+Somebody did the hard part, wrote down the failure it was for, and the one
+line that would have made it fire was missing. That is `evidence.md`'s
+sentence about controls with the sharpest example available: *a control that
+lives beside the tool is run when somebody remembers; one inside it is run
+when they do not.*
+
+`make test` compiles them now, before building any suite so the cheap check
+fails first, and the sabotage is the break itself put back: it fails in **4
+seconds**, naming the file and the call.
+
+### Where it goes was decided by measuring, not by taste
+
+    live-objs, cold -j8                   43 s, no errors
+    live-objs, warm                        4 s
+    an ad-hoc g++ -fsyntax-only sweep     58 s, and one false failure
+
+43s against a suite run of several minutes is proportionate; the same 43s on
+`make style`, which runs constantly and takes seconds, is not -- and a gate
+that becomes annoying is a gate somebody stops running, which is the same
+failure this entry is about arriving from the other side.
+
+**The ad-hoc sweep was the worse instrument twice over.** It falsely failed
+the one driver that `#include`s its own generated `.moc`, and it duplicated
+the flag list. `live-objs` is the build system rather than a second copy of
+it, so moc is handled and there is nothing to keep in step.
+
+Objects only, never links: linking forty-odd Qt WebEngine drivers needs a
+display, and `make drivers` is still where that lives.
+
+### The misattribution it nearly produced
+
+The regeneration said `fmake --eject failed`, and fmake had been rebuilt
+**three times** that day -- `f843219d`, `c8908ca3`, `7c831518`, each caught by
+the recorded-fmake guard. So the fresh binary was the obvious suspect.
+
+Reading the log rather than acting on that: both errors were mine, in my own
+files -- `try_navigate` from the signature change, and a missing
+`#include "node.h"` in the new driver. *Suspect your own instrument before
+their tree* is the only reason a sibling project did not get a second wrong
+report in one day.
+
 ### What is left
 
 ~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was

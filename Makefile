@@ -442,6 +442,32 @@ test:
 		echo "      still matches from $$(pwd)." >&2; \
 		exit 1; \
 	 fi
+	@# **Compile the live drivers too, which nothing here used to do.**
+	@#
+	@# `test/Makefile` has had a `live-objs` target for exactly this, and its
+	@# comment says what it is for: "a change that breaks a driver's
+	@# compilation has been reaching the tree unnoticed. It did repeatedly in
+	@# one session: the drivers were fixed by hand each time, after the fact."
+	@# It was a dependency of nothing -- not `test`, not `all`, not `style` --
+	@# so it ran when somebody remembered.
+	@#
+	@# It happened again, which is why this line exists. A change to
+	@# `web_view_backend`'s window-request signal built clean, passed every
+	@# suite and was pushed; it had broken `try_navigate.cpp`, and the only
+	@# thing that compiled the drivers was a link-set regeneration run for an
+	@# unrelated reason. The remedy was already written and never wired.
+	@#
+	@# Measured at 43s with -j8 against a suite run of several minutes, which
+	@# is why it goes here rather than in `style`: proportionate to what it is
+	@# attached to, and attached to the thing a person actually runs.
+	@#
+	@# Objects only, never links. Linking these costs forty-odd Qt WebEngine
+	@# links and a display to run them on, which is the half this deliberately
+	@# does not do -- `make drivers` is still where that lives.
+	@printf 'compiling the live drivers (objects only)...'
+	@$(MAKE) --no-print-directory -C test -j$(JOBS) BUILD_DIR=$(TEST_BUILD) \
+	   live-objs >/dev/null || { echo " FAILED"; exit 1; }
+	@echo " ok, $(words $(wildcard test/live/try_*.cpp)) driver(s)"
 	@for t in $(SUITES); do $(MAKE) --no-print-directory -C test -j$(JOBS) \
 	   $(TEST_BUILD)/$$t >/dev/null || exit 1; done
 	@mkdir -p $(TEST_TMP)

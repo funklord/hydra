@@ -146,7 +146,12 @@ int main(int argc, char *argv[]) {
 
 		// A click. Chromium's rule and the right one: the popup setting exists
 		// to stop pages opening windows nobody asked for, not to break links.
-		node *made = w.open_new_window(QUrl("https://example.test/clicked"), true);
+		// `background=false`: this case is about a link that TAKES you to the
+		// new tab, which is what a `target="_blank"` click does. The
+		// background destination has its own case in `test_rotation`.
+		node *made = w.open_new_window(QUrl("https://example.test/clicked"),
+		                                /*user_initiated=*/true,
+		                                /*background=*/false);
 		spin(400);
 		check(made != nullptr, "a clicked link opens even with popups blocked");
 		// **This used to assert the opposite, and its own message said so.**
@@ -171,7 +176,9 @@ int main(int argc, char *argv[]) {
 		// rather than beside it.
 		const int after_click = asking->children.size();
 		QStatusBar *sb = w.findChild<QStatusBar *>();
-		node *blocked = w.open_new_window(QUrl("https://example.test/popup"), false);
+		node *blocked = w.open_new_window(QUrl("https://example.test/popup"),
+		                                   /*user_initiated=*/false,
+		                                   /*background=*/false);
 		spin(300);
 		check(blocked == nullptr, "a script-opened window is refused");
 		check(asking->children.size() == after_click,
@@ -182,7 +189,9 @@ int main(int argc, char *argv[]) {
 
 		// The same request once the site is allowed popups.
 		policy.set_setting("*", policy::feature::popups, policy::setting::allow);
-		node *allowed = w.open_new_window(QUrl("https://example.test/allowed"), false);
+		node *allowed = w.open_new_window(QUrl("https://example.test/allowed"),
+		                                   /*user_initiated=*/false,
+		                                   /*background=*/false);
 		spin(300);
 		check(allowed != nullptr, "allowing popups lets one through");
 		policy.set_setting("*", policy::feature::popups, policy::setting::block);
