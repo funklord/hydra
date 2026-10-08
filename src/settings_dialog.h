@@ -285,6 +285,7 @@ private:
 	probe_state   m_probe_state = probe_state::unknown;
 	QLineEdit    *m_claude_model = nullptr;
 	QSpinBox     *m_live_views   = nullptr;
+	QCheckBox    *m_preload_bg   = nullptr;
 	QLineEdit    *m_claude_key   = nullptr;
 	QLabel       *m_ai_status    = nullptr;
 };
@@ -356,5 +357,11 @@ void set_autofill_https_only(bool on);
 // which is the one that decides and which this is only the stored half of.
 int  live_view_cap();
 void set_live_view_cap(int n);
+
+// Whether a tab that opens in the background is loaded before it is clicked.
+// Bounded by `live_view_cap()` -- a preload never evicts a live view -- so
+// the cost is already the budget above rather than a second one.
+bool preload_background_tabs();
+void set_preload_background_tabs(bool on);
 
 }  // namespace settings_store

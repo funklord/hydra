@@ -232,6 +232,21 @@ void set_live_view_cap(int n) {
 	s.sync();
 }
 
+bool preload_background_tabs() {
+	QSettings s = open_settings();
+	// **On by default**, because off is what was reported as the problem: a
+	// background tab that is never fetched until it is clicked makes every
+	// slow site slow twice over. It costs nothing on top of the live-views
+	// budget, which already decides how many engine views may exist.
+	return s.value("tabs/preloadBackground", true).toBool();
+}
+
+void set_preload_background_tabs(bool on) {
+	QSettings s = open_settings();
+	s.setValue("tabs/preloadBackground", on);
+	s.sync();
+}
+
 bool autofill_https_only() {
 	QSettings s = open_settings();
 	return s.value("autofill/httpsOnly",
@@ -1541,6 +1556,8 @@ void settings_dialog::restore_page_defaults(int page) {
 	} else if (name.startsWith("Tabs")) {
 		if (m_live_views)
 			m_live_views->setValue(main_window::k_default_live_views);
+		if (m_preload_bg)
+			m_preload_bg->setChecked(true);
 	} else if (name.startsWith("Kiosk")) {
 		const kiosk_config d;   // the struct's own initialisers are the defaults
 		put_value(m_kiosk_home, d.home.toString());
@@ -2238,6 +2255,19 @@ void settings_dialog::build_tabs_page(QWidget *page) {
 	  "A page whose process crashes lowers the number for the rest of the "
 	  "session, because that is usually a machine running short.",
 	  m_live_views, page));
+
+	m_preload_bg = new QCheckBox(page);
+	m_preload_bg->setObjectName("preload_background");
+	v->addWidget(settings_row(
+	  "Load tabs before you open them",
+	  "A tab that opens in the background, and the tabs a restored session "
+	  "was last in, start loading straight away instead of waiting for the "
+	  "first click. On a site that answers slowly that is the difference "
+	  "between a switch and a wait. It spends no more memory than the number "
+	  "above allows: a tab is only loaded early if there is room under it, "
+	  "and one loaded this way is the first to be put back to sleep — so it "
+	  "never costs you a page you were reading.",
+	  m_preload_bg, page));
 	v->addStretch(1);
 }
 
@@ -2874,6 +2904,8 @@ void settings_dialog::load() {
 		m_autofill_https->setChecked(settings_store::autofill_https_only());
 	if (m_live_views)
 		m_live_views->setValue(settings_store::live_view_cap());
+	if (m_preload_bg)
+		m_preload_bg->setChecked(settings_store::preload_background_tabs());
 
 	switch (settings_store::ai_mode()) {
 		case ai_choice::local_only: m_ai_local->setChecked(true); break;
@@ -3009,6 +3041,8 @@ void settings_dialog::apply() {
 		settings_store::set_autofill_https_only(m_autofill_https->isChecked());
 	if (m_live_views)
 		settings_store::set_live_view_cap(m_live_views->value());
+	if (m_preload_bg)
+		settings_store::set_preload_background_tabs(m_preload_bg->isChecked());
 	if (m_policy) {
 		// Exceptions the user removed. Every feature is set back to unset, which
 		// is what "falls through to the defaults" means in the policy model --

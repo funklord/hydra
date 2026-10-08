@@ -451,6 +451,28 @@ private:
 	// and a page loaded here first would be thrown away or, worse, would spend
 	// a single-use url.
 	void open_node(node *n, bool load_now = true);            // create/restore a live view and show it
+	// The loading half of `open_node`, which shows nothing. Two callers: that
+	// one, and `preload_node`.
+	web_view_backend *ensure_view(node *n, bool load_now);
+	// **Give a background tab its page before anybody asks for it.** A row
+	// that never took the foreground had no view and therefore no load, so
+	// the first click on it paid the whole fetch -- which on a slow site is
+	// the wait this exists to remove. Bounded by `live_view_cap()`, parked at
+	// the back of the LRU, and it shows nothing.
+	void preload_node(node *n);
+	// The same, for the tabs a restored session was last in, ordered by
+	// `last_seen` and deferred to the event loop so it cannot delay the
+	// window appearing.
+	void preload_recent_tabs();
+public:
+	// **Public, like the members below, so a test can drive them.** What a
+	// warm-up must never do -- exceed the cap, evict a page in use, touch
+	// `last_seen`, or warm a magnet row -- is only assertable by calling it,
+	// and the alternative is a suite that reaches the behaviour through a
+	// popup it has to fake an engine for.
+	void preload_background_tab(node *n) { preload_node(n); }
+	void warm_recent_tabs() { preload_recent_tabs(); }
+private:
 	void suspend_node(node *n);         // serialize + tear down the live view
 	void touch_lru(const QString &id);
 	void enforce_live_cap(const QString &keep_id);

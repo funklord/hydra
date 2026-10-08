@@ -4974,6 +4974,223 @@ int main(int argc, char **argv) {
 	}
 
 
+	section("a background tab is loaded before it is clicked");
+	{
+		// **The reported problem.** A row that never took the foreground had
+		// no view and therefore no page: `open_new_window` created the node,
+		// said so in the status bar, and stopped. So the first click paid the
+		// whole fetch, and on a site that answers slowly that is the wait.
+		const bool was_on = settings_store::preload_background_tabs();
+		settings_store::set_preload_background_tabs(true);
+		// The cap through the environment rather than the stored setting:
+		// `live_view_cap` honours it, and it leaves no state behind for the
+		// sections after this one.
+		qputenv("HYDRA_MAX_LIVE_VIEWS", "3");
+
+		main_window p(&factory, &policy, &filter);
+		if (p.layout()) p.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+		p.setMinimumSize(0, 0);
+		p.resize(360, 800);
+
+		node *bg = p.m_model->add_tab(nullptr, "slow site",
+		                               "https://fnirsi.example/product/1");
+		check(bg && bg->type == node_type::unopened_tab,
+		       "a new row starts unopened, with no view");
+		check(!live_view(p, bg), "and nothing is loading for it");
+
+		const QDateTime seen_before = bg->last_seen;
+		p.preload_background_tab(bg);
+		fake_view *v = live_view(p, bg);
+		check(v, "preloading gives it a view");
+		check(v && v->url().toString() == "https://fnirsi.example/product/1",
+		       QString("pointed at the row's own address (%1)")
+		           .arg(v ? v->url().toString() : QStringLiteral("none")));
+		// **`open_tab` is the honest type**, because the vocabulary records
+		// what a row HAS rather than where it is.
+		check(bg->type == node_type::open_tab,
+		       "and the row says it holds a live view");
+		// **`last_seen` must not move.** It is what the startup warm-up sorts
+		// by and what a person reads as "when I was last here"; touching it
+		// would make every warmed tab look recently visited.
+		check(bg->last_seen == seen_before,
+		       "while last_seen is left alone, because nobody has seen it");
+
+		// **Nothing was brought to the front**, which is the other half of
+		// the complaint: a background tab that stole the screen would be a
+		// worse bug than the one being fixed.
+		check(!v || !v->widget()->isVisible(),
+		       "and it is not the page on screen");
+
+		settings_store::set_preload_background_tabs(was_on);
+		qunsetenv("HYDRA_MAX_LIVE_VIEWS");
+	}
+
+	section("warming never costs a page somebody is using");
+	{
+		// **The trade this must not make.** A preload that went over the cap
+		// would have `enforce_live_cap` evict the least-recently-used view to
+		// make room for one nobody has asked for -- a page in use given up
+		// for a guess, which is worse than the wait it saves.
+		const bool was_on = settings_store::preload_background_tabs();
+		settings_store::set_preload_background_tabs(true);
+		qputenv("HYDRA_MAX_LIVE_VIEWS", "2");
+
+		main_window p(&factory, &policy, &filter);
+		if (p.layout()) p.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+		p.setMinimumSize(0, 0);
+		p.resize(360, 800);
+
+		node *reading = p.m_model->add_tab(nullptr, "reading",
+		                                    "https://read.example/");
+		node *one = p.m_model->add_tab(nullptr, "one", "https://1.example/");
+		node *two = p.m_model->add_tab(nullptr, "two", "https://2.example/");
+		// Driven through the tree's own signal, which is how a person opens a
+		// tab -- the suite's existing idiom, and it exercises the path rather
+		// than the function.
+		auto open = [&](node *n) {
+			const QModelIndex idx =
+			  p.m_proxy->mapFromSource(p.m_model->index_for_node(n));
+			emit p.m_tree->activated(idx);
+			spin(120);
+		};
+		open(reading);
+		check(live_view(p, reading), "a tab is open and in front");
+		const int cap = p.live_view_cap();
+		check(cap == 2, QString("with a cap of two (%1)").arg(cap));
+
+		p.preload_background_tab(one);
+		p.preload_background_tab(two);
+		check(int(p.m_views_by_id.size()) <= cap,
+		       QString("the cap still holds after warming (%1 of %2)")
+		           .arg(p.m_views_by_id.size()).arg(cap));
+		check(live_view(p, reading),
+		       "and the page being read still has its view");
+		// Exactly one of the two fitted, because one slot was taken.
+		const int warmed = (live_view(p, one) ? 1 : 0) +
+		                    (live_view(p, two) ? 1 : 0);
+		check(warmed == 1,
+		       QString("one of the two fitted the headroom, not both (%1)")
+		           .arg(warmed));
+
+		// **A warmed view is the first to go, not the last.** Parked at the
+		// back of the LRU rather than touched to the front, so opening
+		// another tab gives up the guess instead of the page in use.
+		node *third = p.m_model->add_tab(nullptr, "third",
+		                                  "https://3.example/");
+		open(third);
+		check(live_view(p, third), "opening a third tab works");
+		check(live_view(p, third),
+		       "the tab just opened has its view");
+		// **The discriminating assertion, and the first version was vacuous.**
+		// It read `!live_view(one) || !live_view(two)`, and only one of those
+		// two was ever warmed -- so the other's absence made it true whatever
+		// the code did. Sabotaging the parking produced no failure at all,
+		// which is how it was caught: reading WHICH checks went red rather
+		// than that some did.
+		//
+		// What separates the two implementations is which view the cap gives
+		// up. Parked at the back of the LRU, the warmed one is oldest and
+		// goes. Touched to the front, it is newest and `reading` goes
+		// instead -- the page somebody was on, for a page nobody asked for.
+		check(live_view(p, reading),
+		       "and the page being read kept its view, not the warmed one");
+		check(!live_view(p, one) && !live_view(p, two),
+		       "which means the warmed view is the one that went");
+
+		settings_store::set_preload_background_tabs(was_on);
+		qunsetenv("HYDRA_MAX_LIVE_VIEWS");
+	}
+
+	section("what warming declines, and the setting that stops it");
+	{
+		const bool was_on = settings_store::preload_background_tabs();
+		settings_store::set_preload_background_tabs(true);
+		qputenv("HYDRA_MAX_LIVE_VIEWS", "8");
+
+		main_window p(&factory, &policy, &filter);
+		if (p.layout()) p.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+		p.setMinimumSize(0, 0);
+		p.resize(360, 800);
+
+		node *dir = p.m_model->add_folder(nullptr, "a folder");
+		p.preload_background_tab(dir);
+		check(!dir || !live_view(p, dir), "a folder has no page to warm");
+
+		node *blank = p.m_model->add_tab(nullptr, "empty", QString());
+		p.preload_background_tab(blank);
+		check(!live_view(p, blank),
+		       "nor does a row with no address");
+
+		// **A magnet row is the one that would have been actively harmful.**
+		// `open_new_window` records it: loading such a url hands it back to
+		// the scheme handler and starts the download again, so a preloader
+		// that skipped this check would have reintroduced that defect by a
+		// new route.
+		node *mag = p.m_model->add_tab(nullptr, "a magnet",
+		                                "magnet:?xt=urn:btih:abc");
+		p.preload_background_tab(mag);
+		check(!live_view(p, mag),
+		       "and a magnet row is refused, as it is at the door");
+
+		// The setting, which is the whole of the off switch.
+		settings_store::set_preload_background_tabs(false);
+		node *off = p.m_model->add_tab(nullptr, "off", "https://off.example/");
+		p.preload_background_tab(off);
+		check(!live_view(p, off),
+		       "with the setting off, nothing is warmed at all");
+		check(off && off->type == node_type::unopened_tab,
+		       "and the row is left as it was");
+
+		settings_store::set_preload_background_tabs(was_on);
+		qunsetenv("HYDRA_MAX_LIVE_VIEWS");
+	}
+
+	section("a restored session warms the tabs it was last in");
+	{
+		// **Where the problem bites hardest.** A restored session is entirely
+		// rows, so every first visit pays a full fetch. Warming the ones a
+		// person was last in makes the common case a switch.
+		const bool was_on = settings_store::preload_background_tabs();
+		settings_store::set_preload_background_tabs(true);
+		qputenv("HYDRA_MAX_LIVE_VIEWS", "3");
+
+		main_window p(&factory, &policy, &filter);
+		if (p.layout()) p.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+		p.setMinimumSize(0, 0);
+		p.resize(360, 800);
+
+		// Three rows, deliberately in the OPPOSITE tree order to their
+		// recency -- which is the fixture that separates "sorted by
+		// last_seen" from "whatever is filed first". Tree order would warm
+		// `oldest`, and the point is that it does not.
+		node *oldest = p.m_model->add_tab(nullptr, "oldest",
+		                                   "https://old.example/");
+		node *middle = p.m_model->add_tab(nullptr, "middle",
+		                                   "https://mid.example/");
+		node *newest = p.m_model->add_tab(nullptr, "newest",
+		                                   "https://new.example/");
+		const QDateTime now = QDateTime::currentDateTime();
+		oldest->last_seen = now.addDays(-9);
+		middle->last_seen = now.addDays(-5);
+		newest->last_seen = now.addSecs(-60);
+
+		p.warm_recent_tabs();
+		// **One slot is left free for the tab the person opens next**, so a
+		// cap of three warms two. Filling it would make the first click go
+		// over the cap, evicting a warmed view and writing its blob -- churn
+		// bought with the work that was supposed to save time.
+		check(int(p.m_views_by_id.size()) == 2,
+		       QString("two of three warmed, one slot kept free (%1)")
+		           .arg(p.m_views_by_id.size()));
+		check(live_view(p, newest) && live_view(p, middle),
+		       "the two most recently used are the ones warmed");
+		check(!live_view(p, oldest),
+		       "and the one furthest back is left as a row");
+
+		settings_store::set_preload_background_tabs(was_on);
+		qunsetenv("HYDRA_MAX_LIVE_VIEWS");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

@@ -35013,6 +35013,106 @@ form is the one `evidence.md` opens with, arriving from the other side: a
 report over an empty population reads exactly like a report over a healthy
 one, and the only fix is for the report to name its denominator.
 
+## A background tab had no page, because loading and showing were one decision
+
+Reported by the copyright holder 2026-10-08: pages in the background do not
+load, and sites that answer slowly -- fnirsi.com product pages were the
+example -- make that a wait rather than an annoyance.
+
+**The cause was one `else` branch.** `open_new_window` created the node, told
+the status bar a window had opened, and stopped:
+
+    } else {
+        // Allowed, but not given the foreground: a page that opens a window
+        // while you are reading is not entitled to take the page away from you.
+        m_status->showMessage(...);
+    }
+
+That comment is right about the screen and was answering a second question
+nobody had asked. **Loading and showing were the same decision**, so declining
+the foreground declined the fetch, and the row sat there with a url until
+somebody clicked it. A restored session is the same thing at scale: every tab
+is a row, so every first visit pays its whole load.
+
+### The fix is a split, and the extraction is the whole of it
+
+`ensure_view(node *, bool load_now)` came out of `open_node` -- 525 lines,
+moved in order, nothing else changed. `open_node` is the showing half now and
+`preload_node` is the other caller.
+
+**The `return`s were checked before the move**, because one at that function's
+own level would have changed meaning from *stop opening this tab* to *hand
+back no view*, which the caller reads as a failure. All of them were inside
+lambdas; `grep -cE '^\t\treturn|^\treturn'` over the block answered 0.
+
+### It spends nothing that was not already budgeted
+
+The cap and the LRU were already here: `live_view_cap()`, default 8, settable
+1 to 64, with `enforce_live_cap` suspending the least-recently-used view to a
+state blob. A preloader that needed a budget of its own would have been a
+second knob answering the same question, so this one lives inside that.
+
+Four refusals, each about not making the cure worse than the complaint:
+
+- **No headroom, no warm.** Going over the cap would have the eviction loop
+  give up a page in use for one nobody has asked for.
+- **Parked at the back of the LRU**, not touched to the front, so a warmed
+  view is the first given up rather than the last.
+- **`last_seen` untouched**, because it is what the warm-up sorts by and what
+  a person reads as when they were last there.
+- **A magnet row refused.** Loading one hands its url back to the scheme
+  handler and starts the download again -- the defect `open_new_window`
+  already records, which a preloader would have reintroduced by a new route.
+
+And `open_tab` is the honest type for a warmed row, because this tree's
+vocabulary records what a row HAS rather than where it is: `unopened_tab` is
+no view, `suspended_tab` is a view in a blob, `open_tab` is a live one. Being
+in front is not what the type says.
+
+### The startup warm-up leaves a slot free, deliberately
+
+`preload_recent_tabs` sorts by `last_seen` descending and fills `cap - 1`.
+The spare slot is for the tab the person opens next: filling the cap would
+make the very first click go over it, evicting a warmed view and writing its
+state blob -- churn bought with the work that was supposed to save time.
+
+It is deferred to the event loop rather than run inline, because loading
+pages is the slowest thing this program does and the window is not on screen
+yet. Warming there would trade a blank window for a shorter wait later, which
+is the reported complaint arriving from the other direction.
+
+### A sabotage caught a vacuous assertion of mine
+
+Three guards sabotaged. Two spoke at once -- the headroom check gave
+`the cap still holds after warming (3 of 2)`, and reversing the sort order
+turned the two ordering checks red.
+
+**The LRU parking produced no failure at all.** The assertion read
+`!live_view(one) || !live_view(two)`, and with a cap of two only one of those
+was ever warmed -- so the other's absence made it true whatever the code did.
+It could not fail.
+
+What separates the two implementations is **which** view the cap gives up.
+Parked at the back, the warmed one is oldest and goes; touched to the front,
+it is newest and the page somebody was reading goes instead. So the assertion
+is now `live_view(reading)` after a third tab opens, and the sabotage turns it
+red with the message that names the trade.
+
+Caught by reading **which** checks went red rather than that some did -- the
+same instrument that found a case passing for the wrong reason earlier the
+same day. A sabotage that turns a suite red confirms only that something is
+watching.
+
+### On by default, and that is the part to disagree with
+
+`preload_background_tabs` defaults on, because off is what was reported as the
+problem. It does mean a background tab makes requests nobody clicked for,
+which is a change of kind rather than of degree -- the shield's other
+network-touching features (`sponsor_skip`) default off. The checkbox is in
+Settings -> Tabs, beside the number it shares a budget with, and the wording
+there says what it costs. Recorded here because the next person to read the
+privacy defaults should find the reasoning rather than infer it.
+
 ### What is left
 
 ~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was

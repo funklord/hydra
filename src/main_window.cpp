@@ -3214,6 +3214,11 @@ bool main_window::load_tree(const QString &path) {
 
 	restore_histories();
 	restore_view_state();
+	// **Deferred, not inline.** Loading pages is the slowest thing this
+	// program does and the window is not on screen yet, so warming here would
+	// trade a blank window for a shorter wait later -- which is the complaint
+	// this answers, arriving from the other direction.
+	QTimer::singleShot(0, this, [this] { preload_recent_tabs(); });
 	return ok;
 }
 
@@ -3841,6 +3846,163 @@ void main_window::open_node(node *n, bool load_now) {
 
 	n->last_seen = QDateTime::currentDateTime();
 
+	// **Built or found, and not shown.** `ensure_view` is the half of this
+	// that is about the view; everything below is about the chrome, which is
+	// why a background tab can have the first without the second.
+	web_view_backend *view = ensure_view(n, load_now);
+	if (!view)
+		return;
+
+	n->type = node_type::open_tab;
+	m_model->refresh_node(n);
+	apply_zoom(view, n->id);
+	m_stack->setCurrentWidget(view->widget());
+	// The tree follows the page. Without this the highlight stayed on whatever
+	// was last clicked, so the row that was showing and the row that looked
+	// selected were different rows -- and `selected_parent()` reads the second
+	// one to decide where the next new tab is filed.
+	if (m_tree)
+		m_tree->show_node(n);
+	// Everything the chrome asserts belongs to the page in front of you: the
+	// bar would otherwise report the last tab's load against this one, the
+	// button would offer to stop a load that is not this tab's, and the find
+	// count would claim matches from a page this is not.
+	sync_page_context();
+	update_address(view->url().toString(), /*force=*/true);
+	page_changed();
+	touch_lru(n->id);
+	enforce_live_cap(n->id);
+	mark_dirty();
+	update_status();
+}
+
+// **This node's live view, built if it has none, and never shown.**
+//
+// Split out of `open_node` so that a tab can be given a view and a page
+// without being brought to the front. `open_node` is "load it and show it";
+// this is the loading half and `preload_node` is the other caller.
+//
+// The split is an extraction and nothing else: every line below was
+// `open_node`'s, in this order, and the `return`s in it are all inside
+// lambdas -- checked before the move, because one at this function's own
+// level would have changed from "stop opening the tab" to "hand back no
+// view", which the caller would then read as a failure.
+// Every row that could hold a page, in tree order.
+//
+// **Not `collect_open_tabs`, and the difference is the whole point.** That one
+// gathers tabs that are open or suspended, for the strip and for cycling --
+// it deliberately leaves out `unopened_tab`, which is precisely the kind this
+// warms. Sharing it would have warmed only the tabs that were already loaded.
+static void collect_loadable_tabs(node *p, QList<node *> &out) {
+	for (node *k : p->children) {
+		if (!k->is_folder())
+			out << k;
+		collect_loadable_tabs(k, out);
+	}
+}
+
+// **The tabs most recently used, warmed after a restore.**
+//
+// This is where the reported problem bites hardest: a restored session is
+// entirely rows, so the first visit to each tab pays its whole fetch, and on
+// a site that answers slowly that is the wait. Warming the ones a person was
+// last in makes the common case a switch rather than a load.
+//
+// **Ordered by `last_seen`, descending**, which is the only ordering that
+// means anything here -- the tree's own order is where tabs live, not when
+// they were used, and warming the top of the tree would warm whatever happens
+// to be filed first.
+void main_window::preload_recent_tabs() {
+	if (!m_model || !settings_store::preload_background_tabs())
+		return;
+	// **One slot left free for the tab the person opens next.** Filling the
+	// cap would mean the very first click goes over it, evicting a warmed
+	// view and writing its state blob -- churn bought with the work that was
+	// supposed to save time. With a cap of one there is no headroom at all,
+	// which is the honest answer rather than a special case.
+	const int room = live_view_cap() - 1 - int(m_views_by_id.size());
+	if (room <= 0)
+		return;
+
+	QList<node *> rows;
+	collect_loadable_tabs(m_model->root(), rows);
+	std::sort(rows.begin(), rows.end(), [](const node *a, const node *b) {
+		return a->last_seen > b->last_seen;
+	});
+	int warmed = 0;
+	for (node *n : rows) {
+		if (warmed >= room)
+			break;
+		const int before = int(m_views_by_id.size());
+		preload_node(n);
+		// **Counted from what happened, not from what was attempted.**
+		// `preload_node` declines a folder, a magnet row, an empty url and a
+		// tab that is already live, so counting calls would stop the warm-up
+		// early on a tree full of rows it skipped.
+		if (int(m_views_by_id.size()) > before)
+			++warmed;
+	}
+	if (warmed > 0)
+		qInfo("tabs: warmed %d background tab(s) into a cap of %d",
+		       warmed, live_view_cap());
+}
+
+// **A background tab, loaded before anybody asks for it.**
+//
+// The reported problem: a row that never took the foreground has no view, so
+// nothing is fetched until it is clicked -- and on a site that takes seconds
+// to answer, the click is where the whole wait lands. Nothing was wrong with
+// the tab; it had simply never been asked to do anything.
+//
+// Four refusals, and each is about not making the cure worse than the
+// complaint.
+void main_window::preload_node(node *n) {
+	if (!n || n->is_folder())
+		return;
+	if (!settings_store::preload_background_tabs())
+		return;
+	if (m_views_by_id.contains(n->id))
+		return;            // already live; nothing to warm
+	// **Only into headroom the cap already allows.** Going over it would have
+	// `enforce_live_cap` evict somebody's least-recently-used page to make
+	// room for one nobody has asked for -- trading a page in use for a guess,
+	// which is worse than the wait it saves. The budget is the person's
+	// already: it is the live-views setting.
+	if (m_views_by_id.size() >= live_view_cap())
+		return;
+	// A row with nothing to fetch gains nothing from a view, and a magnet row
+	// would hand its url back to the scheme handler and start the download
+	// again -- the defect `open_new_window` records, which a preloader would
+	// otherwise reintroduce by a new route.
+	const QUrl target = n->url.isEmpty() ? QUrl()
+	                                      : QUrl::fromUserInput(n->url);
+	if (target.isEmpty() || !renders_as_page(target))
+		return;
+	if (!ensure_view(n, /*load_now=*/true))
+		return;
+
+	// **`open_tab` is the honest type**, because this tree's vocabulary says
+	// what a row HAS rather than where it is: `unopened_tab` means no view,
+	// `suspended_tab` means a view written to a blob, and `open_tab` means a
+	// live one. A preloaded row has a live view and is not in front, and the
+	// second half is not what the type records.
+	n->type = node_type::open_tab;
+	m_model->refresh_node(n);
+	// **`last_seen` is deliberately NOT touched.** It is what the startup
+	// warm-up sorts by and what a person reads as "when I was last here";
+	// moving it because the browser loaded something would make every
+	// preloaded tab look recently visited and push the real answer out.
+
+	// **The back of the LRU, not the front.** `touch_lru` is for a tab
+	// somebody used. A preloaded one must be the first evicted, or warming up
+	// would push out the pages the person has actually been reading -- the
+	// same trade the headroom check above refuses, arriving a moment later.
+	m_lru.removeAll(n->id);
+	m_lru.append(n->id);
+	update_status();
+}
+
+web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 	web_view_backend *view = m_views_by_id.value(n->id, nullptr);
 	if (!view) {
 		view = m_factory->create_view(this);
@@ -4366,28 +4528,7 @@ void main_window::open_node(node *n, bool load_now) {
 			               : target);
 		}
 	}
-
-	n->type = node_type::open_tab;
-	m_model->refresh_node(n);
-	apply_zoom(view, n->id);
-	m_stack->setCurrentWidget(view->widget());
-	// The tree follows the page. Without this the highlight stayed on whatever
-	// was last clicked, so the row that was showing and the row that looked
-	// selected were different rows -- and `selected_parent()` reads the second
-	// one to decide where the next new tab is filed.
-	if (m_tree)
-		m_tree->show_node(n);
-	// Everything the chrome asserts belongs to the page in front of you: the
-	// bar would otherwise report the last tab's load against this one, the
-	// button would offer to stop a load that is not this tab's, and the find
-	// count would claim matches from a page this is not.
-	sync_page_context();
-	update_address(view->url().toString(), /*force=*/true);
-	page_changed();
-	touch_lru(n->id);
-	enforce_live_cap(n->id);
-	mark_dirty();
-	update_status();
+	return view;
 }
 
 
@@ -4902,9 +5043,16 @@ node *main_window::open_new_window(const QUrl &url, bool user_initiated,
 	} else {
 		// Allowed, but not given the foreground: a page that opens a window
 		// while you are reading is not entitled to take the page away from you.
+		//
+		// **It does get loaded, though, which it did not before.** Not taking
+		// the foreground used to mean not being fetched either, so the row sat
+		// there and the click paid for it later. The two are separate
+		// questions and this answers them separately: no, it may not have the
+		// screen; yes, it may have its page.
 		m_status->showMessage(QString("%1 opened a window; it is a new tab.")
 		                          .arg(asker.isEmpty() ? QStringLiteral("This page")
 		                                                : asker), 6000);
+		preload_node(made);
 	}
 	return made;
 }
