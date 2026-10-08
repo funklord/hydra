@@ -313,10 +313,16 @@ public:
 	// produces on its own.
 	download_note note;
 	void set_download_handler(download_note fn) override { note = fn; }
+	// Kept in the old shape, so the four cases below read as they did. An id
+	// of zero is deliberate there: those cases are about the status line, and
+	// a note the shell cannot key a job on is exactly what they want.
 	void note_download(const QUrl &u, const QString &path, bool finished,
 	                    bool ok, const QString &why) {
-		if (note) note(u, path, finished, ok, why);
+		engine_download d;
+		d.url = u; d.path = path; d.finished = finished; d.ok = ok; d.why = why;
+		note_download(d);
 	}
+	void note_download(const engine_download &d) { if (note) note(d); }
 	void clear_browsing_data(const browsing_data &, clear_note done) override {
 		if (done) done(clear_report{});
 	}
@@ -5820,6 +5826,75 @@ int main(int argc, char **argv) {
 			         w2.m_downloads->jobs().first().url ==
 			             QUrl("http://x/e2e.bin"),
 			       "with the url it had");
+		}
+
+		if (xdg_was.isEmpty())
+			qunsetenv("XDG_DATA_HOME");
+		else
+			qputenv("XDG_DATA_HOME", xdg_was);
+	}
+
+	section("a page download is a job, and outlives the window");
+	{
+		// **The gap this closes, reported from use as history disappearing.**
+		// The engine keeps the transfer -- a `blob:` has no url to refetch and
+		// a cookie-bound one gets a login page -- so the shell used to show a
+		// status line and nothing else: no row in the downloads window and no
+		// history, because there was never a job. Architecture doc sec 11.2
+		// asks for one manager fed by two sources, and this is the one that
+		// was missing.
+		QTemporaryDir ehome;
+		check(ehome.isValid(), "a scratch XDG_DATA_HOME for the page download");
+		const QByteArray xdg_was = qgetenv("XDG_DATA_HOME");
+		qputenv("XDG_DATA_HOME", ehome.path().toUtf8());
+		const QString adir =
+		  QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+		QDir().mkpath(adir);
+		const QString hpath = QDir(adir).filePath("download-history.json");
+		QFile::remove(hpath);
+
+		{
+			main_window w1(&factory, &policy, &filter);
+			spin(120);
+			check(w1.m_downloads->jobs().isEmpty(),
+			       "no jobs before the engine says anything");
+
+			web_view_factory::engine_download d;
+			d.id       = 7;
+			d.url      = QUrl("http://x/page.bin");
+			d.path     = QDir(ehome.path()).filePath("page.bin");
+			d.received = 0;
+			d.total    = 100;
+			factory.note_download(d);          // the engine has begun
+			spin(80);
+			check(w1.m_downloads->jobs().size() == 1,
+			       QString("the engine's download is a job (%1)")
+			           .arg(w1.m_downloads->jobs().size()));
+			check(w1.m_downloads->jobs().size() == 1 &&
+			         !w1.m_downloads->jobs().first().terminal(),
+			       "and it is not finished yet, so the window can show it");
+			check(!QFile::exists(hpath),
+			       "nothing is written while it is still running");
+
+			d.received = 100;
+			d.finished = true;
+			d.ok       = true;
+			factory.note_download(d);          // and has finished
+			spin(80);
+			check(w1.m_downloads->jobs().size() == 1 &&
+			         w1.m_downloads->jobs().first().status ==
+			             download_state::done,
+			       "the engine's finish retires the job as done");
+			check(QFile::exists(hpath),
+			       "and that is what writes the history");
+		}
+		{
+			main_window w2(&factory, &policy, &filter);
+			spin(120);
+			check(w2.m_downloads->jobs().size() == 1 &&
+			         w2.m_downloads->jobs().first().url ==
+			             QUrl("http://x/page.bin"),
+			       "and the next window opens with it in the list");
 		}
 
 		if (xdg_was.isEmpty())

@@ -36723,3 +36723,76 @@ refusing to start did not persist, and that is fixed; it would have lost
 rows for the sources that do reach the manager. It is not why the file is
 absent, and reporting it as the answer would have been a fix offered for
 a symptom it does not cause.
+
+## Page downloads are jobs now, which is what sec 11.2 always said
+
+The gap recorded above, built on the copyright holder's instruction. The
+engine still runs the transfer -- that part was never wrong, and
+`qtwebengine_factory` says why: a `blob:` has no url to refetch and a
+cookie-bound one gets a login page. What changed is that the shell adopts
+it instead of narrating it.
+
+**Three parts, and the seam was the only real decision.**
+
+`web_view_factory::download_note` carried
+`(url, path, finished, ok, why)` and now carries one struct,
+`engine_download`, with an `id`, `received` and `total` added. A struct
+rather than a longer parameter list because this is the **second**
+widening -- `why` was the first -- and a field added later now touches no
+implementer. Android implements this interface too.
+
+**The id is the load-bearing field.** A job needs an identity that
+survives both notes, and neither of the two things already in the note
+can be it: `url` cannot, because two downloads of one address are two
+downloads, and `path` cannot, because it is not known until the engine
+has chosen a name. So the factory mints one per download and keeps a
+`QPointer` to the request under it, which is also what lets Cancel in the
+downloads window reach the engine -- `cancel_engine_download(id)`, false
+for an id that has finished, which is the ordinary answer rather than a
+failure.
+
+`engine_download_source` stands for the transfer without performing it.
+`accepts()` is **false with a reason**, so the manager can never route a
+url to a source that has nothing to start; `start()` refuses rather than
+asserting, because a source whose `start` cannot be called is one line
+away from one whose `start` is called by a path nobody predicted; and
+`cancel()` goes back through the factory. It is header-only with no
+`Q_OBJECT`, emitting `download_source`'s inherited signals -- the shape
+`test/fake_download_source.h` already uses, which is also why it adds no
+translation unit and no objsets change.
+
+**One honest limitation, stated rather than hidden.** sec 11.2 wants a
+download to belong to the node it came from, and the note cannot say
+which: the engine's signal is profile-wide, and the only thing that could
+name the page is a Qt type, which this seam exists to keep out. So the
+current tab is used, and a download begun by a background tab is
+attributed to the front one. Wrong in a way nobody would otherwise
+notice, which is the reason it is written down.
+
+### What the test does, and the one check that is weak alone
+
+`test_rotation` drives the whole path with no engine at all, because
+`fake_factory` already stored the handler and only needed a struct
+overload:
+
+    no jobs before the engine says anything                    ok
+    the engine's download is a job                             ok
+    and it is not finished yet, so the window can show it       ok
+    nothing is written while it is still running                ok
+    the engine's finish retires the job as done                 ok
+    and that is what writes the history                         ok
+    and the next window opens with it in the list               ok
+
+Sabotaged by returning the handler to narration: five of the seven redden.
+**The two that stay green are worth naming.** "No jobs before the engine
+says anything" is unaffected by construction. And "nothing is written
+while it is still running" passes under the sabotage **for the wrong
+reason** -- nothing is written at that point either way -- so it is not
+evidence on its own and is paired with "that is what writes the history",
+which is.
+
+An id of zero is a note nothing can adopt, and the guard says so: the
+factory mints from one, so a zero can only come from a backend reporting
+downloads it cannot identify. Narrating such a note is still right;
+keying a job on it is not. The four existing status-line cases pass zero
+deliberately, which is why they read as they did before.

@@ -104,10 +104,44 @@ public:
 	// `interruptReasonString()` and nothing was reading it. Empty when `ok`,
 	// and empty when a backend cannot say -- which is how a backend says it
 	// cannot, rather than being made to invent a sentence.
-	using download_note =
-	  std::function<void(const QUrl &url, const QString &path, bool finished,
-	                      bool ok, const QString &why)>;
+	// **A struct rather than a parameter list**, and the reason is that this
+	// is the second widening. It carried `(url, path, finished, ok)`, grew
+	// `why` when a failure that said nothing proved useless, and now needs an
+	// identity and a byte count -- because the shell no longer merely narrates
+	// a page download, it adopts it as a job (architecture doc sec 11.2: one
+	// manager fed by two sources). A field added later does not touch every
+	// implementer of this interface, and Android implements it too.
+	struct engine_download {
+		// Stable across every note for one download, and the backend's to
+		// mint. The shell keys its job on this: `url` cannot, because two
+		// downloads of one address are two downloads, and `path` cannot,
+		// because it is not known until the engine has chosen a name.
+		quint64 id       = 0;
+		QUrl    url;
+		QString path;
+		qint64  received = 0;
+		qint64  total    = -1;   // -1 while unknown, and it may stay unknown
+		bool    finished = false;
+		bool    ok       = false;
+		// Only when finished and not ok. Empty where a backend cannot say,
+		// which is how it says so rather than inventing a sentence.
+		QString why;
+	};
+	using download_note = std::function<void(const engine_download &d)>;
 	virtual void set_download_handler(download_note fn) = 0;
+
+	// **Stop a download the engine is running.** The shell cannot: the
+	// transfer belongs to the engine for the reasons the factory records --
+	// a `blob:` has no url to refetch and a cookie-bound one gets a login
+	// page -- so a Cancel in the downloads window has to come back here.
+	//
+	// False when the id is unknown, which is the ordinary answer for a
+	// download that has already finished. A backend with no page downloads to
+	// cancel inherits that answer rather than being made to pretend.
+	virtual bool cancel_engine_download(quint64 id) {
+		Q_UNUSED(id)
+		return false;
+	}
 
 	// --- Forgetting ---------------------------------------------------------
 	//

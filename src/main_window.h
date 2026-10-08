@@ -51,6 +51,7 @@ class ytdlp_resolver;
 class mse_tap;
 class stream_assembly;
 class capture_source;
+class engine_download_source;
 class extractor_signals;
 class filter_signals;
 class filter_list;
@@ -726,6 +727,11 @@ public:
 	qint64              m_capture_last  = 0;
 	bool                m_capture_warned = false;
 	capture_source     *m_capture_src   = nullptr;
+	// The engine's own page downloads, adopted as jobs so they appear in the
+	// downloads window and the history like every other source (architecture
+	// doc sec 11.2). Header-only and parented here; see
+	// `engine_download_source.h` for why it transfers nothing itself.
+	engine_download_source *m_engine_src = nullptr;
 	extractor_signals  *m_ex_signals    = nullptr;
 	extractor_store     m_extractors;
 	// **Named once, because it was spelled out twice.** The load in the

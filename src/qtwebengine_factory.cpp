@@ -176,14 +176,41 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 		d->setDownloadFileName(QFileInfo(path).fileName());
 
 		const QUrl url = d->url();
-		if (m_download_note)
-			m_download_note(url, path, /*finished=*/false, /*ok=*/false,
-			                 QString());
+		// **One id for the whole download**, minted here because the shell
+		// needs something that survives both notes and is not the url: two
+		// downloads of one address are two downloads. Kept so Cancel in the
+		// downloads window can reach this request.
+		const quint64 eid = m_next_download_id++;
+		m_engine_downloads.insert(eid, d);
+
+		auto note = [this, d, eid, url, path](bool finished, bool ok,
+		                                       const QString &why) {
+			if (!m_download_note)
+				return;
+			engine_download e;
+			e.id       = eid;
+			e.url      = url;
+			e.path     = path;
+			e.received = d ? d->receivedBytes() : 0;
+			e.total    = d && d->totalBytes() > 0 ? d->totalBytes() : -1;
+			e.finished = finished;
+			e.ok       = ok;
+			e.why      = why;
+			m_download_note(e);
+		};
+		note(/*finished=*/false, /*ok=*/false, QString());
+
+		// **Progress, which the old note could not carry at all.** Without it
+		// an adopted job draws a busy bar for the whole transfer: the manager
+		// has no bytes to report and the window cannot tell an unknown total
+		// from a stalled one.
+		QObject::connect(d, &QWebEngineDownloadRequest::receivedBytesChanged, d,
+		                  [note] { note(false, false, QString()); });
 		// Reported when it ends as well, either way: this feature exists
 		// because a download that fails without saying so looks exactly like
 		// one that was never started.
 		QObject::connect(d, &QWebEngineDownloadRequest::isFinishedChanged, d,
-		                  [this, d, url, path] {
+		                  [this, d, eid, note] {
 			const bool ok =
 			  d->state() == QWebEngineDownloadRequest::DownloadCompleted;
 			// **The engine's own sentence, not one composed here.** Qt turns
@@ -192,10 +219,12 @@ qtwebengine_factory::qtwebengine_factory(request_filter *filter)
 			// maintain and would go quiet on a reason added later. Read only
 			// on failure, since it reads "No error" otherwise and that is
 			// not a thing to show anybody.
-			if (m_download_note)
-				m_download_note(url, path, /*finished=*/true, ok,
-				                 ok ? QString()
-				                    : d->interruptReasonString());
+			note(/*finished=*/true, ok,
+			      ok ? QString() : d->interruptReasonString());
+			// The request is the profile's and is about to go; dropping the
+			// entry keeps `cancel_engine_download` honest about what it can
+			// still reach rather than holding a null QPointer for ever.
+			m_engine_downloads.remove(eid);
 		});
 		d->accept();
 	});
@@ -253,6 +282,18 @@ void qtwebengine_factory::set_external_url_handler(external_url_handler fn) {
 
 void qtwebengine_factory::set_download_handler(download_note fn) {
 	m_download_note = std::move(fn);
+}
+
+bool qtwebengine_factory::cancel_engine_download(quint64 id) {
+	// **An unknown id is the ordinary answer, not a failure.** A download that
+	// finished a moment before the person pressed Cancel is gone from the map,
+	// and so is one whose request the profile has already destroyed -- which
+	// is what the QPointer catches. Both are "there is nothing to stop".
+	const auto it = m_engine_downloads.constFind(id);
+	if (it == m_engine_downloads.cend() || !*it)
+		return false;
+	(*it)->cancel();
+	return true;
 }
 
 namespace {

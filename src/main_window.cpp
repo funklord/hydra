@@ -31,6 +31,7 @@
 #include "stream_assembly.h"
 #include "player_launcher.h"
 #include "download_manager.h"
+#include "engine_download_source.h"
 #include "http_download_source.h"
 #include "torrent_download_source.h"
 #include "downloads_dialog.h"
@@ -462,6 +463,13 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 #endif
 	// The manager has no transport of its own (sec 11.4); give it one. Sources are
 	// tried in order, so adding a torrent source later is one line here.
+	// **The engine's own page downloads, as a source like any other.**
+	// Architecture doc sec 11.2 asks for one manager fed by two sources; this
+	// is the one that was missing, and the handler below adopts a job on the
+	// engine's first note. Registered here with the rest so `source_by_id`
+	// answers when the downloads window asks what a row can do.
+	m_engine_src = new engine_download_source(m_factory, this);
+	m_downloads->add_source(m_engine_src);
 	m_downloads->add_source(new http_download_source);
 	// BitTorrent is a first-class source, not a side feature (sec 11.4). It is
 	// only present when the build found libtorrent; there is no degraded mode.
@@ -509,18 +517,57 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 		// is the whole of what was missing -- an unaccepted download is
 		// cancelled by Qt without a word, so every one of these used to look
 		// like a click that did nothing.
-		factory->set_download_handler([this](const QUrl &url, const QString &path,
-		                                      bool finished, bool ok,
-		                                      const QString &why) {
-			const QString name = QFileInfo(path).fileName();
-			if (!finished) {
+		factory->set_download_handler(
+		  [this](const web_view_factory::engine_download &d) {
+			// **Adopted, not merely narrated.** This handler used to show a
+			// status line and return, so a page download existed for twelve
+			// seconds in the status bar and nowhere else: no row in the
+			// downloads window, and no line in the history, because there was
+			// never a job. `adopt` is for exactly this -- a transport already
+			// running -- and the engine keeps the transfer for the reasons
+			// `qtwebengine_factory` records.
+			// **An id of zero is a note nothing can adopt**, and the guard is
+			// honest rather than defensive: the factory mints from one, so a
+			// zero can only come from a backend that reports downloads
+			// without identifying them. Narrating such a note is still
+			// right; keying a job on it is not, because the next note could
+			// not be matched to it.
+			if (d.id && m_engine_src && m_downloads) {
+				int job = m_engine_src->job_for(d.id);
+				if (!job && !d.finished) {
+					// **The node it came from, as far as the shell can know.**
+					// sec 11.2 wants a download to belong to the node that
+					// started it, and the note cannot say which: the engine's
+					// signal is profile-wide and the only thing that could
+					// name the page is a Qt type, which this seam forbids. So
+					// the current tab, and a download begun by a background
+					// tab is attributed to the front one -- stated rather
+					// than hidden, because it is wrong in a way nobody would
+					// otherwise notice.
+					QString node_id;
+					if (web_view_backend *v = current_view())
+						for (auto it = m_views_by_id.cbegin();
+						      it != m_views_by_id.cend(); ++it)
+							if (it.value() == v) { node_id = it.key(); break; }
+					job = m_downloads->adopt(m_engine_src, d.url, node_id);
+					if (job)
+						m_engine_src->adopted(job, d.id);
+				}
+				if (job)
+					m_engine_src->report(job, d);
+			}
+
+			// And the status line stays, because the downloads window is not
+			// open while somebody is reading a page.
+			const QString name = QFileInfo(d.path).fileName();
+			if (!d.finished) {
 				m_status->showMessage(QString("Downloading %1…").arg(name), 6000);
 				return;
 			}
-			if (ok) {
+			if (d.ok) {
 				m_status->showMessage(QString("Saved %1 to %2")
 				                          .arg(name,
-				                                QFileInfo(path).absolutePath()),
+				                                QFileInfo(d.path).absolutePath()),
 				                       12000);
 				return;
 			}
@@ -530,11 +577,11 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 			// different answers from them. The sentence stays the same shape
 			// when a backend cannot say why, rather than growing an empty
 			// colon.
-			const QString what = name.isEmpty() ? url.toString() : name;
+			const QString what = name.isEmpty() ? d.url.toString() : name;
 			m_status->showMessage(
-			  why.isEmpty() ? QString("Download of %1 failed").arg(what)
-			                : QString("Download of %1 failed: %2")
-			                      .arg(what, why), 12000);
+			  d.why.isEmpty() ? QString("Download of %1 failed").arg(what)
+			                  : QString("Download of %1 failed: %2")
+			                        .arg(what, d.why), 12000);
 		});
 
 		factory->set_external_url_handler(

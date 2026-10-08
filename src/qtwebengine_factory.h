@@ -2,10 +2,13 @@
 
 #include "web_view_factory.h"
 
+#include <QHash>
+#include <QPointer>
 #include <QStringList>
 
 class QNetworkCookieJar;
 class QWebEngineProfile;
+class QWebEngineDownloadRequest;
 class magnet_scheme_handler;
 class request_filter;
 class qtwebengine_interceptor;
@@ -23,6 +26,7 @@ public:
 	QString user_agent() const override;
 	void set_external_url_handler(external_url_handler fn) override;
 	void set_download_handler(download_note fn) override;
+	bool cancel_engine_download(quint64 id) override;
 	void clear_browsing_data(const browsing_data &what,
 	                          clear_note done) override;
 
@@ -67,4 +71,10 @@ private:
 	magnet_scheme_handler   *m_scheme_handler = nullptr;
 	external_url_handler     m_external;
 	download_note            m_download_note;
+	// The engine's downloads, so a Cancel in the downloads window can reach
+	// one. `QPointer` because the request is the profile's and goes when the
+	// download does, and a stale raw pointer here would be a crash on the one
+	// path nobody exercises -- cancelling something that has just finished.
+	quint64                  m_next_download_id = 1;
+	QHash<quint64, QPointer<QWebEngineDownloadRequest>> m_engine_downloads;
 };
