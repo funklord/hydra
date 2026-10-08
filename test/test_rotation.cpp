@@ -323,6 +323,13 @@ public:
 		note_download(d);
 	}
 	void note_download(const engine_download &d) { if (note) note(d); }
+	// What a Cancel in the downloads window reaches, recorded rather than
+	// performed: there is no engine here to stop.
+	QList<quint64> cancelled;
+	bool cancel_engine_download(quint64 id) override {
+		cancelled << id;
+		return true;
+	}
 	void clear_browsing_data(const browsing_data &, clear_note done) override {
 		if (done) done(clear_report{});
 	}
@@ -365,6 +372,31 @@ static fake_view *live_view(main_window &w, node *n) {
 	          : nullptr;
 }
 
+
+// Driving one engine download to the point of a Cancel, which needs a window,
+// the factory it was built with, and somewhere to put the file.
+static void web_view_download_cancel_case(main_window &w, fake_factory &factory,
+                                           const QString &dir) {
+	web_view_factory::engine_download d;
+	d.id    = 99;
+	d.url   = QUrl("http://x/big.bin");
+	d.path  = QDir(dir).filePath("big.bin");
+	d.total = 1000;
+	factory.note_download(d);
+	spin(80);
+	const QList<download_job> jobs = w.m_downloads->jobs();
+	const int job = jobs.isEmpty() ? 0 : jobs.last().id;
+	check(job != 0, "a second engine download is adopted");
+	check(factory.cancelled.isEmpty(), "and nothing has been cancelled yet");
+
+	w.m_downloads->cancel(job);
+	spin(80);
+	check(factory.cancelled.size() == 1 && factory.cancelled.first() == 99,
+	       QString("Cancel reaches the engine, by the engine's own id (%1)")
+	           .arg(factory.cancelled.isEmpty()
+	                    ? QStringLiteral("none")
+	                    : QString::number(factory.cancelled.first())));
+}
 
 int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -5895,6 +5927,19 @@ int main(int argc, char **argv) {
 			         w2.m_downloads->jobs().first().url ==
 			             QUrl("http://x/page.bin"),
 			       "and the next window opens with it in the list");
+		}
+
+		// **Cancel, which was a guard added without being seen to fail.**
+		// The downloads window offers Cancel on every row, and for an engine
+		// job it has to travel job id -> engine id -> the request. Nothing
+		// exercised that, so a wrong mapping would have been a button that
+		// silently did nothing -- and the engine would have kept downloading
+		// while the row said cancelled.
+		{
+			factory.cancelled.clear();
+			main_window w3(&factory, &policy, &filter);
+			spin(120);
+			web_view_download_cancel_case(w3, factory, ehome.path());
 		}
 
 		if (xdg_was.isEmpty())

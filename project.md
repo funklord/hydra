@@ -36796,3 +36796,54 @@ factory mints from one, so a zero can only come from a backend reporting
 downloads it cannot identify. Narrating such a note is still right;
 keying a job on it is not. The four existing status-line cases pass zero
 deliberately, which is why they read as they did before.
+
+## Cancel on an engine row was a guard nobody had seen fail
+
+Written an hour after the adoption above, and against it. `cancel()` on
+`engine_download_source` and `cancel_engine_download` on the factory both
+shipped without a test, which this tree's rules forbid for exactly the
+reason that applies here: **a Cancel that reaches the wrong id is a button
+that silently does nothing** -- the row reads cancelled, the engine keeps
+downloading, and nothing says so. That is a worse failure than the bug the
+adoption fixed.
+
+The path is job id -> engine id -> the request, and the two are different
+numbers from different counters. So the check asserts **which** id arrived:
+
+    a second engine download is adopted                         ok
+    and nothing has been cancelled yet                          ok
+    Cancel reaches the engine, by the engine's own id (99)       ok
+
+`fake_factory` records the request rather than performing it, there being
+no engine in that suite.
+
+**The sabotage is the realistic bug rather than a no-op**, and that is the
+part worth copying. Removing the lookup entirely would have reddened the
+check too, and would have proved only that *something* was cancelled.
+Passing the job id where the engine id belongs is the confusion a hurried
+change actually makes, and the failure names it:
+
+    FAIL  Cancel reaches the engine, by the engine's own id (2)
+
+The 2 is the job id. So the check discriminates the identity and not
+merely the act -- *assert the relationship, not either value*.
+
+### And the lens that led here came back clean, which is also a result
+
+The three most recent faults were all one shape -- an interface only as
+wired as its least-used method -- so the lens was: enumerate a seam's
+methods and count the callers that matter. Run over `download_manager`
+and `web_view_factory`, every method had one. The two the instrument
+flagged with no external caller are the consent gate and the concurrency
+gate, both used inside the file that defines them, and one of them is
+private.
+
+**The instrument's limit is worth recording with the result.** It counted
+declarations without reading their access specifier and excluded the
+defining translation unit, so "no external caller" is the *expected*
+answer for a private method rather than a finding. A sweep keyed on that
+column alone would have reported two dead methods in a class that has
+none.
+
+What it did find was the untested guard above, which is not what it was
+pointed at.
