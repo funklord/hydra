@@ -154,11 +154,18 @@ int main(int argc, char **argv) {
 		       QString("and an unscoped one is refused for being unscoped "
 		                "(%1: %2)").arg(kind_name(got), why));
 
+		// **The third name has now been replaced twice by the catalog
+		// growing**, which is this case working rather than failing:
+		// `nowebrtc` stood here, then `aost`, and each time the count went
+		// red the day the capability arrived. `json-edit` is the one that
+		// will stay put, because it is declined on a measurement rather than
+		// deferred -- 1667 lines of uBlock's JSON query language for three
+		// rules in 2453.
 		const subscription_read rep = filter_subscription::read(
 		  "! Title: Annoyances\n"
 		  "youtube.com##+js(json-prune, adPlacements)\n"
 		  "player.test##+js(set-constant, cfg.ads, false)\n"
-		  "other.test##+js(aost, x)\n");
+		  "other.test##+js(json-edit, x)\n");
 		// **A list of nothing but scriptlets is usable.** An annoyance list
 		// can be exactly that, and refusing it for having no network rule
 		// would refuse the half of the ecosystem this build has just learned

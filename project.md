@@ -34825,6 +34825,112 @@ Sabotage: `&&` to `||` fails three assertions, including "leaves the others
 alone", because with an empty handler pattern matching anything an `||`
 turns `aeld, load` into a rule that refuses every listener on the page.
 
+## The rest of the refusals: 41 scriptlets, and 2443 of 2453
+
+Asked for by the copyright holder 2026-10-08. Twenty names were refused and
+263 rules with them; all but three are implemented, and the catalog has gone
+from 21 to 41.
+
+    scriptlets accepted   1680 -> 1983 -> 2190 -> 2443   of 2453
+    cannot enforce        2542 -> 2239 -> 2032 -> 1779
+    refused names           27 ->   25 ->   23 ->    3
+
+**Every signature was read out of uBlock's source**, never recalled: the
+aliases, the argument order, the defaults, the clamps and which spellings
+require trust. Four of them are not scriptlets in uBlock at all but neutered
+*resources* from `src/web_accessible_resources` -- `noeval`, `nofab`,
+`popads-dummy`, `popads.net` -- which is why they take no arguments, and the
+rules invoke them bare.
+
+### The one declined, with the measurement
+
+`json-edit`, `json-edit-fetch-response` and `jsonl-edit-xhr-response` are
+**not** implemented. They are driven by uBlock's JSON query language, and
+`json-edit.js` is **1667 lines**. That is a language to port, for **3 rules of
+2453** -- 0.12% -- in the code that rewrites response bodies, which is the
+most consequential place in this catalog to be subtly wrong. Recorded rather
+than attempted; if those rules ever matter, the thing to port is the query
+language deliberately and on its own.
+
+**And 7 further rules are refused for their arguments rather than their
+names**, which is why the total is 2443 and not 2446: a catastrophic regex, or
+a defuser naming neither a type nor a handler. Those refusals are working.
+
+### Four shared helpers came out of it
+
+`watch_dom(sweep, stay, attrs)` was lifted out of `remove_dom`, so the DOM
+sweeps share one bound -- sixty-four passes or ten seconds -- rather than each
+family carrying its own. `write_cookie` is shared by `set-cookie` and
+`trusted-set-cookie`, so the encoding and the path check live in one place and
+the two spellings cannot drift about what a value may contain. `props_matcher`
+implements uBlock's `propsToMatch`, whose parsing rule is not obvious and is
+worth having once. `generated_body` turns a directive into a body.
+
+### A threshold and a list copied rather than improved
+
+`prevent-bab` matches the BlockAdBlock script by **four token signatures at a
+four-fifths threshold**, and `set-cookie` accepts **a list of 55 consent
+answers** or a signed 16-bit number. Both are uBlock's, copied whole.
+Changing either changes which pages the rule fires on, and neither is a number
+to improve on without the corpus uBlock has.
+
+### Trust, checked against uBlock for all 41
+
+uBlock declares `requiresTrust` per scriptlet. Compared against this catalog:
+**no disagreements, in either direction**, with the 8 trusted ones agreeing
+and the only four names uBlock's scriptlet table lacks being exactly the four
+resource shims. That is corroboration from a source that has never seen this
+table, and it is the check worth running every time the catalog grows.
+
+Two it settled that would otherwise have been guesses. `replace-node-text` is
+uBlock's **alias of the trusted one**, not a scriptlet of its own -- a
+replacement landing in a `<script>` is code the page runs -- so `rpnt` needs
+trust. And `trusted-prevent-fetch` needs it where `no-fetch-if` does not,
+because it chooses the body rather than refusing.
+
+### Two engine limits that were silently disabling whole scriptlets
+
+Both found by a test failing on code that was right, and both are real
+robustness bugs rather than test accommodations.
+
+**A stack frame without a column matched nothing.** uBlock's normaliser
+requires `:line:column`; QJSEngine reports `adReader@:1`. Every frame was
+dropped, the normalised stack came out empty, and `abort-on-stack-trace` could
+never fire. The column is optional now and the url may be empty, which keeps
+both browser formats and stops the scriptlet going inert on an engine that is
+merely terser.
+
+**A rejected RegExp flag read as "no pattern asked for".** QJSEngine refuses
+`s` (dotAll, ES2018), so `re_of` returned null -- and in the node-text family
+a null `includes` pattern means *no test*, so `remove-node-text(script,
+loadAds)` **cleared every script on the page**. `compile_re` drops flags one
+at a time, newest first, until the engine accepts one.
+
+**`matcher` deliberately does NOT get that fallback**, and the asymmetry is
+the point: its compile failure returns a never-match function, so a rule that
+cannot compile matches nothing. The two failures point opposite ways -- one
+under-matches and is safe, one reads as "no filter" and is catastrophic -- so
+only the dangerous one is made forgiving.
+
+### Three fixtures that could not reach what they asserted
+
+The same mistake three times in one sitting, each caught only because the
+assertion failed rather than passed:
+
+- A **real function** as the handler for `prevent-addEventListener`. QJSEngine
+  answers `function() { [native code] }` for every function, so the handler
+  matcher was unreachable. A string handler carries its text in every engine.
+- `location.hostname = 'a.b.example'` in the `remove-cookie` fixture, while
+  the call's scope was `x.test`. **The dispatcher's scope check skipped the
+  scriptlet entirely** and nothing ran. The host has to sit under the scope
+  the call names.
+- `window.location` where the harness provides a global `location`. The
+  dispatcher already used the bare spelling; two new scriptlets did not.
+
+**Each would have passed for ever had its polarity been reversed.** What
+caught all three was asserting the positive -- that the thing happens -- so
+that a fixture which cannot reach the code fails instead of agreeing.
+
 ### What is left
 
 ~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was

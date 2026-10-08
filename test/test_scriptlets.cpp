@@ -58,6 +58,20 @@ window.RTCPeerConnection = function () { this.real = true; };
 // patches: a listener added to an element has to be reachable too, and
 // stubbing `window.addEventListener` alone would make a test pass for a
 // scriptlet that only covered the window.
+// eval, rAF and the timers record what they were given, so a test can tell
+// "prevented" from "passed through" rather than only that nothing exploded.
+window.__evalled = [];
+window.eval = function (code) { window.__evalled.push(String(code)); return 'real'; };
+window.__framed = [];
+window.requestAnimationFrame = function (fn) {
+	window.__framed.push(typeof fn === 'function' ? String(fn) : String(fn));
+	window.__frame_fn = fn;
+	return 7;
+};
+window.__stopped = 0;
+window.stop = function () { window.__stopped++; };
+window.__intervals = [];
+window.clearInterval = function (id) { window.__cleared = id; };
 window.__listened = [];
 window.EventTarget = function () {};
 window.EventTarget.prototype.addEventListener = function (t, h) {
@@ -203,6 +217,71 @@ window.ask = function (url) {
 };
 )JS";
 
+// **A document with enough shape to walk**, for the families that rewrite
+// nodes rather than globals. A TreeWalker over a flat list is faithful enough
+// for what the code under test does -- it asks for the next node and reads
+// `nodeName` and `textContent` -- and `window.URL`, `document.querySelector`
+// and the load/click plumbing are here for the same reason.
+//
+// Nothing here pretends to be a browser. What it has to be is a fixture the
+// code can reach the hazard through, which the engine's own bare globals are
+// not.
+static const char *k_dom_stubs = R"JS(
+window.__nodes_seen = [];
+var mknode = function (name, text) {
+	return { nodeName: name, textContent: text, content: null };
+};
+window.__tree = [];
+document.documentElement = { tag: 'html' };
+document.currentScript = null;
+window.NodeFilter = { SHOW_ELEMENT: 1, SHOW_TEXT: 4 };
+document.createTreeWalker = function (root, what) {
+	var i = -1;
+	return { nextNode: function () {
+		i += 1;
+		return i < window.__tree.length ? window.__tree[i] : null;
+	} };
+};
+// Links, for href-sanitizer.
+window.__links = [];
+window.__queried = null;
+document.querySelectorAll = function (sel) {
+	window.__queried = String(sel);
+	if (String(sel).indexOf('!broken') >= 0) throw new Error('bad selector');
+	return window.__links;
+};
+window.__meta = null;
+document.querySelector = function (sel) { return window.__meta; };
+window.URL = function (text, base) {
+	var t = String(text);
+	if (/^https?:\/\//.test(t)) {
+		this.href = t;
+		this.protocol = t.slice(0, t.indexOf(':') + 1);
+	} else if (/^[a-z]+:/.test(t)) {
+		this.href = t;
+		this.protocol = t.slice(0, t.indexOf(':') + 1);
+	} else {
+		this.href = 'https://x.test/' + t.replace(/^\//, '');
+		this.protocol = 'https:';
+	}
+	this.hostname = 'x.test';
+	this.searchParams = { get: function () { return null; } };
+};
+document.location = 'https://x.test/page';
+// The window load/click plumbing the last two need.
+window.__onload = null;
+window.addEventListener = function (name, fn) {
+	if (name === 'load') window.__onload = fn;
+};
+window.__onclick = null;
+document.addEventListener = function (name, fn) {
+	if (name === 'click') window.__onclick = fn;
+	if (name === 'DOMContentLoaded') window.__onready = fn;
+};
+document.body = { style: { removeProperty: function () {} } };
+document.getElementById = function () { return null; };
+)JS";
+
 // Run one call and hand back the engine's own answer to an expression.
 static QString ask(QJSEngine *eng, const char *expr) {
 	const QJSValue v = eng->evaluate(QString::fromLatin1(expr));
@@ -240,9 +319,12 @@ int main(int argc, char **argv) {
 		// guarded path to the same action. The trusted names that ARE in the
 		// catalog were absent for want of anything saying which lists are
 		// trusted, which the settings page now does.
+		// **`aost` has since been implemented**, so it moved out of this list
+		// -- which is the list noticing a capability arrive rather than a
+		// regression, as `nowebrtc` and `trusted-set-cookie` did before it.
 		for (const char *no : { "trusted-click-element", "trusted-prune-fetch",
-		                         "aost", "trusted-prune-inbound-object",
-		                         "eval", "" }) {
+		                         "trusted-prune-inbound-object",
+		                         "json-edit", "eval", "" }) {
 			check(!scriptlets::vetted(QString::fromLatin1(no)),
 			       QString("\"%1\" is not in the catalog")
 			           .arg(QString::fromLatin1(no)));
@@ -528,8 +610,8 @@ int main(int argc, char **argv) {
 
 		// The count lives here, once. It moves when the catalog does, which
 		// is the point: a name added without a test is an entry nothing ran.
-		check(scriptlets::names().size() == 21,
-		       QString("twenty-one scriptlets in the catalog (%1)")
+		check(scriptlets::names().size() == 41,
+		       QString("forty-one scriptlets in the catalog (%1)")
 		           .arg(scriptlets::names().size()));
 		// The trusted four, named here rather than counted: the question a
 		// reader has is which scriptlets can act on a page's behalf, and a
@@ -1449,6 +1531,559 @@ int main(int argc, char **argv) {
 		           "window.finish(x, '{\"adPlacements\":[1]}'); "
 		           "return x.responseText; })()").contains("adPlacements"),
 		       "and the body reaches the page as it was");
+	}
+
+	section("the boosters shorten a matching timer and leave the rest");
+	{
+		// **uBlock's numbers, because rules were written against them**: the
+		// delay defaults to 1000, `*` matches any, and the boost defaults to
+		// 0.05 clamped to [0.001, 50].
+		QJSEngine eng;
+		give_page(&eng);
+		check(run_one(&eng, "adjust-setInterval",
+		               { "poll", "1000", "0.02" }).isEmpty(),
+		       "the interval booster installs");
+		check(ask(&eng, "(function () { window.setInterval('pollForAds()', "
+		                 "1000); return window.__ran.join('/'); })()")
+		          == "i,20",
+		       QString("a matching callback and delay is boosted (%1)")
+		           .arg(ask(&eng, "window.__ran.join('/')")));
+		check(ask(&eng, "(function () { window.setInterval('pollForAds()', "
+		                 "250); return String(window.__ran.length); })()")
+		          == "2" &&
+		          ask(&eng, "window.__ran[1][1]") == "250",
+		       QString("another delay is left alone (%1)")
+		           .arg(ask(&eng, "window.__ran[1][1]")));
+		check(ask(&eng, "(function () { window.setInterval('somethingElse()', "
+		                 "1000); return window.__ran[2][1]; })()") == "1000",
+		       "and so is another callback at the matching delay");
+
+		// `*` for any delay, and the clamp at each end.
+		QJSEngine any;
+		give_page(&any);
+		run_one(&any, "adjust-setTimeout", { "ad", "*", "0" });
+		check(ask(&any, "(function () { window.setTimeout('adTimer()', 400); "
+		                 "return window.__ran[0][1]; })()") == "0.4",
+		       QString("a zero boost is clamped to 0.001, not to zero (%1)")
+		           .arg(ask(&any, "window.__ran[0][1]")));
+		QJSEngine big;
+		give_page(&big);
+		run_one(&big, "adjust-setTimeout", { "ad", "*", "9999" });
+		check(ask(&big, "(function () { window.setTimeout('adTimer()', 2); "
+		                 "return window.__ran[0][1]; })()") == "100",
+		       QString("and a huge one to 50 (%1)")
+		           .arg(ask(&big, "window.__ran[0][1]")));
+	}
+
+	section("the eval pair, and what neither of them can reach");
+	{
+		// **Neither can touch a direct `eval(...)`**, which the language
+		// resolves without reading the property -- uBlock has the same limit
+		// for the same reason. What they reach is the indirect call an
+		// obfuscated loader makes.
+		QJSEngine all;
+		give_page(&all);
+		check(run_one(&all, "noeval", {}).isEmpty(), "noeval installs");
+		check(ask(&all, "String(window.eval('anything()'))") == "undefined",
+		       "and every indirect eval returns undefined");
+		check(ask(&all, "String(window.__evalled.length)") == "0",
+		       "with nothing reaching the real one");
+
+		QJSEngine some;
+		give_page(&some);
+		run_one(&some, "noeval-if", { "adsbygoogle" });
+		check(ask(&some, "String(window.eval('adsbygoogle.push()'))")
+		          == "undefined",
+		       "noeval-if prevents matching code");
+		check(ask(&some, "String(window.eval('startPlayer()'))") == "real",
+		       QString("and passes the rest through (%1)")
+		           .arg(ask(&some, "window.__evalled.join('/')")));
+
+		// An empty needle logs in uBlock and prevents nothing, so nothing is
+		// installed rather than silently blocking every eval.
+		QJSEngine none;
+		give_page(&none);
+		run_one(&none, "noeval-if", { "" });
+		check(ask(&none, "String(window.eval('anything()'))") == "real",
+		       "an empty needle installs nothing at all");
+	}
+
+	section("prevent-requestAnimationFrame swaps the callback, and inverts");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		run_one(&eng, "prevent-requestAnimationFrame", { "adLoop" });
+		check(ask(&eng, "(function () { var ran = 0; "
+		                 "window.requestAnimationFrame('adLoop()'); "
+		                 "return window.__framed[0]; })()") != "adLoop()",
+		       QString("a matching callback is replaced (%1)")
+		           .arg(ask(&eng, "window.__framed[0]")));
+		check(ask(&eng, "(function () { "
+		                 "window.requestAnimationFrame('drawFrame()'); "
+		                 "return window.__framed[1]; })()") == "drawFrame()",
+		       "and another is passed through as it was");
+		// **The handle still comes back**, which is the point of swapping the
+		// callback rather than refusing the call: a page storing the id and
+		// cancelling later does not break.
+		check(ask(&eng, "String(window.requestAnimationFrame('adLoop()'))")
+		          == "7",
+		       "with the real handle returned either way");
+
+		QJSEngine inv;
+		give_page(&inv);
+		run_one(&inv, "prevent-requestAnimationFrame", { "!keepThis" });
+		check(ask(&inv, "(function () { "
+		                 "window.requestAnimationFrame('keepThis()'); "
+		                 "return window.__framed[0]; })()") == "keepThis()",
+		       "a negated needle keeps what it names");
+		check(ask(&inv, "(function () { "
+		                 "window.requestAnimationFrame('anythingElse()'); "
+		                 "return window.__framed[1]; })()") != "anythingElse()",
+		       "and replaces everything else");
+	}
+
+	section("set-cookie writes an answer, and refuses an identifier");
+	{
+		// **The whole of why this is not trusted**: every value it accepts is
+		// an answer to a consent question, or a small number. uBlock's list,
+		// and a signed 16-bit range.
+		QJSEngine eng;
+		give_page(&eng);
+		run_one(&eng, "set-cookie", { "consent", "accept" });
+		check(ask(&eng, "window.__cookies.join('/')").startsWith("consent=accept"),
+		       QString("a word from the list is written (%1)")
+		           .arg(ask(&eng, "window.__cookies.join('/')")));
+		run_one(&eng, "set-cookie", { "uid", "a1b2c3d4e5f6" });
+		check(ask(&eng, "String(window.__cookies.length)") == "1",
+		       QString("an identifier is refused (%1)")
+		           .arg(ask(&eng, "window.__cookies.join('/')")));
+		run_one(&eng, "set-cookie", { "seen", "1" });
+		check(ask(&eng, "String(window.__cookies.length)") == "2",
+		       "a small number is allowed");
+		run_one(&eng, "set-cookie", { "big", "99999" });
+		check(ask(&eng, "String(window.__cookies.length)") == "2",
+		       QString("one outside a signed 16-bit range is not (%1)")
+		           .arg(ask(&eng, "window.__cookies.join('/')")));
+		// The same value through the trusted spelling, which has no list.
+		QJSEngine t;
+		give_page(&t);
+		run_one(&t, "trusted-set-cookie", { "uid", "a1b2c3d4e5f6" }, true);
+		check(ask(&t, "window.__cookies.join('/')").contains("a1b2c3d4e5f6"),
+		       "and trusted-set-cookie writes what set-cookie refused");
+	}
+
+	section("remove-cookie expires a matching name on this host and above");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate("window.__cookies = [];"
+		              "Object.defineProperty(document, 'cookie', {"
+		              "  get: function () { return 'keep=1; dropme=2'; },"
+		              "  set: function (v) { window.__cookies.push(String(v)); },"
+		              "  configurable: true });"
+		              // **Under the scope the call names.** The first version
+		              // of this fixture used an unrelated host, so the
+		              // dispatcher's scope check skipped the scriptlet and
+		              // nothing ran -- a section that would have passed for
+		              // the wrong reason had its polarity been reversed.
+		              "location.hostname = 'a.b.x.test';");
+		run_one(&eng, "remove-cookie", { "dropme" });
+		const QString wrote = ask(&eng, "window.__cookies.join(' | ')");
+		check(wrote.contains("dropme=;"),
+		       QString("the matching cookie is expired (%1)").arg(wrote));
+		check(!wrote.contains("keep="),
+		       "and the other is left alone");
+		// **Parent domains too**, because a cookie set on `.b.example` is not
+		// removed by expiring it on `a.b.x.test`.
+		check(wrote.contains("domain=a.b.x.test") &&
+		          wrote.contains("domain=b.x.test"),
+		       QString("on this host and its parents (%1)").arg(wrote));
+	}
+
+	section("abort-on-stack-trace throws only for a matching stack");
+	{
+		// The stack is normalised to `function url:line` per frame before
+		// matching, so a needle names a function rather than a column.
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate("window.cfg = { token: 'kept' };");
+		check(run_one(&eng, "abort-on-stack-trace",
+		               { "cfg.token", "adReader" }).isEmpty(),
+		       "the guard installs");
+		check(ask(&eng, "(function adReader() { "
+		                 "try { return 'read ' + window.cfg.token; } "
+		                 "catch (e) { return 'threw'; } })()") == "threw",
+		       "a read from the named function throws");
+		check(ask(&eng, "(function playerReader() { "
+		                 "try { return 'read ' + window.cfg.token; } "
+		                 "catch (e) { return 'threw'; } })()")
+		          == "read kept",
+		       "and a read from anywhere else gets the value");
+	}
+
+	section("trusted-replace-argument changes what a call is given");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate("window.__sent_args = [];"
+		              "window.api = { track: function (a, b) { "
+		              "  window.__sent_args.push(String(a) + ',' + String(b)); "
+		              "  return 'sent'; } };");
+		check(run_one(&eng, "trusted-replace-argument",
+		               { "api.track", "1", "false" }, true).isEmpty(),
+		       "the replacer installs");
+		check(ask(&eng, "(function () { window.api.track('keep', 'drop'); "
+		                 "return window.__sent_args[0]; })()") == "keep,false",
+		       QString("the named position is replaced and the rest kept (%1)")
+		           .arg(ask(&eng, "window.__sent_args[0]")));
+		// add: offsets a number rather than replacing it.
+		QJSEngine add;
+		give_page(&add);
+		add.evaluate("window.__sent_args = [];"
+		              "window.api = { bid: function (n) { "
+		              "  window.__sent_args.push(String(n)); return n; } };");
+		run_one(&add, "trusted-replace-argument", { "api.bid", "0", "add:5" },
+		         true);
+		check(ask(&add, "(function () { window.api.bid(10); "
+		                 "return window.__sent_args[0]; })()") == "15",
+		       QString("add: offsets it (%1)")
+		           .arg(ask(&add, "window.__sent_args[0]")));
+		// And the trust gate.
+		QJSEngine no;
+		give_page(&no);
+		no.evaluate("window.__sent_args = [];"
+		             "window.api = { track: function (a) { "
+		             "  window.__sent_args.push(String(a)); return 'sent'; } };");
+		run_one(&no, "trusted-replace-argument", { "api.track", "0", "false" },
+		         false);
+		check(ask(&no, "(function () { window.api.track('keep'); "
+		                "return window.__sent_args[0]; })()") == "keep",
+		       "an untrusted list changes nothing");
+	}
+
+	section("the shims answer, rather than refusing");
+	{
+		// **These are not filters.** Each hands a named library a
+		// cooperative stand-in so a page that will not proceed until its ad
+		// script answers gets an answer -- which is why they take no
+		// arguments and why the rules invoke them bare.
+		QJSEngine pd;
+		give_page(&pd);
+		check(run_one(&pd, "popads-dummy", {}).isEmpty(),
+		       "popads-dummy installs");
+		check(ask(&pd, "typeof window.PopAds") == "object" &&
+		          ask(&pd, "typeof window.popns") == "object",
+		       QString("and both globals answer (%1/%2)")
+		           .arg(ask(&pd, "typeof window.PopAds"),
+		                 ask(&pd, "typeof window.popns")));
+
+		// popads.net is the louder one: assigning throws a token its own
+		// error handler swallows, so the library's write fails silently.
+		QJSEngine pn;
+		give_page(&pn);
+		check(run_one(&pn, "popads.net", {}).isEmpty(), "popads.net installs");
+		check(ask(&pn, "(function () { try { window.PopAds = { x: 1 }; "
+		                "return 'assigned'; } catch (e) { "
+		                "return e instanceof ReferenceError ? 'threw' : '?'; "
+		                "} })()") == "threw",
+		       "and an assignment to it throws a ReferenceError");
+		check(ask(&pn, "String(typeof window.onerror)") == "function",
+		       "with a handler installed to swallow it");
+
+		// nofab: the whole trick is which callback runs.
+		QJSEngine nf;
+		give_page(&nf);
+		check(run_one(&nf, "nofab", {}).isEmpty(), "nofab installs");
+		check(ask(&nf, "(function () { var seen = []; "
+		                "window.fuckAdBlock.onNotDetected(function () { "
+		                "  seen.push('not-detected'); }); "
+		                "window.fuckAdBlock.onDetected(function () { "
+		                "  seen.push('detected'); }); "
+		                "return seen.join('/'); })()") == "not-detected",
+		       QString("onNotDetected runs and onDetected does not (%1)")
+		           .arg(ask(&nf, "typeof window.fuckAdBlock")));
+		check(ask(&nf, "String(typeof window.FuckAdBlock) + ',' + "
+		                "String(typeof window.blockAdBlock) + ',' + "
+		                "String(typeof window.sniffAdBlock)")
+		          == "function,object,object",
+		       "and all six spellings are present");
+
+		// prevent-bab recognises the script by what it contains.
+		QJSEngine bb;
+		give_page(&bb);
+		check(run_one(&bb, "prevent-bab", {}).isEmpty(),
+		       "prevent-bab installs");
+		check(ask(&bb, "String(window.eval('var x = blockadblock_check();'))")
+		          == "undefined",
+		       "a signature match is swallowed");
+		check(ask(&bb, "String(window.eval('startThePlayer();'))") == "real",
+		       QString("and ordinary code is passed through (%1)")
+		           .arg(ask(&bb, "window.__evalled.join('/')")));
+		// **The 80% threshold, which is uBlock's and is the whole
+		// classifier.** The fourth signature is fifteen tokens of the
+		// obfuscated loader; twelve of them is a match and a handful is not.
+		check(ask(&bb, "String(window.eval('getElementById String.fromCharCode "
+		                "charAt DOMContentLoaded AdBlock addEventListener'))")
+		          == "real",
+		       "six tokens of the long signature is not a match");
+	}
+
+	section("prevent-xhr answers a matching request and never sends it");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_fetch_stubs));
+		check(run_one(&eng, "prevent-xhr", { "doubleclick" }).isEmpty(),
+		       "the blocker installs");
+		const char *blocked =
+		  "(function () { var x = new window.XMLHttpRequest(); "
+		  "x.open('GET', 'https://doubleclick.test/a'); x.send(); "
+		  "return [x.status, x.readyState, JSON.stringify(x.responseText), "
+		  "window.__sent.length].join('/'); })()";
+		check(ask(&eng, blocked) == "200/4/\"\"/0",
+		       QString("answered 200, complete, empty, and never sent (%1)")
+		           .arg(ask(&eng, blocked)));
+		check(ask(&eng, "(function () { var x = new window.XMLHttpRequest(); "
+		                 "x.open('GET', 'https://news.test/a'); x.send(); "
+		                 "return String(window.__sent.length); })()") != "0",
+		       "another url is sent as usual");
+
+		// **The answer's SHAPE follows responseType**, which is the part that
+		// turns a block into a crash when it is got wrong: a page asking for
+		// json and handed a string calls `.foo` on it and dies.
+		QJSEngine js;
+		give_page(&js);
+		js.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&js, "prevent-xhr", { "doubleclick" });
+		check(ask(&js, "(function () { var x = new window.XMLHttpRequest(); "
+		                "x.responseType = 'json'; "
+		                "x.open('GET', 'https://doubleclick.test/a'); x.send(); "
+		                "return typeof x.response; })()") == "object",
+		       "a json request gets an object");
+
+		// A directive asks for a body of a given length.
+		QJSEngine len;
+		give_page(&len);
+		len.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&len, "prevent-xhr", { "doubleclick", "length:10" });
+		check(ask(&len, "(function () { var x = new window.XMLHttpRequest(); "
+		                 "x.open('GET', 'https://doubleclick.test/a'); x.send(); "
+		                 "return String(x.responseText.length); })()") == "10",
+		       QString("length:10 gives ten characters (%1)")
+		           .arg(ask(&len, "'see above'")));
+		// A property test rather than a url, which is the parsing rule that
+		// is easy to get wrong: `method:HEAD` is a property, while
+		// `/a|b/` stays a url pattern because of the characters in it.
+		QJSEngine pm;
+		give_page(&pm);
+		pm.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&pm, "prevent-xhr", { "method:HEAD" });
+		check(ask(&pm, "(function () { var x = new window.XMLHttpRequest(); "
+		                "x.open('HEAD', 'https://news.test/a'); x.send(); "
+		                "return String(x.status) + '/' + "
+		                "String(window.__sent.length); })()") == "200/0",
+		       "a method test matches on the method");
+		check(ask(&pm, "(function () { var x = new window.XMLHttpRequest(); "
+		                "x.open('GET', 'https://news.test/a'); x.send(); "
+		                "return String(window.__sent.length); })()") == "1",
+		       "and leaves another method alone");
+	}
+
+	section("trusted-prevent-fetch answers, and only for a trusted list");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_fetch_stubs));
+		check(run_one(&eng, "trusted-prevent-fetch",
+		               { "doubleclick", "emptyObj" }, true).isEmpty(),
+		       "the blocker installs");
+		check(ask(&eng, "window.ask('https://doubleclick.test/a')") == "{}",
+		       QString("a matching fetch is answered with the body asked for "
+		                "(%1)").arg(ask(&eng,
+		                 "window.ask('https://doubleclick.test/a')")));
+		check(ask(&eng, "String(window.__fetched.length)") == "0",
+		       "and nothing went out");
+		check(ask(&eng, "window.ask('https://news.test/a')")
+		          .contains("adPlacements"),
+		       "another url is fetched as usual");
+
+		QJSEngine no;
+		give_page(&no);
+		no.evaluate(QString::fromLatin1(k_fetch_stubs));
+		run_one(&no, "trusted-prevent-fetch", { "doubleclick", "emptyObj" },
+		         false);
+		check(ask(&no, "window.ask('https://doubleclick.test/a')")
+		          .contains("adPlacements"),
+		       "an untrusted list's call does nothing at all");
+	}
+
+	section("the node-text family rewrites matching nodes only");
+	{
+		// **`remove-node-text(name, includes)` clears the text** of nodes
+		// whose name matches AND whose text contains the pattern. Both halves
+		// are needed, so the fixture carries a node that fails each one.
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_dom_stubs));
+		eng.evaluate("window.__tree = ["
+		              "  mknode('SCRIPT', 'var ads = loadAds();'),"
+		              "  mknode('SCRIPT', 'var player = start();'),"
+		              "  mknode('DIV', 'loadAds() mentioned here')"
+		              "];");
+		check(run_one(&eng, "remove-node-text",
+		               { "script", "loadAds" }).isEmpty(),
+		       "remove-node-text installs");
+		check(ask(&eng, "window.__tree[0].textContent") == "",
+		       QString("the matching script is cleared (%1)")
+		           .arg(ask(&eng, "window.__tree[0].textContent")));
+		check(ask(&eng, "window.__tree[1].textContent")
+		          == "var player = start();",
+		       "a script whose text does not match is left alone");
+		// **The node name is anchored**, which is uBlock's behaviour and the
+		// reason `script` does not also take `noscript`: a DIV mentioning the
+		// same text is not a script.
+		check(ask(&eng, "window.__tree[2].textContent")
+		          == "loadAds() mentioned here",
+		       "and so is another element with matching text");
+
+		// The trusted spelling rewrites rather than clears, and uBlock gives
+		// `replace-node-text` as an alias of the TRUSTED one -- a replacement
+		// landing in a <script> is code the page runs.
+		QJSEngine rep;
+		give_page(&rep);
+		rep.evaluate(QString::fromLatin1(k_dom_stubs));
+		rep.evaluate("window.__tree = [ mknode('SCRIPT', 'a=1; ads=2; b=3;') ];");
+		check(run_one(&rep, "trusted-replace-node-text",
+		               { "script", "ads=2", "ads=0" }, true).isEmpty(),
+		       "trusted-replace-node-text installs");
+		check(ask(&rep, "window.__tree[0].textContent") == "a=1; ads=0; b=3;",
+		       QString("and rewrites in place (%1)")
+		           .arg(ask(&rep, "window.__tree[0].textContent")));
+
+		QJSEngine untrusted;
+		give_page(&untrusted);
+		untrusted.evaluate(QString::fromLatin1(k_dom_stubs));
+		untrusted.evaluate("window.__tree = [ mknode('SCRIPT', 'ads=2;') ];");
+		run_one(&untrusted, "trusted-replace-node-text",
+		         { "script", "ads=2", "ads=0" }, false);
+		check(ask(&untrusted, "window.__tree[0].textContent") == "ads=2;",
+		       "while an untrusted list changes nothing");
+
+		// **This script's own node is never rewritten**, which is how a
+		// scriptlet would otherwise eat itself.
+		QJSEngine mine;
+		give_page(&mine);
+		mine.evaluate(QString::fromLatin1(k_dom_stubs));
+		mine.evaluate("window.__tree = [ mknode('SCRIPT', 'loadAds();') ];"
+		               "document.currentScript = window.__tree[0];");
+		run_one(&mine, "remove-node-text", { "script", "loadAds" });
+		check(ask(&mine, "window.__tree[0].textContent") == "loadAds();",
+		       "the running script's own node is skipped");
+	}
+
+	section("href-sanitizer only accepts something that is a URL");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_dom_stubs));
+		eng.evaluate("window.__set = [];"
+		              "var mklink = function (text) { return {"
+		              "  textContent: text, href: 'https://tracker.test/r',"
+		              "  getAttribute: function () { return this.href; },"
+		              "  setAttribute: function (k, v) { "
+		              "    this.href = v; window.__set.push(v); } }; };"
+		              "window.__links = [ mklink('https://real.test/page'),"
+		              "                    mklink('not a url at all'),"
+		              "                    mklink('javascript:alert(1)') ];");
+		check(run_one(&eng, "href-sanitizer", { "a[href]" }).isEmpty(),
+		       "href-sanitizer installs");
+		check(ask(&eng, "window.__links[0].href") == "https://real.test/page",
+		       QString("a link whose text is a URL is rewritten (%1)")
+		           .arg(ask(&eng, "window.__links[0].href")));
+		check(ask(&eng, "window.__links[1].href") == "https://tracker.test/r",
+		       "one whose text is not is left alone");
+		// **The scheme check is the one that matters.** Without it this would
+		// take the destination from page text and put `javascript:` in an
+		// href, which is a worse thing than the tracker it replaced.
+		check(ask(&eng, "window.__links[2].href") == "https://tracker.test/r",
+		       QString("and a javascript: URL is refused (%1)")
+		           .arg(ask(&eng, "window.__links[2].href")));
+	}
+
+	section("disable-newtab-links walks up from what was clicked");
+	{
+		// An anchor is rarely the element clicked -- an image or a span
+		// inside it is -- so a handler that only read `ev.target` would miss
+		// nearly every real case.
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_dom_stubs));
+		check(run_one(&eng, "disable-newtab-links", {}).isEmpty(),
+		       "the handler installs");
+		check(ask(&eng, "String(typeof window.__onclick)") == "function",
+		       "on the document, in the capture phase");
+		check(ask(&eng, "(function () { var stopped = 0; "
+		                 "var a = { localName: 'a', parentNode: null, "
+		                 "  hasAttribute: function (n) { return n === 'target'; } }; "
+		                 "var img = { localName: 'img', parentNode: a, "
+		                 "  hasAttribute: function () { return false; } }; "
+		                 "window.__onclick({ target: img, "
+		                 "  stopPropagation: function () { stopped++; }, "
+		                 "  preventDefault: function () { stopped++; } }); "
+		                 "return String(stopped); })()") == "2",
+		       "a click inside an <a target> is stopped");
+		check(ask(&eng, "(function () { var stopped = 0; "
+		                 "var a = { localName: 'a', parentNode: null, "
+		                 "  hasAttribute: function () { return false; } }; "
+		                 "window.__onclick({ target: a, "
+		                 "  stopPropagation: function () { stopped++; }, "
+		                 "  preventDefault: function () { stopped++; } }); "
+		                 "return String(stopped); })()") == "0",
+		       "and an <a> with no target is not");
+	}
+
+	section("prevent-refresh stops the load a meta refresh asked for");
+	{
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_dom_stubs));
+		eng.evaluate("window.__meta = { getAttribute: function () "
+		              "{ return '0; url=https://elsewhere.test/'; } };");
+		check(run_one(&eng, "prevent-refresh", {}).isEmpty(),
+		       "the defuser installs");
+		check(ask(&eng, "String(typeof window.__onload)") == "function",
+		       "waiting for load rather than acting at once");
+		check(ask(&eng, "(function () { window.__onload(); "
+		                 "return String(window.__stopped); })()") == "1",
+		       QString("and a zero-second refresh is stopped immediately (%1)")
+		           .arg(ask(&eng, "String(window.__stopped)")));
+
+		// **With no argument a reader gets half the time the meta asked
+		// for**, which is uBlock's arithmetic and is deliberate: stopping a
+		// five-second refresh at once would look like a broken page.
+		QJSEngine later;
+		give_page(&later);
+		later.evaluate(QString::fromLatin1(k_dom_stubs));
+		later.evaluate("window.__meta = { getAttribute: function () "
+		                "{ return '4; url=https://elsewhere.test/'; } };");
+		run_one(&later, "prevent-refresh", {});
+		check(ask(&later, "(function () { window.__onload(); "
+		                   "return String(window.__stopped) + '/' + "
+		                   "String(window.__ran.length); })()") == "0/1",
+		       QString("a four-second one is deferred, not stopped (%1)")
+		           .arg(ask(&later, "window.__ran.join('/')")));
+		check(ask(&later, "String(window.__ran[0][1])") == "2000",
+		       QString("by half of it (%1)")
+		           .arg(ask(&later, "String(window.__ran[0][1])")));
+
+		// No meta, nothing to defuse.
+		QJSEngine none;
+		give_page(&none);
+		none.evaluate(QString::fromLatin1(k_dom_stubs));
+		run_one(&none, "prevent-refresh", {});
+		check(ask(&none, "(function () { window.__onload(); "
+		                  "return String(window.__stopped); })()") == "0",
+		       "a page with no meta refresh is untouched");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
