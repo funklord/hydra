@@ -35922,6 +35922,23 @@ theme at all. That is this file's own *name the operation the failure
 occurs in*: the cheap member of the family was cheap because it does less,
 and citing its pass would have proved nothing.
 
+**And "a suite that builds real widgets" is a category, not a population.**
+Named, so the next person does not re-derive it -- 51 offline suites, every
+one accounted for, no cell left to hide in:
+
+    Q(Gui)Application   13   loads a platform theme, so CAN see the fault
+    QCoreApplication    38   no GUI stack, cannot
+    neither              0
+
+    for f in test/test_*.cpp; do grep -E 'Q(Gui)?Application [a-z_]+\(' $f; done
+
+`test_scriptlets` is `QCoreApplication` at line 304, which is why it passed
+against the unfixed Makefile; `test_rotation` is `QApplication` at 363,
+which is why it discriminated. **So the remedy for a total whose population
+includes members that cannot fail is not a better total**: name the members
+that can, show one of them failing, and the total becomes context while the
+failing member is the evidence.
+
 What discriminates is a suite that builds real widgets:
 
     HEAD's Makefile + gtk3   rc=2   1x cannot open display   never reported
