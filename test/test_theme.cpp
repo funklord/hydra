@@ -11,6 +11,7 @@
 #include "theme.h"
 
 #include <QStringList>
+#include <QByteArray>
 
 #include "node.h"
 #include "tab_tree_model.h"
@@ -723,6 +724,60 @@ int main(int argc, char **argv) {
 	// answering with a destroyed object is worse than one answering null.
 	check(theme::active() == nullptr,
 	      "the accessor forgets a watcher that has gone");
+
+	section("tier 2 asks the address before it asks the bus");
+	{
+		// **The gate, and the only observable that can test it.**
+		// `QDBusConnection::sessionBus()` autolaunches an unreaped
+		// `dbus-daemon --session` when `DBUS_SESSION_BUS_ADDRESS` is unset, and
+		// `portal_scheme` used to find that out by constructing the connection
+		// and reading `isValid()` -- correct, and one call too late.
+		//
+		// Counting buses cannot show this fixed. On this machine `DISPLAY` is
+		// unset, so libdbus autolaunch fails of its own accord and the count is
+		// the same before and after: it measures the absence of X, not the
+		// presence of a gate. raidcfgd measured four buses either side of a
+		// headless run and proved exactly that.
+		//
+		// So assert what the code DID. `asked` is set where the connection is
+		// about to be constructed, which is a fact about the branch taken
+		// rather than about the machine -- no bus, no DISPLAY and no X server
+		// are needed to read it. Asserting on the connection's `name()` was
+		// tried in raidcfgd and cannot work: a QDBusConnection named and never
+		// opened has no private data and returns empty, so the object discards
+		// the fact a test wants.
+		const QByteArray held = qgetenv("DBUS_SESSION_BUS_ADDRESS");
+
+		qputenv("DBUS_SESSION_BUS_ADDRESS", QByteArray());
+		bool asked = true;   // true, so a function that never writes it fails
+		const int nothing = theme::portal_scheme(&asked);
+		check(!asked,
+		      "with no address, no session-bus connection is constructed");
+		check(nothing == -1,
+		      QString("and the tier abstains at -1, which falls through to "
+		               "kdeglobals and the palette (%1)").arg(nothing));
+
+		// **The control, and without it the check above passes for a function
+		// that always reports false** -- which is a guard that cannot fail.
+		// A syntactically valid address nothing listens on: the gate opens,
+		// the connection is constructed, and the portal still does not answer.
+		// So the flag moves while the verdict does not, which is what shows
+		// the flag is reporting the branch and not the outcome.
+		qputenv("DBUS_SESSION_BUS_ADDRESS",
+		         QByteArray("unix:path=/nonexistent/hydra-test-bus"));
+		bool asked_again = false;
+		const int still_nothing = theme::portal_scheme(&asked_again);
+		check(asked_again,
+		      "with an address, it does construct one, so the flag moves");
+		check(still_nothing == -1,
+		      QString("and a dead bus abstains the same way a missing one does "
+		               "(%1)").arg(still_nothing));
+
+		if (held.isEmpty())
+			qunsetenv("DBUS_SESSION_BUS_ADDRESS");
+		else
+			qputenv("DBUS_SESSION_BUS_ADDRESS", held);
+	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;

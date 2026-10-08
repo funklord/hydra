@@ -17,6 +17,7 @@
 #include "policy_engine.h"
 #include "qtwebengine_factory.h"
 #include "qtwebengine_notifications.h"
+#include "session_bus.h"
 #include "request_filter.h"
 
 #include <QApplication>
@@ -194,9 +195,19 @@ int main(int argc, char **argv) {
 	// of a headless build machine and of this checkout's own sweep unless it is
 	// wrapped. A driver that fails for want of a session bus teaches whoever
 	// reads the sweep to ignore it.
+	// **The address first, for the same reason the shell now reads it first.**
+	// This driver is the one most likely to run somewhere an autolaunch would
+	// succeed, and it skips for want of a bus anyway -- so constructing the
+	// connection in order to discover that was paying for an unreaped daemon
+	// to decide not to use one.
+	if (!session_bus::present()) {
+		std::printf("no DBUS_SESSION_BUS_ADDRESS; run under dbus-run-session\n");
+		std::printf("\n0 passed, 0 failed\n");
+		return 0;
+	}
 	QDBusConnection bus = QDBusConnection::sessionBus();
 	if (!bus.isConnected()) {
-		std::printf("no session bus; run this under dbus-run-session\n");
+		std::printf("session bus address set but not connectable\n");
 		std::printf("\n0 passed, 0 failed\n");
 		return 0;
 	}
@@ -314,6 +325,37 @@ int main(int argc, char **argv) {
 	spin(1200);
 	check(got("onclose") == "yes",
 	      "and dismissing it reaches the page as onclose");
+
+	// **Last, because it has a side effect.** Installing a second presenter on
+	// the same profile would replace the one every check above used, so this
+	// runs when nothing is left to disturb.
+	//
+	// What is asserted is that `install` does not TOUCH the bus when there is
+	// no address -- not that it returns null, which it does either way and
+	// which is why the return value cannot test this. Delete the
+	// `session_bus::present()` gate in `install` and `asked` comes back true,
+	// with no bus, no DISPLAY and no X server needed to see it.
+	std::printf("\n== and install() asks nothing when there is no address ==\n");
+	{
+		const QByteArray held = qgetenv("DBUS_SESSION_BUS_ADDRESS");
+		qputenv("DBUS_SESSION_BUS_ADDRESS", QByteArray());
+		bool asked = true;   // so a function that never writes it fails
+		qtwebengine_notifications *none =
+		  qtwebengine_notifications::install(factory.profile(), &asked);
+		qputenv("DBUS_SESSION_BUS_ADDRESS", held);
+		check(!asked, "install() constructed no connection with the address empty");
+		check(none == nullptr, "and it abstained, which it documents as a result");
+
+		// The control: the same call with the address back. Without this the
+		// check above passes for a function that always reports false, which
+		// is the shape of a guard that cannot fail.
+		bool asked_again = false;
+		qtwebengine_notifications *again =
+		  qtwebengine_notifications::install(factory.profile(), &asked_again);
+		check(asked_again,
+		       "and it does ask when there is an address, so the flag moves");
+		Q_UNUSED(again)
+	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

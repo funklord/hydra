@@ -38,7 +38,12 @@ public:
 	// The check is a real call to the service rather than a name lookup: a name
 	// can be registered by something that will not answer, and the question here
 	// is whether a notification will actually be shown.
-	static qtwebengine_notifications *install(QWebEngineProfile *profile);
+	// `asked`, where given, reports whether a session-bus connection was
+	// actually CONSTRUCTED -- false when there was no address to connect to,
+	// so a caller or a test can tell that abstention from a bus that was
+	// reached and found dead. Both return null. See `session_bus.h`.
+	static qtwebengine_notifications *install(QWebEngineProfile *profile,
+	                                           bool *asked = nullptr);
 
 private slots:
 	// The service's own two signals. They are broadcast to every listener with

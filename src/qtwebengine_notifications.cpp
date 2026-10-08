@@ -1,5 +1,7 @@
 #include "qtwebengine_notifications.h"
 
+#include "session_bus.h"
+
 #include <QWebEngineNotification>
 #include <QWebEngineProfile>
 
@@ -30,7 +32,9 @@ qtwebengine_notifications::qtwebengine_notifications(QObject *parent)
     : QObject(parent) {}
 
 qtwebengine_notifications *
-qtwebengine_notifications::install(QWebEngineProfile *profile) {
+qtwebengine_notifications::install(QWebEngineProfile *profile, bool *asked) {
+	if (asked)
+		*asked = false;
 	if (!profile)
 		return nullptr;
 #ifndef HYDRA_HAVE_DBUS
@@ -38,6 +42,22 @@ qtwebengine_notifications::install(QWebEngineProfile *profile) {
 	// null is the whole contract -- the caller leaves notifications blocked.
 	return nullptr;
 #else
+	// **The gate, and it does not replace the check below.** Returning null on
+	// `!isConnected()` is right and is read too late: `sessionBus()`
+	// autolaunches an unreaped daemon when the address is unset, so the old
+	// code paid for a bus in order to find out it had none. Asking the address
+	// first reaches the same abstain -- which this function already documents
+	// as a supported outcome -- without the launch. See `session_bus.h`.
+	//
+	// The two conditions answer different questions: this one is "is there a
+	// bus at all", and `isConnected()` below is "is the one we were told about
+	// alive". What separates them for a test is `asked`, not the return value,
+	// which is null either way.
+	if (!session_bus::present())
+		return nullptr;
+	if (asked)
+		*asked = true;
+
 	QDBusConnection bus = QDBusConnection::sessionBus();
 	if (!bus.isConnected())
 		return nullptr;

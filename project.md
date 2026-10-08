@@ -35988,3 +35988,121 @@ cannot confirm a gate, after an unset `DISPLAY` and an inherited `PWD`:
 ours to fix -- it is Qt's -- and it is the reason the bus gates recorded
 above have to be proven by asserting that a connection was constructed
 rather than by counting what the machine ended up with.
+
+## The bus gates: ask the address, not the connection
+
+The entry above recorded five session-bus call sites that all abstained on
+the ANSWER rather than the question, and left them alone pending the
+copyright holder's word. They said to fix it, so this is that.
+
+**The change is one predicate asked before the call instead of after.**
+`src/session_bus.h` carries it, header-only beside `accept_language.h`,
+with the reasoning in one place because the reasoning is the valuable part:
+
+    namespace session_bus { inline bool present(); }
+
+It reads `DBUS_SESSION_BUS_ADDRESS` and treats **empty as absent**, which
+is why it is `qEnvironmentVariableIsEmpty` and not `IsSet` -- the build
+clears the variable rather than unsetting it, make having no way to unset
+one for a child. Verified across all three states: unset 0, empty 0,
+`unix:path=...` 1.
+
+**Four sites, not three.** `theme::portal_scheme` and the `SettingChanged`
+watch in `src/theme.cpp`; `qtwebengine_notifications::install`, which the
+other two notification sites are downstream of; and
+`test/live/try_notify.cpp`'s own `sessionBus()`, which is the one most
+likely to run somewhere an autolaunch would succeed and which skipped for
+want of a bus anyway -- so it was paying for a daemon in order to decide
+not to use one.
+
+`portal_scheme` moved out of the anonymous namespace into `theme::` to be
+reachable by a test. Its abstain value was already -1, and `install`'s was
+already null, so neither needed a new contract: that is what makes this a
+gate and not a redesign.
+
+### What makes it testable, which is the whole difficulty
+
+**A bus count cannot show this fixed**, and the reason is not the obvious
+one. raidcfgd measured four buses before a headless run and four after,
+because `DISPLAY` is unset for a session like this one and libdbus
+autolaunch fails of its own accord -- so the count measures the absence of
+X rather than the presence of a gate.
+
+**And asserting on the connection does not work either.** raidcfgd tried
+the cheaper thing first: assert the name the connection was given. It
+fails with the gate in place, because a `QDBusConnection` named and never
+opened has no private data and returns empty. The object discards exactly
+the fact a test wants.
+
+**So the observable is whether a connection was CONSTRUCTED**, reported by
+an out-param the code sets where it is about to construct one:
+
+    int  theme::portal_scheme(bool *asked = nullptr);
+    static qtwebengine_notifications *install(QWebEngineProfile *,
+                                              bool *asked = nullptr);
+
+**Positionally, and never recomputed.** A flag assigned
+`*asked = session_bus::present()` would still read false with the gate
+deleted, which is the single case the flag exists to catch. It is set on
+the line before the construction, so deleting the gate makes the empty
+case report true.
+
+### The sabotages, and they redden different checks
+
+Both confirmed landed before being believed.
+
+    remove the gate in portal_scheme
+      FAIL  with no address, no session-bus connection is constructed
+      ok    with an address, it does construct one, so the flag moves
+
+    remove the *asked = true assignment
+      ok    with no address, no session-bus connection is constructed
+      FAIL  with an address, it does construct one, so the flag moves
+
+**Neither half can be deleted silently**, which a single assertion could
+not have given. The second check is the control the first one needs: on
+its own, "no connection was constructed" passes for a function that always
+reports false, which is a guard that cannot fail. The pair also shows the
+flag tracks the branch rather than the outcome -- the verdict is -1 in
+both rows, because a dead bus abstains exactly as a missing one does.
+
+All of it runs with no bus, no `DISPLAY` and no X server.
+
+### A leak that IS observable here, for the account that matters
+
+The relayed claim was that a bus count cannot move on this machine.
+Measured while running the notification driver, and it is true of this
+account and false of the one that runs the browser:
+
+    ps -o pid=,ppid=,user=,etime=,args= -C dbus-daemon
+
+Four session buses owned by `funk`, each parented to init, each carrying
+the `--fork --print-pid --print-address --session` signature libdbus
+autolaunch leaves behind, at ages 1h47m, 21m34s, 21m26s and **59
+seconds**. A desktop login starts one; four at staggered intervals is not
+that shape. Stated as an observation rather than a diagnosis -- the
+signature and the parentage are facts, and that autolaunch rather than
+something else produced them is the probable reading.
+
+So the gates are not housekeeping against a hypothetical. **What makes the
+count useless as a test is not that nothing leaks, it is that the leak and
+the fix live in different accounts** -- and that is a fourth reason to
+assert the construction rather than count the result, after an unset
+`DISPLAY`, an inherited `PWD`, and Qt Gui's own theme path.
+
+Nothing of this session's own leaked: `dbus-run-session` reaped its bus,
+and no `dbus-daemon` on the machine is owned by this account.
+
+### What is covered by which runner, since they differ
+
+**The theme gate is in `make test`.** `test/test_theme.cpp` is one of the
+13 offline suites that construct a `QApplication`, and the section runs on
+every suite run with no bus needed.
+
+**The notifications gate is not.** `try_notify` skips without a session
+bus by design, so its three new checks run only under
+`dbus-run-session -- ./test/build-make/try_notify`, which is how it was
+proven here: 17 passed, 0 failed. That is a real gap in coverage rather
+than a choice -- a gate exercised only by a driver somebody runs
+deliberately is one that can rot -- and it is recorded rather than closed
+because closing it needs a profile an offline suite cannot build.

@@ -47,6 +47,15 @@ enum class choice {
 // be tested without a desktop. `portal` is -1 when the portal did not answer.
 Qt::ColorScheme decide(Qt::ColorScheme qt_hint, int portal, const QPalette &current);
 
+// Tier 2: what the XDG portal says -- 1 dark, 2 light, 0 no preference, and -1
+// for "did not answer", which includes having no session bus to ask on.
+//
+// `asked`, where given, reports whether a session-bus connection was actually
+// CONSTRUCTED. That is the one observable separating abstaining from asking,
+// and the reason it is an out-param rather than something a caller could work
+// out for itself is in `session_bus.h`.
+int portal_scheme(bool *asked = nullptr);
+
 // Ask the sources and run `decide` on the answers.
 Qt::ColorScheme detect_system();
 

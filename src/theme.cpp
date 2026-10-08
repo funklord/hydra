@@ -1,4 +1,6 @@
 #include "theme.h"
+
+#include "session_bus.h"
 #include <QTextStream>
 #include <QRegularExpression>
 #include <QIcon>
@@ -92,9 +94,32 @@ QPalette dark_palette() {
 	return p;
 }
 
+
+}  // namespace
+
 #ifdef HYDRA_HAVE_DBUS
-// 1 = prefer dark, 2 = prefer light, 0 = no preference, -1 = did not answer.
-int portal_scheme() {
+// 1 = prefer dark, 2 = prefer light, 0 = no preference, -1 = did not answer --
+// which now includes having no session bus to ask on.
+//
+// **`asked` is set where the connection is about to be constructed**, so a
+// test can tell "abstained without touching the bus" from "asked and got
+// nothing". Those are the two states a bus count cannot separate on a machine
+// where autolaunch fails of its own accord, and this is deliberately not
+// recomputed from `session_bus::present()`: a flag read from the environment a
+// second time would still say false with the gate below deleted, which is the
+// one case such a flag exists to catch.
+int portal_scheme(bool *asked) {
+	if (asked)
+		*asked = false;
+	// The gate, asked before `sessionBus()` rather than after. The old code
+	// returned -1 when `iface.isValid()` was false, which is correct and is
+	// read too late: the autolaunch happens inside the call whose answer it
+	// was reading. See `session_bus.h`.
+	if (!session_bus::present())
+		return -1;
+	if (asked)
+		*asked = true;
+
 	QDBusInterface iface(QStringLiteral("org.freedesktop.portal.Desktop"),
 	                      QStringLiteral("/org/freedesktop/portal/desktop"),
 	                      QStringLiteral("org.freedesktop.portal.Settings"),
@@ -115,10 +140,12 @@ int portal_scheme() {
 	return ok ? n : -1;
 }
 #else
-int portal_scheme() { return -1; }
+int portal_scheme(bool *asked) {
+	if (asked)
+		*asked = false;
+	return -1;
+}
 #endif
-
-}  // namespace
 
 Qt::ColorScheme decide(Qt::ColorScheme qt_hint, int portal, const QPalette &current) {
 	if (qt_hint != Qt::ColorScheme::Unknown)
@@ -258,12 +285,16 @@ watcher::watcher(QObject *parent) : QObject(parent) {
 	// And the portal's, for the desktop where Qt says Unknown -- which is the
 	// case this whole file exists for. Without this, choosing "system" would
 	// follow the desktop once, at startup, and then stop.
-	QDBusConnection::sessionBus().connect(
-	  QStringLiteral("org.freedesktop.portal.Desktop"),
-	  QStringLiteral("/org/freedesktop/portal/desktop"),
-	  QStringLiteral("org.freedesktop.portal.Settings"),
-	  QStringLiteral("SettingChanged"), this,
-	  SLOT(portal_changed(QString, QString, QDBusVariant)));
+	// **Gated on the address, like the read above.** A watch is the worse of
+	// the two to get wrong: it holds its connection for the life of the
+	// window, so an autolaunched bus here is one that stays.
+	if (session_bus::present())
+		QDBusConnection::sessionBus().connect(
+		  QStringLiteral("org.freedesktop.portal.Desktop"),
+		  QStringLiteral("/org/freedesktop/portal/desktop"),
+		  QStringLiteral("org.freedesktop.portal.Settings"),
+		  QStringLiteral("SettingChanged"), this,
+		  SLOT(portal_changed(QString, QString, QDBusVariant)));
 #endif
 }
 
