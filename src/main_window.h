@@ -371,6 +371,9 @@ private:
 	// decides whether it is one of them -- which is also what makes it right
 	// in an iframe, where an embedded player has its own hostname.
 	void inject_scriptlets(web_view_backend *view);
+	// Re-read the policy into every live view and re-filter their scriptlets.
+	// Idempotent, so a view the change does not concern costs a comparison.
+	void reapply_policy_to_views();
 	// **The view half of forgetting an id**, shared so the two places that do
 	// it cannot drift: `forget_subtree`, which has a node, and the live cap's
 	// last resort, which by definition does not. Removing the widget from the
@@ -846,6 +849,13 @@ public:
 	bool                m_page_note = false;
 	QTimer             *m_view_timer    = nullptr;
 	QTimer             *m_blob_timer    = nullptr;
+	// **Coalesces per-site settings back onto the live views.** Kicked by
+	// `policy_engine::changed`, which every mutation emits from wherever it
+	// was made, and single-shot at zero so a storm of them inside one event
+	// loop turn -- importing a settings bundle writes hundreds -- becomes one
+	// pass rather than hundreds. Without the coalescing, `apply_policy` would
+	// flip `desktop_site` mid-import and reload the page for each flip.
+	QTimer             *m_policy_timer  = nullptr;
 	// Node ids whose history has moved since the last blob flush. Ids rather
 	// than views, because a view can be suspended between the navigation and
 	// the timer firing, and an id survives that -- suspending writes the blob

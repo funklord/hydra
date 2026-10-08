@@ -36128,3 +36128,101 @@ proven here: 17 passed, 0 failed. That is a real gap in coverage rather
 than a choice -- a gate exercised only by a driver somebody runs
 deliberately is one that can rot -- and it is recorded rather than closed
 because closing it needs a profile an offline suite cannot build.
+
+## The lens from the ads-gate bug, swept, and what it cost to sweep
+
+The last two faults here were a setting consulted once at setup and never
+re-read (`inject_scriptlets`) and a call that read the answer rather than
+the question (the bus gates). The first is the better lens, so: **what else
+is configured per view at creation and never re-read when the thing it
+depends on changes?**
+
+**The sweep, and most of it came back clean.** Recorded because an empty
+result is a measurement only if its method is written down -- these
+families have been looked at, so the next fault here needs a new lens.
+
+Nine scripts are installed on a view at creation. Every one is installed
+**unconditionally**, and the bridge objects behind them -- `consent_blocker`,
+`cosmetic_filters`, `sponsor_skip` -- are each constructed with `m_policy`
+and ask it when the page calls in. So they re-read live, and none of them
+has the fault. `inject_scriptlets` was the exception precisely because it
+filtered at injection time rather than holding the policy and answering
+later.
+
+Enumerated the policy mutation sites rather than querying for them, nine
+across six files, and checked each against what re-applies:
+
+    settings_dialog        a loop over every live view, already there
+    site_policy_dialog     on_policy_changed, CURRENT VIEW ONLY
+    settings_bundle        inside the dialog, so covered by its loop
+    consent_blocker        cookies, which view_settings does not carry
+    permission grant       features view_settings does not carry
+    forget_shell_caches    ads; reaches the interceptor and scriptlets live
+    main.cpp, load()       startup, before any view exists
+
+So one gap, and it was **the asymmetry the scriptlet fix had just
+created**: scriptlets re-applied to every view on a policy change while
+`apply_policy` re-applied to the front one.
+
+### The fix that mattered was not the gap, it was the cost
+
+**Hanging the work on `changed()` directly is worse than the code it
+replaces**, which the first attempt here did not see. `changed()` is
+emitted per mutation and a bundle import writes hundreds inside one event
+loop turn: inline, `apply_policy` would flip `desktop_site` on an
+intermediate value and reload the page for each flip, and every view's
+scriptlet source would be rebuilt as many times. The settings dialog's
+explicit loop runs **once, after the dialog closes**, which is exactly why
+it is written that way.
+
+So `m_policy_timer`, single-shot at zero, coalescing one turn's mutations
+into one `reapply_policy_to_views()` pass -- the tree's own debounce idiom,
+used for structural saves and blob flushes already. That is a real fix to a
+real cost **this session introduced** two commits ago, where the gap it was
+nominally about is thin.
+
+Proven by sabotage against the new mechanism rather than the old: delete
+the `changed()` kick and `try_scriptlets` reddens on *and it stopped
+pruning without being recreated* alone.
+
+### What is NOT proven, with the reason
+
+`reapply_policy_to_views` does two things and only one is observable. The
+scriptlet half `try_scriptlets` asserts. **The `apply_policy` half cannot
+be tested through the current seam**, and the attempt is what established
+that:
+
+- `apply_settings` is pure virtual with two implementations and
+  **`view_settings` has no getters at all**, so nothing it carries can be
+  read back from a driver.
+- `desktop_site()` looked like the one readable field and is **a constant
+  on this platform** -- implemented in `android_view.cpp` only, so the
+  base class's `return false` is what a desktop driver sees. A check
+  written on it passed its "before" control for the same reason it could
+  never pass its "after": the value cannot move. It was removed rather
+  than kept, since a check that cannot fail is worse than none.
+- And most of `view_settings` takes effect at load, while `apply_policy`
+  already runs on every navigation -- so for a background tab the honest
+  benefit is the attributes an engine reads live, popups and scrollbars,
+  rather than the whole set.
+
+What would make it provable is a getter for the settings a view was last
+handed, which means `apply_settings` recording in the base class before
+delegating -- a seam change across both backends, and more than this is
+worth. Recorded with the blocker named rather than left as an absence.
+
+### Two instrument errors, which are the part worth carrying
+
+**A test section with a side effect breaks every section after it.** The
+removed section called `new_tab()`, which leaves the new tab current, and
+the two sections below it then ran against the wrong view: the cosmetic
+check reported an empty string and read as a second failure. It looked like
+my change had broken cosmetic filtering. `try_notify`'s own gate check is
+last in its file for exactly this reason, written an hour earlier -- and
+this one went in the middle. **In a sequential driver, state is the
+section's output whether it was meant to be or not.**
+
+**And a failing test is the thing that found both.** Had the
+`desktop_site` check passed, it would have been quoted as proof that a
+policy change reaches every tab, when the value it read cannot change on
+this platform at all.
