@@ -184,9 +184,10 @@ public:
 	void navigated_to(const QUrl &u) { m_url = u; emit url_changed(u); }
 	// The same door for a window request. Returns whatever the shell offered
 	// to adopt, which is null when it declined to make one.
-	web_view_backend *asked_new_window(const QUrl &u, bool user_initiated) {
+	web_view_backend *asked_new_window(const QUrl &u, bool user_initiated,
+	                                    bool background = false) {
 		web_view_backend *adopt = nullptr;
-		emit new_window_requested(u, user_initiated, &adopt);
+		emit new_window_requested(u, user_initiated, background, &adopt);
 		return adopt;
 	}
 	void back() override {}
@@ -5449,6 +5450,113 @@ int main(int argc, char **argv) {
 		check(mirror, "the mirror folder is there");
 		check(mirror && p.m_tree->isExpanded(at(mirror)),
 		       "and it is open, so the imported tabs show");
+	}
+
+	section("a middle-click opens a tab and does not take you to it");
+	{
+		// **The engine already said so and nothing was reading it.** Chromium
+		// reports four destinations for a window request, and a middle-click
+		// or Ctrl+click is `InNewBackgroundTab` -- the one that means "give me
+		// a tab and leave me where I am". The shell read only
+		// `isUserInitiated`, so that request arrived identical to a
+		// foreground one and went to `open_node`, which shows what it opens:
+		// the standard gesture for a background tab did the one thing it is
+		// chosen to avoid.
+		const bool was_on = settings_store::preload_background_tabs();
+		settings_store::set_preload_background_tabs(true);
+		qputenv("HYDRA_MAX_LIVE_VIEWS", "4");
+
+		main_window p(&factory, &policy, &filter);
+		if (p.layout()) p.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+		p.setMinimumSize(0, 0);
+		p.resize(360, 800);
+		p.show();
+		spin(150);
+
+		node *reading = p.m_model->add_tab(nullptr, "reading",
+		                                    "https://read.example/");
+		auto open = [&](node *n) {
+			const QModelIndex idx =
+			  p.m_proxy->mapFromSource(p.m_model->index_for_node(n));
+			emit p.m_tree->activated(idx);
+			spin(120);
+		};
+		open(reading);
+		fake_view *from = live_view(p, reading);
+		check(from, "a page to middle-click a link on");
+		// Counted and searched recursively, because `open_new_window` files
+		// the new row UNDER the tab that asked -- the relationship the tree
+		// exists to show. A search of the root's children would have missed
+		// it and reported the tab as never made.
+		std::function<int(node *)> count_all = [&](node *n) -> int {
+			int c = 0;
+			for (node *k : n->children)
+				c += 1 + count_all(k);
+			return c;
+		};
+		std::function<node *(node *, const QString &)> find_url =
+		  [&](node *n, const QString &u) -> node * {
+			for (node *k : n->children) {
+				if (k->url == u)
+					return k;
+				if (node *deeper = find_url(k, u))
+					return deeper;
+			}
+			return nullptr;
+		};
+		const int before = count_all(p.m_model->root());
+
+		// The background request. `adopt` must come back null: the request is
+		// declined rather than adopted, which leaves `window.opener` null --
+		// right here, because a middle-clicked link has nothing to say to the
+		// page it came from, and an opener is given as narrowly as possible.
+		web_view_backend *adopt =
+		  from ? from->asked_new_window(QUrl("https://bg.example/page"),
+		                                 /*user_initiated=*/true,
+		                                 /*background=*/true)
+		        : nullptr;
+		spin(150);
+		check(adopt == nullptr,
+		       "the request is declined, so no opener is wired");
+		check(count_all(p.m_model->root()) == before + 1,
+		       QString("and a tab is made for it (%1 new)")
+		           .arg(count_all(p.m_model->root()) - before));
+
+		// **The assertion the bug was about**: the page in front is still the
+		// one being read.
+		check(p.m_stack && from &&
+		          p.m_stack->currentWidget() == from->widget(),
+		       "while the page in front is still the one you were reading");
+
+		// And it is loaded, not merely filed -- the other half of the
+		// complaint that started this.
+		node *made = find_url(p.m_model->root(), "https://bg.example/page");
+		check(made, "the new row carries the url");
+		check(made && made->parent == reading,
+		       "filed under the tab that asked, as a sub-tab");
+		fake_view *bg = made ? live_view(p, made) : nullptr;
+		check(bg, "with a view of its own, loading already");
+		check(bg && bg->url().toString() == "https://bg.example/page",
+		       QString("pointed at the link that was clicked (%1)")
+		           .arg(bg ? bg->url().toString() : QStringLiteral("none")));
+
+		// **The control: a FOREGROUND request still comes to the front.** An
+		// over-broad fix would send every user-initiated window to the
+		// background, and every other assertion here would still pass.
+		web_view_backend *adopt_fg =
+		  from ? from->asked_new_window(QUrl("https://fg.example/page"),
+		                                 /*user_initiated=*/true,
+		                                 /*background=*/false)
+		        : nullptr;
+		spin(150);
+		check(adopt_fg != nullptr,
+		       "a foreground request is adopted, as it was before");
+		check(p.m_stack && from &&
+		          p.m_stack->currentWidget() != from->widget(),
+		       "and it does take the screen");
+
+		settings_store::set_preload_background_tabs(was_on);
+		qunsetenv("HYDRA_MAX_LIVE_VIEWS");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

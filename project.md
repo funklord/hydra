@@ -35256,6 +35256,68 @@ sabotage that cannot be shown to have applied is worth nothing**, which this
 tree already knew for mechanical edits -- `evidence.md` says to assert on the
 substitution -- and the same rule reaches the tool doing the sabotaging.
 
+## A middle-click took you to the tab, because nobody read the destination
+
+Found by applying the lens the last two reports shared -- **a coarse path
+answering a question nobody asked** -- to the window-request seam.
+
+Chromium reports four destinations for a window request, and the seam read
+`requestedUrl()` and `isUserInitiated()` and not `destination()`:
+
+    InNewWindow  InNewTab  InNewDialog  InNewBackgroundTab
+
+**`InNewBackgroundTab` is what a middle-click or Ctrl+click produces** -- the
+one request that means *give me a tab and leave me where I am*. Arriving
+indistinguishable from a foreground one, it went to `open_node`, which shows
+what it opens. The standard gesture for opening a background tab did the one
+thing it is chosen to avoid, and before today it also did not load.
+
+**The engine had already decided and nothing was listening**, which is why the
+destination is read off the request rather than re-derived from keyboard
+modifiers here. A second reading of the gesture would be a second answer
+waiting to disagree with the first. The enum was read out of
+`/usr/include/.../qwebenginenewwindowrequest.h` rather than recalled.
+
+### Declining the request is the right answer, not a shortcut
+
+A background tab leaves `adopt` null, so `window.opener` is null in the new
+tab. That is deliberate. An opener exists so a popup can talk back to the page
+that spawned it, which is the `InNewWindow` and `InNewDialog` case; a
+middle-clicked link has nothing to say to anybody, and this tree already
+narrows openers as far as it can -- the comment above `allow_navigation`
+records the tabnabbing reasoning, and the history of that decision is in the
+revert entry earlier in this file. The seam's own header says leaving `adopt`
+null means *I have handled the url myself*, so declining is the supported
+path rather than a gap.
+
+It then loads through `preload_node`, which means a middle-click **respects
+the live-view cap** rather than making a renderer nobody asked for -- the
+warm-up built this morning turning out to be the right primitive for a
+different problem.
+
+### Proven in both directions, and the second one needed the control
+
+    ignore the destination        -> "the page in front is still the one you
+                                      were reading" goes red, with the opener
+                                      and the url
+    treat EVERY user-initiated
+    window as background          -> "and it does take the screen" goes red
+
+**The second sabotage also broke an assertion in another section** -- *while a
+page asking for a window still gets one* -- which is the suite's existing
+coverage catching an over-broad fix without being asked to. That is the
+cheapest kind of evidence there is: a case somebody else wrote, failing for
+the right reason.
+
+### And the test's own search was wrong, in the way the tree is about
+
+The first version looked for the new row among the root's children.
+`open_new_window` files it **under the tab that asked**, which is the whole
+relationship this browser's tree exists to show -- so the search would have
+missed it and reported the tab as never made. It searches recursively now and
+asserts the parent explicitly, which also pins the sub-tab behaviour that was
+previously only implied.
+
 ### What is left
 
 ~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was

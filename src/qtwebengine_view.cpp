@@ -370,8 +370,16 @@ qtwebengine_view::qtwebengine_view(QWebEngineProfile *profile, QWidget *parent)
 		// The receiver fills this in during the emit, because `request` is
 		// only valid until this lambda returns.
 		web_view_backend *adopt = nullptr;
+		// Read from the request rather than inferred from the modifiers: the
+		// engine has already decided what the gesture meant, and a second
+		// reading of the keyboard here would be a different answer waiting to
+		// disagree with it.
+		const bool background =
+		  request.destination() ==
+		  QWebEngineNewWindowRequest::InNewBackgroundTab;
 		emit new_window_requested(request.requestedUrl(),
-		                           request.isUserInitiated(), &adopt);
+		                           request.isUserInitiated(), background,
+		                           &adopt);
 		if (auto *view = qobject_cast<qtwebengine_view *>(adopt))
 			request.openIn(view->m_page);
 	});

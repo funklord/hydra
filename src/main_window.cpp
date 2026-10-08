@@ -4204,9 +4204,10 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 				report_certificate_rejected(u, why);
 		});
 		connect(view, &web_view_backend::new_window_requested, this,
-		         [this, view](const QUrl &u, bool user, web_view_backend **adopt) {
+		         [this, view](const QUrl &u, bool user, bool background,
+		                       web_view_backend **adopt) {
 			if (view == current_view())
-				open_new_window(u, user, adopt);
+				open_new_window(u, user, background, adopt);
 		});
 		// `window.close()`. Queued rather than acted on inside the signal: the
 		// view is about to be destroyed with the node, and Chromium is still
@@ -4957,8 +4958,10 @@ void main_window::view_page_source() {
 		m_status->showMessage("This page has no source to show.", 5000);
 		return;
 	}
+	// Foreground: somebody asking to see a page's source is asking to look at
+	// it now, which is the opposite of a middle-click.
 	open_new_window(QUrl("view-source:" + page.toString(QUrl::FullyEncoded)),
-	                 true);
+	                 /*user_initiated=*/true, /*background=*/false);
 }
 
 // A link that is not a page: a magnet, a mailto, anything registered as a
@@ -4988,6 +4991,7 @@ void main_window::open_external_url(const QUrl &url) {
 }
 
 node *main_window::open_new_window(const QUrl &url, bool user_initiated,
+                                    bool background,
                                     web_view_backend **adopt) {
 	if (!url.isValid() || url.isEmpty())
 		return nullptr;
@@ -5045,7 +5049,28 @@ node *main_window::open_new_window(const QUrl &url, bool user_initiated,
 		return nullptr;
 	save_tree_soon();
 
-	if (user_initiated) {
+	if (user_initiated && background) {
+		// **A middle-click or Ctrl+click: a tab, and do not take me to it.**
+		// The engine says so and nothing was listening, so this arrived as an
+		// ordinary user-initiated request and went straight to `open_node`,
+		// which shows what it opens. The standard gesture for a background
+		// tab did the one thing it is chosen to avoid.
+		//
+		// **The request is declined rather than adopted**, which leaves
+		// `window.opener` null -- and that is the right answer here rather
+		// than a shortcut. An opener exists so a popup can talk back to the
+		// page that spawned it, which is the `InNewWindow` and `InNewDialog`
+		// case; a middle-clicked link has nothing to say to anybody, and the
+		// comment above `allow_navigation` records why an opener is given as
+		// narrowly as possible. Declining is explicitly supported: the seam's
+		// own header says leaving `adopt` null means "I have handled the url
+		// myself".
+		//
+		// So this loads the page here, through the same bounded warm-up a
+		// background tab gets -- which also means it respects the live-view
+		// cap rather than making a renderer the person did not ask for.
+		preload_node(made);
+	} else if (user_initiated) {
 		// Without loading when the request is being adopted: `openIn` does the
 		// navigation, and doing it here as well would fetch a one-time url
 		// twice -- which for an OAuth popup means spending the state parameter

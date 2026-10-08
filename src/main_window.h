@@ -410,7 +410,10 @@ public:
 	// carries the navigation and doing it twice would replay a one-time OAuth
 	// url.
 	void open_external_url(const QUrl &url);   // a link that is not a page
+	// `background` is the engine saying the person asked for a tab and asked
+	// not to be taken to it -- a middle-click or Ctrl+click.
 	node *open_new_window(const QUrl &url, bool user_initiated,
+	                       bool background,
 	                       web_view_backend **adopt = nullptr);
 	void view_page_source();
 	void present_fullscreen(web_view_backend *view, bool on);

@@ -454,8 +454,14 @@ signals:
 	// works that way -- Google Identity Services posts the credential to the
 	// opener and never redirects -- which is why signing in to claude.ai with
 	// Google produced a blank tab and no session.
+	// **`background` is the engine's own answer, which nothing was reading.**
+	// Chromium reports four destinations and a middle-click or Ctrl+click is
+	// `InNewBackgroundTab` -- the one request that says "give me a tab and do
+	// not take me to it". Without it a middle-click was indistinguishable
+	// from a foreground one and yanked the person to the new page, which is
+	// the standard gesture for a background tab behaving as its opposite.
 	void new_window_requested(const QUrl &url, bool user_initiated,
-	                           web_view_backend **adopt);
+	                           bool background, web_view_backend **adopt);
 
 	// Where the link under the pointer would take you. An empty url means the
 	// pointer left one. **This is the browser's oldest security affordance**:
