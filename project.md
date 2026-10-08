@@ -36226,3 +36226,106 @@ section's output whether it was meant to be or not.**
 `desktop_site` check passed, it would have been quoted as proof that a
 policy change reaches every tab, when the value it read cannot change on
 this platform at all.
+
+## `fmake test` could not run the widget suites, and the fix was one variable short
+
+Reported from fmake 2026-09-18 and recorded above under *From fmake*: this
+tree's `fmake.toml` carried no `test-env`, so `fmake test` ran every suite
+with no QPA named -- 18 of 46 failing, 13 of them Qt's platform plugin
+aborting for want of a display, against 6 with `QT_QPA_PLATFORM=offscreen`
+in the environment. Their report ended with the line to add. It sat on the
+list because nothing here runs `fmake test`; `make objsets` uses `--eject`
+and runs no test at all.
+
+**Taken now, with a second variable their report could not have known
+about**, since the platform-theme finding is a week newer than it. Measured
+against a one-file fmake fixture -- not against this tree's 46 suites, which
+is worth saying rather than implying:
+
+    no test-env                      PLATFORM=<unset>   THEME=gtk3
+    test-env as fmake recommended    PLATFORM=offscreen THEME=gtk3
+    test-env as written now          PLATFORM=offscreen THEME=
+
+So the recommended line leaves the theme inherited, and a contributor on a
+GTK desktop still gets "cannot open display" from an offscreen run. Two
+things checked rather than assumed: `test-env` refuses only an item with no
+`=` in it, so `KEY=` is accepted; and the variable arrives **set and
+empty**, which is what Qt reads as "no theme asked for". Empty is the only
+option available, because `test-env` adds to the environment rather than
+replacing it -- a tree cannot unset an inherited variable through it.
+
+**What is verified and what is not.** The fixture proves fmake's handling,
+including the empty value. This tree's own file is valid TOML with its other
+four keys unchanged, and the run that produced the measurement above reached
+RCC and MOC, so it parsed. A full `fmake test` over these 46 suites was not
+run: it builds the tree and the machine was carrying another account's
+selftest at the time. `fmake --explain` is not the cheap parse check it
+sounds like either -- it builds.
+
+**Signalled rather than fixed, and the entry is named**: fmake's
+`wants_a_display(env)` tests `QT_QPA_PLATFORM`, `DISPLAY` and
+`WAYLAND_DISPLAY` and not `QT_QPA_PLATFORMTHEME`, so it judges exactly the
+environment above as not wanting a display. That is their code and their
+reasons; the report is in their tree at
+`.git/cc-inbox/20261008T1826Z-claude.md`, with the reproduction, and their
+session was told directly as well.
+
+### The plan's own items, audited, and why none of them was taken
+
+*What is next* has twelve numbered items. Read through before picking the
+work above, because the cheapest thing a session can do wrong here is
+invent a task while a list exists:
+
+    1  permissions      holder's: a policy-file upgrade decision, a Qt bug
+                        report, and two device claims
+    2  Android reports  a design question, holder's
+    3  accessibility    controls are named and asserted; the rest needs
+                        TalkBack on the holder's handset or an at-spi
+                        bridge package on their machine
+    4  the media loop   needs live network runs against real sites
+    5  helper DOM tier  nothing has needed it; two captures is two
+    6  AI batch job UI  recorded, not designed
+    7  autofill         closed
+    8  the untested     needs a network or a device
+    9  file: urls       closed
+    10 icon theme       "left for whoever owns that list"
+    11 url has two      a tree-file format change, so holder's; the pin
+       meanings         is asserted so the repair fails loudly
+    12 KeePassXC        needs the account with a working set up
+
+**Every open item is gated on the copyright holder, a device, a network or
+another account.** That is not a complaint and it is worth writing down:
+the next session reading this list should expect the same and look for work
+of the shape above -- something another project has reported into this tree
+-- rather than reopening a gated item.
+
+### Two lenses swept, both clean, recorded so they are not re-run
+
+Derived from the two most recent faults, per *derive the next lens from the
+last bug*.
+
+**A setting consulted once at setup and never re-read.** Nine scripts are
+installed per view and all nine go in unconditionally; the bridges behind
+them hold the policy and answer from it when the page calls in. Nine policy
+mutation sites enumerated rather than queried; seven already covered. The
+one gap was the asymmetry this session had itself created, and the entry
+above has it.
+
+**A base-class virtual whose default silently does nothing.** Twenty of
+them in `web_view_backend`. Most are paired with a `can_*()` the UI
+consults, which is the designed answer. Two are inert on the desktop:
+`set_obscured`, which is Android's IME concern, and `desktop_site`, which
+has three consumers -- the shield, the settings dialog and the View menu --
+and **all three already guard it**, with tooltips and a mirrored
+`screen_share` case for Android.
+
+**And the improvement that suggested itself was wrong.** The guards test
+`#ifdef Q_OS_ANDROID` where a `can_desktop_site()` companion would look
+more honest, matching `can_print`, `can_mute` and `can_save_page` in the
+same class. It would have been the wrong question: the shield's own comment
+says the desktop's user agent already claims X11 Linux, so the request is
+satisfied before anybody asks it. That is a fact about the **platform**, not
+about a backend's capability -- a desktop backend that implemented the
+setter would still have nothing to ask for. Substituting a capability check
+there is the inverse of *a name is not a capability*, and reading the
+comment is what caught it.

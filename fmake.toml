@@ -99,8 +99,34 @@
 # without giving anyone Qt6DBus's include path -- trading a stub collision for a
 # missing header. Reported by fmake, and the reason this entry is one line
 # shorter than a first attempt at it.
+# **`test-env` is why `fmake test` could not run the widget suites**, and the
+# line fmake's own report recommended was one variable short. Reported from
+# fmake 2026-09-18: without it, 18 of 46 tests fail here and 13 of those are
+# Qt's platform plugin aborting for want of a display; with
+# `QT_QPA_PLATFORM=offscreen` in the environment, 6 fail.
+#
+# The second variable is this tree's finding rather than theirs. A
+# platform-theme plugin opens a display of its own whatever the QPA is, so a
+# contributor with `QT_QPA_PLATFORMTHEME=gtk3` exported -- the default on a
+# GTK desktop -- gets "cannot open display" from an offscreen run. Measured
+# against a one-file fmake fixture with gtk3 exported by the parent, which is
+# what shows the recommended line is not enough on its own:
+#
+#     no test-env                      PLATFORM=<unset>   THEME=gtk3
+#     test-env as fmake recommended    PLATFORM=offscreen THEME=gtk3
+#     test-env as written below        PLATFORM=offscreen THEME=
+#
+# **Empty rather than absent**, and `KEY=` is accepted: fmake refuses only an
+# item with no `=` in it, and the fixture confirmed the variable arrives set
+# and empty, which is what Qt reads as "no theme asked for". Unsetting it is
+# not on offer -- `test-env` adds to the environment rather than replacing it.
+#
+# It does not touch `make objsets`, which is what this file otherwise exists
+# for: the link sets come from `--eject` and nothing there runs a test.
+
 [project]
 include-dirs = ['src']
+test-env = ["QT_QPA_PLATFORM=offscreen", "QT_QPA_PLATFORMTHEME="]
 cflags  = ['-DHYDRA_VERSION="(link sets only; see fmake.toml)"']
 exclude = ["build/**", "build-android-*/**", "build-qmake/**",
             "test/build-make/**", "third_party/**", "attic/**"]
