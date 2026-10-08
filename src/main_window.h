@@ -208,15 +208,12 @@ private slots:
 	// with no argument.
 	int  persist_histories(node *from = nullptr);
 	void restore_histories(node *from = nullptr);
-	void new_tab();
 	void new_folder();
 	node *selected_parent() const;
 	node *selected_node() const;
 	void import_firefox_tabs();
 	void import_chromium_tabs();
-	void show_mirror_tabs(const QString &source, const QString &label,
-	                       const QList<session_import::imported_tab> &tabs,
-	                       bool from_poll);
+
 	void on_sort_mode_changed(int combo_index);
 	void on_search_changed(const QString &text);
 	void navigate_to_address();
@@ -597,6 +594,21 @@ public:
 	// order, wrapping. Returns the tab activated, or null when fewer than two
 	// exist. Public, like the members below, so the shortcut and a test drive it.
 	node *activate_adjacent_tab(bool forward);
+
+	// Show another browser's open tabs as a read-only folder. Public so a
+	// test drives it: the fix here was in the CALLER -- it expanded the whole
+	// tree where it meant to reveal one folder -- and a test that composed
+	// `replace_mirror` with `show_node` itself would be asserting its own
+	// arrangement rather than this function's.
+	void show_mirror_tabs(const QString &source, const QString &label,
+	                       const QList<session_import::imported_tab> &tabs,
+	                       bool from_poll);
+
+	// Add an empty tab under the selection (Ctrl+T). Public so the shortcut
+	// and a test drive it: what this must NOT do -- unfold the folders
+	// somebody had closed -- is only assertable by calling it, and the
+	// alternative is a test that goes looking for a menu action by its label.
+	void new_tab();
 
 	// Silence the current tab's audio, or unmute it (Ctrl+M). Public so the
 	// shortcut and a test drive it; the checkmark tracks the view, not the

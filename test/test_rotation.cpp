@@ -5191,6 +5191,266 @@ int main(int argc, char **argv) {
 		qunsetenv("HYDRA_MAX_LIVE_VIEWS");
 	}
 
+	section("an operation nobody asked to unfold the tree leaves it folded");
+	{
+		// **Reported: making a new tab unfolds folders that were closed.**
+		// Eight operations called `m_tree->expandAll()`, and for most of them
+		// it was collateral damage with no purpose: `open_node` already
+		// reveals the row it opens through `show_node`, which expands that
+		// row's ancestors and nothing else.
+		main_window p(&factory, &policy, &filter);
+		if (p.layout()) p.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+		p.setMinimumSize(0, 0);
+		p.resize(360, 800);
+		p.show();
+		spin(150);
+
+		node *a  = p.m_model->add_folder(nullptr, "kept open");
+		node *a1 = p.m_model->add_tab(a, "inside a", "https://a1.example/");
+		node *b  = p.m_model->add_folder(nullptr, "folded by hand");
+		node *b1 = p.m_model->add_tab(b, "inside b", "https://b1.example/");
+		check(a && a1 && b && b1, "two folders with a tab in each");
+
+		auto at = [&](node *n) {
+			return p.m_proxy->mapFromSource(p.m_model->index_for_node(n));
+		};
+		p.m_tree->expandAll();
+		p.m_tree->setExpanded(at(b), false);
+		check(p.m_tree->isExpanded(at(a)) && !p.m_tree->isExpanded(at(b)),
+		       "one open and one folded, which is the state to preserve");
+
+		// A new tab under the open folder. The fold on the other one is the
+		// thing that used to go.
+		p.m_tree->setCurrentIndex(at(a));
+		p.new_tab();
+		spin(120);
+		check(!p.m_tree->isExpanded(at(b)),
+		       "making a tab leaves the folded folder folded");
+		check(p.m_tree->isExpanded(at(a)),
+		       "while the one the new tab went into is open, as it must be");
+
+		// **Revealing a node is still allowed to open its own ancestors**, and
+		// that is the half a blanket fix would have broken: a new row inside a
+		// shut folder has to become visible, or the operation looks like it
+		// did nothing.
+		p.m_tree->setExpanded(at(a), false);
+		p.m_tree->show_node(a1);
+		check(p.m_tree->isExpanded(at(a)),
+		       "show_node opens the ancestors of what it reveals");
+		check(!p.m_tree->isExpanded(at(b)),
+		       "and still leaves the unrelated folder alone");
+
+		// Changing the sort order expanded everything too, for nothing:
+		// `set_sort_mode` only changes the sort role, and a QTreeView keeps
+		// its expansion across a sort.
+		p.m_tree->setExpanded(at(a), false);
+		if (p.m_sort_box) {
+			p.m_sort_box->setCurrentIndex(1);
+			spin(120);
+			check(!p.m_tree->isExpanded(at(b)) && !p.m_tree->isExpanded(at(a)),
+			       "re-sorting leaves both folds as they were");
+			p.m_sort_box->setCurrentIndex(0);
+			spin(120);
+		}
+	}
+
+	section("a search expands to show matches, and gives the folds back");
+	{
+		// **Searching SHOULD expand**, or the matches are invisible. What was
+		// missing is the other half: nothing put the tree back when the box
+		// emptied, so one search was the end of whatever was folded.
+		main_window p(&factory, &policy, &filter);
+		if (p.layout()) p.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+		p.setMinimumSize(0, 0);
+		p.resize(360, 800);
+		p.show();
+		spin(150);
+
+		// **BOTH folders have to match the search**, which the first version
+		// of this fixture got wrong: it put the match in one folder only, so
+		// the search filtered the folded folder away entirely -- and
+		// `isExpanded` on an index the proxy no longer has is false. The
+		// assertion then passed because the folder was collapsed throughout,
+		// never expanded and so never restored. Measured with a probe
+		// printing the state at each step, after sabotaging the restore
+		// produced no failure at all.
+		node *a  = p.m_model->add_folder(nullptr, "kept open");
+		node *a1 = p.m_model->add_tab(a, "needle one",
+		                               "https://needle1.example/");
+		node *b  = p.m_model->add_folder(nullptr, "folded by hand");
+		node *b1 = p.m_model->add_tab(b, "needle two",
+		                               "https://needle2.example/");
+		check(a1 && b1, "a match inside each folder, so neither is filtered");
+
+		auto at = [&](node *n) {
+			return p.m_proxy->mapFromSource(p.m_model->index_for_node(n));
+		};
+		p.m_tree->expandAll();
+		p.m_tree->setExpanded(at(b), false);
+		check(!p.m_tree->isExpanded(at(b)), "with one folded");
+
+		if (p.m_search) {
+			p.m_search->setText("needle");
+			spin(150);
+			check(p.m_tree->isExpanded(at(a)) && p.m_tree->isExpanded(at(b)),
+			       "searching expands both, so every match is visible");
+
+			// **Typed rather than set once**, because the hold is taken on the
+			// first keystroke and every later one must not overwrite it with
+			// the expanded state the previous keystroke produced.
+			p.m_search->setText("needl");
+			spin(60);
+			p.m_search->setText("need");
+			spin(60);
+
+			p.m_search->clear();
+			spin(150);
+			check(!p.m_tree->isExpanded(at(b)),
+			       "and clearing it gives back the fold that was there");
+			check(p.m_tree->isExpanded(at(a)),
+			       "while the folder that was open is open again");
+		}
+	}
+
+	section("the three sweeps that were a judgement, and are not now");
+	{
+		// `open_reorganizer`, `undo_reorganize` and `show_mirror_tabs` each
+		// expanded everything on the grounds that a proposal or an import is
+		// something you want to see whole. That is true of the thing they
+		// made and not of the rest of the tree, which is the same objection
+		// the other five answered.
+		main_window p(&factory, &policy, &filter);
+		if (p.layout()) p.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+		p.setMinimumSize(0, 0);
+		p.resize(360, 800);
+		p.show();
+		spin(150);
+
+		node *keep = p.m_model->add_folder(nullptr, "folded by hand");
+		node *kid  = p.m_model->add_tab(keep, "inside", "https://in.example/");
+		node *outer = p.m_model->add_folder(nullptr, "outer");
+		node *inner = p.m_model->add_folder(outer, "inner");
+		check(kid && inner, "a folder to leave alone and a nested one to reveal");
+
+		auto at = [&](node *n) {
+			return p.m_proxy->mapFromSource(p.m_model->index_for_node(n));
+		};
+		p.m_tree->expandAll();
+		p.m_tree->setExpanded(at(keep), false);
+		p.m_tree->setExpanded(at(outer), false);
+		check(!p.m_tree->isExpanded(at(keep)) &&
+		          !p.m_tree->isExpanded(at(outer)),
+		       "both folded to begin with");
+
+		// **`reveal_ids` is what the reorganizer uses now**, given the ids of
+		// the folders it invented. The nested one is the case that matters: a
+		// new folder inside a shut folder has to become visible, which needs
+		// the ancestors opened outermost first.
+		p.m_tree->reveal_ids({ inner->id });
+		check(p.m_tree->isExpanded(at(outer)),
+		       "revealing a nested folder opens the folder above it");
+		check(p.m_tree->isExpanded(at(inner)),
+		       "and the folder itself, so its contents show");
+		check(!p.m_tree->isExpanded(at(keep)),
+		       "while the unrelated fold is left closed");
+
+		// An id nothing knows is not an error: a reorganize whose folder was
+		// removed before the reveal should not take the sweep with it.
+		p.m_tree->reveal_ids({ QStringLiteral("no-such-id") });
+		check(!p.m_tree->isExpanded(at(keep)),
+		       "an unknown id reveals nothing and expands nothing");
+	}
+
+	section("an undo keeps the folds the reset already carried");
+	{
+		// **`restore_snapshot` wraps itself in beginResetModel/endResetModel**,
+		// and the view's remember/reopen pair is connected to exactly that --
+		// so the folds survive the restore on their own, and the `expandAll`
+		// that followed was throwing away the preservation that had just
+		// happened.
+		main_window p(&factory, &policy, &filter);
+		if (p.layout()) p.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+		p.setMinimumSize(0, 0);
+		p.resize(360, 800);
+		p.show();
+		spin(150);
+
+		node *a = p.m_model->add_folder(nullptr, "stays open");
+		p.m_model->add_tab(a, "one", "https://1.example/");
+		node *b = p.m_model->add_folder(nullptr, "folded by hand");
+		p.m_model->add_tab(b, "two", "https://2.example/");
+
+		auto at = [&](node *n) {
+			return p.m_proxy->mapFromSource(p.m_model->index_for_node(n));
+		};
+		p.m_tree->expandAll();
+		p.m_tree->setExpanded(at(b), false);
+
+		// Snapshot, change the tree, then revert -- the real sequence, since
+		// an undo with nothing to undo returns immediately and would make
+		// this pass without restoring anything.
+		p.m_undo = p.m_model->take_snapshot();
+		p.m_undo_action->setEnabled(true);
+		node *extra = p.m_model->add_folder(nullptr, "added after the snapshot");
+		check(extra, "a folder added after the snapshot");
+		spin(60);
+
+		// **Through the menu action, which is how a person undoes.** The
+		// action is what the shortcut and the View menu both fire, so this
+		// exercises the wiring as well as the function.
+		check(p.m_undo_action && p.m_undo_action->isEnabled(),
+		       "Undo is offered after a reorganization");
+		p.m_undo_action->trigger();
+		spin(150);
+		node *b_again = p.m_model->node_by_id(b->id);
+		node *a_again = p.m_model->node_by_id(a->id);
+		check(b_again && a_again, "the snapshot's folders are back");
+		check(a_again && p.m_tree->isExpanded(at(a_again)),
+		       "the folder that was open is still open after the undo");
+		check(b_again && !p.m_tree->isExpanded(at(b_again)),
+		       "and the one that was folded is still folded");
+	}
+
+	section("an imported session reveals itself and nothing else");
+	{
+		main_window p(&factory, &policy, &filter);
+		if (p.layout()) p.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+		p.setMinimumSize(0, 0);
+		p.resize(360, 800);
+		p.show();
+		spin(150);
+
+		node *mine = p.m_model->add_folder(nullptr, "folded by hand");
+		p.m_model->add_tab(mine, "my tab", "https://mine.example/");
+		auto at = [&](node *n) {
+			return p.m_proxy->mapFromSource(p.m_model->index_for_node(n));
+		};
+		p.m_tree->expandAll();
+		p.m_tree->setExpanded(at(mine), false);
+		check(!p.m_tree->isExpanded(at(mine)), "one folder folded");
+
+		QList<session_import::imported_tab> tabs;
+		session_import::imported_tab t;
+		t.title = "from firefox";
+		t.url   = "https://ff.example/";
+		tabs << t;
+		// `from_poll = false` is the menu click, which is the path that used
+		// to expand everything; the poll path already left the tree alone.
+		p.show_mirror_tabs("firefox", "Firefox", tabs, /*from_poll=*/false);
+		spin(150);
+
+		check(!p.m_tree->isExpanded(at(mine)),
+		       "importing a session leaves the folded folder folded");
+		// And the mirror itself is visible, which is what the click asked for.
+		node *mirror = nullptr;
+		for (node *c : p.m_model->root()->children)
+			if (c->is_folder() && c->title.startsWith("Firefox"))
+				mirror = c;
+		check(mirror, "the mirror folder is there");
+		check(mirror && p.m_tree->isExpanded(at(mirror)),
+		       "and it is open, so the imported tabs show");
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

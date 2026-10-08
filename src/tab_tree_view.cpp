@@ -203,16 +203,11 @@ void tab_tree_view::update_empty_state() {
 // the model shut it: deleting one sub-tab folded the parent it was under, which
 // is where this was found. `isExpanded` is already false for a row with no
 // children, so asking about folders bought nothing even before that.
-void tab_tree_view::remember_open_folders() {
-	m_open_ids.clear();
-	m_current_id.clear();
+QStringList tab_tree_view::expanded_ids() const {
+	QStringList out;
 	tab_tree_model *src = source_model();
 	if (!src)
-		return;
-
-	if (node *cur = node_at_index(currentIndex()))
-		m_current_id = cur->id;
-
+		return out;
 	QList<node *> stack;
 	for (node *c : src->root()->children)
 		stack << c;
@@ -221,13 +216,14 @@ void tab_tree_view::remember_open_folders() {
 		if (!n)
 			continue;
 		if (isExpanded(view_index(n)))
-			m_open_ids << n->id;
+			out << n->id;
 		for (node *c : n->children)
 			stack << c;
 	}
+	return out;
 }
 
-void tab_tree_view::reopen_folders() {
+void tab_tree_view::expand_ids(const QStringList &ids) {
 	tab_tree_model *src = source_model();
 	if (!src)
 		return;
@@ -239,7 +235,7 @@ void tab_tree_view::reopen_folders() {
 	QSet<QString> done;
 	while (progress) {
 		progress = false;
-		for (const QString &id : std::as_const(m_open_ids)) {
+		for (const QString &id : ids) {
 			if (done.contains(id))
 				continue;
 			node *n = src->node_by_id(id);
@@ -255,6 +251,76 @@ void tab_tree_view::reopen_folders() {
 			}
 		}
 	}
+}
+
+// **Held once per search, not once per keystroke.** `on_search_changed` fires
+// on every character, and saving again each time would record the
+// everything-expanded state the previous character produced -- so the first
+// keystroke's save is the only one that holds anything worth giving back.
+void tab_tree_view::hold_folds_for_search() {
+	if (m_folds_held)
+		return;
+	m_pre_search_ids = expanded_ids();
+	m_folds_held = true;
+}
+
+void tab_tree_view::release_folds_after_search() {
+	if (!m_folds_held)
+		return;
+	m_folds_held = false;
+	// **Collapse first, then reopen what was open.** Without the collapse this
+	// could only ever add folders: the search left everything expanded, so
+	// re-expanding a saved subset would leave every other folder open too and
+	// the restore would look like it had done nothing. The same ordering
+	// `restore_view_state` uses, and for the same reason.
+	collapseAll();
+	expand_ids(m_pre_search_ids);
+	m_pre_search_ids.clear();
+	reveal_current();
+}
+
+void tab_tree_view::reveal_ids(const QStringList &ids) {
+	tab_tree_model *src = source_model();
+	if (!src)
+		return;
+	for (const QString &id : ids) {
+		node *n = src->node_by_id(id);
+		if (!n)
+			continue;
+		const QModelIndex idx = view_index(n);
+		if (!idx.isValid())
+			continue;
+		// Ancestors outermost first, for the reason `show_node` records:
+		// `setExpanded` on a row inside a folder that is still shut does
+		// nothing, so working inwards leaves the deeper ones closed.
+		QList<QModelIndex> chain;
+		for (QModelIndex p = idx.parent(); p.isValid(); p = p.parent())
+			chain.prepend(p);
+		for (const QModelIndex &p : chain)
+			setExpanded(p, true);
+		// And the row itself, because what is being revealed here is a folder
+		// and its contents are the thing worth seeing.
+		setExpanded(idx, true);
+	}
+}
+
+void tab_tree_view::remember_open_folders() {
+	m_open_ids.clear();
+	m_current_id.clear();
+	tab_tree_model *src = source_model();
+	if (!src)
+		return;
+
+	if (node *cur = node_at_index(currentIndex()))
+		m_current_id = cur->id;
+	m_open_ids = expanded_ids();
+}
+
+void tab_tree_view::reopen_folders() {
+	tab_tree_model *src = source_model();
+	if (!src)
+		return;
+	expand_ids(m_open_ids);
 	// **`m_current_id` is what was current before the rebuild, not what is
 	// current now.** It is captured by `remember_open_folders` and cleared on
 	// every call, so it exists to carry the selection ACROSS a rebuild --

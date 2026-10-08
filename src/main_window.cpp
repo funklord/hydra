@@ -2154,7 +2154,13 @@ void main_window::open_reorganizer() {
 		before.invented_folders = dlg.invented_folders();
 		m_undo = before;
 		m_undo_action->setEnabled(true);
-		m_tree->expandAll();
+		// **The folders it invented, not the whole tree.** Expanding
+		// everything did show the result, and took every fold the person had
+		// made with it. `invented_folders` is already the exact set worth
+		// looking at -- it is computed here for Undo -- so revealing those
+		// and the folders above them answers "what did it just do" without
+		// answering "what did you have closed".
+		m_tree->reveal_ids(before.invented_folders);
 		mark_dirty();
 	}
 }
@@ -2556,7 +2562,14 @@ void main_window::undo_reorganize() {
 	const int n = m_model->restore_snapshot(m_undo);
 	m_undo = tree_snapshot{};        // one level, as sec 9.4 specifies
 	m_undo_action->setEnabled(false);
-	m_tree->expandAll();
+	// **Nothing is expanded here, and expanding was undoing the preservation
+	// that already exists.** `restore_snapshot` wraps itself in
+	// `beginResetModel`/`endResetModel`, and the view's
+	// `remember_open_folders`/`reopen_folders` are connected to exactly that
+	// pair -- so the folds are carried across the restore already, and the
+	// sweep threw them away a moment later. An undo also returns the tree to
+	// a shape the person had just been looking at, which is the one case
+	// needing no reveal at all.
 	mark_dirty();
 	m_status->showMessage(QString("Reverted the reorganization (%1 nodes).").arg(n),
 	                       5000);
@@ -6199,7 +6212,10 @@ node *main_window::open_url(const QUrl &url) {
 	node *t = m_model->add_tab(nullptr, QString(), url.toString());
 	if (!t)
 		return nullptr;
-	m_tree->expandAll();
+	// **No `expandAll` here, and there never needed to be one.** `open_node`
+	// ends in `show_node`, which expands the new row's ancestors and nothing
+	// else -- so the sweep was collateral damage with no purpose, and what it
+	// destroyed was every fold the person had made.
 	open_node(t);
 	update_address(url.toString(), /*force=*/true);
 	return t;
@@ -6209,7 +6225,8 @@ void main_window::new_tab() {
 	node *t = m_model->add_tab(selected_parent(), QString(), QString());
 	if (!t)
 		return;
-	m_tree->expandAll();
+	// As in `open_url`: `open_node` reveals the row through `show_node`, so
+	// expanding the whole tree only unfolded what somebody had folded.
 	open_node(t);
 	// The address bar, because an empty tab is a question about where to go.
 	if (m_address) {
@@ -6220,14 +6237,16 @@ void main_window::new_tab() {
 
 void main_window::new_folder() {
 	if (node *f = m_model->add_folder(selected_parent(), QString())) {
-		m_tree->expandAll();
+		// **`show_node` rather than `expandAll` and then a hand-rolled
+		// reveal.** It expands the new folder's ancestors, makes it current
+		// and scrolls to it -- the three things this did in four lines, minus
+		// the part that unfolded the rest of the tree.
+		//
+		// A folder gets no `open_node`, having no page, which is why this one
+		// has to reveal itself where the two above do not.
+		m_tree->show_node(f);
 		// Named on the spot: a folder called "New folder" is one somebody has
 		// to come back and rename, and they will not.
-		const QModelIndex at = m_proxy->mapFromSource(m_model->index_for_node(f));
-		if (at.isValid()) {
-			m_tree->setCurrentIndex(at);
-			m_tree->scrollTo(at);
-		}
 		bool ok = false;
 		const QString name = QInputDialog::getText(
 		    this, "New folder", "Name:", QLineEdit::Normal, f->title, &ok);
@@ -6315,15 +6334,28 @@ void main_window::show_mirror_tabs(const QString &source, const QString &label,
 		n->history   = t.history;
 		nodes << n;
 	}
-	m_model->replace_mirror(source,
-	                         QString("%1 (%2 tabs)").arg(label).arg(nodes.size()),
-	                         nodes);
-	// Expanding the whole tree is right for a menu click and wrong for a
-	// background refresh: it would fold the user's folders open again every
-	// time Firefox opened a tab. The row signals already leave everything else
-	// alone, so a poll touches nothing but the mirror.
-	if (!from_poll)
-		m_tree->expandAll();
+	node *mirror = m_model->replace_mirror(
+	  source, QString("%1 (%2 tabs)").arg(label).arg(nodes.size()), nodes);
+	// **This already had half the answer and it is worth saying which half.**
+	// The comment here read: expanding the whole tree "is right for a menu
+	// click and wrong for a background refresh: it would fold the user's
+	// folders open again every time Firefox opened a tab." The second half was
+	// right and the first was not -- a menu click asking to see an imported
+	// session is not asking to unfold everything else either. It was the same
+	// objection, applied to one of the two callers.
+	//
+	// So the menu click reveals the mirror folder and its contents, which is
+	// what somebody clicked for, and the poll still touches nothing.
+	if (!from_poll && mirror) {
+		// **`reveal_ids` and not `show_node`, and a test is what told the
+		// difference apart.** `show_node` opens a row's ANCESTORS and makes it
+		// current, which is right for revealing a tab -- the tab itself has
+		// nothing to open. A mirror folder is the opposite case: it sits at the
+		// root, so it has no ancestors, and what somebody clicked for is the
+		// tabs INSIDE it. `show_node` alone left it closed and showed nothing.
+		m_tree->reveal_ids({ mirror->id });
+		m_tree->show_node(mirror);
+	}
 	else
 		m_status->showMessage(
 		    QString("%1 now has %2 tabs open.").arg(label).arg(nodes.size()), 4000);
@@ -6336,13 +6368,29 @@ void main_window::on_sort_mode_changed(int combo_index) {
 		                          SM::newest_created, SM::recently_seen };
 	if (combo_index >= 0 && combo_index < 4)
 		m_proxy->set_sort_mode(modes[combo_index]);
-	m_tree->expandAll();
+	// **Nothing is expanded here, and nothing needs to be.** `set_sort_mode`
+	// only changes the sort role and re-sorts: it filters nothing, resets
+	// nothing, and `QTreeView` carries expansion across a sort on its own
+	// persistent indexes. So this swept the folds away in exchange for
+	// nothing at all -- checked in `tree_sort_proxy` rather than assumed,
+	// because "the view probably needs it" is how the line got here.
 }
 
 void main_window::on_search_changed(const QString &text) {
+	// **Held BEFORE the proxy is told**, because the hold reads which rows are
+	// expanded and a filter that has already hidden them answers for a
+	// different tree.
+	if (!text.trimmed().isEmpty())
+		m_tree->hold_folds_for_search();
 	m_proxy->set_search_text(text);
+	// Expanding to show matches is right; never putting it back was not. The
+	// hold above is taken once per search, so every later keystroke keeps the
+	// state the first one saved rather than recording the expanded tree the
+	// previous keystroke produced.
 	if (!text.trimmed().isEmpty())
 		m_tree->expandAll();
+	else
+		m_tree->release_folds_after_search();
 	// The page area's hint names the tree, so it has to be told when the tree
 	// stops showing one.
 	refresh_placeholder_text();

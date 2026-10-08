@@ -147,6 +147,21 @@ signals:
 	// updated and its next activation loading from it.
 	void navigate_requested(node *n);
 
+public:
+	// **Hold the folds across a search, and give them back afterwards.**
+	// Searching expands everything so matches are visible, which used to be
+	// the end of whatever the person had folded: nothing put it back when the
+	// box emptied. Holding is idempotent, so every keystroke of a search does
+	// not overwrite the state the first one saved.
+	void hold_folds_for_search();
+	void release_folds_after_search();
+
+	// **Reveal these rows and the folders above them, and nothing else.**
+	// `show_node` is the single-row version and also moves the selection;
+	// this is for the operations that create several rows at once and want
+	// them visible without unfolding the rest of the tree.
+	void reveal_ids(const QStringList &ids);
+
 protected:
 	// Where the file-manager gestures are actually decided.
 	void dragMoveEvent(QDragMoveEvent *event) override;
@@ -157,12 +172,23 @@ private:
 
 	void remember_open_folders();
 	void reopen_folders();
+	// The walk and the re-expansion, each written once. `remember_open_folders`
+	// and the search hold below are two callers of the same pair, which is why
+	// the parents-before-children retry lives here rather than in both.
+	QStringList expanded_ids() const;
+	void expand_ids(const QStringList &ids);
 	QModelIndex view_index(node *n) const;
 	node *node_at_index(const QModelIndex &idx) const;
 	QList<node *> selected_nodes() const;
 
 	QLabel     *m_empty = nullptr;
 	QStringList m_open_ids;
+	// **The folds as they were before a search, kept apart from
+	// `m_open_ids`.** That one is overwritten by every model reset, and a
+	// search outlives a reset -- so sharing it would lose what the person had
+	// folded the moment anything rebuilt the tree.
+	QStringList m_pre_search_ids;
+	bool        m_folds_held = false;
 	QString     m_current_id;
 
 	// Whether a drop *between* rows would mean anything right now.

@@ -35113,6 +35113,149 @@ Settings -> Tabs, beside the number it shares a budget with, and the wording
 there says what it costs. Recorded here because the next person to read the
 privacy defaults should find the reasoning rather than infer it.
 
+## Eight operations unfolded the whole tree, and four had no reason to
+
+Reported by the copyright holder 2026-10-08: making a new tab expands
+folders and tabs that were folded.
+
+`grep -n 'expandAll' src/main_window.cpp` found eight call sites. Read one at
+a time, they divide cleanly:
+
+    new_tab, open_url        nothing -- `open_node` ends in `show_node`
+    new_folder               a reveal, written out in four lines
+    on_sort_mode_changed     nothing at all
+    on_search_changed        show the matches, which is right
+    reorganizer, undo, mirror  present a whole proposal, left alone
+    restore_view_state       the first-run branch, correct
+
+**Four were collateral damage with no purpose.** `open_node` already finishes
+with `show_node`, which expands the new row's ancestors and nothing else -- so
+`new_tab` and `open_url` swept the tree for an effect they already had.
+`new_folder` wanted a reveal and hand-rolled it after the sweep;
+`show_node` is that reveal, and it is the function the other two were
+relying on.
+
+**The sort one is the instructive case, because the reason was checked rather
+than assumed.** `tree_sort_proxy::set_sort_mode` changes the sort role and
+calls `sort()`; `filterAcceptsRow` returns true whenever the search is empty.
+No filtering, no model reset, and `QTreeView` carries expansion across a sort
+on its own persistent indexes. So there was nothing for the expansion to be
+for -- and "the view probably needs it after a re-sort" is exactly how the
+line will have arrived.
+
+### The search keeps expanding, and now gives the folds back
+
+Expanding to show matches is correct; never restoring was not. One search was
+the end of whatever had been folded, permanently.
+
+`tab_tree_view` grew `hold_folds_for_search` / `release_folds_after_search`,
+and three details each of which would have broken it:
+
+- **Held before the proxy is told.** The hold reads which rows are expanded,
+  and a filter that has already hidden them is answering about a different
+  tree.
+- **Held once per search, not per keystroke.** `on_search_changed` fires on
+  every character; saving again each time would record the fully-expanded
+  state the previous character produced, which is the state being replaced.
+- **Collapse, then reopen.** Without the collapse it could only ever add
+  folders -- the search left everything open, so re-expanding a saved subset
+  leaves the rest open and the restore looks like it did nothing. The same
+  ordering `restore_view_state` already uses, and the same reason.
+
+**And the walk is shared now.** `remember_open_folders`, `reopen_folders` and
+the two above are four callers of one `expanded_ids()` and one
+`expand_ids()`, where the parents-before-children retry loop had been written
+twice.
+
+### The sabotage caught a second vacuous fixture, and a probe found why
+
+Three guards sabotaged. Two spoke: restoring `expandAll` to `new_tab` turned
+three checks red, and restoring it to the sort handler turned one.
+
+**Removing the search restore produced no failure at all.** The fixture had a
+match in one folder only -- so the search *filtered the folded folder away*,
+and `isExpanded` on an index the proxy no longer holds is false. The folder
+was collapsed before, during and after; the assertion was reading a constant.
+
+What settled it was a probe printing the state at each step rather than
+another theory:
+
+    [probe] before search: a=1 b=0
+    [probe] during search: a=1 b=0
+    [probe] after clear:   a=1 b=0
+
+`b=0` *during* the search is the line that gives it away: the expansion never
+happened, so there was nothing to restore. Both folders carry a match now,
+neither is filtered, and the sabotage turns
+`and clearing it gives back the fold that was there` red.
+
+**That is the second fixture today that could not reach what it asserted**,
+after the preloader's LRU check, and both were found the same way -- by
+reading WHICH checks went red rather than that some did. The pattern is worth
+more than either instance: *a guard whose sabotage passes is a guard the
+fixture cannot see*, and in both cases the assertion was true for a reason
+that had nothing to do with the code under test.
+
+### The last three, and each needed a different answer
+
+~~`open_reorganizer`, `undo_reorganize` and `show_mirror_tabs` still expand
+everything.~~ **Done on the holder's instruction the same day**, and the
+interesting part is that none of the three wanted the search's hold:
+
+- **`open_reorganizer` reveals what it made.** `invented_folders` already
+  held the ids of the folders the reorganization created -- computed for
+  Undo -- so `reveal_ids` on those answers *what did it just do* without
+  answering *what did you have closed*.
+- **`undo_reorganize` needed a deletion.** `restore_snapshot` wraps itself in
+  `beginResetModel`/`endResetModel`, and the view's
+  `remember_open_folders`/`reopen_folders` are connected to exactly that pair
+  -- so the folds were already carried across the restore and the sweep threw
+  that away a moment later. **It was fighting its own machinery.** An undo
+  also returns the tree to a shape the person was just looking at, which is
+  the one case needing no reveal at all.
+- **`show_mirror_tabs` already contained half the argument.** Its comment
+  said expanding the whole tree "is right for a menu click and wrong for a
+  background refresh: it would fold the user's folders open again every time
+  Firefox opened a tab." The second half was right; the first was the same
+  objection left unapplied to the other caller.
+
+`reveal_ids` is the new primitive: expand these rows and the folders above
+them, and nothing else. It is `show_node` for several rows and without the
+selection move.
+
+### `show_node` reveals a tab; a folder needs its own row opened
+
+A test caught this and the code was wrong, not the test. The mirror fix first
+read `show_node(mirror)`, which failed -- `show_node` opens a row's
+ANCESTORS, which is everything a tab needs, because a tab has no contents to
+show. **A mirror folder sits at the root**: no ancestors, so nothing was
+opened, and what somebody clicked for -- the tabs inside it -- stayed hidden.
+
+That is why `reveal_ids` expands the row itself as well, and sabotaging each
+half proves which assertion holds which: dropping the ancestors turns
+*revealing a nested folder opens the folder above it* red, and dropping the
+row turns *and it is open, so the imported tabs show* red.
+
+### A sabotage that silently landed in the wrong place
+
+The undo guard looked unproven: inserting `expandAll` after
+`m_undo_action->setEnabled(false)` produced no failure at all. The assertion
+was sound -- a probe confirmed the restored nodes had valid proxy indices and
+the right fold states -- so the suspicion fell on the instrument, correctly.
+
+**Two faults at once.** That line occurs twice, the other in the menu
+builder, so a replace of the first occurrence patched a harmless place. And
+the sabotage was written as `python3 -c "..."` with a tab inside a
+double-quoted shell string, which does not survive -- which is also why the
+reorganizer sabotage in the same run died on its assertion and ran against
+unmodified code, reporting a clean pass for a sabotage that never happened.
+
+Re-done through a heredoc with a quoted delimiter and an anchor unique to the
+function, the probe reads `b_again expanded=1` and the check goes red. **A
+sabotage that cannot be shown to have applied is worth nothing**, which this
+tree already knew for mechanical edits -- `evidence.md` says to assert on the
+substitution -- and the same rule reaches the tool doing the sabotaging.
+
 ### What is left
 
 ~~Every `trusted-*` scriptlet, for the reason recorded when the catalog was
