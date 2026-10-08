@@ -36076,19 +36076,41 @@ account and false of the one that runs the browser:
 
     ps -o pid=,ppid=,user=,etime=,args= -C dbus-daemon
 
-Four session buses owned by `funk`, each parented to init, each carrying
-the `--fork --print-pid --print-address --session` signature libdbus
-autolaunch leaves behind, at ages 1h47m, 21m34s, 21m26s and **59
-seconds**. A desktop login starts one; four at staggered intervals is not
-that shape. Stated as an observation rather than a diagnosis -- the
-signature and the parentage are facts, and that autolaunch rather than
-something else produced them is the probable reading.
+Nine session buses owned by `funk`, every one parented to init and every
+one carrying the `--fork --print-pid --print-address --session` signature
+libdbus autolaunch leaves behind, against twelve `dbus-daemon` processes
+in total and **zero owned by this account**. Ages in seconds, which is the
+unit that matters:
 
-So the gates are not housekeeping against a hypothetical. **What makes the
-count useless as a test is not that nothing leaks, it is that the leak and
-the fix live in different accounts** -- and that is a fourth reason to
-assert the construction rather than count the result, after an unset
-`DISPLAY`, an inherited `PWD`, and Qt Gui's own theme path.
+    412 423 430 436 441        five inside a 29-second window
+    1696                       isolated
+    2922 2931                  a pair, 9 seconds apart
+    8071                       isolated
+
+**They cluster; they do not drip, and the first reading of this said they
+did.** It reported four "at staggered intervals", which under-read the
+very pair it was quoting -- 2922 and 2931 are nine seconds apart, not
+staggered -- and read in `etime` rather than seconds, where `21m26s` and
+`21m34s` look like separate events. A cluster of five inside half a minute
+is several processes starting at once, so it points at **what was
+running**: a suite with workers, a parallel build, something that spawns.
+A drip points nowhere. The pids agree -- 13600, 15885, 19450, 22173, 26367
+in age order, some 2,500 pids apart each -- so they were started in
+sequence on a machine creating processes fast, not retained from one
+login.
+
+Stated as an observation rather than a diagnosis: the signature, the
+parentage and the clustering are facts, and that autolaunch rather than
+something else produced them is the probable reading. A desktop login
+starts one.
+
+So the gates are not housekeeping against a hypothetical. And the sharper
+form of "a count cannot confirm the fix" is not that the count cannot
+move: **it can move for reasons none of your gates control.** That one
+sentence replaces the three separate reasons recorded above it -- an unset
+`DISPLAY`, an inherited `PWD`, Qt Gui's own theme path -- because each is
+an instance of it. Here the reason is that the leak and the fix live in
+different accounts.
 
 Nothing of this session's own leaked: `dbus-run-session` reaped its bus,
 and no `dbus-daemon` on the machine is owned by this account.
