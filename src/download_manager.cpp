@@ -171,6 +171,10 @@ void download_manager::pump() {
 		sweep();
 	} while (m_pump_again);
 	m_pumping = false;
+	if (m_history_dirty) {
+		m_history_dirty = false;
+		persist_history();
+	}
 }
 
 void download_manager::sweep() {
@@ -199,6 +203,10 @@ void download_manager::sweep() {
 			m_live.remove(j.id);
 			j.status = download_state::failed;
 			j.error  = error;
+			// Terminal, so it belongs in the history like any other
+			// finish -- see `m_history_dirty`, which `pump()` writes once
+			// after the loop rather than once per refusal.
+			m_history_dirty = true;
 			emit changed();
 			continue;
 		}

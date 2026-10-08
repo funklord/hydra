@@ -36569,3 +36569,76 @@ was not -- the artifact they run, the scope of the search, the branch the
 fixture reaches. **A fix is a claim about what somebody will experience,
 and every one of those three is a way for that claim to be false while
 every green check stays green.**
+
+## Four of five terminal transitions wrote the download history
+
+Reported by the copyright holder 2026-10-08: download history disappears
+from the downloads window.
+
+**The dominant cause is not a defect in this code, and has to be said
+first.** Persistence landed on 2026-09-18 in `0f22a1d`; the package they
+were running until an hour ago was built 2026-08-05, and the last change
+to `download_manager.h` before that date is 2026-07-30. So on the binary
+in use, the feature did not exist: the list lived in memory and went on
+every exit. That is the behaviour being described, and installing the
+current build is what answers it.
+
+**What the report did find is a real gap in the current code.** A job
+reaches a terminal state five ways. Four call `persist_history()`
+directly -- `on_finished` for done and failed, `cancel` for both of its
+branches, `forget` and `forget_finished`. The fifth is a source refusing
+to start, inside `pump`'s sweep: it set the row to `failed`, emitted
+`changed()` so the window showed it, and never wrote. **The row was
+visible and then gone on the next start**, which is exactly the shape of
+"history disappears" that no test of the codec can see.
+
+Flagged rather than written on the spot, because the refusal is inside a
+loop and writing there writes once per refusal. `pump()` already
+coalesces re-entrant sweeps for the same reason, so `m_history_dirty` is
+set in the sweep and written once after it.
+
+### The existing test proved the codec and not the trigger
+
+*a finished download is kept across a restart* has been green since the
+feature landed, and it cannot fail for this:
+
+    fs->finish(id, true);                     // the job finishes
+    dm.set_history_path(hist);                // path set AFTER
+    check(dm.save_history(hist), ...);        // and called BY HAND
+
+The path arrives after the only event that would have triggered a write,
+and the save is explicit -- so a manager whose automatic write never
+fired at all passes it. And the automatic write is the only one the shell
+has: **nothing in `main_window` ever calls `save_history`.** A correct
+function, and no evidence the feature was wired.
+
+The new section sets the path first and never calls `save_history`, so
+the file existing *is* the trigger having worked, and then covers the
+fifth transition:
+
+    a finish writes the history with nobody asking              ok
+    and the row it wrote by itself reads back                   ok
+    a source refusing to start leaves a terminal row            ok
+    and that row is written to the history as well              ok
+    a download that never started comes back, as failed         ok
+
+Sabotaged by removing the flag: the last two redden and the first three
+stay green, which is what separates the trigger from the transition.
+
+### One theory disproved rather than left open
+
+`state_name()` returns an empty string for anything that is not done,
+failed or cancelled, and `state_from_name()` maps an unknown name to
+`queued`, which the loader rejects -- so a state that round-tripped
+through those two would vanish silently, and `seeding` looked like
+exactly that case. It is not: `is_terminal` is `done || failed ||
+cancelled`, `save_history` writes only terminal rows, and a seeding
+torrent is therefore never written. The empty-string branch is
+unreachable from the save path. Recorded because the next person will
+read those two functions and have the same idea.
+
+**And what is not established**: whether the holder saw this on the
+current build or on the August one. The gap above is real either way and
+is fixed, but if history still goes missing on a build that contains
+both, the cause is something else and this entry should not be read as
+having closed it.

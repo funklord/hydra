@@ -55,7 +55,17 @@ public:
 	QString display_name() const override { return "Fake"; }
 	source_capabilities capabilities() const override { return {}; }
 	bool accepts(const QUrl &, QString *) const override { return true; }
-	bool start(const download_request &, QString *) override { return true; }
+	// Defaults to succeeding, so every existing case is unaffected. A source
+	// refusing to start is the fifth way a job reaches a terminal state, and
+	// the only one that happens inside `pump`'s sweep.
+	bool refuse_start = false;
+	bool start(const download_request &, QString *error) override {
+		if (!refuse_start)
+			return true;
+		if (error)
+			*error = QStringLiteral("the fake refused to start");
+		return false;
+	}
 	void cancel(int) override {}
 	void finish(int job_id, bool ok) { emit finished(job_id, ok, QString()); }
 };
@@ -2108,6 +2118,63 @@ int main(int argc, char **argv) {
 		         dm2.jobs().first().url == QUrl("http://x/keep.bin") &&
 		         dm2.jobs().first().terminal(),
 		      "with its url and its terminal status");
+		QFile::remove(hist);
+	}
+
+	section("the automatic write fires, and a refused start is history too");
+	{
+		// **The section above proves the codec and not the trigger.** It sets
+		// the history path AFTER the job has finished and then calls
+		// `save_history` by hand, so a manager whose automatic write never
+		// fired at all would pass it -- and that automatic write is the only
+		// one the shell relies on, because nothing in `main_window` ever calls
+		// `save_history`. Here the path is set FIRST and nothing calls
+		// `save_history`, so the file existing is the trigger having worked.
+		const QString hist = QDir::temp().filePath("hydra-dl-auto.json");
+		QFile::remove(hist);
+		{
+			download_manager dm;
+			dm.set_history_path(hist);
+			auto *fs = new fake_download_source;
+			dm.add_source(fs);
+			QString err;
+			const int id = dm.enqueue(QUrl("http://x/auto.bin"), "n", &err);
+			fs->finish(id, true);
+			check(QFile::exists(hist),
+			       "a finish writes the history with nobody asking");
+		}
+		{
+			download_manager dm2;
+			check(dm2.load_history(hist) && dm2.jobs().size() == 1 &&
+			         dm2.jobs().first().url == QUrl("http://x/auto.bin"),
+			       "and the row it wrote by itself reads back");
+		}
+		QFile::remove(hist);
+
+		// **The fifth transition, which did not write.** Four of the five
+		// ways a job becomes terminal call `persist_history` directly; a
+		// source refusing to start happens inside `pump`'s sweep, set the
+		// row to failed, emitted `changed()` so the window showed it, and
+		// never wrote. The row was visible and then gone on the next start,
+		// which is the shape of "history disappears" that survives every
+		// test of the codec.
+		{
+			download_manager dm;
+			dm.set_history_path(hist);
+			auto *fs = new fake_download_source;
+			fs->refuse_start = true;
+			dm.add_source(fs);
+			QString err;
+			dm.enqueue(QUrl("http://x/refused.bin"), "n", &err);
+			check(dm.jobs().size() == 1 && dm.jobs().first().terminal(),
+			       "a source refusing to start leaves a terminal row");
+			check(QFile::exists(hist),
+			       "and that row is written to the history as well");
+		}
+		download_manager dm3;
+		check(dm3.load_history(hist) && dm3.jobs().size() == 1 &&
+		         dm3.jobs().first().status == download_state::failed,
+		       "a download that never started comes back, as failed");
 		QFile::remove(hist);
 	}
 

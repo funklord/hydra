@@ -156,5 +156,12 @@ private:
 	QString m_history_path;
 	bool    m_pumping    = false;
 	bool    m_pump_again = false;
+	// **A terminal state reached inside `sweep()` still has to be written.**
+	// Four of the five transitions into a terminal state call
+	// `persist_history` directly; the fifth is a source refusing to start,
+	// which happens inside the sweep loop, so writing there would write once
+	// per refusal. Flagged instead and written once by `pump()`, which
+	// already coalesces re-entrant sweeps for the same reason.
+	bool    m_history_dirty = false;
 	QString m_dir;
 };
