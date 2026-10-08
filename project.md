@@ -11096,9 +11096,18 @@ the timer half it treated as the expensive half is the cheap one.
 tiers abstain. Measured 2026-08-31:
 
     XDG_CURRENT_DESKTOP=TDE          Trinity, the KDE 3 fork
-    QT_QPA_PLATFORMTHEME             unset -- no Qt 6 platform-theme plugin
+    QT_QPA_PLATFORMTHEME             unset (re-measured 2026-10-08)
     org.freedesktop.portal.Desktop   not provided by any .service file
     gsettings color-scheme           'default', i.e. no preference
+
+**That row said "no Qt 6 platform-theme plugin" until 2026-10-08 and it was
+false.** Both are installed -- `libqgtk3.so` and `libqtlxqt.so` under
+`qt6/plugins/platformthemes/` -- so what abstains here is the variable being
+unset, not the plugin being absent. The distinction is the whole value of
+the correction rather than tidiness: a recorded absence of the plugin is a
+reason not to clear the variable, so the sentence would have stopped the
+next person looking. A present-tense claim about this machine's packages is
+exactly the shape that rots.
 
 `QStyleHints::colorScheme()` returns `Unknown`, the portal cannot be asked at
 all, and with no platform theme Qt hands the program its **default light
@@ -35860,3 +35869,105 @@ gets quoted for guarantees it never made.
 **What is still not covered**, stated so nothing claims it: this says
 nothing about whether uBlock's YouTube rules work on youtube.com. It proves
 the machinery those rules would travel through, which is the half we own.
+
+## Offscreen is not enough: the platform theme opens its own display
+
+Arrived from a claude-guidelines session relaying hembygd's fix (their
+`0d7ac5f`), and **measured here** rather than taken on report, because a
+relayed latent gap is the kind nobody checks.
+
+**The mechanism.** A platform-theme plugin opens a display of its own
+whatever the QPA is, so a run with `QT_QPA_PLATFORMTHEME=gtk3` in the
+environment -- the default on a GTK desktop -- dies under
+`QT_QPA_PLATFORM=offscreen`. Reproduced against `try_scriptlets`:
+
+    QT_QPA_PLATFORM=offscreen                        8 passed, rc=0
+    QT_QPA_PLATFORMTHEME=gtk3 ... offscreen          rc=1, cannot open display
+    QT_QPA_PLATFORMTHEME= ... offscreen              8 passed, rc=0
+      (with gtk3 still exported by the parent)
+
+**Empty rather than unset**, because make cannot unset a variable for a
+child and empty is what Qt reads as "no theme asked for". The third row is
+that distinction checked rather than assumed.
+
+**It is latent here and would be live for a contributor.** Neither
+`QT_QPA_PLATFORMTHEME` nor `XDG_CURRENT_DESKTOP` is exported in the
+environment the gates run in on this machine, so they pass -- and fail on
+GNOME or XFCE with a message naming GTK rather than naming the environment,
+which sends somebody at Qt instead of at one line of a Makefile.
+
+### Six sites, not one, and the `run` target is why it is not an export
+
+The relayed fix was one line in a Makefile. Enumerating what actually sets
+the QPA found **six executing sites**: `TEST_ENV`, `version-check`,
+two in `cli-check`, and `test/live/measure.sh` and `test/live/sweep.sh`.
+A fix to `TEST_ENV` alone would have left four of them inheriting the
+theme, and a grep of build files alone would never have seen the two
+scripts.
+
+**`export QT_QPA_PLATFORMTHEME=` is the shorter fix and is wrong.** An
+`export` directive reaches every recipe, including `run`, which launches
+the browser for a person -- it would strip their desktop's theme. The same
+argument applies inside `sweep.sh`, whose `SWEEP_ONSCREEN` branch wants
+the theme and is deliberately left alone. So it is a named `HEADLESS`
+variable spelled out at each headless invocation, and the reason is
+recorded at the branch rather than only here.
+
+### The controls, and the first one was vacuous
+
+**A suite with no widgets cannot see this fix.** The first control ran
+`test_scriptlets` with `gtk3` exported against the unfixed Makefile and it
+passed, 290 of 290 -- because an offline suite never loads a platform
+theme at all. That is this file's own *name the operation the failure
+occurs in*: the cheap member of the family was cheap because it does less,
+and citing its pass would have proved nothing.
+
+What discriminates is a suite that builds real widgets:
+
+    HEAD's Makefile + gtk3   rc=2   1x cannot open display   never reported
+    with the fix + gtk3      rc=2   0x cannot open display   554 passed, 1 failed
+
+**Both exit 2, which is the trap.** The status alone says the fix changed
+nothing; the run that died never reached a single check, and the run that
+worked reported 554 passes and the one `test_rotation` font pin this tree
+already records as red. A count and an exit code are halves of one result,
+and here the exit code is the half that lies.
+
+The `style` path discriminates on its own status, because `cli-check` runs
+the real binary: rc=2 with `cli-check: an unrecognised option said:
+Gtk-WARNING ... cannot open display` against HEAD's Makefile, rc=0 with
+the fix.
+
+**So the method to re-run is the table, not `make test`.** With the
+variable unset -- which is how it is here -- a full suite run goes green
+with the fix and without it, so citing a green suite as evidence for these
+lines would be the vacuous pass inside the gate doing the citing.
+
+### A second entrance that is nobody's call site
+
+The first line of the gtk3 failure is `qt.qpa.theme.dbus: Session DBus not
+running.`, and the first version of this entry called it the plugin's. It
+is not. `libQt6Gui.so.6` carries `libQt6DBus.so.6` in its own `DT_NEEDED`
+-- a direct link, which `ldd` cannot distinguish from an inherited one --
+imports 143 dbus symbols, and holds the `qt.qpa.theme.dbus` category
+string, which is in neither platform-theme plugin nor in `libQt6DBus`.
+`libQt6Widgets` has no direct dbus link and inherits Gui's. So the code is
+Gui's, and every Qt GUI program links Gui.
+
+**But the path needs a theme requested**, which is the half that keeps the
+claim from over-reading. Measured with `QT_LOGGING_RULES="qt.qpa.theme*=true"`:
+
+    no theme requested   qt.qpa.theme creates "offscreen"; the .dbus
+                         category never fires at all
+    gtk3 requested       qt.qpa.theme.dbus fires immediately after
+                         "Attempting to create platform theme gtk3"
+
+So the trigger is the environment rather than the application: no
+application code is needed, and no bus appears until something asks for a
+theme the QPA did not supply. That is why a bus can appear under a run in a
+tree with no `sessionBus()` call anywhere, and it is a third reason a count
+cannot confirm a gate, after an unset `DISPLAY` and an inherited `PWD`:
+**the count can rise while every call site in the tree is correct.** Not
+ours to fix -- it is Qt's -- and it is the reason the bus gates recorded
+above have to be proven by asserting that a connection was constructed
+rather than by counting what the machine ended up with.

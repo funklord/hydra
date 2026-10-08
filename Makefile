@@ -290,7 +290,22 @@ TEST_RUNTIME = $(TEST_TMP)/runtime-$(shell id -un)
 # a default for users must not quietly stop exercising the paths the low number
 # was finding.
 HYDRA_TEST_LIVE_VIEWS ?= 2
-TEST_ENV = HYDRA_MAX_LIVE_VIEWS=$(HYDRA_TEST_LIVE_VIEWS) QT_QPA_PLATFORM=offscreen HYDRA_SECRET_KIND=hydra-make-test \
+# **Offscreen is not enough on its own.** A platform-theme plugin opens a
+# display of its own whatever the QPA is, so a run with
+# QT_QPA_PLATFORMTHEME=gtk3 in the environment -- the default on a GTK
+# desktop -- dies with "cannot open display" under QT_QPA_PLATFORM=offscreen.
+# Measured with try_scriptlets: 8 passed with the variable unset, rc=1 with
+# it set to gtk3, 8 passed again with it cleared while the parent still
+# exported gtk3. Empty rather than unset, because make cannot unset a
+# variable for a child and empty is what Qt reads as "no theme asked for".
+#
+# **Not an `export` directive, which would be the shorter fix and is wrong**:
+# that reaches every recipe including `run`, which launches the browser for a
+# person, and would strip their desktop's theme. So it is named here and
+# spelled out at each headless invocation -- and the on-screen branch of
+# test/live/sweep.sh is left alone for the same reason.
+HEADLESS = QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME=
+TEST_ENV = HYDRA_MAX_LIVE_VIEWS=$(HYDRA_TEST_LIVE_VIEWS) $(HEADLESS) HYDRA_SECRET_KIND=hydra-make-test \
            QTWEBENGINE_CHROMIUM_FLAGS=--mute-audio \
            TMPDIR=$(CURDIR)/$(TEST_TMP)
 # Appended here rather than passed by `test-sanitize`, so that everything in
@@ -524,7 +539,9 @@ test-sanitize:
 # compiles the whole app and links WebEngine, and they want a real display.
 drivers:
 	@$(MAKE) --no-print-directory -C test -j$(JOBS) all
-	@echo "live drivers built. Run them offscreen: QT_QPA_PLATFORM=offscreen ./$(TESTS_DIR)/try_cookies"
+	@echo "live drivers built. Run one: $(HEADLESS) ./$(TESTS_DIR)/try_cookies"
+	@echo "  (the theme must be cleared too, not just the platform --"
+	@echo "   a theme plugin opens a display whatever the QPA is)"
 	@echo "test/README.md says which need a helper server, KeePassXC or a model."
 
 # Score the recorded model replies against the current gate. No model, no
@@ -620,7 +637,7 @@ version-check:
 		exit 1; \
 	fi; \
 	if [ -x $(BUILD_DIR)/hydra ]; then \
-		said=$$(QT_QPA_PLATFORM=offscreen $(BUILD_DIR)/hydra --version \
+		said=$$($(HEADLESS) $(BUILD_DIR)/hydra --version \
 		         2>/dev/null | sed -n '1s/^hydra //p'); \
 		if [ "$$said" != "$$file" ]; then \
 			echo "version-check: the built program reports '$$said'" >&2; \
@@ -680,7 +697,7 @@ cli-check:
 		echo "           not asked what it says"; \
 	else \
 		for flag in --help -h; do \
-			out=$$(cd "$$dir" && QT_QPA_PLATFORM=offscreen timeout 30 \
+			out=$$(cd "$$dir" && $(HEADLESS) timeout 30 \
 			        ../../$(BUILD_DIR)/hydra $$flag 2>/dev/null); rc=$$?; \
 			if [ $$rc -ne 0 ]; then \
 				echo "cli-check: '$$flag' exited $$rc, not 0" >&2; fail=1; \
@@ -692,7 +709,7 @@ cli-check:
 				        sed -n 1p)" >&2; fail=1;; \
 			esac; \
 		done; \
-		err=$$(cd "$$dir" && QT_QPA_PLATFORM=offscreen timeout 30 \
+		err=$$(cd "$$dir" && $(HEADLESS) timeout 30 \
 		        ../../$(BUILD_DIR)/hydra --hepl 2>&1 >/dev/null); rc=$$?; \
 		if [ $$rc -eq 0 ]; then \
 			echo "cli-check: an unrecognised option exited 0" >&2; fail=1; \

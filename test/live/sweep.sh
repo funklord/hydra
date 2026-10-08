@@ -350,13 +350,19 @@ for d in $drivers; do
 	# it would have gone unnoticed -- the driver that runs rarely is the one
 	# whose shared path belongs to somebody else by the time it runs.
 	# try_send_gate records the audit that found the other twenty-nine.
+	# QT_QPA_PLATFORMTHEME is cleared on the offscreen branch only. A
+	# platform-theme plugin opens a display whatever the QPA is, so a
+	# contributor with QT_QPA_PLATFORMTHEME=gtk3 exported gets "cannot open
+	# display" from an offscreen run -- and the on-screen branch wants their
+	# theme, which is why this is not an export at the top of the file.
 	if [ -n "${SWEEP_ONSCREEN:-}" ]; then
 		HYDRA_TEST_OUT="$OUT/$d.out" HYDRA_SHOTS="$OUT/$d.shots" \
 			HYDRA_TEST_CONFIG="$OUT/$d.config" \
 			timeout "${SWEEP_TIMEOUT:-300}" \
 			$prefix "$BIN/$d" >"$log" 2>&1
 	else
-		QT_QPA_PLATFORM=offscreen HYDRA_TEST_OUT="$OUT/$d.out" \
+		QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= \
+			HYDRA_TEST_OUT="$OUT/$d.out" \
 			HYDRA_SHOTS="$OUT/$d.shots" HYDRA_TEST_CONFIG="$OUT/$d.config" \
 			timeout "${SWEEP_TIMEOUT:-300}" $prefix "$BIN/$d" >"$log" 2>&1
 	fi

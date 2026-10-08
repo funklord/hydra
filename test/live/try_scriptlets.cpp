@@ -22,8 +22,8 @@
 // So the YouTube half is REPORTED rather than asserted, from the real list if
 // one is at hand:
 //
-//   QT_QPA_PLATFORM=offscreen ./test/build-make/try_scriptlets
-//   HYDRA_UBO_LIST=~/filters.txt QT_QPA_PLATFORM=offscreen ./try_scriptlets
+//   QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= ./try_scriptlets
+//   HYDRA_UBO_LIST=~/filters.txt (as above) reads the real list too
 //
 // The page reports by fetching a url the server records, which is
 // `try_filters`' channel and needs no javascript seam in the shell -- the

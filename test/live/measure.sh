@@ -46,7 +46,8 @@ for i in $(seq 1 "$RUNS"); do
 	name="$TAG-run$i"
 	HYDRA_REPLIES="$REPLIES" HYDRA_REPLY_NAME="$name" \
 	HYDRA_DUMP_PAYLOAD="$LOGS/$name.payload.txt" \
-	HYDRA_MODEL_TIMEOUT_MS=${TIMEOUT_MS:-900000} QT_QPA_PLATFORM=offscreen \
+	HYDRA_MODEL_TIMEOUT_MS=${TIMEOUT_MS:-900000} \
+	QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= \
 		nice -n 19 ionice -c 3 "$BIN" "$MODEL" "$EV" \
 		>"$LOGS/$name.log" 2>&1
 	# Three outcomes, not two. Reporting "refused" for a run that never answered
