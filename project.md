@@ -37432,11 +37432,11 @@ cause in `filter_list::replace`, not in the click. On a package built
 from `99f65c3` the holder reports the toggle fast, and startup, which paid the
 same cost, faster too.
 
-**3. Ads on YouTube, and page downloads, are where the second fold left
-them.** Neither was touched today. The ad question still needs one fact
-from the holder -- which ads, pre-roll, mid-roll or banner -- because
-server-spliced stream ads are beyond any list and a banner is not.
-Downloads are still proven only against `fake_download_source`.
+**3. Pre-roll ads on YouTube: two of our faults found, one fixed.** The
+holder sees pre-roll, and Chrome with an ad-blocking extension does not
+show it. See *Pre-roll on YouTube: the rules were in force and could not
+match* below. Downloads are still proven only against
+`fake_download_source`.
 
 ### What this session got wrong, because it is again the pattern
 
@@ -37462,3 +37462,55 @@ use-after-free directly was lost that way and not restarted, so the crash
 fix rests on a backtrace and a sentinel rather than on the one instrument
 built for it. `make test-sanitize T=test_probe_ui` is still the right
 command and has never been run against this defect.
+
+## Pre-roll on YouTube: the rules were in force and could not match
+
+Reported 2026-10-09: pre-roll ads play here and not in Chrome with an
+ad-blocking extension. The earlier finding -- fourteen of fifteen youtube
+scriptlets in the catalog, the list trusted -- was true and was the wrong
+question. Printing what `parse_call` hands the page for each of them
+showed what the counts could not.
+
+**Quoted arguments were kept with their quotes.** uBlock writes
+
+    www.youtube.com##+js(trusted-rpfr, '"adPlacements"', '"no_ads"', player?)
+
+and reads the second argument as `"adPlacements"`, quotes stripped. This
+build searched the player response for `'"adPlacements"'`, which never
+occurs, so three rules -- both `trusted-rpfr` and one
+`trusted-replace-xhr-response` -- installed, ran on every video and
+changed nothing. Those three are the ones that strip the ad payload from
+`/youtubei/v1/player`, which is how YouTube fetches a video's player data
+when you go from one video to the next. Fixed in `parse_call`, matching
+quotes stripped before the pattern check. `test_scriptlets` runs the rule
+exactly as the list writes it against a stub serving `"adPlacements"`:
+rewritten to `"no_ads"`, and with the stripping disabled, the body comes
+through untouched and the check is red.
+
+**Open, and the other half of pre-roll: `set` cannot hold a guard
+through a replaced parent.** The first page load carries the player data
+in `ytInitialPlayerResponse`, written by an inline script, and uBlock's
+answer is `set, ytInitialPlayerResponse.adPlacements, undefined`. This
+build's `set-constant` creates `ytInitialPlayerResponse` as `{}` and
+defines the property on that object; the page then assigns a whole new
+object to the global and the guard goes with the old one. uBlock traps
+each link of the chain so the property is re-applied to whatever object
+arrives. `json-prune` does not cover this either, because an inline
+object literal is never passed through `JSON.parse`. Not yet built.
+
+**Also open, Shorts only:** `json-prune-fetch-response` here takes a url
+as its third argument, while uBlock's YouTube rule passes named
+arguments (`propsToMatch, url:/reel_watch_sequence?`), so that rule
+matches no url. And `[-]` array wildcards in a prune path are not
+supported.
+
+**What the holder uses is not uBlock.** They run the *AdBlock for
+YouTube* extension in Chrome and report that uBlock is often detected by
+pages that then degrade themselves. This build implements uBlock's
+scriptlet vocabulary, and its patches replace page globals -- `fetch`,
+`JSON.parse`, property setters -- which a page can detect the same way.
+Whether to keep following uBlock's lists, or to aim for what that
+extension does, is the holder's call, and nobody here has established
+how that extension actually works; the faults above are this build's
+either way.
+

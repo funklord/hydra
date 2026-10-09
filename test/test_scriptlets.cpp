@@ -1288,6 +1288,46 @@ int main(int argc, char **argv) {
 		           .arg(ask(&st, "String(window.__store.k)")));
 	}
 
+	// **YouTube's rule as uBlock's list writes it, parsed and run.** The
+	// quotes are the list's way of saying the argument is `"adPlacements"`
+	// including its double quotes; kept as written, the search carried the
+	// single quotes too, never matched, and the rule that strips the ad
+	// payload from the player response did nothing on every video.
+	section("a quoted argument means what is inside the quotes");
+	{
+		scriptlet_call c;
+		QString why;
+		// Parsed before each check rather than inside it, because the
+		// label is built before the condition runs and would otherwise
+		// print the previous call's arguments.
+		bool ok = scriptlets::parse_call(
+		  "trusted-rpfr, '\"adPlacements\"', '\"no_ads\"', player?", &c, &why);
+		const QStringList unquoted = { "\"adPlacements\"", "\"no_ads\"",
+		                               "player?" };
+		check(ok && c.args == unquoted,
+		       QString("the quotes are stripped (%1)").arg(c.args.join("|")));
+		ok = scriptlets::parse_call("json-prune, 'a\", b", &c, &why);
+		check(ok && c.args == QStringList{ "'a\"", "b" },
+		       QString("and quotes that do not match are kept (%1)")
+		           .arg(c.args.join("|")));
+		ok = scriptlets::parse_call("json-prune, ', b", &c, &why);
+		check(ok && c.args.first() == "'",
+		       QString("as is a lone quote (%1)").arg(c.args.join("|")));
+
+		QJSEngine eng;
+		give_page(&eng);
+		eng.evaluate(QString::fromLatin1(k_fetch_stubs));
+		scriptlets::parse_call(
+		  "trusted-rpfr, '\"adPlacements\"', '\"no_ads\"', player?", &c, &why);
+		c.scope   = "x.test";
+		c.trusted = true;
+		eng.evaluate(scriptlets::source_for({ c }));
+		const QString body =
+		  ask(&eng, "window.ask('https://x.test/youtubei/v1/player?key=k')");
+		check(body.contains("\"no_ads\"") && !body.contains("adPlacements"),
+		       QString("and the player response loses its ads (%1)").arg(body));
+	}
+
 	section("trusted-replace-fetch-response rewrites a matching body only");
 	{
 		// Same machinery as the pruner -- one `filter_fetch`, two callers --

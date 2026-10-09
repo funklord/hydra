@@ -1881,6 +1881,23 @@ bool parse_call(const QString &inside, scriptlet_call *out, QString *why) {
 		}
 	}
 	parts << cur.trimmed();
+	// **An argument wrapped in matching quotes means what is inside them**,
+	// as uBlock reads it: a list quotes an argument that has to carry a
+	// leading or trailing space or an embedded quote of the other kind. Kept
+	// as written, `trusted-rpfr, '"adPlacements"', '"no_ads"'` searched YouTube's
+	// player response for the quotes as well, found nothing, and the rule that
+	// strips the ad payload never fired -- with nothing to say so. Stripped
+	// before the pattern check below, so a quoted regex is checked as the
+	// regex it is.
+	for (int i = 1; i < parts.size(); ++i) {
+		const QString &p = parts.at(i);
+		if (p.size() < 2)
+			continue;
+		const QChar q = p.at(0);
+		if ((q == QLatin1Char('\'') || q == QLatin1Char('"') ||
+		     q == QLatin1Char('`')) && p.at(p.size() - 1) == q)
+			parts[i] = p.mid(1, p.size() - 2);
+	}
 	if (parts.isEmpty() || parts.first().isEmpty())
 		return fail("names no scriptlet");
 	const QString asked = parts.takeFirst();
