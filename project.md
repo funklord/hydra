@@ -36993,3 +36993,58 @@ promised away: YouTube serves ad video from the same hosts as content and
 increasingly stitches it into the stream server-side. The five trusted
 rules are what reach the payload today; nothing here can reach a stream
 that arrives already spliced.
+
+## Trust was already on, and the checkbox crashes
+
+Reported 2026-10-09, after `8dc5629` was installed and the holder was
+asked to tick the Trusted box: **it was already ticked**, and hydra
+**crashed** when they unticked and re-ticked it.
+
+**So the trust upgrade was not their problem.** The 22 rules were running
+all along. `8dc5629` is still correct for a profile whose index predates
+the key, and it is not why ads show here. Said plainly because the entry
+above was written as though it would be the answer.
+
+**What the crash is not.** The dialog side is guarded and was read before
+suspecting it: `settings_dialog.cpp:1830` has an `m_filling_subs`
+re-entrancy flag, bounds-checks `indexOfTopLevelItem` against the list it
+re-reads from the updater, and handles columns 0 and 1 separately. None of
+the obvious shapes -- re-entry, a stale row index, a captured snapshot --
+is available there.
+
+**Where it must be, and the honest state of the diagnosis.** Toggling
+column 1 calls `write_subscriptions`, which emits
+`subscriptions_changed`; `main_window` answers that with
+`load_subscriptions()` and then `inject_scriptlets(v)` for every live
+view. That path was edited earlier today. Turning trust off and on again
+also changes **which scriptlets compile**: the trusted ones the real
+uBlock list carries -- `trusted-replace-xhr-response` and `trusted-rpfr`
+-- are admitted or dropped, and `scriptlets::source_for` has only ever
+built them from test arguments, never from that list's own. That is a
+hypothesis and nothing more; no evidence has been read.
+
+**No evidence is available from here.** `coredumpctl` is not installed and
+`core_pattern` is the bare word `core`, so a dump would land in the
+process's working directory. What would make this findable in one run is
+hydra started from a terminal with stderr captured, reproducing the
+toggle: a Qt warning or an assert line names the layer, and an abort
+without one points at the scriptlet source instead.
+
+### Two attribution errors in the same investigation, both mine
+
+**A running process was credited to the wrong account.** Engine processes
+carrying `--application-name=Hydra` were read as the holder's browser
+through several checks today, and every claude-owned one was in fact a
+leftover of this session's own drivers. The application name is a property
+of the program, not of who ran it, and `/proc/<pid>/exe` is unreadable
+across accounts -- so the one field that would have answered was the one
+that could not be read.
+
+**And a parent PID was looked up after it had been recycled.** A zygote's
+`ppid` read in one command, resolved in the next, produced "a hydra
+running since Oct 1" -- which was the harness's own `bg-spare` process
+that had inherited the number. Reported before it was checked, and it
+would have justified killing something that had nothing to do with hydra.
+`running-code.md` says a PID is a moment rather than an artifact and to
+re-read `cmdline` immediately before acting; this is that, with the acting
+caught by one more command rather than by the rule.
