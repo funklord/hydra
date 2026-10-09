@@ -37386,27 +37386,38 @@ for whoever picks this up:
   other account and could not be reached, because the per-tree inbox lives
   inside `.git` and went with the tree.
 
-### The measurement the next session can take and this one could not
+### The measurement, taken: the freeze was `filter_list::replace`
 
-**Running as `funk` unlocks the one open question.** The reload is
-deferred and debounced now, but it still runs on the UI thread, and
-whether that matters depends on how long it takes -- which could not be
-measured from the other account, because `~/.local/share` is mode 700 and
-holds the cached lists.
+**Taken as `funk` the same day, and it did not land where the mechanism
+said.** The cache is EasyList (2.1 MB, 58,688 rules) and uBlock filters
+(0.5 MB, 1,791 rules and 2,441 scriptlets), both enabled and trusted.
+Timed with a harness linking the real sources against those copies:
 
-As the owning account, in order:
+    parse   easylist 148 ms, ublock 23 ms
+    replace 55,237 ms
+    source_for 29 ms
 
-1. Size the cache: `ls -l ~/.local/share/Hydra/filters-subscribed/` and
-   read `filters-subscribed.json` for which are enabled.
-2. Time one `filter_subscription::read` over each enabled body. A few
-   thousand rules should be milliseconds. **If one toggle still stalls
-   for a noticeable time, the cost is not where the mechanism says it
-   should be**, and the next lens is whatever `inject_scriptlets` does
-   per view rather than the parse.
-3. Only then is the worker-thread question a real decision. Parsing off
-   the UI thread and installing through `filter_list::replace`, which
-   already takes the write lock so the interceptor never sees a half-built
-   list, is the shape -- and it is a design change, so it is the holder's.
+**`replace` deduplicated by calling `contains_locked` per rule**, a
+linear scan of every rule already kept, so installing 60,000 rules was
+about 1.8 billion string comparisons -- on the UI thread, under the write
+lock the request interceptor waits on. A set makes it 159 ms on the same
+data, and the whole reload about 350 ms.
+
+The debounce was right and could never have been enough: it made a
+55-second stall happen once per flurry rather than once per click. **And
+the toggle was the least of it.** Startup and every promoting fetch call
+the same `load_subscriptions`, so with these two lists each launch and
+each six-hourly update that promoted a list froze the browser for the
+best part of a minute.
+
+`test_subscription` now installs 40,000 rules plus a repeat and asserts
+under five seconds: 115 ms with the set, **40,076 ms and red with the scan
+put back**. Nothing had exercised `replace` at a real list's size, or at
+all -- it had no test.
+
+The worker-thread question is no longer a real one at a third of a
+second per debounced toggle. It stays the shape if lists grow, and the
+holder's call if so.
 
 ### The three live questions, as of this fold
 
@@ -37415,11 +37426,11 @@ holder's gdb log after installing `98fd3578` holds no signal at all and
 ends `exited normally`. The suite's own evidence is a sentinel in a column
 the handler ignores, which reddens when the deferral is removed.
 
-**2. The freeze is fixed in the tree and unconfirmed by use.** Reported
-after the crash fix: the dialog froze on the same toggle. Deferred and
-debounced at 250ms in `2218501`, both halves sabotage-proven. **Nobody
-has yet reported whether a single toggle still pauses**, which is exactly
-what the measurement above settles.
+**2. The freeze is found and fixed in the tree, not yet confirmed by
+use.** The holder tested `2218501` and it was still very slow; the
+measurement above found the cause in `filter_list::replace`, not in the
+click. Confirmation is a toggle that no longer pauses on a build carrying
+the set, and a launch that no longer takes a minute to answer.
 
 **3. Ads on YouTube, and page downloads, are where the second fold left
 them.** Neither was touched today. The ad question still needs one fact

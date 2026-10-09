@@ -5984,12 +5984,14 @@ QString main_window::address_of(const node *n) const {
 // per click, where a debounce collapses a flurry into the one reload whose
 // result is the state the person left the box in.
 //
-// **What this does not fix**: the reload itself still runs on the UI thread,
-// so a large enough set of lists stalls once instead of twice. Moving the
-// parse to a worker and installing it with `filter_list::replace` -- which
-// already takes the write lock for exactly that reason -- is the next step if
-// one reload is still too slow, and it is a design change rather than a
-// tightening of this one.
+// **The freeze itself was not here.** It was `filter_list::replace`, which
+// deduplicated with a linear scan per rule and took 55 seconds on the
+// holder's EasyList and uBlock filters; see the note there. Measured with that
+// fixed, against the same cached copies, the whole reload is about 350ms:
+// 170 to parse both, 160 to install, 30 to build the scriptlet source. That
+// still runs on the UI thread, and a worker parse installed through
+// `replace` is the shape if it ever needs to go -- but at a third of a second
+// once per debounced toggle, it is no longer the question it was.
 void main_window::reload_subscriptions_soon() {
 	if (m_subs_reload_timer)
 		m_subs_reload_timer->start();

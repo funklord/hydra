@@ -17,6 +17,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
 #include <QTemporaryDir>
@@ -392,6 +393,52 @@ int main(int argc, char **argv) {
 		       QString("what survives is the scoped one (%1)")
 		           .arg(rep.rules.isEmpty() ? QString("nothing")
 		                                     : rep.rules.first().text));
+	}
+
+	// **Two lists that overlap install each shared rule once, and a list the
+	// size of a real subscription installs in a moment.** `replace` checked
+	// for duplicates by scanning every rule it had kept, so it was quadratic:
+	// 55 seconds for EasyList and uBlock filters together, on the UI thread,
+	// under the lock the request interceptor waits on. Nothing exercised it
+	// at a real size, and a dialog that froze was the only report.
+	//
+	// 40,000 rules is about two thirds of the holder's set. The quadratic
+	// scan takes tens of seconds on it and the set a few tens of
+	// milliseconds, so a bound of five seconds separates the two by a wide
+	// margin in both directions, loaded machine or not.
+	section("replace drops overlap and stays linear at a real list's size");
+	{
+		QList<filter_rule> rules;
+		for (const char *line : { "||ads.example^", "||track.example^",
+		                          "||ads.example^" }) {
+			filter_rule r;
+			filter_list::parse_rule(line, &r);
+			rules.push_back(r);
+		}
+		filter_list list;
+		list.replace(rules);
+		check(list.rules().size() == 2,
+		       QString("a rule two lists share is kept once (%1 kept)")
+		           .arg(list.rules().size()));
+		check(list.blocks("https://ads.example/x.js", "page.example"),
+		       "and it still blocks");
+
+		QList<filter_rule> big;
+		for (int i = 0; i < 40000; ++i) {
+			filter_rule r;
+			filter_list::parse_rule(QString("||host%1.example^").arg(i), &r);
+			big.push_back(r);
+		}
+		big.push_back(big.first());
+		QElapsedTimer t;
+		t.start();
+		list.replace(big);
+		const qint64 ms = t.elapsed();
+		check(list.rules().size() == 40000,
+		       QString("40,000 rules and one repeat install as 40,000 (%1)")
+		           .arg(list.rules().size()));
+		check(ms < 5000,
+		       QString("in under five seconds (%1 ms)").arg(ms));
 	}
 
 	section("a fresh install subscribes to something, once");

@@ -7,6 +7,7 @@
 
 #include <QFile>
 #include <QSaveFile>
+#include <QSet>
 #include <QTextStream>
 #include <QUrl>
 
@@ -289,13 +290,23 @@ void filter_list::replace(const QList<filter_rule> &rules) {
 	m_by_host.clear();
 	m_by_token.clear();
 	m_untokenised.clear();
+	// Deduplicated rather than trusting the caller: two subscriptions overlap
+	// by design -- an annoyance list and a base list share rules -- and a
+	// duplicate in the index is a duplicate in every bucket it is filed under.
+	//
+	// **With a set, not `contains_locked`.** That scans every rule kept so
+	// far, so a replace was quadratic: EasyList and uBlock filters together
+	// are about 60,000 rules, and measured against the holder's cached copies
+	// this call took 55 seconds -- on the UI thread, holding the write lock
+	// the request interceptor waits on. It was the settings dialog's freeze
+	// on the Trusted box, which the debounce above it could only make happen
+	// once instead of twice.
+	QSet<QString> seen;
+	seen.reserve(rules.size());
 	for (const filter_rule &r : rules) {
-		// `contains_locked` rather than trusting the caller: two subscriptions
-		// overlap by design -- an annoyance list and a base list share rules --
-		// and a duplicate in the index is a duplicate in every bucket it is
-		// filed under.
-		if (contains_locked(r.text))
+		if (seen.contains(r.text))
 			continue;
+		seen.insert(r.text);
 		m_rules.push_back(r);
 		index_one(m_rules.size() - 1);
 	}
