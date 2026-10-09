@@ -37048,3 +37048,42 @@ would have justified killing something that had nothing to do with hydra.
 `running-code.md` says a PID is a moment rather than an artifact and to
 re-read `cmdline` immediately before acting; this is that, with the acting
 caught by one more command rather than by the rule.
+
+### The capture command could not have caught it
+
+The log arrived and holds no crash: 49 lines, our own output being `icon
+theme: crystalsvg` and `tabs: warmed 6 background tab(s) into a cap of 8`,
+and the rest Chromium and page noise. **That is an artifact of the
+instrument, not a finding.**
+
+`hydra 2>&1 | tee log` captures what the PROGRAM writes. "Segmentation
+fault" and "Aborted" are written by the **shell**, about its child, to the
+terminal -- they never enter the pipe. So a crash leaves the tee'd file
+ending mid-sentence with nothing to find, which is exactly what this one
+does. The command was mine and it was wrong.
+
+**Nor can this account get the evidence another way.** `dmesg` answers
+`Operation not permitted`, `coredumpctl` is absent, `core_pattern` is the
+bare word `core` and no core file was written. Three instruments, none of
+which can see it from here.
+
+**What does work, and both halves are needed.** The installed
+`hydra-dbgsym` does not match the running binary -- there is no
+`/usr/lib/debug/.build-id/b9/6c3a8f...debug` -- so a backtrace would be
+bare addresses in hydra's own frames. The matching one is built and
+waiting:
+
+    sudo dpkg -i build/deb/hydra-dbgsym_0.1_amd64.deb
+    gdb -q -batch -ex run -ex 'thread apply all bt' \
+        --args /usr/bin/hydra 2>&1 | tee /tmp/hydra-bt.log
+
+gdb writes the backtrace to its own stdout, so `tee` keeps it -- which is
+the difference from the first attempt. Then reproduce the untick and
+re-tick.
+
+**Three instrument errors in one day, all the same shape**: `nm` on a
+stripped binary, `strings` on a UTF-16 `QStringLiteral`, and now `tee` on
+a message the shell rather than the program emits. Each returned a clean,
+plausible, empty answer about something that was certainly there. The one
+that caught the first two was a control known to be present; this one was
+caught by asking who prints the word.
