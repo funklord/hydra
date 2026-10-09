@@ -20,6 +20,7 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <cstdio>
@@ -107,6 +108,77 @@ int main(int argc, char **argv) {
 			                 kind_name(got),
 			                 why.isEmpty() ? QString()
 			                               : QString(" -- ") + why.left(60)));
+		}
+	}
+
+	// **uBlock's `replace=` on a script request, carried in the page.** The
+	// interceptor cannot rewrite a body, and this is how YouTube's second
+	// video keeps its ad payload out: switching videos in the page fetches
+	// `/youtubei/v1/get_watch`, and the only rules in the list for it are
+	// these two. Before this they were counted as unsupported, and the
+	// second video played a pre-roll the first no longer did.
+	section("a replace= rule on a script request becomes a page rewrite");
+	{
+		const QString yt = QStringLiteral(
+		  "||youtube.com/youtubei/v1/get_watch?$xhr,1p,"
+		  "replace=/\"adPlacements\"/\"no_ads\"/");
+		scriptlet_call call;
+		QString why;
+		const line_kind got =
+		  filter_subscription::classify(yt, nullptr, &why, &call);
+		check(got == line_kind::scriptlet &&
+		          call.name == "trusted-replace-fetch-response" &&
+		          call.scope == "youtube.com",
+		       QString("it is a fetch rewrite scoped to the host (%1 %2 %3)")
+		           .arg(kind_name(got), call.name, call.scope));
+		const QStringList want_head = { "/\"adPlacements\"/", "\"no_ads\"" };
+		check(call.args.size() == 3 && call.args.mid(0, 2) == want_head,
+		       QString("searching and replacing what the rule says (%1)")
+		           .arg(call.args.join(" | ")));
+		const QString url = call.args.value(2);
+		const QRegularExpression re(url.mid(1, url.size() - 2));
+		check(re.match("https://www.youtube.com/youtubei/v1/get_watch"
+		               "?prettyPrint=false").hasMatch() &&
+		          !re.match("https://www.youtube.com/youtubei/v1/player?x=1")
+		               .hasMatch() &&
+		          !re.match("https://evil.test/youtube.com/youtubei/v1/"
+		                    "get_watch?").hasMatch(),
+		       QString("on the url it names and no other (%1)").arg(url));
+
+		const subscription_read rep = filter_subscription::read(
+		  yt + "\n||ads.example^\n", 0, true);
+		QStringList names;
+		for (const scriptlet_call &c : rep.calls)
+			names << c.name;
+		const QStringList both = { "trusted-replace-fetch-response",
+		                           "trusted-replace-xhr-response" };
+		check(names == both,
+		       QString("and read carries it on both transports (%1)")
+		           .arg(names.join(", ")));
+		const subscription_read untrusted = filter_subscription::read(
+		  yt + "\n||ads.example^\n", 0, false);
+		check(untrusted.calls.isEmpty() && untrusted.needs_trust == 1,
+		       QString("but only for a trusted list (%1 calls, %2 needing "
+		               "trust)").arg(untrusted.calls.size())
+		           .arg(untrusted.needs_trust));
+
+		struct one { const char *line; const char *what; };
+		const QList<one> refused = {
+			{ "||youtube.com/x?$xhr,replace=/a/b/", "without 1p" },
+			{ "||youtube.com/x?$1p,replace=/a/b/", "without xhr" },
+			{ "||youtube.com/x?$xhr,1p,domain=a.test,replace=/a/b/",
+			   "with an option it does not read" },
+			{ "youtube.com/x?$xhr,1p,replace=/a/b/", "not anchored to a host" },
+			{ "||youtube.com/x?$xhr,1p,replace=/(a+)+$/b/",
+			   "with a pattern that backtracks" },
+		};
+		for (const one &c : refused) {
+			QString said;
+			const line_kind k = filter_subscription::classify(
+			  QString::fromLatin1(c.line), nullptr, &said);
+			check(k == line_kind::unsupported,
+			       QString("refused %1 (%2 -- %3)")
+			           .arg(QString::fromLatin1(c.what), kind_name(k), said));
 		}
 	}
 

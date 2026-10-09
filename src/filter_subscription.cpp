@@ -1,11 +1,14 @@
 #include "filter_subscription.h"
 
+#include "site_rules.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QSaveFile>
 
 QString subscription_read::summary() const {
@@ -23,6 +26,136 @@ QString subscription_read::summary() const {
 		s += QString(", %1 refused as unsafe").arg(unsafe);
 	return s;
 }
+
+namespace {
+
+enum class rewrite { none, carried, refused };
+
+// The url half of a `||host/path` pattern as a regex the page can test: the
+// host or any subdomain of it, `*` as anything, `^` as a separator or the end.
+QString url_regex(const QString &host, const QString &rest) {
+	QString re = QStringLiteral("^https?:\\/\\/([^\\/]*\\.)?")
+	           + QRegularExpression::escape(host).replace("/", "\\/");
+	for (const QChar c : rest) {
+		if (c == QLatin1Char('*'))
+			re += QStringLiteral(".*");
+		else if (c == QLatin1Char('^'))
+			re += QStringLiteral("(?:[^\\w.%-]|$)");
+		else if (c == QLatin1Char('/'))
+			re += QStringLiteral("\\/");
+		else
+			re += QRegularExpression::escape(QString(c));
+	}
+	return QLatin1Char('/') + re + QLatin1Char('/');
+}
+
+// **`replace=` on a script request, carried in the page.** uBlock rewrites a
+// response body with
+//
+//     ||youtube.com/youtubei/v1/get_watch?$xhr,1p,replace=/"adPlacements"/"no_ads"/
+//
+// and that is how its list keeps the ad payload out of the request YouTube
+// makes when you move from one video to the next. The interceptor here cannot
+// touch a response body, but a rule limited to `xhr` only ever applies to a
+// request the page's own script made -- which is exactly what
+// `trusted-replace-fetch-response` and its XHR twin already rewrite. So the
+// rule becomes those two calls, scoped to its host and matched on its url.
+//
+// Narrow on purpose, and refused rather than widened otherwise: `||host`
+// anchored, `1p` so the host is also the page it runs on, `xhr` as the only
+// type, and `replace=` last, since its value may hold a comma. The value's
+// regex and the url regex both get the backtracking refusal any pattern from
+// a list gets. One difference from uBlock is stated rather than hidden: the
+// shared rewriter always replaces every match, where uBlock honours a missing
+// `g`.
+rewrite response_rewrite(const QString &t, scriptlet_call *out, QString *why) {
+	const int dollar = t.indexOf(QLatin1Char('$'));
+	if (dollar < 0)
+		return rewrite::none;
+	const QString options = t.mid(dollar + 1);
+	const int at = options.indexOf(QLatin1String("replace="));
+	if (at < 0)
+		return rewrite::none;
+	const auto refuse = [why](const char *text) {
+		if (why)
+			*why = QString::fromLatin1(text);
+		return rewrite::refused;
+	};
+	const QString pattern = t.left(dollar);
+	if (!pattern.startsWith(QLatin1String("||")))
+		return refuse("a response rewrite not anchored to a host");
+	bool first_party = false, script_only = false;
+	const QString head = options.left(at);
+	for (const QString &o : head.split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+		if (o == QLatin1String("1p") || o == QLatin1String("first-party"))
+			first_party = true;
+		else if (o == QLatin1String("xhr") ||
+		         o == QLatin1String("xmlhttprequest"))
+			script_only = true;
+		else
+			return refuse("a response rewrite with an option this build "
+			               "does not read");
+	}
+	if (!first_party || !script_only)
+		return refuse("a response rewrite that is not first-party and "
+		               "limited to script requests");
+
+	// `/pattern/replacement/flags`, with `\/` for a slash inside either half.
+	const QString value = options.mid(at + 8);
+	QStringList parts;
+	QString cur;
+	for (int i = 0; i < value.size(); ++i) {
+		const QChar c = value.at(i);
+		if (c == QLatin1Char('\\') && i + 1 < value.size() &&
+		    value.at(i + 1) == QLatin1Char('/')) {
+			cur += QLatin1Char('/');
+			++i;
+		} else if (c == QLatin1Char('/')) {
+			parts << cur;
+			cur.clear();
+		} else {
+			cur += c;
+		}
+	}
+	parts << cur;
+	if (parts.size() != 4 || !parts.at(0).isEmpty() || parts.at(1).isEmpty())
+		return refuse("a response rewrite whose value is not "
+		               "/pattern/replacement/flags");
+	const QString flags = parts.at(3);
+	for (const QChar f : flags)
+		if (!QStringLiteral("gimsu").contains(f))
+			return refuse("a response rewrite with a flag this build does "
+			               "not take");
+
+	const QString path = pattern.mid(2);
+	int end = 0;
+	while (end < path.size() && path.at(end) != QLatin1Char('/') &&
+	       path.at(end) != QLatin1Char('^') && path.at(end) != QLatin1Char('*'))
+		++end;
+	const QString host = path.left(end);
+	if (host.isEmpty() || !host.contains(QLatin1Char('.')))
+		return refuse("a response rewrite with no host to scope it to");
+
+	const QString search = QLatin1Char('/') + parts.at(1) + QLatin1Char('/') +
+	                       flags;
+	const QString url = url_regex(host, path.mid(end));
+	for (const QString &re : { parts.at(1), url.mid(1, url.size() - 2) }) {
+		const QString bad = site_rules::why_pattern_backtracks(re);
+		if (!bad.isEmpty()) {
+			if (why)
+				*why = QString("its pattern %1").arg(bad);
+			return rewrite::refused;
+		}
+	}
+	if (out) {
+		out->scope = host;
+		out->name  = QStringLiteral("trusted-replace-fetch-response");
+		out->args  = QStringList{ search, parts.at(2), url };
+	}
+	return rewrite::carried;
+}
+
+}  // namespace
 
 namespace filter_subscription {
 
@@ -149,6 +282,22 @@ line_kind classify(const QString &line, filter_rule *out, QString *why,
 	// It is the right way round -- such a rule is skipped rather than
 	// enforced too broadly -- and the alternative is a parser for the option
 	// grammar, which is the work this defers.
+	{
+		scriptlet_call rewritten;
+		QString said;
+		switch (response_rewrite(t, &rewritten, &said)) {
+			case rewrite::carried:
+				if (call)
+					*call = rewritten;
+				return line_kind::scriptlet;
+			case rewrite::refused:
+				if (why)
+					*why = said;
+				return line_kind::unsupported;
+			case rewrite::none:
+				break;
+		}
+	}
 	if (t.contains(QLatin1Char('$'))) {
 		reason("carries options, which this engine does not read");
 		return line_kind::unsupported;
@@ -214,6 +363,16 @@ subscription_read read(const QString &text, int previous_rules,
 				call.trusted = trusted;
 				++rep.scriptlets;
 				rep.calls.push_back(call);
+				// **A network `replace=` rule is carried as two calls**, the
+				// fetch rewrite `classify` returned and its XHR twin, because
+				// uBlock's `xhr` type covers both transports. Told apart by
+				// the line: a scriptlet written as one always has `##`.
+				if (!line.contains(QLatin1String("##"))) {
+					scriptlet_call twin = call;
+					twin.name = QStringLiteral("trusted-replace-xhr-response");
+					++rep.scriptlets;
+					rep.calls.push_back(twin);
+				}
 				break;
 			case line_kind::unsupported:
 				++rep.lines;

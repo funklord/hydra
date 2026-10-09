@@ -37596,3 +37596,43 @@ capabilities and suspects for the dialog it opens but not these, and
 whether the page then showed an ad -- the runner knows what it installed,
 not what the player did afterwards.
 
+### The second video: `get_watch`, and uBlock's `replace=`
+
+With the scope fix installed the holder reported the first video clean and
+the second still carrying a pre-roll. Reproduced over DevTools by clicking
+a related video in the page: the player came back `ad-created` with
+`adPlacements` in `getPlayerResponse()`, and the request log showed why.
+**Switching videos in the page fetches `/youtubei/v1/get_watch`, not
+`/youtubei/v1/player`**, and every response rewrite this build carried
+matched `player?`.
+
+uBlock's answer was already in the subscribed `filters.txt`:
+
+    ||youtube.com/youtubei/v1/get_watch?$xhr,1p,replace=/"adPlacements"/"no_ads"/
+
+a network rule whose `replace=` option rewrites the response body, and
+this build dropped every line carrying options. The interceptor cannot
+rewrite a body, but a rule limited to `xhr` only ever applies to a request
+the page's own script makes, which is what `trusted-replace-fetch-response`
+and its XHR twin rewrite. So `classify` now turns that narrow shape --
+`||host` anchored, `1p`, `xhr` as the only type, `replace=` last -- into
+the fetch call, scoped to the host and matched on the rule's url as a
+regex, and `read` adds the XHR twin. Anything else with options stays
+unsupported, and both regexes get the backtracking refusal. The shared
+rewriter always replaces every match where uBlock honours a missing `g`.
+
+`filters.txt` has eight such lines, now sixteen calls, and the report the
+browser files went from 10 ran to 26 on a watch page. Live, two in-page
+switches each came back with no `ad-` class and `adPlacements` and
+`adSlots` undefined, streaming data intact; `playerAds` remains, as it
+does under uBlock, whose rules for this request rewrite only those two.
+Two switches is a small sample and YouTube does not attach an ad to every
+video, so the holder's own use is the confirmation that counts.
+`test_subscription` covers the translation, the url match, the trust gate
+and five refusals; making the translation decline reds five checks.
+
+**Not subscribed, and worth knowing:** uBlock's own default set includes
+`quick-fixes.txt`, where YouTube changes land first. It has a
+`trusted-rpfr` for `/get_watch?` this build would now run. Whether to add
+it to the shipped defaults is the holder's call.
+
