@@ -363,6 +363,10 @@ private:
 	// that reads more -- and a body that was fine when fetched and is nonsense
 	// on disk now is refused here rather than enforced.
 	int load_subscriptions();
+	// **The whole reload, coalesced, because it is too slow for a click.**
+	// See the definition: one toggle re-reads and re-parses every enabled
+	// list and re-injects into every view.
+	void reload_subscriptions_now();
 	// Put the scriptlet patches into a view, or take them out again.
 	//
 	// **At view creation rather than on navigation**, because a scriptlet has
@@ -800,6 +804,12 @@ public:
 	subscription_updater *m_sub_updater = nullptr;
 	// The scriptlet calls the subscribed lists asked for, accumulated by
 	// `load_subscriptions` and filtered per site when a view is given them.
+	// **Public because the body it schedules sits behind a modal.** The
+	// settings dialog emits `subscriptions_changed` from inside a click and
+	// this is what answers it, so a test can only reach the deferral through
+	// a door of its own.
+	void reload_subscriptions_soon();
+
 	QList<scriptlet_call> m_scriptlets;
 	QTimer              *m_subs_timer   = nullptr;
 	QAction            *m_kiosk_action  = nullptr;
@@ -862,6 +872,7 @@ public:
 	// pass rather than hundreds. Without the coalescing, `apply_policy` would
 	// flip `desktop_site` mid-import and reload the page for each flip.
 	QTimer             *m_policy_timer  = nullptr;
+	QTimer             *m_subs_reload_timer = nullptr;
 	// Node ids whose history has moved since the last blob flush. Ids rather
 	// than views, because a view can be suspended between the navigation and
 	// the timer firing, and an id survives that -- suspending writes the blob

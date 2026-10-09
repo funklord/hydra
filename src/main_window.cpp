@@ -691,6 +691,13 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	connect(m_policy_timer, &QTimer::timeout, this,
 	         &main_window::reapply_policy_to_views);
 
+	m_subs_reload_timer = new QTimer(this);
+	m_subs_reload_timer->setSingleShot(true);
+	m_subs_reload_timer->setInterval(250);    // debounce: a tick and an untick is
+	                                    // one reload, not two
+	connect(m_subs_reload_timer, &QTimer::timeout, this,
+	         &main_window::reload_subscriptions_now);
+
 	m_save_timer = new QTimer(this);
 	m_save_timer->setSingleShot(true);
 	m_save_timer->setInterval(1500);   // debounce structural saves
@@ -5963,6 +5970,37 @@ QString main_window::address_of(const node *n) const {
 	return n->url;
 }
 
+// **Deferred and debounced, because this is far too slow to run inside a
+// click.** Ticking a subscription's Trusted box emits
+// `subscriptions_changed` from the settings dialog's `itemChanged` handler,
+// and answering it synchronously meant the whole reload happened before the
+// mouse release returned: every enabled list re-read from disk and re-parsed
+// by `load_subscriptions`, then `inject_scriptlets` for every live view. The
+// holder reported the dialog freezing on the toggle once the crash above it
+// was fixed.
+//
+// 250ms rather than 0 because the report was about ticking AND unticking: a
+// zero-interval timer takes the work out of the click but still does it once
+// per click, where a debounce collapses a flurry into the one reload whose
+// result is the state the person left the box in.
+//
+// **What this does not fix**: the reload itself still runs on the UI thread,
+// so a large enough set of lists stalls once instead of twice. Moving the
+// parse to a worker and installing it with `filter_list::replace` -- which
+// already takes the write lock for exactly that reason -- is the next step if
+// one reload is still too slow, and it is a design change rather than a
+// tightening of this one.
+void main_window::reload_subscriptions_soon() {
+	if (m_subs_reload_timer)
+		m_subs_reload_timer->start();
+}
+
+void main_window::reload_subscriptions_now() {
+	load_subscriptions();
+	for (web_view_backend *v : m_views_by_id)
+		inject_scriptlets(v);
+}
+
 int main_window::load_subscriptions() {
 	if (!m_sub_updater || !m_subscribed)
 		return 0;
@@ -7059,11 +7097,8 @@ void main_window::open_settings() {
 	// force immediately, and re-reading the cached bodies is the only thing
 	// that can do it -- the dialog has no filter list and no interceptor.
 	dlg.set_subscription_updater(m_sub_updater);
-	connect(&dlg, &settings_dialog::subscriptions_changed, this, [this] {
-		load_subscriptions();
-		for (web_view_backend *v : m_views_by_id)
-			inject_scriptlets(v);
-	});
+	connect(&dlg, &settings_dialog::subscriptions_changed, this,
+	         &main_window::reload_subscriptions_soon);
 	// Cleared and written here rather than in the dialog: the dialog holds the
 	// log only to decide whether to offer the control, and this is where the
 	// file's path lives. Doing the two halves in two places is how a store

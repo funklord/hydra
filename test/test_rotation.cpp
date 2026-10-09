@@ -240,7 +240,15 @@ public:
 	void inject_main_world_script(const QString &n, const QString &) override {
 		if (!scripts.contains(n)) scripts << n;
 	}
-	void remove_script(const QString &n) override { scripts.removeAll(n); }
+	// Counted as well as applied, because with no scriptlets loaded an
+	// injection pass only REMOVES -- and removing a name that was never
+	// added leaves `scripts` identical, so the pass is invisible. The count
+	// is what makes "did the reload run" answerable at all.
+	int  script_removals = 0;
+	void remove_script(const QString &n) override {
+		++script_removals;
+		scripts.removeAll(n);
+	}
 	// Recorded, for the reason `scripts` is: a no-op setter meant nothing in
 	// the suite could ask which object a view was handed, and the fault this
 	// caught was every view being handed the same one.
@@ -299,10 +307,12 @@ public:
 	// offers it the blob in one call, so a test cannot reach the view in
 	// between -- the answer has to be decided before it exists.
 	bool restore_ok = false;
+	QList<fake_view *> views;
 	web_view_backend *create_view(QWidget *parent) override {
 		++made;
 		auto *v = new fake_view(parent);
 		v->m_restore_ok = restore_ok;
+		views << v;
 		return v;
 	}
 	void set_external_url_handler(external_url_handler) override {}
@@ -5946,6 +5956,54 @@ int main(int argc, char **argv) {
 			qunsetenv("XDG_DATA_HOME");
 		else
 			qputenv("XDG_DATA_HOME", xdg_was);
+	}
+
+
+	// == the subscription reload is deferred, and debounced ==
+	//
+	// The holder reported the settings dialog FREEZING on the Trusted box
+	// once the crash there was fixed. The reload it triggers re-reads and
+	// re-parses every enabled list and re-injects into every live view, and
+	// it ran inside the click -- so the mouse release did not return until
+	// all of it had finished.
+	//
+	// Both halves are asserted, because each fails on its own axis: doing it
+	// in the call is the freeze, and dropping it altogether would be a
+	// settings page that stops reflecting what was ticked.
+	{
+		std::printf("\n== the subscription reload is deferred ==\n");
+		fake_factory factory;
+		policy_engine policy;
+		request_filter filter(&policy);
+		main_window w(&factory, &policy, &filter);
+		w.new_tab();
+		check(!factory.views.isEmpty(),
+		       QString("a view exists to inject into (%1)")
+		           .arg(factory.views.size()));
+		if (!factory.views.isEmpty()) {
+			int before = 0;
+			for (fake_view *v : factory.views)
+				before += v->script_removals;
+
+			w.reload_subscriptions_soon();
+
+			int during = 0;
+			for (fake_view *v : factory.views)
+				during += v->script_removals;
+			check(during == before,
+			       QString("the call itself injects nothing (%1 -> %2)")
+			           .arg(before).arg(during));
+
+			// Past the 250ms debounce, which is the point of the interval:
+			// a tick and an untick inside it are one reload.
+			QTest::qWait(500);
+			int after = 0;
+			for (fake_view *v : factory.views)
+				after += v->script_removals;
+			check(after > before,
+			       QString("and the reload still lands afterwards (%1 -> %2)")
+			           .arg(before).arg(after));
+		}
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

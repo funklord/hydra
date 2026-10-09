@@ -37274,3 +37274,54 @@ would cost the packaging nothing and stop one session's package build
 breaking another's suite. It is a change to the packaging interface
 rather than to a program, and more than one session builds here, so
 **it is the holder's call** rather than something to take in passing.
+
+## The toggle froze once it stopped crashing
+
+Reported 2026-10-09, with the crash fix installed: the Trusted box no
+longer crashed and the dialog **froze** on it instead. The gdb log
+confirmed the first half -- no signal, `exited normally` -- and could say
+nothing about the second, a stall leaving no trace in it.
+
+**The crash fix had deferred the cheap half and left the expensive one.**
+`rebuild_subscriptions` was moved off the click; answering
+`subscriptions_changed` was not. That handler calls `load_subscriptions`,
+which opens and fully re-parses every enabled list from disk, and then
+`inject_scriptlets` for every live view -- all of it inside the
+`itemChanged` handler, so the mouse release did not return until it had
+finished, once per click.
+
+Routed through a single-shot timer at 250ms, beside the policy and save
+timers that coalesce for the same reason. The interval is not 0 because
+the report was about ticking AND unticking: zero takes the work out of
+the click and still does it once per click, where a debounce collapses a
+flurry into the one reload whose result is the state the box was left in.
+
+**What it does not fix, stated so nobody reads more into it.** The reload
+still runs on the UI thread, so a large enough set of lists stalls once
+instead of twice. Parsing on a worker and installing through
+`filter_list::replace`, which already takes the write lock so the
+interceptor thread never sees a half-built list, is the next step if one
+reload is still too slow -- a design change, and the holder's call.
+
+**Not measured on the holder's profile, and it could not be.** Their data
+directory is mode 700 under their own account, so this account cannot read
+the cached lists to time a parse. The mechanism is read from the code; the
+magnitude is not known from here, and a single toggle still stalling after
+this is the observation that would decide the question above.
+
+### A member name collision that the compiler caught by luck
+
+Adding the timer, the obvious name `m_subs_timer` was already taken -- by
+the **six-hourly fetch timer**, created lazily behind `if (!m_subs_timer)`
+and given a repeating 6h interval. Assigning a 250ms single-shot to that
+member would have left the fetch timer never configured and `start()`
+firing a reload, **silently disabling subscription updates altogether**.
+
+What complained was a duplicate declaration, because the member was added
+as well as assigned. Reusing the existing name without redeclaring would
+have compiled and produced exactly that silent breakage. So the thing that
+caught a behavioural fault was a syntax error that had nothing to do with
+it, which is luck rather than a safeguard -- and the general shape is that
+**a lazily-created singleton keyed on its own null is a name worth
+grepping before reusing**, since the guard reads as initialisation and is
+also the thing a second writer defeats.
