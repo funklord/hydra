@@ -44,6 +44,7 @@ OBJSETS_SOURCES = \
 	test/test_hls.cpp \
 	test/test_instance.cpp \
 	test/test_invariants.cpp \
+	test/test_investigation.cpp \
 	test/test_kiosk.cpp \
 	test/test_live_model.cpp \
 	test/test_model.cpp \
@@ -297,6 +298,15 @@ OBJS_test_instance = \
 OBJS_test_invariants = \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o
+
+OBJS_test_investigation = \
+	$(BUILD_DIR)/moc/moc_ai_provider.o \
+	$(BUILD_DIR)/moc/moc_investigation.o \
+	$(BUILD_DIR)/app/investigation.o \
+	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/filter_list.o \
+	$(BUILD_DIR)/app/filter_subscription.o \
+	$(BUILD_DIR)/app/site_rules.o
 
 OBJS_test_kiosk = \
 	$(BUILD_DIR)/app/kiosk_controller.o \
