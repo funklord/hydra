@@ -37087,3 +37087,86 @@ a message the shell rather than the program emits. Each returned a clean,
 plausible, empty answer about something that was certainly there. The one
 that caught the first two was a control known to be present; this one was
 caught by asking who prints the word.
+
+## Fold, 2026-10-09 (second): ready to clear
+
+Supersedes the earlier fold for anything they disagree on. The entries
+above carry the detail; this is the handoff.
+
+### What is installed and what it contains
+
+`/usr/bin/hydra` build-id `b96c3a8f10ca...` matches
+`build/deb/hydra_0.1_amd64.deb`, so the holder is running everything
+below. Build IDs rather than dates: dpkg clamps package mtimes to the
+changelog date, so the installed file reads 2026-08-05 whatever is in it.
+
+Shipped and installed: the session-bus gates, the platform theme cleared
+in `TEST_ENV`, the scriptlet pipeline driver, the ads-gate re-read
+coalesced onto a timer, the context menu's `expandAll`, the
+download-history write on a refused start, page downloads adopted as jobs,
+the Cancel test, and the trust-on-silence upgrade.
+
+### The three live questions, honestly stated
+
+**1. The Trusted checkbox crashes hydra, and the trace is still
+uncaptured.** Trust was already ON, so the upgrade was not the ad
+problem. Unticking and re-ticking aborts. The dialog side is guarded and
+read; the suspect path is `subscriptions_changed` ->
+`load_subscriptions()` -> `inject_scriptlets()` for every view, edited
+this session, plus `scriptlets::source_for` compiling uBlock's trusted
+rules from their real arguments for the first time. **That is a guess
+with no evidence.** Two capture attempts failed, both my instruments: a
+`tee` of the program's stderr cannot see a message the shell prints, and
+the second run was `sudo gdb`, which has no display and aborted in
+`QApplication`'s constructor before reaching the checkbox. The command
+that works, run as the holder and not root, with the matching dbgsym
+installed first:
+
+    sudo dpkg -i build/deb/hydra-dbgsym_0.1_amd64.deb
+    gdb -q -batch -ex run -ex 'thread apply all bt' \
+        --args /usr/bin/hydra 2>&1 | tee /tmp/hydra-bt.log
+
+**2. Ads still run on YouTube, and coverage is not the reason.** Measured
+against uBlock's own `filters.txt` fetched here: 2441 of 2451 scriptlet
+rules accepted, 1791 network and cosmetic rules in force, three names
+refused. Fourteen of the fifteen youtube rules are in the catalog; the
+missing one is `json-edit-fetch-response`. Trust is on, so the five
+trusted youtube rules are running. What remains unexplained is why ads
+still appear, and the ceiling is real: YouTube splices ad video into the
+stream server-side from the same hosts as content, which no list reaches.
+**Next step is which ads** -- pre-roll, mid-roll or banner -- because they
+fail differently and nothing here can guess it.
+
+**3. Page downloads are adopted but unconfirmed by use.** The window
+should now show an ordinary download and
+`~/.local/share/Hydra/download-history.json` should exist after one. Only
+ever proven against `fake_download_source`.
+
+### Open and not this session's
+
+Every item of *What is next* is gated on the holder, a device, a network
+or another account. Two are recorded as deliberately unfixed design
+questions: the saved-policy upgrade and the url-with-two-meanings tree
+format. A download begun by a background tab is filed under the front one,
+knowingly. `tool/style_gate.py` and `tool/test_style_gate.py` were dirty
+here all session as another session's work and were never touched.
+
+### What this session got wrong, because it is the pattern
+
+Three reports of "not fixed" were all delivery rather than code: the
+artifact the holder runs, the scope of a search, the branch a fixture
+reaches. Then four instrument errors, each a clean plausible empty answer
+about something certainly present -- `nm` on a stripped binary, `strings`
+on a UTF-16 `QStringLiteral`, `tee` on a shell-printed message, and a
+parent PID resolved after it had been recycled. **A control known to be
+present is what caught them**, and where there was no control the answer
+stood unchallenged until something else contradicted it.
+
+### This file
+
+36,849 lines and about 512,000 tokens when measured this session, 2.56
+times a 200k window, of which this session added roughly 1,200. A
+trimming pass was offered twice and declined twice, on the grounds that
+which entries earned their length is not the judgement of the session that
+wrote them. It remains the obvious next piece of work for whoever has the
+holder's authority to cut.
