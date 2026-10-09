@@ -27251,6 +27251,20 @@ carried along as amendments to a list item.
    `app/org.keepassxc.KeePassXC/` socket variant first — it is the one thing
    about the path still unverified.
 
+13. **Three features a 2026-09-18 session left unbuilt, recorded only in its
+   transcript until now.** Its closing summary named them as not done, and
+   said the details were here; they were not.
+
+   - **Reader mode.** Large, and its core cannot be tested from here.
+   - **Address-bar autocomplete.** The same reason. (The `autocomplete` in
+     this file refers to the HTML attribute the form filler reads, not to
+     this feature.)
+   - **A long-press context menu on Android web pages.** It goes through the
+     `android_view` JNI layer, so it should be built with a phone connected.
+
+   The proxy cookie supplier and DASH muxing were on the same list. Both
+   have their own sections here and are waiting on the holder's decision.
+
 ## From fmake: the hydra it builds had no icons, and its suite offscreen
 
 Measured by fmake's session on 2026-09-18 in a copy of this tree's
