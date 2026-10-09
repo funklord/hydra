@@ -171,9 +171,9 @@ int main(int argc, char **argv) {
 		          model.prompts.at(2).contains("nothing ad-like is visible"),
 		       "and the next prompt tells the model what was refused and what "
 		       "the page then showed");
-		check(inv.trial_rules() ==
-		          QStringList({ "news.example###ad-slot",
-		                        "news.example##+js(set, adsEnabled, false)" }),
+		const QStringList kept = { "news.example###ad-slot",
+		                           "news.example##+js(set, adsEnabled, false)" };
+		check(inv.trial_rules() == kept,
 		       QString("what Keep would save is what is in trial (%1)")
 		           .arg(inv.trial_rules().join(" | ")));
 		check(all.contains("ask: Does it look right?") &&
