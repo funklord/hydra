@@ -306,8 +306,38 @@ int main(int argc, char **argv) {
 		       QString("with a tooltip saying what it allows (%1)")
 		           .arg(row->toolTip(1).left(40)));
 
+		// **The row Qt is editing has to survive the click.** `itemChanged`
+		// is emitted from inside `QStyledItemDelegate::editorEvent` with
+		// `QAbstractItemView::edit` still on the stack, so a handler that
+		// rebuilds the tree deletes the item Qt resumes on -- which is the
+		// SIGSEGV the holder hit on the Trusted box, with no frame of ours
+		// below `QDialog::exec()`.
+		//
+		// A sentinel in a column the handler ignores is what answers it,
+		// rather than comparing pointers: `clear()` frees the row and the
+		// refill allocates one the same size, so the old address is likely
+		// to come straight back and a pointer check would pass on the
+		// allocator's luck. A refilled row is a fresh object and carries no
+		// sentinel, whatever address it lands on.
+		constexpr int sentinel = Qt::UserRole + 7;
+		row->setData(2, sentinel, QString("still here"));
+
 		QSignalSpy told(&d, &settings_dialog::subscriptions_changed);
 		row->setCheckState(1, Qt::Checked);
+		check(view->topLevelItemCount() == 1 &&
+		          view->topLevelItem(0)->data(2, sentinel).toString() ==
+		              "still here",
+		       "ticking it leaves the row Qt was editing alive");
+		// **And it has to still happen, only later.** A deferral that
+		// dropped the rebuild would pass the check above just as
+		// quietly, and the column would then stop reflecting a fetch.
+		QCoreApplication::processEvents();
+		check(view->topLevelItemCount() == 1 &&
+		          view->topLevelItem(0)->data(2, sentinel).isNull(),
+		       "and the rebuild lands once the event has finished");
+		row = view->topLevelItem(0);
+		check(row->checkState(1) == Qt::Checked,
+		       "with the box it redraws agreeing with what was written");
 		check(!up.subscriptions().isEmpty() &&
 		          up.subscriptions().first().trusted,
 		       "ticking it sets the flag on the subscription");

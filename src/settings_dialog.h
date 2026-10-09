@@ -19,6 +19,7 @@ class QLabel;
 class QLineEdit;
 class QRadioButton;
 class QSpinBox;
+class QTimer;
 class QVBoxLayout;
 class claude_provider;
 class download_manager;
@@ -149,6 +150,10 @@ private:
 	void build_tabs_page(QWidget *page);
 	void build_filter_page(QWidget *page);
 	void rebuild_subscriptions();
+	// **Deferred, because a caller may be inside one of the view's own
+	// signals.** See the definition: rebuilding from `itemChanged` deletes
+	// the row Qt is still editing.
+	void schedule_subscriptions_rebuild();
 	void write_subscriptions(const QList<subscription> &subs);
 	void rebuild_filter_list();
 	// The per-site exceptions list on the privacy page: what the shield has been
@@ -193,6 +198,11 @@ private:
 	// Set while the view is being filled, so writing a checkbox back does not
 	// fire on the rows this is putting there.
 	bool                     m_filling_subs  = false;
+	// Coalesces the rebuild to after the current event, so the tree is never
+	// cleared while Qt is inside an edit on one of its items. Made on first
+	// use rather than beside the view, so no ordering between the two can be
+	// got wrong.
+	QTimer                  *m_subs_rebuild_timer = nullptr;
 	QPushButton             *m_filter_remove = nullptr;
 	QLabel                  *m_filter_note   = nullptr;
 	consent_blocker         *m_consent       = nullptr;

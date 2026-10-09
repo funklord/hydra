@@ -36994,7 +36994,7 @@ increasingly stitches it into the stream server-side. The five trusted
 rules are what reach the payload today; nothing here can reach a stream
 that arrives already spliced.
 
-## Trust was already on, and the checkbox crashes
+## Trust was already on, and the checkbox crash was ours
 
 Reported 2026-10-09, after `8dc5629` was installed and the holder was
 asked to tick the Trusted box: **it was already ticked**, and hydra
@@ -37005,30 +37005,66 @@ all along. `8dc5629` is still correct for a profile whose index predates
 the key, and it is not why ads show here. Said plainly because the entry
 above was written as though it would be the answer.
 
-**What the crash is not.** The dialog side is guarded and was read before
-suspecting it: `settings_dialog.cpp:1830` has an `m_filling_subs`
-re-entrancy flag, bounds-checks `indexOfTopLevelItem` against the list it
-re-reads from the updater, and handles columns 0 and 1 separately. None of
-the obvious shapes -- re-entry, a stale row index, a captured snapshot --
-is available there.
+**What it is: we hand Qt a freed row.** The dialog side was read first
+and its guards are real -- `m_filling_subs` against re-entry, and
+`indexOfTopLevelItem` bounds-checked against the list it re-reads. None
+of them is the fault, and the shape that is was not among the ones
+looked for.
 
-**Where it must be, and the honest state of the diagnosis.** Toggling
-column 1 calls `write_subscriptions`, which emits
-`subscriptions_changed`; `main_window` answers that with
-`load_subscriptions()` and then `inject_scriptlets(v)` for every live
-view. That path was edited earlier today. Turning trust off and on again
-also changes **which scriptlets compile**: the trusted ones the real
-uBlock list carries -- `trusted-replace-xhr-response` and `trusted-rpfr`
--- are admitted or dropped, and `scriptlets::source_for` has only ever
-built them from test arguments, never from that list's own. That is a
-hypothesis and nothing more; no evidence has been read.
+The backtrace, captured on the third attempt, is a SIGSEGV inside
+`libQt6Widgets`, the crashing thread reading
 
-**No evidence is available from here.** `coredumpctl` is not installed and
-`core_pattern` is the bare word `core`, so a dump would land in the
-process's working directory. What would make this findable in one run is
-hydra started from a terminal with stderr captured, reproducing the
-toggle: a Qt warning or an assert line names the layer, and an abort
-without one points at the scriptlet source instead.
+    QStyledItemDelegate::editorEvent(...)
+    QAbstractItemView::edit(QModelIndex, EditTrigger, QEvent *)
+    QAbstractItemView::mouseReleaseEvent(QMouseEvent *)
+    ...
+    QDialog::exec()
+    main_window::open_settings()
+
+with **no frame of ours anywhere between `open_settings` and the
+fault.** That absence is the finding rather than a hole in the trace: by
+the time Qt crashes we have already returned.
+
+`QTreeWidget::itemChanged` is emitted from inside `editorEvent`, while
+`edit` and `mouseReleaseEvent` are still on the stack. The handler
+writes the touched box straight back, which is right -- but
+`write_subscriptions` called `rebuild_subscriptions`, and that calls
+`m_subs_view->clear()`, which deletes every `QTreeWidgetItem` including
+the one Qt resumes on. Column 0 is the same path, so unticking Enabled
+could do it too.
+
+**Fixed by deferring the rebuild rather than by guarding the handler.**
+`schedule_subscriptions_rebuild` coalesces it onto a single-shot
+zero-interval timer, so the tree is never cleared while Qt is inside an
+edit on one of its items. The updater's own `updated` signal goes the
+same way, a fetch being able to land mid-click. The timer is made on
+first use rather than beside the view, so no ordering between the two
+can be got wrong -- the same null-on-first-mutation trap this session
+hit with `m_policy_timer`.
+
+**And the suite had been exercising the defect all along while passing.**
+`test_probe_ui` ticks that box and then writes to the same row twice
+more. `clear()` frees it, the refill allocates a row of identical size,
+glibc hands back the same address, and the stale pointer lands on the
+new item -- 39 of 39 green, on the allocator's luck.
+
+So a pointer comparison could not have told the two readings apart; the
+reuse defeats it. A sentinel in a column the handler ignores can: a
+refilled row is a fresh object and carries none, whatever address it
+lands on. That check fails against the unfixed code and passes with it,
+and a second -- the sentinel GONE after `processEvents` -- refuses a
+deferral that quietly lost the rebuild. Sabotaged both ways: dropping
+the timer start reddens the second and leaves the first green. 42
+checks in that suite now.
+
+**ASan was not run, and it is the one instrument that would have named
+the free itself.** `make test-sanitize T=test_probe_ui` exists for
+exactly this class and says so in its own comment. The attempt was
+killed because I started it with `nohup ... &` inside a tool call, which
+the harness reaped when the call returned, and two other accounts'
+builds were already on the machine. The backtrace is evidence about the
+crash and the sentinel about the mechanism; neither is a report of the
+free.
 
 ### Two attribution errors in the same investigation, both mine
 
@@ -37108,23 +37144,25 @@ the Cancel test, and the trust-on-silence upgrade.
 
 ### The three live questions, honestly stated
 
-**1. The Trusted checkbox crashes hydra, and the trace is still
-uncaptured.** Trust was already ON, so the upgrade was not the ad
-problem. Unticking and re-ticking aborts. The dialog side is guarded and
-read; the suspect path is `subscriptions_changed` ->
-`load_subscriptions()` -> `inject_scriptlets()` for every view, edited
-this session, plus `scriptlets::source_for` compiling uBlock's trusted
-rules from their real arguments for the first time. **That is a guess
-with no evidence.** Two capture attempts failed, both my instruments: a
-`tee` of the program's stderr cannot see a message the shell prints, and
-the second run was `sudo gdb`, which has no display and aborted in
-`QApplication`'s constructor before reaching the checkbox. The command
-that works, run as the holder and not root, with the matching dbgsym
-installed first:
+**1. The Trusted checkbox crash is found and fixed.** Trust was already
+ON, so the upgrade was never the ad problem. The crash was ours and had
+nothing to do with scriptlets: rebuilding the subscription tree from
+inside `itemChanged` deleted the row Qt was still editing. See *Trust was
+already on, and the checkbox crash was ours* above for the trace
+and the fix.
+
+Two capture attempts failed first, both my instruments: a `tee` of the
+program's stderr cannot see a message the shell prints, and the second
+run was `sudo gdb`, which has no display and aborted in `QApplication`'s
+constructor before reaching the checkbox. What worked, run as the holder
+and not as root, with the matching dbgsym installed first:
 
     sudo dpkg -i build/deb/hydra-dbgsym_0.1_amd64.deb
     gdb -q -batch -ex run -ex 'thread apply all bt' \
         --args /usr/bin/hydra 2>&1 | tee /tmp/hydra-bt.log
+
+Only the `dpkg` step wants sudo, and a root-owned log then blocks the
+holder's own run from writing it -- which cost one more round.
 
 **2. Ads still run on YouTube, and coverage is not the reason.** Measured
 against uBlock's own `filters.txt` fetched here: 2441 of 2451 scriptlet

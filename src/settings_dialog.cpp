@@ -10,6 +10,7 @@
 #include "web_view_factory.h"
 
 #include <QHeaderView>
+#include <QTimer>
 #include <QAbstractButton>
 #include <QCheckBox>
 #include <QDialogButtonBox>
@@ -1691,7 +1692,7 @@ void settings_dialog::set_subscription_updater(subscription_updater *up) {
 	m_sub_updater = up;
 	if (up)
 		connect(up, &subscription_updater::updated, this,
-		         [this](int, int) { rebuild_subscriptions(); });
+		         [this](int, int) { schedule_subscriptions_rebuild(); });
 	rebuild_subscriptions();
 }
 
@@ -1701,8 +1702,38 @@ void settings_dialog::write_subscriptions(const QList<subscription> &subs) {
 	if (!m_sub_updater->set_subscriptions(subs))
 		m_subs_note->setText("The subscription list could not be saved, so "
 		                      "this holds for the session only.");
-	rebuild_subscriptions();
+	schedule_subscriptions_rebuild();
 	emit subscriptions_changed();
+}
+
+// **The rebuild is deferred, and that is a crash fix rather than tidiness.**
+// `QTreeWidget::itemChanged` is emitted from inside
+// `QStyledItemDelegate::editorEvent`, with `QAbstractItemView::edit` and
+// `mouseReleaseEvent` still on the stack. The handler below writes the
+// touched box straight back, which is right -- but the write rebuilt the
+// tree, and `rebuild_subscriptions` calls `clear()`, which deletes every
+// `QTreeWidgetItem` including the one Qt resumes on when the handler
+// returns.
+//
+// Measured from a real backtrace: SIGSEGV inside libQt6Widgets below
+// `QStyledItemDelegate::editorEvent`, with no frame of ours anywhere under
+// `QDialog::exec()` -- which is what handing Qt a freed item looks like from
+// outside, because by then we have already returned.
+//
+// It survived the suite because the refill allocates a row the same size as
+// the one just freed, so the address usually comes straight back and a stale
+// pointer lands on the new item. `test_probe_ui` puts a sentinel in a column
+// the handler ignores, which a fresh row cannot carry whatever address it
+// lands on.
+void settings_dialog::schedule_subscriptions_rebuild() {
+	if (!m_subs_rebuild_timer) {
+		m_subs_rebuild_timer = new QTimer(this);
+		m_subs_rebuild_timer->setSingleShot(true);
+		m_subs_rebuild_timer->setInterval(0);
+		connect(m_subs_rebuild_timer, &QTimer::timeout, this,
+		         [this] { rebuild_subscriptions(); });
+	}
+	m_subs_rebuild_timer->start();
 }
 
 void settings_dialog::rebuild_subscriptions() {
