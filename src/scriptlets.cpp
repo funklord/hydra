@@ -2087,14 +2087,31 @@ QString source_for(const QList<scriptlet_call> &calls) {
 	     + QStringLiteral(");}catch(e){return;}"
 	                       "var host='';try{host=String(location.hostname||'');}"
 	                       "catch(e){}"
+	                       // **A scope is a list, not a host.** uBlock writes
+	                       // `m.youtube.com,www.youtube.com##+js(...)`, and this
+	                       // compared the whole string against the hostname, so
+	                       // every rule naming more than one site -- 301 of
+	                       // 2444 in uBlock's own list, YouTube's `set` and
+	                       // `json-prune` among them -- ran nowhere. Each entry
+	                       // is an exact host or a parent of it, the test
+	                       // `cosmetic_filters` applies to a selector; `~host`
+	                       // excludes. A scope of exclusions only matches
+	                       // nothing, since a scriptlet for every site but one
+	                       // is the unscoped kind `read` already refuses. An
+	                       // empty scope means every frame, and only a caller
+	                       // that has already matched emits one.
+	                       "var in_scope=function(sc){"
+	                       "if(!sc)return true;"
+	                       "var l=String(sc).split(','),hit=false;"
+	                       "for(var j=0;j<l.length;j++){"
+	                       "var e=l[j].replace(/^\\s+|\\s+$/g,'');"
+	                       "var neg=e.charAt(0)==='~';if(neg)e=e.slice(1);"
+	                       "if(!e)continue;"
+	                       "var m=host===e||host.slice(-(e.length+1))==='.'+e;"
+	                       "if(neg&&m)return false;if(!neg&&m)hit=true;}"
+	                       "return hit;};"
 	                       "for(var i=0;i<calls.length;i++){"
-	                       "var sc=calls[i].s;"
-	                       // An exact host or a subdomain of it, which is the
-	                       // same test `cosmetic_filters` applies to a scoped
-	                       // selector. An empty scope means every frame, and
-	                       // only a caller that has already matched emits one.
-	                       "if(sc&&host!==sc&&"
-	                       "host.slice(-(sc.length+1))!=='.'+sc)continue;"
+	                       "if(!in_scope(calls[i].s))continue;"
 	                       "var f=C[calls[i].n];if(!f)continue;"
 	                       // One failing scriptlet must not take the others
 	                       // with it: they are independent patches and a page

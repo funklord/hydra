@@ -594,6 +594,36 @@ int main(int argc, char **argv) {
 		       "and nothing on a host that merely ends with those letters");
 	}
 
+	// **A scope is a list.** YouTube's `set` and `json-prune` rules name six
+	// hosts each, and the whole list was compared against the hostname as one
+	// string, so they ran on none of them -- measured on a live watch page,
+	// where `ytInitialPlayerResponse` kept every ad field and the player
+	// showed `ad-showing`. 301 of uBlock's 2444 scriptlet rules have this
+	// shape.
+	section("a scope naming several hosts runs on each of them");
+	{
+		const auto runs_on = [](const char *scope, const char *host) {
+			QList<scriptlet_call> calls;
+			calls.push_back({ scope, "set-constant", { "cfg.ok", "true" } });
+			QJSEngine eng;
+			give_window(&eng, host);
+			eng.evaluate(scriptlets::source_for(calls));
+			return eng.evaluate("!!(window.cfg && window.cfg.ok)").toBool();
+		};
+		const char *yt = "m.youtube.com,www.youtube.com,youtube-nocookie.com";
+		check(runs_on(yt, "www.youtube.com") && runs_on(yt, "m.youtube.com") &&
+		          runs_on(yt, "youtube-nocookie.com"),
+		       "every host in the list");
+		check(runs_on(yt, "a.www.youtube.com"), "and a subdomain of one");
+		check(!runs_on(yt, "youtube.com") && !runs_on(yt, "other.test"),
+		       "and nothing the list does not name");
+		check(!runs_on("x.test,~ads.x.test", "ads.x.test") &&
+		          runs_on("x.test,~ads.x.test", "www.x.test"),
+		       "a ~host is excluded from a parent the list includes");
+		check(!runs_on("~x.test", "other.test"),
+		       "and a list of exclusions only runs nowhere");
+	}
+
 	section("the names rules actually use, and the canonical one kept");
 	{
 		// A rule calls a scriptlet by whichever spelling its author knew, so

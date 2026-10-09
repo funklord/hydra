@@ -37529,3 +37529,39 @@ extension does, is the holder's call, and nobody here has established
 how that extension actually works; the faults above are this build's
 either way.
 
+### The real cause: a multi-host scope ran nowhere, on every site
+
+The holder installed both fixes above and still saw pre-roll on the first
+video, and said plainly that this browser exists to diagnose exactly this
+and was not being used to. So it was: a second hydra with a scratch
+`XDG_DATA_HOME` holding a copy of the cached lists, offscreen, with
+`QTWEBENGINE_REMOTE_DEBUGGING` set, and the watch page read over the
+DevTools protocol. On the installed build the player carried
+`ad-showing ad-interrupting`, `ytInitialPlayerResponse` was a plain
+non-configurable variable with every ad field in it, `fetch` was patched
+and `JSON.parse` was not.
+
+That pattern -- some scriptlets in, others never -- was the runner's scope
+test. It compared the hostname against the rule's scope as one string, and
+uBlock writes `m.youtube.com,music.youtube.com,...,www.youtube.com##+js(...)`.
+**301 of the 2,444 scriptlet rules in uBlock's list name more than one
+host, and every one ran nowhere**, on any site. YouTube's `set` and
+`json-prune` rules are among them; the two `trusted-rpfr` rules name
+`www.youtube.com` alone, which is why `fetch` was patched. Neither the
+quote fix nor the chain fix above could have shown in use until this one.
+
+The scope is now a list: each entry an exact host or a parent of it, `~`
+excluding, and a list of exclusions only matching nothing, which keeps the
+refusal of scriptlets for every site. Proved twice: `test_scriptlets`
+covers the list, a subdomain, an exclusion and the exclusions-only case,
+and the old comparison reds three of them; and the same live probe with
+the tree build showed `ytInitialPlayerResponse` trapped, all three ad
+fields undefined with the video data intact, `json-prune` installed, and
+no `ad-` class on the player.
+
+**What is still not done: the browser could not have said any of this
+itself.** The runner swallows every outcome -- skipped for scope, threw,
+ran -- so the only way to see it was from outside with DevTools. The
+holder's point is that this diagnosis is what the built-in AI is for, and
+it needs the runner to report what it did.
+
