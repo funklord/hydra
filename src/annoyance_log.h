@@ -37,6 +37,12 @@ struct annoyance_report {
 	// from outside, and the person filing the report is the only one who can
 	// see the page's side of it.
 	QStringList capabilities;
+	// **What the page patches did on that page**, from their own report
+	// (`scriptlets::describe`), most recent first. The one piece of evidence
+	// for an ad served from the site's own host -- a video pre-roll -- which
+	// leaves no ad-shaped request and often nothing to pick: what matters is
+	// whether the patches meant for it ran, failed, or were never in scope.
+	QStringList patches;
 	int         observed = 0;  // how many requests the page had made in total
 	// What the person did next, if anything: "recorded", "zapped", "evolved",
 	// "consent". Kept because a report nobody acted on is the interesting kind

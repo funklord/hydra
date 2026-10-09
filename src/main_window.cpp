@@ -2413,6 +2413,7 @@ void main_window::report_annoyance() {
 	r.page     = page.toString();
 	if (m_signals) {
 		r.capabilities = m_signals->capabilities_for(host);
+		r.patches = m_signals->scriptlets_for(host);
 		r.suspects = m_signals->suspects_for(host);
 		// `observed_for`, not `count_for`: the latter counts *suspects*, so
 		// using it here made the dialog say "N requests seen, N of them

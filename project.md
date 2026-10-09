@@ -37591,10 +37591,28 @@ the fault. `test_scriptlets` checks the line, its parse, the failure
 reason and a frame with nothing in scope staying silent; removing the
 emit reds five checks.
 
-Still not reaching the model: the *Annoyed* report, which snapshots
-capabilities and suspects for the dialog it opens but not these, and
-whether the page then showed an ad -- the runner knows what it installed,
-not what the player did afterwards.
+**The Annoyed button carries it, and that is where it belongs.** The holder
+was clear that this is not a startup option: the angry-face button is the
+one built to detect and remove an ad on the page in front of somebody, or
+at least to gather what that needs and give it a channel. So
+`annoyance_report` now has `patches`, filled from `scriptlets_for` when
+the button is pressed and saved with the report; the dialog lists them;
+and *Propose Filter Rules* is offered on them alone. It used to need an
+ad-shaped request, which an ad from the site's own host never produces,
+so the one tool that can propose a page patch was disabled on exactly the
+page that needed it -- and the empty list told the person the problem was
+probably cosmetic. With patches present it now says a same-host ad looks
+like that. `HYDRA_FILTER_DEBUG` only prints the same lines; collecting
+them never depended on it. `test_annoyance` covers the round trip, the
+list, the offer and the message; the old suspects-only condition reds
+the offer.
+
+Still open: **detecting** the ad. The button gathers what the patches
+did, not whether the page then showed an ad -- the runner knows what it
+installed, not what the player did afterwards. A YouTube player says so
+in its own classes (`ad-showing`, `ad-interrupting`), which is what the
+DevTools probes here read; a generic answer for any site is the harder
+half and is not built.
 
 ### The second video: `get_watch`, and uBlock's `replace=`
 

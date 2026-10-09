@@ -87,6 +87,8 @@ bool annoyance_log::load(const QString &path) {
 		// annoyances.ini loads as a report that captured no capabilities,
 		// which is exactly what it is.
 		r.capabilities = f.value("capabilities").toStringList();
+		// Absent before the page patches reported, read the same way.
+		r.patches = f.value("patches").toStringList();
 		m_reports.append(r);
 	}
 	f.endArray();
@@ -108,6 +110,8 @@ bool annoyance_log::save(const QString &path) const {
 		f.setValue("suspects", r.suspects);
 		if (!r.capabilities.isEmpty())
 			f.setValue("capabilities", r.capabilities);
+		if (!r.patches.isEmpty())
+			f.setValue("patches", r.patches);
 		if (!r.outcome.isEmpty())
 			f.setValue("outcome", r.outcome);
 	}

@@ -101,9 +101,17 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 		// was captured"; this is the more useful statement that the network
 		// half found nothing, so whatever is wrong is probably cosmetic or is
 		// the site itself.
-		m_suspects->addItem("Nothing on the network looked ad-shaped — so this "
-		                     "is likely cosmetic, a consent banner, or the site "
-		                     "itself.");
+		// And when the page patches ran, the likelier reading is an ad from
+		// the site's own host, which is what a video pre-roll looks like from
+		// the network: nothing at all.
+		m_suspects->addItem(report.patches.isEmpty()
+		  ? QStringLiteral("Nothing on the network looked ad-shaped — so this "
+		                    "is likely cosmetic, a consent banner, or the site "
+		                    "itself.")
+		  : QStringLiteral("Nothing on the network looked ad-shaped. An ad "
+		                    "served from the site's own host, such as a video "
+		                    "pre-roll, looks like this — the page patches "
+		                    "below are what reach it."));
 		m_suspects->setEnabled(false);
 	}
 	box->addWidget(m_suspects, 1);
@@ -145,6 +153,29 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 		box->addWidget(caps, 1);
 	}
 
+	// **What the page patches did.** An ad from the site's own host -- a
+	// pre-roll is the common one -- leaves the list above empty, and until
+	// this the dialog then said the problem was probably cosmetic, which for
+	// a video ad is wrong. What answers it is whether the patches for this
+	// site ran, failed, or never applied, so that is shown, read-only like
+	// the capabilities and for the same reason.
+	if (!report.patches.isEmpty()) {
+		auto *patch_head = new QLabel(
+		  "Page patches that ran here, most recent first:", this);
+		patch_head->setObjectName("patches_head");
+		patch_head->setWordWrap(true);
+		box->addWidget(patch_head);
+
+		auto *patches = new QListWidget(this);
+		patches->setObjectName("patches");
+		for (const QString &p : report.patches)
+			patches->addItem(p);
+		patches->setSelectionMode(QAbstractItemView::NoSelection);
+		patches->setFocusPolicy(Qt::NoFocus);
+		patches->setWordWrap(true);
+		box->addWidget(patches, 1);
+	}
+
 	auto *hint = new QLabel(
 	    "The report is kept either way. Pick a tool if one fits.", this);
 	hint->setWordWrap(true);
@@ -173,14 +204,21 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 	QPushButton *rec = bb->addButton("Just &Record It", QDialogButtonBox::AcceptRole);
 	rec->setDefault(true);
 
-	// Nothing to propose a network rule from, so do not offer to.
-	evo->setEnabled(!report.suspects.isEmpty());
-	evo->setToolTip(report.suspects.isEmpty()
+	// **Offered when there is evidence of either kind.** It used to need a
+	// suspect request, which a same-host ad never produces -- so the one tool
+	// that can propose a page patch was disabled on exactly the page that
+	// needed one. The filter dialog sends the patch report to the model too.
+	const bool evidence =
+	  !report.suspects.isEmpty() || !report.patches.isEmpty();
+	evo->setEnabled(evidence);
+	evo->setToolTip(!evidence
 	                    ? QStringLiteral("Nothing ad-shaped was seen on this "
-	                                      "page, so there is nothing to propose "
-	                                      "a network rule against.")
-	                    : QStringLiteral("Ask for filter rules against the "
-	                                      "addresses above."));
+	                                      "page and no page patch ran, so there "
+	                                      "is nothing to propose a rule "
+	                                      "against.")
+	                    : QStringLiteral("Ask for filter rules from what this "
+	                                      "page requested and what its patches "
+	                                      "did."));
 
 	connect(zap, &QPushButton::clicked, this,
 	        [this] { m_chosen = action::zap; accept(); });

@@ -7,6 +7,8 @@
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QListWidget>
+#include <QPushButton>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -26,6 +28,8 @@ static annoyance_report make(const QString &host, const QStringList &suspects) {
 	// survives disk rather than merely existing in memory.
 	r.capabilities = QStringList{ "17:30:01  Camera: allow",
 	                               "17:29:58  Microphone: block" };
+	r.patches = QStringList{ "17:30:02  www.a.test: 10 ran (set-constant x4), "
+	                          "0 failed, 2431 for other sites" };
 	r.observed = 42;
 	return r;
 }
@@ -105,6 +109,9 @@ int main(int argc, char **argv) {
 		        r.capabilities.first().contains("Camera: allow"),
 		      "and the capability evidence survives the file — the half of a "
 		      "report that explains a page insisting it has no camera");
+		check(r.patches.size() == 1 && r.patches.first().contains("10 ran"),
+		      "and what the page patches did -- the evidence for an ad from "
+		      "the site's own host");
 		check(r.when.isValid(), "and when it was filed");
 
 		// Shrinking must not leave a tail: an array rewritten shorter used to
@@ -236,6 +243,39 @@ int main(int argc, char **argv) {
 	// every failure emptied the log and then said so -- and the caller,
 	// dropping the answer, was left with an empty store pointed at a file it
 	// had never read. The next save wrote that back.
+	// **A pre-roll, as the button sees it**: no ad-shaped request, and the
+	// page patches' report. The tool that can propose a page patch used to be
+	// disabled here, because it needed a suspect.
+	section("an ad from the site's own host can still be taken to the model");
+	{
+		annoyance_report r = make("www.a.test", {});
+		annoyed_dialog with(r);
+		auto *patches = with.findChild<QListWidget *>("patches");
+		check(patches && patches->count() == 1,
+		       "the patch report is shown");
+		QPushButton *evo = nullptr;
+		for (QPushButton *b : with.findChildren<QPushButton *>())
+			if (b->text().contains("Filter Rules"))
+				evo = b;
+		check(evo && evo->isEnabled(),
+		       "and Propose Filter Rules is offered on it alone");
+		auto *sus = with.findChild<QListWidget *>("suspects");
+		check(sus && sus->count() == 1 &&
+		          sus->item(0)->text().contains("own host"),
+		       QString("and the empty list says what that likely means (%1)")
+		           .arg(sus && sus->count() ? sus->item(0)->text() : "none"));
+
+		r.patches.clear();
+		annoyed_dialog without(r);
+		QPushButton *none = nullptr;
+		for (QPushButton *b : without.findChildren<QPushButton *>())
+			if (b->text().contains("Filter Rules"))
+				none = b;
+		check(!without.findChild<QListWidget *>("patches") && none &&
+		          !none->isEnabled(),
+		       "with neither kind of evidence there is no list and no offer");
+	}
+
 	section("a log that will not parse is left alone");
 	{
 		const QString dir = QDir::temp().filePath("hydra-annoyance-garbage");
