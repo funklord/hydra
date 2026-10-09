@@ -310,23 +310,7 @@ C['set-constant'] = function (path, raw) {
 	else if (word === '' || word === 'emptyStr') value = '';
 	else if (/^-?[0-9]+(\.[0-9]+)?$/.test(word)) value = Number(word);
 	else return;
-
-	var parts = String(path).split('.');
-	var last = parts.pop();
-	var owner = window;
-	for (var i = 0; i < parts.length; i++) {
-		if (owner[parts[i]] === undefined || owner[parts[i]] === null)
-			owner[parts[i]] = {};
-		owner = owner[parts[i]];
-		if (typeof owner !== 'object' && typeof owner !== 'function') return;
-	}
-	try {
-		Object.defineProperty(owner, last, {
-			get: function () { return value; },
-			set: function () {},
-			configurable: false
-		});
-	} catch (e) { /* already non-configurable: the page wins, and says so */ }
+	trap_chain(path, pin(value));
 };
 
 // --- shared helpers for the rest of the catalog ---------------------------
@@ -365,6 +349,82 @@ var owner_of = function (path) {
 		if (typeof o !== 'object' && typeof o !== 'function') return null;
 	}
 	return { o: o, k: last };
+};
+
+// **Every link of a dotted path guarded, so the leaf survives a replaced
+// parent.** `owner_of` finds the object that holds the last key as it is
+// now, and a page that then assigns a whole new object to a parent leaves a
+// guard defined there behind on the old one. That is the first YouTube page
+// load exactly: `set, ytInitialPlayerResponse.adPlacements, undefined` was
+// defined on a placeholder, and the page's own
+// `var ytInitialPlayerResponse = {...}` replaced it, ads and all.
+//
+// So each link is an accessor that holds what is assigned to it and applies
+// the rest of the path to it, which is uBlock's answer. A link that cannot
+// be redefined -- already non-configurable -- is still walked as it is now,
+// and simply cannot follow a replacement.
+//
+// **A second rule on the same parent calls the first one's setter, rather
+// than replacing it.** YouTube's list sets `playerAds`, `adPlacements` and
+// `adSlots` under the same global, and three accessors that each overwrote
+// the last would leave only one of them following a replacement.
+//
+// Absent parents are still created, as `owner_of` does, so a rule naming
+// `cfg.ads` reads back on a page that has not made `cfg` yet.
+var trap_chain = function (path, leaf) {
+	var parts = String(path || '').split('.');
+	if (!parts[parts.length - 1]) return;
+	var holds = function (v) {
+		return v !== null && (typeof v === 'object' || typeof v === 'function');
+	};
+	var walk = function (owner, i) {
+		var k = parts[i];
+		if (i === parts.length - 1) { leaf(owner, k); return; }
+		var cur;
+		try { cur = owner[k]; } catch (e) { return; }
+		if (cur === undefined || cur === null) {
+			cur = {};
+			try { owner[k] = cur; } catch (e) { return; }
+			try { cur = owner[k]; } catch (e) { return; }
+		}
+		if (!holds(cur)) return;
+		var prev = null;
+		try { prev = Object.getOwnPropertyDescriptor(owner, k); } catch (e) {}
+		var held = cur;
+		try {
+			Object.defineProperty(owner, k, {
+				configurable: true,
+				enumerable: prev ? !!prev.enumerable : true,
+				get: function () {
+					return (prev && prev.get) ? prev.get.call(this) : held;
+				},
+				set: function (v) {
+					if (prev && prev.set) {
+						prev.set.call(this, v);
+						v = prev.get ? prev.get.call(this) : v;
+					}
+					held = v;
+					if (holds(v)) walk(v, i + 1);
+				}
+			});
+		} catch (e) {}
+		walk(cur, i + 1);
+	};
+	walk(window, 0);
+};
+
+// The leaf both setters define: reads answer the chosen value and writes are
+// dropped. Non-configurable, so the page cannot define it back.
+var pin = function (v) {
+	return function (o, k) {
+		try {
+			Object.defineProperty(o, k, {
+				get: function () { return v; },
+				set: function () {},
+				configurable: false
+			});
+		} catch (e) { /* already non-configurable: the page wins */ }
+	};
 };
 
 // A value from the vocabulary `set-constant` uses, or undefined for anything
@@ -669,15 +729,7 @@ C['trusted-set-constant'] = function (path, value) {
 			try { v = JSON.parse(raw); } catch (e) { v = raw; }
 		}
 	}
-	var at = owner_of(path);
-	if (!at) return;
-	try {
-		Object.defineProperty(at.o, at.k, {
-			get: function () { return v; },
-			set: function () {},
-			configurable: false
-		});
-	} catch (e) {}
+	trap_chain(path, pin(v));
 };
 
 // trusted-set-local-storage-item: the same without the vocabulary.

@@ -37432,7 +37432,7 @@ cause in `filter_list::replace`, not in the click. On a package built
 from `99f65c3` the holder reports the toggle fast, and startup, which paid the
 same cost, faster too.
 
-**3. Pre-roll ads on YouTube: two of our faults found, one fixed.** The
+**3. Pre-roll ads on YouTube: two of our faults found, both fixed.** The
 holder sees pre-roll, and Chrome with an ad-blocking extension does not
 show it. See *Pre-roll on YouTube: the rules were in force and could not
 match* below. Downloads are still proven only against
@@ -37487,16 +37487,31 @@ exactly as the list writes it against a stub serving `"adPlacements"`:
 rewritten to `"no_ads"`, and with the stripping disabled, the body comes
 through untouched and the check is red.
 
-**Open, and the other half of pre-roll: `set` cannot hold a guard
-through a replaced parent.** The first page load carries the player data
-in `ytInitialPlayerResponse`, written by an inline script, and uBlock's
-answer is `set, ytInitialPlayerResponse.adPlacements, undefined`. This
-build's `set-constant` creates `ytInitialPlayerResponse` as `{}` and
-defines the property on that object; the page then assigns a whole new
-object to the global and the guard goes with the old one. uBlock traps
-each link of the chain so the property is re-applied to whatever object
-arrives. `json-prune` does not cover this either, because an inline
-object literal is never passed through `JSON.parse`. Not yet built.
+**The other half of pre-roll: `set` did not hold its guard through a
+replaced parent, and now does.** The first page load carries the player
+data in `ytInitialPlayerResponse`, written by an inline script, and
+uBlock's answer is `set, ytInitialPlayerResponse.adPlacements, undefined`.
+This build's `set-constant` created `ytInitialPlayerResponse` as `{}` and
+defined the property on that object; the page then assigned a whole new
+object to the global and the guard went with the old one. `json-prune`
+does not cover it either, because an inline object literal is never passed
+through `JSON.parse`.
+
+`trap_chain` now makes every link of the path an accessor that applies the
+rest of the path to whatever is assigned to it, which is uBlock's answer,
+and both `set-constant` and `trusted-set-constant` go through it. Absent
+parents are still created, as before, so the existing rules that read back
+`cfg.x` on a page with no `cfg` are unchanged. **A second trap on the same
+link calls the first one's setter** rather than replacing it: the list
+puts `playerAds`, `adPlacements` and `adSlots` under one global, and
+measured with that chaining removed, only `adSlots` -- the last defined --
+survived the page's assignment. `test_scriptlets` assigns the object the
+way the page does and checks all three gone with the rest kept; removing
+the re-application reddens three checks and removing the chaining two.
+
+The `abort-on-property-*` family still guards only the object that is
+there when it runs, the same shape as before this fix; no YouTube rule
+uses it.
 
 **Also open, Shorts only:** `json-prune-fetch-response` here takes a url
 as its third argument, while uBlock's YouTube rule passes named

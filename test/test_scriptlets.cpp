@@ -453,6 +453,45 @@ int main(int argc, char **argv) {
 		                    .toString()));
 	}
 
+	// **The first YouTube page load, in miniature.** The ad data arrives in
+	// `ytInitialPlayerResponse`, which the page's own inline script assigns
+	// as a whole object after the scriptlets ran. A guard defined on the
+	// object that was there before goes with it, so each link of the path
+	// has to follow what is assigned. Three rules on one parent, because
+	// that is what the list carries and a second trap must not replace the
+	// first.
+	section("set-constant follows a parent the page replaces");
+	{
+		QList<scriptlet_call> calls;
+		for (const char *leaf : { "playerAds", "adPlacements", "adSlots" })
+			calls.push_back({ "x.test", "set-constant",
+			                   { QString("ytInitialPlayerResponse.%1")
+			                         .arg(leaf), "undefined" } });
+		calls.push_back({ "x.test", "set-constant",
+		                   { "deep.a.b.ads", "false" } });
+		QJSEngine eng;
+		give_window(&eng);
+		check(!eng.evaluate(scriptlets::source_for(calls)).isError(),
+		       "the script evaluates");
+		eng.evaluate("window.ytInitialPlayerResponse = { playerAds: [1], "
+		             "adPlacements: [2], adSlots: [3], videoDetails: 'v' };");
+		const QString left = eng.evaluate(
+		  "var r = window.ytInitialPlayerResponse; [typeof r.playerAds, "
+		  "typeof r.adPlacements, typeof r.adSlots, r.videoDetails].join()")
+		  .toString();
+		check(left == "undefined,undefined,undefined,v",
+		       QString("all three ad fields are gone from the object the page "
+		               "assigned, and the rest is kept (%1)").arg(left));
+		eng.evaluate("window.ytInitialPlayerResponse = { adPlacements: [4] };");
+		check(eng.evaluate("typeof window.ytInitialPlayerResponse.adPlacements")
+		          .toString() == "undefined",
+		       "and from the next one assigned after it");
+		eng.evaluate("window.deep.a = { b: { ads: true, keep: 1 } };");
+		check(eng.evaluate("window.deep.a.b.ads === false && "
+		                   "window.deep.a.b.keep === 1").toBool(),
+		       "a link replaced in the middle of a path is followed too");
+	}
+
 	section("an argument cannot become code, however it is spelled");
 	{
 		// **The one mistake that would matter.** Arguments arrive from a
