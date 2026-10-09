@@ -37429,8 +37429,8 @@ the handler ignores, which reddens when the deferral is removed.
 **2. The freeze is fixed and confirmed by use.** The holder tested
 `2218501` and it was still very slow; the measurement above found the
 cause in `filter_list::replace`, not in the click. On a package built
-from `99f65c3` the holder reports the toggle fast. Startup, which paid the
-same cost, has not been reported on separately.
+from `99f65c3` the holder reports the toggle fast, and startup, which paid the
+same cost, faster too.
 
 **3. Ads on YouTube, and page downloads, are where the second fold left
 them.** Neither was touched today. The ad question still needs one fact
