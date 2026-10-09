@@ -418,6 +418,60 @@ subscription_read read(const QString &text, int previous_rules,
 	return rep;
 }
 
+namespace {
+
+// A name `includes_in` will follow: one file, in the list's own directory.
+bool includable(const QString &name) {
+	static const QRegularExpression ok(
+	  QStringLiteral("^[A-Za-z0-9_][A-Za-z0-9._-]*$"));
+	return ok.match(name).hasMatch() && !name.contains(QLatin1String(".."));
+}
+
+// The included name on an `!#include` line outside any `!#if` block, or
+// empty. `depth` carries the block nesting from line to line.
+QString include_on(const QString &line, int *depth) {
+	const QString t = line.trimmed();
+	if (t.startsWith(QLatin1String("!#if"))) {
+		++*depth;
+		return QString();
+	}
+	if (t.startsWith(QLatin1String("!#endif"))) {
+		if (*depth > 0)
+			--*depth;
+		return QString();
+	}
+	if (*depth > 0 || !t.startsWith(QLatin1String("!#include ")))
+		return QString();
+	const QString name = t.mid(10).trimmed();
+	return includable(name) ? name : QString();
+}
+
+}  // namespace
+
+QStringList includes_in(const QString &body) {
+	QStringList out;
+	int depth = 0;
+	for (const QString &line : body.split(QLatin1Char('\n'))) {
+		const QString name = include_on(line, &depth);
+		if (!name.isEmpty() && !out.contains(name))
+			out << name;
+	}
+	return out;
+}
+
+QString assemble(const QString &body, const QHash<QString, QString> &included) {
+	QStringList out;
+	int depth = 0;
+	for (const QString &line : body.split(QLatin1Char('\n'))) {
+		const QString name = include_on(line, &depth);
+		if (!name.isEmpty() && included.contains(name))
+			out << included.value(name);
+		else
+			out << line;
+	}
+	return out.join(QLatin1Char('\n'));
+}
+
 QList<subscription> default_subscriptions() {
 	struct seed { const char *name; const char *url; };
 	// Fetched and read through this parser before being written here, which
@@ -427,6 +481,14 @@ QList<subscription> default_subscriptions() {
 		{ "EasyList",       "https://easylist.to/easylist/easylist.txt" },
 		{ "uBlock filters",
 		   "https://ublockorigin.github.io/uAssets/filters/filters.txt" },
+		{ "uBlock filters - Badware risks",
+		   "https://ublockorigin.github.io/uAssets/filters/badware.txt" },
+		{ "uBlock filters - Privacy",
+		   "https://ublockorigin.github.io/uAssets/filters/privacy.txt" },
+		{ "uBlock filters - Quick fixes",
+		   "https://ublockorigin.github.io/uAssets/filters/quick-fixes.txt" },
+		{ "uBlock filters - Unbreak",
+		   "https://ublockorigin.github.io/uAssets/filters/unbreak.txt" },
 	};
 	QList<subscription> out;
 	for (const seed &s : seeds) {

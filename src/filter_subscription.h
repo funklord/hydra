@@ -4,6 +4,7 @@
 #include "scriptlets.h"
 
 #include <QDateTime>
+#include <QHash>
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -95,7 +96,9 @@ subscription_read read(const QString &text, int previous_rules = 0,
 
 // The subscription list itself, as JSON beside the cached bodies.
 //
-// **Only the index is written here; the bodies are kept as fetched.** Caching
+// **Only the index is written here; the bodies are kept as fetched** -- a
+// list built from `!#include` lines as fetched and assembled, so the cache
+// is the whole list and reading it needs no network. Caching
 // the accepted rules instead would be smaller and would put the gate on the
 // fetch path only -- so a build that later learns to read a rule's options
 // could not use what is already on disk without re-fetching every list, and
@@ -107,6 +110,25 @@ bool save_index(const QString &path, const QList<subscription> &subs);
 
 // A filename for a new subscription's cached body, free in `dir`.
 QString mint_cache_name(const QString &dir, const QString &name);
+
+// **`!#include` lines, which uBlock's lists are built from.** Its
+// `filters.txt` is a head and ten includes -- the yearly files, the general
+// rules -- and nothing here followed them, so "uBlock filters" was the head
+// alone: measured on 2026-10-09, YouTube's `get_watch` rules happened to be
+// in the head while Dailymotion's whole answer to its blocker detection was
+// in `filters-2025.txt` and never arrived.
+//
+// The names a body asks to include, in order. A name is a single file in the
+// list's own directory -- letters, digits, `.`, `_` and `-` -- which is the
+// rule uBlock applies too; anything with a slash, or that would climb out of
+// the directory, is not followed. An include inside an `!#if` block is not
+// followed either: this build reads no preprocessor conditions, and the one
+// such include in uBlock's lists is `filters-mobile.txt` under `env_mobile`.
+QStringList includes_in(const QString &body);
+
+// The body with each followed `!#include` line replaced by what it named.
+// A name missing from `included` leaves its line as it was, a comment.
+QString assemble(const QString &body, const QHash<QString, QString> &included);
 
 // **What a fresh install subscribes to, and why these two.** Until this
 // existed a new install enforced nothing at all: there was no default, and
@@ -123,6 +145,23 @@ QString mint_cache_name(const QString &dir, const QString &name);
 // host, which is the YouTube case. uBlock's list is where those rules live.
 // Neither covers the other, so shipping one would have left a gap nobody
 // could see from the settings page.
+//
+// **And the rest of uBlock's default set, on the copyright holder's word of
+// 2026-10-09** -- "add it as a source anyway, we may need it for other
+// purposes". Chrome's uBlock enables five of its own lists, and this shipped
+// one: `filters.txt`, which is moreover mostly `!#include` lines and was
+// fetched without them (see `includes_in`). Badware, privacy, quick fixes and
+// unbreak are the other four. Read through `read()` on 2026-10-09, with
+// `filters.txt` assembled from its includes:
+//
+//     filters.txt + 9 includes  7159 rules  9233 scriptlets
+//     badware.txt                248 rules    24 scriptlets
+//     privacy.txt                337 rules   283 scriptlets
+//     quick-fixes.txt             99 rules   123 scriptlets
+//     unbreak.txt                121 rules   302 scriptlets
+//
+// Much of unbreak is exception rules, which this engine cannot use, and is
+// shipped anyway: its scriptlets undo breakage the others cause.
 //
 // Enabled, because a default that is off is the same as no default: the
 // thing being fixed is that a fresh install blocked nothing.

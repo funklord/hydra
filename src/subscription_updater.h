@@ -2,6 +2,8 @@
 
 #include "filter_subscription.h"
 
+#include <QStringList>
+#include <QHash>
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -65,6 +67,14 @@ signals:
 private:
 	void start_next();
 	void finish(QNetworkReply *reply, int which);
+	QStringList read_offered() const;
+	bool cached_unassembled(const subscription &s) const;
+	void write_offered(const QStringList &urls) const;
+	// The includes a fetched list names, one at a time, then `promote`.
+	void fetch_include();
+	void finish_include(QNetworkReply *reply);
+	void promote(int which, const QByteArray &body);
+	QNetworkReply *get(const QUrl &url);
 
 	QNetworkAccessManager *m_net = nullptr;
 	QString m_index;
@@ -72,6 +82,11 @@ private:
 	QList<subscription> m_subs;
 	QList<int> m_queue;      // indices into m_subs, still to fetch
 	int m_at = -1;           // the one in flight, or -1
+	// A list waiting on its includes: the head as fetched, the names still to
+	// fetch, and the bodies fetched so far.
+	QByteArray              m_head;
+	QStringList             m_includes;
+	QHash<QString, QString> m_included;
 	int m_promoted = 0;
 	int m_refused  = 0;
 };

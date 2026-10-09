@@ -603,6 +603,65 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	// **A shipped list added later reaches a profile that already exists,
+	// once.** Seeding runs only without an index, so the holder's profile --
+	// two lists old -- would never have been given the four added on
+	// 2026-10-09. And once, not whenever absent: a list somebody removed has
+	// to stay removed, which is what the offered record beside the index is.
+	section("a list shipped later is offered to an existing profile, once");
+	{
+		QTemporaryDir dir;
+		const QString index = QDir(dir.path()).filePath("subs.json");
+		const QList<subscription> seeds =
+		  filter_subscription::default_subscriptions();
+		// A profile from before: the original two, and no offered record.
+		QList<subscription> old;
+		for (subscription s : seeds)
+			if (s.url.toString().endsWith("easylist.txt") ||
+			    s.url.toString().endsWith("/filters.txt")) {
+				s.file = filter_subscription::mint_cache_name(dir.path(), s.name);
+				old << s;
+			}
+		check(old.size() == 2, "the original two are still shipped");
+		filter_subscription::save_index(index, old);
+		{
+			subscription_updater up(index, dir.path());
+			check(up.subscriptions().size() == seeds.size(),
+			       QString("the lists shipped since are added (%1 of %2)")
+			           .arg(up.subscriptions().size()).arg(seeds.size()));
+			bool fresh = true;
+			for (const subscription &s : up.subscriptions())
+				if (s.file.isEmpty() || s.file.contains('/'))
+					fresh = false;
+			check(fresh, "each with a cache name of its own");
+			// The person then removes one.
+			QList<subscription> fewer = up.subscriptions();
+			fewer.removeLast();
+			up.set_subscriptions(fewer);
+		}
+		{
+			subscription_updater up(index, dir.path());
+			check(up.subscriptions().size() == seeds.size() - 1,
+			       QString("and one removed afterwards stays removed (%1)")
+			           .arg(up.subscriptions().size()));
+		}
+		// A profile from before that had removed EasyList keeps it removed:
+		// it was offered at seeding, which is what a missing record means.
+		const QString index2 = QDir(dir.path()).filePath("subs2.json");
+		filter_subscription::save_index(index2, { old.last() });
+		{
+			subscription_updater up(index2, dir.path());
+			bool easylist = false;
+			for (const subscription &s : up.subscriptions())
+				easylist = easylist ||
+				           s.url.toString().endsWith("easylist.txt");
+			check(!easylist && up.subscriptions().size() == seeds.size() - 1,
+			       QString("an original list removed before this record "
+			               "existed is not brought back (%1)")
+			           .arg(up.subscriptions().size()));
+		}
+	}
+
 	section("the index round-trips, and a cache name is never a path");
 	{
 		QTemporaryDir dir;
@@ -808,6 +867,109 @@ int main(int argc, char **argv) {
 		srv.file_status = 200;
 		check(up.update(false) == 0,
 		       "nothing is due an hour after a fetch");
+	}
+
+	// **`!#include`, which uBlock's lists are built from.** Its `filters.txt`
+	// is a head and ten includes, and the head alone was all that arrived:
+	// Dailymotion's whole answer to its blocker detection lives in an
+	// included yearly file.
+	section("a list's includes are fetched, assembled and cached whole");
+	{
+		const QString head =
+		  "! Title: head\n||head.example^\n!#include part-a.txt\n"
+		  "!#include ../escape.txt\n!#include sub/dir.txt\n"
+		  "!#if env_mobile\n!#include mobile.txt\n!#endif\n"
+		  "!#include part-a.txt\n!#include part-b.txt\n";
+		check(filter_subscription::includes_in(head) ==
+		          QStringList({ "part-a.txt", "part-b.txt" }),
+		       QString("only plain names in the list's own directory, outside "
+		               "any condition, each once (%1)")
+		           .arg(filter_subscription::includes_in(head).join(" ")));
+		const QString whole = filter_subscription::assemble(
+		  head, { { "part-a.txt", "||a.example^" } });
+		check(whole.contains("||a.example^") &&
+		          whole.contains("!#include part-b.txt") &&
+		          whole.contains("!#include mobile.txt"),
+		       "assembled in place, and a part not supplied stays a comment");
+
+		echo_server srv;
+		srv.content_type = "text/plain";
+		const QString base = srv.start();
+		srv.files["/lists/head.txt"] =
+		  "! Title: head\n||head.example^\n!#include part-a.txt\n"
+		  "!#include part-b.txt\n";
+		srv.files["/lists/part-a.txt"] = "||a.example^\n";
+		srv.files["/lists/part-b.txt"] = "||b.example^\nb.example##.ad\n";
+
+		QTemporaryDir scratch;
+		const QString index = QDir(scratch.path()).filePath("subs.json");
+		const QString cache = QDir(scratch.path()).filePath("bodies");
+		subscription_updater up(index, cache);
+		subscription one;
+		one.name = "Head";
+		one.url  = QUrl(base + "/lists/head.txt");
+		one.file = "head.txt";
+		up.set_subscriptions({ one });
+		int promoted = -1, refused = -1;
+		QObject::connect(&up, &subscription_updater::updated,
+		                  [&promoted, &refused](int p, int r) {
+			promoted = p;
+			refused  = r;
+		});
+		up.update(true);
+		for (int i = 0; i < 200 && promoted < 0; ++i)
+			spin(25);
+		const auto slurp = [](const QString &p) {
+			QFile f(p);
+			f.open(QIODevice::ReadOnly);
+			return QString::fromUtf8(f.readAll());
+		};
+		const QString cached = slurp(QDir(cache).filePath("head.txt"));
+		check(promoted == 1 && up.subscriptions().first().rules == 4,
+		       QString("the head and both parts are read as one list "
+		               "(promoted=%1, %2 rules)")
+		           .arg(promoted).arg(up.subscriptions().first().rules));
+		check(cached.contains("||a.example^") && cached.contains("b.example##.ad"),
+		       "and cached whole, so a load needs no network");
+
+		// **A head cached before includes were followed is due at once.**
+		// Written over the assembled copy, as the holder's profile had it,
+		// with a fetch time of now: an unforced update fetches it anyway,
+		// and only it.
+		{
+			QFile f(QDir(cache).filePath("head.txt"));
+			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			f.write(srv.files["/lists/head.txt"]);
+		}
+		QList<subscription> fresh = up.subscriptions();
+		fresh[0].fetched = QDateTime::currentDateTime();
+		up.set_subscriptions(fresh);
+		promoted = refused = -1;
+		check(up.update(false) == 1,
+		       "a cached head with includes left in it is due though fresh");
+		for (int i = 0; i < 200 && promoted < 0; ++i)
+			spin(25);
+		check(promoted == 1 && slurp(QDir(cache).filePath("head.txt")) == cached,
+		       QString("and comes back assembled (promoted=%1)").arg(promoted));
+		promoted = refused = -1;
+		check(up.update(false) == 0,
+		       "after which a fresh assembled copy is not due again");
+
+		// One part answered with a web page -- a portal, an error page: the
+		// update is refused and the whole copy stays.
+		srv.files["/lists/part-b.txt"] =
+		  "<!DOCTYPE html>\n<html><body>Sign in</body></html>\n";
+		promoted = refused = -1;
+		up.update(true);
+		for (int i = 0; i < 200 && promoted < 0; ++i)
+			spin(25);
+		check(promoted == 0 && refused == 1,
+		       QString("a part that is a web page refuses the update (promoted=%1 "
+		               "refused=%2)").arg(promoted).arg(refused));
+		check(slurp(QDir(cache).filePath("head.txt")) == cached &&
+		          up.subscriptions().first().note.contains("part-b.txt"),
+		       QString("keeping the whole copy, and saying which part (%1)")
+		           .arg(up.subscriptions().first().note));
 	}
 
 	section("an index with no trusted key trusts the lists we ship");

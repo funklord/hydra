@@ -37743,3 +37743,63 @@ target here, but its execution context is reachable from the page target's
 `Runtime.executionContextCreated` list; and a `pgrep` wait loop matched its
 own command line, as `running-code.md` warns, and waited out its full term.
 
+## uBlock's whole default set, and the includes its main list is made of
+
+The Dailymotion ads went once the subscribed cosmetic rules were applied,
+and a countdown stayed where the ad had been. uBlock's answer to that site
+is in `filters-2025.txt` -- `dailymotion.com##+js(set,
+__NATIVEADS_CANARY__, true)`, which answers the site's blocker check, and
+`geo.dailymotion.com##+js(set, DMP_ENABLE_ADS, false)`, which turns ads off
+inside the player's own frame -- and that file never arrived.
+
+**`filters.txt` is a head and ten `!#include` lines**, and the updater did
+not follow them, so "uBlock filters" was 1,791 rules and 2,441 scriptlets
+where the list uBlock means is 7,159 and 9,233. The yearly files 2020 to
+2026, `filters-general.txt` and the link shorteners all came in through
+those lines. Now `includes_in` names them, `assemble` splices them in, and
+the updater fetches them after the head and reads and caches the whole. A
+name is one file in the list's own directory, as uBlock requires; an
+include inside an `!#if` block is not followed, because this build reads
+no preprocessor conditions, and the only such include is
+`filters-mobile.txt` under `env_mobile`. A part that fails, or that is a
+web page, refuses the whole update and keeps the copy in hand -- found
+because the test server answers an unknown path with 200 and an echo,
+which was spliced in as a part.
+
+**The other four of uBlock's default lists ship too**, on the holder's word
+of 2026-10-09 -- "add it as a source anyway, we may need it for other
+purposes": badware, privacy, quick fixes and unbreak, trusted like the
+first two. Seeding ran only without an index, so an existing profile is
+now offered each shipped list once, recorded beside the index in
+`filters-subscribed.json.offered`; a profile older than that record counts
+as offered the original two, so a list somebody removed stays removed,
+and a profile whose index reads back empty -- removed everything, or
+malformed -- is not touched, which the existing tests caught when the
+first version handed the four to both. And a cached body that still holds
+a followable `!#include` is due at once, so the holder's head-only copy is
+replaced on the next launch rather than at its next scheduled fetch.
+
+Measured on a copy of the holder's profile through the real app: the four
+were added and fetched, privacy with its own include, and `filters.txt`
+was refetched at once and cached assembled at 2.4 MB with both Dailymotion
+rules in it. `test_subscription` covers discovery, assembly, the fetch,
+the refusal, the once-only offer and the refetch; sabotaging discovery,
+and the refetch check, each reds what they cover.
+
+**Open, the cost: the scriptlet script is now 1.3 MB.** Every call goes
+into one script injected into every frame of every page, and the page
+picks those in scope. With 10,004 calls it is 1,299,708 characters, built
+in 93ms per view and parsed in every frame, where 2,457 calls made 270 KB.
+Cutting it per host is not simple: it has to be in place before the
+page's own scripts, and a frame -- Dailymotion's player -- has a host of
+its own. Not measured: what the parse costs a page with many frames.
+
+**Open, the holder's: `!#if`.** uBlock's lists choose rules by engine and
+capability -- `env_chromium`, `cap_html_filtering`, `env_mobile` -- and
+this build treats the conditions as comments, applying both branches. For
+Dailymotion that is what makes it work: the branch for Chromium uses
+`xml-prune`, which is not in the catalog, and the other branch carries the
+two `set` rules. Reading the conditions would mean deciding what this
+browser claims to be, which is a judgement about capability rather than
+engine, and is not taken here.
+
