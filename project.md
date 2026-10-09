@@ -37803,3 +37803,31 @@ two `set` rules. Reading the conditions would mean deciding what this
 browser claims to be, which is a judgement about capability rather than
 engine, and is not taken here.
 
+## A PDF in a tab was a silent download, and always had been
+
+Reported 2026-10-09 as a bank failing to load a PDF -- an e-invoice opened
+from Nordea's netbank, `netbank.nordea.se/link/?url=https://www.dcp.se/dip/
+View_invoice.action&ticket=...` -- and corrected by the holder as "not a
+regression, it has probably never worked". Right: the invoice was in
+`~/Downloads` all along, a valid 84 KB `%PDF-1.5`, recorded in
+`download-history.json` as a finished engine download, while the tab
+stayed blank.
+
+**Qt WebEngine's PDF viewer needs `PluginsEnabled`, and Qt defaults it off**,
+so every PDF navigated to in a tab became a download. `apply_settings` now
+turns on `PluginsEnabled` and `PdfViewerEnabled`; in Qt 6 the viewer is the
+only plugin there is. A response sent as an attachment is still a download,
+which is the server's choice.
+
+`try_pdf`, a live driver, serves one PDF inline and one as an attachment
+from a local server: the first is shown with nothing downloaded, the second
+is saved. Without the two settings it reproduces the report exactly -- a
+blank tab and a download. The driver keeps HOME and the XDG directories in
+a temporary directory: its first run named the download directory in a
+`user-dirs.dirs` that was not honoured, and the attachment landed in the
+real `~/Downloads`, from where it was removed by hand.
+
+Not tested: the bank's own flow past the PDF itself -- the netbank link
+page, its ticket and whatever it does before the PDF arrives -- which needs
+the holder's session. The holder's next attempt is the check.
+

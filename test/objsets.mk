@@ -103,6 +103,7 @@ OBJSETS_SOURCES = \
 	test/live/try_navigate.cpp \
 	test/live/try_notify.cpp \
 	test/live/try_pagetools.cpp \
+	test/live/try_pdf.cpp \
 	test/live/try_permissions.cpp \
 	test/live/try_phone.cpp \
 	test/live/try_rename.cpp \
@@ -4501,6 +4502,23 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_sponsor_skip.o \
 	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
+
+OBJS_try_pdf = \
+	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/app/request_filter.o \
+	$(BUILD_DIR)/app/qtwebengine_factory.o \
+	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/app/qtwebengine_view.o \
+	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
+	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/webauth_dialog.o \
+	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
+	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
+	$(BUILD_DIR)/moc/moc_web_view_backend.o \
+	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o
 
 OBJS_try_permissions = \
 	$(BUILD_DIR)/app/main_window.o \

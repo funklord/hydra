@@ -1010,6 +1010,16 @@ void qtwebengine_view::apply_settings(const view_settings &s) {
 	// decision and is made on the signal below; this only makes the request
 	// reach it.
 	set->setAttribute(QWebEngineSettings::FullScreenSupportEnabled, true);
+	// **A PDF is shown, not silently saved.** Qt's built-in viewer needs
+	// plugins on, and Qt defaults them off -- so every PDF opened in a tab
+	// became a download into ~/Downloads while the tab stayed blank. Found on
+	// a bank's e-invoice (`dcp.se/dip/View_invoice.action` through Nordea's
+	// netbank), which "has probably never worked": it was in the downloads
+	// folder all along. In Qt 6 the viewer is the only plugin there is, so
+	// this enables nothing else. A response sent as an attachment is still a
+	// download, which is the server's choice and the right one.
+	set->setAttribute(QWebEngineSettings::PluginsEnabled, true);
+	set->setAttribute(QWebEngineSettings::PdfViewerEnabled, true);
 }
 
 void qtwebengine_view::set_permission_decider(permission_decider fn) {
