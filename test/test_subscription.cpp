@@ -691,6 +691,54 @@ int main(int argc, char **argv) {
 		       "nothing is due an hour after a fetch");
 	}
 
+	section("an index with no trusted key trusts the lists we ship");
+	{
+		// **The upgrade, and why it is not a weakening.** An index written
+		// before the `trusted` key existed says nothing about trust, and
+		// reading its silence as a refusal left EasyList and uBlock's filters
+		// permanently untrusted -- dropping 22 scriptlet rules, five of them
+		// youtube's, and nothing re-seeds an index that already exists.
+		// Settled by the copyright holder 2026-10-09: the lists arrive in the
+		// same binary as the code that trusts them.
+		const QString idx = QDir::temp().filePath("hydra-trust-index.json");
+		auto put = [&](const QByteArray &json) {
+			QFile f(idx);
+			f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+			f.write(json);
+			f.close();
+		};
+
+		// Silence about a list we ship: adopted.
+		put("[{\"name\":\"uBlock filters\","
+		     "\"url\":\"https://ublockorigin.github.io/uAssets/filters/"
+		     "filters.txt\",\"file\":\"u.txt\"}]");
+		QList<subscription> a = filter_subscription::load_index(idx);
+		check(a.size() == 1 && a.first().trusted,
+		       "a shipped list with no trusted key comes back trusted");
+
+		// **Control one: an explicit false is a decision, not silence.**
+		// Without this the change reads as "always trust what we ship",
+		// which would take the switch away from the person.
+		put("[{\"name\":\"uBlock filters\","
+		     "\"url\":\"https://ublockorigin.github.io/uAssets/filters/"
+		     "filters.txt\",\"trusted\":false,\"file\":\"u.txt\"}]");
+		QList<subscription> b = filter_subscription::load_index(idx);
+		check(b.size() == 1 && !b.first().trusted,
+		       "and an explicit false on the same list is still obeyed");
+
+		// **Control two: silence about a list we do NOT ship stays false.**
+		// This is the retroactive grant the original comment refused, and it
+		// is still refused.
+		put("[{\"name\":\"Someone's list\","
+		     "\"url\":\"https://example.invalid/list.txt\","
+		     "\"file\":\"s.txt\"}]");
+		QList<subscription> c = filter_subscription::load_index(idx);
+		check(c.size() == 1 && !c.first().trusted,
+		       "while a list we do not ship is untrusted on silence as before");
+
+		QFile::remove(idx);
+	}
+
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail == 0 ? 0 : 1;
 }

@@ -36957,12 +36957,31 @@ is correct for a list somebody added. What it cannot distinguish is
 itself the answer differs: the file never said "not trusted", the field
 did not exist.
 
-**Not fixed here, because it grants trust.** The repair is to tell absent
-from false -- `o.contains("trusted")` -- and adopt the shipped default's
-trust for a subscription whose url is one hydra ships, leaving an explicit
-false alone and every other list untouched. That is a trust decision and a
-narrow instance of the saved-file-pins-the-old-default question recorded
-above, which is the holder's.
+**Fixed, on the copyright holder's decision 2026-10-09**, and the reason
+is the one that settles it: *we are handing the user a binary via an
+update, so we can hand them trust without weakening security*. The lists
+arrive in the same binary as the code that trusts them, so trusting them
+is the same act as shipping them -- no security is given away that
+shipping had not already given.
+
+`load_index` now tells absent from explicitly false. A url this project
+ships adopts the shipped default's trust when the key is **absent**; an
+explicit `false` is still obeyed, because that is somebody's decision
+rather than an older build's silence; and a url we do not ship keeps the
+old answer, which is the retroactive grant the original comment refused
+and still refuses. Keyed on the url rather than the name, since the name
+is the list's own title and a person may rename a subscription without
+changing what it is.
+
+Three checks in `test_subscription`, and the two controls are what show
+the change is narrow:
+
+    a shipped list with no trusted key comes back trusted        ok
+    and an explicit false on the same list is still obeyed       ok
+    while a list we do not ship is untrusted on silence as before  ok
+
+Sabotaged back to `o.value("trusted").toBool(false)`: the first reddens
+and both controls stay green.
 
 **What is unconfirmed**: whether this profile is actually in that state.
 One command answers it, and it is the holder's to run --

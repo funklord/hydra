@@ -284,6 +284,18 @@ QList<subscription> default_subscriptions() {
 	return out;
 }
 
+// Whether this project ships a list at `url`, and with what trust.
+//
+// **Keyed on the url, not the name.** The name is the list's own title and a
+// person may rename a subscription without changing what it is; the url is
+// what identifies the thing being trusted.
+static bool shipped_trust_for(const QUrl &url) {
+	for (const subscription &d : default_subscriptions())
+		if (d.url == url)
+			return d.trusted;
+	return false;
+}
+
 QList<subscription> load_index(const QString &path) {
 	QList<subscription> out;
 	QFile f(path);
@@ -306,12 +318,31 @@ QList<subscription> load_index(const QString &path) {
 		s.name    = o.value("name").toString();
 		s.url     = QUrl(o.value("url").toString());
 		s.enabled = o.value("enabled").toBool(true);
-		// **False when the key is absent, which is the inverse of `enabled`
-		// just above and not a slip.** An index written by an older build has
-		// no `trusted` key at all, and defaulting it the other way would turn
-		// the power on for every list somebody had already subscribed to,
-		// retroactively, as an upgrade side effect.
-		s.trusted = o.value("trusted").toBool(false);
+		// **False when the key is absent for a list somebody added**, which is
+		// the inverse of `enabled` just above and not a slip: defaulting it
+		// the other way would turn the power on retroactively for every list
+		// anybody had ever subscribed to, as an upgrade side effect.
+		//
+		// **But absent is not false for a list this project ships**, and the
+		// difference decides whether 22 of uBlock's rules run -- five of them
+		// youtube's `trusted-replace-xhr-response` and `trusted-rpfr`, which
+		// reach the ad payload rather than hiding a box. An index written
+		// before this key existed says nothing about trust, and reading its
+		// silence as a refusal left the shipped lists crippled for ever:
+		// nothing re-seeds an index that already exists, so the state was
+		// permanent and silent. Measured against uBlock's own filters.txt --
+		// 2441 of 2451 scriptlet rules accepted, 2419 of them without trust.
+		//
+		// Settled by the copyright holder 2026-10-09: the lists are handed to
+		// the person in the same binary as the code that trusts them, so
+		// trusting them is the same act as shipping them, and no security is
+		// given away that shipping had not already given. An explicit `false`
+		// is still obeyed -- that is somebody's decision rather than an older
+		// build's silence -- and a url this project does not ship keeps the
+		// old answer.
+		s.trusted = o.contains("trusted")
+		                ? o.value("trusted").toBool(false)
+		                : shipped_trust_for(s.url);
 		s.file    = o.value("file").toString();
 		s.rules   = o.value("rules").toInt();
 		s.note    = o.value("note").toString();
