@@ -37325,3 +37325,115 @@ it, which is luck rather than a safeguard -- and the general shape is that
 **a lazily-created singleton keyed on its own null is a name worth
 grepping before reusing**, since the guard reads as initialisation and is
 also the thing a second writer defeats.
+
+## Fold, 2026-10-09 (third): ready to clear, and restarting as funk
+
+Supersedes both folds above wherever they disagree, **including every
+build id in them** -- those are claims about what was installed at the
+time and have moved twice since.
+
+### Where the code is, and what is actually running
+
+`HEAD` is `2218501`, pushed. Three commits this session: the Trusted-box
+crash (`2780eb7`), the tree-deletion record (`6aae30b`), and the reload
+deferral (`2218501`).
+
+**What is installed is one fix behind the tree.** `/usr/bin/hydra` is
+build id `98fd3578...`, which carries the crash fix and NOT the freeze
+fix. The package carrying both is built at `build/deb/hydra_0.1_amd64.deb`
+(debug build id ends `9cf17824...`), and it is **untracked**, so a
+re-clone of this tree deletes it. Either install it before re-cloning or
+run `make deb` again afterwards.
+
+The discriminating check, since three builds are now in play, is a symbol
+in the dbgsym rather than a date or a `strings` sweep:
+`schedule_subscriptions_rebuild` is the crash fix and
+`reload_subscriptions_soon` is the freeze fix. The installed build has the
+first and not the second, which is what makes the probe a control as well
+as a test.
+
+### The tree was deleted, and this copy has the wrong owner
+
+See *The tree was deleted, and what that cost* above. Two consequences
+for whoever picks this up:
+
+- **This working copy is `claude:users`**, so git refuses it for a `funk`
+  session as dubious ownership. Everything is pushed, so the clean fix is
+  to re-make it as the owning account:
+
+        cd /home/funk/src && rm -rf hydra
+        git clone git@github.com:funklord/hydra.git
+
+  Note the clone that restored it came over HTTPS and its remote had to be
+  re-pointed at the SSH url the sibling trees use.
+- **Another session's uncommitted work is gone** -- `tool/style_gate.py`
+  and `tool/test_style_gate.py`, dirty here all session, never staged,
+  never pushed, on a filesystem with no snapshots. That session is on the
+  other account and could not be reached, because the per-tree inbox lives
+  inside `.git` and went with the tree.
+
+### The measurement the next session can take and this one could not
+
+**Running as `funk` unlocks the one open question.** The reload is
+deferred and debounced now, but it still runs on the UI thread, and
+whether that matters depends on how long it takes -- which could not be
+measured from the other account, because `~/.local/share` is mode 700 and
+holds the cached lists.
+
+As the owning account, in order:
+
+1. Size the cache: `ls -l ~/.local/share/Hydra/filters-subscribed/` and
+   read `filters-subscribed.json` for which are enabled.
+2. Time one `filter_subscription::read` over each enabled body. A few
+   thousand rules should be milliseconds. **If one toggle still stalls
+   for a noticeable time, the cost is not where the mechanism says it
+   should be**, and the next lens is whatever `inject_scriptlets` does
+   per view rather than the parse.
+3. Only then is the worker-thread question a real decision. Parsing off
+   the UI thread and installing through `filter_list::replace`, which
+   already takes the write lock so the interceptor never sees a half-built
+   list, is the shape -- and it is a design change, so it is the holder's.
+
+### The three live questions, as of this fold
+
+**1. The crash is fixed and confirmed independently of the suite.** The
+holder's gdb log after installing `98fd3578` holds no signal at all and
+ends `exited normally`. The suite's own evidence is a sentinel in a column
+the handler ignores, which reddens when the deferral is removed.
+
+**2. The freeze is fixed in the tree and unconfirmed by use.** Reported
+after the crash fix: the dialog froze on the same toggle. Deferred and
+debounced at 250ms in `2218501`, both halves sabotage-proven. **Nobody
+has yet reported whether a single toggle still pauses**, which is exactly
+what the measurement above settles.
+
+**3. Ads on YouTube, and page downloads, are where the second fold left
+them.** Neither was touched today. The ad question still needs one fact
+from the holder -- which ads, pre-roll, mid-roll or banner -- because
+server-spliced stream ads are beyond any list and a banner is not.
+Downloads are still proven only against `fake_download_source`.
+
+### What this session got wrong, because it is again the pattern
+
+**A span replace whose end anchor was searched from the start of the
+file.** Rewriting two passages in this document, the second edit found an
+earlier copy of the text it meant to end at, so `src[:s] + new + src[e:]`
+with `e < s` duplicated everything between them. The docs gate caught it
+by the duplicate headings; the edit had no `e > s` assertion, which is the
+proof a mechanical change is supposed to carry.
+
+**A member name whose reuse would have broken something silently.**
+`m_subs_timer` was already the six-hourly fetch timer, created lazily
+behind `if (!m_subs_timer)`. Adding a 250ms single-shot under that name
+would have left the fetch never configured and `start()` firing a reload.
+What complained was a duplicate declaration -- a syntax error that had
+nothing to do with the behavioural fault it happened to prevent. **A
+lazily-created singleton keyed on its own null is a name to grep before
+reusing.**
+
+**And a background job started with `nohup ... &` inside a tool call is
+reaped when the call returns.** An ASan run that would have named the
+use-after-free directly was lost that way and not restarted, so the crash
+fix rests on a backtrace and a sentinel rather than on the one instrument
+built for it. `make test-sanitize T=test_probe_ui` is still the right
+command and has never been run against this defect.
