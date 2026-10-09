@@ -82,6 +82,8 @@ public:
 	bool can_go_forward() const override;
 	void set_script_bridge(QObject *object, const QString &name) override;
 	void remove_script(const QString &name) override;
+	void run_probe(const QString &source,
+	               std::function<void(const QString &)> done) override;
 	QByteArray save_state() const override;
 	bool       restore_state(const QByteArray &blob) override;
 

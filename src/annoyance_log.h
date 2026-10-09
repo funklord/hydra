@@ -43,6 +43,11 @@ struct annoyance_report {
 	// leaves no ad-shaped request and often nothing to pick: what matters is
 	// whether the patches meant for it ran, failed, or were never in scope.
 	QStringList patches;
+	// **What the page itself showed** when the button was pressed: a player
+	// saying it is in an ad, visible ad-named elements, ad-host frames, ad
+	// labels (`ad_probe::describe`). The only field that answers "was an ad
+	// on screen" rather than "what did the browser do".
+	QStringList detected;
 	int         observed = 0;  // how many requests the page had made in total
 	// What the person did next, if anything: "recorded", "zapped", "evolved",
 	// "consent". Kept because a report nobody acted on is the interesting kind

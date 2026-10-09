@@ -1056,6 +1056,12 @@ void qtwebengine_view::remove_script(const QString &name) {
 	forget_script(name);
 }
 
+void qtwebengine_view::run_probe(const QString &source,
+                                  std::function<void(const QString &)> done) {
+	m_page->runJavaScript(source, QWebEngineScript::ApplicationWorld,
+	                      [done](const QVariant &v) { done(v.toString()); });
+}
+
 void qtwebengine_view::inject_script(const QString &name, const QString &source,
                                       bool subframes) {
 	forget_script(name);

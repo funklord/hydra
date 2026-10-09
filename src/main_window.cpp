@@ -44,6 +44,7 @@
 #include "extractor_dialog.h"
 #include "extractor_helpers.h"
 #include "network_fetcher.h"
+#include "ad_probe.h"
 #include "ai_provider.h"
 #include "local_proxy.h"
 #include "filter_signals.h"
@@ -2402,6 +2403,28 @@ void main_window::report_annoyance() {
 		return;
 	}
 
+	// **The page is asked first whether an ad is on screen**, because
+	// everything else this files is about what the browser did, and for a
+	// pre-roll from the site's own host that can all be clean while the ad
+	// plays. Asked in an isolated world, so the page cannot see the question.
+	// The answer arrives asynchronously; the report is filed for the page the
+	// button was pressed on even if the tab changes meanwhile, and a view
+	// closed first takes the question with it, which files nothing -- the
+	// page the complaint was about is gone.
+	QPointer<web_view_backend> asked(v);
+	v->run_probe(ad_probe::source(), [this, asked, page](const QString &json) {
+		if (!asked)
+			return;
+		ad_probe::findings found;
+		ad_probe::parse(json, &found);
+		file_annoyance(page, found);
+	});
+}
+
+void main_window::file_annoyance(const QUrl &page,
+                                  const ad_probe::findings &found) {
+	const QString host = page.host();
+
 	// **Nothing is captured here that was not already being collected.**
 	// `filter_signals` accumulates the ad-shaped requests and the full corpus
 	// as a side effect of the interceptor; this takes a copy of them at the
@@ -2421,6 +2444,12 @@ void main_window::report_annoyance() {
 		// site, where both numbers came back 0 while every check passed.
 		r.observed = m_signals->observed_for(host).size();
 	}
+	// The one thing that was not already being collected: what the page
+	// showed at the moment of the complaint. Kept with the site's signals as
+	// well, so the filter dialog the report can open sends it to the model.
+	r.detected = ad_probe::describe(found);
+	if (m_signals)
+		m_signals->note_detected(host, r.detected);
 
 	// Filed *before* the dialog, deliberately. Somebody who presses this and
 	// then closes the window has still told us something, and losing that

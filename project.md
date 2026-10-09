@@ -37607,12 +37607,57 @@ them never depended on it. `test_annoyance` covers the round trip, the
 list, the offer and the message; the old suspects-only condition reds
 the offer.
 
-Still open: **detecting** the ad. The button gathers what the patches
-did, not whether the page then showed an ad -- the runner knows what it
-installed, not what the player did afterwards. A YouTube player says so
-in its own classes (`ad-showing`, `ad-interrupting`), which is what the
-DevTools probes here read; a generic answer for any site is the harder
-half and is not built.
+**And the button now looks at the page.** Pressing it runs `ad_probe` once
+in the current page through a new `web_view_backend::run_probe`: top frame,
+isolated world, so the page can neither see the question nor answer it
+differently. The report, filed when the answer arrives, gains `detected`;
+the dialog lists it first; the filter AI is sent it and it alone enables
+Send; and the prompt says a visible element is evidence for a cosmetic
+rule on its selector, while a player in an ad with no failed patch means
+the ad got past the patches.
+
+What it looks for, most decisive first:
+
+- **a player saying it is in an ad**, in its own classes: YouTube's
+  `ad-created`, `ad-showing`, `ad-interrupting`, Video.js's
+  `vjs-ad-playing`, JW Player's `jw-flag-ads`, and a visible Google IMA
+  container;
+- **visible ad-named elements**, by whole id or class *token* split on `-`
+  and `_`, at least 20 pixels each way, outermost only;
+- **visible frames from ad hosts**, a short list of the large networks;
+- **visible ad labels**: "Ad", "Sponsored", "Skip ad", "Ad 1 of 2",
+  "Annons", matched whole.
+
+Every scan is capped. `try_adprobe` runs it through the real backend
+against fixture files offline, in both directions -- `header`,
+`shadow-box`, `read-more`, `download` and `Adsorption` find nothing, a
+hidden or 5-pixel ad is not reported, a wrapper and its inner div are one
+-- and substring matching in place of tokens reds the clean page by
+reporting the site header.
+
+**Measured on YouTube, through the real button** (`try_annoyed` with a
+watch url and no lists): the first run reported the player as an
+*element*, because its own `ad-created` class has the token `ad`, while
+the player branch stayed silent since it counted only `ad-showing` and
+`ad-interrupting`. `ad-created` alone is what the earlier DevTools probe
+found on the second video where the holder saw a pre-roll, so it is a
+player state now, and an element already identified as a player is
+skipped by the name scan. The second run reported
+`player: youtube player div#movie_player says it is in an ad
+(ad-created)`, and the check that a player is not also an element reds
+without the skip.
+
+`try_annoyed` had to change for this: its dialog-answering helper looked
+once at 500ms, which the asynchronous probe raced, and once it polled, a
+poller from a section where no dialog should appear outlived that section,
+closed the next one's dialog and wrote through a dead pointer -- so each
+call now retires the previous one.
+
+Still not built: **removing** the ad from the button. The report, the
+dialog and the model have what is needed to propose a rule; applying one
+is still the person accepting it in *Propose Filter Rules*. The probe
+reads the top frame only, so an ad inside a cross-origin frame is seen as
+the frame, not its content, and on Android `run_probe` answers empty.
 
 ### The second video: `get_watch`, and uBlock's `replace=`
 

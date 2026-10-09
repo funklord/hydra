@@ -74,6 +74,28 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 	                  .arg(report.suspects.size()));
 	box->addWidget(what);
 
+	// **What the page showed when the button was pressed**, first, because it
+	// is the one answer to "is there an ad" rather than to "what did the
+	// browser do". A player saying it is in an ad is not a guess; the rest is
+	// evidence a rule can be written from.
+	if (!report.detected.isEmpty()) {
+		auto *seen_head = new QLabel(
+		  QString("Seen on the page when you pressed this (%1):")
+		      .arg(report.detected.size()), this);
+		seen_head->setObjectName("detected_head");
+		seen_head->setWordWrap(true);
+		box->addWidget(seen_head);
+
+		auto *seen = new QListWidget(this);
+		seen->setObjectName("detected");
+		for (const QString &d : report.detected)
+			seen->addItem(d);
+		seen->setSelectionMode(QAbstractItemView::NoSelection);
+		seen->setFocusPolicy(Qt::NoFocus);
+		seen->setWordWrap(true);
+		box->addWidget(seen, 1);
+	}
+
 	m_suspects = new QListWidget(this);
 	m_suspects->setObjectName("suspects");
 	for (const group &g : collapse_by_shape(report.suspects)) {
@@ -104,14 +126,16 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 		// And when the page patches ran, the likelier reading is an ad from
 		// the site's own host, which is what a video pre-roll looks like from
 		// the network: nothing at all.
-		m_suspects->addItem(report.patches.isEmpty()
+		const bool same_host = !report.patches.isEmpty() ||
+		                       !report.detected.isEmpty();
+		m_suspects->addItem(!same_host
 		  ? QStringLiteral("Nothing on the network looked ad-shaped — so this "
 		                    "is likely cosmetic, a consent banner, or the site "
 		                    "itself.")
 		  : QStringLiteral("Nothing on the network looked ad-shaped. An ad "
 		                    "served from the site's own host, such as a video "
-		                    "pre-roll, looks like this — the page patches "
-		                    "below are what reach it."));
+		                    "pre-roll, looks like this — what the page showed "
+		                    "and the page patches are what reach it."));
 		m_suspects->setEnabled(false);
 	}
 	box->addWidget(m_suspects, 1);
@@ -208,17 +232,18 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 	// suspect request, which a same-host ad never produces -- so the one tool
 	// that can propose a page patch was disabled on exactly the page that
 	// needed one. The filter dialog sends the patch report to the model too.
-	const bool evidence =
-	  !report.suspects.isEmpty() || !report.patches.isEmpty();
+	const bool evidence = !report.suspects.isEmpty() ||
+	                      !report.patches.isEmpty() ||
+	                      !report.detected.isEmpty();
 	evo->setEnabled(evidence);
 	evo->setToolTip(!evidence
 	                    ? QStringLiteral("Nothing ad-shaped was seen on this "
-	                                      "page and no page patch ran, so there "
-	                                      "is nothing to propose a rule "
-	                                      "against.")
+	                                      "page, none was showing and no page "
+	                                      "patch ran, so there is nothing to "
+	                                      "propose a rule against.")
 	                    : QStringLiteral("Ask for filter rules from what this "
-	                                      "page requested and what its patches "
-	                                      "did."));
+	                                      "page showed, what it requested and "
+	                                      "what its patches did."));
 
 	connect(zap, &QPushButton::clicked, this,
 	        [this] { m_chosen = action::zap; accept(); });

@@ -37,8 +37,22 @@ static void spin(int ms) { QEventLoop l; QTimer::singleShot(ms, &l, &QEventLoop:
 // Answer the modal while it is up. **Captured by value**, because this returns
 // before the dialog exists and a reference would be dead stack by the time the
 // timer fires -- the defect this project has now paid for twice.
-static void answer(bool *saw, QString button_text, bool just_close) {
-	QTimer::singleShot(500, [saw, button_text, just_close] {
+//
+// **Polled, not looked for once.** The dialog opens only after the page has
+// answered whether an ad is on screen, which is asynchronous, so a single look
+// at 500ms raced it. Every 100ms for up to `tries` looks.
+//
+// **And a newer call retires an older one.** A poller from a section where no
+// dialog should appear outlived that section, found the next section's dialog
+// first, and wrote through a pointer to the old section's dead `saw`.
+static int g_answer_generation = 0;
+static void answer(bool *saw, QString button_text, bool just_close,
+                   int tries = 100, int generation = -1) {
+	if (generation < 0)
+		generation = ++g_answer_generation;
+	QTimer::singleShot(100, [saw, button_text, just_close, tries, generation] {
+		if (generation != g_answer_generation)
+			return;
 		for (QWidget *w : QApplication::topLevelWidgets()) {
 			auto *d = qobject_cast<QDialog *>(w);
 			if (!d || !d->isVisible() || d->objectName() != "annoyed_dialog")
@@ -50,6 +64,8 @@ static void answer(bool *saw, QString button_text, bool just_close) {
 			d->reject();
 			return;
 		}
+		if (tries > 1)
+			answer(saw, button_text, just_close, tries - 1, generation);
 	});
 }
 
@@ -130,7 +146,9 @@ int main(int argc, char *argv[]) {
 		bool saw = false;
 		answer(&saw, "Just Record It", false);
 		annoyed->trigger();
-		spin(900);
+		for (int i = 0; i < 100 && !saw; ++i)
+			spin(100);
+		spin(300);
 		check(saw, "pressing it opens the report");
 
 		annoyance_log log;
@@ -160,6 +178,14 @@ int main(int argc, char *argv[]) {
 			             r.observed, qint64(r.suspects.size()));
 			for (int i = 0; i < r.suspects.size() && i < 8; ++i)
 				std::printf("       %s\n", qPrintable(r.suspects[i].left(96)));
+			// What the page showed. Printed rather than asserted: whether an
+			// ad is on screen is the site's choice at that moment, so the
+			// assertions about the probe live in `try_adprobe`, against
+			// fixtures; this shows it reaching a real report.
+			std::printf("     seen on the page: %lld\n",
+			             qint64(r.detected.size()));
+			for (const QString &d : r.detected)
+				std::printf("       %s\n", qPrintable(d.left(120)));
 		}
 	}
 
@@ -171,7 +197,9 @@ int main(int argc, char *argv[]) {
 		bool saw = false;
 		answer(&saw, "", true);        // rejected, no button pressed
 		annoyed->trigger();
-		spin(900);
+		for (int i = 0; i < 100 && !saw; ++i)
+			spin(100);
+		spin(300);
 		check(saw, "the dialog opened");
 
 		annoyance_log log;

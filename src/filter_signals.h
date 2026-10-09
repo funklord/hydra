@@ -73,6 +73,12 @@ public:
 	void note_scriptlets(const QString &site_host, const QString &line);
 	QStringList scriptlets_for(const QString &site_host) const;
 
+	// **What the page showed when somebody last complained about it**
+	// (`ad_probe`). Replaced rather than appended: it is a snapshot of one
+	// moment, and the filter dialog wants the latest, not a history.
+	void note_detected(const QString &site_host, const QStringList &lines);
+	QStringList detected_for(const QString &site_host) const;
+
 	void clear_site(const QString &site_host);
 	// Forget every site at once, for "Clear browsing data".
 	//
@@ -100,4 +106,5 @@ private:
 	// must not turn a diagnostic into a leak of memory.
 	QHash<QString, QStringList> m_capabilities;
 	QHash<QString, QStringList> m_scriptlets;
+	QHash<QString, QStringList> m_detected;
 };

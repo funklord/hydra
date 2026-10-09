@@ -353,6 +353,26 @@ public:
 	// and the caller is no worse off than before this existed.
 	virtual void remove_script(const QString &name) { Q_UNUSED(name) }
 
+	// Run `source` once, now, in the current page's top frame and in an
+	// isolated world, and hand back what its last expression evaluated to as
+	// text. For a question asked at a moment -- the Annoyed button's "is an ad
+	// on screen" -- rather than a script installed for every load.
+	//
+	// Isolated for the same reason `inject_script` is: the page cannot see the
+	// question, so it cannot answer it differently from how it behaves. That
+	// also means the script sees the DOM and not the page's globals.
+	//
+	// Not pure, and the default answers empty at once, which every caller
+	// reads as "nothing could be looked at". `done` is called at most once,
+	// and not at all if the view is destroyed first -- the engine drops the
+	// callback with the page -- so a caller must not hold anything it needs
+	// released on the answer arriving.
+	virtual void run_probe(const QString &source,
+	                       std::function<void(const QString &)> done) {
+		Q_UNUSED(source)
+		done(QString());
+	}
+
 	// Session state -- navigation history and whatever else the engine can
 	// serialize. Opaque to the shell, which only stores and returns the blob
 	// (state_store keys it by node id, architecture doc sec 4.2).

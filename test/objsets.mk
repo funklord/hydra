@@ -18,7 +18,7 @@
 # it is about to use. `FMAKE` names a different binary;
 # `OBJSETS_ACCEPT_FMAKE=1` takes it when fmake has moved on.
 #
-#     /home/claude/src/fmake/fmake  (build 9aaf61f4, mtime 2026-10-08 17:18)
+#     /home/claude/src/fmake/fmake  (build d673c12e, mtime 2026-10-09 01:07)
 
 OBJSETS_SOURCES = \
 	test/test_address.cpp \
@@ -73,6 +73,7 @@ OBJSETS_SOURCES = \
 	test/test_ytdlp.cpp \
 	test/test_ytdlp_live.cpp \
 	test/live/try_adblock_fix.cpp \
+	test/live/try_adprobe.cpp \
 	test/live/try_annoyed.cpp \
 	test/live/try_autofill.cpp \
 	test/live/try_blob_cost.cpp \
@@ -125,10 +126,10 @@ OBJS_test_annoyance = \
 	$(BUILD_DIR)/app/annoyance_log.o \
 	$(BUILD_DIR)/app/annoyed_dialog.o \
 	$(BUILD_DIR)/app/filter_signals.o \
+	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_filter_signals.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/site_extractor.o \
-	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/app/extractor_helpers.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o \
@@ -404,9 +405,11 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/app/cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
+	$(BUILD_DIR)/app/download_manager.o \
 	$(BUILD_DIR)/moc/moc_kiosk_controller.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/site_policy_dialog.o \
@@ -435,6 +438,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/credential_store.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/tree_outline.o \
@@ -447,14 +451,11 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
 	$(BUILD_DIR)/app/settings_bundle.o \
-	$(BUILD_DIR)/app/download_manager.o \
 	$(BUILD_DIR)/app/filter_subscription.o \
 	$(BUILD_DIR)/moc/moc_subscription_updater.o \
 	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
-	$(BUILD_DIR)/moc/moc_download_manager.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
@@ -494,6 +495,7 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/reorganize_dialog.o \
 	$(BUILD_DIR)/app/tab_history.o \
 	$(BUILD_DIR)/app/http_download_source.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
 	$(BUILD_DIR)/moc/moc_cert_dialog.o \
 	$(BUILD_DIR)/moc/moc_screen_picker.o \
@@ -670,14 +672,14 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -719,6 +721,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -753,6 +756,7 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -762,7 +766,6 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -801,6 +804,24 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/app/sponsor_segments.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o
 
+OBJS_try_adprobe = \
+	$(BUILD_DIR)/app/policy_engine.o \
+	$(BUILD_DIR)/app/request_filter.o \
+	$(BUILD_DIR)/moc/moc_web_view_backend.o \
+	$(BUILD_DIR)/app/qtwebengine_factory.o \
+	$(BUILD_DIR)/app/ad_probe.o \
+	$(BUILD_DIR)/moc/moc_policy_engine.o \
+	$(BUILD_DIR)/app/qtwebengine_view.o \
+	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
+	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
+	$(BUILD_DIR)/app/webauth_dialog.o \
+	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
+	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
+	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o
+
 OBJS_try_annoyed = \
 	$(BUILD_DIR)/app/main_window.o \
 	$(BUILD_DIR)/app/annoyance_log.o \
@@ -811,14 +832,14 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -859,6 +880,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -893,6 +915,7 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -902,7 +925,6 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -956,11 +978,13 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/keepass_bridge.o \
 	$(BUILD_DIR)/moc/moc_keepass_bridge.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -970,7 +994,6 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/claude_provider.o \
@@ -989,7 +1012,6 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1048,6 +1070,7 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -1095,16 +1118,17 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/moc/moc_tab_tree_model.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/claude_provider.o \
@@ -1123,7 +1147,6 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1186,6 +1209,7 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -1234,15 +1258,15 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/download_manager.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -1315,6 +1339,7 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -1374,15 +1399,15 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/download_manager.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -1455,6 +1480,7 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -1521,13 +1547,14 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/claude_provider.o \
@@ -1546,7 +1573,6 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1608,6 +1634,7 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_screen_picker.o \
@@ -1650,14 +1677,14 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -1699,6 +1726,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -1733,6 +1761,7 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -1742,7 +1771,6 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -1795,13 +1823,13 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
@@ -1844,6 +1872,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_ytdlp_resolver.o \
 	$(BUILD_DIR)/app/ytdlp_resolver.o \
 	$(BUILD_DIR)/app/claude_provider.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -1878,6 +1907,7 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -1886,7 +1916,6 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -1930,14 +1959,14 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -1979,6 +2008,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -2013,6 +2043,7 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -2022,7 +2053,6 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -2073,17 +2103,17 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -2122,6 +2152,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -2156,6 +2187,7 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -2165,7 +2197,6 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -2215,14 +2246,14 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -2295,6 +2326,7 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -2352,14 +2384,14 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -2400,6 +2432,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -2434,6 +2467,7 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -2443,7 +2477,6 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -2498,11 +2531,13 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/app/stream_probe.o \
 	$(BUILD_DIR)/app/site_extractor.o \
@@ -2511,8 +2546,6 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -2581,6 +2614,7 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/moc/moc_subscription_updater.o \
 	$(BUILD_DIR)/app/subscription_updater.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -2631,13 +2665,13 @@ OBJS_try_files = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -2679,6 +2713,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -2713,6 +2748,7 @@ OBJS_try_files = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -2722,7 +2758,6 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -2772,14 +2807,14 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -2821,6 +2856,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -2855,6 +2891,7 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -2864,7 +2901,6 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -2916,6 +2952,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
@@ -2937,7 +2974,6 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -3003,6 +3039,7 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -3058,11 +3095,12 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/kiosk_controller.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/claude_provider.o \
@@ -3083,7 +3121,6 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -3145,6 +3182,7 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -3192,14 +3230,14 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -3241,6 +3279,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -3275,6 +3314,7 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -3284,7 +3324,6 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -3336,18 +3375,18 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -3386,6 +3425,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -3419,6 +3459,7 @@ OBJS_try_import = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -3428,7 +3469,6 @@ OBJS_try_import = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -3488,6 +3528,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
@@ -3512,7 +3553,6 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
@@ -3576,6 +3616,7 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -3639,6 +3680,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
@@ -3665,7 +3707,6 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
@@ -3723,6 +3764,7 @@ OBJS_try_look = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_annoyed_dialog.o \
@@ -3764,14 +3806,14 @@ OBJS_try_media = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -3844,6 +3886,7 @@ OBJS_try_media = \
 	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -3903,18 +3946,18 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
@@ -3955,6 +3998,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -3988,6 +4032,7 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -3997,7 +4042,6 @@ OBJS_try_menus = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -4047,14 +4091,15 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/claude_provider.o \
@@ -4073,7 +4118,6 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -4137,6 +4181,7 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -4183,14 +4228,14 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -4232,6 +4277,7 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -4266,6 +4312,7 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -4275,7 +4322,6 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -4332,6 +4378,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
@@ -4355,7 +4402,6 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -4419,6 +4465,7 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -4464,14 +4511,14 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -4512,6 +4559,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -4546,6 +4594,7 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -4555,7 +4604,6 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -4632,9 +4680,11 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tab_tree_model.o \
 	$(BUILD_DIR)/app/tree_serializer.o \
 	$(BUILD_DIR)/moc/moc_reorganize_dialog.o \
@@ -4647,7 +4697,6 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/extractor_helpers.o \
 	$(BUILD_DIR)/moc/moc_extractor_helpers.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
@@ -4664,7 +4713,6 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
@@ -4716,6 +4764,7 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
@@ -4747,17 +4796,17 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
 	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/app/tree_sort_proxy.o \
 	$(BUILD_DIR)/app/address_input.o \
@@ -4797,6 +4846,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -4830,6 +4880,7 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -4839,7 +4890,6 @@ OBJS_try_rename = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -4934,6 +4984,7 @@ OBJS_try_scriptlets = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -4968,6 +5019,7 @@ OBJS_try_scriptlets = \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -4977,7 +5029,6 @@ OBJS_try_scriptlets = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -5038,14 +5089,14 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -5120,6 +5171,7 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -5210,6 +5262,7 @@ OBJS_try_share = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
@@ -5233,7 +5286,6 @@ OBJS_try_share = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -5299,6 +5351,7 @@ OBJS_try_share = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -5348,14 +5401,14 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -5397,6 +5450,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/app/claude_provider.o \
 	$(BUILD_DIR)/app/consent_blocker.o \
 	$(BUILD_DIR)/moc/moc_consent_blocker.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/network_fetcher.o \
 	$(BUILD_DIR)/app/ollama_provider.o \
 	$(BUILD_DIR)/app/player_launcher.o \
@@ -5429,6 +5483,7 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_subscription_updater.o \
 	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/torrent_download_source.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -5438,7 +5493,6 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_consent_dialog.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_permission_dialog.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_http_download_source.o \
 	$(BUILD_DIR)/app/keepass_protocol.o \
@@ -5492,15 +5546,16 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/tree_outline.o \
 	$(BUILD_DIR)/app/tree_invariants.o \
 	$(BUILD_DIR)/app/tree_diff.o \
-	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/claude_provider.o \
@@ -5519,7 +5574,6 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -5582,6 +5636,7 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -5633,14 +5688,14 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -5711,6 +5766,7 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/moc/moc_subscription_updater.o \
 	$(BUILD_DIR)/app/subscription_updater.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -5773,14 +5829,14 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -5851,6 +5907,7 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/app/http_download_source.o \
 	$(BUILD_DIR)/moc/moc_subscription_updater.o \
 	$(BUILD_DIR)/app/subscription_updater.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -5911,14 +5968,14 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -5991,6 +6048,7 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \
@@ -6051,14 +6109,14 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/app/qtwebengine_view.o \
 	$(BUILD_DIR)/app/qtwebengine_interceptor.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_interceptor.o \
+	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_webauth_dialog.o \
 	$(BUILD_DIR)/moc/moc_qtwebengine_view.o \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
-	$(BUILD_DIR)/app/filter_list.o \
-	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
 	$(BUILD_DIR)/app/auth_dialog.o \
@@ -6131,6 +6189,7 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/app/subscription_updater.o \
 	$(BUILD_DIR)/app/mse_tap.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
+	$(BUILD_DIR)/app/ad_probe.o \
 	$(BUILD_DIR)/app/find_bar.o \
 	$(BUILD_DIR)/moc/moc_find_bar.o \
 	$(BUILD_DIR)/moc/moc_auth_dialog.o \

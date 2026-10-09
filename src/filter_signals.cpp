@@ -133,6 +133,22 @@ QStringList filter_signals::scriptlets_for(const QString &site_host) const {
 	return m_scriptlets.value(site_host);
 }
 
+void filter_signals::note_detected(const QString &site_host,
+                                    const QStringList &lines) {
+	if (site_host.isEmpty())
+		return;
+	QMutexLocker guard(&m_lock);
+	if (lines.isEmpty())
+		m_detected.remove(site_host);
+	else
+		m_detected.insert(site_host, lines);
+}
+
+QStringList filter_signals::detected_for(const QString &site_host) const {
+	QMutexLocker guard(&m_lock);
+	return m_detected.value(site_host);
+}
+
 int filter_signals::clear_all() {
 	QMutexLocker guard(&m_lock);
 	// The union, not one of them: a site can be in `m_observed` with nothing
@@ -140,10 +156,12 @@ int filter_signals::clear_all() {
 	QSet<QString> sites;
 	for (const QString &k : m_capabilities.keys()) sites.insert(k);
 	for (const QString &k : m_scriptlets.keys())   sites.insert(k);
+	for (const QString &k : m_detected.keys())     sites.insert(k);
 	for (const QString &k : m_suspects.keys())     sites.insert(k);
 	for (const QString &k : m_observed.keys())     sites.insert(k);
 	m_capabilities.clear();
 	m_scriptlets.clear();
+	m_detected.clear();
 	m_suspects.clear();
 	m_observed.clear();
 	return int(sites.size());
@@ -153,6 +171,7 @@ void filter_signals::clear_site(const QString &site_host) {
 	QMutexLocker guard(&m_lock);
 	m_capabilities.remove(site_host);
 	m_scriptlets.remove(site_host);
+	m_detected.remove(site_host);
 	m_suspects.remove(site_host);
 	m_observed.remove(site_host);
 }

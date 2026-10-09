@@ -17,6 +17,7 @@
 #include <QString>
 
 class annoyance_log;
+namespace ad_probe { struct findings; }
 class tab_tree_view;
 class QSplitter;
 class QStackedWidget;
@@ -263,6 +264,9 @@ private slots:
 	// One click, at the moment something got through. See annoyance_log.h for
 	// why this is worth a toolbar slot of its own rather than a menu item.
 	void report_annoyance();
+	// The half of it that runs once the page has answered whether an ad is
+	// on screen. Separate because that answer arrives asynchronously.
+	void file_annoyance(const QUrl &page, const ad_probe::findings &found);
 	// The other half: did the rules just applied break this page? Reachable
 	// only while there is something to confirm. See main_window.cpp.
 	void confirm_rules();

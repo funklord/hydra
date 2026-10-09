@@ -31,7 +31,13 @@ const char *k_system_prompt =
   "site's own host, such as a video pre-roll, cannot be stopped by a network "
   "rule; if a patch meant for it failed or none ran, a domain-scoped "
   "scriptlet rule (example.com##+js(name, arguments)) is the answer, using "
-  "only scriptlet names that appear in that report.\n";
+  "only scriptlet names that appear in that report.\n"
+  "5. You may be given what the page showed when the user complained: a "
+  "player saying it is in an ad, visible elements named as ads with a "
+  "selector and size, frames from ad hosts, visible ad labels. A visible "
+  "element is evidence for a domain-scoped cosmetic rule on its selector; a "
+  "player in an ad with no failed patch means the ad got past the patches, "
+  "so say what that suggests rather than inventing a rule.\n";
 
 }  // namespace
 
@@ -73,6 +79,15 @@ filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
 	// asks about -- a pre-roll -- comes from the site's own host, slips past
 	// nothing, and has no element to pick. Without this the dialog had no
 	// evidence for that case at all and would not send.
+	// **What the page showed when the person complained**, which is the only
+	// evidence here about the ad itself rather than about what the browser
+	// did. Placed before the rest because it is what the request is about.
+	const QStringList seen = m_signals->detected_for(m_site);
+	if (!seen.isEmpty()) {
+		payload += "\nSeen on the page when the user reported it:\n";
+		for (const QString &d : seen)
+			payload += "  " + d + "\n";
+	}
 	const QStringList patches = m_signals->scriptlets_for(m_site);
 	if (!patches.isEmpty()) {
 		payload += "\nPage patches this browser ran, newest first:\n";
@@ -81,7 +96,8 @@ filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
 	}
 	m_payload->setPlainText(payload);
 
-	if (suspects.isEmpty() && !m_picked.is_valid() && patches.isEmpty())
+	if (suspects.isEmpty() && !m_picked.is_valid() && patches.isEmpty() &&
+	    seen.isEmpty())
 		say("Nothing ad-shaped slipped through on this page, and "
 		                  "no element was picked — there is nothing to propose "
 		                  "against.");
@@ -160,6 +176,7 @@ void filter_dialog::build_ui() {
 	m_apply->setEnabled(false);
 	m_send->setEnabled(!m_signals->suspects_for(m_site).isEmpty() ||
 	                    !m_signals->scriptlets_for(m_site).isEmpty() ||
+	                    !m_signals->detected_for(m_site).isEmpty() ||
 	                    m_picked.is_valid());
 	// And not at all when the provider cannot answer -- the header says so
 	// already, and a button beside an explanation of why it will fail is the

@@ -30,6 +30,8 @@ static annoyance_report make(const QString &host, const QStringList &suspects) {
 	                               "17:29:58  Microphone: block" };
 	r.patches = QStringList{ "17:30:02  www.a.test: 10 ran (set-constant x4), "
 	                          "0 failed, 2431 for other sites" };
+	r.detected = QStringList{ "player: youtube player #movie_player says it is "
+	                           "in an ad (ad-showing)" };
 	r.observed = 42;
 	return r;
 }
@@ -109,6 +111,9 @@ int main(int argc, char **argv) {
 		        r.capabilities.first().contains("Camera: allow"),
 		      "and the capability evidence survives the file — the half of a "
 		      "report that explains a page insisting it has no camera");
+		check(r.detected.size() == 1 &&
+		        r.detected.first().contains("ad-showing"),
+		      "and what the page showed when the button was pressed");
 		check(r.patches.size() == 1 && r.patches.first().contains("10 ran"),
 		      "and what the page patches did -- the evidence for an ad from "
 		      "the site's own host");
@@ -159,6 +164,26 @@ int main(int argc, char **argv) {
 		sig.clear_site("meet.test");
 		check(sig.capabilities_for("meet.test").isEmpty(),
 		      "forgetting a site forgets what it asked for");
+	}
+
+	// A snapshot of one moment, so the latest replaces the last rather than
+	// piling up, and forgetting the site takes it with the rest.
+	section("what a page showed is kept as the latest, and forgotten with it");
+	{
+		filter_signals sig;
+		sig.note_detected("v.test", { "player: one" });
+		sig.note_detected("v.test", { "element: two", "label: three" });
+		check(sig.detected_for("v.test") ==
+		          QStringList({ "element: two", "label: three" }),
+		       QString("the second replaces the first (%1)")
+		           .arg(sig.detected_for("v.test").join(" | ")));
+		sig.note_detected("v.test", {});
+		check(sig.detected_for("v.test").isEmpty(),
+		       "and a clean look clears it, rather than keeping a stale ad");
+		sig.note_detected("v.test", { "player: again" });
+		sig.clear_site("v.test");
+		check(sig.detected_for("v.test").isEmpty(),
+		       "and forgetting the site forgets it");
 	}
 
 	section("forgetting, which has to work or this should not exist");
@@ -265,7 +290,25 @@ int main(int argc, char **argv) {
 		       QString("and the empty list says what that likely means (%1)")
 		           .arg(sus && sus->count() ? sus->item(0)->text() : "none"));
 
+		auto *seen = with.findChild<QListWidget *>("detected");
+		check(seen && seen->count() == 1 &&
+		          seen->item(0)->text().startsWith("player: "),
+		       "and what the page showed is listed");
+
+		// What the page showed is evidence enough on its own: a pre-roll
+		// on a page whose patches never reported is still worth asking about.
+		annoyance_report only_seen = r;
+		only_seen.patches.clear();
+		annoyed_dialog seen_only(only_seen);
+		QPushButton *offer = nullptr;
+		for (QPushButton *b : seen_only.findChildren<QPushButton *>())
+			if (b->text().contains("Filter Rules"))
+				offer = b;
+		check(offer && offer->isEnabled(),
+		       "and Propose Filter Rules is offered on that alone");
+
 		r.patches.clear();
+		r.detected.clear();
 		annoyed_dialog without(r);
 		QPushButton *none = nullptr;
 		for (QPushButton *b : without.findChildren<QPushButton *>())
