@@ -13,9 +13,17 @@ void cosmetic_filters::set_page_host(const QString &host) {
 		qWarning("cosmetic: page host is now \"%s\"", qPrintable(m_host));
 }
 
+QStringList cosmetic_filters::selectors() const {
+	QStringList out = selectors_for(m_list, m_host, m_policy);
+	for (const QString &s : selectors_for(m_subscribed, m_host, m_policy))
+		if (!out.contains(s))
+			out << s;
+	return out;
+}
+
 QString cosmetic_filters::debug_state() const {
 	return QStringLiteral("host=%1 selectors=%2")
-	    .arg(m_host, selectors_for(m_list, m_host, m_policy).join(','));
+	    .arg(m_host, selectors().join(','));
 }
 
 QStringList cosmetic_filters::selectors_for(const filter_list *list,
@@ -52,7 +60,10 @@ QStringList cosmetic_filters::selectors_for(const filter_list *list,
 		if (!filter_list::why_selector_unsafe(
 		         r.text.mid(r.text.indexOf("##") + 2).trimmed()).isEmpty())
 			continue;
-		if (host != r.scope && !host.endsWith("." + r.scope))
+		// A list, not a host: `a.example,b.example##.ad` was compared whole
+		// against the hostname and so applied on neither -- the fault the
+		// scriptlet runner had, met again here.
+		if (!filter_list::scope_matches(r.scope, host))
 			continue;
 		const int hash = r.text.indexOf("##");
 		if (hash < 0)
@@ -66,7 +77,7 @@ QStringList cosmetic_filters::selectors_for(const filter_list *list,
 
 QString cosmetic_filters::selectors_json() const {
 	QJsonArray arr;
-	for (const QString &s : selectors_for(m_list, m_host, m_policy))
+	for (const QString &s : selectors())
 		arr.append(s);
 	return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
 }

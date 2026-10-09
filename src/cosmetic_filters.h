@@ -50,6 +50,17 @@ public:
 	// Set by the shell on navigation. Never by the page.
 	void set_page_host(const QString &host);
 
+	// **The subscribed lists' cosmetic rules**, which nothing applied: the
+	// shell built this from the person's own list alone, so EasyList's
+	// site-scoped hiding -- `dailymotion.com##div[class^="DisplayAd"]` and
+	// thousands like it -- was read, counted as in use, and never reached a
+	// page. Same name and shape as `request_filter`'s, which had it from the
+	// start. Null means none.
+	void set_subscription_list(const filter_list *list) { m_subscribed = list; }
+
+	// Both lists' selectors for the current host, own rules first.
+	QStringList selectors() const;
+
 	// The selectors for one host, without the bridge. Shared with the tests, and
 	// with anything that wants to know what would be hidden without asking a
 	// live page.
@@ -67,6 +78,7 @@ public slots:
 
 private:
 	const filter_list   *m_list   = nullptr;
+	const filter_list   *m_subscribed = nullptr;
 	const policy_engine *m_policy = nullptr;
 	QString              m_host;
 };

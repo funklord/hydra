@@ -1479,6 +1479,56 @@ int main(int argc, char **argv) {
 		      "no list, no selectors, rather than a crash");
 	}
 
+	// **A scope is a list**, as uBlock and EasyList write it: 1,456 of the
+	// 11,643 site-scoped cosmetic rules in the holder's lists name more than
+	// one site, and the whole list was compared against the hostname, so each
+	// applied on none of them.
+	section("cosmetic rules: a scope naming several sites covers each");
+	{
+		filter_list list;
+		filter_rule r;
+		filter_list::parse_rule("a.example,b.example,~ads.b.example##.promo", &r);
+		list.add(r);
+		check(cosmetic_filters::selectors_for(&list, "a.example")
+		          .contains(".promo") &&
+		          cosmetic_filters::selectors_for(&list, "www.b.example")
+		              .contains(".promo"),
+		       "each named site and a subdomain of one");
+		check(cosmetic_filters::selectors_for(&list, "ads.b.example").isEmpty() &&
+		          cosmetic_filters::selectors_for(&list, "c.example").isEmpty(),
+		       "but not an excluded subdomain, nor a site it does not name");
+		check(!filter_list::scope_matches("~a.example", "b.example"),
+		       "and a scope of exclusions only applies nowhere");
+	}
+
+	// **The subscribed lists' cosmetic rules reach the page.** The shell
+	// built the bridge from the person's own list alone, so EasyList's
+	// site-scoped hiding was read, counted as in use, and applied nowhere --
+	// found from an Annoyed report on Dailymotion listing four visible ad
+	// slots that `dailymotion.com##div[class^="DisplayAd"]` exists to hide.
+	section("cosmetic rules: the subscribed lists' rules are served too");
+	{
+		filter_list own, subscribed;
+		filter_rule a, b, c;
+		filter_list::parse_rule("news.example##.mine", &a);
+		filter_list::parse_rule("news.example##div[class^=\"DisplayAd\"]", &b);
+		filter_list::parse_rule("news.example##.mine", &c);
+		own.add(a);
+		subscribed.add(b);
+		subscribed.add(c);
+		cosmetic_filters bridge(&own);
+		bridge.set_page_host("news.example");
+		check(bridge.selectors() == QStringList{ ".mine" },
+		       "without a subscribed list, only the person's own");
+		bridge.set_subscription_list(&subscribed);
+		check(bridge.selectors() ==
+		          QStringList({ ".mine", "div[class^=\"DisplayAd\"]" }),
+		       QString("with one, both -- own first, and a rule in both once "
+		               "(%1)").arg(bridge.selectors().join(" | ")));
+		check(bridge.selectors_json().contains("DisplayAd"),
+		       "and that is what the page is handed");
+	}
+
 	section("cosmetic rules: an unscoped one is not applied everywhere");
 	{
 		// evaluate() rejects an unscoped cosmetic rule at accept time for being

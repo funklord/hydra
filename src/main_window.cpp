@@ -4245,6 +4245,7 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 		// current view, which is what makes the change visible: a stylesheet
 		// is written at load and nothing removes it afterwards.
 		auto *cosmetic = new cosmetic_filters(m_filters, m_policy, view);
+		cosmetic->set_subscription_list(m_subscribed);
 		cosmetic->set_page_host(QUrl::fromUserInput(n->url).host());
 		view->set_script_bridge(cosmetic, cosmetic_filters::bridge_name());
 		view->inject_script("hydra-cosmetic", cosmetic_filters::script_source());

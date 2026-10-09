@@ -569,6 +569,7 @@ OBJS_test_settings = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
+	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/flow_layout.o \

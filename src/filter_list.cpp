@@ -80,6 +80,26 @@ bool filter_list::matches(const QString &pattern, const QString &url) {
 	return !p.isEmpty() && url.contains(p);
 }
 
+bool filter_list::scope_matches(const QString &scope, const QString &host) {
+	if (scope.isEmpty() || host.isEmpty())
+		return false;
+	bool hit = false;
+	for (QString e : scope.split(QLatin1Char(','))) {
+		e = e.trimmed();
+		const bool negated = e.startsWith(QLatin1Char('~'));
+		if (negated)
+			e = e.mid(1);
+		if (e.isEmpty())
+			continue;
+		const bool m = host == e || host.endsWith(QLatin1Char('.') + e);
+		if (negated && m)
+			return false;
+		if (!negated && m)
+			hit = true;
+	}
+	return hit;
+}
+
 QString filter_list::why_selector_unsafe(const QString &selector) {
 	const QString v = selector.trimmed();
 	if (v.isEmpty())

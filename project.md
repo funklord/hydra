@@ -37699,3 +37699,47 @@ and five refusals; making the translation decline reds five checks.
 `trusted-rpfr` for `/get_watch?` this build would now run. Whether to add
 it to the shipped defaults is the holder's call.
 
+## The subscribed lists' cosmetic rules were never applied
+
+Found from the first real use of the Annoyed button's detection, on
+2026-10-09: the holder recorded Dailymotion, and the report listed four
+visible ad slots -- `div#display_ads_desktop_300x250_atf_sticky_mpu_1` to
+`_4`, 300x250 each -- with suspect requests to `ae.dmxleo.com`. EasyList
+carries `dailymotion.com##div[class^="DisplayAd"]` and three siblings, read
+and counted as in use. They were applied nowhere.
+
+**`cosmetic_filters` was built from `m_filters` alone** -- the person's own
+and accepted rules. `m_subscribed`, where `filter_subscription::read` puts
+every site-scoped cosmetic rule from a subscribed list, reached only
+`request_filter`. Measured on the holder's lists: **11,643 site-scoped
+cosmetic rules, none ever served to a page.** The bridge now takes the
+subscribed list through `set_subscription_list`, the name `request_filter`
+uses, and serves both, own first.
+
+**And the scope was a single host**, the fault the scriptlet runner had:
+1,456 of those rules name more than one site, compared whole against the
+hostname, so they would have matched nothing even once served. The shared
+`filter_list::scope_matches` reads the scope as a list with `~` exclusions,
+as the runner now does in the page. On the holder's lists Dailymotion gets
+four selectors, found in 11ms per page load.
+
+Proved in three places. `test_settings` covers the list scope and the
+bridge serving both lists; the old single-host comparison reds the
+multi-site case. And end to end, because the original fault was a missing
+wire that no unit test reaches: a scratch profile subscribed to a two-rule
+local list, a page on 127.0.0.1 with matching elements and one that should
+stay, read over DevTools. With the line in, `adbox: none, DisplayAd_top:
+none, keep: block`; with `set_subscription_list` removed and rebuilt, all
+three `block`.
+
+**Not reproduced: the slots themselves.** A scratch profile behind
+Dailymotion's consent dialog, and then an offscreen window too narrow for
+its desktop layout -- 514x670, then 100x30 with `-qwindowgeometry`, then a
+1600x1000 DevTools override that rendered only 152 elements -- never served
+the `display_ads_*` slots, so whether the four EasyList selectors cover them
+is for the holder's next Annoyed press to say. Two things learned about the
+harness on the way: a cross-origin consent frame is not its own DevTools
+target here, but its execution context is reachable from the page target's
+`Runtime.executionContextCreated` list; and a `pgrep` wait loop matched its
+own command line, as `running-code.md` warns, and waited out its full term.
+

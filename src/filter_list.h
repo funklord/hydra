@@ -122,6 +122,14 @@ public:
 	// Empty means safe; otherwise the reason.
 	static QString why_selector_unsafe(const QString &selector);
 
+	// **Whether a rule's site scope covers this host**, where the scope is a
+	// list: `a.example,b.example##.ad` names two sites, and `~host` excludes
+	// one. Each entry is the host or a parent of it. A scope of exclusions
+	// only matches nothing, since a rule for every site but one is the
+	// unscoped kind this project declines to apply. The scriptlet runner
+	// applies the same test in the page, for the same rules.
+	static bool scope_matches(const QString &scope, const QString &host);
+
 private:
 	bool contains_locked(const QString &text) const;
 
