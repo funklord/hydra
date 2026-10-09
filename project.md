@@ -37208,3 +37208,69 @@ trimming pass was offered twice and declined twice, on the grounds that
 which entries earned their length is not the judgement of the session that
 wrote them. It remains the obvious next piece of work for whoever has the
 holder's authority to cut.
+
+## The tree was deleted, and what that cost
+
+At 10:45:01 on 2026-10-09 `/home/funk/src/hydra` was removed outright,
+`.git` included. Three builds died at that instant: a deb build, and two
+other sessions' `make check` and `make check-ci`. **Nothing here knows
+what did it.**
+
+`/home/claude/src` is a symlink to `/home/funk/src`, same inode, so the
+two paths were one tree rather than two clones -- worth knowing before
+anybody counts copies again.
+
+**The packaging is not the culprit, and that was established by reading
+rather than by arguing.** `debian/rules` runs `$(MAKE) clean` and never
+`distclean`; `clean` loops over the named build directories and refuses
+an empty path, an absolute one, `.`, `./` and anything containing `..`,
+printing each removal. The failed build's log printed exactly two, both
+build directories, then compiled eight files and died on a source file
+that had ceased to exist. A clean cannot delete a tree halfway through a
+compile it has already started.
+
+**What survived, and why.** Everything to the previous fold was on the
+remote. The crash fix was committed and deliberately held back pending a
+full sweep, so it was in the tree and nowhere else -- and it came back
+only because the scripts that had performed its edits were written to a
+scratch directory OUTSIDE the tree. Re-run against a fresh clone they
+reproduced the change exactly: the same four files, the same line count
+in this document, the same 42 checks green. That is luck resting on a
+habit, not a recovery procedure.
+
+So the rule the workspace already has earned its keep the hard way:
+**unpushed work is invisible work, and in a shared tree it is also one
+`rm -rf` from gone.** Holding a commit back for a slower check is a
+defensible trade exactly until the tree stops existing. Push, then
+verify, where the order can be chosen.
+
+**What did not survive: another session's uncommitted work.** Two files
+under `tool/` had been dirty all session and were never staged by anybody
+-- `/home` is ext4 with no snapshots, and they had never been pushed.
+That session runs under a different account and could not be reached:
+the per-tree inbox lives inside `.git`, so the channel went with the
+tree it was meant to protect. **A message channel stored inside the thing
+it coordinates access to cannot survive the thing's destruction**, which
+is a limit of that mechanism rather than a fault in it.
+
+**The restored tree is owned by the wrong account.** It was re-cloned by
+the account that had no way to `chown`, so it is `claude:users` where it
+was `funk:users`, and git refuses a tree whose owner is not the running
+user. The honest fix is for the owning account to re-make it, which costs
+nothing now that everything is pushed. The clone also came over HTTPS and
+had to have its remote re-pointed at the SSH URL every sibling uses.
+
+### A deb build destroys a concurrent test build directory
+
+Found while doing it: `clean` sweeps `$(TESTS_DIR)` and the test build
+directories along with `$(BUILD_DIR)`, and `debian/rules` calls `clean`.
+So `make deb` removes the directory a concurrent `make test` is building
+into, and that is what killed one of the two runs above -- before the
+deletion took everything anyway.
+
+Packaging needs only its own build directory gone. Narrowing
+`override_dh_auto_clean` to remove that and leave the test trees alone
+would cost the packaging nothing and stop one session's package build
+breaking another's suite. It is a change to the packaging interface
+rather than to a program, and more than one session builds here, so
+**it is the holder's call** rather than something to take in passing.
