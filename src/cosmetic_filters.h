@@ -58,6 +58,10 @@ public:
 	// start. Null means none.
 	void set_subscription_list(const filter_list *list) { m_subscribed = list; }
 
+	// An investigation's trial rules for this tab, served after the rest
+	// until it ends. Null means none.
+	void set_trial_list(const filter_list *list) { m_trial = list; }
+
 	// Both lists' selectors for the current host, own rules first.
 	QStringList selectors() const;
 
@@ -79,6 +83,7 @@ public slots:
 private:
 	const filter_list   *m_list   = nullptr;
 	const filter_list   *m_subscribed = nullptr;
+	const filter_list   *m_trial = nullptr;
 	const policy_engine *m_policy = nullptr;
 	QString              m_host;
 };

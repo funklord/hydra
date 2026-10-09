@@ -4,12 +4,16 @@
 
 #include "site_extractor.h"
 
-#include <QDialogButtonBox>
-#include <QLabel>
-#include <QHash>
 #include <QAbstractItemView>
+#include <QDateTime>
+#include <QDialogButtonBox>
+#include <QHBoxLayout>
+#include <QHash>
+#include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
+#include <QTime>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -201,9 +205,12 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 	}
 
 	auto *hint = new QLabel(
-	    "The report is kept either way. Pick a tool if one fits.", this);
+	    "The report is kept either way. Pick a tool if one fits, or let the AI "
+	    "work on it.", this);
 	hint->setWordWrap(true);
 	box->addWidget(hint);
+
+	build_ai(box);
 
 	// **Three tools that wrap, and the plain answer below them.** All four were
 	// one QDialogButtonBox, whose minimum is the sum of its buttons -- 457
@@ -245,15 +252,245 @@ annoyed_dialog::annoyed_dialog(const annoyance_report &report, QWidget *parent)
 	                                      "page showed, what it requested and "
 	                                      "what its patches did."));
 
-	connect(zap, &QPushButton::clicked, this,
-	        [this] { m_chosen = action::zap; accept(); });
+	// **Non-modal now, so the choice is a signal.** The window stays open
+	// beside the page while an investigation runs, which `exec()` could not
+	// allow; a tool or the plain answer still closes it, and closing it any
+	// other way is "recorded", as it always was.
+	const auto choose = [this](action a) {
+		m_chosen = a;
+		accept();
+	};
+	connect(zap, &QPushButton::clicked, this, [choose] { choose(action::zap); });
 	connect(evo, &QPushButton::clicked, this,
-	        [this] { m_chosen = action::evolve; accept(); });
+	        [choose] { choose(action::evolve); });
 	connect(con, &QPushButton::clicked, this,
-	        [this] { m_chosen = action::consent; accept(); });
+	        [choose] { choose(action::consent); });
 	connect(rec, &QPushButton::clicked, this,
-	        [this] { m_chosen = action::recorded; accept(); });
+	        [choose] { choose(action::recorded); });
+	connect(this, &QDialog::finished, this, [this](int) {
+		emit ai_stop_requested();
+		emit chose(m_chosen);
+	});
 	box->addWidget(bb);
 
-	resize(620, 380);
+	resize(680, 560);
+}
+
+void annoyed_dialog::build_ai(QVBoxLayout *box) {
+	auto *head = new QLabel("<b>Work on it with AI</b>", this);
+	box->addWidget(head);
+
+	m_ai_note = new QLabel(this);
+	m_ai_note->setObjectName("ai_note");
+	m_ai_note->setWordWrap(true);
+	box->addWidget(m_ai_note);
+
+	auto *row = new QHBoxLayout;
+	m_ai_start = new QPushButton("&Work On It", this);
+	m_ai_start->setObjectName("ai_start");
+	m_ai_start->setToolTip("The AI looks at the page, tries rules on this tab "
+	                       "only, and asks you when it is stuck. Nothing is "
+	                       "kept unless you keep it.");
+	m_ai_stop = new QPushButton("S&top", this);
+	m_ai_stop->setObjectName("ai_stop");
+	m_ai_stop->setEnabled(false);
+	row->addWidget(m_ai_start);
+	row->addWidget(m_ai_stop);
+	row->addStretch(1);
+	box->addLayout(row);
+
+	m_ai_status = new QLabel(this);
+	m_ai_status->setObjectName("ai_status");
+	m_ai_status->setWordWrap(true);
+	box->addWidget(m_ai_status);
+
+	// **The log is the point of the window**, so it is a list a person can
+	// read back rather than a status line that overwrites itself: what the
+	// model wanted, what the browser did, what the page then showed.
+	m_ai_log = new QListWidget(this);
+	m_ai_log->setObjectName("ai_log");
+	m_ai_log->setWordWrap(true);
+	m_ai_log->setSelectionMode(QAbstractItemView::NoSelection);
+	m_ai_log->setFocusPolicy(Qt::NoFocus);
+	m_ai_log->hide();
+	box->addWidget(m_ai_log, 2);
+
+	// The question, when there is one. Shown only then, and it says so in
+	// the status line too, because a question nobody notices is a stalled
+	// investigation.
+	m_question = new QWidget(this);
+	m_question->setObjectName("question");
+	auto *q = new QVBoxLayout(m_question);
+	q->setContentsMargins(0, 0, 0, 0);
+	m_question_text = new QLabel(m_question);
+	m_question_text->setWordWrap(true);
+	m_question_text->setObjectName("question_text");
+	q->addWidget(m_question_text);
+	auto *answers = new QHBoxLayout;
+	m_yes    = new QPushButton("&Yes", m_question);
+	m_no     = new QPushButton("&No", m_question);
+	m_show   = new QPushButton("&Show Me…", m_question);
+	m_cannot = new QPushButton("I &Can't", m_question);
+	for (QPushButton *b : { m_yes, m_no, m_show, m_cannot })
+		answers->addWidget(b);
+	answers->addStretch(1);
+	q->addLayout(answers);
+	m_question->hide();
+	box->addWidget(m_question);
+
+	m_result = new QWidget(this);
+	m_result->setObjectName("result");
+	auto *r = new QVBoxLayout(m_result);
+	r->setContentsMargins(0, 0, 0, 0);
+	m_result_text = new QLabel(m_result);
+	m_result_text->setWordWrap(true);
+	r->addWidget(m_result_text);
+	m_result_rules = new QListWidget(m_result);
+	m_result_rules->setObjectName("result_rules");
+	m_result_rules->setSelectionMode(QAbstractItemView::NoSelection);
+	r->addWidget(m_result_rules);
+	auto *decide = new QHBoxLayout;
+	m_keep    = new QPushButton("&Keep These Rules", m_result);
+	m_discard = new QPushButton("&Discard Them", m_result);
+	decide->addWidget(m_keep);
+	decide->addWidget(m_discard);
+	decide->addStretch(1);
+	r->addLayout(decide);
+	m_result->hide();
+	box->addWidget(m_result);
+
+	m_ticker = new QTimer(this);
+	m_ticker->setInterval(1000);
+	connect(m_ticker, &QTimer::timeout, this, &annoyed_dialog::tick);
+
+	connect(m_ai_start, &QPushButton::clicked, this, [this] {
+		m_ai_start->setEnabled(false);
+		m_ai_stop->setEnabled(true);
+		m_ai_log->show();
+		m_result->hide();
+		emit ai_start_requested();
+	});
+	connect(m_ai_stop, &QPushButton::clicked, this, [this] {
+		m_ai_stop->setEnabled(false);
+		emit ai_stop_requested();
+	});
+	const auto answer = [this](const QString &a) {
+		m_question->hide();
+		auto fn = std::move(m_answer);
+		m_answer = nullptr;
+		if (fn)
+			fn(a);
+	};
+	connect(m_yes, &QPushButton::clicked, this, [answer] { answer("yes"); });
+	connect(m_no, &QPushButton::clicked, this, [answer] { answer("no"); });
+	connect(m_cannot, &QPushButton::clicked, this,
+	        [answer] { answer("none"); });
+	connect(m_show, &QPushButton::clicked, this, [this] {
+		m_ai_status->setText("Click the thing on the page — Escape cancels.");
+		emit point_requested();
+	});
+	connect(m_keep, &QPushButton::clicked, this, [this] {
+		m_result->hide();
+		emit keep_requested(m_rules);
+	});
+	connect(m_discard, &QPushButton::clicked, this, [this] {
+		m_result->hide();
+		emit discard_requested();
+	});
+}
+
+void annoyed_dialog::set_ai(bool ready, const QString &note) {
+	m_ai_note->setText(note);
+	m_ai_start->setEnabled(ready);
+}
+
+void annoyed_dialog::log_line(const QString &kind, const QString &text) {
+	m_ai_log->show();
+	auto *item = new QListWidgetItem(
+	  QString("%1  %2").arg(QTime::currentTime().toString("HH:mm:ss"), text),
+	  m_ai_log);
+	item->setData(Qt::UserRole, kind);
+	if (kind == QLatin1String("error"))
+		item->setForeground(palette().color(QPalette::Highlight));
+	m_ai_log->scrollToBottom();
+	// The step is no longer being waited on once something new arrives.
+	if (kind != QLatin1String("step")) {
+		m_waiting_for.clear();
+		m_ticker->stop();
+		m_ai_status->setText(text);
+	}
+}
+
+void annoyed_dialog::expecting(const QString &what, int seconds) {
+	m_waiting_for   = what;
+	m_waiting_eta   = seconds;
+	m_waiting_since = QDateTime::currentMSecsSinceEpoch();
+	tick();
+	m_ticker->start();
+}
+
+// "Waiting for the model's answer: 7 s of about 30." Past the estimate it says
+// so rather than counting into negative numbers, because an estimate that has
+// been passed is information too.
+void annoyed_dialog::tick() {
+	if (m_waiting_for.isEmpty())
+		return;
+	const int gone =
+	  int((QDateTime::currentMSecsSinceEpoch() - m_waiting_since) / 1000);
+	m_ai_status->setText(gone <= m_waiting_eta
+	    ? QString("Waiting for %1: %2 s of about %3.")
+	          .arg(m_waiting_for).arg(gone).arg(m_waiting_eta)
+	    : QString("Waiting for %1: %2 s, longer than the %3 expected.")
+	          .arg(m_waiting_for).arg(gone).arg(m_waiting_eta));
+}
+
+void annoyed_dialog::ask(const QString &kind, const QString &question,
+                         std::function<void(const QString &)> answer) {
+	m_answer = std::move(answer);
+	const bool point = kind == QLatin1String("point");
+	m_question_text->setText("<b>The AI asks:</b> " + question.toHtmlEscaped());
+	m_yes->setVisible(!point);
+	m_no->setVisible(!point);
+	m_show->setVisible(point);
+	m_cannot->setVisible(point);
+	m_question->show();
+	m_waiting_for.clear();
+	m_ticker->stop();
+	m_ai_status->setText("Waiting for your answer below.");
+	raise();
+	activateWindow();
+}
+
+void annoyed_dialog::answer_point(const QString &picked) {
+	m_question->hide();
+	auto fn = std::move(m_answer);
+	m_answer = nullptr;
+	if (fn)
+		fn(picked);
+}
+
+void annoyed_dialog::ai_finished(bool solved, const QString &summary,
+                                 const QStringList &rules) {
+	m_ticker->stop();
+	m_waiting_for.clear();
+	m_question->hide();
+	m_ai_stop->setEnabled(false);
+	m_ai_start->setEnabled(true);
+	m_ai_start->setText("&Work On It Again");
+	m_rules = rules;
+	m_ai_status->setText(QString("%1: %2").arg(solved ? "Solved" : "Not solved",
+	                                            summary));
+	m_result_rules->clear();
+	for (const QString &r : rules)
+		m_result_rules->addItem(r);
+	if (rules.isEmpty()) {
+		m_result->hide();
+		return;
+	}
+	m_result_text->setText(solved
+	    ? QString("These %1 rule(s) are in trial on this tab. Keep them, and "
+	              "they apply to this site from now on.").arg(rules.size())
+	    : QString("These %1 rule(s) are in trial but did not solve it. Keep "
+	              "them anyway, or discard them.").arg(rules.size()));
+	m_result->show();
 }

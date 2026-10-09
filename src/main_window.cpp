@@ -45,6 +45,8 @@
 #include "extractor_helpers.h"
 #include "network_fetcher.h"
 #include "ad_probe.h"
+#include "tab_investigation.h"
+#include "investigation.h"
 #include "ai_provider.h"
 #include "local_proxy.h"
 #include "filter_signals.h"
@@ -425,9 +427,28 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	// window aggregator behind the dialog and the badge, and emits none of
 	// them. `wire_consent` connects each per-view blocker.
 	m_picker   = new element_picker(this);
+	// **A pick answers the investigation that asked for it**, when one did;
+	// otherwise it opens filter evolution as it always has.
 	connect(m_picker, &element_picker::picked, this,
-	         [this](const picked_element &) { open_filter_evolution(); });
+	         [this](const picked_element &e) {
+		if (m_pick_for_investigation) {
+			m_pick_for_investigation = false;
+			if (m_investigation_window)
+				m_investigation_window->answer_point(
+				  QString("selector %1, tag %2, classes \"%3\", markup %4")
+				      .arg(e.selector, e.tag, e.classes.join(' '),
+				           e.snippet.left(300)));
+			return;
+		}
+		open_filter_evolution();
+	});
 	connect(m_picker, &element_picker::aborted, this, [this] {
+		if (m_pick_for_investigation) {
+			m_pick_for_investigation = false;
+			if (m_investigation_window)
+				m_investigation_window->answer_point(QStringLiteral("none"));
+			return;
+		}
 		m_status->showMessage("Element pick cancelled.", 3000);
 	});
 	connect(m_keepass, &keepass_bridge::associated_changed, this,
@@ -2417,11 +2438,11 @@ void main_window::report_annoyance() {
 			return;
 		ad_probe::findings found;
 		ad_probe::parse(json, &found);
-		file_annoyance(page, found);
+		file_annoyance(asked, page, found);
 	});
 }
 
-void main_window::file_annoyance(const QUrl &page,
+void main_window::file_annoyance(web_view_backend *view, const QUrl &page,
                                   const ad_probe::findings &found) {
 	const QString host = page.host();
 
@@ -2466,28 +2487,148 @@ void main_window::file_annoyance(const QUrl &page,
 			               "the annoyance report");
 	}
 
-	annoyed_dialog dlg(r, this);
-	dlg.exec();
-	const annoyed_dialog::action chose = dlg.chosen();
-	if (m_annoyances) {
-		m_annoyances->set_outcome(host, annoyed_dialog::name_of(chose));
-		if (!m_annoyances_path.isEmpty())
-			saved_or_said(m_annoyances->save(m_annoyances_path),
-			               "what you chose about this report");
+	// **Non-modal**, so it can stay beside the page while the AI works on it.
+	// Deleted on close, which takes its investigation and the tab's trial
+	// rules with it.
+	auto *dlg = new annoyed_dialog(r, this);
+	dlg->setAttribute(Qt::WA_DeleteOnClose);
+	dlg->setModal(false);
+	{
+		QString why;
+		ai_provider *ai = choose_ai(&why);
+		QString reason;
+		if (!ai)
+			dlg->set_ai(false, why);
+		else if (!ai->ready(&reason))
+			dlg->set_ai(false, reason);
+		else
+			dlg->set_ai(true, provider_note(ai,
+			  "Each turn sends the page address, what the page showed, what "
+			  "its patches did and the rules being tried."));
 	}
 
-	switch (chose) {
-	case annoyed_dialog::action::zap:     start_element_picker();   break;
-	case annoyed_dialog::action::evolve:  open_filter_evolution();  break;
-	case annoyed_dialog::action::consent: open_site_rules();        break;
-	case annoyed_dialog::action::recorded:
-		m_status->showMessage(
-		    QString("Recorded. %1 report%2 filed against %3.")
-		        .arg(m_annoyances ? m_annoyances->count_for(host) : 0)
-		        .arg((m_annoyances && m_annoyances->count_for(host) == 1) ? "" : "s")
-		        .arg(host), 6000);
-		break;
+	connect(dlg, &annoyed_dialog::chose, this,
+	         [this, host](annoyed_dialog::action chose) {
+		if (m_annoyances) {
+			m_annoyances->set_outcome(host, annoyed_dialog::name_of(chose));
+			if (!m_annoyances_path.isEmpty())
+				saved_or_said(m_annoyances->save(m_annoyances_path),
+				               "what you chose about this report");
+		}
+		switch (chose) {
+		case annoyed_dialog::action::zap:     start_element_picker();   break;
+		case annoyed_dialog::action::evolve:  open_filter_evolution();  break;
+		case annoyed_dialog::action::consent: open_site_rules();        break;
+		case annoyed_dialog::action::recorded:
+			m_status->showMessage(
+			    QString("Recorded. %1 report%2 filed against %3.")
+			        .arg(m_annoyances ? m_annoyances->count_for(host) : 0)
+			        .arg((m_annoyances && m_annoyances->count_for(host) == 1)
+			                 ? "" : "s")
+			        .arg(host), 6000);
+			break;
+		}
+	});
+
+	investigation_evidence ev;
+	ev.host     = host;
+	ev.page     = page.toString();
+	ev.detected = r.detected;
+	ev.patches  = r.patches;
+	ev.suspects = r.suspects;
+	if (m_signals)
+		ev.observed = m_signals->observed_for(host);
+	QPointer<web_view_backend> tab(view);
+	connect(dlg, &annoyed_dialog::ai_start_requested, this,
+	         [this, dlg, tab, ev] { start_investigation(dlg, tab, ev); });
+	dlg->show();
+}
+
+// **One investigation at a time**, because the request filter holds one trial
+// and a person can answer one window's questions. Starting a second stops the
+// first, whose window says so.
+void main_window::start_investigation(annoyed_dialog *dlg,
+                                      web_view_backend *view,
+                                      const investigation_evidence &ev) {
+	if (m_investigation && m_investigation->running())
+		m_investigation->stop();
+	if (!view) {
+		dlg->log_line("error", "The tab this was about has been closed.");
+		dlg->ai_finished(false, QStringLiteral("the tab is gone"), {});
+		return;
 	}
+	QString why;
+	ai_provider *ai = choose_ai(&why);
+	if (!ai) {
+		dlg->log_line("error", why);
+		dlg->ai_finished(false, why, {});
+		return;
+	}
+	// A run before this one in the same window gives way to it, trial and
+	// all.
+	delete dlg->findChild<investigation *>();
+	delete dlg->findChild<tab_investigation *>();
+
+	auto *hands = new tab_investigation(view, m_filter, ev.host, dlg);
+	auto *inv   = new investigation(ai, hands, ev, dlg);
+	m_investigation = inv;
+	m_investigation_window = dlg;
+	QPointer<annoyed_dialog> win(dlg);
+	hands->set_asker([win](const QString &kind, const QString &question,
+	                       std::function<void(const QString &)> done) {
+		if (win)
+			win->ask(kind, question, std::move(done));
+		else
+			done(QStringLiteral("nobody to ask"));
+	});
+	connect(inv, &investigation::logged, dlg, &annoyed_dialog::log_line);
+	connect(inv, &investigation::expecting, dlg, &annoyed_dialog::expecting);
+	connect(inv, &investigation::finished, dlg,
+	         [dlg, inv](bool solved, const QString &summary) {
+		dlg->ai_finished(solved, summary, inv->trial_rules());
+	});
+	connect(dlg, &annoyed_dialog::ai_stop_requested, inv, &investigation::stop);
+	connect(dlg, &annoyed_dialog::discard_requested, hands, [dlg, hands] {
+		hands->end();
+		dlg->log_line("done", "Discarded; the page is reloaded without them.");
+	});
+	connect(dlg, &annoyed_dialog::keep_requested, this,
+	         [this, dlg, hands](const QStringList &rules) {
+		keep_investigated_rules(rules);
+		hands->end();
+		dlg->log_line("done", QString("Kept %1 rule(s) for this site.")
+		                          .arg(rules.size()));
+	});
+	connect(dlg, &annoyed_dialog::point_requested, this, [this, view] {
+		// The picker works on the tab in front, so that has to be this one.
+		if (current_view() != view) {
+			m_status->showMessage("Switch back to the tab this is about to "
+			                      "point at it.", 6000);
+		}
+		m_pick_for_investigation = true;
+		m_picker->begin(view->url().toString());
+	});
+	inv->start();
+}
+
+// Into the person's own list, as rules accepted from filter evolution go, and
+// then the lists are re-read so a kept scriptlet is injected too.
+void main_window::keep_investigated_rules(const QStringList &rules) {
+	if (!m_filters)
+		return;
+	int added = 0;
+	for (const QString &text : rules) {
+		filter_rule r;
+		if (!filter_list::parse_rule(text, &r) || m_filters->contains(r.text))
+			continue;
+		r.note = QStringLiteral("kept from an investigation");
+		m_filters->add(r);
+		++added;
+	}
+	if (!m_filters_path.isEmpty())
+		saved_or_said(m_filters->save(m_filters_path), "the filter list");
+	reload_subscriptions_now();
+	m_status->showMessage(QString("%1 rule(s) kept.").arg(added), 6000);
 }
 
 void main_window::open_filter_evolution() {

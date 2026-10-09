@@ -5,7 +5,14 @@
 #include <QDialog>
 #include <QStringList>
 
+#include <functional>
+
+class QLabel;
 class QListWidget;
+class QPushButton;
+class QTimer;
+class QVBoxLayout;
+class QWidget;
 
 // What happens after the one click: show what was captured, and offer the
 // tools that already exist.
@@ -33,6 +40,45 @@ public:
 
 	action chosen() const { return m_chosen; }
 
+	// --- The control panel for the model loop -----------------------------
+	//
+	// **Asked for by the copyright holder on 2026-10-09**: this window is not
+	// only a recording, it is where an iterative process works on the
+	// problem -- saying what it is doing and how long it expects, asking the
+	// person to look or to point when it is stuck, and ending with rules the
+	// person keeps or discards. The window shows and asks; `investigation`
+	// decides; the shell wires the two and owns the tab.
+	//
+	// Whether the AI can be asked, and if not why, and where what is sent
+	// goes -- the same sentence the other AI dialogs show above Send, since
+	// starting is consent to sending.
+	void set_ai(bool ready, const QString &note);
+	// One line of the log, with the time.
+	void log_line(const QString &kind, const QString &text);
+	// What is being waited for and how long it should take; the status line
+	// counts against it.
+	void expecting(const QString &what, int seconds);
+	// A question for the person. `kind` "confirm" offers yes and no; "point"
+	// offers to pick the thing on the page, which `point_requested` asks the
+	// shell to start, and `answer_point` completes.
+	void ask(const QString &kind, const QString &question,
+	         std::function<void(const QString &)> answer);
+	void answer_point(const QString &picked);
+	// The loop ended. `rules` are those in trial, offered to keep.
+	void ai_finished(bool solved, const QString &summary,
+	                 const QStringList &rules);
+
+signals:
+	// A tool was chosen; the window is closing. `recorded` when closed
+	// without one.
+	void chose(annoyed_dialog::action a);
+	void ai_start_requested();
+	void ai_stop_requested();
+	void point_requested();
+	void keep_requested(const QStringList &rules);
+	void discard_requested();
+
+public:
 	// The machine-readable form, for `annoyance_log::set_outcome`.
 	static QString name_of(action a);
 
@@ -59,6 +105,32 @@ public:
 	static QList<group> collapse_by_shape(const QStringList &urls);
 
 private:
+	void build_ai(QVBoxLayout *box);
+	void tick();
+
 	action       m_chosen = action::recorded;
 	QListWidget *m_suspects = nullptr;
+
+	QLabel      *m_ai_note = nullptr;
+	QPushButton *m_ai_start = nullptr;
+	QPushButton *m_ai_stop = nullptr;
+	QLabel      *m_ai_status = nullptr;
+	QListWidget *m_ai_log = nullptr;
+	QWidget     *m_question = nullptr;
+	QLabel      *m_question_text = nullptr;
+	QPushButton *m_yes = nullptr;
+	QPushButton *m_no = nullptr;
+	QPushButton *m_show = nullptr;
+	QPushButton *m_cannot = nullptr;
+	QWidget     *m_result = nullptr;
+	QLabel      *m_result_text = nullptr;
+	QListWidget *m_result_rules = nullptr;
+	QPushButton *m_keep = nullptr;
+	QPushButton *m_discard = nullptr;
+	QTimer      *m_ticker = nullptr;
+	QString      m_waiting_for;
+	int          m_waiting_eta = 0;
+	qint64       m_waiting_since = 0;
+	std::function<void(const QString &)> m_answer;
+	QStringList  m_rules;
 };

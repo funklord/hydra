@@ -37831,3 +37831,80 @@ Not tested: the bank's own flow past the PDF itself -- the netbank link
 page, its ticket and whatever it does before the PDF arrives -- which needs
 the holder's session. The holder's next attempt is the check.
 
+## The Annoyed window is a control panel for a model loop
+
+**The requirement, from the copyright holder on 2026-10-09**, said to have
+been asked for before -- it was in neither this file nor the architecture
+document, so this is the first record of it: the angry-face button should
+become "a window which holds or at least communicates with an AI process,
+shows logs about what it is doing and estimations and such. Not just
+recording, it needs to become a control panel for an iterative process to
+solve the problem, and it may have to pose questions and possibly ask to
+point where and when on a page. Like tell me when it looks right? or show me
+where it is? Not often, but when things get gnarly." Two decisions the holder
+took on being asked: trial rules apply to the tab **without asking each
+time**, reverted unless kept; and the **full loop** in one piece of work.
+
+**The pieces.** `investigation` is the loop and knows no widgets: each turn
+the configured model -- the same local-first or Claude setting as every
+other AI feature -- is sent the evidence and everything that happened, and
+answers with one JSON action, `look`, `try`, `ask` (`confirm` or `point`)
+or `done`. It carries the action out through `investigation_host`, three
+operations: look, trial, ask. `tab_investigation` is that host on a real
+tab. `annoyed_dialog` became non-modal and is the panel: the evidence as
+before, a log a person can read back, a status line counting against the
+estimate, the question with its answers, and at the end Keep or Discard.
+
+**What a model may cause is a list somebody can read**, and every rule it
+proposes passes the gates a subscribed rule does: `classify`, the breadth
+dry run in `evaluate`, untrusted scriptlets only, nothing scoped to another
+site. A refusal goes back to the model with its reason. At most eight
+turns; two replies in a row with no action end it.
+
+**Trial rules reach three places, each as narrow as it can be**: cosmetic
+through the tab's own bridge (`set_trial_list`), scriptlets as a script on
+that tab, network through `request_filter::set_trial` -- for the site rather
+than the tab, because requests carry the site. The trial ignores the
+shield's "allow ads" switch, being something started on purpose. **Nothing
+outlives the window**: `tab_investigation` removes every trial rule in its
+destructor, and the window owns it.
+
+**Keep** writes the rules into the person's own list, as accepted rules go,
+and re-reads the lists so a kept scriptlet is injected; then the trial ends
+and the tab reloads under what was kept. A pick answers the investigation's
+"show me where" when one asked, and opens filter evolution otherwise.
+
+**Estimates** are this session's own model timings once there are any, a
+default before (30s local, 15s external); a reload is a flat six. The
+status line says when an estimate has been passed rather than counting
+into negatives.
+
+**Proved.** `test_investigation`, offline with a scripted model and a fake
+page: action parsing from prose and code fences, a full run whose refusals
+reach the next prompt, the protocol stop, the budget, a failing provider,
+the estimate; removing the trust gate lets a trusted scriptlet through.
+`test_settings`: the network trial for its site only and gone when cleared,
+the cosmetic trial served and removed. **`try_investigate`, end to end
+through the real shell** -- the button, the window, the real Ollama
+provider against a scripted local server, a real tab and reload: a trial
+nobody keeps is gone when the window closes and the ad is back; and the
+loop looks, tries, has `##div` refused, asks, is answered, finishes, and
+Keep puts the rule in `filters-ai.txt` with the page staying clean.
+Removing the destructor's cleanup reds the first.
+
+**Open:**
+
+- **Not yet run against a real model.** The protocol and the gates are
+  proven with a script; whether llama3 or Claude follows it well, and how
+  good its rules are, is the holder's first use.
+- **The provider is shared.** `filter_dialog` connects to the same
+  provider's `finished`, so with both open at once a reply reaches both.
+  The investigation ignores replies it is not waiting for; the filter
+  dialog does not check.
+- **"Show me" needs the tab in front**, since the picker works on the
+  current view; the window says so rather than switching.
+- **Network trials are per site**, and one investigation runs at a time.
+- **Android**: `run_probe` answers empty there, so `look` sees nothing.
+- **Detection is the top frame.** A player in a cross-origin frame is
+  seen as the frame.
+

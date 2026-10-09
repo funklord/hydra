@@ -18,6 +18,9 @@
 
 class annoyance_log;
 namespace ad_probe { struct findings; }
+class annoyed_dialog;
+class investigation;
+struct investigation_evidence;
 class tab_tree_view;
 class QSplitter;
 class QStackedWidget;
@@ -266,7 +269,12 @@ private slots:
 	void report_annoyance();
 	// The half of it that runs once the page has answered whether an ad is
 	// on screen. Separate because that answer arrives asynchronously.
-	void file_annoyance(const QUrl &page, const ad_probe::findings &found);
+	void file_annoyance(web_view_backend *view, const QUrl &page,
+	                    const ad_probe::findings &found);
+	// The model loop behind the window's Work On It button, on that tab.
+	void start_investigation(annoyed_dialog *dlg, web_view_backend *view,
+	                         const investigation_evidence &ev);
+	void keep_investigated_rules(const QStringList &rules);
 	// The other half: did the rules just applied break this page? Reachable
 	// only while there is something to confirm. See main_window.cpp.
 	void confirm_rules();
@@ -750,6 +758,11 @@ public:
 	int                 m_capture_job   = 0;
 	local_proxy        *m_local_proxy   = nullptr;
 	element_picker     *m_picker        = nullptr;
+	// The investigation running now, if any, and its window; and whether the
+	// next pick answers its "show me where" rather than opening evolution.
+	QPointer<investigation>  m_investigation;
+	QPointer<annoyed_dialog> m_investigation_window;
+	bool                     m_pick_for_investigation = false;
 	filter_signals     *m_signals       = nullptr;
 	annoyance_log      *m_annoyances    = nullptr;
 	QString             m_annoyances_path;

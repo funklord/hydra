@@ -1318,6 +1318,38 @@ int main(int argc, char **argv) {
 	// The filter list reaching a decision at all. It did not, for the whole life
 	// of the filter-evolution loop: rules were proposed, checked, accepted, saved
 	// and listed, and nothing asked them about a request.
+	// **An investigation's trial: for its site, and gone when it ends.** The
+	// Annoyed window tries network rules on a tab before anybody keeps them,
+	// and the request filter is the profile's, so the trial is scoped by the
+	// one thing a request carries -- its site.
+	section("trial network rules apply to their site only, until cleared");
+	{
+		policy_engine e;
+		request_filter f(&e);
+		request_context ctx;
+		ctx.site_host    = "www.news.example";
+		ctx.request_host = "ads.example";
+		ctx.url          = QUrl("https://ads.example/slot.js");
+		check(!f.decide(ctx).block, "before a trial, nothing is blocked");
+
+		filter_rule net, hide;
+		filter_list::parse_rule("||ads.example^", &net);
+		filter_list::parse_rule("news.example##.ad", &hide);
+		f.set_trial("news.example", { net, hide });
+		check(f.decide(ctx).block, "in trial, the request is blocked on the site");
+		request_context elsewhere = ctx;
+		elsewhere.site_host = "other.example";
+		check(!f.decide(elsewhere).block, "and not on another site");
+
+		e.set_setting("news.example", policy::feature::ads,
+		              policy::setting::allow);
+		check(f.decide(ctx).block,
+		       "even where the shield allows ads: the trial is on purpose");
+
+		f.set_trial(QString(), {});
+		check(!f.decide(ctx).block, "and cleared, it blocks nothing");
+	}
+
 	section("accepted filter rules are enforced");
 	{
 		policy_engine e;
@@ -1527,6 +1559,20 @@ int main(int argc, char **argv) {
 		               "(%1)").arg(bridge.selectors().join(" | ")));
 		check(bridge.selectors_json().contains("DisplayAd"),
 		       "and that is what the page is handed");
+
+		// An investigation's trial list, for this tab only, served after
+		// the rest and taken back out when it ends.
+		filter_list trial;
+		filter_rule t;
+		filter_list::parse_rule("news.example##.trying", &t);
+		trial.add(t);
+		bridge.set_trial_list(&trial);
+		check(bridge.selectors().contains(".trying") &&
+		          bridge.selectors().first() == ".mine",
+		       "a trial rule is served after the person's own");
+		bridge.set_trial_list(nullptr);
+		check(!bridge.selectors().contains(".trying"),
+		       "and is gone once the trial ends");
 	}
 
 	section("cosmetic rules: an unscoped one is not applied everywhere");

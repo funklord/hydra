@@ -1,12 +1,14 @@
 #pragma once
 
+#include "filter_list.h"
+
 #include <QList>
+#include <QMutex>
 #include <QSet>
 #include <QString>
 #include <QUrl>
 
 class policy_engine;
-class filter_list;
 
 // The kinds of request every engine can distinguish. Qt WebEngine reports far
 // more resource types and Android's WebView reports fewer; this is the subset
@@ -105,6 +107,18 @@ public:
 	// reviewed one at a time.
 	void set_subscription_list(const filter_list *list) { m_subscribed = list; }
 
+	// **Rules an investigation is trying, for one site, until it ends.** The
+	// Annoyed window's model proposes network rules and the browser tries
+	// them on the tab before anybody keeps them; they apply to requests whose
+	// site is `site_host` or under it, and only then. Set and cleared from
+	// the UI thread while `decide` runs on the network thread, so the site is
+	// read under a lock and the list takes its own. An empty site clears it.
+	//
+	// Not behind the shield's "allow ads" switch, unlike the lists above: a
+	// trial is something the person started on purpose, for this site, and
+	// it ends when the window does.
+	void set_trial(const QString &site_host, const QList<filter_rule> &rules);
+
 	request_decision decide(const request_context &ctx) const;
 
 	// Cookie decisions are the same shape: policy plus the first-party host.
@@ -138,6 +152,9 @@ private:
 	policy_engine     *m_engine;
 	const filter_list *m_list = nullptr;
 	const filter_list *m_subscribed = nullptr;
+	mutable QMutex     m_trial_lock;
+	QString            m_trial_site;
+	filter_list        m_trial;
 	QSet<QString>  m_ad_hosts;
 	QList<request_observer *> m_observers;
 };

@@ -115,6 +115,20 @@ request_decision request_filter::decide(const request_context &ctx) const {
 		}
 	}
 
+	// The investigation's trial rules, for its site only.
+	if (ctx.kind != resource_kind::font) {
+		QString site;
+		{
+			QMutexLocker guard(&m_trial_lock);
+			site = m_trial_site;
+		}
+		if (!site.isEmpty() && filter_list::scope_matches(site, ctx.site_host) &&
+		    m_trial.blocks(ctx.url.toString(), ctx.site_host)) {
+			d.block = true;
+			return d;
+		}
+	}
+
 	// Per-origin scripts: block scripts served from a host whose JS is blocked.
 	if (ctx.kind == resource_kind::script &&
 	    !m_engine->is_allowed(feature::javascript, ctx.request_host)) {
@@ -147,3 +161,15 @@ void request_filter::notify(const request_context &ctx, const request_decision &
 	for (request_observer *o : m_observers)
 		o->on_request(ctx, d);
 }
+
+void request_filter::set_trial(const QString &site_host,
+                               const QList<filter_rule> &rules) {
+	QList<filter_rule> network;
+	for (const filter_rule &r : rules)
+		if (!r.cosmetic && !r.scriptlet)
+			network << r;
+	m_trial.replace(network);
+	QMutexLocker guard(&m_trial_lock);
+	m_trial_site = network.isEmpty() ? QString() : site_host;
+}
+

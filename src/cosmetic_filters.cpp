@@ -18,6 +18,11 @@ QStringList cosmetic_filters::selectors() const {
 	for (const QString &s : selectors_for(m_subscribed, m_host, m_policy))
 		if (!out.contains(s))
 			out << s;
+	// Without the policy: like the network trial, an investigation applies
+	// what it is trying even where the shield allows ads.
+	for (const QString &s : selectors_for(m_trial, m_host))
+		if (!out.contains(s))
+			out << s;
 	return out;
 }
 
