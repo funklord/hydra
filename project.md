@@ -36916,3 +36916,61 @@ be forgotten where an import cannot: before reporting something verified,
 before citing a check that passed, before concluding from an empty search,
 and before quoting a count. Four more sections became skills the same way.
 Acknowledged at `8bfc567`.
+
+## An index written before `trusted` existed drops YouTube's best rules
+
+Reported 2026-10-09: ads still on YouTube, and the earlier "it works" was
+a video that happened to carry none. Measured against uBlock's own
+`filters.txt`, fetched here:
+
+    scriptlets        2441 of 2451 asked for  (2419 WITHOUT trust)
+    network+cosmetic  1791 rule(s) in force
+    refused            3 names: json-edit, json-edit-fetch-response,
+                       jsonl-edit-xhr-response
+
+**Coverage is not the problem.** Of the 15 youtube scriptlet rules, 14 are
+in the catalog -- `set` x5, `trusted-replace-xhr-response` x3,
+`trusted-rpfr` x2, `json-prune` x2, `nowoif`, `json-prune-fetch-response`
+-- and one, `json-edit-fetch-response`, is not.
+
+**The gap is trust, and it is an upgrade problem.** 22 rules need the list
+trusted, and five of youtube's are among them: the three
+`trusted-replace-xhr-response` and the two `trusted-rpfr`, which are the
+ones that strip the ad payload rather than hide a box. Three facts
+together:
+
+    filter_subscription.cpp:280  the shipped defaults are trusted = true
+    filter_subscription.cpp:314  the index reads
+                                 o.value("trusted").toBool(false)
+    subscription_updater.cpp:27  defaults are seeded ONLY when the index
+                                 file does not exist
+
+So a profile whose `filters-subscribed.json` was written before the
+`trusted` key existed loads EasyList and uBO's filters as **untrusted, for
+ever**: the key is absent, absent reads as false, and nothing re-seeds an
+index that is already there. The 22 rules are dropped silently.
+
+**The `toBool(false)` is right and is not the bug.** Its comment says
+defaulting the other way would grant trust to a list nobody vetted, which
+is correct for a list somebody added. What it cannot distinguish is
+**absent from explicitly false**, and for the two lists this project ships
+itself the answer differs: the file never said "not trusted", the field
+did not exist.
+
+**Not fixed here, because it grants trust.** The repair is to tell absent
+from false -- `o.contains("trusted")` -- and adopt the shipped default's
+trust for a subscription whose url is one hydra ships, leaving an explicit
+false alone and every other list untouched. That is a trust decision and a
+narrow instance of the saved-file-pins-the-old-default question recorded
+above, which is the holder's.
+
+**What is unconfirmed**: whether this profile is actually in that state.
+One command answers it, and it is the holder's to run --
+`cat ~/.local/share/Hydra/filters-subscribed.json` -- where a `trusted`
+key absent or false on either shipped list is the condition above.
+
+**And one thing a filter list cannot fix**, said plainly rather than
+promised away: YouTube serves ad video from the same hosts as content and
+increasingly stitches it into the stream server-side. The five trusted
+rules are what reach the payload today; nothing here can reach a stream
+that arrives already spliced.
