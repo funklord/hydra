@@ -36847,3 +36847,72 @@ none.
 
 What it did find was the untested guard above, which is not what it was
 pointed at.
+
+## Fold, 2026-10-09: what this session leaves
+
+Written at the fold threshold rather than at the end of the work, so it is
+short on purpose. The sections above carry the detail; this says where
+things stand and what to pick up.
+
+**Shipped and pushed**, in order: the session-bus gates (`dc927a6`), the
+platform-theme clearing (`b88abb6`, `773df00`), the scriptlet live driver
+and the ads-gate re-read (`8f8f7cd`, `efadbf7`), the context menu's
+`expandAll` (`2975e81`), the download-history write on a refused start
+(`ff75e75`), page downloads adopted as jobs (`1ef2913`), and the Cancel
+test that guard needed (`4b0c972`).
+
+**The three reports from use had one shape, and it is recorded above under
+*Every fix was real and none of them was reachable*.** Each time the code
+was right and the thing connecting it to the person was not: the artifact
+they run, the scope of a search, the branch a fixture reaches. Any of the
+three lets "fixed" be false while every check stays green.
+
+### What the next session should verify first
+
+**Whether an ordinary download now appears in Ctrl+J, and whether
+`~/.local/share/Hydra/download-history.json` exists after one.** That is
+the user-visible claim of `1ef2913` and it has only been proven against
+`fake_factory`, never against the engine. The holder has the package; the
+file has never existed on their machine, so its appearing is the signal.
+
+### Open, and not mine
+
+- Every item of *What is next* is gated on the holder, a device, a network
+  or another account -- audited this session, recorded there.
+- Two are recorded as deliberately unfixed: the saved-policy upgrade
+  question and the url-with-two-meanings tree-format change. Both are
+  design decisions and `working-practice` says hold them open.
+- A download begun by a **background** tab is filed under the front one.
+  Known, in the code, and the seam cannot do better without a Qt type
+  crossing it.
+- `tool/style_gate.py` and `tool/test_style_gate.py` were dirty in this
+  tree all session and are another session's work. Untouched.
+
+### This file is 2.56 times a context window
+
+Re-derived here 2026-10-09: 36,849 lines, about 512,000 tokens, +14,615 in
+thirty days, of which **this session added 1,079 across 15 commits**.
+claude-guidelines measured the same thing from outside and signalled it;
+both figures agree.
+
+**That cuts against how these entries have been written.**
+`working-practice` keeps the incident where a rule will be argued with and
+cuts it where the document is looked up -- and at this size this one can
+only be looked up. claude-guidelines applied that to itself the same day,
+taking `evidence.md` from 3044 lines to 1989 and trimming its own notes.
+
+A trimming pass was offered to the holder and not taken: which entries
+have earned their length is not the judgement of the session that wrote
+them, and 36,849 lines of the authoritative record is a deliberate pass
+rather than something to start unasked. The cheap mechanical step --
+a size figure on `style_gate.py`'s `docs` line -- is theirs, being a tool
+spread into every tree.
+
+### And the guidelines now load on demand
+
+`evidence.md` stopped being imported on 2026-10-09 and is the `evidence`
+skill, with four triggers written out in `CLAUDE.md` because a skill can
+be forgotten where an import cannot: before reporting something verified,
+before citing a check that passed, before concluding from an empty search,
+and before quoting a count. Four more sections became skills the same way.
+Acknowledged at `8bfc567`.
