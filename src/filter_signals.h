@@ -64,6 +64,15 @@ public:
 	// interesting first attempt off the end of what a person is shown.
 	QStringList capabilities_for(const QString &site_host) const;
 
+	// **What the page patches did**, one line per frame report, from the
+	// injected script's own account of itself (`scriptlets::describe`). A
+	// rule that was in force and changed nothing looks, from every other
+	// signal here, exactly like a rule that does not exist; this is the one
+	// that tells them apart. Most recent first and bounded, like the
+	// capabilities.
+	void note_scriptlets(const QString &site_host, const QString &line);
+	QStringList scriptlets_for(const QString &site_host) const;
+
 	void clear_site(const QString &site_host);
 	// Forget every site at once, for "Clear browsing data".
 	//
@@ -90,4 +99,5 @@ private:
 	// Bounded, like the two above: a page that asks for a camera every second
 	// must not turn a diagnostic into a leak of memory.
 	QHash<QString, QStringList> m_capabilities;
+	QHash<QString, QStringList> m_scriptlets;
 };

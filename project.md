@@ -37559,9 +37559,40 @@ the tree build showed `ytInitialPlayerResponse` trapped, all three ad
 fields undefined with the video data intact, `json-prune` installed, and
 no `ad-` class on the player.
 
-**What is still not done: the browser could not have said any of this
-itself.** The runner swallows every outcome -- skipped for scope, threw,
-ran -- so the only way to see it was from outside with DevTools. The
-holder's point is that this diagnosis is what the built-in AI is for, and
-it needs the runner to report what it did.
+**And the browser can now say this itself.** The holder's point was that
+this diagnosis is what the built-in AI is for, and that the path could be
+instrumented -- the runner swallowed every outcome, so the fault was
+visible only from outside with DevTools. Now:
+
+- **The runner reports.** One console line per frame with anything in
+  scope -- `hydra-scriptlets {"h":host,"r":[ran],"e":["name: why"],"k":n}`
+  -- through `console.debug` and `JSON.stringify` captured before any
+  page script runs. A page cannot read the console.
+- **The shell files it** with the site's signals: `main_window`'s console
+  handler hands it to `filter_signals::note_scriptlets`, keyed on the
+  tab's site and bounded at twenty like the capability log, and prints it
+  under `HYDRA_FILTER_DEBUG`. The engine's own `js:` echo skips it.
+- **The model is shown it.** The filter-evolution payload carries the
+  page patches, and they alone now enable Send: a pre-roll comes from the
+  site's own host and has no element to pick, so before this the dialog
+  had no evidence for the commonest complaint and would not send. The
+  system prompt says a same-host ad needs a scoped `+js` rule, using only
+  names that appear in the report.
+
+Measured live, the same probe with `HYDRA_FILTER_DEBUG=1`:
+
+    scriptlets: www.youtube.com: 10 ran (trusted-replace-xhr-response x2,
+      trusted-replace-fetch-response x2, set-constant x4,
+      json-prune-fetch-response, json-prune), 0 failed, 2431 for other sites
+
+On the build before the scope fix it would have read four ran, with
+`set-constant` and `json-prune` absent -- the line that would have named
+the fault. `test_scriptlets` checks the line, its parse, the failure
+reason and a frame with nothing in scope staying silent; removing the
+emit reds five checks.
+
+Still not reaching the model: the *Annoyed* report, which snapshots
+capabilities and suspects for the dialog it opens but not these, and
+whether the page then showed an ad -- the runner knows what it installed,
+not what the player did afterwards.
 

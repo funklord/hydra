@@ -20,6 +20,7 @@
 #include "web_view_factory.h"
 #include "address_input.h"
 #include "scheme_rules.h"
+#include "scriptlets.h"
 #include "user_agent.h"
 #include "kiosk_controller.h"
 #include "reorganize_dialog.h"
@@ -4355,9 +4356,26 @@ web_view_backend *main_window::ensure_view(node *n, bool load_now) {
 		// five projects. The cost is one captured bool per message, and only
 		// a page that logs sends any.
 		const bool want_console = qEnvironmentVariableIsSet("HYDRA_CONSOLE");
+		const bool want_filter_debug =
+		  qEnvironmentVariableIsSet("HYDRA_FILTER_DEBUG");
 		connect(view, &web_view_backend::console_message, this,
-		         [want_console](int level, const QString &text, int line,
-		                        const QString &source) {
+		         [this, view, want_console, want_filter_debug](
+		           int level, const QString &text, int line,
+		           const QString &source) {
+			// **The page patches' account of themselves**, filed with the
+			// site's other signals rather than printed. Keyed on the tab's
+			// site, not the frame's, because that is the page a person is
+			// looking at when they ask why an ad got through; the frame's
+			// own host is inside the line.
+			scriptlets::report rep;
+			if (scriptlets::parse_report(text, &rep)) {
+				const QString said = scriptlets::describe(rep);
+				if (m_signals)
+					m_signals->note_scriptlets(view->url().host(), said);
+				if (want_filter_debug)
+					qWarning("scriptlets: %s", qPrintable(said));
+				return;
+			}
 			if (!want_console)
 				return;
 			static const char *const names[] = { "info", "warn", "error" };

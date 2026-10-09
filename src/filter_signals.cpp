@@ -115,15 +115,35 @@ QStringList filter_signals::capabilities_for(const QString &site_host) const {
 	return m_capabilities.value(site_host);
 }
 
+void filter_signals::note_scriptlets(const QString &site_host,
+                                      const QString &line) {
+	if (site_host.isEmpty() || line.isEmpty())
+		return;
+	const QString stamped =
+	  QDateTime::currentDateTime().toString("HH:mm:ss") + "  " + line;
+	QMutexLocker guard(&m_lock);
+	QStringList &list = m_scriptlets[site_host];
+	list.prepend(stamped);
+	while (list.size() > 20)
+		list.removeLast();
+}
+
+QStringList filter_signals::scriptlets_for(const QString &site_host) const {
+	QMutexLocker guard(&m_lock);
+	return m_scriptlets.value(site_host);
+}
+
 int filter_signals::clear_all() {
 	QMutexLocker guard(&m_lock);
 	// The union, not one of them: a site can be in `m_observed` with nothing
 	// suspected, and counting only the suspects would under-report a clear.
 	QSet<QString> sites;
 	for (const QString &k : m_capabilities.keys()) sites.insert(k);
+	for (const QString &k : m_scriptlets.keys())   sites.insert(k);
 	for (const QString &k : m_suspects.keys())     sites.insert(k);
 	for (const QString &k : m_observed.keys())     sites.insert(k);
 	m_capabilities.clear();
+	m_scriptlets.clear();
 	m_suspects.clear();
 	m_observed.clear();
 	return int(sites.size());
@@ -132,6 +152,7 @@ int filter_signals::clear_all() {
 void filter_signals::clear_site(const QString &site_host) {
 	QMutexLocker guard(&m_lock);
 	m_capabilities.remove(site_host);
+	m_scriptlets.remove(site_host);
 	m_suspects.remove(site_host);
 	m_observed.remove(site_host);
 }

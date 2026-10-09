@@ -2,6 +2,7 @@
 
 #include "site_rules.h"
 
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -2110,14 +2111,84 @@ QString source_for(const QList<scriptlet_call> &calls) {
 	                       "var m=host===e||host.slice(-(e.length+1))==='.'+e;"
 	                       "if(neg&&m)return false;if(!neg&&m)hit=true;}"
 	                       "return hit;};"
+	                       // **What ran is reported, because a silent runner
+	                       // could not be diagnosed from inside the browser.**
+	                       // The scope fault above was found only by reading a
+	                       // live page over DevTools: nothing here said that
+	                       // half the rules had been skipped. One line per
+	                       // frame that had anything in scope, through the
+	                       // console the browser already listens to, and with
+	                       // `console.debug` and `JSON.stringify` captured
+	                       // before any scriptlet or page script can have
+	                       // replaced them. A page cannot read the console, so
+	                       // this tells the browser without telling the page.
+	                       "var log=null,str=null;"
+	                       "try{log=console.debug;str=JSON.stringify;}catch(e){}"
+	                       "var rep={h:host,r:[],e:[],k:0};"
 	                       "for(var i=0;i<calls.length;i++){"
-	                       "if(!in_scope(calls[i].s))continue;"
-	                       "var f=C[calls[i].n];if(!f)continue;"
+	                       "if(!in_scope(calls[i].s)){rep.k++;continue;}"
+	                       "var f=C[calls[i].n];"
+	                       "if(!f){rep.e.push(calls[i].n+': not in this build');"
+	                       "continue;}"
 	                       // One failing scriptlet must not take the others
 	                       // with it: they are independent patches and a page
 	                       // that defeats one says nothing about the next.
-	                       "try{f.apply(null,calls[i].a);}catch(e){}}"
+	                       "try{f.apply(null,calls[i].a);rep.r.push(calls[i].n);}"
+	                       "catch(e){var m='';try{m=String(e&&e.message||e);}"
+	                       "catch(x){}rep.e.push(calls[i].n+': '+m);}}"
+	                       "if((rep.r.length||rep.e.length)&&log&&str){"
+	                       "try{log.call(console,'hydra-scriptlets '+str(rep));}"
+	                       "catch(e){}}"
 	                       "})();");
+}
+
+QString report_prefix() {
+	return QStringLiteral("hydra-scriptlets ");
+}
+
+bool parse_report(const QString &line, report *out) {
+	const QString prefix = report_prefix();
+	if (!line.startsWith(prefix))
+		return false;
+	const QJsonDocument doc =
+	  QJsonDocument::fromJson(line.mid(prefix.size()).toUtf8());
+	if (!doc.isObject())
+		return false;
+	const QJsonObject o = doc.object();
+	report r;
+	r.host    = o.value(QStringLiteral("h")).toString();
+	r.skipped = o.value(QStringLiteral("k")).toInt();
+	for (const QJsonValue &v : o.value(QStringLiteral("r")).toArray())
+		r.ran << v.toString();
+	for (const QJsonValue &v : o.value(QStringLiteral("e")).toArray())
+		r.failed << v.toString();
+	if (out)
+		*out = r;
+	return true;
+}
+
+QString describe(const report &r) {
+	// Grouped rather than listed: YouTube alone runs `set-constant` four
+	// times, and a line that repeats a name says less than one that counts it.
+	QStringList order;
+	QHash<QString, int> times;
+	for (const QString &n : r.ran) {
+		if (!times.contains(n))
+			order << n;
+		++times[n];
+	}
+	QStringList names;
+	for (const QString &n : order)
+		names << (times.value(n) > 1
+		            ? QString("%1 x%2").arg(n).arg(times.value(n)) : n);
+	QString line = QString("%1: %2 ran").arg(r.host).arg(r.ran.size());
+	if (!names.isEmpty())
+		line += " (" + names.join(", ") + ")";
+	line += QString(", %1 failed").arg(r.failed.size());
+	if (!r.failed.isEmpty())
+		line += " (" + r.failed.join("; ") + ")";
+	line += QString(", %1 for other sites").arg(r.skipped);
+	return line;
 }
 
 }  // namespace scriptlets

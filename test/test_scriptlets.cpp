@@ -624,6 +624,58 @@ int main(int argc, char **argv) {
 		       "and a list of exclusions only runs nowhere");
 	}
 
+	// **The runner says what it did**, which it did not: every outcome was
+	// swallowed, so the scope fault above could be seen only from outside, over
+	// DevTools. One console line per frame, read back by the shell into the
+	// site's signals where the model is shown it.
+	section("the runner reports what ran, what failed and what was skipped");
+	{
+		QList<scriptlet_call> calls;
+		calls.push_back({ "x.test", "set-constant", { "cfg.a", "true" } });
+		calls.push_back({ "x.test", "set-constant", { "cfg.b", "true" } });
+		calls.push_back({ "x.test", "json-prune", { "ads" } });
+		calls.push_back({ "other.test", "set-constant", { "cfg.c", "true" } });
+		QJSEngine eng;
+		give_window(&eng, "www.x.test");
+		eng.evaluate("var console = { debug: function (s) { "
+		             "window.__said = (window.__said || []).concat([s]); } };");
+		// A scriptlet that throws, so the failure half has something to say:
+		// `json-prune` replaces `JSON.parse`, and in the runner's strict mode
+		// an assignment to a read-only property throws. Read-only rather than
+		// removed, because the runner reads its own call list with it.
+		eng.evaluate("Object.defineProperty(JSON, 'parse', "
+		             "{ value: JSON.parse, writable: false });");
+		eng.evaluate(scriptlets::source_for(calls));
+		const QString said = eng.evaluate("(window.__said || []).join('\\n')")
+		                       .toString();
+		check(eng.evaluate("(window.__said || []).length").toInt() == 1,
+		       QString("one line for the frame (%1)").arg(said));
+		scriptlets::report r;
+		check(scriptlets::parse_report(said, &r),
+		       QString("which reads back as a report (%1)").arg(said));
+		check(r.host == "www.x.test" && r.ran.size() == 2 && r.skipped == 1,
+		       QString("naming the frame, the two that ran and the one for "
+		               "another site (%1)").arg(scriptlets::describe(r)));
+		check(r.failed.size() == 1 && r.failed.first().startsWith("json-prune: "),
+		       QString("and the one that threw, with why (%1)")
+		           .arg(r.failed.join("|")));
+		check(scriptlets::describe(r).contains("set-constant x2"),
+		       QString("described with repeats counted (%1)")
+		           .arg(scriptlets::describe(r)));
+		check(!scriptlets::parse_report("an ordinary page message", &r) &&
+		          !scriptlets::parse_report(scriptlets::report_prefix() + "{",
+		                                    &r),
+		       "and a page's own message, or a broken one, is not a report");
+
+		QJSEngine quiet;
+		give_window(&quiet, "elsewhere.test");
+		quiet.evaluate("var console = { debug: function (s) { "
+		               "window.__said = s; } };");
+		quiet.evaluate(scriptlets::source_for(calls));
+		check(quiet.evaluate("typeof window.__said").toString() == "undefined",
+		       "a frame where nothing was in scope says nothing");
+	}
+
 	section("the names rules actually use, and the canonical one kept");
 	{
 		// A rule calls a scriptlet by whichever spelling its author knew, so

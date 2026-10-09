@@ -1,6 +1,7 @@
 #include "qtwebengine_view.h"
 
 #include "permissions_shim.h"
+#include "scriptlets.h"
 
 #include <QDataStream>
 #include <QIODevice>
@@ -192,6 +193,10 @@ protected:
 	                               const QString &source) override {
 		if (on_console)
 			on_console(int(level), message, line, source);
+		// The page patches' report goes to the shell, which files it; the
+		// default would also print it to stderr once per frame.
+		if (message.startsWith(scriptlets::report_prefix()))
+			return;
 		QWebEnginePage::javaScriptConsoleMessage(level, message, line, source);
 	}
 

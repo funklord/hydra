@@ -25,7 +25,13 @@ const char *k_system_prompt =
   "2. Never write a rule matching a bare TLD, and never one matching the "
   "page's own origin — it would break the page.\n"
   "3. Cosmetic rules must be domain-scoped (example.com##.ad) and must not "
-  "hide a generic tag such as div or img.\n";
+  "hide a generic tag such as div or img.\n"
+  "4. You may also be given the page patches (uBlock Origin scriptlets) this "
+  "browser ran on the page, with any that failed. An ad served from the "
+  "site's own host, such as a video pre-roll, cannot be stopped by a network "
+  "rule; if a patch meant for it failed or none ran, a domain-scoped "
+  "scriptlet rule (example.com##+js(name, arguments)) is the answer, using "
+  "only scriptlet names that appear in that report.\n";
 
 }  // namespace
 
@@ -63,9 +69,19 @@ filter_dialog::filter_dialog(filter_signals *signals_source, filter_list *list,
 	payload += "\nRequests that were not blocked:\n";
 	for (const QString &s : suspects)
 		payload += "  " + s + "\n";
+	// **The page patches' own account**, because the ad a person most often
+	// asks about -- a pre-roll -- comes from the site's own host, slips past
+	// nothing, and has no element to pick. Without this the dialog had no
+	// evidence for that case at all and would not send.
+	const QStringList patches = m_signals->scriptlets_for(m_site);
+	if (!patches.isEmpty()) {
+		payload += "\nPage patches this browser ran, newest first:\n";
+		for (const QString &p : patches)
+			payload += "  " + p + "\n";
+	}
 	m_payload->setPlainText(payload);
 
-	if (suspects.isEmpty() && !m_picked.is_valid())
+	if (suspects.isEmpty() && !m_picked.is_valid() && patches.isEmpty())
 		say("Nothing ad-shaped slipped through on this page, and "
 		                  "no element was picked — there is nothing to propose "
 		                  "against.");
@@ -143,6 +159,7 @@ void filter_dialog::build_ui() {
 	m_apply = buttons->addButton("&Accept Selected", QDialogButtonBox::AcceptRole);
 	m_apply->setEnabled(false);
 	m_send->setEnabled(!m_signals->suspects_for(m_site).isEmpty() ||
+	                    !m_signals->scriptlets_for(m_site).isEmpty() ||
 	                    m_picked.is_valid());
 	// And not at all when the provider cannot answer -- the header says so
 	// already, and a button beside an explanation of why it will fail is the

@@ -89,4 +89,26 @@ bool parse_call(const QString &inside, scriptlet_call *out, QString *why);
 // installing a script that does nothing.
 QString source_for(const QList<scriptlet_call> &calls);
 
+// **What the injected script did in one frame**, as it reports it on the
+// console: which scriptlets ran, which failed and why, and how many were not
+// for this host. The browser keeps it with the site's other signals, so the
+// person and the model can both see a rule that was in force and did nothing.
+struct report {
+	QString     host;      // the frame's own hostname
+	QStringList ran;       // canonical names, in the order they ran
+	QStringList failed;    // "name: reason"
+	int         skipped = 0;
+};
+
+// The console line's prefix. A message without it is the page's own.
+QString report_prefix();
+
+// Reads one console line. False for anything that is not a report, so a
+// caller can hand it every message and keep only these.
+bool parse_report(const QString &line, report *out);
+
+// One line for a person or a model: the counts, the names that ran grouped
+// by how often, and every failure in full.
+QString describe(const report &r);
+
 }  // namespace scriptlets
