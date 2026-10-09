@@ -37426,11 +37426,11 @@ holder's gdb log after installing `98fd3578` holds no signal at all and
 ends `exited normally`. The suite's own evidence is a sentinel in a column
 the handler ignores, which reddens when the deferral is removed.
 
-**2. The freeze is found and fixed in the tree, not yet confirmed by
-use.** The holder tested `2218501` and it was still very slow; the
-measurement above found the cause in `filter_list::replace`, not in the
-click. Confirmation is a toggle that no longer pauses on a build carrying
-the set, and a launch that no longer takes a minute to answer.
+**2. The freeze is fixed and confirmed by use.** The holder tested
+`2218501` and it was still very slow; the measurement above found the
+cause in `filter_list::replace`, not in the click. On a package built
+from `99f65c3` the holder reports the toggle fast. Startup, which paid the
+same cost, has not been reported on separately.
 
 **3. Ads on YouTube, and page downloads, are where the second fold left
 them.** Neither was touched today. The ad question still needs one fact
