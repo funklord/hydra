@@ -11,6 +11,7 @@
 #include <QSet>
 #include <QList>
 
+class model_tally;
 class QCheckBox;
 class QComboBox;
 class QListWidget;
@@ -331,6 +332,10 @@ void set_ai_mode(ai_choice mode);
 // The AI load knob, 10 to 100 per cent; 100 when never set. Kept because a
 // person who turned the AI down meant it for the next job too.
 int  ai_load();
+// The per-model tally of checked AI answers (`model_tally`), kept with the
+// settings so which tasks a model is weak at is known across restarts.
+void load_tally(model_tally *tally);
+void save_tally(const model_tally &tally);
 void set_ai_load(int percent);
 
 // Light, dark, or follow the desktop. Default is to follow -- see `theme.h` for

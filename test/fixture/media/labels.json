@@ -1,0 +1,68 @@
+{
+ "_about": "What each fixture is, as a person reading its metadata would say, for scoring a model's reading task by task. Each field lists every answer accepted: where reasonable people differ -- a lecture is talk or learning, a set's title with or without its subtitle -- both count. Written 2026-10-10 from the fixtures' own metadata; the reason is with each.",
+ "album_monstercat_fool": {
+  "kind": ["music"], "artist": ["F.O.O.L"], "title": ["MACHINE"],
+  "is_set": true, "tracklist": ["chapters", "description"],
+  "why": "A label channel (Monstercat Uncaged) uploads an artist's full album; the artist is in the title, not the uploader."
+ },
+ "audio_daft_punk": {
+  "kind": ["music"], "artist": ["Daft Punk"], "title": ["One More Time"],
+  "is_set": false, "tracklist": [""],
+  "why": "The artist's own channel; the title repeats the artist and adds (Official Audio), neither part of the track's name."
+ },
+ "interview_economist": {
+  "kind": ["talk"], "artist": ["The Economist"],
+  "title": ["The full-length interview with Elon Musk"],
+  "is_set": false, "tracklist": [""],
+  "why": "An 85-minute interview filed under News & Politics; its chapters are topics, not tracks. The channel is responsible for it."
+ },
+ "label_monstercat_noisestorm": {
+  "kind": ["music"], "artist": ["Noisestorm"], "title": ["Crab Rave"],
+  "is_set": false, "tracklist": [""],
+  "why": "A label upload: the uploader is the label, the artist and track are in the title, with [Monstercat Release] after them."
+ },
+ "lecture_mit": {
+  "kind": ["talk", "learning"], "artist": ["MIT OpenCourseWare"],
+  "title": ["Lecture 1: Introduction to China's History", "Introduction to China's History"],
+  "is_set": false, "tracklist": [""],
+  "why": "A university lecture; talk by the agreed list, learning by its category, and both are defensible. Chapters are topics."
+ },
+ "live_kexp_nils_frahm": {
+  "kind": ["music"], "artist": ["Nils Frahm"], "title": ["Says", "Says (Live on KEXP)"],
+  "is_set": false, "tracklist": [""],
+  "why": "A radio station's live session: the uploader is the broadcaster, the artist and song are in the title."
+ },
+ "lyrics_rare_vibes_adele": {
+  "kind": ["music"], "artist": ["Adele"], "title": ["Hello"],
+  "is_set": false, "tracklist": [""],
+  "why": "A lyrics channel re-uploading a song, filed under Autos & Vehicles: neither the uploader nor the category says what it is."
+ },
+ "playlist_music_for_shops": {
+  "kind": ["music"], "artist": ["Music For Shops"],
+  "title": ["Hugo Boss Store Music · Luxury Deep House Playlist 2026", "Luxury Deep House Playlist 2026"],
+  "is_set": true, "tracklist": ["chapters", "description"],
+  "why": "A curator's 95-minute playlist; the curator is the one to file it under, the tracks are in its chapters and description."
+ },
+ "set_groovix": {
+  "kind": ["music"], "artist": ["Groovix"],
+  "title": ["CLASSIC DISCO FUNK | Groovy French House for Long Evenings", "CLASSIC DISCO FUNK"],
+  "is_set": true, "tracklist": ["description", "chapters"],
+  "why": "A curated set filed under People & Blogs with no music metadata; the tracklist is in the description and YouTube's chapters."
+ },
+ "topic_daft_punk": {
+  "kind": ["music"], "artist": ["Daft Punk"], "title": ["One More Time"],
+  "is_set": false, "tracklist": [""],
+  "why": "Auto-generated with music metadata: the site's own artist and track fields are the answer."
+ },
+ "trailer_lionsgate": {
+  "kind": ["misc"], "artist": ["Lionsgate Movies"],
+  "title": ["The Ministry Of Ungentlemanly Warfare (2024) Official Trailer", "The Ministry Of Ungentlemanly Warfare (2024) Official Trailer - Starring Henry Cavill", "The Ministry Of Ungentlemanly Warfare"],
+  "is_set": false, "tracklist": [""],
+  "why": "A two-minute trailer in Film & Animation: about a movie, not one. Its chapters are scenes."
+ },
+ "video_adele": {
+  "kind": ["music"], "artist": ["Adele"], "title": ["Hello"],
+  "is_set": false, "tracklist": [""],
+  "why": "The artist's channel; the title adds the artist and (Official Music Video)."
+ }
+}

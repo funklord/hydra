@@ -18,6 +18,8 @@
 
 class annoyance_log;
 namespace ad_probe { struct findings; }
+struct media_reading;
+struct resolved_media;
 class annoyed_dialog;
 class investigation;
 struct investigation_evidence;
@@ -275,6 +277,10 @@ private slots:
 	void start_investigation(annoyed_dialog *dlg, web_view_backend *view,
 	                         const investigation_evidence &ev);
 	void keep_investigated_rules(const QStringList &rules);
+	// yt-dlp's streams listed once what they are has been read: named from
+	// the reading, and the reading and its weaknesses said.
+	void list_resolved_media(const QString &host, const resolved_media &m,
+	                         const media_reading &r, ai_provider *ai);
 	// The other half: did the rules just applied break this page? Reachable
 	// only while there is something to confirm. See main_window.cpp.
 	void confirm_rules();

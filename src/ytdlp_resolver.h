@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QList>
 #include <QMap>
 #include <QObject>
@@ -30,6 +31,9 @@ struct resolved_media {
 	QString title;
 	QString extractor;
 	QUrl    webpage_url;
+	// yt-dlp's whole answer, for `media_evidence`: comments, chapters and
+	// the description are read from it there rather than copied here.
+	QByteArray json;
 	// What a file is named from. Any may be empty: a site reports what it
 	// has, and the name is built from whatever arrived.
 	QString id;            // the site's own id: a YouTube video id
@@ -39,14 +43,6 @@ struct resolved_media {
 	QString channel;
 	qint64  timestamp = -1;   // upload time, seconds since the epoch, UTC
 	QString upload_date;      // YYYYMMDD, when only the day is known
-	// What says what it is (`content_kind_of`).
-	QString     album;
-	QString     series;       // a show, where the site has one
-	int         season = -1;
-	int         episode = -1;
-	int         release_year = -1;
-	double      duration = -1;   // seconds
-	QStringList categories;      // YouTube's: "Music", "Film & Animation"...
 	QList<media_format> formats;
 };
 
@@ -111,29 +107,11 @@ public:
 	// with their separators, and an over-long name is shortened in the
 	// track, the part a person needs least to tell two files apart.
 	static QString file_name_for(const resolved_media &m, const QString &ext);
+	// The same, with the name and track given -- by a checked reading of
+	// the evidence, which knows better than the fields alone.
+	static QString file_name_for(const resolved_media &m, const QString &ext,
+	                             const QString &name, const QString &track);
 
-	// **What a video is**, asked for by the holder on 2026-10-10 so music,
-	// movies and clips can be downloaded by different rules. Read from the
-	// site's own metadata rather than guessed from pixels; each answer
-	// carries the evidence it rests on, so a wrong one can be argued with.
-	//
-	//   music    music metadata (track, artist, album), an auto-generated
-	//            "Artist - Topic" channel, the Music category, or a title
-	//            that says "official video", "audio" or "lyrics"
-	//   episode  a series, season or episode number
-	//   movie    an hour or more, together with a film category, a release
-	//            year, or "full movie" in the title
-	//   clip     anything else
-	//
-	// In that order: an hour-long album upload is music, and a series
-	// episode an hour long is an episode, not a movie.
-	enum class content_kind { music, episode, movie, clip };
-	struct content_guess {
-		content_kind kind = content_kind::clip;
-		QStringList  because;    // the evidence, for the person
-	};
-	static content_guess content_kind_of(const resolved_media &m);
-	static QString kind_name(content_kind k);
 
 	// The rendition to prefer, or a default-constructed one if there is none.
 	//

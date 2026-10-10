@@ -45,6 +45,9 @@
 #include "extractor_helpers.h"
 #include "network_fetcher.h"
 #include "ad_probe.h"
+#include "model_tally.h"
+#include "media_interpretation.h"
+#include "media_evidence.h"
 #include "tab_investigation.h"
 #include "investigation.h"
 #include "ai_provider.h"
@@ -7265,11 +7268,62 @@ void main_window::find_media_with_ytdlp() {
 	m_ytdlp->disconnect(this);
 	connect(m_ytdlp, &ytdlp_resolver::resolved, this,
 	         [this, host](const resolved_media &m) {
-		// What it is, said with the evidence, so the person can see why a
-		// download will follow the rules it does.
-		const ytdlp_resolver::content_guess what =
-		  ytdlp_resolver::content_kind_of(m);
-		const QString kind = ytdlp_resolver::kind_name(what.kind);
+		// **What it is, read before anything is listed**: the evidence from
+		// yt-dlp's whole answer, a model's reading of it checked against
+		// that evidence, the rules where there is no model or a part fails.
+		QString no_ai;
+		ai_provider *ai = choose_ai(&no_ai);
+		auto *step = new media_interpretation(ai, media_evidence::from_json(m.json),
+		                                      this);
+		m_status->showMessage(ai ? QString("Reading what it is with %1…")
+		                             .arg(ai->name())
+		                         : QStringLiteral("Reading what it is…"));
+		connect(step, &media_interpretation::finished, this,
+		         [this, host, m, step, ai](const media_reading &r) {
+			step->deleteLater();
+			list_resolved_media(host, m, r, ai);
+		});
+		step->start();
+	}, Qt::SingleShotConnection);
+	connect(m_ytdlp, &ytdlp_resolver::failed, this, [this](const QString &e) {
+		// yt-dlp's own words: "Unsupported URL" is the answer that matters,
+		// and it is exactly the case sec 11.6's tap exists for.
+		m_status->showMessage("yt-dlp: " + e, 10000);
+	}, Qt::SingleShotConnection);
+
+	m_ytdlp->resolve(page);
+}
+
+// The tally's name for a model: what was asked, not how its state is shown.
+static QString model_id(ai_provider *ai) {
+	if (auto *o = qobject_cast<ollama_provider *>(ai))
+		return "Ollama " + o->model();
+	return ai ? ai->name() : QString();
+}
+
+void main_window::list_resolved_media(const QString &host,
+                                      const resolved_media &m,
+                                      const media_reading &r, ai_provider *ai) {
+	// Counted against the model, task by task, so the browser can say which
+	// tasks it is too weak for rather than leaving the person to notice.
+	QStringList warnings;
+	if (ai && r.model_answered) {
+		model_tally tally;
+		settings_store::load_tally(&tally);
+		const QString id = model_id(ai);
+		for (const QString &task : { "kind", "artist", "title", "tracklist" })
+			tally.record(id, task, r.from_model.contains(task));
+		settings_store::save_tally(tally);
+		warnings = tally.warnings(id);
+	} else if (ai) {
+		model_tally tally;
+		settings_store::load_tally(&tally);
+		tally.record(model_id(ai), "answer", false);
+		settings_store::save_tally(tally);
+		warnings = tally.warnings(model_id(ai));
+	}
+	const QString kind = media_reading::name_of(r.what);
+	{
 		int added = 0;
 		for (const media_format &f : m.formats) {
 			if (!f.has_video && !f.has_audio)
@@ -7289,7 +7343,8 @@ void main_window::find_media_with_ytdlp() {
 			// for them". A download of a yt-dlp stream went out naked and
 			// collected the 403 this field exists to prevent.
 			item.headers   = f.headers;
-			item.file_name = ytdlp_resolver::file_name_for(m, f.ext);
+			item.file_name = ytdlp_resolver::file_name_for(m, f.ext, r.artist,
+			                                               r.title);
 			item.label     = QString("[%1] %2 %3%4")
 			                     .arg(kind, m.title.isEmpty() ? host : m.title,
 			                          f.height ? QString::number(f.height) + "p"
@@ -7299,22 +7354,31 @@ void main_window::find_media_with_ytdlp() {
 			m_media->add_item(host, item);
 			++added;
 		}
-		m_status->showMessage(
-		  added ? QString("yt-dlp (%1): %2 stream(s) found. It looks like %3: "
-		                  "%4.")
-		              .arg(m.extractor).arg(added).arg(kind,
-		                   what.because.join("; "))
-		        : QString("yt-dlp found nothing playable."), 12000);
+		// What was read and by whom, what fell back and why, and what the
+		// tally says about this model -- said, not left to be noticed.
+		QString said = added
+		  ? QString("yt-dlp (%1): %2 stream(s). It looks like %3%4, by %5: "
+		            "\"%6\".")
+		        .arg(m.extractor).arg(added)
+		        .arg(kind, r.is_set ? QStringLiteral(" (a set)") : QString(),
+		             r.artist, r.title)
+		  : QStringLiteral("yt-dlp found nothing playable.");
+		if (added && !r.tracklist.isEmpty())
+			said += QString(" Tracklist: %1.").arg(r.tracklist);
+		if (added && ai && r.model_answered)
+			said += QString(" Read by %1%2.").arg(model_id(ai),
+			    r.from_model.size() < 4
+			      ? QString(", the rules for the rest") : QString());
+		else if (added)
+			said += QStringLiteral(" Read by the rules alone.");
+		if (!r.rejected.isEmpty())
+			said += " Not kept: " + r.rejected.join("; ") + ".";
+		for (const QString &w : warnings)
+			said += " " + w;
+		m_status->showMessage(said, 20000);
 		if (added)
 			open_media();
-	}, Qt::SingleShotConnection);
-	connect(m_ytdlp, &ytdlp_resolver::failed, this, [this](const QString &e) {
-		// yt-dlp's own words: "Unsupported URL" is the answer that matters,
-		// and it is exactly the case sec 11.6's tap exists for.
-		m_status->showMessage("yt-dlp: " + e, 10000);
-	}, Qt::SingleShotConnection);
-
-	m_ytdlp->resolve(page);
+	}
 }
 
 void main_window::open_settings() {

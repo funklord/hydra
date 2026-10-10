@@ -19,6 +19,9 @@ picking a winner.
 `third_party/` keeps its upstream style and is exempt. So do generated
 sources: the `hydra_seed.qrc` and `sample-tree.txt` copy the build writes
 into the build directory, and anything `moc` or `androiddeployqt` produces.
+And `test/fixture/`, which holds data captured from real sites -- their
+metadata in whatever script it is written in -- and is theirs, not this
+tree's, the case *ASCII in source* names as genuinely requiring Unicode.
 
 ## The three rules
 

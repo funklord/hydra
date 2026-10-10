@@ -1,3 +1,4 @@
+#include "model_tally.h"
 #include "settings_dialog.h"
 #include "claude_provider.h"
 #include "download_manager.h"
@@ -290,6 +291,19 @@ int ai_load() {
 void set_ai_load(int percent) {
 	QSettings s = open_settings();
 	s.setValue("ai/load", qBound(10, percent, 100));
+	s.sync();
+}
+
+void load_tally(model_tally *tally) {
+	if (!tally)
+		return;
+	QSettings s = open_settings();
+	tally->load(s);
+}
+
+void save_tally(const model_tally &tally) {
+	QSettings s = open_settings();
+	tally.save(s);
 	s.sync();
 }
 

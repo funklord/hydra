@@ -38020,3 +38020,68 @@ Separately, the Play policy's first example is "Apps that block or
 interfere with another app displaying ads", which is about other apps
 rather than web pages, and is noted rather than judged here.
 
+## What a video is: evidence, a weak model's checked reading, and its weaknesses
+
+**The holder's direction, 2026-10-10**, after a first version turned one
+example's quirks into rules: "there are exceptions to most of these facts
+... and some require at least a weak model to solve as the solution is quite
+abstract. Like being able to tell if the artist name is the uploader or in
+the title". Then: "go ahead, let's see where it gets us, but we need to
+signal if the model is too weak and what tasks fall outside its comfort
+zone." Three steps, of which the first two and the signal are built:
+
+1. **Evidence, without judgement** -- `media_evidence::from_json` over
+   yt-dlp's whole answer, which now includes the top twenty comments: the
+   site's fields, the description, chapters, comments with pinned /
+   by-uploader / likes, and **every candidate tracklist** (chapters, the
+   description, each comment with three or more timestamped lines), none
+   chosen. Times are `h:mm:ss` or `m:ss` with nothing numeric either side;
+   a bracketed time goes with its brackets, and `Track [ID]` keeps its own.
+2. **A weak model's reading, checked** -- `media_interpretation`: kind (from
+   the proposed categories: music, movie, episode, talk, learning, news,
+   gaming, short, misc), artist, title, set or not, which candidate is the
+   tracklist, confidence. **It may choose and split, not invent**: a name
+   must appear in the evidence, the tracklist must be a candidate whose
+   times rise and end inside the video, the kind must be on the list. A
+   part that fails is the rules' answer instead, and the reason is kept.
+   Wired into the yt-dlp flow: streams are listed once the reading is in,
+   named from it, and the status line says what was read, by which model,
+   what fell back and why.
+3. *Corrections remembered per channel* -- not built yet.
+
+**The signal.** `model_tally` counts, per model and per task, answers kept
+and rejected by the checks; a task with five or more answers of which 30%
+or more were rejected is reported as weak, with the numbers, in the status
+line every time that model reads something, and the tally is kept in the
+settings. **What the checks cannot see** -- a real name from the metadata,
+the wrong one -- is measured against labels instead: twelve real cases in
+`test/fixture/media/`, chosen because each breaks a rule (a label upload, a
+lyrics channel filed under Autos & Vehicles, a broadcaster's live session,
+a curator's set, an interview, a lecture, a trailer), labelled with their
+reasons in `labels.json`. `test_media` scores the rules on them --
+
+    artist 8/12, title 5/12, kind 10/12, is_set 9/12, tracklist 9/12
+
+-- the baseline a model has to beat, with artist and title under the 75%
+comfort line. `try_media_model` scores a real model on the same twelve and
+names the tasks under that line.
+
+**Not measured: any model.** No model runs on this machine -- no Ollama
+answers, no weights are on disk beyond llama.cpp's vocabulary files, no API
+key -- so the scorecard has a baseline and no candidate. Running it needs
+a model, which is a multi-gigabyte download and the holder's call. The
+configured `qwen2.5-coder:14b` is tuned for code; a small general model
+may read metadata better, which is what the scorecard is for.
+
+**Replaced:** yesterday's `content_kind_of` in `ytdlp_resolver`, folded into
+`by_rules` with its title and film signals, so there is one rule set to
+disagree with rather than two.
+
+**Fixtures are exempt from the style gate** -- `fixture` in
+`.style-gate.toml`'s excludes, and named in `code-style.md` -- because they
+are third parties' data in the scripts their names are written in.
+
+**Not built**: the tracklist saved beside the file (a `.cue`) and as
+chapters in it; video, audio or both asked once per kind and remembered;
+corrections per channel.
+

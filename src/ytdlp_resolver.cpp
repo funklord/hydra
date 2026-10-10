@@ -180,6 +180,13 @@ void ytdlp_resolver::resolve(const QUrl &page_url) {
 	     << "--no-playlist"        // a watch page's "playlist" is usually related items
 	     << "--no-progress"
 	     << "--socket-timeout" << "20"
+	     // The top comments too, because a tracklist or the real artist is
+	     // often in one -- the evidence `media_evidence` gathers for the
+	     // model. Twenty, top-ranked, no replies: a bounded addition to
+	     // the request rather than the whole thread. YouTube's arguments;
+	     // other extractors ignore them.
+	     << "--get-comments"
+	     << "--extractor-args" << "youtube:max_comments=20,all,0,0;comment_sort=top"
 	     << page_url.toString();
 	proc->setProgram(m_program);
 	proc->setArguments(args);
@@ -204,7 +211,8 @@ void ytdlp_resolver::resolve(const QUrl &page_url) {
 			emit failed(reason.section('\n', 0, 0).left(300));
 			return;
 		}
-		const resolved_media m = parse(out);
+		resolved_media m = parse(out);
+		m.json = out;
 		if (!m.ok) {
 			emit failed(m.error.isEmpty() ? "Could not read yt-dlp's answer."
 			                              : m.error);
@@ -293,18 +301,7 @@ resolved_media ytdlp_resolver::parse(const QByteArray &json) {
 	out.uploader    = o.value("uploader").toString();
 	out.channel     = o.value("channel").toString();
 	out.upload_date = o.value("upload_date").toString();
-	out.album       = o.value("album").toString();
-	out.series      = o.value("series").toString();
-	if (o.value("season_number").isDouble())
-		out.season = o.value("season_number").toInt();
-	if (o.value("episode_number").isDouble())
-		out.episode = o.value("episode_number").toInt();
-	if (o.value("release_year").isDouble())
-		out.release_year = o.value("release_year").toInt();
-	if (o.value("duration").isDouble())
-		out.duration = o.value("duration").toDouble();
-	for (const QJsonValue &c : o.value("categories").toArray())
-		out.categories << c.toString();
+
 	if (o.value("timestamp").isDouble())
 		out.timestamp = qint64(o.value("timestamp").toDouble());
 	out.extractor   = o.value("extractor_key").toString();
@@ -412,16 +409,23 @@ QString name_part(const QString &raw) {
 
 QString ytdlp_resolver::file_name_for(const resolved_media &m,
                                       const QString &ext) {
+	return file_name_for(m, ext,
+	                     !m.artist.isEmpty() ? m.artist
+	                     : !m.uploader.isEmpty() ? m.uploader : m.channel,
+	                     !m.track.isEmpty() ? m.track : m.title);
+}
+
+QString ytdlp_resolver::file_name_for(const resolved_media &m, const QString &ext,
+                                      const QString &name_in,
+                                      const QString &track_in) {
 	QString when;
 	if (m.timestamp > 0)
 		when = QDateTime::fromSecsSinceEpoch(m.timestamp, QTimeZone::UTC)
 		         .toString(QStringLiteral("yyyyMMdd'T'HHmmss'Z'"));
 	else if (m.upload_date.size() == 8)
 		when = m.upload_date;
-	const QString name = name_part(!m.artist.isEmpty() ? m.artist
-	                                : !m.uploader.isEmpty() ? m.uploader
-	                                                        : m.channel);
-	QString track = name_part(!m.track.isEmpty() ? m.track : m.title);
+	const QString name = name_part(name_in);
+	QString track = name_part(track_in);
 	const QString id = name_part(m.id);
 	const QString dot_ext = ext.isEmpty() ? QString()
 	                                      : QLatin1Char('.') + name_part(ext);
@@ -454,80 +458,4 @@ QString ytdlp_resolver::file_name_for(const resolved_media &m,
 	return out;
 }
 
-QString ytdlp_resolver::kind_name(content_kind k) {
-	switch (k) {
-	case content_kind::music:   return QStringLiteral("music");
-	case content_kind::episode: return QStringLiteral("episode");
-	case content_kind::movie:   return QStringLiteral("movie");
-	case content_kind::clip:    break;
-	}
-	return QStringLiteral("clip");
-}
-
-ytdlp_resolver::content_guess ytdlp_resolver::content_kind_of(
-  const resolved_media &m) {
-	content_guess g;
-	const QString title = m.title.toLower();
-	const auto has_category = [&m](const char *c) {
-		return m.categories.contains(QString::fromLatin1(c), Qt::CaseInsensitive);
-	};
-
-	QStringList music;
-	if (!m.track.isEmpty())
-		music << QString("the site names the track \"%1\"").arg(m.track);
-	if (!m.artist.isEmpty())
-		music << QString("the site names the artist \"%1\"").arg(m.artist);
-	if (!m.album.isEmpty())
-		music << QString("it is on the album \"%1\"").arg(m.album);
-	if (m.channel.endsWith(QLatin1String(" - Topic")) ||
-	    m.uploader.endsWith(QLatin1String(" - Topic")))
-		music << QStringLiteral("it comes from an auto-generated Topic "
-		                        "channel, which carries only music");
-	if (has_category("Music"))
-		music << QStringLiteral("its category is Music");
-	static const QRegularExpression music_title(
-	  QStringLiteral("official (music )?(video|audio)|\\((official )?audio\\)|"
-	                 "\\blyrics?\\b|\\bvisuali[sz]er\\b"));
-	if (music_title.match(title).hasMatch())
-		music << QStringLiteral("its title calls it a music video, audio or "
-		                        "lyrics");
-	if (!music.isEmpty()) {
-		g.kind = content_kind::music;
-		g.because = music;
-		return g;
-	}
-
-	if (!m.series.isEmpty() || m.season >= 0 || m.episode >= 0) {
-		g.kind = content_kind::episode;
-		if (!m.series.isEmpty())
-			g.because << QString("it belongs to the series \"%1\"").arg(m.series);
-		if (m.season >= 0 || m.episode >= 0)
-			g.because << QStringLiteral("the site gives it a season or episode "
-			                            "number");
-		return g;
-	}
-
-	if (m.duration >= 3600) {
-		QStringList film;
-		if (has_category("Film & Animation") || has_category("Movies"))
-			film << QStringLiteral("its category is film");
-		if (m.release_year > 0)
-			film << QString("it has a release year, %1").arg(m.release_year);
-		if (title.contains(QLatin1String("full movie")))
-			film << QStringLiteral("its title says \"full movie\"");
-		if (!film.isEmpty()) {
-			g.kind = content_kind::movie;
-			g.because << QString("it runs %1 minutes").arg(int(m.duration / 60));
-			g.because << film;
-			return g;
-		}
-	}
-
-	g.kind = content_kind::clip;
-	g.because << (m.duration > 0
-	    ? QString("nothing says otherwise, and it runs %1 minutes")
-	          .arg(qMax(1, int(m.duration / 60)))
-	    : QStringLiteral("nothing says otherwise"));
-	return g;
-}
 

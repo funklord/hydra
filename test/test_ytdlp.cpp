@@ -168,77 +168,10 @@ int main(int argc, char **argv) {
 		  "\"formats\":[{\"format_id\":\"1\",\"url\":\"https://x.test/a\","
 		  "\"ext\":\"m4a\",\"vcodec\":\"none\",\"acodec\":\"mp4a\"}]}");
 		check(parsed.id == "vid1" && parsed.artist == "A" &&
-		          parsed.track == "Tr" && parsed.album == "Al" &&
-		          parsed.timestamp == 1700000000 && parsed.duration > 215 &&
-		          parsed.categories == QStringList{ "Music" },
+		          parsed.track == "Tr" && parsed.uploader == "U" &&
+		          parsed.timestamp == 1700000000 &&
+		          parsed.upload_date == "20231114",
 		       "and the fields it is built from are read from yt-dlp's answer");
-	}
-
-	// **What it is**, so music, movies and clips can follow different rules.
-	section("what a video is, and why");
-	{
-		using kind = ytdlp_resolver::content_kind;
-		const auto kind_of = [](const resolved_media &m) {
-			return ytdlp_resolver::content_kind_of(m);
-		};
-		resolved_media song;
-		song.title = "Song";
-		song.track = "Song";
-		song.artist = "Band";
-		check(kind_of(song).kind == kind::music &&
-		          kind_of(song).because.join(" ").contains("track"),
-		       "music metadata is music, and it says so");
-
-		resolved_media topic;
-		topic.title = "Track";
-		topic.channel = "Band - Topic";
-		check(kind_of(topic).kind == kind::music,
-		       "an auto-generated Topic channel is music");
-
-		resolved_media video;
-		video.title = "Band - Song (Official Music Video)";
-		video.uploader = "BandVEVO";
-		video.duration = 240;
-		check(kind_of(video).kind == kind::music,
-		       "a title saying official music video is music");
-
-		resolved_media album = song;
-		album.duration = 3900;
-		album.categories = { "Music" };
-		check(kind_of(album).kind == kind::music,
-		       "an hour-long album upload is music, not a movie");
-
-		resolved_media ep;
-		ep.title = "The Pilot";
-		ep.series = "A Show";
-		ep.season = 1;
-		ep.episode = 1;
-		ep.duration = 3000;
-		check(kind_of(ep).kind == kind::episode, "a series episode");
-
-		resolved_media film;
-		film.title = "A Film";
-		film.duration = 6300;
-		film.categories = { "Film & Animation" };
-		const auto g = kind_of(film);
-		check(g.kind == kind::movie &&
-		          g.because.join(" ").contains("105 minutes"),
-		       QString("long and filed as film is a movie (%1)")
-		           .arg(g.because.join("; ")));
-
-		resolved_media stream;
-		stream.title = "Three hours of me coding";
-		stream.duration = 10800;
-		stream.categories = { "Science & Technology" };
-		check(kind_of(stream).kind == kind::clip,
-		       "long alone is not a movie");
-
-		resolved_media shortie;
-		shortie.title = "My cat";
-		shortie.duration = 40;
-		check(kind_of(shortie).kind == kind::clip &&
-		          ytdlp_resolver::kind_name(kind::clip) == "clip",
-		       "and a short video with nothing else said is a clip");
 	}
 
 	section("choosing between them");
