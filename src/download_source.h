@@ -133,6 +133,11 @@ struct download_request {
 	// A source applies what it can and ignores the rest; nothing here is a
 	// promise that a given transport has headers at all.
 	QMap<QString, QString> headers;
+
+	// The name to save as, when the caller knows one; a single file name,
+	// and the source still keeps it inside `directory`. Empty: the source
+	// names it from the url, as before.
+	QString file_name;
 };
 
 // A source's report on a job. Fields left at their defaults mean "unchanged",

@@ -80,7 +80,10 @@ bool http_download_source::start(const download_request &req, QString *error) {
 
 	QDir().mkpath(req.directory);
 
-	QString name = QFileInfo(req.url.path()).fileName();
+	// The caller's name when it has one -- yt-dlp's metadata says far more
+	// than `videoplayback` -- and the url's otherwise.
+	QString name = req.file_name.isEmpty() ? QFileInfo(req.url.path()).fileName()
+	                                       : req.file_name;
 	if (name.isEmpty())
 		name = "download";
 	// Never let a remote path escape the download directory.

@@ -66,7 +66,8 @@ void download_manager::set_consent(const QString &source_id, bool granted) {
 
 int download_manager::enqueue(const QUrl &url, const QString &node_id,
                                QString *error,
-                               const QMap<QString, QString> &headers) {
+                               const QMap<QString, QString> &headers,
+                               const QString &file_name) {
 	// **The same address twice is one download, not two.**
 	//
 	// Reported from use: clicking a magnet link sometimes produced two rows
@@ -121,6 +122,7 @@ int download_manager::enqueue(const QUrl &url, const QString &node_id,
 	job.status               = download_state::queued;
 	job.public_participation = caps.public_participation;
 	job.headers              = headers;
+	job.file_name            = file_name;
 
 	m_jobs.push_back(job);
 	emit changed();
@@ -196,6 +198,7 @@ void download_manager::sweep() {
 		req.directory = m_dir;
 		req.node_id   = j.node_id;
 		req.headers   = j.headers;
+		req.file_name = j.file_name;
 
 		QString error;
 		m_live.insert(j.id);

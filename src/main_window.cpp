@@ -7130,6 +7130,15 @@ void main_window::toggle_capture() {
 	}
 
 	// --- start -------------------------------------------------------------
+	// A recording is saving too, where saving is not allowed.
+	{
+		QString refused;
+		if (!media_saving_allowed(v->url().host(), QUrl(), &refused)) {
+			m_capture_action->setChecked(false);
+			m_status->showMessage(refused, 10000);
+			return;
+		}
+	}
 	if (!m_local_proxy || !m_local_proxy->listening()) {
 		m_capture_action->setChecked(false);
 		m_status->showMessage("Cannot capture: the local proxy is not listening.",
@@ -7227,6 +7236,15 @@ void main_window::find_media_with_ytdlp() {
 		m_status->showMessage("Open a page first.", 5000);
 		return;
 	}
+	// yt-dlp exists to save what it finds; not asked where saving is not
+	// allowed.
+	{
+		QString refused;
+		if (!media_saving_allowed(v->url().host(), QUrl(), &refused)) {
+			m_status->showMessage(refused, 10000);
+			return;
+		}
+	}
 	if (!m_ytdlp)
 		m_ytdlp = new ytdlp_resolver(this);
 	if (!m_ytdlp->available()) {
@@ -7247,6 +7265,11 @@ void main_window::find_media_with_ytdlp() {
 	m_ytdlp->disconnect(this);
 	connect(m_ytdlp, &ytdlp_resolver::resolved, this,
 	         [this, host](const resolved_media &m) {
+		// What it is, said with the evidence, so the person can see why a
+		// download will follow the rules it does.
+		const ytdlp_resolver::content_guess what =
+		  ytdlp_resolver::content_kind_of(m);
+		const QString kind = ytdlp_resolver::kind_name(what.kind);
 		int added = 0;
 		for (const media_format &f : m.formats) {
 			if (!f.has_video && !f.has_audio)
@@ -7266,8 +7289,9 @@ void main_window::find_media_with_ytdlp() {
 			// for them". A download of a yt-dlp stream went out naked and
 			// collected the 403 this field exists to prevent.
 			item.headers   = f.headers;
-			item.label     = QString("%1 %2%3")
-			                     .arg(m.title.isEmpty() ? host : m.title,
+			item.file_name = ytdlp_resolver::file_name_for(m, f.ext);
+			item.label     = QString("[%1] %2 %3%4")
+			                     .arg(kind, m.title.isEmpty() ? host : m.title,
 			                          f.height ? QString::number(f.height) + "p"
 			                                   : f.ext,
 			                          f.note.isEmpty() ? QString()
@@ -7276,9 +7300,11 @@ void main_window::find_media_with_ytdlp() {
 			++added;
 		}
 		m_status->showMessage(
-		  added ? QString("yt-dlp (%1): %2 stream(s) found.")
-		              .arg(m.extractor).arg(added)
-		        : QString("yt-dlp found nothing playable."), 8000);
+		  added ? QString("yt-dlp (%1): %2 stream(s) found. It looks like %3: "
+		                  "%4.")
+		              .arg(m.extractor).arg(added).arg(kind,
+		                   what.because.join("; "))
+		        : QString("yt-dlp found nothing playable."), 12000);
 		if (added)
 			open_media();
 	}, Qt::SingleShotConnection);

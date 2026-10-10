@@ -244,3 +244,33 @@ int media_detector::drop_disallowed() {
 		emit site_updated(s, 0);
 	return int(dropped.size());
 }
+
+namespace {
+
+bool is_youtube_host(const QString &host) {
+	const QString h = host.toLower();
+	for (const char *d : { "youtube.com", "youtu.be", "youtube-nocookie.com",
+	                       "googlevideo.com" }) {
+		const QString base = QString::fromLatin1(d);
+		if (h == base || h.endsWith(QLatin1Char('.') + base))
+			return true;
+	}
+	return false;
+}
+
+}  // namespace
+
+bool media_saving_allowed_on(bool android, const QString &site_host,
+                             const QUrl &media_url, QString *why) {
+	if (!android)
+		return true;
+	if (!is_youtube_host(site_host) && !is_youtube_host(media_url.host()))
+		return true;
+	if (why)
+		*why = QStringLiteral("Saving from YouTube is not available on Android: "
+		                      "YouTube's terms forbid downloading, and Google "
+		                      "Play does not allow apps that break a service's "
+		                      "terms.");
+	return false;
+}
+

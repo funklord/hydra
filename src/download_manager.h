@@ -19,6 +19,7 @@ struct download_job {
 	qint64      total    = -1;  // -1 while unknown, and it may stay unknown
 	QString     detail;         // source's own words: "fetching metadata"...
 	QMap<QString, QString> headers;   // what this address needs sent with it
+	QString     file_name;            // what to save as; empty: from the url
 	QString     error;
 	download_state status = download_state::queued;
 
@@ -73,8 +74,10 @@ public:
 	//
 	// `headers` travel with the request to whichever source takes it -- what a
 	// CDN wants to see before it will serve a stream (sec 11.3).
+	// `file_name`, when given, is what the file is saved as.
 	int enqueue(const QUrl &url, const QString &node_id, QString *error,
-	             const QMap<QString, QString> &headers = {});
+	             const QMap<QString, QString> &headers = {},
+	             const QString &file_name = QString());
 
 	// Register a job whose transport is *already* running.
 	//

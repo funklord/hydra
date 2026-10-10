@@ -39,6 +39,10 @@ struct media_item {
 	// context -- and filled by a learned extractor (sec 11.5), which is asked for
 	// them precisely because a CDN answers 403 without them (sec 11.3).
 	QMap<QString, QString> headers;
+
+	// The name to save it as, when something knew better than the url --
+	// yt-dlp's metadata (`ytdlp_resolver::file_name_for`). Empty: the url's.
+	QString file_name;
 };
 
 // The media type to hand a system player along with the URL.
@@ -146,3 +150,43 @@ private:
 	mutable QMutex m_lock;
 	QHash<QString, QList<media_item>> m_by_site;
 };
+
+// **Whether this build may save media from a site.** False in one case: on
+// Android, for YouTube -- the page or the media itself. Set by the copyright
+// holder on 2026-10-10, conditional on the rule being real; it is.
+//
+// Google Play's Device and Network Abuse policy, read 2026-10-10 at
+// https://support.google.com/googleplay/android-developer/answer/9888379,
+// lists among its "Examples of common Device and Network Abuse violations":
+//
+//     Apps that access or use a service or API in a manner that violates
+//     its terms of service.
+//
+// and YouTube's Terms of Service (effective December 15, 2023), under
+// "Permissions and Restrictions", say "You are not allowed to":
+//
+//     access, reproduce, download, distribute, transmit, broadcast,
+//     display, sell, license, alter, modify or otherwise use any part of
+//     the Service or any Content except: (a) as expressly authorized by the
+//     Service; or (b) with prior written permission from YouTube and, if
+//     applicable, the respective rights holders;
+//
+// So a Play build saves nothing from YouTube: not a detected stream, not an
+// assembled one, not a capture, and yt-dlp is not asked. Desktop is not a
+// Play build and is unchanged. Watching in an external player is not
+// saving, and is left as it was -- recorded in project.md as the holder's to
+// decide, since the same terms reach it.
+//
+// `android` is a parameter so a desktop test can ask the Android question;
+// `media_saving_allowed` answers for the build it is in.
+bool media_saving_allowed_on(bool android, const QString &site_host,
+                             const QUrl &media_url, QString *why = nullptr);
+inline bool media_saving_allowed(const QString &site_host, const QUrl &media_url,
+                                 QString *why = nullptr) {
+#ifdef Q_OS_ANDROID
+	return media_saving_allowed_on(true, site_host, media_url, why);
+#else
+	return media_saving_allowed_on(false, site_host, media_url, why);
+#endif
+}
+

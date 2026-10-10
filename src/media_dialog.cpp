@@ -204,6 +204,9 @@ void media_dialog::repopulate() {
 		QString why_watch, why_save;
 		gate(watch, can_watch(item, m_players, &why_watch), why_watch);
 		gate(save,  can_fetch(item, m_downloads, &why_save), why_save);
+		QString no_save;
+		if (save->isEnabled() && !media_saving_allowed(m_site, item.url, &no_save))
+			gate(save, false, no_save);
 		// A player that will take it but warn about it stays enabled: a warning
 		// is advice, not a refusal, and greying on one would hide a stream that
 		// plays perfectly well.
@@ -241,6 +244,13 @@ void media_dialog::repopulate() {
 			emit capture_requested();
 			accept();
 		});
+		// Said on the button rather than refused after the click: a
+		// control that cannot work here should look like it.
+		QString no_capture;
+		if (!media_saving_allowed(m_site, QUrl(), &no_capture)) {
+			rec->setEnabled(false);
+			rec->setToolTip(no_capture);
+		}
 		m_list->setItemWidget(row, 3, cell);
 	}
 
@@ -342,6 +352,11 @@ void media_dialog::watch(const media_item &item) {
 }
 
 void media_dialog::save(const media_item &item) {
+	QString refused;
+	if (!media_saving_allowed(m_site, item.url, &refused)) {
+		m_status->setText("<b>" + refused.toHtmlEscaped() + "</b>");
+		return;
+	}
 	// HLS and DASH are saveable: fetch the segments and concatenate them
 	// (sec 11.2). Same engine, same refusal for an MPD whose audio is separate.
 	if (is_assemblable(item)) {
@@ -355,7 +370,8 @@ void media_dialog::save(const media_item &item) {
 	QString error;
 	// A learned stream carries the headers its CDN checks; without them the
 	// download is refused where Watch would have succeeded.
-	const int id = m_downloads->enqueue(item.url, m_node_id, &error, item.headers);
+	const int id = m_downloads->enqueue(item.url, m_node_id, &error, item.headers,
+	                                    item.file_name);
 	// Where it lands, as the user will actually find it.
 	//
 	// On Android naming the directory is worse than useless: Qt downloads into

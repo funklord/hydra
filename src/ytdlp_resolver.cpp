@@ -1,13 +1,16 @@
 #include "ytdlp_resolver.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QStandardPaths>
+#include <QTimeZone>
 
 namespace {
 
@@ -282,6 +285,28 @@ resolved_media ytdlp_resolver::parse(const QByteArray &json) {
 	}
 
 	out.title       = o.value("title").toString();
+	out.id          = o.value("id").toString();
+	out.artist      = o.value("artist").toString();
+	if (out.artist.isEmpty())
+		out.artist = o.value("creator").toString();
+	out.track       = o.value("track").toString();
+	out.uploader    = o.value("uploader").toString();
+	out.channel     = o.value("channel").toString();
+	out.upload_date = o.value("upload_date").toString();
+	out.album       = o.value("album").toString();
+	out.series      = o.value("series").toString();
+	if (o.value("season_number").isDouble())
+		out.season = o.value("season_number").toInt();
+	if (o.value("episode_number").isDouble())
+		out.episode = o.value("episode_number").toInt();
+	if (o.value("release_year").isDouble())
+		out.release_year = o.value("release_year").toInt();
+	if (o.value("duration").isDouble())
+		out.duration = o.value("duration").toDouble();
+	for (const QJsonValue &c : o.value("categories").toArray())
+		out.categories << c.toString();
+	if (o.value("timestamp").isDouble())
+		out.timestamp = qint64(o.value("timestamp").toDouble());
 	out.extractor   = o.value("extractor_key").toString();
 	if (out.extractor.isEmpty())
 		out.extractor = o.value("extractor").toString();
@@ -359,3 +384,150 @@ media_format ytdlp_resolver::best(const resolved_media &m) {
 
 	return m.formats.isEmpty() ? media_format{} : m.formats.last();
 }
+
+namespace {
+
+// One part of a file name: whitespace to `_`, what a filesystem refuses gone,
+// runs of `_` folded, and no `_` or `.` at either end.
+QString name_part(const QString &raw) {
+	QString out;
+	for (const QChar c : raw) {
+		if (c.isSpace())
+			out += QLatin1Char('_');
+		else if (c.unicode() < 0x20 || QStringLiteral("/\\:*?\"<>|").contains(c))
+			continue;
+		else
+			out += c;
+	}
+	while (out.contains(QLatin1String("__")))
+		out.replace(QLatin1String("__"), QLatin1String("_"));
+	while (out.startsWith(QLatin1Char('_')) || out.startsWith(QLatin1Char('.')))
+		out.remove(0, 1);
+	while (out.endsWith(QLatin1Char('_')) || out.endsWith(QLatin1Char('.')))
+		out.chop(1);
+	return out;
+}
+
+}  // namespace
+
+QString ytdlp_resolver::file_name_for(const resolved_media &m,
+                                      const QString &ext) {
+	QString when;
+	if (m.timestamp > 0)
+		when = QDateTime::fromSecsSinceEpoch(m.timestamp, QTimeZone::UTC)
+		         .toString(QStringLiteral("yyyyMMdd'T'HHmmss'Z'"));
+	else if (m.upload_date.size() == 8)
+		when = m.upload_date;
+	const QString name = name_part(!m.artist.isEmpty() ? m.artist
+	                                : !m.uploader.isEmpty() ? m.uploader
+	                                                        : m.channel);
+	QString track = name_part(!m.track.isEmpty() ? m.track : m.title);
+	const QString id = name_part(m.id);
+	const QString dot_ext = ext.isEmpty() ? QString()
+	                                      : QLatin1Char('.') + name_part(ext);
+
+	const auto build = [&](const QString &t) {
+		QStringList head;
+		if (!when.isEmpty())
+			head << when;
+		QString who_what = name;
+		if (!name.isEmpty() && !t.isEmpty())
+			who_what += QStringLiteral("_-_") + t;
+		else if (name.isEmpty())
+			who_what = t;
+		if (!who_what.isEmpty())
+			head << who_what;
+		if (!id.isEmpty())
+			head << QLatin1Char('[') + id + QLatin1Char(']');
+		const QString base = head.join(QLatin1Char('_'));
+		return (base.isEmpty() ? QStringLiteral("download") : base) + dot_ext;
+	};
+	// 255 bytes is the common limit, and UTF-8 counts bytes, not letters;
+	// 200 leaves room for the `.part` a transfer may add while it runs.
+	QString out = build(track);
+	while (out.toUtf8().size() > 200 && !track.isEmpty()) {
+		track.chop(1);
+		while (track.endsWith(QLatin1Char('_')))
+			track.chop(1);
+		out = build(track);
+	}
+	return out;
+}
+
+QString ytdlp_resolver::kind_name(content_kind k) {
+	switch (k) {
+	case content_kind::music:   return QStringLiteral("music");
+	case content_kind::episode: return QStringLiteral("episode");
+	case content_kind::movie:   return QStringLiteral("movie");
+	case content_kind::clip:    break;
+	}
+	return QStringLiteral("clip");
+}
+
+ytdlp_resolver::content_guess ytdlp_resolver::content_kind_of(
+  const resolved_media &m) {
+	content_guess g;
+	const QString title = m.title.toLower();
+	const auto has_category = [&m](const char *c) {
+		return m.categories.contains(QString::fromLatin1(c), Qt::CaseInsensitive);
+	};
+
+	QStringList music;
+	if (!m.track.isEmpty())
+		music << QString("the site names the track \"%1\"").arg(m.track);
+	if (!m.artist.isEmpty())
+		music << QString("the site names the artist \"%1\"").arg(m.artist);
+	if (!m.album.isEmpty())
+		music << QString("it is on the album \"%1\"").arg(m.album);
+	if (m.channel.endsWith(QLatin1String(" - Topic")) ||
+	    m.uploader.endsWith(QLatin1String(" - Topic")))
+		music << QStringLiteral("it comes from an auto-generated Topic "
+		                        "channel, which carries only music");
+	if (has_category("Music"))
+		music << QStringLiteral("its category is Music");
+	static const QRegularExpression music_title(
+	  QStringLiteral("official (music )?(video|audio)|\\((official )?audio\\)|"
+	                 "\\blyrics?\\b|\\bvisuali[sz]er\\b"));
+	if (music_title.match(title).hasMatch())
+		music << QStringLiteral("its title calls it a music video, audio or "
+		                        "lyrics");
+	if (!music.isEmpty()) {
+		g.kind = content_kind::music;
+		g.because = music;
+		return g;
+	}
+
+	if (!m.series.isEmpty() || m.season >= 0 || m.episode >= 0) {
+		g.kind = content_kind::episode;
+		if (!m.series.isEmpty())
+			g.because << QString("it belongs to the series \"%1\"").arg(m.series);
+		if (m.season >= 0 || m.episode >= 0)
+			g.because << QStringLiteral("the site gives it a season or episode "
+			                            "number");
+		return g;
+	}
+
+	if (m.duration >= 3600) {
+		QStringList film;
+		if (has_category("Film & Animation") || has_category("Movies"))
+			film << QStringLiteral("its category is film");
+		if (m.release_year > 0)
+			film << QString("it has a release year, %1").arg(m.release_year);
+		if (title.contains(QLatin1String("full movie")))
+			film << QStringLiteral("its title says \"full movie\"");
+		if (!film.isEmpty()) {
+			g.kind = content_kind::movie;
+			g.because << QString("it runs %1 minutes").arg(int(m.duration / 60));
+			g.because << film;
+			return g;
+		}
+	}
+
+	g.kind = content_kind::clip;
+	g.because << (m.duration > 0
+	    ? QString("nothing says otherwise, and it runs %1 minutes")
+	          .arg(qMax(1, int(m.duration / 60)))
+	    : QStringLiteral("nothing says otherwise"));
+	return g;
+}
+

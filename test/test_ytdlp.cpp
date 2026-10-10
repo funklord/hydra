@@ -115,6 +115,132 @@ int main(int argc, char **argv) {
 		      "acodec \"none\" means no audio, not unknown");
 	}
 
+	// **Saved as what it is**, asked for 2026-10-10:
+	// <upload time>_<name>_-_<track>_[<id>].<ext>
+	section("a download is named from its metadata");
+	{
+		resolved_media m;
+		m.title = "Rick Astley - Never Gonna Give You Up (Official Video)";
+		m.artist = "Rick Astley";
+		m.track = "Never Gonna Give You Up";
+		m.uploader = "Rick Astley";
+		m.id = "dQw4w9WgXcQ";
+		m.timestamp = 1256453398;    // 2009-10-25 06:49:58 UTC
+		m.upload_date = "20091025";
+		const QString full = ytdlp_resolver::file_name_for(m, "mp4");
+		check(full == "20091025T064958Z_Rick_Astley_-_Never_Gonna_Give_You_Up"
+		              "_[dQw4w9WgXcQ].mp4",
+		       QString("time, artist, track and id (%1)").arg(full));
+
+		resolved_media day = m;
+		day.timestamp = -1;
+		check(ytdlp_resolver::file_name_for(day, "m4a").startsWith("20091025_"),
+		       "the day alone when that is all the site gives");
+
+		resolved_media clip;
+		clip.title = "How to: fix it / part 2?";
+		clip.uploader = "Sällskapet för \"Tekniker\"";
+		clip.id = "abc123";
+		clip.upload_date = "20240102";
+		const QString c = ytdlp_resolver::file_name_for(clip, "webm");
+		check(c == "20240102_Sällskapet_för_Tekniker_-_How_to_fix_it_part_2_[abc123].webm",
+		       QString("the uploader and title when there is no music metadata; "
+		               "what a filesystem refuses is gone and the letters stay "
+		               "(%1)").arg(c));
+
+		resolved_media longer = m;
+		longer.track = QString(400, QLatin1Char('x'));
+		const QString l = ytdlp_resolver::file_name_for(longer, "mp4");
+		check(l.toUtf8().size() <= 200 && l.endsWith("_[dQw4w9WgXcQ].mp4") &&
+		          l.startsWith("20091025T064958Z_Rick_Astley_-_x"),
+		       QString("an over-long title is shortened, keeping the time, name, "
+		               "id and extension (%1 bytes)").arg(l.toUtf8().size()));
+
+		check(ytdlp_resolver::file_name_for(resolved_media(), "mp4") ==
+		          "download.mp4",
+		       "and with nothing known, still a name");
+
+		const resolved_media parsed = ytdlp_resolver::parse(
+		  "{\"title\":\"T\",\"id\":\"vid1\",\"artist\":\"A\",\"track\":\"Tr\","
+		  "\"album\":\"Al\",\"uploader\":\"U\",\"channel\":\"C\","
+		  "\"timestamp\":1700000000,\"upload_date\":\"20231114\","
+		  "\"duration\":215.5,\"categories\":[\"Music\"],"
+		  "\"formats\":[{\"format_id\":\"1\",\"url\":\"https://x.test/a\","
+		  "\"ext\":\"m4a\",\"vcodec\":\"none\",\"acodec\":\"mp4a\"}]}");
+		check(parsed.id == "vid1" && parsed.artist == "A" &&
+		          parsed.track == "Tr" && parsed.album == "Al" &&
+		          parsed.timestamp == 1700000000 && parsed.duration > 215 &&
+		          parsed.categories == QStringList{ "Music" },
+		       "and the fields it is built from are read from yt-dlp's answer");
+	}
+
+	// **What it is**, so music, movies and clips can follow different rules.
+	section("what a video is, and why");
+	{
+		using kind = ytdlp_resolver::content_kind;
+		const auto kind_of = [](const resolved_media &m) {
+			return ytdlp_resolver::content_kind_of(m);
+		};
+		resolved_media song;
+		song.title = "Song";
+		song.track = "Song";
+		song.artist = "Band";
+		check(kind_of(song).kind == kind::music &&
+		          kind_of(song).because.join(" ").contains("track"),
+		       "music metadata is music, and it says so");
+
+		resolved_media topic;
+		topic.title = "Track";
+		topic.channel = "Band - Topic";
+		check(kind_of(topic).kind == kind::music,
+		       "an auto-generated Topic channel is music");
+
+		resolved_media video;
+		video.title = "Band - Song (Official Music Video)";
+		video.uploader = "BandVEVO";
+		video.duration = 240;
+		check(kind_of(video).kind == kind::music,
+		       "a title saying official music video is music");
+
+		resolved_media album = song;
+		album.duration = 3900;
+		album.categories = { "Music" };
+		check(kind_of(album).kind == kind::music,
+		       "an hour-long album upload is music, not a movie");
+
+		resolved_media ep;
+		ep.title = "The Pilot";
+		ep.series = "A Show";
+		ep.season = 1;
+		ep.episode = 1;
+		ep.duration = 3000;
+		check(kind_of(ep).kind == kind::episode, "a series episode");
+
+		resolved_media film;
+		film.title = "A Film";
+		film.duration = 6300;
+		film.categories = { "Film & Animation" };
+		const auto g = kind_of(film);
+		check(g.kind == kind::movie &&
+		          g.because.join(" ").contains("105 minutes"),
+		       QString("long and filed as film is a movie (%1)")
+		           .arg(g.because.join("; ")));
+
+		resolved_media stream;
+		stream.title = "Three hours of me coding";
+		stream.duration = 10800;
+		stream.categories = { "Science & Technology" };
+		check(kind_of(stream).kind == kind::clip,
+		       "long alone is not a movie");
+
+		resolved_media shortie;
+		shortie.title = "My cat";
+		shortie.duration = 40;
+		check(kind_of(shortie).kind == kind::clip &&
+		          ytdlp_resolver::kind_name(kind::clip) == "clip",
+		       "and a short video with nothing else said is a clip");
+	}
+
 	section("choosing between them");
 	{
 		const resolved_media m = ytdlp_resolver::parse(k_json);

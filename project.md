@@ -37957,3 +37957,66 @@ seems not to bite, is whether this Ollama honours `num_thread` per request.
 a knob outside the Annoyed window -- it lives where the job is, as that entry
 asked, and the setting it writes is global.
 
+## Downloads named by what they are, and none from YouTube on Android
+
+**Named from yt-dlp's metadata**, on the holder's word of 2026-10-10:
+`<upload time>_<name>_-_<track>_[<id>].<ext>`, built by
+`ytdlp_resolver::file_name_for`. The time is ISO 8601 basic in UTC
+(`20091025T064958Z`, or the day alone), so files sort by publication and the
+time holds no `_`. Whitespace becomes `_`; only what a filesystem refuses is
+removed, so `Sällskapet` survives; missing parts drop out with their
+separators; over 200 bytes the track is shortened. It reaches the file
+through `media_item::file_name`, `download_manager::enqueue` and
+`download_request::file_name`, and an assembled stream keeps it with `.ts`.
+Before this a YouTube download was named from its URL -- `videoplayback`.
+
+**The name and track are, for now, chosen by rules** -- artist else uploader
+else channel; track else title -- and `content_kind_of` sorts music,
+episode, movie and clip by rule as well. **The holder corrected the
+direction the same day**: each of those "facts" has exceptions (the
+uploader is sometimes the artist and sometimes a curator; the artist is
+sometimes in the title), and telling which applies is interpretation, which
+wants at least a weak model. So these rules are the fallback for when no
+model answers, and the next stage replaces them as the decision -- see the
+entry after this one. The first real case looked at, a DJ set
+(`ftQQAvj74KI`), would be a *clip* by these rules: category "People &
+Blogs", no music fields, its tracklist in the description and in 21
+chapters.
+
+**No saving from YouTube in an Android build**, conditional on the rule
+being real, which it is. Read 2026-10-10 from the primary sources:
+
+Google Play, Device and Network Abuse policy
+(https://support.google.com/googleplay/android-developer/answer/9888379),
+under "Examples of common Device and Network Abuse violations":
+
+    Apps that access or use a service or API in a manner that violates its
+    terms of service.
+
+YouTube Terms of Service, effective December 15, 2023, "Permissions and
+Restrictions", "You are not allowed to":
+
+    access, reproduce, download, distribute, transmit, broadcast, display,
+    sell, license, alter, modify or otherwise use any part of the Service
+    or any Content except: (a) as expressly authorized by the Service; or
+    (b) with prior written permission from YouTube and, if applicable, the
+    respective rights holders;
+
+The current Play policy has no YouTube example of its own -- older ones,
+quoted on developer forums, did -- so the clause above is what applies.
+`media_saving_allowed` refuses on Android for a YouTube page or media host
+(youtube.com, youtu.be, youtube-nocookie.com, googlevideo.com, and their
+subdomains), and every route asks it: the media dialog's Download and
+Capture are disabled with the reason, `save`, `toggle_capture` and the
+yt-dlp request refuse. Desktop is unchanged. `test_streamtype` asks both
+platforms' answers.
+
+**Left to the holder, because the same terms reach them:** watching a
+YouTube stream in an external player is not saving, but is "access ...
+except as expressly authorized"; and the terms' next item forbids
+interfering with "any part of the Service" -- which ad blocking on YouTube
+does, so the YouTube scriptlets are the same question for a Play build.
+Separately, the Play policy's first example is "Apps that block or
+interfere with another app displaying ads", which is about other apps
+rather than web pages, and is noted rather than judged here.
+

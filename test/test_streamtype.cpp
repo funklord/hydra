@@ -87,6 +87,32 @@ int main(int argc, char **argv) {
 	std::setvbuf(stdout, nullptr, _IONBF, 0);
 	QCoreApplication app(argc, argv);
 
+	// **No saving from YouTube in a Play build.** Google Play forbids apps
+	// that use a service against its terms, and YouTube's forbid downloading;
+	// the desktop is not a Play build. Asked both ways here, since this suite
+	// runs on the desktop and the Android answer is the one that matters.
+	section("saving from YouTube is refused on Android, and only there");
+	{
+		const QUrl stream("https://rr1---sn-x.googlevideo.com/videoplayback?id=1");
+		check(media_saving_allowed_on(false, "www.youtube.com", stream),
+		       "on the desktop, YouTube saves as before");
+		QString why;
+		check(!media_saving_allowed_on(true, "www.youtube.com", stream, &why) &&
+		          why.contains("Google Play"),
+		       QString("on Android a YouTube page refuses, and says why (%1)")
+		           .arg(why));
+		check(!media_saving_allowed_on(true, "music.youtube.com", QUrl()) &&
+		          !media_saving_allowed_on(true, "youtu.be", QUrl()) &&
+		          !media_saving_allowed_on(true, "www.youtube-nocookie.com", QUrl()),
+		       "and so do Music, the short host and the embed host");
+		check(!media_saving_allowed_on(true, "blog.example", stream),
+		       "and a YouTube stream embedded in another site");
+		check(media_saving_allowed_on(true, "notyoutube.com", QUrl()) &&
+		          media_saving_allowed_on(true, "vimeo.com",
+		                                  QUrl("https://cdn.vimeo.example/v.mp4")),
+		       "while a lookalike host and other sites save as before");
+	}
+
 	section("classification, without a network in sight");
 	{
 		// The case this tier exists for. Believing the header here is exactly

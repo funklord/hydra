@@ -6,6 +6,7 @@
 #include "player_launcher.h"
 
 #include <QDir>
+#include <QFileInfo>
 
 stream_assembly::stream_assembly(player_launcher *players,
                                   download_manager *downloads,
@@ -72,7 +73,11 @@ void stream_assembly::assemble(const media_item &item,
 	  // stops making sense.
 	  ? m_scratch.filePath(QStringLiteral("stream-%1.ts").arg(++m_stream_seq))
 	  : QDir(m_downloads->directory()).filePath(
-	        item.label.section('/', -1).section('.', 0, 0) + ".ts");
+	        // The metadata's name where there is one, as a transport stream,
+	        // which is what this writes; the list label's otherwise.
+	        (item.file_name.isEmpty()
+	           ? item.label.section('/', -1).section('.', 0, 0)
+	           : QFileInfo(item.file_name).completeBaseName()) + ".ts");
 
 	connect(m_assembler, &hls_assembler::progress, this,
 	         [this, out, play_it, item](qint64 bytes, int done, int total) {
