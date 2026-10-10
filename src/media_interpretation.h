@@ -40,7 +40,19 @@ struct media_reading {
 	// Why each rejected task was rejected, "artist: ..." -- shown to the
 	// person and counted against the model.
 	QStringList rejected;
+	// **Kept, but suspect**: "title: ...". A check that cannot reject --
+	// the string is in the metadata, so grounding passes -- and can still
+	// see something wrong with it: the artist's name, or a tag like
+	// "(Official Audio)", left in the title. Measured on the corpus, that is
+	// exactly what the 3B models get wrong, and without this the tally
+	// counted every such title as kept, so a person running one was told
+	// nothing about its worst task.
+	QStringList flagged;
 	bool        model_answered = false;   // false: rules throughout
+
+	// Whether the model's answer for `task` was kept and not flagged --
+	// what the tally counts as a good answer.
+	bool clean(const QString &task) const;
 
 	static QString name_of(kind k);
 	static bool    kind_from(const QString &name, kind *out);
@@ -69,6 +81,10 @@ public:
 	// Does `value` appear in the evidence a name may be copied from? Case
 	// and runs of whitespace aside.
 	static bool grounded(const QString &value, const media_evidence &ev);
+	// What looks wrong with a title, without deciding it is: the artist's
+	// name in it as a whole word (a self-titled song aside), or a tag that
+	// names the upload rather than the work, bracketed or at the end.
+	static QStringList title_flags(const QString &title, const QString &artist);
 
 signals:
 	void finished(const media_reading &reading);

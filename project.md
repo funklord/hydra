@@ -38109,12 +38109,25 @@ usable for artist and kind and not for titles.
 Their titles keep what is not the track -- "One More Time (Official
 Audio)", "Noisestorm - Crab Rave [Monstercat Release]", "Hello (Lyrics)"
 -- and every one of those is in the metadata, so it passes the grounding
-check and the tally counts it kept. The tally catches invention; it cannot
-catch a real string chosen badly. Only the corpus sees that, which is why
-both exist -- and it means a person running a 3B model is told nothing at
-run time about the task it is worst at. The cheap remedy, not built: a
-check that flags (not decides) a title holding the artist's name or a
-bracketed tag, counted against the model.
+check, and the tally counted it kept: a person running a 3B model was told
+nothing at run time about the task it is worst at.
+
+**So titles are now flagged as well as checked** (`title_flags`, built on
+the holder's word the same day). A flag does not reject -- the title is
+kept as the model gave it -- but it is said with the reading and counts
+against the model's title in the tally (`media_reading::clean`). Two
+flags: the artist's name in the title as a whole word, a self-titled song
+aside; and a tag naming the upload rather than the work -- `(Official
+Audio)`, `[Monstercat Release]`, `(Lyrics)`, `(Full Album)` and the like,
+bracketed, or the same at the end without brackets -- leaving `(2024)`,
+`(Live on KEXP)` and `feat.` alone.
+
+Proved both ways in `test_media`: every bad title the scored models gave
+is flagged, and no title the labels accept is; emptying the check reds
+both. **And against the real models**: qwen2.5:3b's tally now says
+"qwen2.5:3b is unreliable at title: 6 of its last 12 answers failed their
+check" -- matching its 7 of 12 on the corpus -- while qwen2.5-coder:14b,
+12 of 12 on titles, raises no flag and no warning.
 
 **And the first run found an extraction fault, not a model one.** The
 first set looked at has its tracklist in the description followed by a

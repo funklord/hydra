@@ -160,6 +160,62 @@ int main(int argc, char **argv) {
 		               "beside it are not (%1)").arg(clocks.rejected.join("; ")));
 	}
 
+	// **A title the check cannot reject, and can still see is wrong.** The
+	// scored 3B models' bad titles were all real strings from the metadata,
+	// so grounding passed them and the tally counted them kept. Both ways:
+	// every bad title they gave is flagged, and no title the labels accept is.
+	section("a title holding the artist's name or a tag is flagged, not rejected");
+	{
+		struct seen { const char *title; const char *artist; };
+		const QList<seen> wrong = {
+			{ "One More Time (Official Audio)", "Daft Punk" },
+			{ "Daft Punk - One More Time (Official Audio)", "Daft Punk" },
+			{ "Noisestorm - Crab Rave [Monstercat Release]", "Noisestorm" },
+			{ "Crab Rave [Monstercat Release]", "Noisestorm" },
+			{ "Hello (Lyrics)", "Adele" },
+			{ "Hello (Official Music Video)", "Adele" },
+			{ "Adele - Hello (Lyrics)", "Rare Vibes" },
+			{ "F.O.O.L - MACHINE (Full Album) [Monstercat Release]", "F.O.O.L" },
+			{ "The full-length interview with Elon Musk | The Economist",
+			  "The Economist" },
+			{ "Hello Official Video", "Adele" },
+		};
+		QStringList missed;
+		for (const seen &w : wrong)
+			if (media_interpretation::title_flags(w.title, w.artist).isEmpty())
+				missed << QString::fromUtf8(w.title);
+		check(missed.isEmpty(),
+		       QString("every bad title the scored models gave is flagged (missed: "
+		               "%1)").arg(missed.join(" | ")));
+
+		QStringList false_alarms;
+		for (const corpus_case &c : corpus)
+			for (const QString &t : c.title)
+				for (const QString &f : media_interpretation::title_flags(
+				       t, c.artist.first()))
+					false_alarms << c.name + ": " + f;
+		check(false_alarms.isEmpty(),
+		       QString("and no title a label accepts is (%1)")
+		           .arg(false_alarms.join(" | ")));
+		check(media_interpretation::title_flags("Adele", "Adele").isEmpty() &&
+		          media_interpretation::title_flags("Says (Live on KEXP)",
+		                                            "Nils Frahm").isEmpty() &&
+		          media_interpretation::title_flags(
+		            "Dance (feat. Someone)", "Band").isEmpty(),
+		       "a self-titled song, a live session and a featured artist are "
+		       "not tags");
+
+		const media_evidence ev = find("audio_daft_punk").evidence;
+		const media_reading r = media_interpretation::checked(
+		  "{\"kind\":\"music\",\"artist\":\"Daft Punk\","
+		  "\"title\":\"One More Time (Official Audio)\",\"tracklist\":\"\"}", ev);
+		check(r.title == "One More Time (Official Audio)" &&
+		          r.from_model.contains("title") && !r.clean("title") &&
+		          r.clean("artist") && r.flagged.size() == 1,
+		       QString("a flagged title is kept, and counted against the model "
+		               "(%1)").arg(r.flagged.join("; ")));
+	}
+
 	section("the tally says which tasks a model is too weak for");
 	{
 		model_tally t;

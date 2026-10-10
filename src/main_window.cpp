@@ -7311,8 +7311,10 @@ void main_window::list_resolved_media(const QString &host,
 		model_tally tally;
 		settings_store::load_tally(&tally);
 		const QString id = model_id(ai);
+		// Kept and not flagged: a title the check could not reject but saw
+		// something wrong with counts against the model too.
 		for (const QString &task : { "kind", "artist", "title", "tracklist" })
-			tally.record(id, task, r.from_model.contains(task));
+			tally.record(id, task, r.clean(task));
 		settings_store::save_tally(tally);
 		warnings = tally.warnings(id);
 	} else if (ai) {
@@ -7373,6 +7375,8 @@ void main_window::list_resolved_media(const QString &host,
 			said += QStringLiteral(" Read by the rules alone.");
 		if (!r.rejected.isEmpty())
 			said += " Not kept: " + r.rejected.join("; ") + ".";
+		if (!r.flagged.isEmpty())
+			said += " Looks wrong: " + r.flagged.join("; ") + ".";
 		for (const QString &w : warnings)
 			said += " " + w;
 		m_status->showMessage(said, 20000);

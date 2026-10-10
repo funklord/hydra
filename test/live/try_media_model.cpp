@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
 		}
 		for (const QString &task : { "kind", "artist", "title", "tracklist" })
 			if (got.model_answered)
-				tally.record(model, task, got.from_model.contains(task));
+				tally.record(model, task, got.clean(task));
 		if (!got.model_answered)
 			tally.record(model, "answer", false);
 
@@ -95,6 +95,8 @@ int main(int argc, char *argv[]) {
 		            got.confidence);
 		if (!got.rejected.isEmpty())
 			std::printf("   rejected: %s\n", qPrintable(got.rejected.join("; ")));
+		if (!got.flagged.isEmpty())
+			std::printf("   flagged: %s\n", qPrintable(got.flagged.join("; ")));
 		if (!wrong.isEmpty())
 			std::printf("   wrong against the label: %s\n",
 			            qPrintable(wrong.join(", ")));

@@ -80,6 +80,15 @@ bool media_reading::kind_from(const QString &name, kind *out) {
 	return false;
 }
 
+bool media_reading::clean(const QString &task) const {
+	if (!from_model.contains(task))
+		return false;
+	for (const QString &f : flagged)
+		if (f.startsWith(task + QLatin1Char(':')))
+			return false;
+	return true;
+}
+
 QStringList media_reading::kind_names() {
 	QStringList out;
 	for (const char *k : k_kinds)
@@ -213,6 +222,42 @@ bool media_interpretation::grounded(const QString &value,
 	return false;
 }
 
+QStringList media_interpretation::title_flags(const QString &title,
+                                             const QString &artist) {
+	QStringList out;
+	const QString t = title.simplified();
+	const QString a = artist.simplified();
+	if (!a.isEmpty() && t.compare(a, Qt::CaseInsensitive) != 0) {
+		const QRegularExpression whole(
+		  QStringLiteral("(?<![\\w])") + QRegularExpression::escape(a) +
+		  QStringLiteral("(?![\\w])"),
+		  QRegularExpression::CaseInsensitiveOption |
+		  QRegularExpression::UseUnicodePropertiesOption);
+		if (whole.match(t).hasMatch())
+			out << QString("title: \"%1\" holds the artist's name").arg(t);
+	}
+	// Words that name the upload rather than the work. Not "live", which is
+	// as often the work itself, nor a year, nor "feat.".
+	static const QString tag_words = QStringLiteral(
+	  "official|music video|video|audio|lyrics?|visuali[sz]er|full album|"
+	  "release|remaster(?:ed)?|hd|hq|4k|explicit|out now|premiere");
+	static const QRegularExpression bracketed(
+	  QStringLiteral("[\\[(][^\\])]*\\b(?:") + tag_words +
+	  QStringLiteral(")\\b[^\\])]*[\\])]"),
+	  QRegularExpression::CaseInsensitiveOption);
+	static const QRegularExpression trailing(
+	  QStringLiteral("\\b(?:official (?:music )?(?:video|audio)|lyric video|"
+	                 "lyrics|visuali[sz]er)\\s*$"),
+	  QRegularExpression::CaseInsensitiveOption);
+	const QRegularExpressionMatch b = bracketed.match(t);
+	if (b.hasMatch())
+		out << QString("title: \"%1\" carries the tag %2").arg(t, b.captured(0));
+	else if (const QRegularExpressionMatch e = trailing.match(t); e.hasMatch())
+		out << QString("title: \"%1\" ends with the tag \"%2\"")
+		         .arg(t, e.captured(0));
+	return out;
+}
+
 media_reading media_interpretation::by_rules(const media_evidence &ev) {
 	media_reading r;
 	r.artist = !ev.artist.isEmpty() ? ev.artist
@@ -251,6 +296,7 @@ media_reading media_interpretation::by_rules(const media_evidence &ev) {
 		r.what = media_reading::kind::learning;
 	else
 		r.what = media_reading::kind::misc;
+	r.flagged = title_flags(r.title, r.artist);
 	return r;
 }
 
@@ -309,5 +355,6 @@ media_reading media_interpretation::checked(const QString &reply,
 			r.from_model << QStringLiteral("tracklist");
 		}
 	}
+	r.flagged = title_flags(r.title, r.artist);
 	return r;
 }
