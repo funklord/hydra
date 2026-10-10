@@ -11,7 +11,7 @@ Rules-Requires-Root: no
 Package: hydra
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: ca-certificates
+Recommends: ca-certificates, python3
 Suggests: keepassxc, yt-dlp, gnome-keyring | kwalletmanager
 Description: Tab-tree browser with a per-site policy engine
  Hydra keeps its tabs in a tree that is saved as a plain text file rather

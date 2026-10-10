@@ -6,6 +6,8 @@
 #include <QFile>
 
 #include <QCoreApplication>
+#include <QTemporaryDir>
+#include <QDate>
 #include <QDir>
 #include <QFileInfo>
 #include <QStandardPaths>
@@ -297,6 +299,62 @@ int main(int argc, char **argv) {
 			note("skipped: no vendored checkout here, so the submodule advice "
 			      "is the right advice and there is nothing to distinguish");
 		}
+	}
+
+	// **Which copy ran, and how old it is**, because on 2026-10-10 an
+	// installed build ran the distribution's 2025.04.30, YouTube refused it,
+	// and all the holder saw was a ten-second status message.
+	section("the version that runs is known, and how old it is");
+	{
+		check(ytdlp_resolver::age_days("2025.04.30") > 365 &&
+		          ytdlp_resolver::age_days(QDate::currentDate()
+		                                     .toString("yyyy.MM.dd")) == 0 &&
+		          ytdlp_resolver::age_days("nightly") == -1,
+		       "a version is aged by the date it is named for, and a name that "
+		       "is not one is not guessed at");
+
+		QTemporaryDir fake;
+		QDir().mkpath(fake.filePath("checkout/yt_dlp"));
+		{
+			QFile m(fake.filePath("checkout/yt_dlp/__main__.py"));
+			m.open(QIODevice::WriteOnly);
+			QFile v(fake.filePath("checkout/yt_dlp/version.py"));
+			v.open(QIODevice::WriteOnly);
+			v.write("# x\n__version__ = '2026.01.02'\nRELEASE_GIT_HEAD = 'x'\n");
+		}
+		const bool python = !QStandardPaths::findExecutable("python3").isEmpty();
+		if (python) {
+			qputenv("HYDRA_YTDLP", fake.filePath("checkout").toLocal8Bit());
+			ytdlp_resolver r;
+			qunsetenv("HYDRA_YTDLP");
+			check(r.version() == "2026.01.02" &&
+			          r.description().contains("2026.01.02"),
+			       QString("a vendored copy's version is read from its file "
+			               "(%1)").arg(r.description()));
+		} else {
+			note("skipped: no python3 to run a vendored copy with");
+		}
+
+		// A copy on PATH is asked. The only thing on PATH is a script that
+		// answers like an old yt-dlp, so nothing vendored can be run.
+		QDir().mkpath(fake.filePath("bin"));
+		{
+			QFile y(fake.filePath("bin/yt-dlp"));
+			y.open(QIODevice::WriteOnly);
+			y.write("#!/bin/sh\necho 2025.04.30\n");
+			y.setPermissions(QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+		}
+		const QByteArray saved = qgetenv("PATH");
+		qputenv("PATH", fake.filePath("bin").toLocal8Bit());
+		QString said, version;
+		{
+			ytdlp_resolver r;
+			said = r.description();
+			version = r.version();
+		}
+		qputenv("PATH", saved);
+		check(version == "2025.04.30" && said.contains("2025.04.30 from PATH"),
+		       QString("a copy on PATH is asked for its version (%1)").arg(said));
 	}
 
 	section("a yt-dlp that never answers is stopped rather than waited for");

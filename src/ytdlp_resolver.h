@@ -79,6 +79,13 @@ public:
 
 	// One line for a settings page or a status bar: what was found, and where.
 	QString description() const;
+	// The version that will run, "2026.07.04", or empty when not known.
+	QString version() const { return m_version; }
+	// How many days old a yt-dlp version is, by the date it is named for;
+	// -1 when it is not a date. yt-dlp is versioned by release date, and
+	// YouTube breaks old releases often enough that the age is the first
+	// thing to look at when one fails.
+	static int age_days(const QString &version);
 
 	// Asynchronous: exactly one of resolved() / failed() follows.
 	void resolve(const QUrl &page_url);
@@ -132,6 +139,7 @@ private:
 	// something other than "neither the submodule nor PATH has it" -- see
 	// description(), which used to name a cause it had not tested.
 	QString  m_why;
+	QString  m_version;
 	QPointer<QProcess> m_proc;
 	// **A bound on a process this program starts, inside the program.** yt-dlp
 	// is given `--socket-timeout`, which bounds its network reads and nothing

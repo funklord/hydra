@@ -889,20 +889,60 @@ android-build: android-check android-gradle-check
 	  JAVA_HOME=$(JAVA_HOME) \
 	  $(MAKE) --no-print-directory -C $(ANDROID_BUILD_DIR) apk
 
+# **The vendored yt-dlp, fetched when it is missing, never moved.** The
+# install ships it, so a tree cloned without `--recurse-submodules` would
+# otherwise build a package with no yt-dlp in it -- the silent "built less
+# than asked" a vendored dependency must not do. So: present is fine;
+# absent is fetched at the commit the gitlink names; and anything that
+# leaves it absent stops the build, naming the submodule.
+.PHONY: ytdlp
+ytdlp:
+	@if [ ! -f third_party/yt-dlp/yt_dlp/__main__.py ]; then \
+	   command -v git >/dev/null 2>&1 || { echo "ytdlp: third_party/yt-dlp is missing and git is not installed to fetch it" >&2; exit 1; }; \
+	   git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "ytdlp: third_party/yt-dlp is missing and this is not a git checkout to fetch it into" >&2; exit 1; }; \
+	   echo "fetching third_party/yt-dlp at its pinned commit (network)"; \
+	   git submodule update --init --depth 1 third_party/yt-dlp || { echo "ytdlp: fetching third_party/yt-dlp failed" >&2; exit 1; }; \
+	   test -f third_party/yt-dlp/yt_dlp/__main__.py || { echo "ytdlp: third_party/yt-dlp still has no yt_dlp after fetching" >&2; exit 1; }; \
+	 fi
+
 # A staged install -- DESTDIR set -- never refreshes a cache: it would touch
 # the build host, and the caches it writes end up inside the package, where
 # lintian rejects the mimeinfo one outright. dpkg's triggers do both on the
 # installing machine, which is the only correct moment. Setting this here
 # rather than in each packaging caller means a new caller cannot forget it,
 # which is how it was forgotten.
-install: all
+install: all ytdlp
 	@install -Dm755 $(BUILD_DIR)/$(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
+	@# **The vendored yt-dlp ships with the program.** An installed build
+	@# had only the distribution's copy on PATH, and on 2026-10-10 that
+	@# was 2025.04.30, which YouTube refused outright ("The page needs to
+	@# be reloaded") -- so the media reading the holder had just installed
+	@# was never reached. The resolver prefers the pinned copy, and finds
+	@# it at ../share/hydra/yt-dlp beside the binary. The package's files
+	@# only, no bytecode caches, and its own licence with it.
+	@test -n "$(SHARE)" || { echo "install: SHARE is empty, refusing" >&2; exit 1; }
+	@mkdir -p $(DESTDIR)$(SHARE)/hydra/yt-dlp
+	@(cd third_party/yt-dlp && find yt_dlp -type f ! -path '*/__pycache__/*' \
+	    ! -name '*.pyc' -print0 | tar --null -cf - -T -) | \
+	  tar -xf - --no-same-owner --no-same-permissions \
+	    -C $(DESTDIR)$(SHARE)/hydra/yt-dlp
+	@install -Dm644 third_party/yt-dlp/LICENSE $(DESTDIR)$(SHARE)/hydra/yt-dlp/LICENSE
+	@echo "installed yt-dlp $$(sed -n "s/^__version__ = '\(.*\)'/\1/p" \
+	    third_party/yt-dlp/yt_dlp/version.py) to $(DESTDIR)$(SHARE)/hydra/yt-dlp"
 	@HYDRA_SKIP_CACHE_UPDATE=$${DESTDIR:+1} \
 	 sh packaging/install-icons.sh $(DESTDIR)$(SHARE)
 	@echo "installed $(TARGET) to $(DESTDIR)$(PREFIX)/bin, icons and desktop entry to $(DESTDIR)$(SHARE)"
 
 uninstall:
 	@rm -f $(DESTDIR)$(PREFIX)/bin/$(TARGET)
+	@# The yt-dlp copy `install` put there, a directory it created whole.
+	@# Checked first: a SHARE emptied by a typo must not turn this into a
+	@# removal of /hydra or of nothing in particular.
+	@case "$(SHARE)" in */share) \
+	   d="$(DESTDIR)$(SHARE)/hydra/yt-dlp"; \
+	   if [ -d "$$d" ]; then rm -rf -- "$$d" && echo "removed $$d"; fi ;; \
+	 *) echo "uninstall: SHARE ($(SHARE)) does not end in /share, leaving yt-dlp" ;; \
+	 esac
 	@rm -f $(DESTDIR)$(SHARE)/applications/hydra.desktop
 	@rm -f $(DESTDIR)$(SHARE)/icons/hicolor/*/apps/hydra.png
 	@# **The caches, because removing the file is not removing the entry.**

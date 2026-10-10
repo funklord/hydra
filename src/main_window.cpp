@@ -7288,7 +7288,25 @@ void main_window::find_media_with_ytdlp() {
 	connect(m_ytdlp, &ytdlp_resolver::failed, this, [this](const QString &e) {
 		// yt-dlp's own words: "Unsupported URL" is the answer that matters,
 		// and it is exactly the case sec 11.6's tap exists for.
-		m_status->showMessage("yt-dlp: " + e, 10000);
+		//
+		// **Said in a window, with which copy ran.** This was a ten-second
+		// status message, and on 2026-10-10 it was all the holder saw of a
+		// feature that never ran: the yt-dlp on PATH was 17 months old and
+		// YouTube refused it. Which copy and how old is the first thing to
+		// know, so it is said, and an old one is named as the likely cause.
+		QString text = QString("<p>yt-dlp could not read this page:</p>"
+		                       "<p><tt>%1</tt></p><p>It was %2.</p>")
+		                 .arg(e.toHtmlEscaped(), m_ytdlp->description().toHtmlEscaped());
+		const int age = ytdlp_resolver::age_days(m_ytdlp->version());
+		if (age > 90)
+			text += QString("<p>That yt-dlp is %1 months old. Sites change "
+			                "often and old versions stop working with them; a "
+			                "newer yt-dlp is the likely fix.</p>")
+			          .arg(age / 30);
+		QMessageBox box(QMessageBox::Warning, "yt-dlp could not read this page",
+		                text, QMessageBox::Ok, this);
+		box.setTextFormat(Qt::RichText);
+		box.exec();
 	}, Qt::SingleShotConnection);
 
 	m_ytdlp->resolve(page);

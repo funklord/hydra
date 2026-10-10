@@ -38158,3 +38158,52 @@ second server, replaces its log at each start, and has no restart loop --
 a crashed server stays down until the next login rather than leaving a
 supervisor running past its session.
 
+## The installed build never reached yt-dlp, and now ships its own
+
+**Reported 2026-10-10**: the holder installed the package with the media
+reading and "I don't think it is working... not sure how its supposed to
+work". It had not run at all. The installed build had no vendored yt-dlp
+-- the package never shipped one -- so it used `/usr/bin/yt-dlp`, Debian's
+**2025.04.30**, which YouTube refuses in two seconds: `ERROR: [youtube]
+...: The page needs to be reloaded.` That surfaced as a ten-second status
+message. Every test of the reading had run against the tree's vendored
+2026.07.04, which works, so nothing here could have seen it.
+
+**Fixed on the holder's choice of two of three options** (the third,
+installing a current yt-dlp into `~/.local/bin` for this machine alone, was
+declined):
+
+- **The package ships the pinned yt-dlp**: `install` copies the `yt_dlp`
+  package -- files only, no bytecode caches, its own `LICENSE` beside it --
+  to `$(SHARE)/hydra/yt-dlp`, and the resolver looks for it at
+  `../share/hydra/yt-dlp` from the binary. `uninstall` removes that
+  directory after checking `SHARE` ends in `/share`. `python3` is
+  Recommended, since only this feature needs it. Measured staged: 1,051
+  files, 11 MB, and the copy reports 2026.07.04 when run the way the
+  resolver runs it.
+- **A `ytdlp` step `install` depends on** fetches the submodule at its
+  pinned commit when it is missing, saying so, and fails naming it when git
+  is absent, the tree is not a checkout, or the fetch leaves it empty -- the
+  workspace's rule for vendored dependencies, since a package built from a
+  clone without submodules would otherwise ship no yt-dlp in silence.
+- **A failure is said in a window**: yt-dlp's error, which copy and version
+  ran (`vendored yt-dlp 2026.07.04 (...)`, `yt-dlp 2025.04.30 from PATH`),
+  and, past ninety days old, that a newer yt-dlp is the likely fix. The
+  vendored version is read from its `version.py`; a PATH copy is asked,
+  bounded at five seconds.
+
+**Not changed: which copy is preferred.** The resolver already prefers the
+pinned copy over PATH, deliberately and documented in `refresh`, for
+determinism now that yt-dlp's answer feeds a model -- so shipping the copy
+was the whole of the fix, and a "newest wins" rule, which was offered in
+the question, would have contradicted a recorded decision for no gain.
+
+**A trap found staging it**: `python3 -I -m yt_dlp` in the shipped
+directory runs the *system* yt-dlp, because isolated mode drops the working
+directory from the path. The resolver runs without `-I`, which is what
+makes the shipped copy the one imported; anyone changing that invocation
+changes which yt-dlp runs.
+
+**How it is reached**, since the holder asked: the media tool's **Ask
+yt-dlp**, on a video page. It is not automatic on opening a video.
+

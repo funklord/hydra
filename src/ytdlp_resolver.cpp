@@ -1,8 +1,10 @@
 #include "ytdlp_resolver.h"
 
 #include <QCoreApplication>
+#include <QDate>
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -28,8 +30,11 @@ QStringList vendored_candidates() {
 	// literals makes a temporary QString per iteration, and binding a reference
 	// to it is the kind of thing that is safe here and is not safe one refactor
 	// later. The conversion happens at the call below either way.
+	// `../share/hydra/yt-dlp`: where an installed build has it, beside
+	// `bin/`, since the package ships the pinned copy.
 	for (const char *rel : { "third_party/yt-dlp", "../third_party/yt-dlp",
-		                        "../../third_party/yt-dlp" })
+		                        "../../third_party/yt-dlp",
+		                        "../share/hydra/yt-dlp" })
 		out << QDir(app).absoluteFilePath(QLatin1String(rel));
 	out << QDir::current().absoluteFilePath("third_party/yt-dlp");
 	return out;
@@ -52,6 +57,7 @@ void ytdlp_resolver::refresh() {
 	m_prefix.clear();
 	m_origin.clear();
 	m_why.clear();
+	m_version.clear();
 
 	// **The vendored copy first, because it is pinned.** This used to prefer
 	// PATH, on the reasoning that the package manager keeps that one current
@@ -79,6 +85,15 @@ void ytdlp_resolver::refresh() {
 			m_program = python;
 			m_prefix  = { "-m", "yt_dlp" };
 			m_origin  = dir;
+			// Read rather than run: the version file says it, and asking
+			// costs a Python start-up.
+			QFile vf(QDir(dir).filePath("yt_dlp/version.py"));
+			if (vf.open(QIODevice::ReadOnly)) {
+				static const QRegularExpression v(
+				  QStringLiteral("^__version__ = '([^']+)'"),
+				  QRegularExpression::MultilineOption);
+				m_version = v.match(QString::fromUtf8(vf.readAll())).captured(1);
+			}
 			return;
 		}
 	}
@@ -90,6 +105,14 @@ void ytdlp_resolver::refresh() {
 	if (!on_path.isEmpty()) {
 		m_program = on_path;
 		m_origin  = "PATH";
+		// Asked, bounded: a copy that does not answer in five seconds is
+		// reported as of unknown version rather than waited for.
+		QProcess p;
+		p.start(on_path, { "--version" });
+		if (p.waitForFinished(5000))
+			m_version = QString::fromUtf8(p.readAllStandardOutput()).trimmed();
+		else
+			p.kill();
 		return;
 	}
 
@@ -119,9 +142,17 @@ QString ytdlp_resolver::description() const {
 		         ? QString("yt-dlp not found — clone with --recurse-submodules, "
 		                    "or install it")
 		         : m_why;
+	const QString v = m_version.isEmpty() ? QString() : " " + m_version;
 	if (m_origin == "PATH")
-		return QString("yt-dlp from PATH (%1)").arg(m_program);
-	return QString("vendored yt-dlp (%1)").arg(m_origin);
+		return QString("yt-dlp%1 from PATH (%2)").arg(v, m_program);
+	return QString("vendored yt-dlp%1 (%2)").arg(v, m_origin);
+}
+
+int ytdlp_resolver::age_days(const QString &version) {
+	const QDate d = QDate::fromString(version.left(10), QStringLiteral("yyyy.MM.dd"));
+	if (!d.isValid())
+		return -1;
+	return int(d.daysTo(QDate::currentDate()));
 }
 
 bool ytdlp_resolver::busy() const {
