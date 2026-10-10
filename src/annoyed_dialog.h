@@ -10,6 +10,7 @@
 class QLabel;
 class QListWidget;
 class QPushButton;
+class QSlider;
 class QTimer;
 class QVBoxLayout;
 class QWidget;
@@ -67,6 +68,8 @@ public:
 	// The loop ended. `rules` are those in trial, offered to keep.
 	void ai_finished(bool solved, const QString &summary,
 	                 const QStringList &rules);
+	// The load knob's position, 10 to 100, without emitting.
+	void set_load(int percent);
 
 signals:
 	// A tool was chosen; the window is closing. `recorded` when closed
@@ -77,6 +80,8 @@ signals:
 	void point_requested();
 	void keep_requested(const QStringList &rules);
 	void discard_requested();
+	// The knob moved; applied from the next request, and remembered.
+	void load_changed(int percent);
 
 public:
 	// The machine-readable form, for `annoyance_log::set_outcome`.
@@ -128,6 +133,8 @@ private:
 	QPushButton *m_keep = nullptr;
 	QPushButton *m_discard = nullptr;
 	QTimer      *m_ticker = nullptr;
+	QSlider     *m_load = nullptr;
+	QLabel      *m_load_text = nullptr;
 	QString      m_waiting_for;
 	int          m_waiting_eta = 0;
 	qint64       m_waiting_since = 0;

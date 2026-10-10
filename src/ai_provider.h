@@ -69,6 +69,15 @@ public:
 	virtual void send(const QString &system_prompt, const QString &user_prompt) = 0;
 	virtual void cancel() {}
 
+	// **How much of this machine the next request may use**, 10 to 100 per
+	// cent -- the knob the holder asked for on 2026-09-01, "a slider that
+	// reduces CPU load and memory use dynamically". From the next request on:
+	// a request already in flight cannot be slowed, only killed. The default
+	// does nothing, which is right for a backend whose work happens on
+	// somebody else's machine; pacing between requests is the caller's, and
+	// applies to every backend.
+	virtual void set_load(int percent) { Q_UNUSED(percent) }
+
 signals:
 	void finished(const QString &reply);
 	void failed(const QString &error);

@@ -328,6 +328,10 @@ void set_kiosk(const kiosk_config &c);
 
 ai_choice ai_mode();
 void set_ai_mode(ai_choice mode);
+// The AI load knob, 10 to 100 per cent; 100 when never set. Kept because a
+// person who turned the AI down meant it for the next job too.
+int  ai_load();
+void set_ai_load(int percent);
 
 // Light, dark, or follow the desktop. Default is to follow -- see `theme.h` for
 // why that is harder than it sounds.

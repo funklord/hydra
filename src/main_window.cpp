@@ -2538,6 +2538,16 @@ void main_window::file_annoyance(web_view_backend *view, const QUrl &page,
 	ev.suspects = r.suspects;
 	if (m_signals)
 		ev.observed = m_signals->observed_for(host);
+	dlg->set_load(settings_store::ai_load());
+	connect(dlg, &annoyed_dialog::load_changed, this, [this](int percent) {
+		settings_store::set_ai_load(percent);
+		if (m_local_ai)
+			m_local_ai->set_load(percent);
+		if (m_external_ai)
+			m_external_ai->set_load(percent);
+		if (m_investigation)
+			m_investigation->set_load(percent);
+	});
 	QPointer<web_view_backend> tab(view);
 	connect(dlg, &annoyed_dialog::ai_start_requested, this,
 	         [this, dlg, tab, ev] { start_investigation(dlg, tab, ev); });
@@ -2571,6 +2581,7 @@ void main_window::start_investigation(annoyed_dialog *dlg,
 
 	auto *hands = new tab_investigation(view, m_filter, ev.host, dlg);
 	auto *inv   = new investigation(ai, hands, ev, dlg);
+	inv->set_load(settings_store::ai_load());
 	m_investigation = inv;
 	m_investigation_window = dlg;
 	QPointer<annoyed_dialog> win(dlg);
@@ -6899,6 +6910,11 @@ ai_provider *main_window::choose_ai(QString *why) {
 	// asynchronously then read the answer immediately, which meant the first
 	// use of the day *never* saw a running local model and quietly used the
 	// external one instead.
+	// The load knob reaches every AI tool, not only the investigation that
+	// carries the slider: it is a statement about this machine.
+	m_local_ai->set_load(settings_store::ai_load());
+	m_external_ai->set_load(settings_store::ai_load());
+
 	QApplication::setOverrideCursor(Qt::WaitCursor);
 	const bool local_ok = m_local_ai->probe_now();
 	QApplication::restoreOverrideCursor();

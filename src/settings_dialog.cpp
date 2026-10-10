@@ -283,6 +283,16 @@ void set_ai_mode(ai_choice mode) {
 	s.sync();
 }
 
+int ai_load() {
+	return qBound(10, open_settings().value("ai/load", 100).toInt(), 100);
+}
+
+void set_ai_load(int percent) {
+	QSettings s = open_settings();
+	s.setValue("ai/load", qBound(10, percent, 100));
+	s.sync();
+}
+
 void load_into(player_launcher *players, download_manager *downloads,
                 torrent_download_source *torrents, ollama_provider *local_ai,
                 claude_provider *external_ai) {

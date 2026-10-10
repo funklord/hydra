@@ -6,8 +6,10 @@
 // protocol, and on a provider that fails.
 #include "investigation.h"
 #include "ai_provider.h"
+#include "ollama_provider.h"
 
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QJsonArray>
 #include <QTimer>
@@ -26,15 +28,24 @@ class scripted_model : public ai_provider {
 public:
 	QStringList replies;
 	QStringList prompts;
+	QList<int>  loads;        // the load in force at each send
+	QList<qint64> sent_at;    // when each send arrived, ms since start
+	QElapsedTimer clock;
+	int delay_ms = 0;         // how long "thinking" takes
+	int load = 100;
 	bool external = false;
+	scripted_model() { clock.start(); }
+	void set_load(int percent) override { load = percent; }
 	QString name() const override { return QStringLiteral("scripted"); }
 	bool available() const override { return true; }
 	bool is_external() const override { return external; }
 	void send(const QString &, const QString &user) override {
 		prompts << user;
+		loads << load;
+		sent_at << clock.elapsed();
 		const QString r = replies.isEmpty() ? QStringLiteral("{\"action\":\"look\"}")
 		                                    : replies.takeFirst();
-		QTimer::singleShot(0, this, [this, r] {
+		QTimer::singleShot(delay_ms, this, [this, r] {
 			if (r.isEmpty())
 				emit failed(QStringLiteral("connection refused"));
 			else
@@ -263,6 +274,65 @@ int main(int argc, char **argv) {
 		       QString("a default for a local model first, then this session's "
 		               "own measure (%1, %2)")
 		           .arg(etas.value(0)).arg(etas.value(1)));
+	}
+
+	// **The load knob**: paced so the model is busy about the chosen share
+	// of the time, passed to the provider before every request, and felt at
+	// once when turned up during a pause.
+	section("the load knob paces the turns and reaches the provider");
+	{
+		scripted_model model;
+		model.delay_ms = 300;
+		model.replies = { "{\"action\":\"look\"}", "{\"action\":\"look\"}",
+		                  "{\"action\":\"done\",\"solved\":false}" };
+		fake_page page;
+		investigation inv(&model, &page, evidence());
+		inv.set_load(50);
+		bool solved = true;
+		QString summary;
+		// Turned up to full 50ms into the second pause. Not from the log
+		// line itself: that is emitted just before the pause starts, so a
+		// change made there lands before there is a pause to shorten -- which
+		// is how the first version of this check tested nothing.
+		QObject::connect(&inv, &investigation::logged,
+		                  [&inv](const QString &, const QString &t) {
+			if (t.startsWith("Pausing") && inv.turn() == 2)
+				QTimer::singleShot(50, &inv, [&inv] { inv.set_load(100); });
+		});
+		const bool ended = run(inv, &solved, &summary);
+		check(ended && model.sent_at.size() == 3,
+		       QString("it runs (%1 requests)").arg(model.sent_at.size()));
+		const qint64 gap1 = model.sent_at.value(1) - model.sent_at.value(0);
+		const qint64 gap2 = model.sent_at.value(2) - model.sent_at.value(1);
+		check(gap1 >= 550,
+		       QString("at 50% a 300ms answer is followed by about as long "
+		               "a pause before the next request (%1 ms apart)")
+		           .arg(gap1));
+		check(gap2 < gap1 - 150,
+		       QString("and turned up to 100% during a pause, the rest of it "
+		               "is dropped (%1 ms apart)").arg(gap2));
+		check(model.loads.value(0) == 50 && model.loads.value(2) == 100,
+		       QString("the provider is told the load before each request "
+		               "(%1, %2)").arg(model.loads.value(0))
+		           .arg(model.loads.value(2)));
+	}
+
+	section("a local model gets fewer threads and lets go of memory");
+	{
+		check(ollama_provider::load_options(100, 24).isEmpty(),
+		       "at 100% nothing is sent, and the server decides as before");
+		const QJsonObject half = ollama_provider::load_options(50, 24);
+		check(half.value("num_thread").toInt() == 12 &&
+		          !half.contains("keep_alive"),
+		       "at 50% half the cores, and the model stays loaded");
+		const QJsonObject low = ollama_provider::load_options(30, 24);
+		check(low.value("num_thread").toInt() == 7 &&
+		          low.contains("keep_alive") &&
+		          low.value("keep_alive").toInt() == 0,
+		       "at 30% fewer still, and it leaves memory after each answer");
+		check(ollama_provider::load_options(10, 4).value("num_thread")
+		          .toInt() == 1,
+		       "and never fewer than one thread");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

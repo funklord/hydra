@@ -30,7 +30,9 @@
 #include <QJsonObject>
 #include <QListWidget>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSettings>
+#include <QSlider>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
@@ -58,6 +60,7 @@ class local_server : public QTcpServer {
 public:
 	QStringList script;
 	QStringList prompts;
+	QList<QJsonObject> bodies;   // every /api/generate request, whole
 	int pages = 0;
 protected:
 	void incomingConnection(qintptr fd) override {
@@ -91,8 +94,8 @@ private:
 		if (head.startsWith("GET /api/tags")) {
 			send(s, "application/json", "{\"models\":[{\"name\":\"llama3\"}]}");
 		} else if (head.startsWith("POST /api/generate")) {
-			prompts << QJsonDocument::fromJson(body).object()
-			               .value("prompt").toString();
+			bodies << QJsonDocument::fromJson(body).object();
+			prompts << bodies.last().value("prompt").toString();
 			const QString r = script.isEmpty()
 			  ? QStringLiteral("{\"action\":\"done\",\"solved\":false}")
 			  : script.takeFirst();
@@ -301,6 +304,45 @@ int main(int argc, char *argv[]) {
 		       "Keep puts the rule in the person's own list, on disk");
 		check(seen(view).isEmpty(),
 		       "and the page stays clean under the kept rule, trial gone");
+		d->close();
+		spin(1500);
+	}
+
+	// **The load knob, through the real window and the real provider.** The
+	// slider is moved before starting, so the very first request should go
+	// out with fewer threads and no resident model -- and the setting should
+	// be remembered for the next job.
+	section("the load knob reaches the request the model is sent");
+	{
+		srv.bodies.clear();
+		srv.script = { "{\"action\":\"look\"}",
+		               "{\"action\":\"done\",\"solved\":false}" };
+		annoyed->trigger();
+		annoyed_dialog *d = nullptr;
+		until([&] { return (d = open_window()) != nullptr; }, 8000);
+		if (!d)
+			return 1;
+		auto *knob = d->findChild<QSlider *>("ai_load");
+		check(knob && knob->value() == 10, "the knob starts at 100%");
+		if (knob)
+			knob->setValue(3);
+		if (QPushButton *start = button(d, "Work On It"))
+			start->click();
+		until([&] { return srv.bodies.size() >= 2; }, 40000);
+		const QJsonObject first = srv.bodies.value(0);
+		check(first.value("options").toObject().contains("num_thread") &&
+		          first.contains("keep_alive") &&
+		          first.value("keep_alive").toInt() == 0,
+		       QString("the request carries fewer threads and keep_alive 0 (%1)")
+		           .arg(QString::fromUtf8(QJsonDocument(first).toJson(
+		               QJsonDocument::Compact)).left(160).remove(
+		               QRegularExpression("\"(system|prompt)\":\"[^\"]*\",?"))));
+		check(log_of(d).contains("Pausing"),
+		       "and the turns are paced, which the log says");
+		QSettings s(QSettings::IniFormat, QSettings::UserScope, "hydra", "hydra");
+		check(s.value("ai/load").toInt() == 30,
+		       QString("and the setting is remembered (%1)")
+		           .arg(s.value("ai/load").toString()));
 		d->close();
 		spin(1500);
 	}

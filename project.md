@@ -13316,8 +13316,12 @@ makes from its own indicator.
   front of you, which is a different question about a different thing, and the
   two should not be merged because they happen to both come from the AI side.
 
-Not started. The permissions work comes first, on the holder's instruction:
-the browser has to be a browser before the harder half is worth building.
+**Since built, in part, for the Annoyed window rather than a batch queue** --
+see *The Annoyed window is a control panel for a model loop* and *The AI
+load knob* at the end of this file. The window has the progress, the log,
+the rare question, Stop, and the load slider; there is still no queue of
+batch jobs, no separate kill, and no swapping to a cheaper model. Before
+that, this entry read "not started", behind the permissions work.
 
 ## `ask`: the third answer, and the four defaults that now use it
 
@@ -37907,4 +37911,49 @@ Removing the destructor's cleanup reds the first.
 - **Android**: `run_probe` answers empty there, so `look` sees nothing.
 - **Detection is the top frame.** A player in a cross-origin frame is
   seen as the frame.
+
+## The AI load knob
+
+Asked for again on 2026-10-10 -- "that knob to turn down AI system load as
+interactively as possible" -- and already specified on 2026-09-01, in
+*Wanted: an indicator for the AI batch jobs*: a slider that reduces CPU and
+memory "while a job is running, not only for the next one", in the same
+panel as everything else about the job.
+
+**One slider, "AI load", 10% to 100%, in the Annoyed window**, remembered as
+`ai/load` and applied by `choose_ai` to both providers, so filter evolution
+and the reorganizer obey it too. It turns three things, all from the next
+request; a request in flight can be stopped but not slowed:
+
+- **Pacing, for any backend.** After an answer that took T, the next request
+  waits T x (100 - load) / load, so the model is busy about that share of the
+  time; capped at two minutes. Moving the slider during a pause recomputes
+  what is left of it at once -- that is the "interactively".
+- **Threads, for Ollama.** `num_thread` set to that share of this machine's
+  cores, never below one. Ollama reloads the model once when it changes.
+- **Memory, for Ollama.** At 30% and below `keep_alive` is 0, so the model
+  leaves memory as soon as it has answered instead of the default minutes.
+
+At 100% nothing extra is sent and the server decides, as before.
+
+**Proved**: `test_investigation` -- at 50% a 300ms answer is followed by a
+pause of about as long (598ms between requests), raised to 100% fifty
+milliseconds into a pause the rest is dropped (351ms), and the provider is
+told the load before every request; removing the recompute reds the second.
+`ollama_provider::load_options` at 100, 50, 30 and 10. And end to end in
+`try_investigate`, through the window's real slider and the real provider:
+at 30% the request the local server receives is
+`{"keep_alive":0, "options":{"num_thread":7}, ...}` on this 24-core machine,
+the log says it is pausing, and `ai/load` is 30 in the settings file.
+
+**Not measured: what Ollama does with them.** No Ollama runs on this
+machine -- the holder's settings name `localhost:11434` with
+`qwen2.5-coder:14b`, and nothing answers there -- so the CPU and memory a
+setting actually saves, and the cost of the reload a thread change causes,
+are for the holder's first use. The first thing to look at, if the knob
+seems not to bite, is whether this Ollama honours `num_thread` per request.
+
+**Not built**: the cheaper-model half the 2026-09-01 answer allowed for, and
+a knob outside the Annoyed window -- it lives where the job is, as that entry
+asked, and the setting it writes is global.
 

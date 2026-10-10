@@ -5,6 +5,7 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QThread>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -130,6 +131,14 @@ void ollama_provider::send(const QString &system_prompt, const QString &user_pro
 	body.insert("system", system_prompt);
 	body.insert("prompt", user_prompt);
 	body.insert("stream", false);
+	const QJsonObject load = load_options(m_load, QThread::idealThreadCount());
+	if (load.contains("num_thread")) {
+		QJsonObject options;
+		options.insert("num_thread", load.value("num_thread"));
+		body.insert("options", options);
+	}
+	if (load.contains("keep_alive"))
+		body.insert("keep_alive", load.value("keep_alive"));
 
 	QNetworkRequest req(m_endpoint.resolved(QUrl("/api/generate")));
 	req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
@@ -155,3 +164,20 @@ void ollama_provider::cancel() {
 	if (m_reply && m_reply->isRunning())
 		m_reply->abort();
 }
+
+// **Below full, a share of the cores, and at the bottom, no resident model.**
+// At 100 nothing is sent and the server decides, which is what it did before
+// this existed. A remote endpoint has cores of its own that this cannot see;
+// the share is of this machine's, which is the right number for the case the
+// knob is for -- a model on the same machine the person is working on.
+QJsonObject ollama_provider::load_options(int percent, int cores) {
+	QJsonObject o;
+	percent = qBound(10, percent, 100);
+	if (percent >= 100 || cores < 1)
+		return o;
+	o.insert("num_thread", qMax(1, (cores * percent + 50) / 100));
+	if (percent <= 30)
+		o.insert("keep_alive", 0);
+	return o;
+}
+

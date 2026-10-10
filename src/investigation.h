@@ -15,6 +15,7 @@
 #include <functional>
 
 class ai_provider;
+class QTimer;
 
 // **What the Annoyed button gathered**, handed to an investigation as the
 // starting evidence. Everything here is already collected elsewhere; this is
@@ -102,6 +103,17 @@ public:
 	// The rules in trial now, as text. What Keep saves.
 	QStringList trial_rules() const;
 
+	// **The load knob**, 10 to 100 per cent, turned while it runs. Passed to
+	// the provider for its next request -- threads and memory, where the
+	// backend has them -- and used here to pace the turns: after an answer
+	// that took T, the next request waits T x (100 - load) / load, so the
+	// model is busy about that share of the time. Capped at two minutes. A
+	// change during a pause takes effect on what is left of it.
+	void set_load(int percent);
+	int  load() const { return m_load; }
+	// The pause before the next request at the current load, in ms.
+	int  pause_ms() const;
+
 	// For the tests and the window: the action a reply carries, or an empty
 	// object when it carries none. The first `{...}` that parses as an object
 	// with an "action" key -- a model that wraps it in prose or a code fence
@@ -118,6 +130,7 @@ signals:
 
 private:
 	void next_turn();
+	void send_turn();
 	void on_reply(const QString &reply);
 	void on_failed(const QString &error);
 	void act(const QJsonObject &a);
@@ -136,6 +149,9 @@ private:
 	QStringList            m_last_seen;
 	QElapsedTimer          m_clock;
 	QList<qint64>          m_model_ms;
+	QTimer               *m_pause = nullptr;
+	QElapsedTimer         m_paused_for;
+	int  m_load = 100;
 	int  m_turn = 0;
 	int  m_bad_replies = 0;
 	bool m_running = false;

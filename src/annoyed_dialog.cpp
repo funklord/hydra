@@ -12,6 +12,8 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
+#include <QSignalBlocker>
+#include <QSlider>
 #include <QTime>
 #include <QTimer>
 #include <QUrl>
@@ -299,6 +301,35 @@ void annoyed_dialog::build_ai(QVBoxLayout *box) {
 	row->addStretch(1);
 	box->addLayout(row);
 
+	// **The load knob, in the panel and live.** Asked for on 2026-09-01 as
+	// "a slider that reduces CPU load and memory use dynamically", and put
+	// here because everything about a running job belongs in one place.
+	// Moving it is felt from the next request, and at once during a pause.
+	auto *load_row = new QHBoxLayout;
+	auto *load_label = new QLabel("AI &load:", this);
+	m_load = new QSlider(Qt::Horizontal, this);
+	m_load->setObjectName("ai_load");
+	m_load->setRange(1, 10);          // tens of per cent
+	m_load->setPageStep(1);
+	m_load->setValue(10);
+	m_load->setToolTip("How much of this machine the AI may use. Lower paces "
+	                   "the turns so the model is busy only that share of the "
+	                   "time; a local model also gets fewer threads, and at "
+	                   "30% or less leaves memory after each answer.");
+	load_label->setBuddy(m_load);
+	m_load_text = new QLabel("100%", this);
+	m_load_text->setObjectName("ai_load_text");
+	m_load_text->setMinimumWidth(m_load_text->fontMetrics()
+	                               .horizontalAdvance("100%") + 4);
+	load_row->addWidget(load_label);
+	load_row->addWidget(m_load, 1);
+	load_row->addWidget(m_load_text);
+	box->addLayout(load_row);
+	connect(m_load, &QSlider::valueChanged, this, [this](int tens) {
+		m_load_text->setText(QString("%1%").arg(tens * 10));
+		emit load_changed(tens * 10);
+	});
+
 	m_ai_status = new QLabel(this);
 	m_ai_status->setObjectName("ai_status");
 	m_ai_status->setWordWrap(true);
@@ -397,6 +428,12 @@ void annoyed_dialog::build_ai(QVBoxLayout *box) {
 		m_result->hide();
 		emit discard_requested();
 	});
+}
+
+void annoyed_dialog::set_load(int percent) {
+	const QSignalBlocker quiet(m_load);
+	m_load->setValue(qBound(1, (percent + 5) / 10, 10));
+	m_load_text->setText(QString("%1%").arg(m_load->value() * 10));
 }
 
 void annoyed_dialog::set_ai(bool ready, const QString &note) {

@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTimer>
 
 namespace {
 
@@ -54,6 +55,9 @@ investigation::investigation(ai_provider *provider, investigation_host *host,
                              QObject *parent)
   : QObject(parent), m_provider(provider), m_host(host), m_evidence(evidence),
     m_last_seen(evidence.detected) {
+	m_pause = new QTimer(this);
+	m_pause->setSingleShot(true);
+	connect(m_pause, &QTimer::timeout, this, &investigation::send_turn);
 	if (m_provider) {
 		connect(m_provider, &ai_provider::finished, this,
 		         &investigation::on_reply);
@@ -88,6 +92,7 @@ void investigation::stop() {
 	if (m_provider && m_waiting_model)
 		m_provider->cancel();
 	m_waiting_model = false;
+	m_pause->stop();
 	finish(false, QStringLiteral("stopped"));
 }
 
@@ -125,6 +130,39 @@ int investigation::model_estimate() const {
 	return int(sum / m_model_ms.size() / 1000) + 1;
 }
 
+void investigation::set_load(int percent) {
+	m_load = qBound(10, percent, 100);
+	if (m_provider)
+		m_provider->set_load(m_load);
+	if (m_running)
+		emit logged("step", m_load >= 100
+		  ? QStringLiteral("AI load 100%: no pauses, the backend decides the "
+		                   "rest. From the next request.")
+		  : QString("AI load %1%: the model is kept busy about %1% of the "
+		            "time, with fewer threads and less memory where the "
+		            "backend allows. From the next request.").arg(m_load));
+	// During a pause, what is left of it is recomputed now rather than at
+	// its end: turning the knob up should be felt at once.
+	if (m_pause->isActive()) {
+		const int left = pause_ms() - int(m_paused_for.elapsed());
+		m_pause->stop();
+		if (left <= 0) {
+			send_turn();
+		} else {
+			m_pause->start(left);
+			emit expecting(QStringLiteral("a pause to keep the load down"),
+			               left / 1000 + 1);
+		}
+	}
+}
+
+int investigation::pause_ms() const {
+	if (m_load >= 100 || m_model_ms.isEmpty())
+		return 0;
+	const qint64 busy = m_model_ms.last();
+	return int(qMin<qint64>(120000, busy * (100 - m_load) / m_load));
+}
+
 void investigation::next_turn() {
 	if (!m_running)
 		return;
@@ -133,6 +171,22 @@ void investigation::next_turn() {
 		                  .arg(k_max_turns));
 		return;
 	}
+	const int pause = pause_ms();
+	if (pause > 0) {
+		emit logged("step", QString("Pausing %1 s to keep the AI load at %2%.")
+		                         .arg((pause + 500) / 1000).arg(m_load));
+		emit expecting(QStringLiteral("a pause to keep the load down"),
+		               pause / 1000 + 1);
+		m_paused_for.restart();
+		m_pause->start(pause);
+		return;
+	}
+	send_turn();
+}
+
+void investigation::send_turn() {
+	if (!m_running)
+		return;
 	++m_turn;
 	const int eta = model_estimate();
 	emit logged("step", QString("Turn %1: asking %2.")
@@ -140,6 +194,8 @@ void investigation::next_turn() {
 	emit expecting(QStringLiteral("the model's answer"), eta);
 	m_waiting_model = true;
 	m_clock.restart();
+	// Re-applied every time: the provider is shared with the other AI tools.
+	m_provider->set_load(m_load);
 	m_provider->send(QString::fromLatin1(k_system_prompt), prompt());
 }
 

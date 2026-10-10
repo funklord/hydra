@@ -304,6 +304,8 @@ OBJS_test_investigation = \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/moc/moc_investigation.o \
 	$(BUILD_DIR)/app/investigation.o \
+	$(BUILD_DIR)/app/ollama_provider.o \
+	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/filter_subscription.o \

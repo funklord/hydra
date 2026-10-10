@@ -2,6 +2,7 @@
 
 #include "ai_provider.h"
 
+#include <QJsonObject>
 #include <QPointer>
 #include <QStringList>
 #include <QUrl>
@@ -42,6 +43,15 @@ public:
 	static bool endpoint_is_local(const QUrl &url);
 	void send(const QString &system_prompt, const QString &user_prompt) override;
 	void cancel() override;
+
+	// Below 100: `num_thread` scaled to this machine's cores, and at 30 and
+	// under `keep_alive` 0, so the model leaves memory as soon as it has
+	// answered. Ollama reloads the model when the thread count changes, once.
+	void set_load(int percent) override { m_load = qBound(10, percent, 100); }
+	int  load() const { return m_load; }
+	// The options a request carries at `percent` on a machine of `cores`.
+	// Separate so it can be checked without a server.
+	static QJsonObject load_options(int percent, int cores);
 
 	void set_endpoint(const QUrl &url) { m_endpoint = url; }
 	void set_model(const QString &model) { m_model = model; }
@@ -103,6 +113,7 @@ private:
 	QNetworkAccessManager *m_net = nullptr;
 	QPointer<QNetworkReply> m_reply;
 	QUrl    m_endpoint = QUrl("http://localhost:11434");
+	int     m_load = 100;
 	QString m_model    = "llama3";
 	QStringList m_models;
 	bool    m_reachable = false;
