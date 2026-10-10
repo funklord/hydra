@@ -16,7 +16,8 @@ QStringList strings(const QJsonValue &v) {
 
 }  // namespace
 
-QList<media_evidence::entry> media_evidence::timestamped_lines(const QString &text) {
+// One line's entry, when it has a time and something besides it.
+bool media_evidence::entry_of(const QString &raw, entry *out) {
 	// h:mm:ss or m:ss, with seconds and, where hours are given, minutes
 	// under sixty; digits on neither side, so `2026:10` or `12:345` are not
 	// read as times.
@@ -32,29 +33,58 @@ QList<media_evidence::entry> media_evidence::timestamped_lines(const QString &te
 	static const QRegularExpression framing(
 	  QStringLiteral("^[\\s\\-\\x{2013}\\x{2014}|:.,]+|"
 	                 "[\\s\\-\\x{2013}\\x{2014}|:.,]+$"));
+	const QRegularExpressionMatch m = stamp.match(raw);
+	if (!m.hasMatch())
+		return false;
+	const int h = m.captured(1).isEmpty() ? 0 : m.captured(1).toInt();
+	const int mi = m.captured(2).toInt();
+	const int s = m.captured(3).toInt();
+	if (s >= 60 || (!m.captured(1).isEmpty() && mi >= 60))
+		return false;
+	QString rest = raw;
+	rest.replace(bracketed, QStringLiteral(" "));
+	rest.replace(stamp, QStringLiteral(" "));
+	rest = rest.simplified();
+	rest.remove(framing);
+	if (rest.isEmpty())
+		return false;
+	out->start = h * 3600 + mi * 60 + s;
+	out->text  = rest;
+	return true;
+}
+
+QList<media_evidence::entry> media_evidence::timestamped_lines(const QString &text) {
 	QList<entry> out;
+	for (const QList<entry> &run : timestamped_runs(text))
+		out += run;
+	return out;
+}
+
+// **Runs, not every line of a text at once.** A description can hold more
+// than one block of times -- measured on the first set looked at, whose
+// tracklist was followed by a premiere's clock times in nine cities, `07:00
+// -- Los Angeles` read as seven minutes -- and as one candidate the two
+// interleaved into a list that went backwards, so the real tracklist was
+// refused with them. Blank lines do not end a run; any other line does.
+QList<QList<media_evidence::entry>> media_evidence::timestamped_runs(
+  const QString &text) {
+	QList<QList<entry>> runs;
+	QList<entry> run;
 	for (const QString &raw : text.split(QLatin1Char('\n'))) {
-		const QRegularExpressionMatch m = stamp.match(raw);
-		if (!m.hasMatch())
-			continue;
-		const int h = m.captured(1).isEmpty() ? 0 : m.captured(1).toInt();
-		const int mi = m.captured(2).toInt();
-		const int s = m.captured(3).toInt();
-		if (s >= 60 || (!m.captured(1).isEmpty() && mi >= 60))
-			continue;
-		QString rest = raw;
-		rest.replace(bracketed, QStringLiteral(" "));
-		rest.replace(stamp, QStringLiteral(" "));
-		rest = rest.simplified();
-		rest.remove(framing);
-		if (rest.isEmpty())
+		if (raw.trimmed().isEmpty())
 			continue;
 		entry e;
-		e.start = h * 3600 + mi * 60 + s;
-		e.text  = rest;
-		out << e;
+		if (entry_of(raw, &e)) {
+			run << e;
+			continue;
+		}
+		if (!run.isEmpty())
+			runs << run;
+		run.clear();
 	}
-	return out;
+	if (!run.isEmpty())
+		runs << run;
+	return runs;
 }
 
 media_evidence media_evidence::from_json(const QByteArray &json) {
@@ -123,14 +153,22 @@ media_evidence media_evidence::from_json(const QByteArray &json) {
 			t.entries << entry{ ch.start, ch.title };
 		ev.tracklists << t;
 	}
-	const QList<entry> from_description = timestamped_lines(ev.description);
-	if (from_description.size() >= k_min_entries)
-		ev.tracklists << tracklist{ QStringLiteral("description"),
-		                            from_description };
-	for (int i = 0; i < ev.comments.size(); ++i) {
-		const QList<entry> lines = timestamped_lines(ev.comments.at(i).text);
-		if (lines.size() >= k_min_entries)
-			ev.tracklists << tracklist{ QString("comment %1").arg(i + 1), lines };
-	}
+	// Each run of a text its own candidate: "description", then
+	// "description 2"; "comment 3", then "comment 3.2".
+	const auto add_runs = [&ev](const QString &text, const QString &name,
+	                            const QString &next) {
+		int n = 0;
+		for (const QList<entry> &run : timestamped_runs(text)) {
+			if (run.size() < k_min_entries)
+				continue;
+			++n;
+			ev.tracklists << tracklist{ n == 1 ? name : next.arg(n), run };
+		}
+	};
+	add_runs(ev.description, QStringLiteral("description"),
+	         QStringLiteral("description %1"));
+	for (int i = 0; i < ev.comments.size(); ++i)
+		add_runs(ev.comments.at(i).text, QString("comment %1").arg(i + 1),
+		         QString("comment %1.").arg(i + 1) + QStringLiteral("%1"));
 	return ev;
 }

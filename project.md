@@ -38066,12 +38066,13 @@ reasons in `labels.json`. `test_media` scores the rules on them --
 comfort line. `try_media_model` scores a real model on the same twelve and
 names the tasks under that line.
 
-**Not measured: any model.** No model runs on this machine -- no Ollama
-answers, no weights are on disk beyond llama.cpp's vocabulary files, no API
-key -- so the scorecard has a baseline and no candidate. Running it needs
-a model, which is a multi-gigabyte download and the holder's call. The
-configured `qwen2.5-coder:14b` is tuned for code; a small general model
-may read metadata better, which is what the scorecard is for.
+**Measured: see *Three models scored* below.** This entry first said no
+weights were on disk, and that was wrong: the configured
+`qwen2.5-coder:14b` had been in `~/.ollama/models` for seven weeks. The
+search looked for `*.gguf`, and Ollama keeps weights as `sha256-...` blobs
+with no extension -- a count that inherited its detector -- and a listing of
+`~/.ollama` was cut to two lines by `head`. What was true is that nothing
+served them: no Ollama binary was installed for this account.
 
 **Replaced:** yesterday's `content_kind_of` in `ytdlp_resolver`, folded into
 `by_rules` with its title and film signals, so there is one rule set to
@@ -38084,4 +38085,56 @@ are third parties' data in the scripts their names are written in.
 **Not built**: the tracklist saved beside the file (a `.cue`) and as
 chapters in it; video, audio or both asked once per kind and remembered;
 corrections per channel.
+
+### Three models scored
+
+Run on 2026-10-10 against the twelve labelled cases with Ollama 0.40.2 on
+the holder's RTX 3060, each model twice (out of 12; the rules alone in the
+first column):
+
+    task       rules  qwen2.5:3b  llama3.2:3b  qwen2.5-coder:14b
+    artist       8     12  12      12  11        11  12
+    title        5      7   7       6   5        12  11
+    kind        10     11  11      10  10        11  10
+    is_set       9     12  12       5   7        12  12
+    tracklist    9     10  10       9  10        11  10
+
+**Outside the comfort zone (under 75%)**: qwen2.5:3b at **title**;
+llama3.2:3b at **title and is_set** -- worse than the rules on is_set, and
+it varies between runs; qwen2.5-coder:14b at nothing. So the configured
+model is the one to keep, coding-tuned or not, and the 3B models are
+usable for artist and kind and not for titles.
+
+**What the 3B models get wrong is invisible to the in-browser tally.**
+Their titles keep what is not the track -- "One More Time (Official
+Audio)", "Noisestorm - Crab Rave [Monstercat Release]", "Hello (Lyrics)"
+-- and every one of those is in the metadata, so it passes the grounding
+check and the tally counts it kept. The tally catches invention; it cannot
+catch a real string chosen badly. Only the corpus sees that, which is why
+both exist -- and it means a person running a 3B model is told nothing at
+run time about the task it is worst at. The cheap remedy, not built: a
+check that flags (not decides) a title holding the artist's name or a
+bracketed tag, counted against the model.
+
+**And the first run found an extraction fault, not a model one.** The
+first set looked at has its tracklist in the description followed by a
+premiere's clock times in nine cities (`07:00 -- Los Angeles`), and the two
+were one candidate whose times went backwards, so the right tracklist was
+refused. Candidates are now **runs** -- `description`, `description 2` --
+broken by any line that is not timestamped, blanks aside, and a tracklist's
+times must **strictly** rise, which the clock block (four cities at 16:00)
+does not. Reading the first scores, a `grep -B1 -A2` attributed two cases'
+lines to their neighbours twice; the score files read whole are what the
+table above rests on.
+
+Not measured: how long each answer took, and whether a temperature of
+zero would steady llama3.2. One label is arguable: the 14B model sometimes
+files the Economist interview under "Elon Musk", whom the label does not
+accept; the channel was judged responsible, and a person could disagree.
+
+**The tools**: Ollama 0.40.2 installed for this account in
+`~/.local/opt/ollama` (2.1 GB, the CUDA build), models in `~/.ollama/models`
+(`qwen2.5:3b` and `llama3.2:3b` pulled for this, 1.9 and 2.0 GB, beside
+the existing `qwen2.5-coder:14b`). Not a service: the server was started by
+hand for the run.
 

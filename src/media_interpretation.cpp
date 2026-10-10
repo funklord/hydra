@@ -50,10 +50,13 @@ QJsonObject answer_in(const QString &reply) {
 
 // Why a tracklist cannot be the one, or empty when it can.
 QString tracklist_problem(const media_evidence::tracklist &t, double duration) {
+	// Strictly rising: two tracks cannot start at once, and a list of
+	// times that repeat -- a premiere's start in four cities sharing a
+	// zone -- is something other than a tracklist.
 	double last = -1;
 	for (const media_evidence::entry &e : t.entries) {
-		if (e.start < last)
-			return QStringLiteral("its times go backwards");
+		if (e.start <= last)
+			return QStringLiteral("its times do not rise");
 		last = e.start;
 	}
 	if (duration > 0 && last >= duration)

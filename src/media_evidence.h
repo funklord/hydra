@@ -66,7 +66,8 @@ struct media_evidence {
 		QString text;            // the line without its timestamps
 	};
 	struct tracklist {
-		QString      source;     // "chapters", "description", "comment 3"
+		QString      source;     // "chapters", "description", "description 2",
+		                         // "comment 3", "comment 3.2"
 		QList<entry> entries;    // in the source's own order
 	};
 	QList<tracklist> tracklists;
@@ -88,4 +89,9 @@ struct media_evidence {
 	// either side, so `3:2` and `2026:10:09` are not times; a line counts
 	// when something other than times and separators is left on it.
 	static QList<entry> timestamped_lines(const QString &text);
+	// The same, as the runs it falls into: a block of timestamped lines,
+	// broken by any line that is not one, blanks aside. Each run of a text
+	// is a candidate of its own.
+	static QList<QList<entry>> timestamped_runs(const QString &text);
+	static bool entry_of(const QString &line, entry *out);
 };

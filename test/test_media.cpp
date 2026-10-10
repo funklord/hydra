@@ -79,7 +79,8 @@ int main(int argc, char **argv) {
 		for (const auto &t : ev.tracklists)
 			sources << QString("%1:%2").arg(t.source).arg(t.entries.size());
 		check(sources.contains("chapters:21") &&
-		          sources.contains("description:29"),
+		          sources.contains("description:20") &&
+		          sources.contains("description 2:9"),
 		       QString("every candidate tracklist, each on its own, none chosen "
 		               "(%1)").arg(sources.join(", ")));
 		check(ev.comments.size() == 20 && ev.comments.first().pinned &&
@@ -138,8 +139,25 @@ int main(int argc, char **argv) {
 		  "{\"kind\":\"music\",\"artist\":\"Noisestorm\",\"title\":\"Crab Rave\","
 		  "\"tracklist\":\"description\"}", backwards);
 		check(back.tracklist.isEmpty() &&
-		          back.rejected.join(" ").contains("backwards"),
+		          back.rejected.join(" ").contains("do not rise"),
 		       "a tracklist whose times go backwards is not taken");
+
+		// The first set looked at: its description held the tracklist and,
+		// after it, a premiere's clock times. Separate runs now, and the
+		// tracklist is taken while the clock times are not.
+		const media_evidence groovix = find("set_groovix").evidence;
+		const media_reading good_set = media_interpretation::checked(
+		  "{\"kind\":\"music\",\"artist\":\"Groovix\","
+		  "\"title\":\"CLASSIC DISCO FUNK\",\"tracklist\":\"description\"}",
+		  groovix);
+		const media_reading clocks = media_interpretation::checked(
+		  "{\"kind\":\"music\",\"artist\":\"Groovix\","
+		  "\"title\":\"CLASSIC DISCO FUNK\",\"tracklist\":\"description 2\"}",
+		  groovix);
+		check(good_set.tracklist == "description" && clocks.tracklist.isEmpty() &&
+		          clocks.rejected.join(" ").contains("do not rise"),
+		       QString("a set's tracklist is taken and the premiere's clock times "
+		               "beside it are not (%1)").arg(clocks.rejected.join("; ")));
 	}
 
 	section("the tally says which tasks a model is too weak for");
