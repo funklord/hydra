@@ -38135,6 +38135,13 @@ accept; the channel was judged responsible, and a person could disagree.
 **The tools**: Ollama 0.40.2 installed for this account in
 `~/.local/opt/ollama` (2.1 GB, the CUDA build), models in `~/.ollama/models`
 (`qwen2.5:3b` and `llama3.2:3b` pulled for this, 1.9 and 2.0 GB, beside
-the existing `qwen2.5-coder:14b`). Not a service: the server was started by
-hand for the run.
+the existing `qwen2.5-coder:14b`), all three kept on the holder's word.
+**Started at login**, on the holder's request for a user service: this
+machine runs sysvinit, not systemd, and the desktop is Trinity, so the
+equivalent is `~/.trinity/Autostart/ollama.desktop` running
+`~/.local/opt/ollama/bin/ollama-session`. That exits at once when an
+Ollama already answers on 127.0.0.1:11434, so a second login starts no
+second server, replaces its log at each start, and has no restart loop --
+a crashed server stays down until the next login rather than leaving a
+supervisor running past its session.
 
