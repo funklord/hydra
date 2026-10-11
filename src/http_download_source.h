@@ -40,6 +40,8 @@ public:
 	}
 
 	bool accepts(const QUrl &url, QString *why_not = nullptr) const override;
+	bool accepts_known_media(const QUrl &url,
+	                         QString *why_not = nullptr) const override;
 	bool start(const download_request &req, QString *error) override;
 	void cancel(int id) override;
 
@@ -56,8 +58,18 @@ private:
 		// readyRead or finished happens first -- a small reply can arrive
 		// complete before anything has had a chance to look at its headers.
 		bool     range_checked = false;
+		// Fetched a range at a time when `chunk` is set: what to ask again
+		// with, the whole size `Content-Range` reported, and the status of the
+		// reply in hand -- only a 206 means there may be more to ask for.
+		QUrl     url;
+		QMap<QString, QString> headers;
+		qint64   chunk = 0;
+		qint64   whole = -1;
+		int      code  = 0;
 	};
 
+	// Asks for what is not yet on disk: the rest, or the next range.
+	void issue(transfer *t);
 	void wire(transfer *t);
 	void teardown(transfer *t, bool ok, const QString &message);
 	transfer *find(int id) const { return m_transfers.value(id, nullptr); }

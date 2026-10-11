@@ -23,19 +23,22 @@ void media_remux::start(const QString &assembled) {
 }
 
 void media_remux::start_mux(const QString &video, const QString &audio) {
-	const QString ffmpeg = tool();
-	if (ffmpeg.isEmpty()) {
-		// **Not the same degradation as a rewrap.** There, the file that exists
-		// is the programme in the wrong container; here it is the video without
-		// its sound, and calling that "kept as-is" would describe a silent file
-		// as a saved one.
+	start_mux(video, audio, target_for(video));
+}
+
+void media_remux::start_mux(const QString &video, const QString &audio,
+                            const QString &out) {
+	// **Not the same degradation as a rewrap.** There, the file that exists
+	// is the programme in the wrong container; here it is the video without
+	// its sound, and calling that "kept as-is" would describe a silent file
+	// as a saved one.
+	if (tool().isEmpty()) {
 		emit finished(false, video,
 		               QStringLiteral("ffmpeg is not installed, so the video and "
 		                               "audio could not be combined. The video "
 		                               "is saved without its sound."));
 		return;
 	}
-	const QString out = target_for(video);
 	run(arguments(video, audio, out), out, QStringList{ video, audio }, video,
 	     QStringLiteral("combine"), QStringLiteral("combined"));
 }

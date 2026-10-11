@@ -96,6 +96,9 @@ public:
 	// half-programmes left beside the result are two files that look like
 	// downloads and play as neither.
 	void start_mux(const QString &video, const QString &audio);
+	// The same, into `out`: the caller knows the container both halves fit.
+	void start_mux(const QString &video, const QString &audio,
+	               const QString &out);
 
 signals:
 	// `path` is the file to keep -- the remuxed one when this worked, and the

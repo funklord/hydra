@@ -11,7 +11,9 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
+#include <QProcess>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QtGlobal>
@@ -317,6 +319,139 @@ static void test_cancel_and_failure() {
 	check(tor2->live(good), "and the queue still runs afterwards");
 }
 
+// Makes a one-second file with ffmpeg, or returns false. Bounded: the
+// inputs are generated and one second long, and the wait is capped.
+static bool make_media(const QStringList &args) {
+	QProcess p;
+	p.start(QStandardPaths::findExecutable("ffmpeg"),
+	        QStringList{ "-y", "-loglevel", "error" } + args);
+	if (!p.waitForFinished(20000)) {
+		p.kill();
+		p.waitForFinished(2000);
+		return false;
+	}
+	return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+// **A picture and its sound, saved as one.** YouTube serves almost every
+// quality as one or the other, and a Download of a picture-only row saved a
+// silent file.
+static void test_pairs(const QString &dir) {
+	section("pairs: a picture and its sound become one file");
+
+	// **Every Download on a yt-dlp row was disabled**: the HTTP source judges
+	// an address by its shape, and YouTube's do not look like files.
+	{
+		http_download_source http;
+		const QUrl yt("https://rr1---sn-x.googlevideo.com/videoplayback?itag=140&mime=audio%2Fmp4");
+		QString why;
+		check(!http.accepts(yt, &why), "by its shape a stream address is refused");
+		check(http.accepts_known_media(yt, &why),
+		      "but taken when yt-dlp has said it is a media file");
+		check(!http.accepts_known_media(QUrl("https://cdn.test/a/index.m3u8"), &why),
+		      "while a manifest is still refused, whoever vouches for it");
+		download_manager m;
+		m.add_source(new http_download_source);
+		check(m.enqueue(yt, QString(), &why) == 0, "the manager refuses it unvouched");
+		m.set_directory(dir + "/vouched");
+		const int id = m.enqueue(yt, QString(), &why, {}, "x.m4a",
+		                         download_hints{ true, 0 });
+		check(id != 0, QString("and takes it vouched (%1)").arg(why));
+		m.cancel(id);
+	}
+
+	using names = download_manager::pair_names;
+	const names mp4 = download_manager::names_for_pair("A_-_B_[id].mp4",
+	                                                    "A_-_B_[id].m4a");
+	check(mp4.picture == "A_-_B_[id].picture.mp4" &&
+	      mp4.sound == "A_-_B_[id].sound.m4a" && mp4.combined == "A_-_B_[id].mp4",
+	      QString("H.264 with AAC stays MP4, each half marked (%1, %2, %3)")
+	          .arg(mp4.picture, mp4.sound, mp4.combined));
+	check(download_manager::names_for_pair("x.webm", "x.webm").combined == "x.webm",
+	      "VP9 with Opus stays WebM");
+	check(download_manager::names_for_pair("x.webm", "x.m4a").combined == "x.mkv",
+	      "and a mixed pair goes to Matroska, which takes both");
+
+	QString err;
+	{
+		download_manager m;
+		auto *src = new fake_plain_source;
+		m.add_source(src);
+		const int pic = m.enqueue_pair(QUrl("http://cdn.test/v"), QUrl("http://cdn.test/a"),
+		                               QString(), &err, {}, "x.picture.mp4",
+		                               "x.sound.m4a", "x.mp4");
+		const download_job *pj = job_by_id(m, pic);
+		check(pic && pj && pj->sound_job, QString("a pair is two jobs (%1)").arg(err));
+		const int snd = pj ? pj->sound_job : 0;
+		m.cancel(pic);
+		check(status_of(m, snd) == download_state::cancelled,
+		      "cancelling the picture cancels its sound");
+	}
+	{
+		download_manager m;
+		auto *src = new fake_plain_source;
+		m.add_source(src);
+		const int pic = m.enqueue_pair(QUrl("http://cdn.test/v"), QUrl("http://cdn.test/a"),
+		                               QString(), &err, {}, "x.picture.mp4",
+		                               "x.sound.m4a", "x.mp4");
+		const int snd = job_by_id(m, pic)->sound_job;
+		src->set(pic, download_state::running, 10, 10, dir + "/x.picture.mp4", QString());
+		src->finish(pic, true, QString());
+		check(status_of(m, pic) == download_state::running,
+		      "a picture that lands first waits for its sound");
+		src->finish(snd, false, "403 Forbidden");
+		const download_job *pj = job_by_id(m, pic);
+		check(pj && pj->status == download_state::done &&
+		      pj->detail.contains("without its sound") && pj->detail.contains("403"),
+		      QString("a failed sound leaves the picture, saying so (%1)")
+		          .arg(pj ? pj->detail : QString()));
+	}
+
+	if (QStandardPaths::findExecutable("ffmpeg").isEmpty()) {
+		std::printf("  skip  combining needs ffmpeg, which is not installed\n");
+		return;
+	}
+	const QString v = dir + "/y.picture.mp4", a = dir + "/y.sound.m4a";
+	const bool made =
+	  make_media({ "-f", "lavfi", "-i", "testsrc=duration=1:size=64x64:rate=5",
+	               "-c:v", "mpeg4", v }) &&
+	  make_media({ "-f", "lavfi", "-i", "sine=duration=1", "-c:a", "aac", a });
+	check(made, "ffmpeg made a one-second picture and sound to combine");
+	if (!made)
+		return;
+
+	download_manager m;
+	auto *src = new fake_plain_source;
+	m.add_source(src);
+	const int pic = m.enqueue_pair(QUrl("http://cdn.test/v"), QUrl("http://cdn.test/a"),
+	                               QString(), &err, {}, "y.picture.mp4",
+	                               "y.sound.m4a", "y.mp4");
+	const int snd = job_by_id(m, pic)->sound_job;
+	src->set(snd, download_state::running, 1, 1, a, QString());
+	src->set(pic, download_state::running, 1, 1, v, QString());
+	src->finish(snd, true, QString());
+	src->finish(pic, true, QString());
+	QElapsedTimer t;
+	t.start();
+	while (status_of(m, pic) != download_state::done && t.elapsed() < 20000)
+		spin(50);
+	const download_job *pj = job_by_id(m, pic);
+	const QString out = dir + "/y.mp4";
+	check(pj && pj->status == download_state::done && pj->path == out,
+	      QString("the picture's row ends as the combined file (%1: %2)")
+	          .arg(pj ? pj->path : QString(), pj ? pj->detail : QString()));
+	check(QFileInfo(out).size() > 0, "which exists and has bytes");
+	check(!QFile::exists(v) && !QFile::exists(a), "the two halves are removed");
+	check(!job_by_id(m, snd), "and the sound's row, whose file is gone, with them");
+
+	QProcess probe;
+	probe.start(QStandardPaths::findExecutable("ffmpeg"), { "-hide_banner", "-i", out });
+	probe.waitForFinished(10000);
+	const QString said = QString::fromLocal8Bit(probe.readAllStandardError());
+	check(said.contains("Video:") && said.contains("Audio:"),
+	      "and it holds a picture and a sound");
+}
+
 static void test_reentrancy() {
 	section("re-entrancy: a source that fails inside start()");
 
@@ -384,6 +519,149 @@ public:
 		});
 	}
 };
+
+// Honours `Range: bytes=a-b` with 206 and Content-Range, as googlevideo
+// does, and counts what it was asked. `starve_after` answers every request
+// past that many with a 206 and no bytes.
+class range_server : public QTcpServer {
+public:
+	static const int k_size = 35000;
+	QList<QByteArray> asked;
+	int starve_after = -1;
+	// Sends every request for /videoplayback on to /real first, as YouTube
+	// sends each to another host.
+	bool redirect = false;
+
+	static QByteArray body() {
+		QByteArray b(k_size, 0);
+		for (int i = 0; i < k_size; ++i)
+			b[i] = char(i % 251);
+		return b;
+	}
+
+	void incomingConnection(qintptr fd) override {
+		auto *s = new QTcpSocket(this);
+		s->setSocketDescriptor(fd);
+		connect(s, &QTcpSocket::readyRead, this, [this, s] {
+			const QByteArray head = s->readAll();
+			if (!head.contains("\r\n\r\n"))
+				return;
+			if (redirect && head.startsWith("GET /videoplayback")) {
+				s->write("HTTP/1.1 302 Found\r\nLocation: /real\r\n"
+				          "Content-Length: 0\r\nConnection: close\r\n\r\n");
+				s->flush();
+				s->disconnectFromHost();
+				return;
+			}
+			QByteArray range;
+			for (const QByteArray &line : head.split('\n'))
+				if (line.toLower().startsWith("range:"))
+					range = line.mid(6).trimmed();
+			asked << range;
+			qint64 from = 0, to = k_size - 1;
+			if (range.startsWith("bytes=")) {
+				const QList<QByteArray> ab = range.mid(6).split('-');
+				from = ab.value(0).toLongLong();
+				if (!ab.value(1).isEmpty())
+					to = qMin<qint64>(ab.value(1).toLongLong(), k_size - 1);
+			}
+			const bool starve = starve_after >= 0 && asked.size() > starve_after;
+			const QByteArray part = starve ? QByteArray()
+			                               : body().mid(from, to - from + 1);
+			s->write("HTTP/1.1 206 Partial Content\r\nContent-Type: video/mp4\r\n"
+			          "Content-Range: bytes " + QByteArray::number(from) + '-' +
+			          QByteArray::number(to) + '/' + QByteArray::number(k_size) +
+			          "\r\nContent-Length: " + QByteArray::number(part.size()) +
+			          "\r\nConnection: close\r\n\r\n" + part);
+			s->flush();
+			s->disconnectFromHost();
+		});
+	}
+};
+
+// **YouTube throttles one open-ended request to about 32 KB/s** and answers
+// a 10 MB range in a second, so yt-dlp fetches it a range at a time and
+// says how large: measured 2026-10-11, 1.9 MB in 60 s against 10 MB in 1.1 s.
+static void test_chunked(const QString &tmp) {
+	section("http source: a stream fetched a range at a time");
+
+	auto run = [&](range_server &server, const QString &name, qint64 chunk) {
+		download_manager m;
+		m.add_source(new http_download_source);
+		m.set_directory(tmp);
+		QString err;
+		const int id = m.enqueue(
+		    QUrl(QString("http://127.0.0.1:%1/videoplayback?itag=1")
+		             .arg(server.serverPort())),
+		    QString(), &err, {}, name, download_hints{ true, chunk });
+		QElapsedTimer t;
+		t.start();
+		while (job_by_id(m, id) && !job_by_id(m, id)->terminal() && t.elapsed() < 8000)
+			spin(20);
+		const download_job *j = job_by_id(m, id);
+		return j ? *j : download_job{};
+	};
+
+	range_server server;
+	if (!server.listen(QHostAddress::LocalHost, 0)) {
+		std::printf("  --    could not listen; skipped\n");
+		return;
+	}
+	const download_job j = run(server, "whole.mp4", 10000);
+	check(j.status == download_state::done, QString("the job completes (%1)").arg(j.error));
+	const QList<QByteArray> four = { "bytes=0-9999", "bytes=10000-19999",
+	                                 "bytes=20000-29999", "bytes=30000-39999" };
+	check(server.asked == four,
+	      QString("in four ranges of the size asked (%1)")
+	          .arg(QString::fromLatin1(server.asked.join(", "))));
+	QFile f(tmp + "/whole.mp4");
+	f.open(QIODevice::ReadOnly);
+	check(f.readAll() == range_server::body(), "and the file is the body, byte for byte");
+	check(j.total == range_server::k_size,
+	      QString("its size is the whole, from Content-Range (%1)").arg(j.total));
+
+	// **Through a redirect, as every YouTube stream is.** The status read at
+	// the hop was 302, so the first version stopped after one range.
+	range_server hop;
+	hop.redirect = true;
+	if (!hop.listen(QHostAddress::LocalHost, 0))
+		return;
+	const download_job h = run(hop, "hop.mp4", 10000);
+	QFile hf(tmp + "/hop.mp4");
+	hf.open(QIODevice::ReadOnly);
+	check(h.status == download_state::done && hf.readAll() == range_server::body(),
+	      QString("every range through a redirect, whole (%1 ranges, %2)")
+	          .arg(hop.asked.size()).arg(h.error));
+
+	// And a resume through one: the hop's status emptied the partial file.
+	{
+		QFile part(tmp + "/resumed.mp4");
+		part.open(QIODevice::WriteOnly);
+		part.write(range_server::body().left(12345));
+	}
+	range_server hop2;
+	hop2.redirect = true;
+	if (!hop2.listen(QHostAddress::LocalHost, 0))
+		return;
+	const download_job r = run(hop2, "resumed.mp4", 0);
+	QFile rf(tmp + "/resumed.mp4");
+	rf.open(QIODevice::ReadOnly);
+	check(r.status == download_state::done && rf.readAll() == range_server::body() &&
+	      hop2.asked == QList<QByteArray>({ "bytes=12345-" }),
+	      QString("a resume through a redirect keeps what it had (%1, %2)")
+	          .arg(QString::fromLatin1(hop2.asked.join(", ")), r.error));
+
+	range_server starved;
+	starved.starve_after = 2;
+	if (!starved.listen(QHostAddress::LocalHost, 0))
+		return;
+	const download_job s = run(starved, "starved.mp4", 10000);
+	check(s.status == download_state::failed && s.error.contains("stopped sending"),
+	      QString("a server that stops sending fails the job rather than being "
+	               "asked for ever (%1)").arg(s.error));
+	check(starved.asked.size() == 3, QString("after one empty answer (%1 asked)")
+	                                     .arg(starved.asked.size()));
+}
 
 static void test_resume_against_a_server_that_ignores_range(const QString &tmp) {
 	section("http source: a server that ignores Range does not corrupt the file");
@@ -522,8 +800,11 @@ int main(int argc, char **argv) {
 	// a permission on a file from another user, wearing the costume of a
 	// broken downloader.
 	QTemporaryDir scratch;
-	if (scratch.isValid())
+	if (scratch.isValid()) {
 		test_resume_against_a_server_that_ignores_range(scratch.path());
+		test_pairs(scratch.path());
+		test_chunked(scratch.path());
+	}
 	else
 		std::printf("  --    no scratch directory to run the resume case in; "
 		             "skipped\n");

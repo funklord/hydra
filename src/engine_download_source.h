@@ -44,11 +44,12 @@ public:
 
 	// **Never accepts a url.** Nothing may be routed here, because there is
 	// nothing to start: a job arrives only through `adopt`, already running.
-	// Saying so rather than returning a bare false, since the manager hands
-	// this reason to whoever asked.
-	bool accepts(const QUrl &, QString *why_not = nullptr) const override {
-		if (why_not)
-			*why_not = QStringLiteral("a page download is the page's to begin");
+	//
+	// **And gives no reason, because it is never the reason.** It said "a page
+	// download is the page's to begin", and as the first source asked its
+	// reason was the one the manager and the media list reported -- so a
+	// stream the HTTP source refused showed that, and hid why.
+	bool accepts(const QUrl &, QString * = nullptr) const override {
 		return false;
 	}
 

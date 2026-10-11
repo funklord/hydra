@@ -7393,19 +7393,31 @@ void main_window::list_resolved_media(const QString &host,
 	{
 		// **The sound to play beside a picture-only stream**: the last
 		// sound-only stream yt-dlp lists, since it lists worst first, and a
-		// direct file over a manifest, since every player seeks one.
-		QUrl best_audio;
-		bool best_direct = false;
+		// direct file over a manifest, since every player seeks one. Kept per
+		// container family too, so a download pairs MP4 with M4A and WebM
+		// with WebM, and the two combine without converting either.
+		struct sound { const media_format *f = nullptr; bool direct = false; };
+		sound any, m4a, webm;
+		auto consider = [](sound *s, const media_format &f, bool direct) {
+			if (direct || !s->direct)
+				*s = sound{ &f, direct };
+		};
 		for (const media_format &f : m.formats) {
 			if (f.has_video || !f.has_audio)
 				continue;
 			const bool direct = !f.protocol.startsWith("m3u8") &&
 			                    !f.protocol.startsWith("http_dash");
-			if (direct || !best_direct) {
-				best_audio  = f.url;
-				best_direct = direct;
-			}
+			consider(&any, f, direct);
+			if (f.ext == "m4a")
+				consider(&m4a, f, direct);
+			else if (f.ext == "webm")
+				consider(&webm, f, direct);
 		}
+		auto sound_for = [&](const media_format &f) {
+			const sound &s = (f.ext == "mp4" && m4a.f) ? m4a
+			               : (f.ext == "webm" && webm.f) ? webm : any;
+			return s.f;
+		};
 		// **Best first.** Picture with sound by height, a direct file before
 		// a manifest at the same height; sound alone after them -- or before
 		// them, for something read as music, where the sound is the point.
@@ -7419,10 +7431,17 @@ void main_window::list_resolved_media(const QString &host,
 			const bool direct = !f.protocol.startsWith("m3u8") &&
 			                    !f.protocol.startsWith("http_dash");
 			media_item item;
+			item.known_media = true;
+			item.chunk_size  = f.chunk_size;
 			item.has_video = f.has_video;
 			item.has_audio = f.has_audio;
 			if (f.has_video && !f.has_audio)
-				item.audio = best_audio;
+				if (const media_format *s = sound_for(f)) {
+					item.audio            = s->url;
+					item.audio_chunk_size = s->chunk_size;
+					item.audio_file_name  = ytdlp_resolver::file_name_for(
+					    m, s->ext, r.artist, r.title);
+				}
 			const int heard = (f.has_audio || !item.audio.isEmpty()) ? 1 : 0;
 			item.rank = !f.has_video
 			  ? (music ? 300000 : 100000) + order
@@ -7443,13 +7462,13 @@ void main_window::list_resolved_media(const QString &host,
 			item.headers   = f.headers;
 			item.file_name = ytdlp_resolver::file_name_for(m, f.ext, r.artist,
 			                                               r.title);
-			// What it carries, said in the row: a picture-only download is
-			// silent, and the label is the only place that is visible
-			// before it is fetched.
+			// What it carries, said in the row: a picture with nothing to
+			// pair is silent whether watched or saved, and the label is the
+			// only place that is visible before it is fetched.
 			const QString carries = !f.has_video ? QStringLiteral(" · sound only")
 			  : f.has_audio ? QString()
 			  : item.audio.isEmpty() ? QStringLiteral(" · picture only")
-			  : QStringLiteral(" · picture only, Watch adds the sound");
+			  : QStringLiteral(" · picture only, the sound is added");
 			item.label     = QString("[%1] %2 %3%4%5")
 			                     .arg(kind, m.title.isEmpty() ? host : m.title,
 			                          f.height ? QString::number(f.height) + "p"

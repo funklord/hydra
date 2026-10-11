@@ -12,6 +12,7 @@
 #include <QHeaderView>
 #include <QLocale>
 #include <QEvent>
+#include <QFileInfo>
 #include <QLabel>
 #include <QPushButton>
 
@@ -57,7 +58,8 @@ bool can_fetch(const media_item &item, download_manager *dm, QString *why) {
 	}
 	for (download_source *s : dm->sources()) {
 		QString w;
-		if (s->accepts(item.url, &w))
+		if (item.known_media ? s->accepts_known_media(item.url, &w)
+		                     : s->accepts(item.url, &w))
 			return true;
 		if (why->isEmpty() && !w.isEmpty())
 			*why = w;
@@ -372,10 +374,25 @@ void media_dialog::save(const media_item &item) {
 	}
 
 	QString error;
+	// A picture-only stream with a sound to pair: both fetched and combined,
+	// because either alone is half of what the person asked to save.
+	const bool pair = item.has_video && !item.has_audio && !item.audio.isEmpty();
+	const download_manager::pair_names names = download_manager::names_for_pair(
+	    item.file_name.isEmpty() ? QFileInfo(item.url.path()).fileName()
+	                             : item.file_name,
+	    item.audio_file_name.isEmpty() ? QFileInfo(item.audio.path()).fileName()
+	                                   : item.audio_file_name);
 	// A learned stream carries the headers its CDN checks; without them the
 	// download is refused where Watch would have succeeded.
-	const int id = m_downloads->enqueue(item.url, m_node_id, &error, item.headers,
-	                                    item.file_name);
+	const int id = pair
+	  ? m_downloads->enqueue_pair(item.url, item.audio, m_node_id, &error,
+	                              item.headers, names.picture, names.sound,
+	                              names.combined,
+	                              { item.known_media, item.chunk_size },
+	                              { item.known_media, item.audio_chunk_size })
+	  : m_downloads->enqueue(item.url, m_node_id, &error, item.headers,
+	                         item.file_name,
+	                         { item.known_media, item.chunk_size });
 	// Where it lands, as the user will actually find it.
 	//
 	// On Android naming the directory is worse than useless: Qt downloads into

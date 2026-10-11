@@ -71,6 +71,24 @@ bool http_download_source::accepts(const QUrl &url, QString *why_not) const {
 	return true;
 }
 
+bool http_download_source::accepts_known_media(const QUrl &url,
+                                               QString *why_not) const {
+	// Only the shape test is waived. A manifest is still the playlist text,
+	// whoever vouches for it, and goes to the assembler instead.
+	QString why;
+	if (accepts(url, &why))
+		return true;
+	const QString scheme = url.scheme().toLower();
+	bool ignored = false;
+	const media_kind kind = media_detector::classify(url, &ignored);
+	if ((scheme == "http" || scheme == "https") && kind != media_kind::hls &&
+	    kind != media_kind::dash)
+		return true;
+	if (why_not)
+		*why_not = why;
+	return false;
+}
+
 bool http_download_source::start(const download_request &req, QString *error) {
 	if (m_transfers.contains(req.id)) {
 		if (error)
@@ -93,26 +111,14 @@ bool http_download_source::start(const download_request &req, QString *error) {
 	t->id   = req.id;
 	t->path = QDir(req.directory).filePath(name);
 
-	QNetworkRequest net_req(req.url);
-
-	// Whatever this address needs to be served at all. Range is ours and is
-	// set below, so a caller cannot overwrite the resume offset by naming it.
-	for (auto it = req.headers.cbegin(); it != req.headers.cend(); ++it) {
-		if (it.key().isEmpty() || it.value().isEmpty())
-			continue;
-		if (it.key().compare("Range", Qt::CaseInsensitive) == 0)
-			continue;
-		net_req.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
-	}
+	t->url     = req.url;
+	t->headers = req.headers;
+	t->chunk   = req.chunk_size;
 
 	// Resume: if a partial file is already there, ask for the rest.
 	const QFileInfo fi(t->path);
 	const qint64 have = fi.exists() ? fi.size() : 0;
-	if (have > 0) {
-		net_req.setRawHeader("Range",
-		                      QByteArray("bytes=") + QByteArray::number(have) + "-");
-		t->base = have;
-	}
+	t->base = have;
 
 	t->file = new QFile(t->path);
 	if (!t->file->open(have > 0 ? (QIODevice::Append | QIODevice::WriteOnly)
@@ -124,9 +130,8 @@ bool http_download_source::start(const download_request &req, QString *error) {
 		return false;
 	}
 
-	t->reply = m_net->get(net_req);
 	m_transfers.insert(t->id, t);
-	wire(t);
+	issue(t);
 
 	download_progress p;
 	p.state    = download_state::running;
@@ -134,6 +139,34 @@ bool http_download_source::start(const download_request &req, QString *error) {
 	p.received = t->base;
 	emit progressed(t->id, p);
 	return true;
+}
+
+void http_download_source::issue(transfer *t) {
+	QNetworkRequest net_req(t->url);
+
+	// Whatever this address needs to be served at all. Range is ours and is
+	// set below, so a caller cannot overwrite the resume offset by naming it.
+	for (auto it = t->headers.cbegin(); it != t->headers.cend(); ++it) {
+		if (it.key().isEmpty() || it.value().isEmpty())
+			continue;
+		if (it.key().compare("Range", Qt::CaseInsensitive) == 0)
+			continue;
+		net_req.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
+	}
+
+	// From whatever is on disk: a resume, or the next range of a chunked one.
+	const qint64 from = t->base;
+	if (t->chunk > 0)
+		net_req.setRawHeader("Range", QByteArray("bytes=") + QByteArray::number(from)
+		                                  + '-' + QByteArray::number(from + t->chunk - 1));
+	else if (from > 0)
+		net_req.setRawHeader("Range",
+		                      QByteArray("bytes=") + QByteArray::number(from) + "-");
+
+	t->range_checked = false;
+	t->code          = 0;
+	t->reply         = m_net->get(net_req);
+	wire(t);
 }
 
 void http_download_source::wire(transfer *t) {
@@ -154,12 +187,31 @@ void http_download_source::wire(transfer *t) {
 	// resume is abandoned and the file starts again from nothing.
 	const auto honour_range = [this, reply, id] {
 		transfer *t = find(id);
-		if (!t || !t->file || t->base == 0 || t->range_checked)
+		if (!t || !t->file || t->range_checked)
 			return;
-		t->range_checked = true;
 		const int code =
 		  reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-		if (code == 206)
+		// No headers yet, or a redirect's: Qt follows the hop, and the status
+		// that answers the question is the one after it. **Reading the hop's
+		// was a fault twice over**: a chunked fetch from YouTube, which
+		// redirects every stream, saw 302, decided no range was coming and
+		// stopped after the first 10 MB; and a resume through a redirect
+		// emptied the partial file and appended the rest to nothing.
+		if (!code || (code >= 300 && code < 400))
+			return;
+		t->range_checked = true;
+		t->code          = code;
+		// "bytes 0-10485759/59881660": the whole size, which a ranged reply's
+		// own length does not say.
+		const QByteArray range = reply->rawHeader("Content-Range");
+		const int slash = range.lastIndexOf('/');
+		if (code == 206 && slash >= 0) {
+			bool ok = false;
+			const qint64 whole = range.mid(slash + 1).trimmed().toLongLong(&ok);
+			if (ok && whole > 0)
+				t->whole = whole;
+		}
+		if (code == 206 || t->base == 0)
 			return;
 		t->file->seek(0);
 		t->file->resize(0);
@@ -194,7 +246,7 @@ void http_download_source::wire(transfer *t) {
 		// With a resumed request the server reports only the remaining bytes,
 		// so add back what was already on disk.
 		Q_UNUSED(got)
-		p.total = (total > 0) ? total + t->base : -1;
+		p.total = t->whole > 0 ? t->whole : (total > 0) ? total + t->base : -1;
 		emit progressed(id, p);
 	});
 
@@ -207,12 +259,31 @@ void http_download_source::wire(transfer *t) {
 			honour_range();
 			t->file->write(reply->readAll());
 		}
-		if (t->cancelled)
+		if (t->cancelled) {
 			teardown(t, false, "Cancelled.");
-		else if (reply->error() != QNetworkReply::NoError)
+		} else if (reply->error() != QNetworkReply::NoError) {
 			teardown(t, false, reply->errorString());
-		else
+		} else if (t->chunk > 0 && t->code == 206 && t->whole > 0 && t->file &&
+		           t->file->flush() && t->file->size() < t->whole) {
+			// **The next range**, unless this one brought nothing: a server
+			// that answers 206 with no bytes would otherwise be asked for
+			// ever.
+			const qint64 had = t->base;
+			t->base = t->file->size();
+			if (t->base <= had)
+				teardown(t, false, QString("The server stopped sending at %1 of "
+				                           "%2 bytes.").arg(t->base).arg(t->whole));
+			else
+				issue(t);
+		} else if (t->whole > 0 && t->file && t->file->flush() &&
+		           t->file->size() != t->whole) {
+			// A size the server stated and the file does not have is not a
+			// finished download, whatever the last reply said.
+			teardown(t, false, QString("Ended at %1 of %2 bytes.")
+			                       .arg(t->file->size()).arg(t->whole));
+		} else {
 			teardown(t, true, QString());
+		}
 	});
 }
 

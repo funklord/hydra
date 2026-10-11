@@ -38279,3 +38279,54 @@ proxy URL, and was not reproduced in the three runs after it. That failure
 is unexplained, not attributed. The direct YouTube URLs answer `302` to
 another googlevideo host, which the proxy follows; a bounded fetch through
 it returned `206` for both streams.
+
+## Download of a YouTube stream: four faults, one behind the other
+
+Found 2026-10-11, after Watch was fixed, by pressing Download on the
+Groovix set through `try_media_reading` (`HYDRA_TRY_SAVE=1`). Each fault
+hid the next one.
+
+1. **Every Download on a yt-dlp row was disabled.** The HTTP source judges
+   an address by its shape, and YouTube's are `/videoplayback?...`, which
+   does not look like a file. Its tooltip was wrong too: it showed "a page
+   download is the page's to begin", from the engine source. That source
+   accepts nothing and is asked first, so its reason hid the real one. It
+   now gives no reason. A source is asked `accepts_known_media` for an
+   address yt-dlp has vouched for (`download_hints::known_media`). That
+   waives the shape test only; a manifest is still refused.
+2. **YouTube throttles one open-ended request to about 32 KB/s.**
+   Measured: 1.9 MB in 60 s, against a 10 MB range in 1.1 s. yt-dlp states
+   the size it fetches in, `downloader_options.http_chunk_size`, 10 MB on
+   every direct YouTube stream. It now travels from `media_format` to
+   `download_request::chunk_size`, and the HTTP source asks for one range
+   at a time. It learns the whole size from `Content-Range` and stops with
+   an error if a range brings nothing.
+3. **The status was read at the redirect hop.** Every YouTube stream
+   answers 302 first. Qt follows the redirect, but `honour_range` saw the
+   302, decided no range was coming, and the halves stopped at exactly
+   10,485,760 bytes each. **The same mistake was already in resume**: a
+   resume through a redirect emptied the partial file and appended the rest
+   to nothing. Redirect statuses are now skipped. A download that ends
+   short of a size the server stated fails, instead of reporting done.
+4. **Saving the picture alone is silent.** Download on a picture-only row
+   now fetches both halves (`enqueue_pair`). They are named `.picture.` and
+   `.sound.` so a half left by an interrupted run says what it is. ffmpeg
+   then combines them without re-encoding, into the container both fit:
+   MP4 for H.264 with AAC, WebM for VP9 with Opus, Matroska otherwise. The
+   sound is chosen from the same family as the picture, so the common
+   cases need no Matroska. The picture's row stays open until the combine
+   is finished and ends as the combined file; the sound's row is removed
+   with its file. A failed sound leaves the picture, and the row says so.
+
+**Measured live**: the 144p picture and its sound arrived at exactly
+yt-dlp's stated sizes (41,679,727 and 59,881,660 bytes). They were combined
+into one MP4 of 1:01:40 with a picture and a sound, and nothing else was
+left. The first live run had combined 10 MB of each half and passed its
+checks, so the driver now also requires a duration longer than a few
+minutes.
+
+Tests: `test_seam` gained a local server that honours ranges and can
+redirect every request, as YouTube does, or stop sending. With the redirect
+fix removed, the redirect test fails with one range, which is the live
+fault. A real combine runs on one-second media made by ffmpeg. With
+`settle_pair` disabled, six checks fail.

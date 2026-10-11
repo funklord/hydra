@@ -361,6 +361,8 @@ resolved_media ytdlp_resolver::parse(const QByteArray &json) {
 		const QJsonObject hs = f.value("http_headers").toObject();
 		for (auto it = hs.begin(); it != hs.end(); ++it)
 			m.headers.insert(it.key(), it.value().toString());
+		m.chunk_size = qint64(f.value("downloader_options").toObject()
+		                         .value("http_chunk_size").toDouble());
 		return m;
 	};
 

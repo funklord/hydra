@@ -54,6 +54,14 @@ struct media_item {
 	// stream of the same answer -- so Watch plays a video rather than a
 	// silent one. Empty where there is nothing to pair.
 	QUrl audio;
+	QString audio_file_name;   // what that sound is saved as, with its extension
+	// yt-dlp said this is a media file. Its address need not look like one,
+	// and a download source is asked accordingly.
+	bool known_media = false;
+	// Fetch in ranges of this size, and the sound's likewise; 0 for one
+	// request. See `download_request::chunk_size`.
+	qint64 chunk_size       = 0;
+	qint64 audio_chunk_size = 0;
 	// Where an authoritative answer places it, highest first; 0 for anything
 	// detected, which keeps the hit-count order below the ranked rows.
 	int rank = 0;

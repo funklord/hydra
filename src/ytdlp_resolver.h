@@ -23,6 +23,9 @@ struct media_format {
 	bool    has_video = true;
 	bool    has_audio = true;
 	QMap<QString, QString> headers;   // what the CDN expects to see (sec 11.3)
+	// The range size yt-dlp itself fetches it in, 0 for one request: YouTube
+	// throttles an open-ended request to a crawl.
+	qint64  chunk_size = 0;
 };
 
 struct resolved_media {

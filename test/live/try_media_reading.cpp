@@ -4,6 +4,10 @@
 //
 //     QT_QPA_PLATFORM=offscreen ./test/build-make/try_media_reading [url]
 //
+// HYDRA_TRY_SAVE=1 presses Download on the smallest picture-only file row
+// instead, which fetches its sound too, and waits up to ten minutes for the
+// two to be combined into one file under the scratch HOME.
+//
 // HYDRA_TRY_WATCH=1 also presses Watch on the first row, and =picture on the
 // first row that plays a picture, then stays up 40 s so the player can fetch
 // through this process's proxy. It starts a real player: put a wrapper named
@@ -32,7 +36,9 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QProcess>
 #include <QPushButton>
+#include <QStandardPaths>
 #include <QSettings>
 #include <QStatusBar>
 #include <QTemporaryDir>
@@ -86,6 +92,8 @@ int main(int argc, char *argv[]) {
 	qputenv("XDG_CONFIG_HOME", base + "/config");
 	qputenv("XDG_DATA_HOME", base + "/data");
 	qputenv("XDG_CACHE_HOME", base + "/cache");
+	// Downloads land under HOME; a real one is not this driver's to fill.
+	qputenv("HOME", base);
 	QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 	QApplication app(argc, argv);
 	const QString url = argc > 1 ? QString::fromLocal8Bit(argv[1])
@@ -141,6 +149,32 @@ int main(int argc, char *argv[]) {
 					for (int i = 0; i < qMin(3, list->topLevelItemCount()); ++i)
 						std::printf("  row %d: %s\n", i,
 						            qPrintable(list->topLevelItem(i)->text(1)));
+				if (qEnvironmentVariableIsSet("HYDRA_TRY_SAVE"))
+					if (auto *list = dlg->findChild<QTreeWidget *>()) {
+						QPushButton *last = nullptr;
+						QString label;
+						for (int i = 0; i < list->topLevelItemCount(); ++i) {
+							QTreeWidgetItem *row = list->topLevelItem(i);
+							if (row->text(0) != "File" ||
+							    !row->text(1).contains("the sound is added"))
+								continue;
+							if (QWidget *cell = list->itemWidget(row, 3))
+								for (QPushButton *b : cell->findChildren<QPushButton *>())
+									if (b->text().contains("Download")) {
+										last  = b;
+										label = row->text(1);
+									}
+						}
+						if (last) {
+							std::printf("  pressing Download on: %s\n  enabled=%d tip=%s\n",
+							            qPrintable(label), int(last->isEnabled()),
+							            qPrintable(last->toolTip()));
+							last->click();
+							for (QLabel *l : dlg->findChildren<QLabel *>())
+								if (!l->text().isEmpty())
+									std::printf("  label: %s\n", qPrintable(l->text().left(300)));
+						}
+					}
 				if (qEnvironmentVariableIsSet("HYDRA_TRY_WATCH"))
 					// =picture presses the first row that plays a picture.
 					for (QPushButton *b : watch_buttons(dlg,
@@ -198,6 +232,45 @@ int main(int argc, char *argv[]) {
 		check(!r.file_name.isEmpty() && r.file_name.contains(r.id),
 		       "and the file name carries the video's id");
 	}
+	if (qEnvironmentVariableIsSet("HYDRA_TRY_SAVE")) {
+		// Done when one file is there that is neither half.
+		const QDir dl(QString::fromLocal8Bit(base) + "/Downloads");
+		QString combined;
+		// Thirty seconds with no Downloads folder is a download that never
+		// started, and not worth waiting ten minutes to report.
+		for (int i = 0; i < 6000 && combined.isEmpty() && (i < 300 || dl.exists());
+		     ++i) {
+			spin(100);
+			for (const QFileInfo &fi : dl.entryInfoList(QDir::Files))
+				if (!fi.fileName().contains(".picture.") &&
+				    !fi.fileName().contains(".sound.") && fi.size() > 0)
+					combined = fi.absoluteFilePath();
+		}
+		for (const QFileInfo &fi : dl.entryInfoList(QDir::Files))
+			std::printf("  in Downloads: %s (%lld bytes)\n",
+			            qPrintable(fi.fileName()), qint64(fi.size()));
+		check(!combined.isEmpty(), "the pair is combined into one file");
+		if (!combined.isEmpty()) {
+			spin(2000);   // the halves are removed after the file appears
+			QProcess probe;
+			probe.start(QStandardPaths::findExecutable("ffmpeg"),
+			            { "-hide_banner", "-i", combined });
+			probe.waitForFinished(10000);
+			const QString said = QString::fromLocal8Bit(probe.readAllStandardError());
+			check(said.contains("Video:") && said.contains("Audio:"),
+			      "holding a picture and a sound");
+			// Whole, not the first range of each: the first version combined
+			// 10 MB of each half and passed both checks above.
+			const int at = said.indexOf("Duration: ");
+			std::printf("  %s\n", qPrintable(said.mid(at, 22)));
+			check(at >= 0 && !said.mid(at + 10, 8).startsWith("00:0"),
+			      "and runs longer than a few minutes, so neither half stopped short");
+			for (const QFileInfo &fi : dl.entryInfoList(QDir::Files))
+				std::printf("  left: %s\n", qPrintable(fi.fileName()));
+			check(dl.entryList(QDir::Files).size() == 1, "and nothing else is left");
+		}
+	}
+
 	// The player fetches through this process's proxy; stay up long enough
 	// for it to show whether it plays.
 	if (qEnvironmentVariableIsSet("HYDRA_TRY_WATCH"))

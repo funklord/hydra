@@ -167,9 +167,9 @@ OBJS_test_assembly = \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_mse_tap.o \
-	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/app/policy_engine.o \
 	$(BUILD_DIR)/app/policy.o \
@@ -225,7 +225,9 @@ OBJS_test_dlheaders = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/policy_engine.o \
-	$(BUILD_DIR)/app/policy.o
+	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o
 
 OBJS_test_empty_state = \
 	$(BUILD_DIR)/app/empty_state.o \
@@ -366,6 +368,8 @@ OBJS_test_pick = \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o
 
 OBJS_test_picker = \
@@ -397,6 +401,8 @@ OBJS_test_probe_ui = \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
 	$(BUILD_DIR)/app/scriptlets.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
 	$(BUILD_DIR)/app/policy_engine.o \
@@ -467,6 +473,8 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/app/credential_store.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/kiosk_controller.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/scriptlets.o \
@@ -548,8 +556,6 @@ OBJS_test_rotation = \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -576,7 +582,9 @@ OBJS_test_seam = \
 	$(BUILD_DIR)/moc/moc_policy_engine.o \
 	$(BUILD_DIR)/moc/moc_media_detector.o \
 	$(BUILD_DIR)/app/policy_engine.o \
-	$(BUILD_DIR)/app/policy.o
+	$(BUILD_DIR)/app/policy.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o
 
 OBJS_test_send_gate = \
 	$(BUILD_DIR)/app/ollama_provider.o \
@@ -611,6 +619,8 @@ OBJS_test_settings = \
 	$(BUILD_DIR)/moc/moc_ollama_provider.o \
 	$(BUILD_DIR)/moc/moc_cosmetic_filters.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
@@ -675,7 +685,9 @@ OBJS_test_torrent = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/app/torrent_download_source.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
-	$(BUILD_DIR)/moc/moc_torrent_download_source.o
+	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o
 
 OBJS_test_tree = \
 	$(BUILD_DIR)/app/tree_outline.o \
@@ -695,6 +707,8 @@ OBJS_test_watch = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_local_proxy.o
 
 OBJS_test_ytdlp = \
@@ -837,9 +851,9 @@ OBJS_try_adblock_fix = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1007,9 +1021,9 @@ OBJS_try_annoyed = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1077,6 +1091,8 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1166,8 +1182,6 @@ OBJS_try_autofill = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1223,6 +1237,8 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1317,8 +1333,6 @@ OBJS_try_blob_cost = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1352,6 +1366,8 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/download_manager.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1464,8 +1480,6 @@ OBJS_try_cancel = \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1504,6 +1518,8 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/site_rules.o \
 	$(BUILD_DIR)/app/download_manager.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1616,8 +1632,6 @@ OBJS_try_capture = \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1682,6 +1696,8 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -1773,8 +1789,6 @@ OBJS_try_chrome = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -1919,9 +1933,9 @@ OBJS_try_confirm = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2071,9 +2085,9 @@ OBJS_try_consent = \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2223,9 +2237,9 @@ OBJS_try_cookies = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2376,9 +2390,9 @@ OBJS_try_delete = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2416,6 +2430,8 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -2528,8 +2544,6 @@ OBJS_try_downloads = \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2680,9 +2694,9 @@ OBJS_try_evolve_confirm = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2832,9 +2846,9 @@ OBJS_try_extract = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -2983,9 +2997,9 @@ OBJS_try_files = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3137,9 +3151,9 @@ OBJS_try_filters = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3193,6 +3207,8 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_ai_provider.o \
 	$(BUILD_DIR)/moc/moc_claude_provider.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -3292,8 +3308,6 @@ OBJS_try_flicker = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3351,6 +3365,8 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_theme.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -3445,8 +3461,6 @@ OBJS_try_forget = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3593,9 +3607,9 @@ OBJS_try_handoff = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3897,9 +3911,9 @@ OBJS_try_investigate = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -3968,6 +3982,8 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/tab_tree_view.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
@@ -4062,8 +4078,6 @@ OBJS_try_lock = \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -4133,6 +4147,8 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
@@ -4214,8 +4230,6 @@ OBJS_try_look = \
 	$(BUILD_DIR)/moc/moc_extractor_dialog.o \
 	$(BUILD_DIR)/moc/moc_stream_probe.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -4360,9 +4374,9 @@ OBJS_try_media = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -4521,9 +4535,9 @@ OBJS_try_media_reading = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -4738,6 +4752,8 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -4833,8 +4849,6 @@ OBJS_try_navigate = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -4981,9 +4995,9 @@ OBJS_try_notify = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -5044,6 +5058,8 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -5139,8 +5155,6 @@ OBJS_try_pagetools = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -5302,9 +5316,9 @@ OBJS_try_permissions = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -5394,6 +5408,8 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/empty_state.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
@@ -5463,8 +5479,6 @@ OBJS_try_phone = \
 	$(BUILD_DIR)/app/keepass_protocol.o \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -5760,9 +5774,9 @@ OBJS_try_scriptlets = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -5922,9 +5936,9 @@ OBJS_try_settings = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -5958,6 +5972,8 @@ OBJS_try_settings_ui = \
 	$(BUILD_DIR)/moc/moc_settings_dialog.o \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_theme.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/app/flow_layout.o \
 	$(BUILD_DIR)/app/model_tally.o \
@@ -6012,6 +6028,8 @@ OBJS_try_share = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -6111,8 +6129,6 @@ OBJS_try_share = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -6258,9 +6274,9 @@ OBJS_try_subframe = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -6322,6 +6338,8 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_download_manager.o \
 	$(BUILD_DIR)/moc/moc_download_source.o \
 	$(BUILD_DIR)/moc/moc_torrent_download_source.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -6416,8 +6434,6 @@ OBJS_try_tabswitch = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -6562,9 +6578,9 @@ OBJS_try_tap = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -6714,9 +6730,9 @@ OBJS_try_taprow = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -6755,6 +6771,8 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_web_view_backend.o \
 	$(BUILD_DIR)/app/policy.o \
 	$(BUILD_DIR)/app/site_rules.o \
+	$(BUILD_DIR)/moc/moc_media_remux.o \
+	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/app/filter_list.o \
 	$(BUILD_DIR)/app/address_input.o \
 	$(BUILD_DIR)/app/scheme_rules.o \
@@ -6867,8 +6885,6 @@ OBJS_try_watch = \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
 	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
-	$(BUILD_DIR)/moc/moc_media_remux.o \
-	$(BUILD_DIR)/app/media_remux.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \
@@ -7018,9 +7034,9 @@ OBJS_try_ytdlp = \
 	$(BUILD_DIR)/moc/moc_downloads_dialog.o \
 	$(BUILD_DIR)/moc/moc_flow_layout.o \
 	$(BUILD_DIR)/moc/moc_empty_state.o \
-	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_media_remux.o \
 	$(BUILD_DIR)/app/media_remux.o \
+	$(BUILD_DIR)/moc/moc_tree_sort_proxy.o \
 	$(BUILD_DIR)/moc/moc_hls_assembler.o \
 	$(BUILD_DIR)/app/hls_assembler.o \
 	$(BUILD_DIR)/app/hls_playlist.o \

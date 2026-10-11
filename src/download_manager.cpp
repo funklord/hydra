@@ -1,4 +1,7 @@
 #include "download_manager.h"
+#include "media_remux.h"
+
+#include <QDir>
 
 #include <QStandardPaths>
 #include <QFile>
@@ -64,10 +67,117 @@ void download_manager::set_consent(const QString &source_id, bool granted) {
 	pump();
 }
 
+download_manager::pair_names
+download_manager::names_for_pair(const QString &picture_name,
+                                 const QString &sound_name) {
+	auto split = [](const QString &name, QString *stem, QString *ext) {
+		const int dot = name.lastIndexOf('.');
+		*stem = dot > 0 ? name.left(dot) : name;
+		*ext  = dot > 0 ? name.mid(dot + 1).toLower() : QString();
+	};
+	QString stem, picture_ext, sound_stem, sound_ext;
+	split(picture_name, &stem, &picture_ext);
+	split(sound_name, &sound_stem, &sound_ext);
+	// **The container both halves fit, unconverted.** H.264 with AAC is MP4's
+	// own pair and VP9 with Opus is WebM's; anything mixed goes to Matroska,
+	// which takes all of them. Chosen by extension because that is what
+	// yt-dlp reports, and a copy into the wrong container fails rather than
+	// converting -- which `media_remux` reports, keeping the picture.
+	QString combined_ext = QStringLiteral("mkv");
+	if (picture_ext == "mp4" && (sound_ext == "m4a" || sound_ext == "mp4"))
+		combined_ext = QStringLiteral("mp4");
+	else if (picture_ext == "webm" && sound_ext == "webm")
+		combined_ext = QStringLiteral("webm");
+	auto with = [](const QString &s, const QString &part, const QString &e) {
+		return e.isEmpty() ? s + part : s + part + '.' + e;
+	};
+	return { with(stem, ".picture", picture_ext),
+	         with(stem, ".sound", sound_ext),
+	         stem + '.' + combined_ext };
+}
+
+int download_manager::enqueue_pair(const QUrl &picture, const QUrl &sound,
+                                   const QString &node_id, QString *error,
+                                   const QMap<QString, QString> &headers,
+                                   const QString &picture_name,
+                                   const QString &sound_name,
+                                   const QString &combined_name,
+                                   const download_hints &picture_hints,
+                                   const download_hints &sound_hints) {
+	const int sound_id = enqueue(sound, node_id, error, headers, sound_name,
+	                             sound_hints);
+	if (!sound_id)
+		return 0;
+	const int picture_id = enqueue(picture, node_id, error, headers, picture_name,
+	                               picture_hints);
+	if (!picture_id) {
+		cancel(sound_id);
+		return 0;
+	}
+	if (download_job *s = find(sound_id))
+		s->picture_job = picture_id;
+	if (download_job *p = find(picture_id)) {
+		p->sound_job     = sound_id;
+		p->combined_name = combined_name;
+	}
+	return picture_id;
+}
+
+void download_manager::settle_pair(int picture_id) {
+	download_job *p = find(picture_id);
+	if (!p || !p->sound_job)
+		return;
+	const download_job *s = find(p->sound_job);
+	// Landed: its source has let go and it was held open rather than closed.
+	// Queued jobs are not live either, which is why the status is asked too.
+	const bool landed = p->status == download_state::running &&
+	                    !m_live.contains(p->id);
+	// The picture is held open until this decides, so it is the one row that
+	// says what happened to the pair.
+	if (!s || s->status == download_state::failed ||
+	    s->status == download_state::cancelled) {
+		if (landed) {
+			p->status = download_state::done;
+			p->detail = QString("Saved without its sound: the sound %1.")
+			                .arg(s && s->status == download_state::failed
+			                       ? "failed (" + s->error + ")"
+			                       : QStringLiteral("was cancelled"));
+		}
+		return;
+	}
+	if (!s->complete() || !landed || p->detail.startsWith("Combining"))
+		return;
+	const QString out = QDir(QFileInfo(p->path).absolutePath())
+	                      .filePath(p->combined_name);
+	p->detail = QStringLiteral("Combining picture and sound…");
+	const int sound_id = s->id;
+	auto *mux = new media_remux(this);
+	connect(mux, &media_remux::finished, this,
+	         [this, mux, picture_id, sound_id](bool ok, const QString &path,
+	                                           const QString &message) {
+		mux->deleteLater();
+		if (download_job *p = find(picture_id)) {
+			p->status = download_state::done;
+			p->path   = path;
+			p->detail = ok ? QStringLiteral("Picture and sound, combined.")
+			               : message;
+		}
+		// Its file is inside the combined one now, and a row pointing at a
+		// file that is gone is a row nobody can act on.
+		if (ok)
+			forget(sound_id);
+		emit changed();
+		persist_history();
+	});
+	mux->start_mux(p->path, s->path, out);
+	emit changed();
+}
+
 int download_manager::enqueue(const QUrl &url, const QString &node_id,
                                QString *error,
                                const QMap<QString, QString> &headers,
-                               const QString &file_name) {
+                               const QString &file_name,
+                               const download_hints &hints) {
 	// **The same address twice is one download, not two.**
 	//
 	// Reported from use: clicking a magnet link sometimes produced two rows
@@ -97,7 +207,8 @@ int download_manager::enqueue(const QUrl &url, const QString &node_id,
 	QString first_reason;
 	for (download_source *s : m_sources) {
 		QString why_not;
-		if (s->accepts(url, &why_not)) {
+		if (hints.known_media ? s->accepts_known_media(url, &why_not)
+		                : s->accepts(url, &why_not)) {
 			chosen = s;
 			break;
 		}
@@ -123,6 +234,7 @@ int download_manager::enqueue(const QUrl &url, const QString &node_id,
 	job.public_participation = caps.public_participation;
 	job.headers              = headers;
 	job.file_name            = file_name;
+	job.chunk_size           = hints.chunk_size;
 
 	m_jobs.push_back(job);
 	emit changed();
@@ -199,6 +311,7 @@ void download_manager::sweep() {
 		req.node_id   = j.node_id;
 		req.headers   = j.headers;
 		req.file_name = j.file_name;
+		req.chunk_size = j.chunk_size;
 
 		QString error;
 		m_live.insert(j.id);
@@ -247,12 +360,21 @@ void download_manager::on_finished(int id, bool ok, const QString &message) {
 			// so cancelling a capture showed as "Complete". HTTP never exposed
 			// it because aborting a reply reports failure; a capture reports
 			// success whenever any bytes were written.
+		} else if (ok && j->sound_job) {
+			// Not done until its sound is with it.
+			j->status = download_state::running;
+			j->detail = QStringLiteral("Waiting for its sound…");
 		} else if (ok) {
 			j->status = download_state::done;
 		} else {
 			j->status = download_state::failed;
 			j->error  = message;
 		}
+	}
+	if (const download_job *j = find(id)) {
+		const int picture = j->sound_job ? j->id : j->picture_job;
+		if (picture)
+			settle_pair(picture);
 	}
 	emit changed();
 	persist_history();
@@ -263,6 +385,10 @@ void download_manager::cancel(int id) {
 	download_job *j = find(id);
 	if (!j || j->terminal())
 		return;
+	// Half a pair is not wanted without the other half.
+	if (j->sound_job)
+		cancel(j->sound_job);
+	j = find(id);   // the list is unchanged, but re-asked after a call that emits
 	if (m_live.contains(id)) {
 		j->status = download_state::cancelled;
 		if (download_source *s = source_by_id(j->source_id))

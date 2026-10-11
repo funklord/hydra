@@ -138,6 +138,20 @@ struct download_request {
 	// and the source still keeps it inside `directory`. Empty: the source
 	// names it from the url, as before.
 	QString file_name;
+
+	// Fetch in ranges of this many bytes, one after another; 0 for one
+	// request. yt-dlp names it per stream (`http_chunk_size`), because
+	// YouTube throttles a single open-ended request to about 32 KB/s and
+	// answers a 10 MB range in a second -- measured 2026-10-11.
+	qint64 chunk_size = 0;
+};
+
+// What the caller knows about an address that its shape does not say.
+struct download_hints {
+	// yt-dlp said it is a media file: sources are asked
+	// `accepts_known_media` rather than judging it by its shape.
+	bool   known_media = false;
+	qint64 chunk_size  = 0;   // as `download_request::chunk_size`
 };
 
 // A source's report on a job. Fields left at their defaults mean "unchanged",
@@ -167,6 +181,15 @@ public:
 	// because the knowledge does: only the HTTP source knows that saving an
 	// HLS manifest would write the playlist text and call it a video.
 	virtual bool accepts(const QUrl &url, QString *why_not = nullptr) const = 0;
+
+	// The same, for an address something authoritative -- yt-dlp -- has said
+	// is a media file. Its shape need not look like one: YouTube's are
+	// `/videoplayback?...`, which `accepts` refuses by shape, and every
+	// Download button on a yt-dlp row was disabled for it.
+	virtual bool accepts_known_media(const QUrl &url,
+	                                 QString *why_not = nullptr) const {
+		return accepts(url, why_not);
+	}
 
 	// Begin. Returns false and sets `error` if the job could not be started at
 	// all; anything that fails later is reported through finished().

@@ -20,12 +20,21 @@ struct download_job {
 	QString     detail;         // source's own words: "fetching metadata"...
 	QMap<QString, QString> headers;   // what this address needs sent with it
 	QString     file_name;            // what to save as; empty: from the url
+	qint64      chunk_size = 0;       // as `download_request::chunk_size`
 	QString     error;
 	download_state status = download_state::queued;
 
 	// Copied from the source's capabilities at enqueue time so the UI can mark
 	// the row without asking what transport this is (sec 11.4).
 	bool public_participation = false;
+
+	// **A picture and its sound, fetched as two jobs and saved as one file.**
+	// YouTube serves almost every quality as picture alone or sound alone, so
+	// a download of either is half a programme. The picture's job names the
+	// sound's and what the two become; it stays open until they are combined.
+	int     sound_job   = 0;    // on a picture: the job fetching its sound
+	int     picture_job = 0;    // on a sound: the picture it is fetched for
+	QString combined_name;      // on a picture: the file the two become
 
 	bool complete() const { return is_complete(status); }
 	bool terminal() const { return is_terminal(status); }
@@ -75,9 +84,32 @@ public:
 	// `headers` travel with the request to whichever source takes it -- what a
 	// CDN wants to see before it will serve a stream (sec 11.3).
 	// `file_name`, when given, is what the file is saved as.
+	// A picture-only stream and the sound to go with it: both fetched, then
+	// combined by ffmpeg into `combined_name` without re-encoding, and the
+	// halves removed. Returns the picture's job id, or 0 with `error`. Without
+	// ffmpeg the picture is kept and the job says it has no sound.
+	int enqueue_pair(const QUrl &picture, const QUrl &sound,
+	                  const QString &node_id, QString *error,
+	                  const QMap<QString, QString> &headers,
+	                  const QString &picture_name, const QString &sound_name,
+	                  const QString &combined_name,
+	                  const download_hints &picture_hints = {},
+	                  const download_hints &sound_hints = {});
+
+	// The names a pair is saved under, from the name the picture would have
+	// had alone: each half marked as a half, so a file left by an interrupted
+	// run says what it is, and the result in a container both fit.
+	struct pair_names {
+		QString picture, sound, combined;
+	};
+	static pair_names names_for_pair(const QString &picture_name,
+	                                 const QString &sound_name);
+
+	// `hints`: what the caller knows that the address does not say.
 	int enqueue(const QUrl &url, const QString &node_id, QString *error,
 	             const QMap<QString, QString> &headers = {},
-	             const QString &file_name = QString());
+	             const QString &file_name = QString(),
+	             const download_hints &hints = {});
 
 	// Register a job whose transport is *already* running.
 	//
@@ -150,6 +182,8 @@ private:
 	void on_progress(int id, const download_progress &p);
 	void on_finished(int id, bool ok, const QString &message);
 	void persist_history();
+	// Both halves of a pair are on disk: combine them. Either failed: say so.
+	void settle_pair(int picture_id);
 
 	QList<download_source *> m_sources;
 	QList<download_job>      m_jobs;
