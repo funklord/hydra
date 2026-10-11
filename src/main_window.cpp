@@ -7391,11 +7391,42 @@ void main_window::list_resolved_media(const QString &host,
 			saved_or_said(m_readings->save(m_readings_path), "the reading");
 	}
 	{
+		// **The sound to play beside a picture-only stream**: the last
+		// sound-only stream yt-dlp lists, since it lists worst first, and a
+		// direct file over a manifest, since every player seeks one.
+		QUrl best_audio;
+		bool best_direct = false;
+		for (const media_format &f : m.formats) {
+			if (f.has_video || !f.has_audio)
+				continue;
+			const bool direct = !f.protocol.startsWith("m3u8") &&
+			                    !f.protocol.startsWith("http_dash");
+			if (direct || !best_direct) {
+				best_audio  = f.url;
+				best_direct = direct;
+			}
+		}
+		// **Best first.** Picture with sound by height, a direct file before
+		// a manifest at the same height; sound alone after them -- or before
+		// them, for something read as music, where the sound is the point.
+		const bool music = r.what == media_reading::kind::music;
 		int added = 0;
+		int order = 0;
 		for (const media_format &f : m.formats) {
 			if (!f.has_video && !f.has_audio)
 				continue;
+			++order;
+			const bool direct = !f.protocol.startsWith("m3u8") &&
+			                    !f.protocol.startsWith("http_dash");
 			media_item item;
+			item.has_video = f.has_video;
+			item.has_audio = f.has_audio;
+			if (f.has_video && !f.has_audio)
+				item.audio = best_audio;
+			const int heard = (f.has_audio || !item.audio.isEmpty()) ? 1 : 0;
+			item.rank = !f.has_video
+			  ? (music ? 300000 : 100000) + order
+			  : 200000 + heard * 50000 + f.height * 4 + (direct ? 2 : 0);
 			// Trust yt-dlp's protocol rather than re-guessing from the URL --
 			// knowing this authoritatively is the entire point of asking it.
 			item.kind = (f.protocol.startsWith("m3u8")) ? media_kind::hls
@@ -7412,12 +7443,20 @@ void main_window::list_resolved_media(const QString &host,
 			item.headers   = f.headers;
 			item.file_name = ytdlp_resolver::file_name_for(m, f.ext, r.artist,
 			                                               r.title);
-			item.label     = QString("[%1] %2 %3%4")
+			// What it carries, said in the row: a picture-only download is
+			// silent, and the label is the only place that is visible
+			// before it is fetched.
+			const QString carries = !f.has_video ? QStringLiteral(" · sound only")
+			  : f.has_audio ? QString()
+			  : item.audio.isEmpty() ? QStringLiteral(" · picture only")
+			  : QStringLiteral(" · picture only, Watch adds the sound");
+			item.label     = QString("[%1] %2 %3%4%5")
 			                     .arg(kind, m.title.isEmpty() ? host : m.title,
 			                          f.height ? QString::number(f.height) + "p"
 			                                   : f.ext,
 			                          f.note.isEmpty() ? QString()
-			                                           : " · " + f.note);
+			                                           : " · " + f.note,
+			                          carries);
 			m_media->add_item(host, item);
 			++added;
 		}

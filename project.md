@@ -38240,3 +38240,42 @@ the reading was already on disk: the streams window that follows is modal,
 and its `exec()` held the driver's poll loop. Found by printing the status
 bar as it changed, which the driver now always does, and fixed by closing
 that window as it appears.
+
+## Watch played a silent picture, because YouTube splits nearly everything
+
+**Reported 2026-10-11**: "watch doesn't work", on the Groovix set. Of the
+45 streams yt-dlp offered, **one** carried picture and sound together --
+format 18, at 360p. Every other was picture alone or sound alone. The
+rows had no hits, so `items_for` ordered them by label, where "1080p"
+sorts first, and the top row was a picture-only HLS manifest: mpv opened
+it, showed `Video --vid=1 (vp9 1920x1080)`, and had no audio track at all.
+
+**Fixed in three places:**
+
+- **The sound is played beside the picture.** A picture-only row carries
+  the best sound-only stream of the same answer in `media_item::audio`
+  (the last yt-dlp lists, a direct file over a manifest), and Watch hands
+  it to the player through the proxy as `--audio-file` for mpv,
+  `--input-slave` for VLC and `-audiofile` for mplayer.
+  `player_launcher::arguments` builds these and is tested directly. ffplay
+  and SMPlayer cannot take a second input, and their Watch button says the
+  stream will be silent before it is pressed.
+- **A ranked answer orders itself.** `media_item::rank` sorts before
+  everything else in `items_for`. Detected items keep rank 0 and the old
+  order. yt-dlp's rows rank picture with sound by height, with a direct
+  file before a manifest. Sound-only rows go after them, or before them
+  when the reading says music.
+- **The row says what it carries**: "sound only", "picture only", or
+  "picture only, Watch adds the sound". The last matters for Download,
+  which still fetches the one stream: a picture-only download is silent,
+  and only the label says so in advance. Saving picture and sound as one
+  file is still to do.
+
+**Measured live, through the real proxy, with mpv muted**: a sound-only
+row played (`AO: alsa`). The 2160p picture row opened as `vp9 3840x2160`
+with the opus sound as `[default external]`, and played to the 15 s limit
+in three of four runs. The fourth failed with `Failed to open` on the
+proxy URL, and was not reproduced in the three runs after it. That failure
+is unexplained, not attributed. The direct YouTube URLs answer `302` to
+another googlevideo host, which the proxy follows; a bounded fetch through
+it returned `206` for both streams.

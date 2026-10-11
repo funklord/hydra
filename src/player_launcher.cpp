@@ -120,6 +120,16 @@ QString player_launcher::warning_for(const media_item &item) const {
 	const player_entry *e = entry(m_selected);
 	if (!e || !e->installed)
 		return "No external player found. Install mpv, VLC, or mplayer.";
+	// Said on the button, before the click: a silent video is otherwise
+	// discovered by watching one.
+	if (item.has_video && !item.has_audio) {
+		if (item.audio.isEmpty())
+			return "Picture only: this stream carries no sound.";
+		if (!takes_audio_beside(e->id))
+			return QString("Picture only: %1 cannot play the sound beside it, "
+			               "so it will be silent. mpv, VLC and mplayer can.")
+			    .arg(e->label);
+	}
 	if (!is_manifest(item) || e->native_streams)
 		return QString();
 
@@ -157,8 +167,55 @@ void player_launcher::set_custom_command(const QString &cmd) {
 	}
 }
 
+bool player_launcher::takes_audio_beside(const QString &id) {
+	return id == "mpv" || id == "vlc" || id == "mplayer" || id == "mplayer2";
+}
+
+QStringList player_launcher::arguments(const QString &id, const QString &custom,
+                                        const QString &target,
+                                        const QString &audio) {
+	QStringList args;
+	if (id == QLatin1String(custom_id())) {
+		QStringList parts = custom.split(QRegularExpression("\\s+"),
+		                                 Qt::SkipEmptyParts);
+		if (!parts.isEmpty())
+			parts.removeFirst();          // the program itself
+		bool substituted = false;
+		for (QString &a : parts) {
+			if (a.contains("%U")) {
+				a.replace("%U", target);
+				substituted = true;
+			}
+		}
+		if (!substituted)
+			parts << target;              // no placeholder: append, as meant
+		return parts;
+	}
+	const bool pair = !audio.isEmpty() && takes_audio_beside(id);
+	if (id == "mpv") {
+		args << "--force-window=yes";
+		if (pair)
+			args << "--audio-file=" + audio;
+		args << target;
+	} else if (id == "vlc") {
+		if (pair)
+			args << "--input-slave=" + audio;
+		args << target;
+	} else if (id == "ffplay") {
+		args << "-autoexit" << target;
+	} else if (id == "smplayer") {
+		args << target;
+	} else {   // mplayer / mplayer2
+		args << "-cache" << "8192";
+		if (pair)
+			args << "-audiofile" << audio;
+		args << target;
+	}
+	return args;
+}
+
 bool player_launcher::play(const media_item &item, QString *error,
-                            const QUrl &via) const {
+                            const QUrl &via, const QUrl &via_audio) const {
 	const player_entry *e = entry(m_selected);
 	if (!e || !e->installed) {
 		if (error)
@@ -174,33 +231,10 @@ bool player_launcher::play(const media_item &item, QString *error,
 		return android_intents::open_media(QUrl(target), media_mime_for(item.url),
 		                                    error);
 #endif
-	QStringList args;
-	if (e->id == QLatin1String(custom_id())) {
-		QStringList parts = m_custom.split(QRegularExpression("\\s+"),
-		                                    Qt::SkipEmptyParts);
-		if (!parts.isEmpty())
-			parts.removeFirst();          // the program itself
-		bool substituted = false;
-		for (QString &a : parts) {
-			if (a.contains("%U")) {
-				a.replace("%U", target);
-				substituted = true;
-			}
-		}
-		if (!substituted)
-			parts << target;              // no placeholder: append, as meant
-		args = parts;
-	} else if (e->id == "mpv") {
-		args << "--force-window=yes" << target;
-	} else if (e->id == "vlc") {
-		args << target;
-	} else if (e->id == "ffplay") {
-		args << "-autoexit" << target;
-	} else if (e->id == "smplayer") {
-		args << target;
-	} else {   // mplayer / mplayer2
-		args << "-cache" << "8192" << target;
-	}
+	const QString audio = item.audio.isEmpty() ? QString()
+	                    : via_audio.isValid() ? via_audio.toString()
+	                                          : item.audio.toString();
+	const QStringList args = arguments(e->id, m_custom, target, audio);
 
 	// Detached: a player outliving the browser is normal.
 	const bool ok = QProcess::startDetached(e->path, args);

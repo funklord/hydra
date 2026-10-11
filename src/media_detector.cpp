@@ -160,7 +160,12 @@ QList<media_item> media_detector::items_for(const QString &site_host) const {
 	QList<media_item> list = m_by_site.value(site_host);
 	// Manifests before direct files, and within manifests the most-fetched
 	// first -- that is the heuristic for "the stream the page is playing".
+	//
+	// **A ranked answer comes before all of that.** yt-dlp's rows have no hits,
+	// so they fell to the label tie-break, and "1080p" sorts first -- which put
+	// a picture-only stream at the top and made Watch play silence.
 	std::sort(list.begin(), list.end(), [](const media_item &a, const media_item &b) {
+		if (a.rank != b.rank) return a.rank > b.rank;
 		const bool am = (a.kind == media_kind::hls || a.kind == media_kind::dash);
 		const bool bm = (b.kind == media_kind::hls || b.kind == media_kind::dash);
 		if (am != bm) return am;

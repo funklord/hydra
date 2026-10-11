@@ -250,6 +250,52 @@ int main(int argc, char **argv) {
 		check(!still, "a command that resolves to nothing is not 'installed'");
 	}
 
+	// **Watch on YouTube played a silent picture**: nearly every quality is
+	// picture alone or sound alone, and the player was handed one stream.
+	section("a picture-only stream is played with its sound beside it");
+	{
+		const QString v = "http://127.0.0.1:9/v", a = "http://127.0.0.1:9/a";
+		check(player_launcher::arguments("mpv", QString(), v, a)
+		        == QStringList({"--force-window=yes", "--audio-file=" + a, v}),
+		      "mpv takes it as --audio-file");
+		check(player_launcher::arguments("vlc", QString(), v, a)
+		        == QStringList({"--input-slave=" + a, v}),
+		      "VLC as --input-slave");
+		check(player_launcher::arguments("mplayer", QString(), v, a)
+		        == QStringList({"-cache", "8192", "-audiofile", a, v}),
+		      "mplayer as -audiofile");
+		check(player_launcher::arguments("ffplay", QString(), v, a)
+		        == QStringList({"-autoexit", v}),
+		      "ffplay, which cannot, gets the picture alone");
+		check(player_launcher::arguments("mpv", QString(), v, QString())
+		        == QStringList({"--force-window=yes", v}),
+		      "and nothing is added when there is no sound to add");
+
+		player_launcher p;
+		media_item pic;
+		pic.url       = QUrl(v);
+		pic.has_audio = false;
+		const bool mpv = !p.installed().isEmpty() &&
+		                 player_launcher::takes_audio_beside(p.selected());
+		if (mpv)
+			check(p.warning_for(pic).contains("no sound"),
+			      QString("a picture with nothing to pair says so (%1)")
+			          .arg(p.warning_for(pic)));
+		pic.audio = QUrl(a);
+		if (mpv)
+			check(p.warning_for(pic).isEmpty(),
+			      "and says nothing once the sound is paired");
+		bool ffplay = false;
+		for (const player_entry &e : p.players())
+			if (e.id == "ffplay" && e.installed)
+				ffplay = true;
+		p.set_selected("ffplay");
+		if (ffplay)
+			check(p.warning_for(pic).contains("silent"),
+			      QString("a player that cannot pair says it will be silent (%1)")
+			          .arg(p.warning_for(pic)));
+	}
+
 	section("the AI backend choice");
 	{
 		check(settings_store::ai_mode() == ai_choice::automatic,

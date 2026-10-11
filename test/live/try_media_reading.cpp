@@ -4,6 +4,11 @@
 //
 //     QT_QPA_PLATFORM=offscreen ./test/build-make/try_media_reading [url]
 //
+// HYDRA_TRY_WATCH=1 also presses Watch on the first row, and =picture on the
+// first row that plays a picture, then stays up 40 s so the player can fetch
+// through this process's proxy. It starts a real player: put a wrapper named
+// mpv first on PATH that adds `--ao=null --vo=null`, or it plays aloud.
+//
 // **Why this exists**: the holder's first installed run of the reading never
 // reached it -- the installed build ran an old yt-dlp that YouTube refused --
 // while every offline suite passed, because each tested a piece and none the
@@ -23,14 +28,17 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
+#include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QSettings>
 #include <QStatusBar>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QTreeView>
+#include <QTreeWidget>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -49,6 +57,26 @@ static QAction *menu_action(QWidget *w, const QString &text) {
 		if (a->text().remove('&') == text)
 			return a;
 	return nullptr;
+}
+
+// The Watch buttons in row order, or only those of rows that play a picture.
+static QList<QPushButton *> watch_buttons(QDialog *dlg, bool picture) {
+	QList<QPushButton *> out;
+	auto *list = dlg->findChild<QTreeWidget *>();
+	if (!list)
+		return out;
+	for (int i = 0; i < list->topLevelItemCount(); ++i) {
+		QTreeWidgetItem *row = list->topLevelItem(i);
+		if (picture && row->text(1).contains("sound only"))
+			continue;
+		if (QWidget *cell = list->itemWidget(row, 3))
+			for (QPushButton *b : cell->findChildren<QPushButton *>())
+				if (b->text().contains("Watch")) {
+					b->setProperty("row", row->text(1));
+					out << b;
+				}
+	}
+	return out;
 }
 
 int main(int argc, char *argv[]) {
@@ -107,6 +135,27 @@ int main(int argc, char *argv[]) {
 				failure = box->text();
 				box->accept();
 			} else {
+				// HYDRA_TRY_WATCH presses the first row's Watch first, and
+				// says what the window answered.
+				if (auto *list = dlg->findChild<QTreeWidget *>())
+					for (int i = 0; i < qMin(3, list->topLevelItemCount()); ++i)
+						std::printf("  row %d: %s\n", i,
+						            qPrintable(list->topLevelItem(i)->text(1)));
+				if (qEnvironmentVariableIsSet("HYDRA_TRY_WATCH"))
+					// =picture presses the first row that plays a picture.
+					for (QPushButton *b : watch_buttons(dlg,
+					       qEnvironmentVariable("HYDRA_TRY_WATCH") == "picture"))
+						if (b->text().contains("Watch")) {
+							std::printf("  watch enabled=%d tip=%s\n", int(b->isEnabled()),
+							            qPrintable(b->toolTip()));
+							std::printf("  pressing Watch on: %s\n",
+							            qPrintable(b->property("row").toString()));
+							b->click();
+							for (QLabel *l : dlg->findChildren<QLabel *>())
+								if (!l->text().isEmpty())
+									std::printf("  label: %s\n", qPrintable(l->text().left(300)));
+							break;
+						}
 				std::printf("  closing: %s\n", qPrintable(dlg->windowTitle()));
 				dlg->reject();
 			}
@@ -149,6 +198,10 @@ int main(int argc, char *argv[]) {
 		check(!r.file_name.isEmpty() && r.file_name.contains(r.id),
 		       "and the file name carries the video's id");
 	}
+	// The player fetches through this process's proxy; stay up long enough
+	// for it to show whether it plays.
+	if (qEnvironmentVariableIsSet("HYDRA_TRY_WATCH"))
+		spin(40000);
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;
 }

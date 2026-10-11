@@ -90,8 +90,17 @@ public:
 	// context instead of a naked request (sec 11.3). Referer and User-Agent
 	// always; cookies only when a learned extractor named them, because
 	// nothing observes the engine's jar -- see `media_dialog::watch`.
+	// `via_audio` is `item.audio` as the player should fetch it, the same way.
 	bool play(const media_item &item, QString *error,
-	           const QUrl &via = QUrl()) const;
+	           const QUrl &via = QUrl(), const QUrl &via_audio = QUrl()) const;
+
+	// The arguments a player is started with, apart from the program: the
+	// stream, and the sound beside it where the player can take a second
+	// input. `custom` is the custom command line, used for that player only.
+	static QStringList arguments(const QString &id, const QString &custom,
+	                              const QString &target, const QString &audio);
+	// Whether that player can play `audio` beside the picture.
+	static bool takes_audio_beside(const QString &id);
 
 private:
 	const player_entry *entry(const QString &id) const;

@@ -343,6 +343,25 @@ int main(int argc, char **argv) {
 		check(manifest_hits == 2,
 		      QString("the two segments were credited to it, and nothing else "
 		               "was (hits=%1)").arg(manifest_hits));
+
+		// **A ranked answer orders itself.** yt-dlp's rows have no hits and
+		// fell to the label, where "1080p" sorts first: a picture-only
+		// manifest topped the list and Watch played silence.
+		media_item low, high;
+		low.kind  = media_kind::hls;
+		low.url   = QUrl("https://cdn.test/yt/1080.m3u8");
+		low.label = "[music] Set 1080p · picture only";
+		low.rank  = 1;
+		high.kind  = media_kind::direct;
+		high.url   = QUrl("https://cdn.test/yt/audio.m4a");
+		high.label = "[music] Set m4a · sound only";
+		high.rank  = 2;
+		det.add_item("site.test", low);
+		det.add_item("site.test", high);
+		const QList<media_item> ranked = det.items_for("site.test");
+		check(ranked.size() >= 2 && ranked.at(0).url == high.url &&
+		      ranked.at(1).url == low.url,
+		      "ranked rows come first, highest rank first, over kind and label");
 	}
 
 	std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

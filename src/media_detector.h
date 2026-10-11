@@ -43,6 +43,20 @@ struct media_item {
 	// The name to save it as, when something knew better than the url --
 	// yt-dlp's metadata (`ytdlp_resolver::file_name_for`). Empty: the url's.
 	QString file_name;
+
+	// **What the stream carries, where something knows.** True for anything
+	// found by watching requests, which cannot tell. yt-dlp can, and YouTube
+	// serves almost every quality as picture alone or sound alone: of the 45
+	// streams it offered for one set, one had both, at 360p.
+	bool has_video = true;
+	bool has_audio = true;
+	// The sound to play beside a picture-only stream -- the best sound-only
+	// stream of the same answer -- so Watch plays a video rather than a
+	// silent one. Empty where there is nothing to pair.
+	QUrl audio;
+	// Where an authoritative answer places it, highest first; 0 for anything
+	// detected, which keeps the hit-count order below the ranked rows.
+	int rank = 0;
 };
 
 // The media type to hand a system player along with the URL.

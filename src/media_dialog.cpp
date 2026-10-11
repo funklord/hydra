@@ -340,8 +340,12 @@ void media_dialog::watch(const media_item &item) {
 		else                                   ctx.extra.insert(it.key(), it.value());
 	}
 	const QUrl via = m_proxy ? m_proxy->publish(item.url, ctx) : QUrl();
+	// The sound beside a picture-only stream, through the proxy the same way:
+	// it comes from the same answer and the same CDN.
+	const QUrl via_audio = (m_proxy && !item.audio.isEmpty())
+	                         ? m_proxy->publish(item.audio, ctx) : QUrl();
 	QString error;
-	if (!m_players->play(item, &error, via)) {
+	if (!m_players->play(item, &error, via, via_audio)) {
 		m_status->setText("<b>" + error.toHtmlEscaped() + "</b>");
 		return;
 	}
