@@ -11,8 +11,11 @@
 #include "media_evidence.h"
 #include "media_interpretation.h"
 #include "model_tally.h"
+#include "reading_log.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
+#include <QFile>
 #include <QFileInfo>
 #include <QSettings>
 #include <QTemporaryDir>
@@ -214,6 +217,73 @@ int main(int argc, char **argv) {
 		          r.clean("artist") && r.flagged.size() == 1,
 		       QString("a flagged title is kept, and counted against the model "
 		               "(%1)").arg(r.flagged.join("; ")));
+	}
+
+	// **What each reading decided, kept**, because the only trace of the
+	// first real one was a status line that had gone.
+	section("readings are kept, bounded, and survive a restart");
+	{
+		QTemporaryDir dir;
+		const QString path = dir.filePath("readings.ini");
+		reading_log log;
+		reading_record a;
+		a.when = QDateTime::fromString("2026-10-10T19:51:01Z", Qt::ISODate);
+		a.page = "https://www.youtube.com/watch?v=ftQQAvj74KI";
+		a.id = "ftQQAvj74KI";
+		a.channel = "Groovix";
+		a.model = "Ollama qwen2.5-coder:14b";
+		a.kind = "music";
+		a.artist = "Groovix";
+		a.title = "CLASSIC DISCO FUNK | Groovy French House for Long Evenings";
+		a.is_set = true;
+		a.tracklist = "description";
+		a.file_name = "20261002T130010Z_Groovix_-_CLASSIC_DISCO_FUNK_[ftQQAvj74KI]";
+		a.from_model = { "kind", "artist", "title", "tracklist" };
+		log.add(a);
+		reading_record b = a;
+		b.channel = "Adele";
+		b.artist = "Adele";
+		b.title = "Hello (Lyrics)";
+		b.flagged = { "title: \"Hello (Lyrics)\" carries the tag (Lyrics)" };
+		log.add(b);
+		check(log.save(path), "it saves");
+		{
+			QFile f(path);
+			f.open(QIODevice::ReadOnly);
+			const QString text = QString::fromUtf8(f.readAll());
+			check(text.contains("2\\flagged=") && !text.contains("1\\flagged=") &&
+			          !text.contains("rejected="),
+			       "as INI, with an empty list left out rather than written");
+		}
+		reading_log back;
+		check(back.load(path) && back.size() == 2, "and loads");
+		const reading_record r = back.all().first();
+		check(r.title == a.title && r.is_set && r.tracklist == "description" &&
+		          r.from_model.size() == 4 && r.when == a.when &&
+		          back.all().last().flagged.size() == 1,
+		       "every field survives, flags included");
+		check(back.for_channel("Groovix").size() == 1 &&
+		          back.for_channel("Nobody").isEmpty(),
+		       "and a channel's readings can be asked for");
+
+		reading_log many;
+		for (int i = 0; i < reading_log::k_max + 5; ++i) {
+			reading_record x = a;
+			x.id = QString::number(i);
+			many.add(x);
+		}
+		check(many.size() == reading_log::k_max && many.all().first().id == "5",
+		       "it keeps the newest, and the oldest go");
+
+		QFile broken(dir.filePath("broken.ini"));
+		broken.open(QIODevice::WriteOnly);
+		broken.write("[readings\nthis is not = = an ini\x01\x02");
+		broken.close();
+		reading_log none;
+		none.add(a);
+		check(!none.load(dir.filePath("broken.ini")) && none.size() == 1,
+		       "a file that will not parse is left alone, not read as empty");
+		check(none.clear_all() == 1 && none.size() == 0, "and clearing forgets all");
 	}
 
 	section("the tally says which tasks a model is too weak for");

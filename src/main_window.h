@@ -17,6 +17,7 @@
 #include <QString>
 
 class annoyance_log;
+class reading_log;
 namespace ad_probe { struct findings; }
 struct media_reading;
 struct resolved_media;
@@ -277,6 +278,8 @@ private slots:
 	void start_investigation(annoyed_dialog *dlg, web_view_backend *view,
 	                         const investigation_evidence &ev);
 	void keep_investigated_rules(const QStringList &rules);
+	// Tools -> Media -> Recent Readings.
+	void open_readings();
 	// yt-dlp's streams listed once what they are has been read: named from
 	// the reading, and the reading and its weaknesses said.
 	void list_resolved_media(const QString &host, const resolved_media &m,
@@ -772,6 +775,11 @@ public:
 	filter_signals     *m_signals       = nullptr;
 	annoyance_log      *m_annoyances    = nullptr;
 	QString             m_annoyances_path;
+	// What each media reading decided, kept (`reading_log`), beside the
+	// annoyance reports for the same reason: a record of where somebody
+	// has been belongs where they can read and clear it.
+	reading_log        *m_readings      = nullptr;
+	QString             m_readings_path;
 	QAction            *m_annoyed_action = nullptr;
 	QAction            *m_annoyed_menu_action = nullptr;
 	QAction            *m_confirm_action = nullptr;

@@ -38207,3 +38207,36 @@ changes which yt-dlp runs.
 **How it is reached**, since the holder asked: the media tool's **Ask
 yt-dlp**, on a video page. It is not automatic on opening a video.
 
+
+## Readings are kept, and the end-to-end driver that proves it
+
+**Asked for 2026-10-10** ("yes, keep a history of readings"), after a
+reading ran and what it decided survived only in a status line. Each
+reading is now a `reading_record` in `profile/readings.ini`, beside the
+annoyance log and by the same rules: INI, newest last, at most 200, a file
+that will not parse left alone and reported rather than treated as empty,
+and cleared with the rest of the browsing data. A record carries the page,
+the video id, uploader and channel, **who read it** (`Ollama <model>` or
+`rules`), the kind, artist, title, set, tracklist source, the file name
+produced, and which tasks the model's answer was kept, rejected or flagged
+for. Tools > Media > **Recent Readings** lists them, newest first, with the
+detail in each row's tooltip.
+
+It is written before the streams window opens, so a person who closes that
+window has still kept the reading. The corrections per channel still to be
+built read `for_channel` from this log.
+
+**`test/live/try_media_reading`** triggers the real menu action against a
+real video with the local model, and checks a reading lands in the file,
+read by the model, with the id in the file name. Measured 2026-10-11 on the
+Groovix set with `qwen2.5-coder:14b`: music, artist Groovix, a set, the
+tracklist from the description, nothing rejected or flagged -- 5 passed.
+
+**Two driver mistakes, both reading as a feature that did not work.** The
+first version sent SIGTERM at its deadline, hydra's shutdown handler caught
+it to save, and the process ran on for eighteen hours; it now runs under
+`timeout -k`. The second sat for three minutes reporting no reading while
+the reading was already on disk: the streams window that follows is modal,
+and its `exec()` held the driver's poll loop. Found by printing the status
+bar as it changed, which the driver now always does, and fixed by closing
+that window as it appears.

@@ -45,6 +45,8 @@
 #include "extractor_helpers.h"
 #include "network_fetcher.h"
 #include "ad_probe.h"
+#include "readings_dialog.h"
+#include "reading_log.h"
 #include "model_tally.h"
 #include "media_interpretation.h"
 #include "media_evidence.h"
@@ -326,6 +328,7 @@ main_window::main_window(web_view_factory *factory, policy_engine *policy,
 	m_media      = new media_detector(m_policy, this);
 	m_signals    = new filter_signals(this);
 	m_annoyances = new annoyance_log();
+	m_readings   = new reading_log();
 	m_ex_signals = new extractor_signals(this);
 	// Constructed before it is registered, which is not a style point: an
 	// observer added while still null was harmless for exactly as long as the
@@ -1907,6 +1910,9 @@ QMenuBar *main_window::build_menu_bar() {
 	QAction *find = media_menu->addAction("&Find Media on This Page…", this,
 	                                       &main_window::find_media_with_ytdlp);
 	find->setStatusTip("Ask yt-dlp what the video on this page is");
+	QAction *readings = media_menu->addAction("Recent &Readings…", this,
+	                                          &main_window::open_readings);
+	readings->setStatusTip("What each video looked up was read as, and why");
 	m_capture_action = media_menu->addAction("&Capture Playing Video", this,
 	                                          &main_window::toggle_capture);
 	m_capture_action->setCheckable(true);
@@ -3075,6 +3081,7 @@ main_window::~main_window() {
 	// match the two above rather than being the one member with a different
 	// lifetime idiom.
 	delete m_annoyances;
+	delete m_readings;
 	// Leave kiosk while our children still exist: the controller hands the
 	// presented view's widget back to the stack, and doing that after the
 	// stack has been destroyed is a use-after-free. Destructor bodies run
@@ -3294,6 +3301,10 @@ bool main_window::load_tree(const QString &path) {
 	if (m_annoyances)
 		keep_or_disown(m_annoyances->load(m_annoyances_path),
 		                &m_annoyances_path, "The annoyance log");
+	m_readings_path = dir + "/readings.ini";
+	if (m_readings)
+		keep_or_disown(m_readings->load(m_readings_path),
+		                &m_readings_path, "The reading history");
 
 	m_filters_path = dir + "/filters-ai.txt";
 	// **Only the open failure is caught here, and that is the honest limit.**
@@ -6028,6 +6039,15 @@ void main_window::forget_shell_caches() {
 	if (m_mse)         records += m_mse->clear_all();
 	if (m_signals)     records += m_signals->clear_all();
 	if (m_antiadblock) records += m_antiadblock->clear_all();
+	// What each media reading decided names the page it was on, so it is a
+	// browsing record like the rest and goes with them.
+	if (m_readings) {
+		const int n = m_readings->clear_all();
+		records += n;
+		if (n > 0 && !m_readings_path.isEmpty())
+			saved_or_said(m_readings->save(m_readings_path),
+			               "the cleared readings");
+	}
 
 	int allowances = 0;
 	for (const QString &host : m_antiadblock_fixed) {
@@ -7343,6 +7363,33 @@ void main_window::list_resolved_media(const QString &host,
 		warnings = tally.warnings(model_id(ai));
 	}
 	const QString kind = media_reading::name_of(r.what);
+	// **Kept**, so what was decided outlives the status line: the person can
+	// look it up, and corrections per channel will be checked against it.
+	if (m_readings) {
+		reading_record rec;
+		rec.when       = QDateTime::currentDateTimeUtc();
+		rec.page       = m.webpage_url.toString();
+		rec.id         = m.id;
+		rec.extractor  = m.extractor;
+		rec.uploader   = m.uploader;
+		rec.channel    = m.channel;
+		rec.model      = (ai && r.model_answered) ? model_id(ai)
+		                                           : QStringLiteral("rules");
+		rec.kind       = kind;
+		rec.artist     = r.artist;
+		rec.title      = r.title;
+		rec.is_set     = r.is_set;
+		rec.tracklist  = r.tracklist;
+		rec.confidence = r.confidence;
+		rec.file_name  = ytdlp_resolver::file_name_for(m, QString(), r.artist,
+		                                               r.title);
+		rec.from_model = r.from_model;
+		rec.rejected   = r.rejected;
+		rec.flagged    = r.flagged;
+		m_readings->add(rec);
+		if (!m_readings_path.isEmpty())
+			saved_or_said(m_readings->save(m_readings_path), "the reading");
+	}
 	{
 		int added = 0;
 		for (const media_format &f : m.formats) {
@@ -7963,3 +8010,14 @@ void main_window::closeEvent(QCloseEvent *event) {
 	}
 	QWidget::closeEvent(event);
 }
+
+void main_window::open_readings() {
+	readings_dialog dlg(m_readings, this);
+	connect(&dlg, &readings_dialog::cleared, this, [this] {
+		if (m_readings && !m_readings_path.isEmpty())
+			saved_or_said(m_readings->save(m_readings_path),
+			               "the cleared readings");
+	});
+	dlg.exec();
+}
+

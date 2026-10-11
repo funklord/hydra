@@ -3,12 +3,16 @@
 #include "annoyance_log.h"
 #include "filter_signals.h"
 #include "annoyed_dialog.h"
+#include "reading_log.h"
+#include "readings_dialog.h"
 
 #include <QApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QListWidget>
 #include <QPushButton>
+#include <QTreeWidget>
 #include <cstdio>
 
 static int g_pass = 0, g_fail = 0;
@@ -317,6 +321,43 @@ int main(int argc, char **argv) {
 		check(!without.findChild<QListWidget *>("patches") && none &&
 		          !none->isEnabled(),
 		       "with neither kind of evidence there is no list and no offer");
+	}
+
+	// The Recent Readings window: what was read, after the status line.
+	section("past readings are listed, newest first, with why in the tooltip");
+	{
+		reading_log log;
+		readings_dialog empty(&log);
+		auto *list = empty.findChild<QTreeWidget *>("readings");
+		check(list && list->topLevelItemCount() == 1 &&
+		          list->topLevelItem(0)->text(3).contains("Find Media"),
+		       "with nothing read, it says how to read something");
+
+		reading_record a;
+		a.when = QDateTime::currentDateTimeUtc();
+		a.page = "https://www.youtube.com/watch?v=one";
+		a.kind = "music";
+		a.artist = "Groovix";
+		a.title = "First";
+		a.model = "Ollama qwen2.5-coder:14b";
+		a.file_name = "first";
+		a.is_set = true;
+		log.add(a);
+		reading_record b = a;
+		b.title = "Second";
+		b.file_name = "second";
+		b.rejected = { "artist: \"X\" is not in the metadata" };
+		log.add(b);
+		readings_dialog full(&log);
+		list = full.findChild<QTreeWidget *>("readings");
+		check(list && list->topLevelItemCount() == 2 &&
+		          list->topLevelItem(0)->text(3) == "Second" &&
+		          list->topLevelItem(1)->text(1) == "music (set)",
+		       "newest first, a set marked as one");
+		check(list->topLevelItem(0)->text(5) == "1 not kept" &&
+		          list->topLevelItem(0)->toolTip(0).contains("saved as second") &&
+		          list->topLevelItem(0)->toolTip(0).contains("is not in the metadata"),
+		       "and each row says what its checks found, and why, in full");
 	}
 
 	section("a log that will not parse is left alone");
