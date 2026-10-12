@@ -217,8 +217,22 @@ void ytdlp_resolver::resolve(const QUrl &page_url) {
 	     // the request rather than the whole thread. YouTube's arguments;
 	     // other extractors ignore them.
 	     << "--get-comments"
-	     << "--extractor-args" << "youtube:max_comments=20,all,0,0;comment_sort=top"
-	     << page_url.toString();
+	     << "--extractor-args" << "youtube:max_comments=20,all,0,0;comment_sort=top";
+	// **Every JavaScript runtime yt-dlp can solve YouTube's challenge with**,
+	// not only deno, which is all it looks for unaided and which Debian does
+	// not package. YouTube extraction without one is deprecated upstream;
+	// measured 2026-10-12 it still offered all 49 formats without, so this is
+	// ahead of need. Naming one that is not installed costs nothing -- yt-dlp
+	// skips it -- and node is named for the day it is new enough: 22 is the
+	// minimum, Debian 13 has 20.
+	//
+	// **The pinned copy only.** A yt-dlp older than the option refuses the
+	// whole command with a usage error -- measured on Debian's 2025.04.30 --
+	// so passing it to a PATH copy would break the fallback outright.
+	if (m_origin != "PATH")
+		args << "--js-runtimes" << "deno" << "--js-runtimes" << "quickjs"
+		     << "--js-runtimes" << "bun" << "--js-runtimes" << "node";
+	args << page_url.toString();
 	proc->setProgram(m_program);
 	proc->setArguments(args);
 

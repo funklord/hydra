@@ -38357,3 +38357,24 @@ reads chapters (mpv, VLC) can then skip track by track.
 **Not done: a `.cue` beside the file.** Chapters cover the players here, and
 a second file per download would be the first sidecar Hydra writes. If a
 tool that reads only `.cue` comes up, it is a small addition.
+
+## yt-dlp is told every JavaScript runtime it can use
+
+yt-dlp warns that YouTube extraction without a JavaScript runtime is
+deprecated and "some formats may be missing". hydra passes `--no-warnings`,
+so nobody saw it. Unaided, yt-dlp looks only for deno, which Debian does not
+package. It accepts quickjs at 2023.12.09 or later and node at 22 or later.
+This machine's node is 20.19, and yt-dlp reports it "unsupported". The
+challenge-solver scripts ship inside the pinned yt-dlp, so a runtime is all
+it lacks.
+
+**Measured 2026-10-12, not yet a loss**: the Groovix set offered the same
+49 formats with and without a runtime, up to 2160p. The resolver now names
+deno, quickjs, bun and node, and yt-dlp skips any that are absent; it
+extracts normally with none usable. Debian's `quickjs` package
+(2025.04.26) would satisfy it. Installing it is the holder's choice, and
+nothing in hydra depends on it.
+
+**Passed to the pinned copy only.** Debian's yt-dlp 2025.04.30 predates the
+option and refuses the whole command with a usage error (exit 2), so
+passing it to a PATH copy would break the fallback outright.
